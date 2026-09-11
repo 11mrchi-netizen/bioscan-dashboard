@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAVIDE // BIOSCAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --bg:#0a0a14; --panel:#12101e; --panel-2:#181530; --line:#2e2850; --line-bright:#4a3f7a;
+    --cyan:#4cf1ff; --magenta:#ff4cd6; --green:#3dffa0; --amber:#ffb648;
+    --text:#eef0fb; --muted:#6e6a94; --muted-2:#9d97c4;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{ min-height:100%; background:var(--bg); color:var(--text); font-family:'Rajdhani', sans-serif; font-weight:500; }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px; border-bottom:1px solid var(--line); background:var(--panel);
+  }
+  .topbar-id{ font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:0.06em; color:var(--cyan); text-shadow:0 0 8px rgba(76,241,255,0.4);}
+  .signout-btn{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--muted-2);
+    background:none; border:1px solid var(--line); border-radius:100px; padding:6px 14px; cursor:pointer;
+  }
+  .signout-btn:hover{ border-color:var(--cyan); color:var(--cyan); }
+
+  .wrap{ max-width:640px; margin:0 auto; padding:30px 20px 60px; }
+  .placeholder-note{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--amber);
+    background:rgba(255,182,72,0.08); border:1px solid rgba(255,182,72,0.25); border-radius:12px;
+    padding:12px 16px; margin-bottom:28px; line-height:1.6;
+  }
+
+  .section{ margin-bottom:28px; }
+  .section-title{ font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.08em; color:var(--muted); margin-bottom:12px; }
+
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-bottom:10px; }
+  .card-row{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+  .card-name{ font-size:15px; }
+  .card-meta{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--muted-2); }
+  .card-status{ font-family:'IBM Plex Mono', monospace; font-size:10px; padding:3px 9px; border-radius:100px; }
+  .card-status.active{ background:rgba(61,255,160,0.12); color:var(--green); }
+  .card-status.ended, .card-status.resolved{ background:rgba(110,106,148,0.15); color:var(--muted-2); }
+  .card-status.monitoring{ background:rgba(255,182,72,0.12); color:var(--amber); }
+
+  .empty-note, .loading-note, .error-note{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--muted); padding:20px 0; text-align:center;
+  }
+  .error-note{ color:var(--magenta); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-id mono">DAVIDE // BIOSCAN</span>
+  <button class="signout-btn" id="signout-btn">SIGN OUT</button>
+</div>
+
+<div class="wrap">
+  <div class="placeholder-note">
+    ⚠ This is a minimal placeholder — proving the login → Supabase → dashboard chain
+    works end to end. The full 3D interactive dashboard replaces this once the pipeline
+    is confirmed working.
+  </div>
+
+  <div class="section">
+    <div class="section-title">SUPPLEMENTS</div>
+    <div id="supplements-list"><div class="loading-note">loading...</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">INJURIES</div>
+    <div id="injuries-list"><div class="loading-note">loading...</div></div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://ugfrglbcoivkprjqvjzz.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_GyandyvuVbF0RxZLnugz4A_GlNIstPc';
+  const { createClient } = supabase;
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  async function init(){
+    const { data: { session } } = await sb.auth.getSession();
+    if(!session){
+      window.location.href = './login.html';
+      return;
+    }
+    loadSupplements();
+    loadInjuries();
+  }
+
+  async function loadSupplements(){
+    const el = document.getElementById('supplements-list');
+    const { data, error } = await sb.from('supplements').select('*').order('status').order('time_of_day');
+    if(error){
+      el.innerHTML = `<div class="error-note">Error loading supplements: ${error.message}</div>`;
+      return;
+    }
+    if(!data || data.length === 0){
+      el.innerHTML = `<div class="empty-note">No supplements synced yet.</div>`;
+      return;
+    }
+    el.innerHTML = data.map(s => `
+      <div class="card">
+        <div class="card-row">
+          <span class="card-name">${s.name}</span>
+          <span class="card-status ${s.status}">${s.status}</span>
+        </div>
+        <div class="card-meta">${s.dose} · ${s.time_of_day}${s.target ? ' · ' + s.target : ''}</div>
+      </div>
+    `).join('');
+  }
+
+  async function loadInjuries(){
+    const el = document.getElementById('injuries-list');
+    const { data, error } = await sb.from('injuries').select('*').order('start_date', {ascending:false});
+    if(error){
+      el.innerHTML = `<div class="error-note">Error loading injuries: ${error.message}</div>`;
+      return;
+    }
+    if(!data || data.length === 0){
+      el.innerHTML = `<div class="empty-note">No injuries synced yet.</div>`;
+      return;
+    }
+    el.innerHTML = data.map(inj => `
+      <div class="card">
+        <div class="card-row">
+          <span class="card-name">${inj.part} — ${inj.type}</span>
+          <span class="card-status ${inj.status}">${inj.status}</span>
+        </div>
+        <div class="card-meta">Severity ${inj.severity}/10 · ${inj.start_date}${inj.end_date ? ' → ' + inj.end_date : ' → ongoing'}</div>
+      </div>
+    `).join('');
+  }
+
+  document.getElementById('signout-btn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    window.location.href = './login.html';
+  });
+
+  init();
+</script>
+
+</body>
+</html>

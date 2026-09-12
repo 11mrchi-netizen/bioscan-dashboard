@@ -81,7 +81,17 @@
     statusEl.classList.remove('error');
     const { error } = await sb.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin + window.location.pathname.replace('login.html', 'index.html') }
+      options: {
+        redirectTo: window.location.origin + window.location.pathname.replace('login.html', 'index.html'),
+        scopes: 'https://www.googleapis.com/auth/calendar.readonly',
+        // Google doesn't return a refresh token by default — access_type:'offline'
+        // plus prompt:'consent' forces one, per Supabase's own documented
+        // workaround. Without this, session.provider_token (Google's own
+        // Calendar API token, distinct from the Supabase session token) expires
+        // in ~1h and a normal Supabase session refresh does NOT refresh it —
+        // only a fresh login does, which is a real, still-open rough edge.
+        queryParams: { access_type: 'offline', prompt: 'consent' }
+      }
     });
     if(error){
       statusEl.textContent = 'Error: ' + error.message;

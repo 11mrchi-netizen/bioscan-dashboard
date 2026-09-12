@@ -1515,12 +1515,30 @@ function toShortDate(isoDate){
   return isoDate.slice(5);
 }
 
+// Escapes text pulled from external sources (Calendar API event titles/
+// descriptions) before it's inserted via innerHTML elsewhere in the file —
+// those strings are the person's own calendar data, not user-generated
+// content from strangers, but escaping costs nothing and avoids any risk
+// if a description ever contains characters that look like HTML.
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 async function fetchDashboardData(sb){
   const { data: { session } } = await sb.auth.getSession();
   if(!session){
     window.location.href = './login.html';
     throw new Error('No session — redirecting to login.');
   }
+  // Google's own Calendar API token (distinct from the Supabase session token) —
+  // requested via the calendar.readonly scope added at login. Stored globally
+  // so the calendar fetch (triggered later, alongside the weather fetch) can
+  // use it without threading it through every function signature. May be
+  // undefined if the user signed in before this scope was added — the
+  // calendar fetch handles that by falling back to the placeholder panel.
+  window.googleProviderToken = session.provider_token || null;
 
   // Fire every query in parallel — independent tables, no reason to serialize.
   const [
@@ -2129,17 +2147,51 @@ async function fetchDashboardData(sb){
   const PANELS = {
     session: {
       eyebrow: "SLOT // UPCOMING", title: "Next Session", status: "watch",
-      source: "SOURCE: PLACEHOLDER — calendar integration not yet wired (roadmap P1)",
+      source: "SOURCE: LIVE — Google Calendar API (browser-direct, calendar.readonly scope)",
       render(){
-        let left = `<div class="fp-section"><div class="fp-section-title">SESSION</div>
-          <div class="stat-line"><span class="k">Type</span><span class="v">— not yet connected —</span></div>
-          <div class="stat-line"><span class="k">Time</span><span class="v">—</span></div>
-          <div class="stat-line"><span class="k">Route</span><span class="v">—</span></div>
-        </div>`;
-        left += `<div class="gap-flag">⚠ This panel is a UI scaffold — real calendar data isn't wired in yet. Next step: pull the next 🏋️/🏃/⛰️ (colorId 8) event from the calendar and populate this panel for real.</div>`;
+        if(!nextSessionData){
+          const noTokenReason = window.googleProviderToken
+            ? "No upcoming training session (colorId 8) found in the next 7 days."
+            : "Calendar access not granted for this session — sign out and back in to enable (the calendar.readonly scope was added after your last login).";
+          let left = `<div class="fp-section"><div class="fp-section-title">SESSION</div>
+            <div class="stat-line"><span class="k">Type</span><span class="v">—</span></div>
+            <div class="stat-line"><span class="k">Time</span><span class="v">—</span></div>
+          </div>`;
+          left += `<div class="gap-flag">⚠ ${noTokenReason}</div>`;
+          let right = `<div class="fp-note">Gear checklist will appear here once a session is found.</div>`;
+          return {left, right, leftLabel:"SESSION DETAIL", rightLabel:"GEAR CHECKLIST"};
+        }
 
-        let right = `<div class="fp-section"><div class="fp-section-title">GEAR CHECKLIST</div>
-          <div class="fp-note">Will list required gear once session type is known — e.g. trail shoes + hydration vest for trail runs, lifting shoes for strength days.</div></div>`;
+        const startDate = new Date(nextSessionData.start);
+        const dateLabel = startDate.toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'});
+        const timeLabel = startDate.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+
+        let left = `<div class="fp-section"><div class="fp-section-title">SESSION</div>
+          <div class="stat-line"><span class="k">Name</span><span class="v">${escapeHtml(nextSessionData.title)}</span></div>
+          <div class="stat-line"><span class="k">Type</span><span class="v">${nextSessionData.kind}</span></div>
+          <div class="stat-line"><span class="k">When</span><span class="v">${dateLabel}, ${timeLabel}</span></div>
+        </div>`;
+        if(nextSessionData.description){
+          left += `<div class="fp-section"><div class="fp-section-title">DETAILS</div>
+            <div class="fp-note">${escapeHtml(nextSessionData.description).replace(/\n/g,'<br>')}</div></div>`;
+        }
+        if(nextSessionData.gpxLink){
+          left += `<div class="fp-section"><div class="stat-line"><span class="k">Route file</span><span class="v"><a href="${nextSessionData.gpxLink}" target="_blank" style="color:var(--cyan);">Open GPX ↗</a></span></div></div>`;
+        }
+
+        // Gear checklist keyed off the classified gear kind — same 3 kinds
+        // the 3D gear model already renders (barbell / shoes-run / shoes-trail-vest).
+        const GEAR_CHECKLISTS = {
+          'barbell': ['Lifting shoes', 'Belt (if heavy day)', 'Chalk/straps for pulls', 'Water bottle'],
+          'shoes-run': ['Road running shoes', 'Moisture-wicking socks', 'Water/hydration for runs >45min'],
+          'shoes-trail-vest': ['Trail running shoes', 'Hydration vest', 'Headlamp if pre-dawn/dusk start', 'Phone/GPS for route safety']
+        };
+        const checklist = GEAR_CHECKLISTS[nextSessionData.gearKind] || [];
+        let right = `<div class="fp-section"><div class="fp-section-title">GEAR CHECKLIST</div>`;
+        checklist.forEach(item => { right += `<div class="stat-line"><span class="k">☐ ${item}</span><span class="v"></span></div>`; });
+        right += `</div>`;
+        right += `<div class="fp-note" style="margin-top:10px;">Checklist is based on session type only — doesn't yet factor in live weather (e.g. rain gear). See roadmap P2.</div>`;
+
         return {left, right, leftLabel:"SESSION DETAIL", rightLabel:"GEAR CHECKLIST"};
       },
       draw(){}
@@ -3221,6 +3273,78 @@ async function fetchDashboardData(sb){
     cell.querySelector('.tb-value').textContent = `${Math.round(c.temperature_2m)}°C`;
     cell.querySelector('.tb-sub2').textContent = `${weatherCodeLabel(c.weather_code)} · ${Math.round(c.wind_speed_10m)} km/h wind`;
   }
+
+  // ============ LIVE CALENDAR — Google Calendar API, browser-direct ============
+  // Uses session.provider_token (Google's own access token, captured in
+  // fetchDashboardData above) to call the Calendar API directly from the
+  // browser — no Supabase table, no chat-triggered sync, genuinely live.
+  // Session-type is detected by colorId (confirmed pattern: colorId '8' =
+  // training session — 🏋️/🏃/⛰️ — more reliable than matching on emoji/title
+  // text, which can vary). Meal-prep and other non-training events use
+  // different colorIds and are correctly excluded.
+  let nextSessionData = null;
+
+  function classifySessionType(summary){
+    if(summary.includes('🏋️')) return {kind:'strength', gearKind:'barbell'};
+    if(summary.includes('⛰️')) return {kind:'hill', gearKind:'shoes-trail-vest'};
+    if(summary.includes('🏃')){
+      // trail vs road isn't in the emoji — look for route/trail keywords in
+      // the title itself, matching the calendar's own real naming pattern
+      // (e.g. "LSS — 12.9km (Dajia Riverside)" vs a named trail route).
+      const isTrail = /trail|hill|off-road/i.test(summary);
+      return {kind: isTrail ? 'trail run' : 'run', gearKind: isTrail ? 'shoes-trail-vest' : 'shoes-run'};
+    }
+    return {kind:'session', gearKind:'shoes-run'};
+  }
+
+  function parseGpxLink(description){
+    const m = (description || '').match(/https:\/\/drive\.google\.com\/\S+/);
+    return m ? m[0] : null;
+  }
+
+  async function fetchNextSession(){
+    if(!window.googleProviderToken){
+      // No calendar scope granted yet (user signed in before this feature
+      // existed) — leave the placeholder panel in place rather than error.
+      console.warn('No Google provider token available — calendar scope not granted this session. Sign out and back in to enable.');
+      return;
+    }
+    try{
+      const now = new Date().toISOString();
+      const weekOut = new Date(Date.now() + 7*24*60*60*1000).toISOString();
+      const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events` +
+        `?timeMin=${encodeURIComponent(now)}&timeMax=${encodeURIComponent(weekOut)}` +
+        `&singleEvents=true&orderBy=startTime&maxResults=50`;
+      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${window.googleProviderToken}` } });
+      if(!res.ok) throw new Error(`Calendar API returned ${res.status}`);
+      const data = await res.json();
+      const nextTraining = (data.items || []).find(ev => ev.colorId === '8');
+      if(!nextTraining){
+        console.warn('No upcoming training-session (colorId 8) events found in the next 7 days.');
+        return;
+      }
+      const classification = classifySessionType(nextTraining.summary || '');
+      nextSessionData = {
+        title: nextTraining.summary,
+        start: nextTraining.start.dateTime || nextTraining.start.date,
+        description: nextTraining.description || '',
+        gpxLink: parseGpxLink(nextTraining.description),
+        ...classification
+      };
+      renderSessionLabel();
+      setGearKind(classification.gearKind);
+    } catch(e){
+      console.warn('Live calendar fetch failed, session panel stays on placeholder:', e.message);
+    }
+  }
+
+  function renderSessionLabel(){
+    if(!nextSessionData) return;
+    const titleEl = document.getElementById('session-label-title');
+    if(titleEl) titleEl.textContent = nextSessionData.title.replace(/^[🏋️🏃⛰️\s]+/, '');
+  }
+
+  fetchNextSession();
 
   // ============ TRAINING-DAY GEAR — GROUND LEVEL, BESIDE THE FIGURE ============
   // Real Three.js models via Gear3D.create() (see the <script type="module">

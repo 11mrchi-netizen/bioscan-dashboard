@@ -240,14 +240,17 @@ sync every morning," or "sync before opening the dashboard." Not yet decided.
   hologram look — deliberately not a real embedded map, which would need its own tile API/key
   and would clash with the aesthetic. See `extractDriveFileId()`, `fetchGpxRoute()`,
   `parseGpxPoints()`, `drawGpxRoute()` near the calendar code.
-  - **Bug found and fixed in passing**: the SVG route chart had no `viewBox`, so — like every
-    other `chart-svg` in the file (`drawLineChart` etc.) — it drew in raw 500×150 coordinate
-    units with no scaling to the actual rendered pixel width. Confirmed this genuinely clips
-    content (the route's end-of-path marker landed off-canvas at a real ~325px render width,
-    not just a theoretical risk). Fixed for the new GPX chart by setting
-    `viewBox="0 0 500 150"`. **Not yet fixed for the pre-existing charts** (HRV/ACWR/sleep/
-    wellbeing trend lines) — same latent bug likely affects them too at narrow enough render
-    widths, worth a follow-up pass if chart edges ever look clipped.
+  - **Bug found, and fixed everywhere 2026-09-12**: the SVG route chart had no `viewBox`, so —
+    like every other `chart-svg` in the file (`drawLineChart`/`drawLineChartOverlay`) — it drew
+    in raw 500×150 coordinate units with no scaling to the actual rendered pixel width. This
+    was a real, significant bug, not just a theoretical risk: measured render widths of
+    ~324–330px against content drawn out to x=492 confirmed roughly the right **35% of every
+    trend chart** (HRV readiness, ACWR, sleep hours/score, wellbeing energy/mood/stress/
+    soreness) was being silently clipped off-canvas. Fixed by adding
+    `viewBox="0 0 500 150"` + `preserveAspectRatio="xMidYMid meet"` to `drawLineChart` (and
+    the GPX route chart); `drawLineChartOverlay` always draws onto an svg `drawLineChart`
+    already ran on, so it inherits the fix without its own change. Verified by direct DOM
+    measurement (chart path's rendered bounding box now sits fully inside the svg's own box).
 - [ ] Sunrise/sunset times feeding a "headlamp needed" gear-checklist rule (rain/cold/heat/wind
   gear is already done — see Calendar Integration above — this is the only remaining P2 item).
   — **Est: 1 session (1–2h)**.

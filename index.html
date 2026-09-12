@@ -2037,6 +2037,12 @@ async function fetchDashboardData(sb){
     const svg = document.getElementById(svgId);
     if(!svg) return;
     svg.innerHTML = '';
+    // No viewBox means 1 user unit = 1 CSS px of the actual rendered size, so
+    // content drawn near x=500 clips off-canvas whenever the chart-wrap
+    // renders narrower than 500px (confirmed happening in practice — see
+    // ROADMAP.md). This scales the fixed 500x150 coordinate space down to fit.
+    svg.setAttribute('viewBox', '0 0 500 150');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     const W=500,H=150,padL=34,padR=8,padT=14,padB=20;
     const pts = values.map((v,i)=>({v,i})).filter(p=>p.v!==null && p.v!==undefined);
     if(pts.length===0){ svg.innerHTML = '<text x="250" y="75" text-anchor="middle" fill="#63696f" font-family="IBM Plex Mono" font-size="11">no data points</text>'; return; }

@@ -88,6 +88,12 @@
   .topbar-sub{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--muted-2); }
   .topbar-divider{ width:1px; height:16px; background:var(--line); display:inline-block; vertical-align:middle; margin:0 10px;}
   .tb-countdown{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--text); }
+  .signout-btn{
+    font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:0.04em;
+    color:var(--muted-2); background:none; border:1px solid var(--line); border-radius:100px;
+    padding:5px 12px; cursor:pointer; transition:border-color 0.15s ease, color 0.15s ease;
+  }
+  .signout-btn:hover{ border-color:var(--cyan); color:var(--cyan); }
   .sync-badge{
     font-size:10px; letter-spacing:0.05em; color:var(--muted-2); cursor:pointer;
     display:flex; align-items:center; gap:6px; padding:5px 12px; border:1px solid var(--line);
@@ -448,6 +454,7 @@
     <div style="display:flex; align-items:center; gap:14px;">
       <div class="sync-badge mono" id="sync-badge" data-open="synclog" title="Click for sync details">SYNCING…</div>
       <div class="tb-countdown">T-<span class="num" id="tb-days">—</span>D · 40KM RACE · DEC 06</div>
+      <button class="signout-btn mono" id="signout-btn" title="Sign out">SIGN OUT</button>
     </div>
   </div>
   <div class="topbar-strip">
@@ -3345,6 +3352,21 @@ async function fetchDashboardData(sb){
   }
 
   fetchNextSession();
+
+  // ============ SIGN OUT ============
+  // Genuinely necessary, not just a nicety: login.html auto-redirects straight
+  // to index.html if a valid session already exists, skipping the OAuth
+  // button entirely — so re-granting a new scope (e.g. calendar.readonly,
+  // added after initial launch) requires actually clearing the session first.
+  // Without this button there was no way to do that short of manually
+  // clearing browser storage.
+  const signoutBtn = document.getElementById('signout-btn');
+  if(signoutBtn){
+    signoutBtn.addEventListener('click', async () => {
+      await sb.auth.signOut();
+      window.location.href = './login.html';
+    });
+  }
 
   // ============ TRAINING-DAY GEAR — GROUND LEVEL, BESIDE THE FIGURE ============
   // Real Three.js models via Gear3D.create() (see the <script type="module">

@@ -271,9 +271,29 @@ sync every morning," or "sync before opening the dashboard." Not yet decided.
     the GPX route chart); `drawLineChartOverlay` always draws onto an svg `drawLineChart`
     already ran on, so it inherits the fix without its own change. Verified by direct DOM
     measurement (chart path's rendered bounding box now sits fully inside the svg's own box).
-- [ ] Sunrise/sunset times feeding a "headlamp needed" gear-checklist rule (rain/cold/heat/wind
-  gear is already done — see Calendar Integration above — this is the only remaining P2 item).
-  — **Est: 1 session (1–2h)**.
+- [x] **Sunrise/sunset → "headlamp needed" — done 2026-09-13 (Claude Code).** Added
+  `sunrise`/`sunset` to the existing daily Open-Meteo fetch and a `needsHeadlamp()` check
+  (strictly before sunrise or after sunset on the session's own day — a clean objective line,
+  not a fuzzy "near dawn/dusk" buffer) feeding into `weatherGearItems()` alongside the
+  rain/cold/heat/wind items, so it now applies to *any* outdoor session (road runs included,
+  not just trail — a pre-dawn road run needs visibility too) rather than being trail-only.
+  Removed the old static "Headlamp if pre-dawn/dusk start" line from the trail-vest checklist
+  since it's now genuinely time-aware instead of always shown regardless of actual start time.
+  One real gotcha handled: Open-Meteo returns sunrise/sunset as naive local-time strings with
+  no UTC offset even with a `timezone` param set — appended Taipei's fixed `+08:00` (no DST in
+  Taiwan) so parsing is correct regardless of the viewer's own browser timezone, matching
+  `nextSessionData.start`, which always carries a real offset from the Calendar API. Verified
+  live against real sunrise (~05:39) / sunset (~18:00) times for three cases: pre-dawn (04:30,
+  headlamp shown), midday (12:00, not shown), post-sunset (19:30, shown) — plus the
+  trail-vest + pre-dawn combination to confirm no duplicate/missing item after removing the
+  static line.
+
+**The original "Environmental panel" P2 item (air quality/UV, GPX route, headlamp) is now
+fully complete.** Route-GPX-as-a-map (an actual embedded map rather than the stylized route
+line already shipped) was never separately scoped and hasn't been revisited — flag if wanted.
+Push notifications and the morning wake-time alert below are a distinct, larger scope (real
+service-worker/PWA work, plus the chat-triggered-sync re-scope question) and remain open.
+
 - [ ] **Interactive push notifications** — Web Push + Notifications API `actions` array for
   real quick-log buttons (not Google Home script notifications — confirmed insufficient, no
   button/action support). iPhone needs PWA home-screen install first (iOS 16.4+). Since sync

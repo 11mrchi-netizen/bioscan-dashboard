@@ -2220,7 +2220,7 @@ async function fetchDashboardData(sb){
         const GEAR_CHECKLISTS = {
           'barbell': ['Lifting shoes', 'Belt (if heavy day)', 'Chalk/straps for pulls', 'Water bottle'],
           'shoes-run': ['Road running shoes', 'Moisture-wicking socks', 'Water/hydration for runs >45min'],
-          'shoes-trail-vest': ['Trail running shoes', 'Hydration vest', 'Headlamp if pre-dawn/dusk start', 'Phone/GPS for route safety']
+          'shoes-trail-vest': ['Trail running shoes', 'Hydration vest', 'Phone/GPS for route safety']
         };
         const checklist = GEAR_CHECKLISTS[nextSessionData.gearKind] || [];
         let right = `<div class="fp-section"><div class="fp-section-title">GEAR CHECKLIST</div>`;
@@ -2233,7 +2233,7 @@ async function fetchDashboardData(sb){
         if(isOutdoorSession){
           const sessionWeather = getSessionWeather();
           if(sessionWeather){
-            const extraItems = weatherGearItems(sessionWeather);
+            const extraItems = weatherGearItems(sessionWeather, nextSessionData.start);
             right += `<div class="fp-section" style="margin-top:10px;"><div class="fp-section-title">WEATHER-DRIVEN (${weatherCodeLabel(sessionWeather.code)}, ${Math.round(sessionWeather.tMin)}–${Math.round(sessionWeather.tMax)}°C)</div>`;
             if(extraItems.length === 0){
               right += `<div class="fp-note">No extra gear flagged for the forecast conditions.</div>`;
@@ -3347,31 +3347,48 @@ async function fetchDashboardData(sb){
       .toLocaleDateString('en-CA', {timeZone:'Asia/Taipei'});
     const d = liveWeatherData.daily;
     const dayIdx = d.time.indexOf(sessionDateStr);
+    // Open-Meteo returns sunrise/sunset as naive local-time strings (no UTC
+    // offset) when a timezone param is given — appending Taipei's fixed
+    // +08:00 (no DST in Taiwan) makes them parse correctly regardless of the
+    // viewer's own browser timezone, matching nextSessionData.start, which
+    // always carries a real offset from the Calendar API.
     if(dayIdx !== -1){
       return {
         code: d.weather_code[dayIdx],
         precipProb: d.precipitation_probability_max[dayIdx],
         tMin: d.temperature_2m_min[dayIdx],
         tMax: d.temperature_2m_max[dayIdx],
-        windMax: d.wind_speed_10m_max[dayIdx]
+        windMax: d.wind_speed_10m_max[dayIdx],
+        sunrise: d.sunrise[dayIdx] + '+08:00',
+        sunset: d.sunset[dayIdx] + '+08:00'
       };
     }
     const c = liveWeatherData.current;
     return {
       code: c.weather_code, precipProb: c.precipitation > 0 ? 100 : 0,
-      tMin: c.temperature_2m, tMax: c.temperature_2m, windMax: c.wind_speed_10m
+      tMin: c.temperature_2m, tMax: c.temperature_2m, windMax: c.wind_speed_10m,
+      sunrise: d.sunrise[0] + '+08:00', sunset: d.sunset[0] + '+08:00'
     };
+  }
+
+  // Dark-start check: strictly before sunrise or after sunset on the
+  // session's own day — a clean, objective line rather than a fuzzy "near
+  // dawn/dusk" buffer.
+  function needsHeadlamp(sessionStartIso, sunriseIso, sunsetIso){
+    const start = new Date(sessionStartIso).getTime();
+    return start < new Date(sunriseIso).getTime() || start > new Date(sunsetIso).getTime();
   }
 
   // Extra gear items driven by the session-day forecast — layered on top of
   // the session-type checklist (GEAR_CHECKLISTS), not a replacement for it.
-  function weatherGearItems(w){
+  function weatherGearItems(w, sessionStartIso){
     const items = [];
     const rainCode = (w.code >= 51 && w.code <= 67) || (w.code >= 80 && w.code <= 82) || w.code >= 95;
     if(rainCode || w.precipProb >= 40) items.push('Rain jacket / waterproof layer');
     if(w.tMin <= 15) items.push('Extra warm layer (cold start)');
     if(w.tMax >= 30) items.push('Extra electrolytes/water (heat)');
     if(w.windMax >= 25) items.push('Windbreaker (high wind)');
+    if(needsHeadlamp(sessionStartIso, w.sunrise, w.sunset)) items.push('Headlamp (dark start — before sunrise/after sunset)');
     return items;
   }
 
@@ -3379,7 +3396,7 @@ async function fetchDashboardData(sb){
     try{
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${TAIPEI_LAT}&longitude=${TAIPEI_LON}` +
         `&current=temperature_2m,precipitation,weather_code,wind_speed_10m,relative_humidity_2m` +
-        `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max` +
+        `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset` +
         `&forecast_days=4&timezone=Asia%2FTaipei`;
       const res = await fetch(url);
       if(!res.ok) throw new Error(`Open-Meteo returned ${res.status}`);

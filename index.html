@@ -2157,11 +2157,20 @@ async function fetchDashboardData(sb){
       source: "SOURCE: LIVE — Google Calendar API (browser-direct, calendar.readonly scope)",
       render(){
         if(!nextSessionData){
+          // 401 means the token itself is invalid/expired — a re-login fixes it.
+          // 403 means Google is deliberately denying the request even with a
+          // valid token — almost always a Google Cloud / OAuth-consent config
+          // issue (Calendar API not enabled for the project, or the
+          // calendar.readonly scope not actually granted), which a re-login
+          // will NOT fix. Conflating the two sent past debugging in the wrong
+          // direction, so they get distinct messages.
           const noTokenReason = !window.googleProviderToken
             ? "Calendar access not granted for this session — sign out and back in to enable (the calendar.readonly scope was added after your last login)."
-            : calendarFetchError
+            : calendarFetchError?.startsWith('401')
               ? `Calendar fetch failed (${escapeHtml(calendarFetchError)}) — the Google Calendar token for this session has likely expired (it can go stale after about an hour and a page refresh alone won't renew it). Sign out and back in to get a fresh one.`
-              : "No upcoming training session (colorId 8) found in the next 7 days.";
+              : calendarFetchError
+                ? `Calendar fetch failed (${escapeHtml(calendarFetchError)}) — this is Google actively denying the request, not a stale token, so signing back in won't fix it. Check that the Google Calendar API is enabled for the Google Cloud project behind this app's OAuth client, and that calendar.readonly is listed under that project's OAuth consent screen scopes.`
+                : "No upcoming training session (colorId 8) found in the next 7 days.";
           let left = `<div class="fp-section"><div class="fp-section-title">SESSION</div>
             <div class="stat-line"><span class="k">Type</span><span class="v">—</span></div>
             <div class="stat-line"><span class="k">Time</span><span class="v">—</span></div>
@@ -3388,8 +3397,16 @@ async function fetchDashboardData(sb){
         `?timeMin=${encodeURIComponent(now)}&timeMax=${encodeURIComponent(weekOut)}` +
         `&singleEvents=true&orderBy=startTime&maxResults=50`;
       const res = await fetch(url, { headers: { 'Authorization': `Bearer ${window.googleProviderToken}` } });
-      if(!res.ok) throw new Error(`Calendar API returned ${res.status}`);
-      const data = await res.json();
+      const data = await res.json().catch(()=>null);
+      if(!res.ok){
+        // Surface Google's own error message, not just the HTTP status — a 401
+        // ("invalid_token"/expired) needs a re-login, but a 403 ("insufficient
+        // authentication scopes" or "Calendar API has not been used in this
+        // project") is a Google Cloud / OAuth-consent configuration problem
+        // that re-logging in won't fix, and the two look identical without this.
+        const reason = data?.error?.message || res.statusText || 'unknown error';
+        throw new Error(`${res.status} — ${reason}`);
+      }
       const nextTraining = (data.items || []).find(ev => ev.colorId === '8');
       if(!nextTraining){
         console.warn('No upcoming training-session (colorId 8) events found in the next 7 days.');

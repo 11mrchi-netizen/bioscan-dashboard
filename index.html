@@ -46,6 +46,21 @@
   }
   @media (max-width:900px){ #gear-canvas{ display:none; } }
 
+  /* ---- session label — sits directly above the gear canvas, tappable ----
+     Real calendar data not wired yet (see roadmap P1 "next session" item) —
+     placeholder text only for now, but the panel/click plumbing is real. */
+  .session-label{
+    position:absolute; left:56%; bottom:calc(2% + min(16vw, 190px) + 10px);
+    transform:translateX(0); z-index:2; cursor:pointer;
+    width:min(20vw, 220px); text-align:center;
+    background:rgba(18,16,30,0.75); border:1px solid var(--line-bright); border-radius:12px;
+    padding:8px 12px; -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
+    transition:border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .session-label:hover{ border-color:var(--cyan); box-shadow:0 0 14px rgba(76,241,255,0.25); }
+  .session-label-eyebrow{ font-family:'IBM Plex Mono', monospace; font-size:8.5px; letter-spacing:0.08em; color:var(--muted); margin-bottom:3px; }
+  .session-label-title{ font-size:13px; font-weight:600; color:var(--text); }
+  @media (max-width:900px){ .session-label{ display:none; } }
   /* ---- weather toggle (manual preview control — swap for live Open-Meteo data later) ---- */
   .weather-toggle{
     position:fixed; bottom:14px; right:14px; z-index:50;
@@ -138,6 +153,15 @@
   .stat-card-sub{ font-size:8px; color:var(--muted); letter-spacing:0.06em; margin-top:1px; }
 
   .stat-bars{ display:flex; flex-direction:column; gap:10px; margin-top:2px; }
+  .stat-card-labs-row{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:12px; padding-top:10px; border-top:1px solid var(--line);
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.05em;
+    color:var(--muted-2); cursor:pointer; transition:color 0.15s ease;
+  }
+  .stat-card-labs-row:hover{ color:var(--cyan); }
+  .stat-card-labs-row .labs-row-arrow{ transition:transform 0.15s ease; }
+  .stat-card-labs-row:hover .labs-row-arrow{ transform:translateX(3px); }
   .stat-bar-row{ position:relative; cursor:pointer; }
   .stat-bar-label{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
   .stat-bar-label .sbl-name{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--muted-2); letter-spacing:0.03em; }
@@ -429,8 +453,7 @@
   <div class="topbar-strip">
     <div class="tb-cell" data-open="strength"><div class="tb-label">STRENGTH — SQUAT 1RM</div><div class="tb-value ok">115.5 kg</div><div class="tb-sub2">PR Apr'25 · current 72.9kg</div></div>
     <div class="tb-cell" data-open="endurance"><div class="tb-label">ENDURANCE — 4WK VOL</div><div class="tb-value ok">19.6 mi/wk</div><div class="tb-sub2">longest 18.72km · pace +9.4%</div></div>
-    <div class="tb-cell" data-open="supplements"><div class="tb-label">SUPPLEMENTS</div><div class="tb-value">13 active</div><div class="tb-sub2">2 ended (DIM, Apigenin)</div></div>
-    <div class="tb-cell" data-open="labs"><div class="tb-label">LABS — hs-CRP</div><div class="tb-value watch">0.183 mg/dL</div><div class="tb-sub2">target &lt;0.10 · Apr 25 draw</div></div>
+    <div class="tb-cell" data-open="weather" id="weather-tb-cell"><div class="tb-label">WEATHER</div><div class="tb-value">—</div><div class="tb-sub2">loading…</div></div>
   </div>
 </div>
 
@@ -447,8 +470,15 @@
     <div class="stat-card-sub mono">COMPOSITE — SEE INFO</div>
   </div>
   <div class="stat-bars" id="stat-bars"></div>
+  <div class="stat-card-labs-row" id="stat-card-labs-row" data-open="labs">
+    <span>LABS</span><span class="labs-row-arrow">→</span>
+  </div>
 </div>
 
+<div class="session-label" id="session-label" data-open="session">
+  <div class="session-label-eyebrow">NEXT SESSION</div>
+  <div class="session-label-title" id="session-label-title">— placeholder —</div>
+</div>
 <canvas id="gear-canvas"></canvas>
 </div>
 
@@ -2097,6 +2127,54 @@ async function fetchDashboardData(sb){
 
   // ============ PANEL DEFINITIONS ============
   const PANELS = {
+    session: {
+      eyebrow: "SLOT // UPCOMING", title: "Next Session", status: "watch",
+      source: "SOURCE: PLACEHOLDER — calendar integration not yet wired (roadmap P1)",
+      render(){
+        let left = `<div class="fp-section"><div class="fp-section-title">SESSION</div>
+          <div class="stat-line"><span class="k">Type</span><span class="v">— not yet connected —</span></div>
+          <div class="stat-line"><span class="k">Time</span><span class="v">—</span></div>
+          <div class="stat-line"><span class="k">Route</span><span class="v">—</span></div>
+        </div>`;
+        left += `<div class="gap-flag">⚠ This panel is a UI scaffold — real calendar data isn't wired in yet. Next step: pull the next 🏋️/🏃/⛰️ (colorId 8) event from the calendar and populate this panel for real.</div>`;
+
+        let right = `<div class="fp-section"><div class="fp-section-title">GEAR CHECKLIST</div>
+          <div class="fp-note">Will list required gear once session type is known — e.g. trail shoes + hydration vest for trail runs, lifting shoes for strength days.</div></div>`;
+        return {left, right, leftLabel:"SESSION DETAIL", rightLabel:"GEAR CHECKLIST"};
+      },
+      draw(){}
+    },
+    weather: {
+      eyebrow: "SLOT // ENVIRONMENT", title: "Weather", status: "ok",
+      source: "SOURCE: LIVE — Open-Meteo (no key required)",
+      render(){
+        if(!liveWeatherData){
+          return {left: `<div class="fp-note">Weather data still loading — try reopening this panel in a moment.</div>`, right: ''};
+        }
+        const c = liveWeatherData.current;
+        const d = liveWeatherData.daily;
+
+        let left = `<div class="fp-section"><div class="fp-section-title">RIGHT NOW</div>
+          <div class="stat-line"><span class="k">Conditions</span><span class="v">${weatherCodeLabel(c.weather_code)}</span></div>
+          <div class="stat-line"><span class="k">Temperature</span><span class="v">${Math.round(c.temperature_2m)}°C</span></div>
+          <div class="stat-line"><span class="k">Humidity</span><span class="v">${Math.round(c.relative_humidity_2m)}%</span></div>
+          <div class="stat-line"><span class="k">Wind</span><span class="v">${Math.round(c.wind_speed_10m)} km/h</span></div>
+          <div class="stat-line"><span class="k">Precipitation</span><span class="v">${c.precipitation} mm</span></div>
+        </div>`;
+        left += `<div class="fp-section" style="margin-top:8px;"><div class="fp-section-title">READ</div>
+          <div class="fp-note">Background scene auto-updates to match current conditions on load — the manual toggle (bottom-right) always overrides it if you want a different mood.</div></div>`;
+
+        let right = `<div class="fp-section"><div class="fp-section-title">3-DAY FORECAST</div>`;
+        for(let i=1; i<Math.min(4, d.time.length); i++){
+          const dateLabel = new Date(d.time[i]+'T00:00:00').toLocaleDateString('en-US',{weekday:'short', month:'short', day:'numeric'});
+          right += `<div class="stat-line"><span class="k">${dateLabel} — ${weatherCodeLabel(d.weather_code[i])}</span><span class="v">${Math.round(d.temperature_2m_min[i])}–${Math.round(d.temperature_2m_max[i])}°C</span></div>`;
+          right += `<div class="stat-line"><span class="k">Rain chance</span><span class="v">${d.precipitation_probability_max[i]}%</span></div>`;
+        }
+        right += `</div>`;
+        return {left, right, leftLabel:"CURRENT CONDITIONS", rightLabel:"FORECAST"};
+      },
+      draw(){}
+    },
     sleep: {
       eyebrow: "SLOT // CRANIAL — READINESS", title: "Readiness", status: "watch",
       source: "SOURCE: LIVE — list_sleep, list_wellbeing, list_recovery_sessions, list_rest_days, list_wearable_data",
@@ -2754,8 +2832,9 @@ async function fetchDashboardData(sb){
     {key:'head',         slot:'sleep',        label:'READINESS',    flagged:false, anchor:[0, 12.35, 0.15], test:(nx,x,y,z)=> nx > 0.90 && !(x > 0.55 && y < 12.0)},
     {key:'head_hormone',  slot:'hormones',     label:'HORMONES',     flagged:false, anchor:[0.85, 11.75, 0.05], test:(nx,x,y,z)=> nx > 0.90 && x > 0.55 && y < 12.0},
     {key:'lungs',         slot:'respiratory',  label:'LUNGS',        flagged:false, anchor:[0, 10.53, 0.5], test:(nx,x,y,z)=> nx > 0.74 && nx <= 0.90 && Math.abs(x) < 1.6},
-    {key:'heart',         slot:'heart',        label:'HEART',        flagged:false, anchor:[-0.7, 9.2, 0.5], test:(nx,x,y,z)=> nx > 0.65 && nx <= 0.74 && Math.abs(x) < 1.6},
+    {key:'heart',         slot:'heart',        label:'HEART',        flagged:false, anchor:[-0.7, 9.2, 0.5], test:(nx,x,y,z)=> nx > 0.65 && nx <= 0.74 && x <= 0.6},
     {key:'stomach',       slot:'nutrition',    label:'STOMACH',      flagged:false, anchor:[0, 7.38, 0.6], test:(nx,x,y,z)=> nx > 0.50 && nx <= 0.65 && Math.abs(x) < 1.7},
+    {key:'spleen',         slot:'supplements',  label:'SUPPLEMENTS',  flagged:false, anchor:[0.9, 8.0, 0.4], test:(nx,x,y,z)=> nx > 0.65 && nx <= 0.74 && x > 0.6},
     {key:'pelvis',        slot:'posture',      label:'POSTURE — R HIP', flagged:true,  anchor:[1.1, 5.9, 0.35], test:(nx,x,y,z)=> nx > 0.40 && nx <= 0.50 && x > 0.6 && x < 2.0},
     {key:'kneeR',         slot:'knee',         label:'KNEE — R',     flagged:true,  anchor:[0.7, 2.05, 0.4], test:(nx,x,y,z)=> nx > 0.13 && nx <= 0.19 && x > 0},
     {key:'feet',          slot:'steps',        label:'STEPS',        flagged:false, anchor:[0, 0.32, 0.6], test:(nx,x,y,z)=> nx <= 0.05},
@@ -3076,11 +3155,11 @@ async function fetchDashboardData(sb){
   });
 
   // ============ LIVE WEATHER — Open-Meteo, no key required ============
-  // Fetches current conditions for Taipei and maps the WMO weather code
-  // (+ wind/precip thresholds) onto the dashboard's four background variants.
-  // Runs once on load; the manual toggle buttons above still work afterward
-  // as a user override, since setWeather() is the same call either way.
+  // Fetches current conditions + a 3-day forecast for Taipei. Current
+  // conditions drive the outrun background variant (see setWeather() above);
+  // the full response is also stored for the weather top-bar panel.
   const TAIPEI_LAT = 25.033, TAIPEI_LON = 121.5654;
+  let liveWeatherData = null; // populated by fetchLiveWeather(), read by the weather panel
 
   function mapWeatherCodeToVariant(code, windSpeedKmh, precipMm){
     // Typhoon: no single WMO code means this — treat very high wind or heavy
@@ -3096,16 +3175,36 @@ async function fetchDashboardData(sb){
     return 'sunny'; // unrecognized code — fail toward the least dramatic variant
   }
 
+  function weatherCodeLabel(code){
+    const labels = {
+      0:'Clear', 1:'Mainly clear', 2:'Partly cloudy', 3:'Overcast',
+      45:'Fog', 48:'Depositing fog',
+      51:'Light drizzle', 53:'Drizzle', 55:'Dense drizzle',
+      56:'Freezing drizzle', 57:'Freezing drizzle',
+      61:'Slight rain', 63:'Rain', 65:'Heavy rain',
+      66:'Freezing rain', 67:'Freezing rain',
+      71:'Slight snow', 73:'Snow', 75:'Heavy snow', 77:'Snow grains',
+      80:'Slight showers', 81:'Showers', 82:'Violent showers',
+      85:'Slight snow showers', 86:'Snow showers',
+      95:'Thunderstorm', 96:'Thunderstorm w/ hail', 99:'Thunderstorm w/ heavy hail'
+    };
+    return labels[code] || 'Unknown';
+  }
+
   async function fetchLiveWeather(){
     try{
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${TAIPEI_LAT}&longitude=${TAIPEI_LON}` +
-        `&current=temperature_2m,precipitation,weather_code,wind_speed_10m&timezone=Asia%2FTaipei`;
+        `&current=temperature_2m,precipitation,weather_code,wind_speed_10m,relative_humidity_2m` +
+        `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+        `&forecast_days=4&timezone=Asia%2FTaipei`;
       const res = await fetch(url);
       if(!res.ok) throw new Error(`Open-Meteo returned ${res.status}`);
       const data = await res.json();
+      liveWeatherData = data;
       const c = data.current;
       const variant = mapWeatherCodeToVariant(c.weather_code, c.wind_speed_10m, c.precipitation);
       setWeather(variant);
+      renderWeatherTopbarCell();
     } catch(e){
       // Fail quietly to the default 'sunny' state already set — a broken
       // weather fetch should never block the rest of the dashboard from
@@ -3114,6 +3213,14 @@ async function fetchDashboardData(sb){
     }
   }
   fetchLiveWeather();
+
+  function renderWeatherTopbarCell(){
+    const cell = document.getElementById('weather-tb-cell');
+    if(!cell || !liveWeatherData) return;
+    const c = liveWeatherData.current;
+    cell.querySelector('.tb-value').textContent = `${Math.round(c.temperature_2m)}°C`;
+    cell.querySelector('.tb-sub2').textContent = `${weatherCodeLabel(c.weather_code)} · ${Math.round(c.wind_speed_10m)} km/h wind`;
+  }
 
   // ============ TRAINING-DAY GEAR — GROUND LEVEL, BESIDE THE FIGURE ============
   // Real Three.js models via Gear3D.create() (see the <script type="module">

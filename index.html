@@ -2957,10 +2957,30 @@ async function fetchDashboardData(sb){
     // nx = normalized height 0(feet)-1(head). x/z in original mesh units (X:-5..5, Z:-1.38..0.99)
     {key:'head',         slot:'sleep',        label:'READINESS',    flagged:false, anchor:[0, 12.35, 0.15], test:(nx,x,y,z)=> nx > 0.90 && !(x > 0.55 && y < 12.0)},
     {key:'head_hormone',  slot:'hormones',     label:'HORMONES',     flagged:false, anchor:[0.85, 11.75, 0.05], test:(nx,x,y,z)=> nx > 0.90 && x > 0.55 && y < 12.0},
-    {key:'lungs',         slot:'respiratory',  label:'LUNGS',        flagged:false, anchor:[0, 10.53, 0.5], test:(nx,x,y,z)=> nx > 0.74 && nx <= 0.90 && Math.abs(x) < 1.6},
-    {key:'heart',         slot:'heart',        label:'HEART',        flagged:false, anchor:[-0.7, 9.2, 0.5], test:(nx,x,y,z)=> nx > 0.65 && nx <= 0.74 && x <= 0.6},
+    // LUNGS (nx 0.72-0.90): confirmed via direct analysis of the raw mesh vertex
+    // data (see ROADMAP.md) that there is NO geometric gap between torso and
+    // shoulder/arm anywhere in this height band — the shoulder is anatomically
+    // continuous with the chest, and even surface-normal orientation doesn't
+    // cleanly separate them (front-facing arm surface exists at the same x
+    // range as the chest). abs(x) is tightened from the original 1.6 to 1.0 as
+    // a best-effort reduction of the false-positive area (confirmed normal.z
+    // turns negative — surface facing sideways, not toward camera — past
+    // roughly x=1.2), but this band cannot be made fully correct without a
+    // rigged/segmented mesh; a raised-arm click can still occasionally
+    // false-positive here.
+    {key:'lungs',         slot:'respiratory',  label:'LUNGS',        flagged:false, anchor:[0, 10.53, 0.5], test:(nx,x,y,z)=> nx > 0.72 && nx <= 0.90 && Math.abs(x) < 1.0},
+    // HEART/SPLEEN (nx 0.65-0.72): unlike lungs, the raw mesh DOES have a real
+    // gap here between torso (|x| up to ~1.0-1.3 depending on exact height)
+    // and the arm (reappearing past ~1.7-2.4) — confirmed empirically, gap
+    // narrowest at nx~0.71-0.72 where it's [1.29, 1.68]. 1.4 sits safely
+    // inside that gap across the whole band. Both tests previously had NO
+    // upper/outer x bound at all (heart: x<=0.6 with no lower bound; spleen:
+    // x>0.6 with no upper bound) — meaning any click on either arm at this
+    // height, however far out, matched one of these two regions. That's the
+    // confirmed bug (clicking the forearm opened Supplements).
+    {key:'heart',         slot:'heart',        label:'HEART',        flagged:false, anchor:[-0.7, 9.2, 0.5], test:(nx,x,y,z)=> nx > 0.65 && nx <= 0.72 && x >= -1.4 && x <= 0.6},
     {key:'stomach',       slot:'nutrition',    label:'STOMACH',      flagged:false, anchor:[0, 7.38, 0.6], test:(nx,x,y,z)=> nx > 0.50 && nx <= 0.65 && Math.abs(x) < 1.7},
-    {key:'spleen',         slot:'supplements',  label:'SUPPLEMENTS',  flagged:false, anchor:[0.9, 8.0, 0.4], test:(nx,x,y,z)=> nx > 0.65 && nx <= 0.74 && x > 0.6},
+    {key:'spleen',         slot:'supplements',  label:'SUPPLEMENTS',  flagged:false, anchor:[0.9, 8.0, 0.4], test:(nx,x,y,z)=> nx > 0.65 && nx <= 0.72 && x > 0.6 && x <= 1.4},
     {key:'pelvis',        slot:'posture',      label:'POSTURE — R HIP', flagged:true,  anchor:[1.1, 5.9, 0.35], test:(nx,x,y,z)=> nx > 0.40 && nx <= 0.50 && x > 0.6 && x < 2.0},
     {key:'kneeR',         slot:'knee',         label:'KNEE — R',     flagged:true,  anchor:[0.7, 2.05, 0.4], test:(nx,x,y,z)=> nx > 0.13 && nx <= 0.19 && x > 0},
     {key:'feet',          slot:'steps',        label:'STEPS',        flagged:false, anchor:[0, 0.32, 0.6], test:(nx,x,y,z)=> nx <= 0.05},

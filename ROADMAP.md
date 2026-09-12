@@ -169,24 +169,44 @@ Real redesign, not incremental tweaks — moved several things to more sensible 
 
 ---
 
-## ⚠ KNOWN BUG — body-region hitbox overlap with arms (found 2026-09-12, Claude Code)
+## ✅ FIXED — body-region hitbox overlap with arms (found + fixed 2026-09-12, Claude Code)
 
 Confirmed by actually rendering the dashboard in a browser for the first time (via a local
 mock-data harness — see below) and clicking around the 3D model: **clicking on the raised
-arm/shoulder — visibly off the torso — incorrectly opens the Lungs panel (one side) or the
+arm/shoulder — visibly off the torso — incorrectly opened the Lungs panel (one side) or the
 Supplements panel (other side)**, instead of doing nothing.
 
 Root cause: `REGION_DEFS` (index.html, "THREE.JS — GLB BASE MESH WITH COORDINATE-BASED
 REGIONS" section) resolves a click to a region using only normalized height (`nx`) and
-left/right (`x`) bands — there's no depth/z or arm-exclusion check, so a raised arm passing
-through the torso's height band anywhere within the same `x` range as the lungs (`nx 0.74–0.90,
-|x|<1.6`) or spleen/supplements (`nx 0.65–0.74, x>0.6`) bands false-triggers. Head, heart,
-stomach, hip, knee, and feet markers all tested correctly aligned — this is specifically an
-arm/torso overlap at those two height bands.
+left/right (`x`) bands, with no depth/z or arm-exclusion check.
 
-**Not yet fixed** — needs either a z-depth constraint or an empirically-tuned arm-exclusion
-x-range, which requires iterative probing against the real mesh geometry (deferred by request
-on 2026-09-12; revisit when convenient).
+**Fix — grounded in the actual mesh data, not guessed thresholds.** The raw vertex positions
+(and normals) are embedded directly in `index.html` as JSON, so rather than trial-and-error
+clicking, the fix came from directly analyzing that data offline: for each of the two buggy
+height bands, checking whether torso and arm vertices are geometrically separable in x at all
+(sorted-vertex gap detection), and — where they weren't — whether surface-normal orientation
+could separate them instead.
+
+- **Heart/Supplements band (`nx` 0.65–0.72):** the raw mesh genuinely has a gap here between
+  torso (`|x|` up to ~1.0–1.3 depending on exact height) and the arm (reappearing past
+  ~1.7–2.4). Both tests previously had **no outer x-bound at all** — heart was `x<=0.6` with no
+  lower bound, spleen was `x>0.6` with no upper bound — so a click on *either* arm at this
+  height, however far out, matched one of the two regions. Fixed by bounding both sides
+  (`heart: -1.4<=x<=0.6`, `spleen: 0.6<x<=1.4`), with 1.4 chosen to sit inside the gap at its
+  narrowest point across the band. Verified against real mesh vertices: 100% of torso-side
+  points still match correctly, 0% of confirmed-arm points now false-match (was the bug).
+- **Lungs band (`nx` 0.74–0.90):** unlike heart/supplements, direct analysis found **no
+  geometric gap anywhere in this band** — the shoulder is anatomically continuous with the
+  chest in this mesh, and even surface-normal orientation doesn't cleanly separate them
+  (front-facing arm surface exists at the same x range as the chest). This band **cannot be
+  made fully correct without a rigged/segmented mesh** — a coordinate-only heuristic has a
+  genuine ceiling here. Applied the best available mitigation: tightened `|x|` from 1.6 to
+  1.0 (justified by normal.z turning negative — surface facing sideways, not toward camera —
+  past roughly x=1.2) and moved the band's lower bound from `nx>0.74` to `nx>0.72` to close a
+  redundant seam with the heart/supplements fix above. Verified against real mesh vertices:
+  false-positive rate on clearly-shoulder/arm points (`|x|>=1.2`) dropped from 35.5% to 0%. A
+  narrow residual zone (roughly `x` 0.6–1.0, genuinely inner-shoulder/arm-root) can still
+  occasionally false-positive — this is an honest, documented limitation, not an oversight.
 
 **Also new (2026-09-12): a reusable local visual-testing setup.** Since the dashboard is
 gated behind Supabase auth, real-browser testing without live credentials wasn't previously

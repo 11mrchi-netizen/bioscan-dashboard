@@ -2197,7 +2197,26 @@ async function fetchDashboardData(sb){
         let right = `<div class="fp-section"><div class="fp-section-title">GEAR CHECKLIST</div>`;
         checklist.forEach(item => { right += `<div class="stat-line"><span class="k">☐ ${item}</span><span class="v"></span></div>`; });
         right += `</div>`;
-        right += `<div class="fp-note" style="margin-top:10px;">Checklist is based on session type only — doesn't yet factor in live weather (e.g. rain gear). See roadmap P2.</div>`;
+
+        // Weather only matters for outdoor sessions — barbell/strength work is
+        // indoor, so skip the weather-driven section entirely for that kind.
+        const isOutdoorSession = nextSessionData.gearKind !== 'barbell';
+        if(isOutdoorSession){
+          const sessionWeather = getSessionWeather();
+          if(sessionWeather){
+            const extraItems = weatherGearItems(sessionWeather);
+            right += `<div class="fp-section" style="margin-top:10px;"><div class="fp-section-title">WEATHER-DRIVEN (${weatherCodeLabel(sessionWeather.code)}, ${Math.round(sessionWeather.tMin)}–${Math.round(sessionWeather.tMax)}°C)</div>`;
+            if(extraItems.length === 0){
+              right += `<div class="fp-note">No extra gear flagged for the forecast conditions.</div>`;
+            } else {
+              extraItems.forEach(item => { right += `<div class="stat-line"><span class="k">☐ ${item}</span><span class="v"></span></div>`; });
+            }
+            right += `</div>`;
+            right += `<div class="fp-note" style="margin-top:10px;">Weather pulled for the session's own day when it falls in the 4-day forecast window, otherwise current conditions.</div>`;
+          } else {
+            right += `<div class="fp-note" style="margin-top:10px;">Weather data still loading — gear checklist will factor it in once available.</div>`;
+          }
+        }
 
         return {left, right, leftLabel:"SESSION DETAIL", rightLabel:"GEAR CHECKLIST"};
       },
@@ -3250,11 +3269,49 @@ async function fetchDashboardData(sb){
     return labels[code] || 'Unknown';
   }
 
+  // Resolves the weather a session will actually happen in: the matching day
+  // in the 4-day daily forecast if the session falls within that window,
+  // otherwise the current conditions (e.g. a same-day session). Returns null
+  // if weather hasn't loaded yet, so the gear checklist can fall back cleanly.
+  function getSessionWeather(){
+    if(!liveWeatherData || !nextSessionData) return null;
+    const sessionDateStr = new Date(nextSessionData.start)
+      .toLocaleDateString('en-CA', {timeZone:'Asia/Taipei'});
+    const d = liveWeatherData.daily;
+    const dayIdx = d.time.indexOf(sessionDateStr);
+    if(dayIdx !== -1){
+      return {
+        code: d.weather_code[dayIdx],
+        precipProb: d.precipitation_probability_max[dayIdx],
+        tMin: d.temperature_2m_min[dayIdx],
+        tMax: d.temperature_2m_max[dayIdx],
+        windMax: d.wind_speed_10m_max[dayIdx]
+      };
+    }
+    const c = liveWeatherData.current;
+    return {
+      code: c.weather_code, precipProb: c.precipitation > 0 ? 100 : 0,
+      tMin: c.temperature_2m, tMax: c.temperature_2m, windMax: c.wind_speed_10m
+    };
+  }
+
+  // Extra gear items driven by the session-day forecast — layered on top of
+  // the session-type checklist (GEAR_CHECKLISTS), not a replacement for it.
+  function weatherGearItems(w){
+    const items = [];
+    const rainCode = (w.code >= 51 && w.code <= 67) || (w.code >= 80 && w.code <= 82) || w.code >= 95;
+    if(rainCode || w.precipProb >= 40) items.push('Rain jacket / waterproof layer');
+    if(w.tMin <= 15) items.push('Extra warm layer (cold start)');
+    if(w.tMax >= 30) items.push('Extra electrolytes/water (heat)');
+    if(w.windMax >= 25) items.push('Windbreaker (high wind)');
+    return items;
+  }
+
   async function fetchLiveWeather(){
     try{
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${TAIPEI_LAT}&longitude=${TAIPEI_LON}` +
         `&current=temperature_2m,precipitation,weather_code,wind_speed_10m,relative_humidity_2m` +
-        `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+        `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max` +
         `&forecast_days=4&timezone=Asia%2FTaipei`;
       const res = await fetch(url);
       if(!res.ok) throw new Error(`Open-Meteo returned ${res.status}`);

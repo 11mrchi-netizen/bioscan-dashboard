@@ -1,0 +1,363 @@
+# Bioscan Dashboard — Project Roadmap
+
+*Last updated: 2026-09-12. Supersedes all earlier versions of this file and the original
+Sept 12 calendar event description (which hit Google Calendar's length limit).*
+
+**Time estimates are directional, not committed.** They assume focused session-based work
+(evenings/weekends style), not full-time effort, and don't account for debugging or platform
+surprises. Treat them as "roughly this scale," not a deadline.
+
+---
+
+## ⚠ CORRECTED AUTOMATION MODEL (read this first)
+
+The original plan assumed Wellness Project supported an unattended personal API key for
+scheduled/headless access (GitHub Actions running a cron job with no human present). **This
+turned out to be wrong** — Wellness Project's Claude connector (`wellnessproject.ai/settings/claude`)
+is OAuth-only: "Sign-in happens through your Wellness Project account, no API key needed,"
+confirmed directly from their own in-app guide. There is no unattended access path.
+
+**What this means practically**: the daily sync cannot run on a schedule with nobody around.
+Instead, **you ask Claude (in a chat like this one, where the Wellness Project MCP connector
+is already authorized via your browser session) to run the sync**, and Claude pulls fresh data
+and writes it directly to Supabase in that same conversation. This is a real, working, tested
+mechanism — just manually-triggered rather than fully automatic.
+
+The `daily-sync.yml` GitHub Actions workflow and `sync.js` script drafted early on are **not
+in use** for this reason — kept only as a reference in case Wellness Project adds unattended
+API access in the future, in which case they'd need re-validating against the real API
+contract (they were written from general MCP-protocol assumptions, never verified against
+Wellness Project's actual request/response shape).
+
+---
+
+## 🛠 DEVELOPMENT WORKFLOW SPLIT (new, 2026-09-12)
+
+Starting this session, work on the project splits across two surfaces, deliberately:
+
+- **Claude Code** (local, has real filesystem/git access and — critically — can actually
+  render the page in a browser, which this chat has never been able to do) is now the primary
+  driver for changes to `index.html` / `login.html` themselves. A full setup/briefing prompt
+  was written for it (`claude-code-setup-prompt.md`, delivered separately) covering the real
+  architecture, known bug classes already hit once, and credential-handling rules.
+- **This chat** (claude.ai) stays the driver for anything using the MCP connectors already
+  live here and not (yet) replicated in Claude Code: Supabase schema/data work, Wellness
+  Project syncs, Google Calendar/roadmap discussions.
+- **Why**: every bug this whole build has hit (zero-dimension canvas crashes, wrong gear
+  asset picked, misplaced UI elements, the `login.html` auto-redirect trap) was only caught
+  because the person manually tested in a real browser and reported back — there was no way
+  for Claude (in this chat) to see a render or run the code. That's the concrete gap Claude
+  Code closes.
+
+---
+
+## ✅ FOUNDATION — COMPLETE (2026-09-11)
+
+Real, live, verified infrastructure:
+
+- **Supabase project**: `bioscan-dashboard`, region `ap-southeast-1` (Singapore), project ref
+  `ugfrglbcoivkprjqvjzz`, free tier ($0/month confirmed). Postgres 17.6.
+- **22 tables**, full domain coverage across every roadmap tier (injuries, supplements,
+  lab_draws/lab_results, wearable_daily, sleep_daily, wellbeing_daily, hydration_daily,
+  body_metrics, meals, recovery_sessions, rest_days, runs, sync_log, illnesses, people,
+  encounters, arousal_daily, masturbation_log, stool_log, clothing_items, laundry_loads).
+  Row-level security enabled and policy-correct on all 22 (verified via Supabase's own
+  security advisor — zero real warnings). RLS performance-optimized (`(select auth.uid())`
+  pattern) and fully indexed on every foreign key.
+- **Auth**: Google OAuth via Supabase Auth, confirmed working end-to-end. One real user:
+  `d.demarchi11@gmail.com`, provider `google`, user id `9757c37c-28c2-4d5e-bb3d-8027c853f7d7`.
+  Scope later extended to include `calendar.readonly` (see Calendar Integration below) —
+  requires the user to have signed in *after* that scope was added; a sign-out button now
+  exists in the dashboard's top bar specifically to make re-authorizing possible (the
+  original `login.html` auto-redirects past the sign-in button whenever a valid session
+  already exists, so signing out first is the only way to re-grant a new scope).
+- **GitHub repo**: `11mrchi-netizen/bioscan-dashboard`, public, GitHub Pages live at
+  `https://11mrchi-netizen.github.io/bioscan-dashboard/`.
+- **First real manual sync completed**: pulled live from Wellness Project, written to
+  Supabase, logged in `sync_log`. Proved the actual end-to-end mechanism (chat-triggered, not
+  cron-triggered) — and has been re-run since with real data across all populated domains
+  (30 days of wearable/sleep/wellbeing/hydration/meals, 16 real runs, both lab draws / 77
+  markers, etc.).
+
+**Secrets note**: `SUPABASE_SERVICE_ROLE_KEY` and `WELLNESS_API_KEY` were never actually
+needed given the corrected automation model above — only the Supabase *publishable* key
+lives in committed files, which is safe by design (RLS is the real gate, not key secrecy).
+
+---
+
+## ✅ FULL DASHBOARD MERGE — COMPLETE (2026-09-11)
+
+The full 3D hologram dashboard (body model, readiness tab, character sheet, outrun
+background, gear assets) — previously a separate standalone file built across earlier
+sessions — is now `index.html` itself, live against real Supabase data. The old hardcoded
+`DASHBOARD_DATA` object was replaced with `fetchDashboardData()`, an async function that
+queries every relevant table in parallel and reshapes results into the exact structure every
+panel's `render()` already expected — so panel code itself didn't need rewriting, only the
+data layer underneath it.
+
+- 13 original panels confirmed working against live data.
+- Endurance and labs panels, which were still hardcoded static text even after the initial
+  merge, have since been upgraded to render from the live `runs` and `lab_draws`/`lab_results`
+  tables (see Layout Rework below — labs moved location in the same pass).
+
+---
+
+## ✅ LIVE WEATHER — COMPLETE (2026-09-12)
+
+Open-Meteo (no key required) wired in two ways:
+1. Drives the outrun background's variant (sunny/cloudy/rainy/typhoon) automatically on load,
+   via a WMO-weather-code mapping (manual toggle still works as an override).
+2. A dedicated **Weather** panel (see Layout Rework below) shows current conditions + a real
+   3-day forecast.
+
+---
+
+## ✅ LIVE CALENDAR / SESSION INTEGRATION — COMPLETE (2026-09-12)
+
+Genuinely browser-direct, no Supabase table involved — a deliberate architecture choice over
+the alternative (a `sessions` table synced from this chat), since it was worth the extra
+one-time OAuth setup to get truly live data:
+
+- `login.html` requests the `calendar.readonly` scope at Google sign-in (added to the same
+  OAuth consent screen used for Supabase Auth), plus `access_type:'offline'` +
+  `prompt:'consent'` to force a refresh token — Google doesn't return one by default, and a
+  normal Supabase session refresh does **not** refresh the Google-specific `provider_token`,
+  only a fresh login does. This is a documented, still-open rough edge, not fully solved —
+  after roughly an hour, calendar calls may start silently failing back to a placeholder
+  state until the page is reloaded or the user signs in again.
+- `index.html` captures `session.provider_token` and calls the Google Calendar API directly
+  from the browser. Session-type detection uses **colorId `'8'`** (confirmed reliable from
+  real calendar data — cleaner than matching on emoji/title text, which varies).
+- Session type classification maps to the same 3 gear kinds the 3D gear model already
+  supports (barbell / shoes-run / shoes-trail-vest) and calls `setGearKind()` automatically.
+- A gear checklist renders per session type, **now weather-aware (done 2026-09-12, Claude
+  Code)**: for outdoor sessions (run/trail run — not barbell/strength, which is indoor), a
+  "WEATHER-DRIVEN" sub-section adds rain jacket / cold layer / heat hydration / windbreaker
+  items based on the forecast for the session's own day (falls back to current conditions if
+  the session is outside the 4-day Open-Meteo window). See `getSessionWeather()` and
+  `weatherGearItems()` near the live-weather code, and the `session` panel's `render()`.
+- GPX links (when present in the event description) are parsed and surfaced as a real link.
+- All calendar-sourced text is passed through an `escapeHtml()` helper before insertion into
+  `innerHTML` — defensive, since this is now genuinely external API data flowing into the page.
+
+---
+
+## ✅ LAYOUT REWORK — COMPLETE (2026-09-12)
+
+Real redesign, not incremental tweaks — moved several things to more sensible locations:
+
+- **Top bar**: reduced from 4 cells to 3 — Strength, Endurance, **Weather** (new). Supplements
+  and Labs removed from the top bar entirely.
+- **Supplements**: now a body-region marker (torso, opposite side from the Heart marker —
+  required narrowing Heart's own hitbox test band to prevent a real region-overlap bug caught
+  during this change, not after).
+- **Labs**: moved into the character-sheet stat card as a "LABS →" row at the bottom, using
+  the same generic `data-open` click-wiring every other panel trigger already uses.
+- **Session + gear**: a tappable "NEXT SESSION" label now sits directly above the 3D gear
+  model, opening full session detail (see Calendar Integration above).
+- **Sign-out button**: added to the top bar (see Foundation section — this was a genuine
+  missing piece, not a nice-to-have, since there was previously no way to re-trigger the
+  OAuth consent flow once signed in).
+
+---
+
+## ⚠ KNOWN BUG — body-region hitbox overlap with arms (found 2026-09-12, Claude Code)
+
+Confirmed by actually rendering the dashboard in a browser for the first time (via a local
+mock-data harness — see below) and clicking around the 3D model: **clicking on the raised
+arm/shoulder — visibly off the torso — incorrectly opens the Lungs panel (one side) or the
+Supplements panel (other side)**, instead of doing nothing.
+
+Root cause: `REGION_DEFS` (index.html, "THREE.JS — GLB BASE MESH WITH COORDINATE-BASED
+REGIONS" section) resolves a click to a region using only normalized height (`nx`) and
+left/right (`x`) bands — there's no depth/z or arm-exclusion check, so a raised arm passing
+through the torso's height band anywhere within the same `x` range as the lungs (`nx 0.74–0.90,
+|x|<1.6`) or spleen/supplements (`nx 0.65–0.74, x>0.6`) bands false-triggers. Head, heart,
+stomach, hip, knee, and feet markers all tested correctly aligned — this is specifically an
+arm/torso overlap at those two height bands.
+
+**Not yet fixed** — needs either a z-depth constraint or an empirically-tuned arm-exclusion
+x-range, which requires iterative probing against the real mesh geometry (deferred by request
+on 2026-09-12; revisit when convenient).
+
+**Also new (2026-09-12): a reusable local visual-testing setup.** Since the dashboard is
+gated behind Supabase auth, real-browser testing without live credentials wasn't previously
+possible. Claude Code now has a mock-data test harness (a scratch copy of `index.html` with
+`fetchDashboardData()` swapped for synthetic data, served locally via `.claude/launch.json`)
+that renders the full dashboard — 3D model, panels, gear, weather — without touching real
+Supabase data or Google auth. Not part of the committed repo; regenerate by copying
+`index.html` and stubbing `fetchDashboardData`/`nextSessionData` per the pattern used this
+session, whenever visual verification is needed again.
+
+---
+
+## Recurring: manual sync cadence
+
+Since Wellness Project sync is chat-triggered, decide a real cadence — e.g. "ask Claude to
+sync every morning," or "sync before opening the dashboard." Not yet decided.
+
+---
+
+## P1 — remaining items
+
+- [x] HRV readiness score + ACWR training load — done, live.
+- [x] Auth/access control — done.
+- [x] Next session + gear + weather panel — done (see sections above), including the
+  weather-aware gear checklist (done 2026-09-12).
+
+**P1 is now fully complete.**
+
+---
+
+## P2
+
+- [ ] **Environmental panel** — air quality (AQI/PM2.5) and UV index from Open-Meteo (same
+  source as weather, separate endpoint fields, no new key). Sunrise/sunset times feeding a
+  "headlamp needed" gear-checklist rule (rain/cold/heat/wind gear is already done — see
+  Calendar Integration above — this is just the remaining sunrise/sunset piece). Route GPX
+  rendered as a small map in the session panel.
+  — **Est: 1 session (2–3h)**.
+- [ ] **Interactive push notifications** — Web Push + Notifications API `actions` array for
+  real quick-log buttons (not Google Home script notifications — confirmed insufficient, no
+  button/action support). iPhone needs PWA home-screen install first (iOS 16.4+). Since sync
+  is chat-triggered rather than cron-triggered, push notifications can't fire from an
+  unattended sync job — they'd need to be sent as part of whatever triggers a manual sync, or
+  reconsidered as a "reminder to come ask Claude to sync" mechanism.
+  — **Est: 2–3 sessions (6–10h)**.
+- [ ] **Morning wake-time alert** — same re-scope consideration as push notifications above.
+
+### Researched & explicitly out of scope for now
+**True auto-cast to the Google TV Streamer 4K** — confirmed no action in Google's Home
+Automations API loads an arbitrary URL on a Cast/Google TV device. Would need the separate
+Google Cast SDK — a genuine mini-project of its own, not included in any estimate above.
+
+---
+
+## P3
+
+- [ ] **Spotify/music correlation** — novelty/texture feature, not core optimization —
+  lowest priority.
+  — **Est: 1 session (2–3h)**.
+
+---
+
+## P4
+
+- [ ] **Partner/encounter tracking** — Supabase tables `people` + `encounters` already exist
+  and are RLS-protected (see Foundation), just empty — no data-entry mechanism built yet.
+  Calendar-scan-for-Flamingo-events piece reuses the same browser-direct Calendar API pattern
+  already proven for sessions (see above) — genuinely less new work now than when this was
+  originally scoped, since the hard part (getting Calendar data into the browser at all) is
+  done. The "next-morning actionable push" piece inherits the same re-scope note as P2's push
+  notifications.
+- [ ] **Daily arousal + morning-erection logging** — table exists (`arousal_daily`), empty.
+- [ ] **Masturbation logging** — table exists (`masturbation_log`), empty.
+  — **Est: 1–2 sessions (4–6h)** for the full P4 set — now mostly UI + calendar-matching
+  logic, since schema work is already done.
+
+---
+
+## P5
+
+- [ ] **Illness/infection tracking** — table exists (`illnesses`), empty.
+- [ ] **Stool tracker** — table exists (`stool_log`), empty.
+  — **Est: 1 session (2–4h)** for both — schema-only remaining work is UI.
+
+---
+
+## P6 — Wardrobe Manager
+
+**Goal**: system picks tomorrow's clothing based on calendar events, planned workouts, and
+weather — tracks what's been worn, what needs washing, and resets on laundry.
+
+Tables exist (`clothing_items`, `laundry_loads`), empty, RLS-protected.
+
+### Open design questions (still open)
+1. **Rule-based vs. tag-based** outfit selection — recommend rule-based first (ships faster,
+  tags can layer on later).
+2. **Weather integration** — reuses the Open-Meteo pattern already live (see above).
+3. **Wash-need detection** — wear count / elapsed-days threshold per category.
+4. **Inventory entry burden** — real, one-time manual data-entry cost, separate from build time.
+
+**Est: 2–3 sessions (6–10h) for the build** + separate, variable inventory-entry time.
+
+---
+
+## P7 — Decouple from Wellness Project (do this LAST, after everything above ships)
+
+**Explicit sequencing decision**: finish P1–P6 first. This is a platform migration, not a
+feature — deliberately kept separate so it doesn't block or get tangled with the rest of the
+build. Goal: stop depending on Wellness Project's OAuth-only, chat-triggered sync and get
+data flowing more directly and more automatically.
+
+**Why this order**: Wellness Project was the right way to get started (working MCP connector,
+rich already-modeled data, got the whole pipeline proven end-to-end). But it has two real,
+permanent limits — no unattended API access (confirmed), and it doesn't write to Health
+Connect (confirmed by the user), so it's a dead end for ever centralizing data on-device.
+
+### Stage 1 — Zepp Mini Program → own server (stepping stone)
+Real, officially-documented pattern from Zepp's own workshop content ("How To Extract Health
+Data from Amazfit Smartwatches to a Web Server," zepp-health GitHub org): a Zepp OS Mini
+Program (Device App + Settings App + Side Service, running on-watch/in-companion-app) reads
+health data and POSTs it directly to a web server — no Wellness Project, no Google, no Health
+Connect in the loop. Zepp's own sample code exists (`zeppos-samples/application/2.0/post-health-data`,
+Node.js + MongoDB reference server) as a real starting point.
+- **Alternative researched**: unofficial cloud-session-token access (`zepp-life-mcp` pattern
+  — extract an `apptoken` from Zepp's web portal cookies). Faster to stand up, but
+  unofficial/reverse-engineered and could break without warning. Mini Program path preferred
+  — it's sanctioned, not scraped.
+- **Est: 2–4 sessions (6–14h)** — real uncertainty, depends on Zepp OS Mini Program tooling
+  quality, not yet evaluated hands-on.
+
+### Stage 2 — Companion Android app + Health Connect (long-term hub)
+A small Android app using the Health Connect SDK, reading locally-aggregated data (which —
+per ROOK's documented Zepp integration — already includes Zepp data once linked once, plus
+any other app already syncing to Health Connect) and forwarding it to Supabase.
+- Confirmed constraint: Health Connect is on-device only — no cloud API reads it directly. A
+  real Android app is unavoidable; no config-only shortcut exists.
+- Can plausibly stay a **personal, unpublished, sideloaded app** — Play Console health-data
+  declaration is only a hard requirement for public Play Store distribution.
+- **Est: 4–8 sessions (12–25h)** — genuine Android app development, the largest single build
+  on the entire roadmap.
+
+### Explicitly ruled out
+- **A pure Google Cloud / server-side app reading Health Connect directly** — confirmed
+  impossible; no cloud-reachable API exists.
+- **Google Health API** — real, but explicitly scoped by Google to Fitbit/Pixel Watch data;
+  doesn't apply to Amazfit/Zepp.
+
+**Est total for P7: 8–12 sessions (18–39h)** — the second-largest phase on the whole roadmap.
+
+---
+
+## Pn — Write-back to Wellness Project (indefinite timeline, deliberately unscheduled)
+
+Deprioritized below P7. Originally planned as a server-side script call using a personal API
+key — since that key doesn't exist, this needs real re-thinking before it's buildable at all:
+either (a) writes go through the same chat-triggered pattern as reads, meaning a dashboard
+button can't directly write to Wellness Project without a person approving it in a Claude
+conversation, or (b) something else entirely once P7's decoupling lands and Wellness Project
+may not even be the write target anymore. No time estimate given — genuinely blocked on a
+design decision, not on effort.
+
+---
+
+## Summary — rough remaining build time
+
+Foundation, the full dashboard merge, live weather, live calendar/session integration, and
+the layout rework are all done. P1 is fully complete. Remaining:
+
+| Tier | Est. hours |
+|---|---|
+| P2 (environmental panel + weather-aware gear checklist; push notifications need re-scope) | 8–13h+ |
+| P3 | 2–3h |
+| P4 (schema already done — UI + calendar-matching logic only) | 4–6h |
+| P5 (schema already done — UI only) | 2–4h |
+| P6 (Wardrobe) | 6–10h |
+| P7 (Decouple from Wellness Project — Zepp Mini Program, then Health Connect app) | 18–39h |
+| **Total** | **~40–75h** |
+
+The core "is this real" question was answered early — the pipeline works, proven with live
+data, the full dashboard UI is live against it, and weather + calendar are now genuinely live
+too. What's left is real product-building (P2–P6, all with schemas already in place) plus one
+large, deliberately-last platform migration (P7).

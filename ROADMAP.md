@@ -124,7 +124,15 @@ one-time OAuth setup to get truly live data:
   normal Supabase session refresh does **not** refresh the Google-specific `provider_token`,
   only a fresh login does. This is a documented, still-open rough edge, not fully solved —
   after roughly an hour, calendar calls may start silently failing back to a placeholder
-  state until the page is reloaded or the user signs in again.
+  state until the user signs out and back in (a plain page reload does **not** fix it, since
+  it doesn't get a fresh Google token). **Fixed 2026-09-12 (Claude Code): the placeholder now
+  correctly distinguishes this from "no session found."** Previously, a failed Calendar API
+  call (e.g. a 401 from an expired token) was silently swallowed and showed the same "No
+  upcoming training session (colorId 8) found" message as a genuine empty result — actively
+  misleading, since it looked like a color-matching bug rather than an auth problem. Now a
+  fetch failure sets `calendarFetchError` and the panel shows an accurate "Calendar fetch
+  failed... sign out and back in" message instead. See `fetchNextSession()`'s catch block and
+  the `session` panel's placeholder branch.
 - `index.html` captures `session.provider_token` and calls the Google Calendar API directly
   from the browser. Session-type detection uses **colorId `'8'`** (confirmed reliable from
   real calendar data — cleaner than matching on emoji/title text, which varies).

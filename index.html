@@ -2157,9 +2157,11 @@ async function fetchDashboardData(sb){
       source: "SOURCE: LIVE — Google Calendar API (browser-direct, calendar.readonly scope)",
       render(){
         if(!nextSessionData){
-          const noTokenReason = window.googleProviderToken
-            ? "No upcoming training session (colorId 8) found in the next 7 days."
-            : "Calendar access not granted for this session — sign out and back in to enable (the calendar.readonly scope was added after your last login).";
+          const noTokenReason = !window.googleProviderToken
+            ? "Calendar access not granted for this session — sign out and back in to enable (the calendar.readonly scope was added after your last login)."
+            : calendarFetchError
+              ? `Calendar fetch failed (${escapeHtml(calendarFetchError)}) — the Google Calendar token for this session has likely expired (it can go stale after about an hour and a page refresh alone won't renew it). Sign out and back in to get a fresh one.`
+              : "No upcoming training session (colorId 8) found in the next 7 days.";
           let left = `<div class="fp-section"><div class="fp-section-title">SESSION</div>
             <div class="stat-line"><span class="k">Type</span><span class="v">—</span></div>
             <div class="stat-line"><span class="k">Time</span><span class="v">—</span></div>
@@ -3350,6 +3352,9 @@ async function fetchDashboardData(sb){
   // text, which can vary). Meal-prep and other non-training events use
   // different colorIds and are correctly excluded.
   let nextSessionData = null;
+  let calendarFetchError = null; // set when the Calendar API call itself fails (e.g.
+                                  // expired provider_token), distinct from "no session
+                                  // found" — read by the session panel's placeholder text.
 
   function classifySessionType(summary){
     if(summary.includes('🏋️')) return {kind:'strength', gearKind:'barbell'};
@@ -3401,6 +3406,7 @@ async function fetchDashboardData(sb){
       renderSessionLabel();
       setGearKind(classification.gearKind);
     } catch(e){
+      calendarFetchError = e.message;
       console.warn('Live calendar fetch failed, session panel stays on placeholder:', e.message);
     }
   }

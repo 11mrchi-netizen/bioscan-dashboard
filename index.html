@@ -3075,6 +3075,46 @@ async function fetchDashboardData(sb){
     btn.addEventListener('click', ()=> setWeather(btn.dataset.weather));
   });
 
+  // ============ LIVE WEATHER — Open-Meteo, no key required ============
+  // Fetches current conditions for Taipei and maps the WMO weather code
+  // (+ wind/precip thresholds) onto the dashboard's four background variants.
+  // Runs once on load; the manual toggle buttons above still work afterward
+  // as a user override, since setWeather() is the same call either way.
+  const TAIPEI_LAT = 25.033, TAIPEI_LON = 121.5654;
+
+  function mapWeatherCodeToVariant(code, windSpeedKmh, precipMm){
+    // Typhoon: no single WMO code means this — treat very high wind or heavy
+    // rain as the typhoon-level variant rather than plain "rainy".
+    if(windSpeedKmh >= 60 || precipMm >= 15) return 'typhoon';
+    if(code === 0 || code === 1) return 'sunny';           // clear / mainly clear
+    if(code === 2 || code === 3) return 'cloudy';           // partly cloudy / overcast
+    if(code === 45 || code === 48) return 'cloudy';         // fog -> closest existing variant
+    if(code >= 51 && code <= 67) return 'rainy';            // drizzle / rain / freezing rain
+    if(code >= 71 && code <= 77) return 'cloudy';           // snow -> no snow variant exists yet
+    if(code >= 80 && code <= 82) return 'rainy';            // rain showers
+    if(code >= 95) return 'typhoon';                        // thunderstorm
+    return 'sunny'; // unrecognized code — fail toward the least dramatic variant
+  }
+
+  async function fetchLiveWeather(){
+    try{
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${TAIPEI_LAT}&longitude=${TAIPEI_LON}` +
+        `&current=temperature_2m,precipitation,weather_code,wind_speed_10m&timezone=Asia%2FTaipei`;
+      const res = await fetch(url);
+      if(!res.ok) throw new Error(`Open-Meteo returned ${res.status}`);
+      const data = await res.json();
+      const c = data.current;
+      const variant = mapWeatherCodeToVariant(c.weather_code, c.wind_speed_10m, c.precipitation);
+      setWeather(variant);
+    } catch(e){
+      // Fail quietly to the default 'sunny' state already set — a broken
+      // weather fetch should never block the rest of the dashboard from
+      // rendering. Logged for debugging, not surfaced to the user as an error.
+      console.warn('Live weather fetch failed, keeping default background:', e.message);
+    }
+  }
+  fetchLiveWeather();
+
   // ============ TRAINING-DAY GEAR — GROUND LEVEL, BESIDE THE FIGURE ============
   // Real Three.js models via Gear3D.create() (see the <script type="module">
   // block above — modified from the original gear3d.js to drop OrbitControls

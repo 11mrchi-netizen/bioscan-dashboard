@@ -2253,6 +2253,23 @@ async function fetchDashboardData(sb){
           <div class="stat-line"><span class="k">Wind</span><span class="v">${Math.round(c.wind_speed_10m)} km/h</span></div>
           <div class="stat-line"><span class="k">Precipitation</span><span class="v">${c.precipitation} mm</span></div>
         </div>`;
+
+        if(liveAirQualityData){
+          const aq = liveAirQualityData.current;
+          const aqi = aqiBand(aq.us_aqi);
+          const uvNow = uvBand(aq.uv_index);
+          const uvPeak = uvBand(liveAirQualityData.todayPeakUv);
+          left += `<div class="fp-section" style="margin-top:8px;"><div class="fp-section-title">AIR QUALITY &amp; UV</div>
+            <div class="stat-line"><span class="k">Air quality (US AQI)</span><span class="v ${aqi.cls}">${aq.us_aqi} — ${aqi.label}</span></div>
+            <div class="stat-line"><span class="k">PM2.5</span><span class="v">${aq.pm2_5} µg/m³</span></div>
+            <div class="stat-line"><span class="k">UV index (now)</span><span class="v ${uvNow.cls}">${aq.uv_index} — ${uvNow.label}</span></div>
+            <div class="stat-line"><span class="k">UV index (today's peak)</span><span class="v ${uvPeak.cls}">${liveAirQualityData.todayPeakUv ?? '—'} — ${uvPeak.label}</span></div>
+          </div>`;
+        } else {
+          left += `<div class="fp-section" style="margin-top:8px;"><div class="fp-section-title">AIR QUALITY &amp; UV</div>
+            <div class="fp-note">Still loading — try reopening this panel in a moment.</div></div>`;
+        }
+
         left += `<div class="fp-section" style="margin-top:8px;"><div class="fp-section-title">READ</div>
           <div class="fp-note">Background scene auto-updates to match current conditions on load — the manual toggle (bottom-right) always overrides it if you want a different mood.</div></div>`;
 
@@ -3351,6 +3368,55 @@ async function fetchDashboardData(sb){
     cell.querySelector('.tb-value').textContent = `${Math.round(c.temperature_2m)}°C`;
     cell.querySelector('.tb-sub2').textContent = `${weatherCodeLabel(c.weather_code)} · ${Math.round(c.wind_speed_10m)} km/h wind`;
   }
+
+  // ============ LIVE AIR QUALITY / UV — Open-Meteo Air Quality API ============
+  // Separate host from the weather forecast API (no key required either),
+  // rolled into the same top-bar "Weather" panel rather than a standalone
+  // panel — air quality/UV is environmental context for the same decision
+  // (what to wear/expect outside), not a distinct concern worth its own slot.
+  let liveAirQualityData = null; // { current: {...}, todayPeakUv: number|null }
+
+  function aqiBand(usAqi){
+    if(usAqi == null) return {label:'—', cls:''};
+    if(usAqi <= 50) return {label:'Good', cls:'ok'};
+    if(usAqi <= 100) return {label:'Moderate', cls:'watch'};
+    if(usAqi <= 150) return {label:'Unhealthy (sensitive groups)', cls:'watch'};
+    if(usAqi <= 200) return {label:'Unhealthy', cls:'hot'};
+    if(usAqi <= 300) return {label:'Very unhealthy', cls:'hot'};
+    return {label:'Hazardous', cls:'hot'};
+  }
+
+  function uvBand(uv){
+    if(uv == null) return {label:'—', cls:''};
+    if(uv <= 2) return {label:'Low', cls:'ok'};
+    if(uv <= 5) return {label:'Moderate', cls:'ok'};
+    if(uv <= 7) return {label:'High', cls:'watch'};
+    if(uv <= 10) return {label:'Very high', cls:'hot'};
+    return {label:'Extreme', cls:'hot'};
+  }
+
+  async function fetchLiveAirQuality(){
+    try{
+      const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${TAIPEI_LAT}&longitude=${TAIPEI_LON}` +
+        `&current=pm2_5,pm10,us_aqi,european_aqi,uv_index` +
+        `&hourly=uv_index&forecast_days=1&timezone=Asia%2FTaipei`;
+      const res = await fetch(url);
+      if(!res.ok) throw new Error(`Open-Meteo air quality returned ${res.status}`);
+      const data = await res.json();
+      // The air-quality API has no daily-aggregate endpoint (unlike the main
+      // forecast API), so today's peak UV is derived from the hourly array —
+      // "current" UV reads 0 outside daylight hours, which is uninformative
+      // for planning a session earlier or later in the day.
+      const todayPeakUv = data.hourly?.uv_index?.length
+        ? Math.max(...data.hourly.uv_index) : null;
+      liveAirQualityData = { current: data.current, todayPeakUv };
+    } catch(e){
+      // Same fail-quiet policy as fetchLiveWeather — this is supplementary
+      // context, never something that should block the rest of the dashboard.
+      console.warn('Live air quality fetch failed:', e.message);
+    }
+  }
+  fetchLiveAirQuality();
 
   // ============ LIVE CALENDAR — Google Calendar API, browser-direct ============
   // Uses session.provider_token (Google's own access token, captured in

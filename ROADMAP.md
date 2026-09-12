@@ -219,11 +219,18 @@ sync every morning," or "sync before opening the dashboard." Not yet decided.
 
 ## P2
 
-- [ ] **Environmental panel** — air quality (AQI/PM2.5) and UV index from Open-Meteo (same
-  source as weather, separate endpoint fields, no new key). Sunrise/sunset times feeding a
-  "headlamp needed" gear-checklist rule (rain/cold/heat/wind gear is already done — see
-  Calendar Integration above — this is just the remaining sunrise/sunset piece). Route GPX
-  rendered as a small map in the session panel.
+- [x] **Air quality & UV — done 2026-09-12 (Claude Code).** Rolled into the existing top-bar
+  "Weather" panel (not a separate panel — same decision-making context as weather itself)
+  rather than a standalone slot. Pulls from Open-Meteo's separate Air Quality API
+  (`air-quality-api.open-meteo.com`, also keyless): current US AQI + European AQI, PM2.5,
+  current UV index, and today's peak UV (that API has no daily-aggregate endpoint, so peak UV
+  is derived from its hourly array — "current" UV reads 0 outside daylight hours, which isn't
+  useful for planning). AQI and UV each get a human-readable band (Good/Moderate/Unhealthy...;
+  Low/Moderate/High/Very High/Extreme) with ok/watch/hot color coding matching the rest of the
+  dashboard. See `fetchLiveAirQuality()`, `aqiBand()`, `uvBand()` near the live-weather code.
+- [ ] Sunrise/sunset times feeding a "headlamp needed" gear-checklist rule (rain/cold/heat/wind
+  gear is already done — see Calendar Integration above — this is just the sunrise/sunset
+  piece). Route GPX rendered as a small map in the session panel.
   — **Est: 1 session (2–3h)**.
 - [ ] **Interactive push notifications** — Web Push + Notifications API `actions` array for
   real quick-log buttons (not Google Home script notifications — confirmed insufficient, no

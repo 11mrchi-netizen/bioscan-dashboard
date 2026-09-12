@@ -83,7 +83,12 @@
       provider: 'google',
       options: {
         redirectTo: window.location.origin + window.location.pathname.replace('login.html', 'index.html'),
-        scopes: 'https://www.googleapis.com/auth/calendar.readonly',
+        // drive.readonly (added for GPX route files linked in calendar events,
+        // hosted on Drive and not publicly shared) is broader than calendar.readonly
+        // — it can read any file in Drive, not just this one. Needed because
+        // drive.file only grants access to files the app itself creates/opens
+        // via a picker, not arbitrary existing files reached by a known link.
+        scopes: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/drive.readonly',
         // Google doesn't return a refresh token by default — access_type:'offline'
         // plus prompt:'consent' forces one, per Supabase's own documented
         // workaround. Without this, session.provider_token (Google's own

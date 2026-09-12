@@ -228,10 +228,29 @@ sync every morning," or "sync before opening the dashboard." Not yet decided.
   useful for planning). AQI and UV each get a human-readable band (Good/Moderate/Unhealthy...;
   Low/Moderate/High/Very High/Extreme) with ok/watch/hot color coding matching the rest of the
   dashboard. See `fetchLiveAirQuality()`, `aqiBand()`, `uvBand()` near the live-weather code.
+- [x] **GPX route rendering — done 2026-09-12 (Claude Code).** The Drive-hosted GPX files
+  linked in calendar event descriptions are private (not "anyone with the link"), so this
+  needed a new, broader OAuth scope — `drive.readonly` — added alongside `calendar.readonly`
+  in `login.html`. **Requires one-time Google Cloud Console setup, same pattern as the
+  Calendar API fix above: enable the Drive API for the project, add `drive.readonly` to the
+  OAuth consent screen's scopes, then sign out and back in** to actually grant it. The route
+  itself is fetched via `GET drive/v3/files/{id}?alt=media` (file ID pulled from either Drive
+  share-link shape), parsed as plain XML (`trkpt`, falling back to `rtept`), and rendered as a
+  small stylized route line (cyan path, green/magenta start/end dots) matching the dashboard's
+  hologram look — deliberately not a real embedded map, which would need its own tile API/key
+  and would clash with the aesthetic. See `extractDriveFileId()`, `fetchGpxRoute()`,
+  `parseGpxPoints()`, `drawGpxRoute()` near the calendar code.
+  - **Bug found and fixed in passing**: the SVG route chart had no `viewBox`, so — like every
+    other `chart-svg` in the file (`drawLineChart` etc.) — it drew in raw 500×150 coordinate
+    units with no scaling to the actual rendered pixel width. Confirmed this genuinely clips
+    content (the route's end-of-path marker landed off-canvas at a real ~325px render width,
+    not just a theoretical risk). Fixed for the new GPX chart by setting
+    `viewBox="0 0 500 150"`. **Not yet fixed for the pre-existing charts** (HRV/ACWR/sleep/
+    wellbeing trend lines) — same latent bug likely affects them too at narrow enough render
+    widths, worth a follow-up pass if chart edges ever look clipped.
 - [ ] Sunrise/sunset times feeding a "headlamp needed" gear-checklist rule (rain/cold/heat/wind
-  gear is already done — see Calendar Integration above — this is just the sunrise/sunset
-  piece). Route GPX rendered as a small map in the session panel.
-  — **Est: 1 session (2–3h)**.
+  gear is already done — see Calendar Integration above — this is the only remaining P2 item).
+  — **Est: 1 session (1–2h)**.
 - [ ] **Interactive push notifications** — Web Push + Notifications API `actions` array for
   real quick-log buttons (not Google Home script notifications — confirmed insufficient, no
   button/action support). iPhone needs PWA home-screen install first (iOS 16.4+). Since sync

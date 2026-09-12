@@ -2197,7 +2197,16 @@ async function fetchDashboardData(sb){
             <div class="fp-note">${escapeHtml(nextSessionData.description).replace(/\n/g,'<br>')}</div></div>`;
         }
         if(nextSessionData.gpxLink){
-          left += `<div class="fp-section"><div class="stat-line"><span class="k">Route file</span><span class="v"><a href="${nextSessionData.gpxLink}" target="_blank" style="color:var(--cyan);">Open GPX ↗</a></span></div></div>`;
+          left += `<div class="fp-section"><div class="fp-section-title">ROUTE</div>
+            <div class="stat-line"><span class="k">Route file</span><span class="v"><a href="${nextSessionData.gpxLink}" target="_blank" style="color:var(--cyan);">Open GPX ↗</a></span></div>`;
+          if(gpxRoutePoints){
+            left += `<div class="chart-wrap"><svg class="chart-svg" id="chart-gpx-route"></svg></div>`;
+          } else if(gpxRouteError){
+            left += `<div class="gap-flag">⚠ Couldn't load the route (${escapeHtml(gpxRouteError)}). If this is a permissions error, the drive.readonly scope may need signing out and back in to grant, plus enabling the Drive API in the Google Cloud project (same setup as Calendar).</div>`;
+          } else {
+            left += `<div class="fp-note">Fetching route from Drive...</div>`;
+          }
+          left += `</div>`;
         }
 
         // Gear checklist keyed off the classified gear kind — same 3 kinds
@@ -2234,7 +2243,9 @@ async function fetchDashboardData(sb){
 
         return {left, right, leftLabel:"SESSION DETAIL", rightLabel:"GEAR CHECKLIST"};
       },
-      draw(){}
+      draw(){
+        if(gpxRoutePoints) drawGpxRoute('chart-gpx-route', gpxRoutePoints);
+      }
     },
     weather: {
       eyebrow: "SLOT // ENVIRONMENT", title: "Weather", status: "ok",
@@ -3449,6 +3460,102 @@ async function fetchDashboardData(sb){
     return m ? m[0] : null;
   }
 
+  // ============ GPX ROUTE — fetched from Drive, rendered in-style ============
+  // The file itself lives in the user's own Drive, not publicly shared, so
+  // reading it needs the drive.readonly scope above (session.provider_token
+  // is the same Google access token used for Calendar — one token, multiple
+  // scopes). Handles both share-link shapes Drive actually produces.
+  function extractDriveFileId(url){
+    let m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if(m) return m[1];
+    m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    return m ? m[1] : null;
+  }
+
+  let gpxRoutePoints = null; // [{lat, lon}, ...] once loaded
+  let gpxRouteError = null;
+
+  // GPX is plain XML — trkpt (recorded track) is the common case, rtept
+  // (planned route, e.g. a Strava "route" export rather than an "activity")
+  // is the fallback. No library needed for either.
+  function parseGpxPoints(xmlText){
+    const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+    if(doc.querySelector('parsererror')) throw new Error('Could not parse GPX file (not valid XML).');
+    let els = doc.getElementsByTagName('trkpt');
+    if(els.length === 0) els = doc.getElementsByTagName('rtept');
+    const points = Array.from(els)
+      .map(el => ({ lat: parseFloat(el.getAttribute('lat')), lon: parseFloat(el.getAttribute('lon')) }))
+      .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+    if(points.length === 0) throw new Error('No track/route points found in this GPX file.');
+    return points;
+  }
+
+  async function fetchGpxRoute(gpxLink){
+    gpxRoutePoints = null; gpxRouteError = null;
+    const fileId = extractDriveFileId(gpxLink);
+    if(!fileId){ gpxRouteError = "Couldn't find a Drive file ID in this link."; return; }
+    try{
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        { headers: { 'Authorization': `Bearer ${window.googleProviderToken}` } });
+      if(!res.ok){
+        const body = await res.json().catch(()=>null);
+        throw new Error(`${res.status} — ${body?.error?.message || res.statusText}`);
+      }
+      gpxRoutePoints = parseGpxPoints(await res.text());
+    } catch(e){
+      gpxRouteError = e.message;
+      console.warn('GPX route fetch failed:', e.message);
+    }
+  }
+
+  // Same visual convention as drawLineChart (500x150 viewBox, thin gridlines,
+  // IBM Plex Mono-scale simplicity) rather than an embedded real map — no
+  // map-tile API/key, and a photographic basemap would clash with the
+  // hologram/outrun look everywhere else on the dashboard.
+  function drawGpxRoute(svgId, points){
+    const svg = document.getElementById(svgId);
+    if(!svg || !points || points.length === 0) return;
+    svg.innerHTML = '';
+    // The existing charts (drawLineChart etc.) draw in raw 500x150 units with
+    // no viewBox, which only avoids clipping because their content happens to
+    // stay inboard of the actual rendered width — confirmed here that it
+    // doesn't in general (the end-of-route marker landed off-canvas at
+    // render widths under ~500px). Setting viewBox makes this one actually
+    // scale to fit rather than relying on that coincidence.
+    svg.setAttribute('viewBox', '0 0 500 150');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    const W=500, H=150, pad=12;
+    const lats = points.map(p=>p.lat), lons = points.map(p=>p.lon);
+    const latMin=Math.min(...lats), latMax=Math.max(...lats);
+    const lonMin=Math.min(...lons), lonMax=Math.max(...lons);
+    const avgLatRad = (latMin+latMax)/2 * Math.PI/180;
+    // Scale longitude by cos(latitude) so the route isn't horizontally
+    // stretched — a flat lat/lon plot distorts more the further from the
+    // equator, and Taipei is far enough north for that to be visible.
+    const lonSpan = Math.max((lonMax-lonMin) * Math.cos(avgLatRad), 1e-6);
+    const latSpan = Math.max(latMax-latMin, 1e-6);
+    const scale = Math.min((W-pad*2)/lonSpan, (H-pad*2)/latSpan);
+    const xFor = lon => (W/2) + (lon - (lonMin+lonMax)/2) * Math.cos(avgLatRad) * scale;
+    const yFor = lat => (H/2) - (lat - (latMin+latMax)/2) * scale; // screen y grows downward
+
+    const ns = "http://www.w3.org/2000/svg";
+    const d = points.map((p,i) => `${i===0?'M':'L'} ${xFor(p.lon).toFixed(1)} ${yFor(p.lat).toFixed(1)}`).join(' ');
+    const path = document.createElementNS(ns,'path');
+    path.setAttribute('d', d); path.setAttribute('fill','none');
+    path.setAttribute('stroke','#4cf1ff'); path.setAttribute('stroke-width','2');
+    path.setAttribute('stroke-linecap','round'); path.setAttribute('stroke-linejoin','round');
+    svg.appendChild(path);
+
+    const marker = (lon, lat, color) => {
+      const c = document.createElementNS(ns,'circle');
+      c.setAttribute('cx', xFor(lon)); c.setAttribute('cy', yFor(lat));
+      c.setAttribute('r','4'); c.setAttribute('fill',color);
+      svg.appendChild(c);
+    };
+    marker(points[0].lon, points[0].lat, '#3dffa0');
+    marker(points.at(-1).lon, points.at(-1).lat, '#ff4cd6');
+  }
+
   async function fetchNextSession(){
     if(!window.googleProviderToken){
       // No calendar scope granted yet (user signed in before this feature
@@ -3488,6 +3595,10 @@ async function fetchDashboardData(sb){
       };
       renderSessionLabel();
       setGearKind(classification.gearKind);
+      // Fire-and-forget: the session panel is opened on-demand later, and its
+      // render()/draw() just read whatever gpxRoutePoints/gpxRouteError holds
+      // by then rather than needing this to block the calendar fetch.
+      if(nextSessionData.gpxLink) fetchGpxRoute(nextSessionData.gpxLink);
     } catch(e){
       calendarFetchError = e.message;
       console.warn('Live calendar fetch failed, session panel stays on placeholder:', e.message);

@@ -483,7 +483,7 @@
 </div>
 
 <div class="session-label" id="session-label" data-open="session">
-  <div class="session-label-eyebrow">NEXT SESSION</div>
+  <div class="session-label-eyebrow">NEXT SESSION <span id="session-label-countdown"></span></div>
   <div class="session-label-title" id="session-label-title">— placeholder —</div>
 </div>
 <canvas id="gear-canvas"></canvas>
@@ -2172,11 +2172,14 @@ async function fetchDashboardData(sb){
         const startDate = new Date(nextSessionData.start);
         const dateLabel = startDate.toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'});
         const timeLabel = startDate.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+        const daysOut = daysUntilSession(nextSessionData.start);
+        const daysOutLabel = daysOut <= 0 ? 'Today' : daysOut === 1 ? 'Tomorrow' : `In ${daysOut} days`;
 
         let left = `<div class="fp-section"><div class="fp-section-title">SESSION</div>
           <div class="stat-line"><span class="k">Name</span><span class="v">${escapeHtml(nextSessionData.title)}</span></div>
           <div class="stat-line"><span class="k">Type</span><span class="v">${nextSessionData.kind}</span></div>
           <div class="stat-line"><span class="k">When</span><span class="v">${dateLabel}, ${timeLabel}</span></div>
+          <div class="stat-line"><span class="k">Countdown</span><span class="v">${daysOutLabel}</span></div>
         </div>`;
         if(nextSessionData.description){
           left += `<div class="fp-section"><div class="fp-section-title">DETAILS</div>
@@ -3402,10 +3405,28 @@ async function fetchDashboardData(sb){
     }
   }
 
+  // Calendar-day difference in Taipei local time (not raw hours/24) — so a
+  // session at 6am the day after tomorrow reads as "in 2 days", not 1, and a
+  // late-night session later today still reads as "today" rather than -0/1
+  // off from an hours-based calculation.
+  function daysUntilSession(startIso){
+    const fmt = (d) => d.toLocaleDateString('en-CA', {timeZone:'Asia/Taipei'});
+    const todayStr = fmt(new Date());
+    const sessionStr = fmt(new Date(startIso));
+    const msPerDay = 24*60*60*1000;
+    return Math.round((new Date(sessionStr) - new Date(todayStr)) / msPerDay);
+  }
+
   function renderSessionLabel(){
     if(!nextSessionData) return;
     const titleEl = document.getElementById('session-label-title');
     if(titleEl) titleEl.textContent = nextSessionData.title.replace(/^[🏋️🏃⛰️\s]+/, '');
+
+    const countdownEl = document.getElementById('session-label-countdown');
+    if(countdownEl){
+      const days = daysUntilSession(nextSessionData.start);
+      countdownEl.textContent = days <= 0 ? '· TODAY' : days === 1 ? '· TOMORROW' : `· IN ${days}D`;
+    }
   }
 
   fetchNextSession();

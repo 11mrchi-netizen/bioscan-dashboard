@@ -326,19 +326,71 @@ Google Cast SDK — a genuine mini-project of its own, not included in any estim
   already proven for sessions (see above) — genuinely less new work now than when this was
   originally scoped, since the hard part (getting Calendar data into the browser at all) is
   done. The "next-morning actionable push" piece inherits the same re-scope note as P2's push
-  notifications.
-- [ ] **Daily arousal + morning-erection logging** — table exists (`arousal_daily`), empty.
+  notifications. **Explicitly not a body marker** — it's calendar-driven like the Session
+  panel, with its own trigger UI (placement still an open design decision) — see the
+  handoff notes from 2026-09-13 for the full detection/insert logic.
+- [x] **Daily arousal + morning-erection logging — done 2026-09-13 (Claude Code).** New
+  "Loins" marker + `PANELS.arousal` (slot `arousal`), structurally copied from wellbeing's
+  daily 0-10 self-report pattern (`arousal_daily` → `{dates, morningErection, arousalLevel}`
+  parallel arrays, `drawLineChart` + `drawLineChartOverlay` for the solid/dashed pair).
+  Anchor placed centered (`x≈0`) in the same `nx` height band as the existing Posture/pelvis
+  marker (`0.40–0.50`) rather than hip-offset — pelvis's own test already starts at `x>0.6`,
+  so neither marker needed to move to avoid collision. Table starts empty, so the empty-state
+  path (matching the Session panel's tone) is what actually ships live: "No arousal/
+  morning-wood data logged yet..."
 - [ ] **Masturbation logging** — table exists (`masturbation_log`), empty.
-  — **Est: 1–2 sessions (4–6h)** for the full P4 set — now mostly UI + calendar-matching
-  logic, since schema work is already done.
+  — **Est: 1 session (2–3h)** remaining for the P4 set (partner tracking + masturbation
+  logging) — arousal is done.
 
 ---
 
 ## P5
 
-- [ ] **Illness/infection tracking** — table exists (`illnesses`), empty.
-- [ ] **Stool tracker** — table exists (`stool_log`), empty.
-  — **Est: 1 session (2–4h)** for both — schema-only remaining work is UI.
+- [x] **Illness tracking — done 2026-09-13 (Claude Code), merged with injuries as "Health
+  Events."** Design finalized during handoff: `injuries` and `illnesses` stay separate tables
+  (genuinely different fields — body-part/mechanism vs symptoms/diagnosis/medication — forcing
+  a schema merge would lose real data) but are combined for display everywhere. Concretely:
+  - **Knee marker removed entirely** (`kneeR` in `REGION_DEFS`, `PANELS.knee`) — it was
+    hardcoded to one specific injury and never generalized to others, a real design flaw the
+    merge fixes rather than papers over.
+  - **Head marker now carries a dynamic ring** instead of every other marker's static
+    `flagged` value — reuses the existing `.region-marker.flagged` CSS (same magenta
+    pulse used elsewhere) but computed at build time via `hasActiveHealthEvents()`. An event
+    counts as active if `status` is `active`/`monitoring`, or `resolved` with `end_date`
+    within the last 7 days — a **display filter only**, nothing is ever deleted from the
+    tables. Shared once as `isHealthEventActive()` rather than duplicated per table, since
+    both use the same status enum. Also applied to the region-legend chip for consistency.
+  - **New "HISTORY →" row** in the character sheet (second `.stat-card-labs-row`, below
+    LABS) opens `PANELS.history`: the complete, unfiltered combined record — no 7-day
+    cutoff — sorted by start date descending, each row prefixed `[Injury]`/`[Illness]`.
+    Verified this surfaces an old (>7-day) resolved injury that correctly does *not* trigger
+    the head ring, alongside a recent one that does.
+  - Deliberately did **not** extend the existing RES (Resilience) score's active-injury
+    penalty to include illnesses — that's a scoring-formula change, not a display merge, and
+    wasn't asked for.
+- [x] **Stool tracker — done 2026-09-13 (Claude Code).** No new marker — extends the existing
+  Nutrition panel (Stomach marker) under a "RECENT STOOL LOG" section, same anatomical
+  reasoning as the rest of that panel (digestive system). Most-recent-first list (date,
+  Bristol type 1–7, discomfort 0–10 if present), read-only — no entry form yet, a real
+  follow-up item, not an oversight.
+  - **Also relocated hydration out of Nutrition while touching this panel**: `hydration_daily`
+    was already being fetched but had no dedicated home yet (see Foundation notes), so it had
+    landed inside Nutrition's "BODY" section as a stopgap. Since hydration now has its own
+    Kidneys marker/panel (below), keeping it duplicated in both places would just be
+    confusing — removed the Hydration range-bar/chart/gap-flag mention from Nutrition
+    entirely rather than showing the same metric twice.
+- [x] **Hydration display — done 2026-09-13 (Claude Code), new "Kidneys" marker + panel** (not
+  originally scoped as its own P5 line item, but the same session's natural companion to
+  moving hydration out of Nutrition above). Anchor placed on the left flank, same `nx` height
+  band as Stomach (`0.50–0.65`) — a real front-facing mesh vertex confirmed to sit inside the
+  same torso/arm gap already used for the heart/spleen hitbox fix, carved out of Stomach's own
+  x-range and checked first in `REGION_DEFS` so the narrower zone takes priority. Left pane
+  shows today's total against a stated (not stored — checked first, no target field exists
+  anywhere) general guideline of 2500–3000ml/day; right pane's gap-flag is computed live from
+  the actual logged-vs-total day ratio rather than a hardcoded snapshot that would drift stale.
+  — **Est for original P5 scope: done.** Both items shipped same session as new markers,
+  verified via the local mock-data harness (empty-state, active-ring, and full-history paths
+  all exercised with synthetic data covering each branch).
 
 ---
 
@@ -422,19 +474,21 @@ design decision, not on effort.
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and
-the layout rework are all done. P1 is fully complete. Remaining:
+the layout rework are all done. P1 is fully complete. P5 is fully complete (illness tracking +
+stool tracker, plus the new Kidneys/hydration marker as their natural companion). P4's arousal
+item is done; partner/encounter tracking and masturbation logging remain. Remaining:
 
 | Tier | Est. hours |
 |---|---|
-| P2 (environmental panel + weather-aware gear checklist; push notifications need re-scope) | 8–13h+ |
+| P2 (push notifications + morning wake-time alert need re-scope; environmental panel done) | 6–10h |
 | P3 | 2–3h |
-| P4 (schema already done — UI + calendar-matching logic only) | 4–6h |
-| P5 (schema already done — UI only) | 2–4h |
+| P4 (arousal done — partner/encounter tracking + masturbation logging remain) | 2–3h |
+| P5 | **done** |
 | P6 (Wardrobe) | 6–10h |
 | P7 (Decouple from Wellness Project — Zepp Mini Program, then Health Connect app) | 18–39h |
-| **Total** | **~40–75h** |
+| **Total** | **~34–65h** |
 
 The core "is this real" question was answered early — the pipeline works, proven with live
 data, the full dashboard UI is live against it, and weather + calendar are now genuinely live
-too. What's left is real product-building (P2–P6, all with schemas already in place) plus one
+too. What's left is real product-building (P2–P4, P6, most schemas already in place) plus one
 large, deliberately-last platform migration (P7).

@@ -480,6 +480,9 @@
   <div class="stat-card-labs-row" id="stat-card-labs-row" data-open="labs">
     <span>LABS</span><span class="labs-row-arrow">→</span>
   </div>
+  <div class="stat-card-labs-row" id="stat-card-history-row" data-open="history">
+    <span>HISTORY</span><span class="labs-row-arrow">→</span>
+  </div>
 </div>
 
 <div class="session-label" id="session-label" data-open="session">
@@ -1551,7 +1554,7 @@ async function fetchDashboardData(sb){
   const [
     wearableRes, sleepRes, wellbeingRes, hydrationRes, bodyMetricsRes,
     mealsRes, recoveryRes, restDaysRes, injuriesRes, supplementsRes,
-    labDrawsRes, labResultsRes, runsRes
+    labDrawsRes, labResultsRes, runsRes, stoolRes, arousalRes, illnessesRes
   ] = await Promise.all([
     sb.from('wearable_daily').select('*').order('date'),
     sb.from('sleep_daily').select('*').order('date'),
@@ -1565,7 +1568,10 @@ async function fetchDashboardData(sb){
     sb.from('supplements').select('*').order('status').order('time_of_day'),
     sb.from('lab_draws').select('*').order('draw_date'),
     sb.from('lab_results').select('*'),
-    sb.from('runs').select('*').order('date', {ascending:false})
+    sb.from('runs').select('*').order('date', {ascending:false}),
+    sb.from('stool_log').select('*').order('occurred_at', {ascending:false}),
+    sb.from('arousal_daily').select('*').order('date'),
+    sb.from('illnesses').select('*').order('start_date', {ascending:false})
   ]);
 
   // surface the first real error rather than silently rendering empty panels
@@ -1573,7 +1579,8 @@ async function fetchDashboardData(sb){
     wearable:wearableRes, sleep:sleepRes, wellbeing:wellbeingRes, hydration:hydrationRes,
     bodyMetrics:bodyMetricsRes, meals:mealsRes, recovery:recoveryRes, restDays:restDaysRes,
     injuries:injuriesRes, supplements:supplementsRes, labDraws:labDrawsRes,
-    labResults:labResultsRes, runs:runsRes
+    labResults:labResultsRes, runs:runsRes, stool:stoolRes, arousal:arousalRes,
+    illnesses:illnessesRes
   })){
     if(res.error) throw new Error(`Supabase fetch failed (${name}): ${res.error.message}`);
   }
@@ -1656,7 +1663,31 @@ async function fetchDashboardData(sb){
     id: r.id, name: r.name, dose: r.dose, time: r.time_of_day, status: r.status,
     start: r.start_date, end: r.end_date, target: r.target
   }));
+  // illnesses is injuries' counterpart for the merged "Health Events" concept
+  // (see the head-marker ring + History panel) — kept as its own table/shape
+  // since it has genuinely different fields (symptoms/diagnosis/medication vs
+  // body-part/mechanism), the merge is a display decision, not a schema one.
+  const illnesses = (illnessesRes.data || []).map(r => ({
+    id: r.id, name: r.name, symptoms: r.symptoms, diagnosis: r.diagnosis,
+    medication: r.medication, severity: r.severity, status: r.status,
+    start: r.start_date, end: r.end_date, notes: r.notes
+  }));
   const labDraws = labDrawsRows.map(r => ({ date: r.draw_date, lab: r.lab_name }));
+
+  // ---- stool: most-recent-first log, not a chart — matches how the panel
+  // wants to display it (a short list, not a trend line) ----
+  const stool = (stoolRes.data || []).map(r => ({
+    id: r.id, occurredAt: r.occurred_at, bristolType: r.bristol_type,
+    discomfort: r.discomfort, notes: r.notes
+  }));
+
+  // ---- arousal: structurally identical to wellbeing (daily 0-10 self-report) ----
+  const arousalRows = arousalRes.data || [];
+  const arousal = {
+    dates: arousalRows.map(r => toShortDate(r.date)),
+    morningErection: arousalRows.map(r => r.morning_erection_quality),
+    arousalLevel: arousalRows.map(r => r.arousal_level)
+  };
 
   // ---- runs: kept as its own array (new — the original dashboard hardcoded
   // this panel's stats as static text; the merge upgrades it to live data) ----
@@ -1687,8 +1718,10 @@ async function fetchDashboardData(sb){
     syncSource: "Supabase (live) — fetched on dashboard load",
     wearable, sleep, nutrition, bodyMetrics, hydration, wellbeing,
     recovery, restDays, injuries, supplements, labDraws,
-    runs, labs // new fields — not in the original hardcoded shape, used by
+    runs, labs, // new fields — not in the original hardcoded shape, used by
                // the upgraded endurance/labs panels (see merge notes)
+    stool, arousal, illnesses // new data domains (stool tracker, arousal/
+               // morning-wood, illnesses merged with injuries as "Health Events")
   };
 }
 
@@ -1723,6 +1756,7 @@ async function fetchDashboardData(sb){
   const wellbeing = DASHBOARD_DATA.wellbeing;
   const recovery = DASHBOARD_DATA.recovery;
   const restDays = DASHBOARD_DATA.restDays;
+  const arousal = DASHBOARD_DATA.arousal;
 
   function avgSlice(arr, n){
     const valid = arr.filter(v => v !== null && v !== undefined);
@@ -1740,6 +1774,26 @@ async function fetchDashboardData(sb){
     const latest = new Date([...dateList].sort().at(-1) + 'T00:00:00');
     const today = new Date(DASHBOARD_DATA.syncedAt);
     return Math.round((today - latest) / (1000*60*60*24));
+  }
+
+  // ============ HEALTH EVENTS (injuries + illnesses, merged for display) ============
+  // Shared once here rather than duplicated per table, since both use the same
+  // status enum shape (active/monitoring/resolved). "Active" for the purposes
+  // of the head-marker ring means: active/monitoring status, OR resolved
+  // within the last 7 days — a display filter only, nothing is ever removed
+  // from the underlying tables, it just stops showing as a live concern.
+  function isHealthEventActive(status, endDate){
+    if(status === 'active' || status === 'monitoring') return true;
+    if(status === 'resolved' && endDate){
+      const daysSince = Math.round((new Date(DASHBOARD_DATA.syncedAt) - new Date(endDate+'T00:00:00')) / (1000*60*60*24));
+      return daysSince <= 7;
+    }
+    return false;
+  }
+  function hasActiveHealthEvents(){
+    const injActive = DASHBOARD_DATA.injuries.some(i => isHealthEventActive(i.status, i.end));
+    const illActive = DASHBOARD_DATA.illnesses.some(i => isHealthEventActive(i.status, i.end));
+    return injActive || illActive;
   }
 
   // ============ READINESS COMPUTATIONS ============
@@ -2489,14 +2543,13 @@ async function fetchDashboardData(sb){
     },
     nutrition: {
       eyebrow: "SLOT // DIGESTIVE — NUTRITION", title: "Stomach — Nutrition", status: "watch",
-      source: "SOURCE: LIVE — list_meals, list_body_metrics, list_hydration",
+      source: "SOURCE: LIVE — list_meals, list_body_metrics, list_stool",
       render(){
         const latestCal = nutrition.cal[nutrition.cal.length-1];
         const latestPro = nutrition.pro[nutrition.pro.length-1];
         const latestFat = nutrition.fat[nutrition.fat.length-1];
         const latestCarb = nutrition.carb[nutrition.carb.length-1];
         const latestWeight = bodyMetrics.weight[bodyMetrics.weight.length-1];
-        const latestHydration = hydration.ml[hydration.ml.length-1];
 
         let left = `<div class="fp-section-title" style="margin-bottom:10px;">TODAY'S INTAKE</div>`;
         left += rangeBarHTML("Calories", latestCal, "", 0, 3500, latestCal < 1800 ? 'watch' : 'ok', 0);
@@ -2505,7 +2558,6 @@ async function fetchDashboardData(sb){
         left += rangeBarHTML("Carbs", latestCarb, "g", 0, 450, 'ok', 0);
         left += `<div class="fp-section-title" style="margin:16px 0 10px;">BODY</div>`;
         left += rangeBarHTML("Weight", latestWeight, "kg", 65, 80, 'ok', 1);
-        left += rangeBarHTML("Hydration", latestHydration, "ml", 0, 4000, latestHydration < 2000 ? 'watch' : 'ok', 0);
         left += `<div class="fp-section" style="margin-top:14px;"><div class="fp-section-title">BODY COMPOSITION — LATEST (SEP 9)</div>
           <div class="stat-line"><span class="k">Body fat %</span><span class="v">19.66%</span></div>
           <div class="stat-line"><span class="k">Lean mass</span><span class="v">57.8 kg</span></div>
@@ -2522,13 +2574,27 @@ async function fetchDashboardData(sb){
         right += `<div class="chart-wrap" style="margin-bottom:18px;"><svg class="chart-svg" id="chart-carb"></svg></div>`;
         right += `<div class="fp-section-title" style="margin-bottom:8px;">BODY WEIGHT (kg)</div>` + quadStatsHTML(bodyMetrics.weight, "kg", 1);
         right += `<div class="chart-wrap" style="margin-bottom:18px;"><svg class="chart-svg" id="chart-weight"></svg></div>`;
-        right += `<div class="fp-section-title" style="margin-bottom:8px;">HYDRATION (ml/day, logged days only)</div>` + quadStatsHTML(hydration.ml, "ml", 0);
-        right += `<div class="chart-wrap" style="margin-bottom:18px;"><svg class="chart-svg" id="chart-hydration"></svg></div>`;
+
+        // Stool: a short recent-first log, not a chart — same anatomical
+        // reasoning as the rest of this panel (digestive system), no separate
+        // marker/panel. No entry form yet — read-only display for this pass.
+        right += `<div class="fp-section"><div class="fp-section-title">RECENT STOOL LOG</div>`;
+        if(DASHBOARD_DATA.stool.length === 0){
+          right += `<div class="fp-note">No stool entries logged yet.</div>`;
+        } else {
+          DASHBOARD_DATA.stool.slice(0, 10).forEach(s=>{
+            const dateLabel = new Date(s.occurredAt).toLocaleDateString('en-US', {month:'short', day:'numeric'});
+            const discomfortLabel = (s.discomfort !== null && s.discomfort !== undefined) ? ` · discomfort ${s.discomfort}/10` : '';
+            right += `<div class="stat-line"><span class="k">${dateLabel} — Bristol ${s.bristolType}${discomfortLabel}</span><span class="v"></span></div>`;
+          });
+        }
+        right += `</div>`;
+
         right += `<div class="fp-section"><div class="fp-section-title">READ</div>
           <div class="fp-note">Calorie target 2500/day; 7-day average (2314) sits slightly under — Sep 9 is a partial day (only 2 meals logged), pulling "latest" down artificially.</div>
           <div class="fp-note">Protein stayed strong all window (144–177g/day), comfortably above the 154g compliance floor most days.</div>
           <div class="fp-note">Weight has 3 points only (70.0 → 73.1 → 72.0 kg) — too sparse and too volatile day-to-day to call a real trend yet; body fat%/lean mass exist for just the most recent point.</div>
-          <div class="gap-flag">⚠ Meals: no entries Aug 11–26 (16-day gap). Hydration: only 3 of 30 days logged. Body metrics: only 3 entries total, ever.</div></div>`;
+          <div class="gap-flag">⚠ Meals: no entries Aug 11–26 (16-day gap). Body metrics: only 3 entries total, ever.</div></div>`;
         return {left, right};
       },
       draw(){
@@ -2537,7 +2603,6 @@ async function fetchDashboardData(sb){
         drawLineChart('chart-fat', nutrition.dates, nutrition.fat, '#ff4757');
         drawLineChart('chart-carb', nutrition.dates, nutrition.carb, '#4cf1ff');
         drawLineChart('chart-weight', bodyMetrics.dates, bodyMetrics.weight, '#4cf1ff');
-        drawLineChart('chart-hydration', hydration.dates, hydration.ml, '#4cf1ff');
       }
     },
     strength: {
@@ -2611,33 +2676,89 @@ async function fetchDashboardData(sb){
       },
       draw(){}
     },
-    knee: {
-      eyebrow: "SLOT // RIGHT KNEE", title: "Injury Log", status: "watch",
-      source: "SOURCE: LIVE — list_injuries",
+    hydration: {
+      eyebrow: "SLOT // RENAL — HYDRATION", title: "Kidneys — Hydration", status: "watch",
+      source: "SOURCE: LIVE — list_hydration",
       render(){
-        if(DASHBOARD_DATA.injuries.length === 0){
-          return {left: `<div class="fp-note">No injuries logged.</div>`, right: ''};
+        if(hydration.ml.length === 0){
+          return {left: `<div class="fp-note">No hydration data logged yet.</div>`, right: ''};
         }
-        let left = `<div class="fp-section-title" style="margin-bottom:10px;">SEVERITY</div>`;
-        DASHBOARD_DATA.injuries.forEach(inj=>{
-          left += rangeBarHTML(`${inj.part} — ${inj.type}`, inj.severity, "/10", 0, 10, inj.status==='active'?'hot':inj.status==='monitoring'?'watch':'ok', 0);
+        const latestHydration = hydration.ml[hydration.ml.length-1];
+        const loggedDays = hydration.ml.filter(v=>v!==null && v!==undefined).length;
+        const totalDays = hydration.dates.length;
+
+        let left = `<div class="fp-section-title" style="margin-bottom:10px;">TODAY</div>`;
+        left += rangeBarHTML("Hydration", latestHydration, "ml", 0, 4000, latestHydration < 2000 ? 'watch' : 'ok', 0);
+        left += `<div class="fp-note" style="margin-top:10px;">No stored personal target — 2500–3000 ml/day is a common general guideline, not a specific goal pulled from any table.</div>`;
+
+        let right = `<div class="fp-section-title" style="margin-bottom:8px;">DAILY TOTAL (ml)</div>` + quadStatsHTML(hydration.ml, "ml", 0);
+        right += `<div class="chart-wrap" style="margin-bottom:18px;"><svg class="chart-svg" id="chart-hydration-kidneys"></svg></div>`;
+        right += `<div class="fp-section"><div class="fp-section-title">READ</div>`;
+        if(loggedDays < totalDays * 0.5){
+          right += `<div class="gap-flag">⚠ Only ${loggedDays} of ${totalDays} days logged in this window — too sparse to call a real trend.</div>`;
+        } else {
+          right += `<div class="fp-note">${loggedDays} of ${totalDays} days logged in this window.</div>`;
+        }
+        right += `</div>`;
+        return {left, right};
+      },
+      draw(){
+        if(hydration.ml.length > 0) drawLineChart('chart-hydration-kidneys', hydration.dates, hydration.ml, '#4cf1ff');
+      }
+    },
+    arousal: {
+      eyebrow: "SLOT // REPRODUCTIVE — DAILY TRACKING", title: "Loins — Arousal & Morning Wood", status: "ok",
+      source: "SOURCE: LIVE — list_arousal",
+      render(){
+        if(arousal.dates.length === 0){
+          return {
+            left: `<div class="fp-note">No arousal/morning-wood data logged yet — once entries exist in arousal_daily, they'll show up here.</div>`,
+            right: ''
+          };
+        }
+        const latestErection = arousal.morningErection[arousal.morningErection.length-1];
+        const latestArousal = arousal.arousalLevel[arousal.arousalLevel.length-1];
+
+        let left = `<div class="fp-section-title" style="margin-bottom:10px;">TODAY</div>`;
+        left += `<div class="stat-line"><span class="k">Morning erection quality</span><span class="v">${latestErection ?? '—'}/10</span></div>`;
+        left += `<div class="stat-line"><span class="k">Arousal level</span><span class="v">${latestArousal ?? '—'}/10</span></div>`;
+
+        let right = `<div class="fp-section-title" style="margin-bottom:8px;">MORNING ERECTION (SOLID) / AROUSAL (DASHED)</div>`;
+        right += `<div class="chart-wrap"><svg class="chart-svg" id="chart-arousal"></svg></div>`;
+        return {left, right};
+      },
+      draw(){
+        if(arousal.dates.length === 0) return;
+        drawLineChart('chart-arousal', arousal.dates, arousal.morningErection, '#4cf1ff', {min:0, max:10});
+        drawLineChartOverlay('chart-arousal', arousal.dates, arousal.arousalLevel, '#ff4cd6');
+      }
+    },
+    history: {
+      eyebrow: "SLOT // MEDICAL — FULL RECORD", title: "Health Events — History", status: "ok",
+      source: "SOURCE: LIVE — list_injuries, list_illnesses",
+      render(){
+        // Merged display only — injuries and illnesses stay separate tables
+        // underneath (genuinely different fields), this just combines them
+        // for one chronological view. No 7-day cutoff here, unlike the
+        // Head-marker ring — this is the complete, unfiltered record.
+        const combined = [
+          ...DASHBOARD_DATA.injuries.map(i => ({...i, kind:'Injury', label:`${i.part} — ${i.type}`})),
+          ...DASHBOARD_DATA.illnesses.map(i => ({...i, kind:'Illness', label:i.name}))
+        ].sort((a,b) => (b.start || '').localeCompare(a.start || ''));
+
+        if(combined.length === 0){
+          return {left: `<div class="fp-note">No injuries or illnesses logged yet.</div>`, right: ''};
+        }
+
+        let left = `<div class="fp-section-title" style="margin-bottom:10px;">FULL RECORD (${combined.length})</div>`;
+        combined.forEach(ev=>{
+          const statusCls = ev.status === 'active' ? 'hot' : ev.status === 'monitoring' ? 'watch' : 'ok';
+          left += `<div class="stat-line"><span class="k">[${ev.kind}] ${ev.label}</span><span class="v ${statusCls}">${ev.status}</span></div>`;
+          left += `<div class="stat-line"><span class="k">Duration</span><span class="v">${ev.start} → ${ev.end || 'ongoing'}</span></div>`;
         });
 
-        let right = `<div class="fp-section"><div class="fp-section-title">LOGGED ENTRIES</div>`;
-        DASHBOARD_DATA.injuries.forEach(inj=>{
-          const diff = syncDiff.injuries[inj.id] || {state:'unchanged'};
-          const badge = diff.state === 'new' ? '<span class="record-badge new">NEW</span>'
-                      : diff.state === 'changed' ? `<span class="record-badge changed">${diff.from.toUpperCase()} → ${diff.to.toUpperCase()}</span>`
-                      : '';
-          const statusCls = inj.status === 'active' ? 'hot' : inj.status === 'monitoring' ? 'watch' : 'ok';
-          right += `<div class="stat-line"><span class="k">${inj.part} — ${inj.type}${badge}</span><span class="v ${statusCls}">${inj.status}</span></div>`;
-          right += `<div class="stat-line"><span class="k">Duration</span><span class="v">${inj.start} → ${inj.end || 'ongoing'}</span></div>`;
-        });
-        right += `</div>`;
-        right += `<div class="fp-section"><div class="fp-section-title">READ</div>
-        <div class="fp-note">${DASHBOARD_DATA.injuries[0].notes}</div>
-        <div class="fp-note">This list reflects exactly what's logged in Wellness Project — new entries appear automatically flagged on the first sync after they're added, and status changes (e.g. active → resolved) are highlighted the same way.</div></div>`;
-        return {left, right};
+        let right = `<div class="fp-note">This is the complete, unfiltered history — no 7-day cutoff. The Head marker's ring only reflects active/monitoring events or ones resolved in the last 7 days; older resolved events still show up here regardless.</div>`;
+        return {left, right, leftLabel:"FULL RECORD", rightLabel:"ABOUT THIS VIEW"};
       },
       draw(){}
     },
@@ -2979,10 +3100,27 @@ async function fetchDashboardData(sb){
     // height, however far out, matched one of these two regions. That's the
     // confirmed bug (clicking the forearm opened Supplements).
     {key:'heart',         slot:'heart',        label:'HEART',        flagged:false, anchor:[-0.7, 9.2, 0.5], test:(nx,x,y,z)=> nx > 0.65 && nx <= 0.72 && x >= -1.4 && x <= 0.6},
+    // KIDNEYS (nx 0.50-0.65, left flank): carved out of the stomach band's own
+    // x-range — checked before 'stomach' below so this narrower zone takes
+    // priority. Coordinates come from real mesh vertices (front-most point in
+    // this x/height slice, matching how every other anchor sits on the
+    // front-facing surface) confirmed to sit inside the same real torso/arm
+    // gap already used for the heart/spleen fix — this is genuine torso
+    // surface, not empty space or arm.
+    {key:'kidneys',       slot:'hydration',    label:'KIDNEYS',      flagged:false, anchor:[-0.95, 6.64, 0.2], test:(nx,x,y,z)=> nx > 0.50 && nx <= 0.65 && x >= -1.3 && x <= -0.85},
     {key:'stomach',       slot:'nutrition',    label:'STOMACH',      flagged:false, anchor:[0, 7.38, 0.6], test:(nx,x,y,z)=> nx > 0.50 && nx <= 0.65 && Math.abs(x) < 1.7},
     {key:'spleen',         slot:'supplements',  label:'SUPPLEMENTS',  flagged:false, anchor:[0.9, 8.0, 0.4], test:(nx,x,y,z)=> nx > 0.65 && nx <= 0.72 && x > 0.6 && x <= 1.4},
+    // LOINS (nx 0.40-0.50, centered): same height band as the existing hip
+    // marker below, but centered (|x|<=0.6) rather than hip-offset — pelvis's
+    // own test already starts at x>0.6, so this doesn't collide and neither
+    // marker needed to move. Anchor is a real front-most vertex at x=0 in
+    // this band.
+    {key:'loins',         slot:'arousal',      label:'LOINS',        flagged:false, anchor:[0, 6.38, 0.55], test:(nx,x,y,z)=> nx > 0.40 && nx <= 0.50 && Math.abs(x) <= 0.6},
     {key:'pelvis',        slot:'posture',      label:'POSTURE — R HIP', flagged:true,  anchor:[1.1, 5.9, 0.35], test:(nx,x,y,z)=> nx > 0.40 && nx <= 0.50 && x > 0.6 && x < 2.0},
-    {key:'kneeR',         slot:'knee',         label:'KNEE — R',     flagged:true,  anchor:[0.7, 2.05, 0.4], test:(nx,x,y,z)=> nx > 0.13 && nx <= 0.19 && x > 0},
+    // kneeR removed 2026-09-13: was hardcoded to one specific injury and never
+    // generalized. Injuries now surface via the Head-marker ring (active/
+    // recent) and the character sheet's HISTORY row (full record) instead —
+    // see hasActiveHealthEvents() and PANELS.history.
     {key:'feet',          slot:'steps',        label:'STEPS',        flagged:false, anchor:[0, 0.32, 0.6], test:(nx,x,y,z)=> nx <= 0.05},
   ];
 
@@ -3113,9 +3251,14 @@ async function fetchDashboardData(sb){
     // dedupe by slot so left/right pairs (arms, legs) don't need two visible markers
     // unless their anchors are visually distinct enough to want both — arms/legs keep both,
     // head/head_hormone/heart/stomach/pelvis/feet are single.
+    // Head's flagged state is dynamic (active/recently-resolved injury or
+    // illness), unlike every other marker's static def.flagged — computed
+    // once here rather than baked into REGION_DEFS, since it depends on
+    // DASHBOARD_DATA which isn't known when REGION_DEFS is declared.
     REGION_DEFS.forEach(def=>{
+      const isFlagged = def.key === 'head' ? hasActiveHealthEvents() : def.flagged;
       const el = document.createElement('div');
-      el.className = 'region-marker' + (def.flagged ? ' flagged' : '');
+      el.className = 'region-marker' + (isFlagged ? ' flagged' : '');
       el.innerHTML = `<div class="glow"></div><div class="ring"></div><div class="m-label">${def.label}</div>`;
       el.addEventListener('click', (e)=>{ e.stopPropagation(); openPanel(def.slot); });
       layer.appendChild(el);
@@ -3242,8 +3385,9 @@ async function fetchDashboardData(sb){
     REGION_DEFS.forEach(def=>{
       if(seen.has(def.slot)) return;
       seen.add(def.slot);
+      const isFlagged = def.key === 'head' ? hasActiveHealthEvents() : def.flagged;
       const chip = document.createElement('div');
-      chip.className = 'leg-chip' + (def.flagged ? ' flagged' : '');
+      chip.className = 'leg-chip' + (isFlagged ? ' flagged' : '');
       chip.innerHTML = `<span class="dot"></span>${def.label}`;
       chip.addEventListener('click', ()=> openPanel(def.slot));
       legend.appendChild(chip);

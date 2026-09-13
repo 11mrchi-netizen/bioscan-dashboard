@@ -360,6 +360,112 @@ never stored anywhere persistent, only the refresh token, only in `user_google_t
 
 ---
 
+## ✅ PUSH NOTIFICATIONS — foundation + time-based reminders (done 2026-09-13, Claude Code)
+
+Built per the handoff's own recommended order (steps 1–3 of 5); step 4 (encounter detection +
+People/Encounters schema) and step 5 (spreadsheet migration) are explicitly deferred — see
+below.
+
+**Architecture:**
+1. **`push_subscriptions` table** — per the handoff's schema, plus one addition:
+   `quicklog_token` (a random per-subscription secret, `gen_random_bytes(24)` base64url,
+   generated server-side on insert). RLS: standard 4-policy pattern.
+2. **`sw.js`** (repo root) — `push` event shows the notification with its `actions` array;
+   `notificationclick` branches on which action fired. A quick-log action (e.g.
+   `morning_wood_yes`) POSTs straight to the `quick-log` Edge Function with no page open at
+   all. No action (body tap) or the explicit `open_app` action focuses/opens the dashboard via
+   `clients.openWindow()`.
+3. **VAPID keypair** — generated locally (Node's built-in `crypto`, ECDSA P-256), per the
+   user's choice to generate rather than have Claude Code create them via an Edge Function.
+   Public key is embedded directly in `index.html` (safe, same trust level as the Supabase
+   publishable key). **Important format note**: `npm:web-push`'s API wants the private key as
+   the raw base64url `d` value, *not* a JWK blob — the JWK's `d` field is exactly that raw
+   value, so no conversion was needed, but this would be an easy mistake to make by passing
+   the whole JWK object where the library expects a bare string.
+4. **`send-push` Edge Function** — looks up a user's `active` subscriptions, sends via
+   `npm:web-push@3.6.7` (confirmed working in Supabase's Deno Edge Runtime via a throwaway
+   test function before committing to this approach — hand-rolling RFC 8291 encryption myself
+   was ruled out as too risky to get right without a way to test real delivery). On a 404/410
+   send failure, marks that subscription `active = false` rather than retrying. **Gated to
+   `service_role`-only callers**: `verify_jwt` is on (blocks unsigned requests) *and* the
+   function additionally decodes the caller's JWT `role` claim and rejects anything that isn't
+   `service_role` — otherwise the public anon key (embedded in every client, not a secret)
+   would be enough for anyone to make this function spam push notifications to any `user_id`.
+5. **`quick-log` Edge Function** — `verify_jwt` is *off* here deliberately: this is called
+   from the service worker with no Supabase session available, so the opaque `quicklog_token`
+   *is* the auth mechanism (per the user's chosen "small Edge Function, service-role insert"
+   approach over storing a Supabase session in the service worker). It only accepts a small
+   fixed enum of server-interpreted intents (`morning_wood_yes`, `arousal_low`,
+   `stool_normal`, etc.) — the client sends an intent code, never a raw table/column/value, so
+   a leaked token can only ever trigger one of those specific, harmless writes.
+6. **`pg_cron` + `pg_net` + Vault** (both extensions newly enabled this session) — a
+   `private.send_daily_reminder(reminder_type)` Postgres function checks, per user with an
+   active subscription, whether today's row already has the relevant field filled in; if not,
+   calls `send-push` via `net.http_post`, authenticated with the project's `service_role` key
+   pulled from `vault.decrypted_secrets` (never hardcoded, never seen by Claude Code — see
+   manual step below). Three cron jobs, all scheduled in UTC to land at sensible **Asia/Taipei
+   (UTC+8, no DST)** local times: morning-wood reminder 09:00 local, arousal + stool reminders
+   21:00 / 21:30 local.
+7. **`index.html`** — new topbar button `ENABLE ALERTS` (hidden by default, hidden again once
+   subscribed on that device). Deliberately *not* an auto-prompt on page load — browsers
+   penalize unprompted permission requests and it's bad UX regardless. On click: requests
+   Notification permission, registers `sw.js`, subscribes via `PushManager`, upserts the
+   subscription row via the logged-in user's own session (normal RLS-respecting client call,
+   no service-role needed here since the user is writing their own row).
+
+**Design decision made without stopping to ask** (small enough to be an implementation detail
+under the already-approved "small Edge Function, service-role insert" architecture, not a new
+scope question): exact notification button semantics weren't specified in the handoff, since
+Bristol stool type (1–7) and arousal level (0–10) don't reduce cleanly to one-tap buttons.
+Chose one-tap-for-the-common-case: morning-wood is a real yes/no, arousal offers Low/High
+(anything more granular opens the app), stool offers "Normal" (Bristol 4, the common case) vs.
+"Details" (opens the app). All of `arousal_daily`'s relevant columns are nullable, so a partial
+quick-log now doesn't block a fuller entry later via the dashboard. Easy to change the mapping
+later — it's just the `INTENTS` table in `quick-log`'s `index.ts`.
+
+**What's NOT built yet (deliberately, per the handoff's own scoping):**
+- **Encounter-detection push** — the handoff flagged a real discrepancy that only the user can
+  resolve: earlier planning assumed colorId `'4'` (Flamingo) for encounter events, but the
+  user's actual, years-old production Google Apps Script detects by title starting with
+  `"Meet "` (case-insensitive). Needs checking against how events are titled in practice
+  *today* before picking one — Claude Code has no calendar access to verify this directly.
+- **People/Encounters schema redesign** — the handoff described real spreadsheet data (168
+  people, 225 encounters) with specific typed columns (Where Met, Relationship, Gender,
+  Body Type, activity tag lists, per-encounter ratings, etc.) that the current loose `jsonb`
+  `demographics`/`detail`/`evaluation` columns on `people`/`encounters` probably don't serve
+  well. The handoff explicitly said to flag this back rather than silently redesign it —
+  flagging it now: worth a real schema conversation before any encounter-tracking UI gets
+  built on top of the current shape.
+- **Spreadsheet migration** — explicitly out of scope for this handoff per the user's own
+  planning doc ("needs further consideration").
+
+**What's left — real manual steps, not something Claude Code can or should do:**
+- **Set Edge Function secrets** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (e.g.
+  `mailto:d.demarchi11@gmail.com`) via `supabase secrets set` or the Dashboard's Edge Function
+  secrets page. The two key values are in this session's transcript from when they were
+  generated — deliberately not re-shown or handled again here now that they're wired in.
+- **Store the `service_role` key in Vault**, run directly in the Supabase SQL Editor (not
+  through Claude Code, so the key never passes through an agent that doesn't need to hold it):
+  ```sql
+  select vault.create_secret('<paste service_role key from Settings → API>', 'service_role_key');
+  ```
+  Until this exists, `private.send_daily_reminder()` silently no-ops (logs a notice, sends
+  nothing) — safe by default, but means no reminder will actually fire until this step is done.
+- **Delete (or ignore) the `test-webpush-import` Edge Function** — a throwaway used to confirm
+  `npm:web-push` works in Supabase's Deno runtime before committing to the approach. Harmless
+  (no real data access, `verify_jwt` off), but not real project infrastructure. No MCP tool
+  exists to delete an Edge Function, so this needs the Dashboard.
+- **Subscribe from an actual Android Chrome device** (tap "ENABLE ALERTS" in the topbar,
+  grant the permission prompt) — this is the only way to get a real subscription row into
+  `push_subscriptions`, and the only way to actually verify a push arrives with working action
+  buttons. Once secrets + Vault are set, trigger a real test on demand from the SQL Editor
+  without waiting for the next scheduled cron time:
+  ```sql
+  select private.send_daily_reminder('morning_wood');
+  ```
+
+---
+
 ## Recurring: manual sync cadence
 
 Since Wellness Project sync is chat-triggered, decide a real cadence — e.g. "ask Claude to
@@ -435,14 +541,16 @@ line already shipped) was never separately scoped and hasn't been revisited — 
 Push notifications and the morning wake-time alert below are a distinct, larger scope (real
 service-worker/PWA work, plus the chat-triggered-sync re-scope question) and remain open.
 
-- [ ] **Interactive push notifications** — Web Push + Notifications API `actions` array for
-  real quick-log buttons (not Google Home script notifications — confirmed insufficient, no
-  button/action support). iPhone needs PWA home-screen install first (iOS 16.4+). Since sync
-  is chat-triggered rather than cron-triggered, push notifications can't fire from an
-  unattended sync job — they'd need to be sent as part of whatever triggers a manual sync, or
-  reconsidered as a "reminder to come ask Claude to sync" mechanism.
-  — **Est: 2–3 sessions (6–10h)**.
-- [ ] **Morning wake-time alert** — same re-scope consideration as push notifications above.
+- [x] **Interactive push notifications — done 2026-09-13 (Claude Code), foundation +
+  time-based reminders.** Full write-up below. The re-scope concern above (chat-triggered sync
+  can't fire pushes) turned out to be moot — this doesn't route through the Wellness Project
+  sync at all; `pg_cron` calls the `send-push` Edge Function directly on its own schedule,
+  independent of any chat session.
+- [ ] **Morning wake-time alert** — not yet built; same infrastructure (cron + `send-push`)
+  would carry it once there's a concrete trigger condition (currently unspecified — needs
+  scoping, e.g. tied to actual wake time from wearable sleep data vs. a fixed clock time).
+- [ ] **Encounter-detection push (calendar-driven) + People/Encounters schema redesign** —
+  deliberately deferred, see "Push Notifications — what's NOT built yet" below.
 
 ### Researched & explicitly out of scope for now
 **True auto-cast to the Google TV Streamer 4K** — confirmed no action in Google's Home
@@ -463,13 +571,15 @@ Google Cast SDK — a genuine mini-project of its own, not included in any estim
 
 - [ ] **Partner/encounter tracking** — Supabase tables `people` + `encounters` already exist
   and are RLS-protected (see Foundation), just empty — no data-entry mechanism built yet.
-  Calendar-scan-for-Flamingo-events piece reuses the same browser-direct Calendar API pattern
+  Calendar-scan-for-encounter-events piece reuses the same browser-direct Calendar API pattern
   already proven for sessions (see above) — genuinely less new work now than when this was
   originally scoped, since the hard part (getting Calendar data into the browser at all) is
-  done. The "next-morning actionable push" piece inherits the same re-scope note as P2's push
-  notifications. **Explicitly not a body marker** — it's calendar-driven like the Session
-  panel, with its own trigger UI (placement still an open design decision) — see the
-  handoff notes from 2026-09-13 for the full detection/insert logic.
+  done, and the push-notification *infrastructure* (`send-push`, `quick-log`, `sw.js`) is now
+  also done and ready to reuse. Still blocked on the detection-signal discrepancy and the
+  People/Encounters schema redesign — see the Push Notifications section above.
+  **Explicitly not a body marker** — it's calendar-driven like the Session panel, with its own
+  trigger UI (placement still an open design decision) — see the handoff notes from
+  2026-09-13 for the full detection/insert logic.
 - [x] **Daily arousal + morning-erection logging — done 2026-09-13 (Claude Code).** New
   "Loins" marker + `PANELS.arousal` (slot `arousal`), structurally copied from wellbeing's
   daily 0-10 self-report pattern (`arousal_daily` → `{dates, morningErection, arousalLevel}`
@@ -621,13 +731,13 @@ item is done; partner/encounter tracking and masturbation logging remain. Remain
 
 | Tier | Est. hours |
 |---|---|
-| P2 (push notifications + morning wake-time alert need re-scope; environmental panel done) | 6–10h |
+| P2 (push notification foundation done; morning wake-time alert unscoped; environmental panel done) | 1–2h |
 | P3 | 2–3h |
 | P4 (arousal done — partner/encounter tracking + masturbation logging remain) | 2–3h |
 | P5 | **done** |
 | P6 (Wardrobe) | 6–10h |
 | P7 (Decouple from Wellness Project — Zepp Mini Program, then Health Connect app) | 18–39h |
-| **Total** | **~34–65h** |
+| **Total** | **~29–57h** |
 
 The core "is this real" question was answered early — the pipeline works, proven with live
 data, the full dashboard UI is live against it, and weather + calendar are now genuinely live

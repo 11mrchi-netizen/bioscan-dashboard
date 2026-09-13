@@ -454,6 +454,7 @@
     <div style="display:flex; align-items:center; gap:14px;">
       <div class="sync-badge mono" id="sync-badge" data-open="synclog" title="Click for sync details">SYNCING…</div>
       <div class="tb-countdown">T-<span class="num" id="tb-days">—</span>D · 40KM RACE · DEC 06</div>
+      <button class="signout-btn mono" id="push-enable-btn" title="Enable push notifications" style="display:none;">ENABLE ALERTS</button>
       <button class="signout-btn mono" id="signout-btn" title="Sign out">SIGN OUT</button>
     </div>
   </div>
@@ -1742,6 +1743,74 @@ async function fetchDashboardData(sb){
   };
 }
 
+// ============ PUSH NOTIFICATIONS ============
+// Web Push for the daily arousal/morning-wood/stool reminders (see ROADMAP.md).
+// Subscribing is opt-in via the "ENABLE ALERTS" topbar button, never an
+// auto-prompt on load — browsers penalize sites that ask for notification
+// permission unprompted, and it's just bad UX.
+const VAPID_PUBLIC_KEY = 'BD1ojJw3oQ1vWv4vn-5D8ulKsGSKnTbeycVOa7E0cCq9R4cycnYQ_uCrpmVrc94-2tU3nJAk55Pa34rjJjG4KCM';
+
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+async function setupPushNotifications(sb, userId){
+  const btn = document.getElementById('push-enable-btn');
+  if(!btn) return;
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)) return; // unsupported browser — leave button hidden
+  if(Notification.permission === 'denied') return; // user said no; don't nag
+
+  let registration;
+  try {
+    registration = await navigator.serviceWorker.register('./sw.js');
+  } catch(e){
+    console.warn('Service worker registration failed:', e.message);
+    return;
+  }
+
+  const existingSub = await registration.pushManager.getSubscription();
+  if(existingSub){
+    btn.style.display = 'none';
+    return; // already subscribed on this device
+  }
+
+  btn.style.display = '';
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      const permission = await Notification.requestPermission();
+      if(permission !== 'granted'){
+        btn.disabled = false;
+        return;
+      }
+      const sub = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+      const subJson = sub.toJSON();
+      const { error } = await sb.from('push_subscriptions').upsert({
+        user_id: userId,
+        endpoint: subJson.endpoint,
+        p256dh_key: subJson.keys.p256dh,
+        auth_key: subJson.keys.auth,
+        active: true,
+      }, { onConflict: 'user_id,endpoint' });
+      if(error){
+        console.warn('Failed to store push subscription:', error.message);
+        btn.disabled = false;
+        return;
+      }
+      btn.style.display = 'none';
+    } catch(e){
+      console.warn('Push subscription failed:', e.message);
+      btn.disabled = false;
+    }
+  });
+}
+
 
   // Everything below (the original dashboard script) runs inside this async
   // IIFE so it can `await fetchDashboardData(sb)` partway through, exactly
@@ -1762,6 +1831,11 @@ async function fetchDashboardData(sb){
   // into this exact structure so every panel render() function downstream
   // works completely unchanged from the original hardcoded-data version.
   const DASHBOARD_DATA = await fetchDashboardData(sb);
+
+  // Fire-and-forget: don't block dashboard render on push setup.
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if(session) setupPushNotifications(sb, session.user.id);
+  });
 
   // Back-compat local references so the rest of the panel code (written before this
   // refactor) keeps working unchanged — these just point at the nested data.

@@ -122,20 +122,18 @@ one-time OAuth setup to get truly live data:
   OAuth consent screen used for Supabase Auth), plus `access_type:'offline'` +
   `prompt:'consent'` to force a refresh token — Google doesn't return one by default, and a
   normal Supabase session refresh does **not** refresh the Google-specific `provider_token`,
-  only a fresh login does. This is a documented, still-open rough edge, not fully solved —
-  after roughly an hour, calendar calls may start silently failing back to a placeholder
-  state until the user signs out and back in (a plain page reload does **not** fix it, since
-  it doesn't get a fresh Google token). **Fixed 2026-09-12 (Claude Code): the placeholder now
-  correctly distinguishes this from "no session found."** Previously, a failed Calendar API
-  call (e.g. a 401 from an expired token) was silently swallowed and showed the same "No
-  upcoming training session (colorId 8) found" message as a genuine empty result — actively
-  misleading, since it looked like a color-matching bug rather than an auth problem. Now a
-  fetch failure sets `calendarFetchError` and the panel shows an accurate "Calendar fetch
-  failed... sign out and back in" message instead. See `fetchNextSession()`'s catch block and
-  the `session` panel's placeholder branch.
-- `index.html` captures `session.provider_token` and calls the Google Calendar API directly
-  from the browser. Session-type detection uses **colorId `'8'`** (confirmed reliable from
-  real calendar data — cleaner than matching on emoji/title text, which varies).
+  only a fresh login does. This was a documented rough edge for a while: after roughly an
+  hour, calendar calls started silently failing back to a placeholder state until the user
+  signed out and back in. **Fully fixed 2026-09-13 (Claude Code) — see the "SHORT-LIVED
+  GOOGLE TOKEN" section below for the real architecture** (a server-side refresh flow via a
+  Supabase Edge Function, not a client-side workaround). The 2026-09-12 fix mentioned here
+  previously only improved the *error message* shown when the token went stale — it didn't
+  stop the token from going stale in the first place, which the Edge Function now does.
+- `index.html` calls the Google Calendar API from the browser using a fresh access token
+  minted on demand via `getFreshGoogleToken()` (calls the `refresh-google-token` Edge
+  Function — see below) rather than the raw, short-lived `session.provider_token`. Session-type
+  detection uses **colorId `'8'`** (confirmed reliable from real calendar data — cleaner than
+  matching on emoji/title text, which varies).
 - Session type classification maps to the same 3 gear kinds the 3D gear model already
   supports (barbell / shoes-run / shoes-trail-vest) and calls `setGearKind()` automatically.
 - A gear checklist renders per session type, **now weather-aware (done 2026-09-12, Claude
@@ -276,6 +274,93 @@ all-time PRs + working-best + VO2max trend chart + performance supplements on th
 
 Also removed the `spleen`/`supplements` `REGION_DEFS` entry entirely (no replacement marker —
 same "remove, don't relocate the hitbox" pattern as the Knee marker removal).
+
+---
+
+## ✅ FIXED — short-lived Google Calendar/Drive token (fixed 2026-09-13, Claude Code)
+
+**Root cause, confirmed via research (not a guess):** `session.provider_token` (Google's OAuth
+access token via Supabase Auth) expires after ~1h, and Supabase deliberately does not store or
+manage the Google-specific refresh token at all — confirmed across many independent Supabase
+GitHub issues/discussions spanning years. Supabase's own JWT refresh keeps the *Supabase*
+session alive indefinitely; it has nothing to do with the Google-specific token, which just
+dies after an hour unless the app captures and manages Google's refresh token itself, entirely
+outside Supabase's session system.
+
+**Compounding constraint**: the Google Cloud OAuth consent screen is in **Testing** status
+(deliberate, to skip Google's verification review). Per Google's own documentation, a refresh
+token issued under Testing status with an external user type is only valid for **7 days**
+(not the ~6-months-of-disuse expiry Google normally applies) unless the only scopes requested
+are name/email/profile — not the case here, since `calendar.readonly` is requested. So even
+with a proper refresh-token flow, tokens still need re-authorization every 7 days unless the
+consent screen moves to Production.
+
+**Decision made (per the handoff): build the refresh-token flow regardless** — a real
+improvement even capped at 7 days — **and treat moving to Production as a separate, optional
+follow-up** the user can decide on later (that step requires Google's app verification review
+for `calendar.readonly`, a real process with unknown/variable turnaround, and is a manual
+Google Cloud Console step Claude Code cannot perform). Not blocked on that decision.
+
+**Architecture** — matches Supabase's own documented pattern:
+
+1. **New table `user_google_tokens`** (`user_id` PK, `refresh_token`, `updated_at`), RLS
+   restricted to each user's own row (select/insert/update). Holds *only* the long-lived
+   refresh token — the short-lived access token is never persisted anywhere, requested fresh
+   and discarded after each use.
+2. **`index.html` captures `session.provider_refresh_token`** in `fetchDashboardData()`,
+   immediately after `getSession()` — the one point where it's reliably present, right after
+   a fresh sign-in with `prompt:'consent'` (already set in `login.html`). Upserts it into
+   `user_google_tokens`. Safe to run on every load: on subsequent loads the field is simply
+   absent and this is a no-op. `login.html` itself needed no changes.
+3. **New Supabase Edge Function `refresh-google-token`** (deployed live, not just written) —
+   reads the caller's own row via their JWT (never accepts a `user_id` param — a client could
+   pass an arbitrary one), POSTs to `https://oauth2.googleapis.com/token` with the stored
+   refresh token + `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (Edge Function secrets — **not
+   yet set, see "What's left" below**), and returns only the fresh access token + expiry.
+   Distinguishes `invalid_grant` (refresh token itself is dead — the 7-day ceiling, 6-month
+   disuse, or revocation) from other failures, so the client can prompt a real re-login
+   specifically for that case rather than a generic error.
+   - **Real bug found and fixed during this work, not just in isolated testing**: the
+     function initially had no CORS headers. Worked fine in `curl` and non-browser testing,
+     but failed immediately once actually loaded as a page in a browser (`Access to fetch...
+     has been blocked by CORS policy`) — a genuine reminder that this class of bug only shows
+     up when something actually calls the function the way it'll really be called. Fixed with
+     an `OPTIONS` preflight handler + `Access-Control-Allow-Origin` on every response;
+     confirmed via direct `curl -X OPTIONS` that the header is now present.
+4. **`index.html`'s `getFreshGoogleToken()`** replaces every direct use of
+   `window.googleProviderToken` (which no longer exists) — calls the Edge Function fresh on
+   *every* calendar/drive fetch (`fetchNextSession()`, `fetchGpxRoute()`) rather than
+   caching/tracking expiry client-side, deliberately avoiding a whole class of "is my cached
+   token still valid" bugs. The session panel's placeholder message now branches on the Edge
+   Function's own explicit error codes (`no_refresh_token` / `invalid_grant` / `not_configured`
+   / `calendar_api_error`) instead of guessing from raw HTTP status — each needs a genuinely
+   different fix, and the old 401-vs-403 guessing sent debugging in the wrong direction more
+   than once already (see the Live Calendar section above).
+
+**What's NOT changed**: Supabase's own session/JWT refresh — unrelated, already fine, this
+only ever affected the Google-specific provider token. The Google *access* token is still
+never stored anywhere persistent, only the refresh token, only in `user_google_tokens`.
+
+**What's left — real manual steps, not something Claude Code can do:**
+- **Set the Edge Function secrets** (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — the same
+  OAuth client already used for Supabase Auth's Google provider) via
+  `supabase secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=...`, or the Dashboard's
+  Edge Function secrets page. Deliberately not something Claude Code did or saw the values
+  for — credentials like this shouldn't pass through an agent that doesn't need to hold them.
+- **Sign out and back in** (existing sign-out button) once secrets are set — the current
+  session predates this refresh-token capture logic, so `user_google_tokens` has no row for
+  the real user yet. Same category of "needs a real re-login" issue as when the calendar
+  scope itself was first added.
+- Verified everything up to that point that's possible without a real Google login: the table
+  + RLS (via `get_advisors` — clean), the deployed function's CORS headers and auth gate (via
+  direct `curl`, both authenticated and not), and that the client-side error-handling path
+  doesn't crash and shows a sensible message end-to-end against the real deployed function.
+  The actual "mint a real access token from a real stored refresh token" path needs the two
+  manual steps above before it can be exercised for real.
+
+---
+
+## Recurring: manual sync cadence
 
 Since Wellness Project sync is chat-triggered, decide a real cadence — e.g. "ask Claude to
 sync every morning," or "sync before opening the dashboard." Not yet decided.

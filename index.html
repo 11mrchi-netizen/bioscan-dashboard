@@ -1544,13 +1544,24 @@ async function fetchDashboardData(sb){
     window.location.href = './login.html';
     throw new Error('No session — redirecting to login.');
   }
-  // Google's own Calendar API token (distinct from the Supabase session token) —
-  // requested via the calendar.readonly scope added at login. Stored globally
-  // so the calendar fetch (triggered later, alongside the weather fetch) can
-  // use it without threading it through every function signature. May be
-  // undefined if the user signed in before this scope was added — the
-  // calendar fetch handles that by falling back to the placeholder panel.
-  window.googleProviderToken = session.provider_token || null;
+
+  // Captures Google's refresh token the one time it's actually present --
+  // only right after a fresh sign-in with prompt:'consent' (see login.html).
+  // Supabase does NOT persist this itself (that's the whole reason the
+  // refresh-google-token Edge Function + user_google_tokens table exist --
+  // see ROADMAP.md); this is genuinely the only reliable place to grab it.
+  // Safe to call on every load: on subsequent loads session.provider_refresh_token
+  // is simply absent and this is a no-op. session.provider_token (the
+  // short-lived access token) is deliberately NOT captured or stored anywhere
+  // -- calendar/drive calls now go through getFreshGoogleToken() instead,
+  // which mints one on demand from the stored refresh token.
+  if(session.provider_refresh_token){
+    const { error: upsertError } = await sb.from('user_google_tokens').upsert(
+      { user_id: session.user.id, refresh_token: session.provider_refresh_token, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' }
+    );
+    if(upsertError) console.warn('Failed to store Google refresh token:', upsertError.message);
+  }
 
   // Fire every query in parallel — independent tables, no reason to serialize.
   const [
@@ -2287,23 +2298,25 @@ async function fetchDashboardData(sb){
   const PANELS = {
     session: {
       eyebrow: "SLOT // UPCOMING", title: "Next Session", status: "watch",
-      source: "SOURCE: LIVE — Google Calendar API (browser-direct, calendar.readonly scope)",
+      source: "SOURCE: LIVE — Google Calendar API via refresh-google-token Edge Function",
       render(){
         if(!nextSessionData){
-          // 401 means the token itself is invalid/expired — a re-login fixes it.
-          // 403 means Google is deliberately denying the request even with a
-          // valid token — almost always a Google Cloud / OAuth-consent config
-          // issue (Calendar API not enabled for the project, or the
-          // calendar.readonly scope not actually granted), which a re-login
-          // will NOT fix. Conflating the two sent past debugging in the wrong
-          // direction, so they get distinct messages.
-          const noTokenReason = !window.googleProviderToken
+          // Branches on the Edge Function's own explicit error codes (see
+          // refresh-google-token) rather than guessing from HTTP status —
+          // each of these needs a genuinely different fix, and conflating
+          // them (as the old raw-provider_token code did with 401 vs 403)
+          // sends debugging in the wrong direction.
+          const noTokenReason = calendarFetchErrorCode === 'no_refresh_token'
             ? "Calendar access not granted for this session — sign out and back in to enable (the calendar.readonly scope was added after your last login)."
-            : calendarFetchError?.startsWith('401')
-              ? `Calendar fetch failed (${escapeHtml(calendarFetchError)}) — the Google Calendar token for this session has likely expired (it can go stale after about an hour and a page refresh alone won't renew it). Sign out and back in to get a fresh one.`
-              : calendarFetchError
-                ? `Calendar fetch failed (${escapeHtml(calendarFetchError)}) — this is Google actively denying the request, not a stale token, so signing back in won't fix it. Check that the Google Calendar API is enabled for the Google Cloud project behind this app's OAuth client, and that calendar.readonly is listed under that project's OAuth consent screen scopes.`
-                : "No upcoming training session (colorId 8) found in the next 7 days.";
+            : calendarFetchErrorCode === 'invalid_grant'
+              ? "Your Google Calendar/Drive access has expired — sign out and back in to reauthorize. (While the Google Cloud OAuth consent screen is in Testing status, refresh tokens are capped at 7 days between logins — this is expected, not a bug.)"
+              : calendarFetchErrorCode === 'not_configured'
+                ? "Calendar refresh isn't fully set up yet — the refresh-google-token Edge Function needs GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET set as Supabase Edge Function secrets."
+                : calendarFetchErrorCode === 'calendar_api_error'
+                  ? `Calendar fetch failed (${escapeHtml(calendarFetchError)}) — Google is denying the request even with a valid token, so signing back in won't fix it. Check that the Google Calendar API is enabled for the Google Cloud project behind this app's OAuth client, and that calendar.readonly is listed under that project's OAuth consent screen scopes.`
+                  : calendarFetchError
+                    ? `Calendar fetch failed (${escapeHtml(calendarFetchError)}).`
+                    : "No upcoming training session (colorId 8) found in the next 7 days.";
           let left = `<div class="fp-section"><div class="fp-section-title">SESSION</div>
             <div class="stat-line"><span class="k">Type</span><span class="v">—</span></div>
             <div class="stat-line"><span class="k">Time</span><span class="v">—</span></div>
@@ -3698,18 +3711,51 @@ async function fetchDashboardData(sb){
   }
   fetchLiveAirQuality();
 
-  // ============ LIVE CALENDAR — Google Calendar API, browser-direct ============
-  // Uses session.provider_token (Google's own access token, captured in
-  // fetchDashboardData above) to call the Calendar API directly from the
-  // browser — no Supabase table, no chat-triggered sync, genuinely live.
-  // Session-type is detected by colorId (confirmed pattern: colorId '8' =
-  // training session — 🏋️/🏃/⛰️ — more reliable than matching on emoji/title
-  // text, which can vary). Meal-prep and other non-training events use
-  // different colorIds and are correctly excluded.
+  // ============ LIVE CALENDAR/DRIVE — via refresh-google-token Edge Function ============
+  // session.provider_token (Google's short-lived access token) expires after
+  // ~1h and Supabase does not refresh it -- confirmed root cause, see
+  // ROADMAP.md. getFreshGoogleToken() replaces every direct use of it: mints
+  // a fresh access token on demand from the refresh token captured once at
+  // login (fetchDashboardData) and stored server-side in user_google_tokens,
+  // via a Supabase Edge Function that holds the Google Client Secret (never
+  // exposed client-side). Called fresh on every calendar/drive fetch rather
+  // than caching/tracking expiry client-side -- the Edge Function call is
+  // cheap and this avoids a whole class of "is my cached token still valid"
+  // bugs. Session-type is detected by colorId (confirmed pattern: colorId
+  // '8' = training session — 🏋️/🏃/⛰️ — more reliable than matching on
+  // emoji/title text, which can vary). Meal-prep and other non-training
+  // events use different colorIds and are correctly excluded.
   let nextSessionData = null;
-  let calendarFetchError = null; // set when the Calendar API call itself fails (e.g.
-                                  // expired provider_token), distinct from "no session
-                                  // found" — read by the session panel's placeholder text.
+  let calendarFetchError = null;     // human-readable message for display
+  let calendarFetchErrorCode = null; // 'no_refresh_token' | 'invalid_grant' |
+                                      // 'not_configured' | 'refresh_failed' |
+                                      // 'calendar_api_error' | null — read by
+                                      // the session panel's placeholder text
+                                      // to show the right fix for each case.
+
+  // Returns { token, errorCode, errorMessage } — token is null on any
+  // failure, with errorCode set to one of refresh-google-token's own error
+  // codes (see that function) so callers can show an accurate, specific
+  // message instead of a generic failure.
+  async function getFreshGoogleToken(){
+    try{
+      const { data, error } = await sb.functions.invoke('refresh-google-token');
+      if(error){
+        // supabase-js's FunctionsHttpError carries the actual response body
+        // on error.context — duck-typed check (rather than `instanceof
+        // FunctionsHttpError`) since that class isn't obviously exposed off
+        // the UMD global this file loads supabase-js from.
+        let body = null;
+        if(typeof error.context?.json === 'function'){
+          try{ body = await error.context.json(); }catch(e){}
+        }
+        return { token:null, errorCode: body?.error || 'refresh_failed', errorMessage: body?.message || error.message };
+      }
+      return { token: data.access_token, errorCode:null, errorMessage:null };
+    } catch(e){
+      return { token:null, errorCode:'refresh_failed', errorMessage:e.message };
+    }
+  }
 
   function classifySessionType(summary){
     if(summary.includes('🏋️')) return {kind:'strength', gearKind:'barbell'};
@@ -3764,8 +3810,10 @@ async function fetchDashboardData(sb){
     const fileId = extractDriveFileId(gpxLink);
     if(!fileId){ gpxRouteError = "Couldn't find a Drive file ID in this link."; return; }
     try{
+      const { token, errorMessage } = await getFreshGoogleToken();
+      if(!token) throw new Error(errorMessage || 'Could not get a Google access token.');
       const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-        { headers: { 'Authorization': `Bearer ${window.googleProviderToken}` } });
+        { headers: { 'Authorization': `Bearer ${token}` } });
       if(!res.ok){
         const body = await res.json().catch(()=>null);
         throw new Error(`${res.status} — ${body?.error?.message || res.statusText}`);
@@ -3826,10 +3874,19 @@ async function fetchDashboardData(sb){
   }
 
   async function fetchNextSession(){
-    if(!window.googleProviderToken){
-      // No calendar scope granted yet (user signed in before this feature
-      // existed) — leave the placeholder panel in place rather than error.
-      console.warn('No Google provider token available — calendar scope not granted this session. Sign out and back in to enable.');
+    calendarFetchError = null; calendarFetchErrorCode = null;
+    const { token, errorCode, errorMessage } = await getFreshGoogleToken();
+    if(!token){
+      // no_refresh_token: never signed in with the calendar scope, or signed
+      // in before this refresh-flow existed (needs a fresh login to capture
+      // one). invalid_grant: the stored refresh token itself is dead (7-day
+      // Testing-mode ceiling, 6-month disuse in Production, or revocation).
+      // not_configured: GOOGLE_CLIENT_ID/SECRET not set as Edge Function
+      // secrets yet. Leave the placeholder panel in place either way rather
+      // than error — the session panel surfaces the specific reason.
+      calendarFetchErrorCode = errorCode;
+      calendarFetchError = errorMessage;
+      console.warn('Could not get a fresh Google token for calendar fetch:', errorCode, errorMessage);
       return;
     }
     try{
@@ -3838,15 +3895,16 @@ async function fetchDashboardData(sb){
       const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events` +
         `?timeMin=${encodeURIComponent(now)}&timeMax=${encodeURIComponent(weekOut)}` +
         `&singleEvents=true&orderBy=startTime&maxResults=50`;
-      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${window.googleProviderToken}` } });
+      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json().catch(()=>null);
       if(!res.ok){
-        // Surface Google's own error message, not just the HTTP status — a 401
-        // ("invalid_token"/expired) needs a re-login, but a 403 ("insufficient
-        // authentication scopes" or "Calendar API has not been used in this
-        // project") is a Google Cloud / OAuth-consent configuration problem
-        // that re-logging in won't fix, and the two look identical without this.
+        // With a freshly-minted token, a failure here means Google is
+        // actively denying the request (Calendar API not enabled for the
+        // project, or calendar.readonly not actually on the OAuth consent
+        // screen) rather than a stale/expired token — that case is already
+        // handled above via getFreshGoogleToken()'s own error codes.
         const reason = data?.error?.message || res.statusText || 'unknown error';
+        calendarFetchErrorCode = 'calendar_api_error';
         throw new Error(`${res.status} — ${reason}`);
       }
       const nextTraining = (data.items || []).find(ev => ev.colorId === '8');

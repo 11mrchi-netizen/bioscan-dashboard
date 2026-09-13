@@ -158,7 +158,9 @@ Real redesign, not incremental tweaks — moved several things to more sensible 
   and Labs removed from the top bar entirely.
 - **Supplements**: now a body-region marker (torso, opposite side from the Heart marker —
   required narrowing Heart's own hitbox test band to prevent a real region-overlap bug caught
-  during this change, not after).
+  during this change, not after). **Superseded 2026-09-13** — see the Supplements
+  Distribution section below; the dedicated marker/panel didn't last long before a better
+  design replaced it.
 - **Labs**: moved into the character-sheet stat card as a "LABS →" row at the bottom, using
   the same generic `data-open` click-wiring every other panel trigger already uses.
 - **Session + gear**: a tappable "NEXT SESSION" label now sits directly above the 3D gear
@@ -219,7 +221,61 @@ session, whenever visual verification is needed again.
 
 ---
 
-## Recurring: manual sync cadence
+## ✅ SUPPLEMENTS DISTRIBUTION + TRAINING MERGE — COMPLETE (2026-09-13, Claude Code)
+
+Design finalized after further discussion: the dedicated Supplements marker/panel (added just
+one round of changes earlier, see Layout Rework above) is gone — real churn, but the
+anatomical-distribution approach is the better design. A `category` column was added to
+`supplements` (`hormonal` / `sleep` / `anti-inflammatory` / `performance` / `systemic`) and
+backfilled on all 15 existing rows — **this is now the source of truth for placement; any
+supplement added later needs a category set for auto-sorting to work.**
+
+**Placement**, via `supplementsForCategory()`:
+
+| Category | Goes into |
+|---|---|
+| `hormonal` | Hormones panel |
+| `sleep` | Readiness panel, sleep section |
+| `anti-inflammatory` | Heart panel |
+| `performance` | Training panel (new merge, see below) |
+| `systemic` | Readiness panel, wellbeing section |
+
+**One deliberate name-based exception**: Tadalafil is categorized `systemic` in the data, but
+routed to the Loins panel specifically by name match (`supplementsByName(/tadalafil/i)`) — its
+actual relevance is domain-specific in a way "systemic" doesn't capture. Every category query
+excludes it by name so it doesn't also show up in the Readiness panel's systemic section.
+
+Each destination panel gets a single compact line per supplement — dose + expected-outcome
+text together (`supplementLinesHTML()`), not the old panel's two-pane outcome/dosage split.
+Outcome text is interpretive research framing (not stored data), matched by name keyword via
+`supplementOutcome()` — brand suffixes vary in the real data (e.g. "Zinc Picolinate (Swanson)")
+so exact-name matching wouldn't hold up; falls back to an empty string for anything unmapped.
+
+**Auto-hide retired supplements** uses the same 7-day-cutoff shape as the injuries/illnesses
+Health Events work — written once as `isStatusCurrentlyRelevant()` and shared by both
+`isHealthEventActive()` (active/monitoring, or resolved ≤7 days) and the new
+`isSupplementActive()` (active, or ended ≤7 days), since the day-math is identical and only
+the status enum differs. **New "SUPPLEMENTS →" character-sheet row** (repurposed
+`PANELS.supplements`) shows the complete, unfiltered history regardless of the cutoff — active
+first, then ended sorted by most-recent `end_date`.
+
+Verified against the *real* live `supplements` table (pulled via the Supabase MCP connector,
+not synthesized) — this caught two supplements (DIM Complex, Apigenin) that existed in the
+real data but weren't in the old panel's hardcoded outcome text at all, and gave a real,
+non-synthetic test of the 7-day cutoff: DIM Complex ended 2026-09-08 (5 days before the
+2026-09-13 test date) correctly still shows in the Hormones panel; Apigenin ended 2026-08-30
+(14 days before) correctly does not show in the Readiness panel's sleep section, while both
+correctly appear in the full SUPPLEMENTS history.
+
+**Strength + Endurance merged into one "Training" panel** as a prerequisite — needed so the
+`performance`-category supplements (Creatine, Iron, L-Tyrosine) had one obvious home instead
+of an arbitrary choice between two separate panels. Top bar goes from 3 cells to 2
+(Training, Weather). Both panels' existing content is preserved, just combined into one
+`{left, right}` panel — strength PRs + endurance this-week stats + intensity mix on the left,
+all-time PRs + working-best + VO2max trend chart + performance supplements on the right.
+
+Also removed the `spleen`/`supplements` `REGION_DEFS` entry entirely (no replacement marker —
+same "remove, don't relocate the hitbox" pattern as the Knee marker removal).
 
 Since Wellness Project sync is chat-triggered, decide a real cadence — e.g. "ask Claude to
 sync every morning," or "sync before opening the dashboard." Not yet decided.

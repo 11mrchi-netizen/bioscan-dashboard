@@ -458,8 +458,7 @@
     </div>
   </div>
   <div class="topbar-strip">
-    <div class="tb-cell" data-open="strength"><div class="tb-label">STRENGTH — SQUAT 1RM</div><div class="tb-value ok">115.5 kg</div><div class="tb-sub2">PR Apr'25 · current 72.9kg</div></div>
-    <div class="tb-cell" data-open="endurance"><div class="tb-label">ENDURANCE — 4WK VOL</div><div class="tb-value ok">19.6 mi/wk</div><div class="tb-sub2">longest 18.72km · pace +9.4%</div></div>
+    <div class="tb-cell" data-open="training"><div class="tb-label">TRAINING — STRENGTH / ENDURANCE</div><div class="tb-value ok">115.5kg · 19.6mi/wk</div><div class="tb-sub2">squat PR · pace +9.4%</div></div>
     <div class="tb-cell" data-open="weather" id="weather-tb-cell"><div class="tb-label">WEATHER</div><div class="tb-value">—</div><div class="tb-sub2">loading…</div></div>
   </div>
 </div>
@@ -482,6 +481,9 @@
   </div>
   <div class="stat-card-labs-row" id="stat-card-history-row" data-open="history">
     <span>HISTORY</span><span class="labs-row-arrow">→</span>
+  </div>
+  <div class="stat-card-labs-row" id="stat-card-supplements-row" data-open="supplements">
+    <span>SUPPLEMENTS</span><span class="labs-row-arrow">→</span>
   </div>
 </div>
 
@@ -1659,9 +1661,13 @@ async function fetchDashboardData(sb){
     id: r.id, part: r.part, type: r.type, severity: r.severity, status: r.status,
     start: r.start_date, end: r.end_date, notes: r.notes
   }));
+  // category (hormonal/sleep/anti-inflammatory/performance/systemic) is the
+  // source of truth for which panel a supplement's info shows in — see
+  // supplementsForCategory() below. Backfilled on all rows as of 2026-09-13;
+  // any new supplement added later needs one set for auto-sorting to work.
   const supplements = (supplementsRes.data || []).map(r => ({
     id: r.id, name: r.name, dose: r.dose, time: r.time_of_day, status: r.status,
-    start: r.start_date, end: r.end_date, target: r.target
+    start: r.start_date, end: r.end_date, target: r.target, category: r.category
   }));
   // illnesses is injuries' counterpart for the merged "Health Events" concept
   // (see the head-marker ring + History panel) — kept as its own table/shape
@@ -1776,24 +1782,91 @@ async function fetchDashboardData(sb){
     return Math.round((today - latest) / (1000*60*60*24));
   }
 
-  // ============ HEALTH EVENTS (injuries + illnesses, merged for display) ============
-  // Shared once here rather than duplicated per table, since both use the same
-  // status enum shape (active/monitoring/resolved). "Active" for the purposes
-  // of the head-marker ring means: active/monitoring status, OR resolved
-  // within the last 7 days — a display filter only, nothing is ever removed
-  // from the underlying tables, it just stops showing as a live concern.
-  function isHealthEventActive(status, endDate){
-    if(status === 'active' || status === 'monitoring') return true;
-    if(status === 'resolved' && endDate){
+  // ============ "STILL RELEVANT" CUTOFF — shared by health events + supplements ============
+  // Same active-or-recently-ended shape shows up twice: injuries/illnesses
+  // (active/monitoring, or resolved within 7 days) and supplements (active,
+  // or ended within 7 days) — different status enums, identical day-math, so
+  // written once here rather than duplicated.
+  function isStatusCurrentlyRelevant(status, endDate, activeStatuses, endedStatuses, cutoffDays=7){
+    if(activeStatuses.includes(status)) return true;
+    if(endedStatuses.includes(status) && endDate){
       const daysSince = Math.round((new Date(DASHBOARD_DATA.syncedAt) - new Date(endDate+'T00:00:00')) / (1000*60*60*24));
-      return daysSince <= 7;
+      return daysSince <= cutoffDays;
     }
     return false;
+  }
+
+  // ============ HEALTH EVENTS (injuries + illnesses, merged for display) ============
+  // "Active" for the purposes of the head-marker ring means: active/monitoring
+  // status, OR resolved within the last 7 days — a display filter only,
+  // nothing is ever removed from the underlying tables, it just stops
+  // showing as a live concern.
+  function isHealthEventActive(status, endDate){
+    return isStatusCurrentlyRelevant(status, endDate, ['active','monitoring'], ['resolved']);
   }
   function hasActiveHealthEvents(){
     const injActive = DASHBOARD_DATA.injuries.some(i => isHealthEventActive(i.status, i.end));
     const illActive = DASHBOARD_DATA.illnesses.some(i => isHealthEventActive(i.status, i.end));
     return injActive || illActive;
+  }
+
+  // ============ SUPPLEMENTS — distributed across destination panels ============
+  // The dedicated Supplements marker/panel is gone (see ROADMAP.md) — each
+  // supplement's dose + expected-outcome line now shows inside whichever
+  // panel matches its `category` column (the real source of truth, added via
+  // migration and backfilled). Same active-or-recently-ended cutoff as health
+  // events, just against the active/ended enum supplements actually use.
+  function isSupplementActive(status, endDate){
+    return isStatusCurrentlyRelevant(status, endDate, ['active'], ['ended']);
+  }
+
+  // Outcome text is interpretive/directional research framing, not stored
+  // data — matched by name keyword since that's the only stable handle
+  // (brand suffixes vary, e.g. "Zinc Picolinate (Swanson)"). Falls back to
+  // empty string for anything unmapped rather than breaking.
+  function supplementOutcome(name){
+    const OUTCOME_MAP = [
+      [/boron/i, 'Free-T ↑ ~10-15%*'],
+      [/zinc/i, 'Supports T synthesis*'],
+      [/nettle/i, 'SHBG binding ↓*'],
+      [/dim complex/i, 'Estrogen metabolism support*'],
+      [/omega.?3|fish oil/i, 'hs-CRP ↓ — primary lever'],
+      [/tart cherry/i, 'Exercise-induced inflammation ↓'],
+      [/magnesium/i, 'Sleep onset/depth ↑*'],
+      [/glycine/i, 'Sleep onset ↑*'],
+      [/apigenin/i, 'GABA-A modulation, sleep support*'],
+      [/creatine/i, 'Power output ↑ — well established'],
+      [/tyrosine/i, 'Stress-task focus ↑*'],
+      [/\biron\b/i, 'RBC production support'],
+      [/vitamin d/i, 'Hormonal + immune support'],
+      [/b.?complex/i, 'Methylation cofactors'],
+      [/tadalafil/i, 'Erectile fn. decoupled from stress — confirmed in data']
+    ];
+    const hit = OUTCOME_MAP.find(([re]) => re.test(name));
+    return hit ? hit[1] : '';
+  }
+
+  // Tadalafil is categorized 'systemic' in the data but routed to the Loins
+  // panel specifically by name — a deliberate one-off exception, not a bug —
+  // so every category query excludes it to avoid double-listing it there too.
+  function supplementsForCategory(category){
+    return DASHBOARD_DATA.supplements.filter(s =>
+      s.category === category && !/tadalafil/i.test(s.name) && isSupplementActive(s.status, s.end)
+    );
+  }
+  function supplementsByName(pattern){
+    return DASHBOARD_DATA.supplements.filter(s => pattern.test(s.name) && isSupplementActive(s.status, s.end));
+  }
+
+  // Single compact line per supplement — dose + outcome together, not split
+  // across two panes like the old dedicated panel did.
+  function supplementLinesHTML(list){
+    return list.map(s => {
+      const outcome = supplementOutcome(s.name);
+      const endedNote = s.status === 'ended' ? ` (ended ${s.end})` : '';
+      const cls = s.status === 'ended' ? 'watch' : '';
+      return `<div class="stat-line supp"><span class="k">${s.name} <i>${s.dose}</i></span><span class="v ${cls}">${outcome}${endedNote}</span></div>`;
+    }).join('');
   }
 
   // ============ READINESS COMPUTATIONS ============
@@ -2394,6 +2467,11 @@ async function fetchDashboardData(sb){
         left += rangeBarHTML("Sleep duration", latestHrs, "h", 4, 9, latestHrs < 6.5 ? 'watch' : 'ok', 2);
         left += rangeBarHTML("Sleep score", latestScore, "", 40, 100, latestScore < 75 ? 'watch' : 'ok', 0);
 
+        const sleepSupps = supplementsForCategory('sleep');
+        if(sleepSupps.length > 0){
+          left += `<div class="fp-section" style="margin-top:10px;"><div class="fp-section-title">SLEEP SUPPLEMENTS</div>${supplementLinesHTML(sleepSupps)}</div>`;
+        }
+
         left += `<div class="fp-section" style="margin-top:14px;"><div class="fp-section-title">REST DAY STATUS</div>`;
         if(daysSinceRest === null){
           left += `<div class="fp-note">No rest days logged in the pulled window.</div>`;
@@ -2414,6 +2492,11 @@ async function fetchDashboardData(sb){
           <div class="stat-line"><span class="k">Stress</span><span class="v ${latestWB.stress>=6?'watch':''}">${latestWB.stress}/10</span></div>
           <div class="stat-line"><span class="k">Soreness</span><span class="v ${latestWB.soreness>=6?'watch':''}">${latestWB.soreness}/10</span></div>
         </div>`;
+
+        const systemicSupps = supplementsForCategory('systemic');
+        if(systemicSupps.length > 0){
+          left += `<div class="fp-section" style="margin-top:14px;"><div class="fp-section-title">FOUNDATIONAL SUPPLEMENTS</div>${supplementLinesHTML(systemicSupps)}</div>`;
+        }
 
         left += `<div class="fp-section" style="margin-top:14px;"><div class="fp-section-title">READ</div>
           <div class="fp-note">Sleep is trending slightly down over the last 7 days (6.76h) vs the 30-day average (7.09h) — worth watching, not yet alarming.</div>
@@ -2475,6 +2558,11 @@ async function fetchDashboardData(sb){
         left += rangeBarHTML("FSH", 6.3, "", 1.5, 9.3, 'ok', 1);
         left += rangeBarHTML("Prolactin", 9.1, "", 2.1, 17.7, 'ok', 1);
 
+        const hormonalSupps = supplementsForCategory('hormonal');
+        if(hormonalSupps.length > 0){
+          left += `<div class="fp-section" style="margin-top:14px;"><div class="fp-section-title">SUPPLEMENTS</div>${supplementLinesHTML(hormonalSupps)}</div>`;
+        }
+
         let right = `<div class="fp-section"><div class="fp-section-title">DRAW DATE</div>
           <div class="stat-line"><span class="k">Apr 25, 2026</span><span class="v">大安聯合醫事檢驗所</span></div>
         </div>
@@ -2510,6 +2598,12 @@ async function fetchDashboardData(sb){
         let left = rangeBarHTML("HRV", latestHrv, " ms", 20, 100, 'ok', 1);
         left += rangeBarHTML("Resting Heart Rate", latestRhr, " bpm", 40, 70, 'ok', 1);
         left += rangeBarHTML("VO2max (est.)", latestVo2, "", 35, 65, 'ok', 1);
+
+        const antiInflammatorySupps = supplementsForCategory('anti-inflammatory');
+        if(antiInflammatorySupps.length > 0){
+          left += `<div class="fp-section" style="margin-top:10px;"><div class="fp-section-title">SUPPLEMENTS</div>${supplementLinesHTML(antiInflammatorySupps)}</div>`;
+        }
+
         left += `<div class="fp-section" style="margin-top:8px;"><div class="fp-section-title">READ</div>
           <div class="fp-note">HRV 7-day average (64.7ms) is above the 30-day average (62.3ms) — a genuine positive trend.</div>
           <div class="fp-note">RHR is essentially flat (52.7 vs 53.4 bpm) — good stability through a demanding training block.</div>
@@ -2605,16 +2699,36 @@ async function fetchDashboardData(sb){
         drawLineChart('chart-weight', bodyMetrics.dates, bodyMetrics.weight, '#4cf1ff');
       }
     },
-    strength: {
-      eyebrow: "SLOT // STRENGTH", title: "Strength — 1RM Log", status: "ok",
-      source: "SOURCE: LIVE — get_exercise_history per lift",
+    // Strength + Endurance merged into one top-bar cell/panel 2026-09-13 —
+    // needed so the performance-category supplements (Creatine, L-Tyrosine,
+    // Iron) from the supplements-distribution work have one obvious home
+    // instead of an arbitrary choice between the two.
+    training: {
+      eyebrow: "SLOT // STRENGTH & ENDURANCE", title: "Training — Strength & Endurance", status: "ok",
+      source: "SOURCE: LIVE — get_exercise_history per lift, list_runs, list_wearable_data (VO2max)",
       render(){
-        let left = `<div class="fp-section-title" style="margin-bottom:10px;">CURRENT VS. ALL-TIME PR</div>`;
+        const latestVo2 = [...wearable.vo2].reverse().find(v=>v!==null);
+
+        let left = `<div class="fp-section-title" style="margin-bottom:10px;">STRENGTH — CURRENT VS. ALL-TIME PR</div>`;
         left += rangeBarHTML("Back Squat", 72.9, "kg", 0, 115.5, 'watch', 1);
         left += rangeBarHTML("Weighted Pull-Up total", 34.5, "kg", 0, 44.3, 'watch', 1);
         left += rangeBarHTML("Military Press", 56.7, "kg", 0, 60, 'watch', 1);
-        left += `<div class="fp-section" style="margin-top:8px;"><div class="fp-section-title">READ</div>
-          <div class="fp-note">Squat/deadlift PRs are from one-off Apr 2025 peaking sessions — current working sets are appropriately submaximal mid-hypertrophy-block.</div></div>`;
+
+        left += `<div class="fp-section-title" style="margin:16px 0 10px;">ENDURANCE — THIS WEEK</div>`;
+        left += rangeBarHTML("Distance", 17.9, "km", 0, 32, 'ok', 1);
+        left += rangeBarHTML("Longest run (all-time)", 18.72, "km", 0, 25, 'ok', 2);
+        left += rangeBarHTML("VO2max (est.)", latestVo2, "", 35, 65, 'ok', 1);
+        left += `<div class="fp-section" style="margin-top:10px;"><div class="fp-section-title">INTENSITY MIX (CLASSIFIED)</div>
+            <div class="stat-line"><span class="k">Easy</span><span class="v ok">58.6 km (70%)</span></div>
+            <div class="stat-line"><span class="k">Quality (tempo/interval/hills)</span><span class="v">24.6 km</span></div>
+            <div class="stat-line"><span class="k">Avg HR (weighted)</span><span class="v">152 bpm</span></div>
+            <div class="stat-line"><span class="k">Lactate threshold</span><span class="v hot">not yet tested</span></div>
+          </div>`;
+
+        const performanceSupps = supplementsForCategory('performance');
+        if(performanceSupps.length > 0){
+          left += `<div class="fp-section" style="margin-top:14px;"><div class="fp-section-title">PERFORMANCE SUPPLEMENTS</div>${supplementLinesHTML(performanceSupps)}</div>`;
+        }
 
         let right = `<div class="fp-section"><div class="fp-section-title">ALL-TIME PRs</div>
             <div class="stat-line"><span class="k">Back Squat (Apr'25)</span><span class="v ok">115.5 kg</span></div>
@@ -2626,38 +2740,19 @@ async function fetchDashboardData(sb){
             <div class="stat-line"><span class="k">Front Squat</span><span class="v">72.9 kg</span></div>
             <div class="stat-line"><span class="k">Pull-Up total</span><span class="v watch">34.5 kg (−22% vs PR)</span></div>
             <div class="stat-line"><span class="k">Military Press</span><span class="v watch">56.7 kg (−5.5% vs PR)</span></div>
-          </div>
-          <div class="gap-flag">⚠ Strength has no daily granularity by nature — updates only on logged sessions, so no trend chart here.</div>`;
-        return {left, right, leftLabel:"CURRENT VS. PR", rightLabel:"FULL LOG"};
-      },
-      draw(){}
-    },
-    endurance: {
-      eyebrow: "SLOT // ENDURANCE", title: "Running", status: "ok",
-      source: "SOURCE: LIVE — list_runs (Jun 10–Sep 9) + list_wearable_data (VO2max)",
-      render(){
-        const latestVo2 = [...wearable.vo2].reverse().find(v=>v!==null);
-        let left = `<div class="fp-section-title" style="margin-bottom:10px;">THIS WEEK</div>`;
-        left += rangeBarHTML("Distance", 17.9, "km", 0, 32, 'ok', 1);
-        left += rangeBarHTML("Longest run (all-time)", 18.72, "km", 0, 25, 'ok', 2);
-        left += rangeBarHTML("VO2max (est.)", latestVo2, "", 35, 65, 'ok', 1);
-        left += `<div class="fp-section" style="margin-top:10px;"><div class="fp-section-title">INTENSITY MIX (CLASSIFIED)</div>
-            <div class="stat-line"><span class="k">Easy</span><span class="v ok">58.6 km (70%)</span></div>
-            <div class="stat-line"><span class="k">Quality (tempo/interval/hills)</span><span class="v">24.6 km</span></div>
-            <div class="stat-line"><span class="k">Avg HR (weighted)</span><span class="v">152 bpm</span></div>
-            <div class="stat-line"><span class="k">Lactate threshold</span><span class="v hot">not yet tested</span></div>
           </div>`;
-
-        let right = `<div class="quad-stats">
+        right += `<div class="quad-stats">
             <div class="quad-cell"><div class="ql">4WK AVG</div><div class="qv">31.5 km/wk</div></div>
             <div class="quad-cell"><div class="ql">PACE TREND</div><div class="qd up">+9.4%</div></div>
           </div>`;
         right += `<div class="fp-section-title" style="margin-bottom:8px;">VO2MAX (EST.)</div>` + quadStatsHTML(wearable.vo2, "", 1);
-        right += `<div class="chart-wrap"><svg class="chart-svg" id="chart-vo2-endurance"></svg></div>`;
-        right += `<div class="fp-section" style="margin-top:18px;"><div class="fp-section-title">READ</div>
+        right += `<div class="chart-wrap" style="margin-bottom:18px;"><svg class="chart-svg" id="chart-vo2-endurance"></svg></div>`;
+        right += `<div class="fp-section"><div class="fp-section-title">READ</div>
+          <div class="fp-note">Squat/deadlift PRs are from one-off Apr 2025 peaking sessions — current working sets are appropriately submaximal mid-hypertrophy-block.</div>
           <div class="fp-note">Pace trend is genuinely improving (+9.4% faster vs prior 14 days) — real speed gains, not just volume.</div>
-          <div class="fp-note">VO2max climbing steadily (30-day avg ${avgSlice(wearable.vo2,30)?.toFixed(1)} → 7-day avg ${avgSlice(wearable.vo2,7)?.toFixed(1)}) alongside rising run volume — wearable-estimated, not lab-confirmed.</div></div>`;
-        return {left, right};
+          <div class="fp-note">VO2max climbing steadily (30-day avg ${avgSlice(wearable.vo2,30)?.toFixed(1)} → 7-day avg ${avgSlice(wearable.vo2,7)?.toFixed(1)}) alongside rising run volume — wearable-estimated, not lab-confirmed.</div>
+          <div class="gap-flag">⚠ Strength has no daily granularity by nature — updates only on logged sessions, so no trend chart for that half.</div></div>`;
+        return {left, right, leftLabel:"CURRENT STATUS", rightLabel:"PRs, TRENDS & LOG"};
       },
       draw(){ drawLineChart('chart-vo2-endurance', wearable.dates, wearable.vo2, '#4cf1ff'); }
     },
@@ -2710,9 +2805,18 @@ async function fetchDashboardData(sb){
       eyebrow: "SLOT // REPRODUCTIVE — DAILY TRACKING", title: "Loins — Arousal & Morning Wood", status: "ok",
       source: "SOURCE: LIVE — list_arousal",
       render(){
+        // Tadalafil is categorized 'systemic' in the data but routed here by
+        // name — a deliberate one-off exception (see supplementsForCategory)
+        // — so it needs to show regardless of whether arousal_daily has any
+        // entries yet, not just in the non-empty branch below.
+        const loinsSupps = supplementsByName(/tadalafil/i);
+        const suppsHTML = loinsSupps.length > 0
+          ? `<div class="fp-section" style="margin-top:10px;"><div class="fp-section-title">SUPPLEMENTS</div>${supplementLinesHTML(loinsSupps)}</div>`
+          : '';
+
         if(arousal.dates.length === 0){
           return {
-            left: `<div class="fp-note">No arousal/morning-wood data logged yet — once entries exist in arousal_daily, they'll show up here.</div>`,
+            left: `<div class="fp-note">No arousal/morning-wood data logged yet — once entries exist in arousal_daily, they'll show up here.</div>${suppsHTML}`,
             right: ''
           };
         }
@@ -2722,6 +2826,7 @@ async function fetchDashboardData(sb){
         let left = `<div class="fp-section-title" style="margin-bottom:10px;">TODAY</div>`;
         left += `<div class="stat-line"><span class="k">Morning erection quality</span><span class="v">${latestErection ?? '—'}/10</span></div>`;
         left += `<div class="stat-line"><span class="k">Arousal level</span><span class="v">${latestArousal ?? '—'}/10</span></div>`;
+        left += suppsHTML;
 
         let right = `<div class="fp-section-title" style="margin-bottom:8px;">MORNING ERECTION (SOLID) / AROUSAL (DASHED)</div>`;
         right += `<div class="chart-wrap"><svg class="chart-svg" id="chart-arousal"></svg></div>`;
@@ -2762,69 +2867,41 @@ async function fetchDashboardData(sb){
       },
       draw(){}
     },
+    // Repurposed 2026-09-13 from the old dedicated Supplements panel (now
+    // distributed across Hormones/Heart/Readiness/Training/Loins by category
+    // — see supplementsForCategory()) into the character sheet's new
+    // "SUPPLEMENTS →" row: the complete, unfiltered history, no 7-day cutoff.
     supplements: {
-      eyebrow: "SLOT // PROTOCOL STACK", title: "Supplements & Meds", status: "ok",
-      source: "SOURCE: LIVE — list_supplements (15 total: 13 active, 2 ended)",
+      eyebrow: "SLOT // PROTOCOL STACK — FULL RECORD", title: "Supplements — History", status: "ok",
+      source: "SOURCE: LIVE — list_supplements",
       render(){
-        const TIME_ORDER = ['morning','afternoon','night','as-needed'];
-        const TIME_LABEL = {morning:'MORNING', afternoon:'AFTERNOON', night:'BEFORE BED', 'as-needed':'AS NEEDED'};
-        const active = DASHBOARD_DATA.supplements.filter(s=>s.status==='active');
-        const ended = DASHBOARD_DATA.supplements.filter(s=>s.status==='ended');
+        const all = DASHBOARD_DATA.supplements;
+        if(all.length === 0){
+          return {left: `<div class="fp-note">No supplements logged yet.</div>`, right: ''};
+        }
+        // Active first, then ended sorted by most-recent end_date — per spec,
+        // this is where the per-panel-hidden (>7-day-ended) ones stay visible.
+        const sorted = [...all].sort((a,b)=>{
+          if(a.status==='active' && b.status!=='active') return -1;
+          if(b.status==='active' && a.status!=='active') return 1;
+          return (b.end || '').localeCompare(a.end || '');
+        });
+        const activeCount = all.filter(s=>s.status==='active').length;
 
-        let html = '';
-        TIME_ORDER.forEach(slot=>{
-          const items = active.filter(s=>s.time===slot);
-          if(items.length===0) return;
-          html += `<div class="fp-section"><div class="fp-section-title">${TIME_LABEL[slot]} (${items.length})</div>`;
-          items.forEach(s=>{
-            const diff = syncDiff.supplements[s.id] || {state:'unchanged'};
-            const badge = diff.state === 'new' ? '<span class="record-badge new">NEW</span>' : '';
-            html += `<div class="stat-line supp"><span class="k">${s.name} <i>${s.dose}</i>${badge}</span><span class="v">${s.time==='as-needed'?'as needed':''}</span></div>`;
-          });
-          html += `</div>`;
+        let left = `<div class="fp-section-title" style="margin-bottom:10px;">FULL RECORD (${all.length} total: ${activeCount} active, ${all.length-activeCount} ended)</div>`;
+        sorted.forEach(s=>{
+          const outcome = supplementOutcome(s.name);
+          const statusCls = s.status === 'active' ? 'ok' : 'watch';
+          const statusLabel = s.status === 'active' ? 'active' : `ended ${s.end}`;
+          left += `<div class="stat-line supp"><span class="k">${s.name} <i>${s.dose}</i> — ${s.category}</span><span class="v ${statusCls}">${statusLabel}</span></div>`;
+          if(outcome){
+            left += `<div class="stat-line"><span class="k" style="opacity:0.7;">${outcome}</span><span class="v"></span></div>`;
+          }
         });
 
-        if(ended.length > 0){
-          html += `<div class="fp-section"><div class="fp-section-title">RECENTLY ENDED</div>`;
-          ended.forEach(s=>{
-            const diff = syncDiff.supplements[s.id] || {state:'unchanged'};
-            const badge = diff.state === 'changed' ? '<span class="record-badge changed">JUST ENDED</span>' : '';
-            html += `<div class="stat-line supp"><span class="k">${s.name} <i>${s.dose}</i>${badge}</span><span class="v watch">ended ${s.end}</span></div>`;
-          });
-          html += `</div>`;
-        }
-
-        // LEFT — quantified expected outcomes, grouped by target system, game-stat style.
-        // Effect sizes are directional estimates from established supplement research
-        // patterns, not measured personal results — framed as "expected", not "actual".
-        const left = `
-          <div class="fp-section"><div class="fp-section-title">⚔ HORMONAL</div>
-            <div class="stat-line"><span class="k">Boron 10mg</span><span class="v ok">Free-T ↑ ~10-15%*</span></div>
-            <div class="stat-line"><span class="k">Zinc 50mg</span><span class="v ok">Supports T synthesis*</span></div>
-            <div class="stat-line"><span class="k">Nettle Root 500mg</span><span class="v ok">SHBG binding ↓*</span></div>
-          </div>
-          <div class="fp-section"><div class="fp-section-title">🛡 ANTI-INFLAMMATORY</div>
-            <div class="stat-line"><span class="k">Omega-3 3000mg</span><span class="v ok">hs-CRP ↓ — primary lever</span></div>
-            <div class="stat-line"><span class="k">Tart Cherry</span><span class="v">Exercise-induced inflammation ↓</span></div>
-          </div>
-          <div class="fp-section"><div class="fp-section-title">😴 SLEEP</div>
-            <div class="stat-line"><span class="k">Magnesium 400mg</span><span class="v ok">Sleep onset/depth ↑*</span></div>
-            <div class="stat-line"><span class="k">Glycine 3000mg</span><span class="v ok">Sleep onset ↑*</span></div>
-          </div>
-          <div class="fp-section"><div class="fp-section-title">⚡ PERFORMANCE</div>
-            <div class="stat-line"><span class="k">Creatine 5g</span><span class="v ok">Power output ↑ — well established</span></div>
-            <div class="stat-line"><span class="k">L-Tyrosine 2000mg</span><span class="v">Stress-task focus ↑*</span></div>
-            <div class="stat-line"><span class="k">Iron 36mg 3×/wk</span><span class="v">RBC production support</span></div>
-          </div>
-          <div class="fp-section"><div class="fp-section-title">💊 FOUNDATIONAL</div>
-            <div class="stat-line"><span class="k">Vitamin D3 5000IU</span><span class="v">Hormonal + immune support</span></div>
-            <div class="stat-line"><span class="k">B-Complex</span><span class="v">Methylation cofactors</span></div>
-            <div class="stat-line"><span class="k">Tadalafil 2.5mg</span><span class="v ok">Erectile fn. decoupled from stress — confirmed in data</span></div>
-          </div>
-          <div class="fp-note" style="margin-top:4px; font-size:11px;">*Directional estimate from established research on the compound — not a measured personal effect size.</div>
-        `;
-
-        return {left, right: html, leftLabel:"EXPECTED OUTCOMES", rightLabel:"DOSAGE BY TIME"};
+        let right = `<div class="fp-note">This is the complete, unfiltered supplement history — active and ended alike, regardless of how long ago. The per-panel sections elsewhere (Hormones, Heart, Readiness, Training, Loins) only show active supplements or ones ended within the last 7 days; older ended ones only appear here.</div>
+          <div class="fp-note" style="margin-top:10px;">*Outcome text is a directional estimate from established research on the compound — not a measured personal effect size.</div>`;
+        return {left, right, leftLabel:"FULL RECORD", rightLabel:"ABOUT THIS VIEW"};
       },
       draw(){}
     },
@@ -3109,7 +3186,12 @@ async function fetchDashboardData(sb){
     // surface, not empty space or arm.
     {key:'kidneys',       slot:'hydration',    label:'KIDNEYS',      flagged:false, anchor:[-0.95, 6.64, 0.2], test:(nx,x,y,z)=> nx > 0.50 && nx <= 0.65 && x >= -1.3 && x <= -0.85},
     {key:'stomach',       slot:'nutrition',    label:'STOMACH',      flagged:false, anchor:[0, 7.38, 0.6], test:(nx,x,y,z)=> nx > 0.50 && nx <= 0.65 && Math.abs(x) < 1.7},
-    {key:'spleen',         slot:'supplements',  label:'SUPPLEMENTS',  flagged:false, anchor:[0.9, 8.0, 0.4], test:(nx,x,y,z)=> nx > 0.65 && nx <= 0.72 && x > 0.6 && x <= 1.4},
+    // spleen/supplements marker removed 2026-09-13: the dedicated Supplements
+    // panel is gone — each supplement's dose/outcome now shows inside
+    // whichever panel matches its category (hormones/heart/readiness/
+    // training/loins), see supplementsForCategory(). Real churn (this marker
+    // was added just one round of changes ago) but the anatomical-
+    // distribution approach is the better design.
     // LOINS (nx 0.40-0.50, centered): same height band as the existing hip
     // marker below, but centered (|x|<=0.6) rather than hip-offset — pelvis's
     // own test already starts at x>0.6, so this doesn't collide and neither

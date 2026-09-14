@@ -71,12 +71,17 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.0")
 
     // Supabase Kotlin client (community-maintained, io.github.jan-tennert.supabase).
-    // Confirm these module names/versions are still current at build time --
-    // this ecosystem has renamed modules before (gotrue-kt -> auth-kt).
-    implementation(platform("io.github.jan-tennert.supabase:bom:3.0.0"))
+    // Bumped 2026-09-15 after a real crash: the app crashed on launch with
+    // NoClassDefFoundError on io.ktor.client.plugins.HttpTimeout, because
+    // supabase-kt 3.8.0 (this BOM) requires Ktor 3.5.1 internally (confirmed
+    // by reading supabase-kt-android's own Gradle module metadata directly,
+    // not guessed) -- the explicit ktor-client-android:2.3.12 pin below was
+    // two major Ktor versions behind and shadowed whatever compatible
+    // version Gradle would otherwise have resolved.
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.8.0"))
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:auth-kt")
-    implementation("io.ktor:ktor-client-android:2.3.12")
+    implementation("io.ktor:ktor-client-android:3.5.1")
 
     // Native Google sign-in via Android's Credential Manager (confirmed current
     // approach per Supabase's own native-Android-auth docs -- see Step 2 notes

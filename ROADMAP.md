@@ -845,9 +845,27 @@ compileSdk 37 (targetSdk deliberately kept at 36 — no reason to opt into newer
 yet). The Gradle wrapper jar/scripts are now committed for real (Step 1's "let Android Studio
 generate it" plan reversed now that a verified one exists — committing it is the actual standard
 Gradle convention, not something to keep regenerating blind).
-- **Build succeeded**: `app-debug.apk` produced. **Not yet installed/run on a device or
-  emulator** — none connected on this machine (checked via `adb devices`) — so the visual result
-  hasn't been eyeballed against the mockups yet, only confirmed to compile.
+- **Build succeeded**: `app-debug.apk` produced.
+
+### ✅ Step 4 follow-up — real crash fixed, verified live on an emulator (2026-09-15, Claude Code)
+The APK above installed but **crashed immediately on launch** once the user actually ran it —
+`NoClassDefFoundError` on `io.ktor.client.plugins.HttpTimeout`, thrown inside Supabase's own
+HTTP client init. Root cause (confirmed via `adb logcat`'s crash buffer, then reading
+`supabase-kt-android`'s real Gradle module metadata, not guessed): the explicit
+`ktor-client-android:2.3.12` pin was two major Ktor versions behind what `supabase-kt` 3.8.0
+(the BOM version Step 4 had bumped to) actually requires internally (Ktor 3.5.1). Bumped the
+Supabase BOM 3.0.0 → 3.8.0 and `ktor-client-android` to 3.5.1 to match.
+- Separately, Android Studio itself ran `updateDaemonJvm` on the project (pinning the Gradle
+  daemon's own JVM to JBR 21 via the `foojay-resolver-convention` plugin) — a cleaner, more
+  permanent fix for the same "JDK 25 is too new for parts of this toolchain" problem Step 4's
+  Kotlin-version bump patched at a different layer. Kept both; not in conflict.
+- **Verified for real this time, not just compiled**: installed on a live emulator, launched
+  without crashing, screenshotted — ground/amber/mono-type rendering matches `/design/`'s
+  tokens. Tapped "SIGN IN WITH GOOGLE" for real: it correctly reaches Google Play services'
+  Credential Manager and returns `NoCredentialException: No credentials available` — expected
+  and correct, since this emulator has no Google account added yet, not a bug in this app. The
+  real credential exchange (Step 2's actual "done when" criterion) still needs a Google account
+  added to the emulator to test end-to-end.
 
 **Remaining**: Phase C onward per `mobile-app-implementation-roadmap.md` (Status → Log → Map →
 Settings real content, Steps 5–15, then Health Connect in Phase G). Not started.

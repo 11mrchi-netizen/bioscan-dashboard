@@ -13,10 +13,18 @@ applied across all of it). Still placeholder *content* everywhere — Phase C
 onward replaces each screen's placeholder text with real Supabase-backed
 data.
 
-**Build-verified for real** as of Step 4 (`./gradlew :app:assembleDebug`
-succeeded, producing a real `app-debug.apk`) — see "Toolchain" below for what
-that took. Not yet installed/run on an actual device or emulator — do that
-in Android Studio to confirm it looks right, not just that it compiles.
+**Verified on a real running emulator, not just compiled** (2026-09-15):
+installed, launched without crashing, screenshotted — the ground/amber/
+mono-type look matches `/design/`'s tokens. The sign-in button was tapped for
+real too: it correctly reaches Google Play services' Credential Manager and
+fails with `NoCredentialException: No credentials available` -- expected,
+since this emulator has no Google account added yet, not a bug. Add one
+(Settings → Accounts → Add account → Google on the emulator) to test the
+actual credential exchange.
+
+The first install crashed on launch with `NoClassDefFoundError` on
+`io.ktor.client.plugins.HttpTimeout` -- a real Ktor/Supabase version
+mismatch, not a design bug. See "Toolchain" below.
 
 ## Toolchain
 
@@ -49,6 +57,22 @@ confirmed via the actual build error rather than guessed:
    intended member extension. Fix was to remove the import entirely and let
    `weight()` resolve via `RowScope`'s implicit receiver, which needs no
    import at all.
+6. **`NoClassDefFoundError` on `io.ktor.client.plugins.HttpTimeout` at
+   runtime** (the build succeeded; this only showed up installing and
+   launching on a real emulator) -- the explicit `ktor-client-android:2.3.12`
+   pin was two major Ktor versions behind what `supabase-kt` 3.8.0 actually
+   needs (Ktor 3.5.1, confirmed by reading `supabase-kt-android`'s own
+   Gradle module metadata directly rather than trusting a version-number
+   guess). Bumped the Supabase BOM from 3.0.0 to 3.8.0 and
+   `ktor-client-android` to 3.5.1 to match.
+
+Also: Android Studio itself ran `updateDaemonJvm` on this project at some
+point, adding `gradle/gradle-daemon-jvm.properties` (pins the Gradle
+*daemon's* own JVM to JetBrains Runtime 21 via auto-download, independent of
+whatever `JAVA_HOME` is set to) and the `foojay-resolver-convention` plugin
+in `settings.gradle.kts` that makes that auto-download possible. This is a
+cleaner, more permanent fix for the same JDK-25-is-too-new class of problem
+item 1 above patches at the Kotlin-compiler level -- both are kept.
 
 Gradle wrapper is pinned to **9.7.1** (`gradle/wrapper/gradle-wrapper.properties`)
 and, unlike the original Step 1 note, the wrapper jar/scripts (`gradlew`,

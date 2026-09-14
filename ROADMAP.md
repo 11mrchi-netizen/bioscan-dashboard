@@ -690,15 +690,14 @@ Node.js + MongoDB reference server) as a real starting point.
   quality, not yet evaluated hands-on.
 
 ### Stage 2 — Companion Android app + Health Connect (long-term hub)
-A small Android app using the Health Connect SDK, reading locally-aggregated data (which —
-per ROOK's documented Zepp integration — already includes Zepp data once linked once, plus
-any other app already syncing to Health Connect) and forwarding it to Supabase.
+**Superseded by P8's detailed build sequence below** (this stage used to gesture at "a small
+Android app" abstractly; P8 is that same app, now scoped step-by-step and partially built) —
+its own hour estimate has moved to P8's row in the summary table to avoid double-counting. The
+constraints that motivated this stage still stand:
 - Confirmed constraint: Health Connect is on-device only — no cloud API reads it directly. A
   real Android app is unavoidable; no config-only shortcut exists.
 - Can plausibly stay a **personal, unpublished, sideloaded app** — Play Console health-data
   declaration is only a hard requirement for public Play Store distribution.
-- **Est: 4–8 sessions (12–25h)** — genuine Android app development, the largest single build
-  on the entire roadmap.
 
 ### Explicitly ruled out
 - **A pure Google Cloud / server-side app reading Health Connect directly** — confirmed
@@ -706,7 +705,7 @@ any other app already syncing to Health Connect) and forwarding it to Supabase.
 - **Google Health API** — real, but explicitly scoped by Google to Fitbit/Pixel Watch data;
   doesn't apply to Amazfit/Zepp.
 
-**Est total for P7: 8–12 sessions (18–39h)** — the second-largest phase on the whole roadmap.
+**Est total for P7 (Stage 1 only — Stage 2's estimate now lives in P8): 2–4 sessions (6–14h)**.
 
 ---
 
@@ -719,6 +718,77 @@ button can't directly write to Wellness Project without a person approving it in
 conversation, or (b) something else entirely once P7's decoupling lands and Wellness Project
 may not even be the write target anymore. No time estimate given — genuinely blocked on a
 design decision, not on effort.
+
+---
+
+## P8 — Mobile App ("Field Terminal", native Android)
+
+**Numbering note, flagged rather than silently resolved**: the planning docs driving this work
+(`mobile-app-scoping.md`, `mobile-app-implementation-roadmap.md` — both live outside this repo,
+on the user's own machine, not committed here) refer to "P3 (mobile UI)" and "P4 (Health
+Connect)" as their own scope boundary, but this ROADMAP.md's actual P3 (Spotify correlation) and
+P4 (partner/encounter tracking) are unrelated existing items. Filing this as a new **P8** instead
+of overwriting either — flag back if a different numbering/merge was actually intended. Those
+two docs also reference three further companion documents (`claude-code-setup-prompt.md`,
+`feasibility-assessment.md`, `claude-code-new-domains-handoff.md`) that don't exist as files
+anywhere findable on this machine — likely they only ever existed in other claude.ai chat
+threads. None have blocked anything yet (their content needed so far was already known from
+this ROADMAP.md's own history), but Steps 10/16/17 of the implementation roadmap lean on them
+more directly and may hit a real gap later.
+
+**Environment constraint, confirmed not assumed**: this machine has no Android SDK, Gradle
+install, or emulator/device — checked directly (`java -version` succeeds via a JRE-only
+Temurin install; `gradle`, `adb`, and Android Studio are all absent). Claude Code can write and
+reason about the Kotlin/Gradle scaffold correctly, but **cannot compile or run it** to verify
+each step's own "done when" criterion the way it could for, say, a deployed Edge Function.
+Every step below needs a real build-and-run check in Android Studio before being trusted as
+actually working, not just as correctly written.
+
+### ✅ Step 1 — Android project scaffold (done 2026-09-14, Claude Code)
+Native Kotlin + Jetpack Compose project under `android-app/` (confirmed still the current
+recommended standard over XML layouts at write time). Package `com.bioscan.fieldterminal`,
+`minSdk 26` (chosen up front for Health Connect's Phase G requirement, not just Step 1's own
+needs), Supabase Kotlin client (`io.github.jan-tennert.supabase`, confirmed current module
+names — `auth-kt`/`postgrest-kt`, not the older `gotrue-kt`) + Navigation Compose wired into
+Gradle. Ships to a blank launch screen only, per the step's own scope. The Gradle wrapper JAR
+is deliberately not committed (`.gitignore`) — Android Studio generates it on first open, which
+is normal for a hand-written scaffold, not a sign of something missing (see
+`android-app/README.md`).
+
+### ✅ Step 2 — Native Google auth (done 2026-09-14, Claude Code)
+The roadmap doc's own flagged "real open question, don't guess" — whether the existing web
+OAuth client works as-is for native Android, or a second Android-specific client is needed —
+resolved via direct research against current (Sept 2026) Google and Supabase documentation,
+not assumed:
+- **Confirmed: a second, Android-specific OAuth client is required**, keyed to the app's
+  package name + signing certificate SHA-1. The existing web client ID stays in use too (it's
+  what Credential Manager's `GetGoogleIdOption` actually wants as its "server client ID" —
+  counterintuitively, not the new Android client ID, which exists only so Google recognizes the
+  calling app).
+- Generated a real debug-keystore SHA-1 fingerprint directly (`keytool`, via the JRE already on
+  this machine, into the standard `~/.android/debug.keystore` location so Android Studio
+  reuses it rather than generating a conflicting second one) — a concrete value ready to paste
+  into Google Cloud Console rather than a placeholder. See `android-app/README.md`'s "Manual
+  setup required" section for the exact value and the three remaining manual steps (create the
+  Android OAuth client, register both client IDs in Supabase's Google provider settings, add
+  the web client ID to a local, gitignored `local.properties`) — none of them skippable by
+  Claude Code, same category as this project's other Google Cloud Console / secret-setting
+  steps.
+- Implementation (`GoogleAuthManager.kt`) uses Android's Credential Manager API + a
+  `supabase.auth.signInWith(IDToken)` exchange — every import path and the raw-vs-hashed-nonce
+  handling (hashed nonce to Google, raw nonce to Supabase, which re-hashes to verify) was
+  checked against Supabase's own current sample rather than pattern-matched from memory, since
+  getting the nonce direction backwards would fail silently in a way that's easy to misdiagnose.
+  Sign-out (`GoogleAuthManager.signOut()`) mirrors the web dashboard's own sign-out button and
+  its documented reason for existing (Foundation section above): a valid session skips straight
+  past any sign-in screen, so signing out is the only way to re-trigger consent, e.g. after a
+  new OAuth scope is added later.
+- **Not yet verified against a real device** — needs the three manual steps above done first,
+  then a real build in Android Studio.
+
+**Remaining**: Steps 3 onward per `mobile-app-implementation-roadmap.md` (navigation skeleton,
+visual design from `/design/`, then Status → Log → Map → Settings content, then Health Connect
+in Phase G). Not started.
 
 ---
 
@@ -736,8 +806,9 @@ item is done; partner/encounter tracking and masturbation logging remain. Remain
 | P4 (arousal done — partner/encounter tracking + masturbation logging remain) | 2–3h |
 | P5 | **done** |
 | P6 (Wardrobe) | 6–10h |
-| P7 (Decouple from Wellness Project — Zepp Mini Program, then Health Connect app) | 18–39h |
-| **Total** | **~29–57h** |
+| P7 (Decouple from Wellness Project — Zepp Mini Program only; Health Connect app moved to P8) | 6–14h |
+| P8 (Mobile app "Field Terminal" — Steps 1–2 of 18 done; Health Connect is this app's own Phase G) | 38–65h |
+| **Total** | **~53–92h** |
 
 The core "is this real" question was answered early — the pipeline works, proven with live
 data, the full dashboard UI is live against it, and weather + calendar are now genuinely live

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Placeholder only -- real palette lands in Phase B once /design/ mockups
+         are applied (see mobile-app-implementation-roadmap.md Step 4). -->
+    <color name="ic_launcher_background">#14161A</color>
+</resources>

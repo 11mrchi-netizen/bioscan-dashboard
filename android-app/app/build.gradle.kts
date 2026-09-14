@@ -57,6 +57,11 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
+    // Extended icon set -- guarantees Home/LocationOn/List/Settings resolve
+    // without checking each one against the smaller default icon set.
+    // Step 4 replaces these placeholder icons with the mockups' exact
+    // inline-SVG shapes anyway, so this dependency is temporary scaffolding.
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")

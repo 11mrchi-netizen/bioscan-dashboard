@@ -7,9 +7,16 @@ the repo) for the full design/build sequencing this scaffold follows.
 
 ## Status
 
-**Steps 1–2 done (project scaffold + Google sign-in).** Real navigation
-(Step 3) and visual design (Step 4, gated on `/design/` mockups) are separate,
-deliberately sequenced follow-ups — not built yet.
+**Steps 1–3 done** (project scaffold, Google sign-in, 4-tab navigation
+skeleton with Status's 5 sub-tabs). All placeholder content — visual design
+(Step 4, gated on `/design/` mockups) is a separate, deliberately sequenced
+follow-up, not built yet.
+
+Android Studio is now installed on this machine, but its first-run setup
+(downloading the SDK, platform-tools, and creating a virtual device) hadn't
+happened yet as of Step 3 — opening this project for the first time will
+trigger that wizard. **Nothing in Steps 1–3 has been build-verified yet** —
+do that before trusting any of it works as written.
 
 ## Manual setup required before sign-in works
 

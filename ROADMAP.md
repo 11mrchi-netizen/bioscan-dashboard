@@ -730,19 +730,31 @@ Connect)" as their own scope boundary, but this ROADMAP.md's actual P3 (Spotify 
 P4 (partner/encounter tracking) are unrelated existing items. Filing this as a new **P8** instead
 of overwriting either — flag back if a different numbering/merge was actually intended. Those
 two docs also reference three further companion documents (`claude-code-setup-prompt.md`,
-`feasibility-assessment.md`, `claude-code-new-domains-handoff.md`) that don't exist as files
-anywhere findable on this machine — likely they only ever existed in other claude.ai chat
-threads. None have blocked anything yet (their content needed so far was already known from
-this ROADMAP.md's own history), but Steps 10/16/17 of the implementation roadmap lean on them
-more directly and may hit a real gap later.
+`feasibility-assessment.md`, `claude-code-new-domains-handoff.md`) — **found and read as of
+2026-09-14** (user supplied them; they'd only ever existed outside this repo). All three turned
+out to describe/confirm work already reflected elsewhere in this file rather than surfacing
+anything that changes P8's own sequencing:
+- `claude-code-setup-prompt.md` — general architecture/credential rules, already consistent
+  with how this project has operated throughout.
+- `claude-code-new-domains-handoff.md` — the stool/hydration/arousal/health-events/supplements
+  -distribution work this file already documents as done (see the relevant ✅ sections above);
+  directly useful once mobile Step 10 (Injuries & Illness sub-tab) is reached, since it confirms
+  the web version's exact merge/7-day-hide logic to mirror.
+- `feasibility-assessment.md` — relevant to Phase G's Step 16 (the rMSSD-vs-SDNN question is
+  confirmed still genuinely open, not resolved by this doc — needs inspecting the raw Health
+  Connect record once direct access exists). Also names three schema additions explicitly
+  **independent of this mobile roadmap** (sleep bedtime/wake/stage columns for SRI, a computed
+  `session_load` for real CTL/ATL/TSB, draw-condition + OSTRC-H2 columns) — not actioned here,
+  flagged as a possible separate near-term task if wanted.
 
-**Environment constraint, confirmed not assumed**: this machine has no Android SDK, Gradle
-install, or emulator/device — checked directly (`java -version` succeeds via a JRE-only
-Temurin install; `gradle`, `adb`, and Android Studio are all absent). Claude Code can write and
-reason about the Kotlin/Gradle scaffold correctly, but **cannot compile or run it** to verify
-each step's own "done when" criterion the way it could for, say, a deployed Edge Function.
-Every step below needs a real build-and-run check in Android Studio before being trusted as
-actually working, not just as correctly written.
+**Environment constraint, confirmed not assumed**: as of Steps 1–2, this machine had no Android
+SDK, Gradle install, or emulator/device (checked directly: `java -version` succeeded via a
+JRE-only Temurin install; `gradle`, `adb`, and Android Studio were all absent). **Android Studio
+is now installed** (as of Step 3) but its first-run setup — downloading the SDK/platform-tools,
+creating a virtual device — hadn't been run yet, so Claude Code still cannot compile or run this
+project to verify any step's "done when" criterion the way it could for, say, a deployed Edge
+Function. Every step below needs a real build-and-run check in Android Studio before being
+trusted as actually working, not just as correctly written.
 
 ### ✅ Step 1 — Android project scaffold (done 2026-09-14, Claude Code)
 Native Kotlin + Jetpack Compose project under `android-app/` (confirmed still the current
@@ -786,9 +798,31 @@ not assumed:
 - **Not yet verified against a real device** — needs the three manual steps above done first,
   then a real build in Android Studio.
 
-**Remaining**: Steps 3 onward per `mobile-app-implementation-roadmap.md` (navigation skeleton,
-visual design from `/design/`, then Status → Log → Map → Settings content, then Health Connect
-in Phase G). Not started.
+### ✅ Step 3 — Navigation skeleton (done 2026-09-14, Claude Code)
+Real 4-tab structure (`FieldTerminalNavHost.kt`, Navigation Compose) + Status's 5-sub-tab
+segmented control (`StatusScreen.kt`), all placeholder content per the step's own scope —
+mechanism only, no visual styling (that's Step 4).
+- **Tab order discrepancy found and resolved by following the higher-fidelity source**:
+  `mobile-app-scoping.md`'s prose lists tabs as "Status, Log, Map, Settings," but the actual
+  pinned `/design/PipNavA.dc.html` mockup — the "high fidelity... final" committed design per
+  `design/README.md` — renders them Status, Map, Log, Setup. Went with the mockup's order
+  (reads as the deliberate decision; the scoping doc's order reads as incidental prose
+  ordering) — flagged in code (`TopLevelTab.kt`) rather than silently picked, correct if the
+  prose order was actually intended.
+- Status's 5 sub-tabs are plain composable state under the Status screen, not a nested nav
+  graph — matches the implementation roadmap's explicit instruction that these are "a
+  segmented-control layer... not a separate nav level."
+- Sign-out (Step 2) moved from a bare screen into the Setup tab — its real long-term home per
+  `mobile-app-scoping.md`'s Settings scope, rather than a temporary standalone screen.
+- Bottom-nav icons are generic Material placeholders (Home/LocationOn/List/Settings), not the
+  mockups' exact inline-SVG shapes (pulse line, map pin, three lines, gear) — deliberately
+  deferred to Step 4, which recreates those precisely; this step only needed *a* recognizable
+  icon per tab.
+- **Not yet verified against a real device** — same constraint as Steps 1–2.
+
+**Remaining**: Step 4 onward per `mobile-app-implementation-roadmap.md` (visual design from
+`/design/`, then Status → Log → Map → Settings real content, then Health Connect in Phase G).
+Not started.
 
 ---
 

@@ -3,9 +3,7 @@ package com.bioscan.fieldterminal
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -18,19 +16,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.ui.nav.FieldTerminalNavHost
 import com.bioscan.fieldterminal.ui.theme.FieldTerminalTheme
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.launch
 
-// Step 2 scaffold (see mobile-app-implementation-roadmap.md): real Google
-// sign-in/sign-out against the same Supabase project the web dashboard uses,
-// gating a still-blank post-login screen. The real 4-tab navigation (Step 3)
-// and visual design (Step 4, gated on /design/ mockups) are separate,
-// deliberately sequenced follow-ups -- not built here.
+// Step 2 (auth) + Step 3 (navigation skeleton) scaffold, per
+// mobile-app-implementation-roadmap.md. Real per-screen content (Phase C
+// onward) and visual styling (Step 4, gated on /design/ mockups) are
+// separate, deliberately sequenced follow-ups -- not built here.
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,18 +48,7 @@ private fun AuthGate() {
     Surface(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             when (sessionStatus) {
-                is SessionStatus.Authenticated -> {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        // Intentionally blank beyond this -- Step 3 builds the
-                        // real tab structure here.
-                        Button(onClick = { scope.launch { GoogleAuthManager.signOut() } }) {
-                            Text("Sign out")
-                        }
-                    }
-                }
+                is SessionStatus.Authenticated -> FieldTerminalNavHost()
                 is SessionStatus.NotAuthenticated -> {
                     Button(onClick = { scope.launch { GoogleAuthManager.signIn(context) } }) {
                         Text("Sign in with Google")

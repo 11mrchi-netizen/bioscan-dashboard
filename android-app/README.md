@@ -7,16 +7,55 @@ the repo) for the full design/build sequencing this scaffold follows.
 
 ## Status
 
-**Steps 1–3 done** (project scaffold, Google sign-in, 4-tab navigation
-skeleton with Status's 5 sub-tabs). All placeholder content — visual design
-(Step 4, gated on `/design/` mockups) is a separate, deliberately sequenced
-follow-up, not built yet.
+**Steps 1–4 done** (project scaffold, Google sign-in, 4-tab navigation
+skeleton with Status's 5 sub-tabs, and the real `/design/` visual system
+applied across all of it). Still placeholder *content* everywhere — Phase C
+onward replaces each screen's placeholder text with real Supabase-backed
+data.
 
-Android Studio is now installed on this machine, but its first-run setup
-(downloading the SDK, platform-tools, and creating a virtual device) hadn't
-happened yet as of Step 3 — opening this project for the first time will
-trigger that wizard. **Nothing in Steps 1–3 has been build-verified yet** —
-do that before trusting any of it works as written.
+**Build-verified for real** as of Step 4 (`./gradlew :app:assembleDebug`
+succeeded, producing a real `app-debug.apk`) — see "Toolchain" below for what
+that took. Not yet installed/run on an actual device or emulator — do that
+in Android Studio to confirm it looks right, not just that it compiles.
+
+## Toolchain
+
+The Step 1–3 pins (AGP 8.6.0, Kotlin 2.0.20, Gradle 8.9, compileSdk 35) were
+written without a local SDK to verify against. Once this machine's Android
+Studio (bundling JBR 25 as its build JVM) was available, a real build
+surfaced a chain of genuine incompatibilities — fixed in order, each
+confirmed via the actual build error rather than guessed:
+
+1. **Kotlin 2.0.20 crashes under JDK 25** — `JavaVersion.parse("25.0.3")`
+   throws (upstream bug KT-83610, fixed in Kotlin 2.1.20+). Bumped to
+   Kotlin 2.4.20 (current stable).
+2. **AGP 9.0+ removed the separate Kotlin Android plugin** — applying
+   `org.jetbrains.kotlin.android` alongside AGP 9.4.0 now fails outright
+   (AGP has *built-in* Kotlin support). Removed it; kept
+   `org.jetbrains.kotlin.plugin.compose` (still required separately since
+   Kotlin 2.0, unrelated to the built-in-Kotlin change — confirmed by a
+   second real build error after an early web result claimed otherwise).
+3. **Compose BOM 2026.08.00 needs compileSdk 37**, not 35/36 as guessed from
+   a "what's the current Android version" search — bumped `compileSdk` to
+   37 while deliberately keeping `targetSdk` at 36 (no reason to opt into
+   API 37's runtime behavior changes yet; compileSdk only needed bumping to
+   satisfy a dependency requirement).
+4. **XML comments can't contain `--`** — a few resource files used `--` as
+   an em-dash-style separator (fine in Kotlin `//` comments, illegal in XML
+   comments per spec). Fixed the three affected files.
+5. **A real `RowScope.weight()` resolution bug**, isolated by testing: an
+   explicit `import androidx.compose.foundation.layout.weight` in this
+   Compose version resolves to an unrelated internal symbol instead of the
+   intended member extension. Fix was to remove the import entirely and let
+   `weight()` resolve via `RowScope`'s implicit receiver, which needs no
+   import at all.
+
+Gradle wrapper is pinned to **9.7.1** (`gradle/wrapper/gradle-wrapper.properties`)
+and, unlike the original Step 1 note, the wrapper jar/scripts (`gradlew`,
+`gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`) **are** committed now that
+a real one has been generated and verified — the earlier "let Android Studio
+generate it" plan was reasonable before any of this was build-tested, but a
+verified wrapper is strictly better to commit than to regenerate blind.
 
 ## Manual setup required before sign-in works
 
@@ -33,48 +72,46 @@ needed** — confirmed, not assumed. Concretely, before sign-in will work:
    ```
    02:B6:50:DF:9A:B7:3A:EE:76:AD:0A:A6:E1:9E:81:28:56:FE:38:B0
    ```
-   (Generated this session into the standard `~/.android/debug.keystore`
-   location — same fixed debug alias/password Android tooling always uses —
-   so Android Studio will reuse it, not generate a conflicting second one.
-   A *release* build needs its own separate SHA-1 registered later, once a
-   release signing key exists — not needed yet.)
+   (Generated into the standard `~/.android/debug.keystore` location — same
+   fixed debug alias/password Android tooling always uses — so Android
+   Studio reuses it, not generates a conflicting second one. A *release*
+   build needs its own separate SHA-1 registered later, once a release
+   signing key exists — not needed yet.)
 2. **Register both client IDs** (the existing web one + this new Android one)
    in Supabase Dashboard → Authentication → Providers → Google, comma-
    separated with the web client ID first — per Supabase's own docs, this is
    required for `signInWith(IDToken)` to accept tokens from either flow.
-3. **Add the Web client ID** (not the new Android one — Credential Manager's
-   `GetGoogleIdOption` always wants the web client ID as its "server client
-   ID") to `android-app/local.properties` (create this file — it's
-   gitignored, same as `local.properties` always is for Android projects):
+3. **Add the Web client ID** to `android-app/local.properties` (gitignored,
+   same as always for Android projects) — **already done** on this machine
+   as of Step 4:
    ```
    GOOGLE_WEB_CLIENT_ID=<the existing web OAuth client ID>
    ```
-   This isn't a secret (client IDs are public identifiers, unlike client
-   secrets — same distinction this project already draws for the anon key
-   vs. the service-role key), it's just kept out of tracked source so it's
-   easy to set per-checkout.
+   Not a secret (client IDs are public identifiers, unlike client secrets —
+   same distinction this project draws for the anon key vs. service-role
+   key), just kept out of tracked source for per-checkout convenience.
 
 ## Opening this project
 
-This scaffold was written without a local Android SDK/Gradle install to
-verify against, so the very first open in Android Studio is also the first
-real build check:
-
 1. Open this `android-app/` folder in Android Studio (not the repo root).
-2. Let it sync — Android Studio will download the Gradle distribution
-   pinned in `gradle/wrapper/gradle-wrapper.properties` and generate
-   `gradle/wrapper/gradle-wrapper.jar` itself (deliberately not committed —
-   see `.gitignore`). This is normal for a hand-written scaffold, not a sign
-   something's missing.
-3. If sync reports outdated AGP/Kotlin/Compose/dependency versions, take the
-   IDE's suggested upgrade — the versions in `build.gradle.kts` /
-   `app/build.gradle.kts` were current when written, not pinned intentionally.
-4. Run on a device or emulator (API 26+ — Health Connect, planned for Phase G,
-   requires it).
+2. Let it sync — the wrapper is now committed and verified, so this should
+   be a normal sync, not a first-time bootstrap.
+3. Run on a device or emulator (API 26+ — Health Connect, planned for
+   Phase G, requires it) and confirm the 4 tabs + 5 Status sub-tabs actually
+   look like `/design/`'s mockups, not just that the build succeeds.
 
 ## Package layout
 
 - `com.bioscan.fieldterminal` — application ID and root package.
-- `ui/theme/` — placeholder Compose theme only. The real design system comes
-  from `/design/` (repo root) once Phase B (Step 4 of the implementation
-  roadmap) applies it — don't hand-roll styling here before then.
+- `ui/theme/` — the real Field Terminal design tokens (`Color.kt`,
+  `Type.kt`, `TextStyles.kt`, `Theme.kt`), extracted 1:1 from
+  `/design/README.md`. Bundled fonts (JetBrains Mono, Saira, Saira
+  Condensed — `res/font/`) came from Google's official open-source fonts
+  repo; their OFL license text is in `licenses/fonts/`.
+- `ui/components/` — small shared pieces used across multiple screens
+  (`ScreenHeader`, `AmberButton`) so the header/button look isn't
+  copy-pasted per screen.
+- `ui/nav/` — the 4-tab structure (`FieldTerminalNavHost.kt`,
+  `TopLevelTab.kt`) and Status's 5-sub-tab state (`StatusSubTab`).
+- `ui/screens/` — one file per top-level screen. All placeholder content
+  (Phase C onward replaces this).

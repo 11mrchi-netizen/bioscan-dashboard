@@ -1,27 +1,29 @@
 package com.bioscan.fieldterminal.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
-// Placeholder color scheme -- Step 4 (Phase B) replaces this with the real
-// Field Terminal design system extracted from /design/README.md once mockups
-// gate that work. This exists only so Step 1's launch screen has *a* theme.
-private val PlaceholderScheme = darkColorScheme(
-    background = PlaceholderBackground,
-    surface = PlaceholderBackground,
-    onBackground = PlaceholderInk,
-    onSurface = PlaceholderInk,
+// Field Terminal is a single deliberate dark theme (design/README.md has no
+// light variant) -- not following system light/dark, matching the mockups'
+// own fixed "machined instrument" look.
+private val FieldColorScheme = darkColorScheme(
+    background = FieldColors.Ground,
+    surface = FieldColors.Ground,
+    surfaceVariant = FieldColors.RaisedSurface,
+    onBackground = FieldColors.Ink,
+    onSurface = FieldColors.Ink,
+    primary = FieldColors.Amber,
+    onPrimary = FieldColors.Ground,
+    secondary = FieldColors.Green,
+    error = FieldColors.Alert,
+    outline = FieldColors.Hairline,
 )
 
 @Composable
-fun FieldTerminalTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit,
-) {
+fun FieldTerminalTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = PlaceholderScheme,
+        colorScheme = FieldColorScheme,
         content = content,
     )
 }

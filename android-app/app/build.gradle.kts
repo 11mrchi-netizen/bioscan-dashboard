@@ -2,7 +2,9 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    // No org.jetbrains.kotlin.android -- AGP 9's built-in Kotlin support
+    // replaces it (see root build.gradle.kts). The Compose Compiler plugin
+    // is still required separately, unrelated to that change.
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -18,12 +20,19 @@ val googleWebClientId: String = localProperties.getProperty("GOOGLE_WEB_CLIENT_I
 
 android {
     namespace = "com.bioscan.fieldterminal"
-    compileSdk = 35
+    // 37, not 36: a real build error said Compose 2026.08.00's own
+    // dependencies require compiling against API 37+ -- confirmed via that
+    // error, not assumed from a "current Android version" search alone.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.bioscan.fieldterminal"
         minSdk = 26 // Health Connect (Phase G) requires API 26+
-        targetSdk = 35
+        // Deliberately lower than compileSdk -- 37's runtime behavior
+        // changes aren't something this scaffold has any reason to opt into
+        // yet. compileSdk only needed bumping to satisfy a dependency
+        // requirement, not because the app needs newer platform APIs.
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
 
@@ -38,12 +47,11 @@ android {
     }
 
     compileOptions {
+        // Also sets the Kotlin JVM target under AGP's built-in Kotlin support
+        // -- no separate `kotlinOptions` block exists anymore (that was the
+        // org.jetbrains.kotlin.android plugin's DSL extension, now removed).
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
     }
 
     buildFeatures {
@@ -53,15 +61,10 @@ android {
 }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2024.09.00"))
+    implementation(platform("androidx.compose:compose-bom:2026.08.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
-    // Extended icon set -- guarantees Home/LocationOn/List/Settings resolve
-    // without checking each one against the smaller default icon set.
-    // Step 4 replaces these placeholder icons with the mockups' exact
-    // inline-SVG shapes anyway, so this dependency is temporary scaffolding.
-    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")

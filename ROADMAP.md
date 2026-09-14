@@ -820,9 +820,37 @@ mechanism only, no visual styling (that's Step 4).
   icon per tab.
 - **Not yet verified against a real device** — same constraint as Steps 1–2.
 
-**Remaining**: Step 4 onward per `mobile-app-implementation-roadmap.md` (visual design from
-`/design/`, then Status → Log → Map → Settings real content, then Health Connect in Phase G).
-Not started.
+### ✅ Step 4 — Visual design system applied (done 2026-09-14, Claude Code) — first real build-verified step
+Extracted `design/README.md`'s full token table (colors, JetBrains Mono / Saira / Saira
+Condensed typography, spacing, "radius 0 everywhere") into `ui/theme/` and applied it across
+every screen Step 3 built — header, sync pill, sub-tab chips, bottom tab bar (including the
+mockups' exact inline-SVG icon shapes, not generic placeholders anymore), sign-in/sign-out
+buttons. Fonts bundled as real files (`res/font/`) fetched from Google's official open-source
+fonts repo, per the user's explicit choice over the fragile Downloadable-Fonts-API alternative
+(asked first since fetching files wasn't something to just do silently) — variable fonts for
+JetBrains Mono/Saira (only format upstream ships), a static file for Saira Condensed Bold
+(matches the design's "weight 700 only" use).
+
+**This is the first step actually build-verified, not just written** — Android Studio was
+installed by this point, and running a real `./gradlew :app:assembleDebug` (using Android
+Studio's own bundled JBR 25 as the build JVM, no separate JDK existing on this machine) surfaced
+a chain of five genuine toolchain issues, each fixed via the real error rather than guessed —
+full account in `android-app/README.md`'s "Toolchain" section. Headline finding: **the Step 1–3
+version pins (AGP 8.6.0, Kotlin 2.0.20, Gradle 8.9, compileSdk 35) didn't survive contact with a
+real build** — this machine's very recent JBR 25 build JVM exposed a real Kotlin compiler bug
+(fixed upstream in 2.1.20+), which cascaded into AGP 9.x's built-in-Kotlin restructuring and a
+Compose-BOM-driven compileSdk bump, none of which were knowable without actually attempting the
+build once a real environment existed. Bumped to AGP 9.4.0 / Kotlin 2.4.20 / Gradle 9.7.1 /
+compileSdk 37 (targetSdk deliberately kept at 36 — no reason to opt into newer runtime behavior
+yet). The Gradle wrapper jar/scripts are now committed for real (Step 1's "let Android Studio
+generate it" plan reversed now that a verified one exists — committing it is the actual standard
+Gradle convention, not something to keep regenerating blind).
+- **Build succeeded**: `app-debug.apk` produced. **Not yet installed/run on a device or
+  emulator** — none connected on this machine (checked via `adb devices`) — so the visual result
+  hasn't been eyeballed against the mockups yet, only confirmed to compile.
+
+**Remaining**: Phase C onward per `mobile-app-implementation-roadmap.md` (Status → Log → Map →
+Settings real content, Steps 5–15, then Health Connect in Phase G). Not started.
 
 ---
 

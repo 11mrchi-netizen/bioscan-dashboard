@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 1:1 with design/PipNavA.dc.html's MAP tab icon (pin). The mockup's SVG
+     <circle> is converted to an equivalent two-arc path; VectorDrawable has
+     no native circle primitive. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,21s6.5,-6.3 6.5,-11a6.5,6.5 0 1,0 -13,0C5.5,14.7 12,21 12,21z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M9.7,10 A2.3,2.3 0 1,0 14.3,10 A2.3,2.3 0 1,0 9.7,10"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.9"
+        android:fillColor="#00000000" />
+</vector>

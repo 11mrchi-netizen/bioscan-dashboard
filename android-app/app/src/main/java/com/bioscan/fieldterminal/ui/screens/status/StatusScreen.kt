@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -77,7 +78,9 @@ private fun SubTabChip(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 
     Box(
+        contentAlignment = Alignment.Center,
         modifier = Modifier
+            .defaultMinSize(minHeight = 48.dp) // was ~30dp before -- under Android's 48dp minimum touch target
             .border(1.dp, borderColor)
             .background(background)
             .clickable(

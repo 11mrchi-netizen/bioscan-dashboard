@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Saira:wght@400;500;600;700&family=Archivo:wght@400;500;600;700;800&family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e8e6ee;font-family:'Archivo',system-ui,sans-serif}
+a{color:#2a78d6}a:hover{color:#1b4f8f}
+.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}
+.dv-tid{font:600 10px 'JetBrains Mono',monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 'Archivo',sans-serif;color:#1a1a1a}
+.dv-note{margin:0 0 24px;max-width:900px;font:400 12px/1.6 'Archivo',sans-serif;color:rgba(0,0,0,.55)}
+.dv-opts{display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px;max-width:840px}
+.dv-oid{font:600 10.5px 'JetBrains Mono',monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11.5px/1.45 'Archivo',sans-serif;color:rgba(0,0,0,.55)}
+.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}
+.dv-row{display:flex;gap:18px;align-items:flex-start}
+.ph{width:390px;height:844px;border-radius:38px;overflow:hidden;position:relative;box-shadow:0 18px 40px rgba(0,0,0,.22),0 2px 6px rgba(0,0,0,.12);flex:none;display:flex;flex-direction:column}
+.cap{font:500 10px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(0,0,0,.45);margin-top:8px;text-transform:uppercase}
+</style>
+</helmet>
+
+<section class="dv-turn">
+<div class="dv-thd"><a class="dv-tid" href="#3b">3</a><div class="dv-tname">Opening screen candidates — Field Terminal</div></div>
+<p class="dv-note">Launch screen, sits at the top of STATUS above the sub-tabs. Three candidates; one gets built.</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="3b">
+<div class="dv-olabel"><a class="dv-oid" href="#3b">3b</a>System grid — six tiles, one per subsystem. Tap any tile to land on its sub-tab.</div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.6);border-radius:2px;display:inline-block;position:relative"><span style="position:absolute;inset:2px;right:7px;background:#ffb02e;display:block"></span></span></span></div>
+  <div style="padding:18px 22px 14px;background:#0e1013;border-bottom:2px solid #ffb02e;display:flex;align-items:flex-end;justify-content:space-between">
+    <div><div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ffb02e">STATUS</div><div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);margin-top:4px;letter-spacing:.04em">ALL SYSTEMS · 09:41</div></div>
+    <div style="display:flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid rgba(255,176,46,.5);background:rgba(255,176,46,.12)"><span style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#ffb02e">82 READY</span></div>
+  </div>
+  <div style="flex:1;overflow:hidden;padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:12px">
+
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22;padding:13px 13px 12px;display:flex;flex-direction:column;justify-content:space-between">
+      <div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ffb02e">FUEL</div>
+      <div><div><span style="font:700 30px/1 'Saira Condensed',sans-serif">2140</span><span style="font:500 11.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.78)"> kcal</span></div><div style="margin-top:8px;height:6px;background:rgba(233,237,242,.12)"><div style="height:6px;width:78%;background:#ffb02e"></div></div><div style="font:500 10.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.78);margin-top:6px">610 LEFT · P 148 G</div></div>
+    </div>
+
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22;padding:13px 13px 12px;display:flex;flex-direction:column;justify-content:space-between">
+      <div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#6fd8ff">WATER</div>
+      <div><div><span style="font:700 30px/1 'Saira Condensed',sans-serif">1.9</span><span style="font:500 11.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.78)"> / 3.0 L</span></div><div style="display:flex;gap:3px;margin-top:9px"><div style="flex:1;height:14px;background:#6fd8ff"></div><div style="flex:1;height:14px;background:#6fd8ff"></div><div style="flex:1;height:14px;background:#6fd8ff"></div><div style="flex:1;height:14px;background:#6fd8ff"></div><div style="flex:1;height:14px;background:rgba(111,216,255,.45)"></div><div style="flex:1;height:14px;border:1px solid rgba(233,237,242,.22)"></div></div><div style="font:500 10.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.78);margin-top:6px">LAST 09:05</div></div>
+    </div>
+
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22;padding:13px 13px 12px;display:flex;flex-direction:column;justify-content:space-between">
+      <div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#7ef2a8">TRAIN</div>
+      <div><div style="font:600 15px 'Saira',sans-serif">Tempo run</div><div style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.8);margin-top:3px">TODAY 17:30 · 8 KM</div>
+      <div style="display:flex;gap:4px;margin-top:10px;align-items:flex-end;height:26px"><div style="flex:1;height:60%;background:rgba(126,242,168,.5)"></div><div style="flex:1;height:100%;background:#7ef2a8"></div><div style="flex:1;height:35%;background:rgba(126,242,168,.5)"></div><div style="flex:1;height:0;border-top:1px solid rgba(233,237,242,.25)"></div><div style="flex:1;height:75%;background:rgba(126,242,168,.28)"></div><div style="flex:1;height:50%;background:rgba(126,242,168,.28)"></div><div style="flex:1;height:0;border-top:1px solid rgba(233,237,242,.25)"></div></div></div>
+    </div>
+
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22;padding:13px 13px 12px;display:flex;flex-direction:column;justify-content:space-between">
+      <div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ffb02e">SUPP</div>
+      <div><div><span style="font:700 30px/1 'Saira Condensed',sans-serif">2</span><span style="font:500 11.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.78)"> / 4 taken</span></div><div style="font:400 12.5px/1.35 'Saira',sans-serif;color:#e9edf2;margin-top:8px">Due: magnesium, omega-3</div><div style="font:500 10.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.78);margin-top:6px">EVENING DOSE</div></div>
+    </div>
+
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22;padding:13px 13px 12px;display:flex;flex-direction:column;justify-content:space-between">
+      <div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#6fd8ff">LABS</div>
+      <div><div style="font:600 15px 'Saira',sans-serif">All in range</div><div style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.8);margin-top:4px">DRAWN 08 SEP</div><div style="font:400 12.5px/1.35 'Saira',sans-serif;color:#7ef2a8;margin-top:7px">T 21.4 ▲ · CRP 0.6 ▼</div></div>
+    </div>
+
+    <div style="border:1px solid rgba(255,107,74,.5);background:rgba(255,107,74,.1);padding:13px 13px 12px;display:flex;flex-direction:column;justify-content:space-between">
+      <div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ff6b4a">HEALTH</div>
+      <div><div style="font:600 15px 'Saira',sans-serif">Right knee</div><div style="font:500 11px 'JetBrains Mono',monospace;color:#ff6b4a;margin-top:4px">DAY 4 · FLAGGED</div><div style="font:400 12.5px/1.35 'Saira',sans-serif;color:#e9edf2;margin-top:7px">Auto-clears in 3 days</div></div>
+    </div>
+
+    <div style="grid-column:span 2;border:1px solid rgba(233,237,242,.16);background:#0e1013;display:flex;align-items:center;gap:14px;padding:13px 14px">
+      <div style="flex:1"><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ffb02e">NEXT UP</div><div style="font:600 15px 'Saira',sans-serif;margin-top:4px">17:30 · Riverside loop, 4:45 /km</div></div>
+      <span style="font:700 22px 'JetBrains Mono',monospace;color:#ffb02e">›</span>
+    </div>
+  </div>
+  <dc-import name="PipNavA" active="{{ tabStatus }}" hint-size="390px,78px"></dc-import>
+</div>
+<div class="cap">Launch · System grid</div>
+</div>
+
+
+<div class="dv-opt" id="3c">
+<div class="dv-olabel"><a class="dv-oid" href="#3c">3c</a>Day line — thin vitals strip on top, then today in order: what's done, what's due, what's flagged.</div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.6);border-radius:2px;display:inline-block;position:relative"><span style="position:absolute;inset:2px;right:7px;background:#ffb02e;display:block"></span></span></span></div>
+  <div style="padding:18px 22px 14px;background:#0e1013;border-bottom:2px solid #ffb02e">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between">
+      <div><div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ffb02e">STATUS</div><div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);margin-top:4px;letter-spacing:.04em">SUN 13 SEP</div></div>
+      <div style="display:flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid rgba(233,237,242,.2);background:#1a1d22"><span style="width:7px;height:7px;background:#7ef2a8;box-shadow:0 0 8px #7ef2a8;display:block"></span><span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:rgba(233,237,242,.78)">SYNCED</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(233,237,242,.14);margin-top:14px;border:1px solid rgba(233,237,242,.14)">
+      <div style="background:#14161a;padding:9px 8px"><div style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.8)">READY</div><div style="font:700 21px/1 'Saira Condensed',sans-serif;color:#ffb02e;margin-top:5px">82</div></div>
+      <div style="background:#14161a;padding:9px 8px"><div style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.8)">SLEEP</div><div style="font:700 21px/1 'Saira Condensed',sans-serif;margin-top:5px">7:20</div></div>
+      <div style="background:#14161a;padding:9px 8px"><div style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.8)">HRV</div><div style="font:700 21px/1 'Saira Condensed',sans-serif;color:#7ef2a8;margin-top:5px">64</div></div>
+      <div style="background:#14161a;padding:9px 8px"><div style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.8)">RHR</div><div style="font:700 21px/1 'Saira Condensed',sans-serif;margin-top:5px">49</div></div>
+    </div>
+  </div>
+  <div style="flex:1;overflow:hidden;padding:16px 22px 14px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ffb02e">TODAY</span><span style="flex:1;height:1px;background:rgba(233,237,242,.14)"></span><span style="font:500 10px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.8)">3 DONE · 4 DUE</span></div>
+
+    <div style="display:flex;flex-direction:column">
+      <div style="display:flex;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid rgba(233,237,242,.08)">
+        <span style="width:44px;flex:none;font:500 11.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.78)">07:20</span>
+        <span style="width:12px;height:12px;flex:none;border:1.5px solid #7ef2a8;background:#7ef2a8"></span>
+        <div style="flex:1"><div style="font:500 14px 'Saira',sans-serif;color:rgba(233,237,242,.8)">Breakfast · 620 kcal</div></div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid rgba(233,237,242,.08)">
+        <span style="width:44px;flex:none;font:500 11.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.78)">07:40</span>
+        <span style="width:12px;height:12px;flex:none;border:1.5px solid #7ef2a8;background:#7ef2a8"></span>
+        <div style="flex:1"><div style="font:500 14px 'Saira',sans-serif;color:rgba(233,237,242,.8)">AM stack · D3+K2, creatine</div></div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid rgba(233,237,242,.08)">
+        <span style="width:44px;flex:none;font:500 11.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.78)">09:05</span>
+        <span style="width:12px;height:12px;flex:none;border:1.5px solid #7ef2a8;background:#7ef2a8"></span>
+        <div style="flex:1"><div style="font:500 14px 'Saira',sans-serif;color:rgba(233,237,242,.8)">Water · 250 ml (1.9 L total)</div></div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid rgba(233,237,242,.08);background:rgba(255,176,46,.07)">
+        <span style="width:44px;flex:none;font:600 11.5px 'JetBrains Mono',monospace;color:#ffb02e;padding-left:6px">13:00</span>
+        <span style="width:12px;height:12px;flex:none;border:1.5px solid #ffb02e"></span>
+        <div style="flex:1"><div style="font:600 14.5px 'Saira',sans-serif">Lunch — 900 kcal budget</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.8);margin-top:2px">60 g protein to stay on pace</div></div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid rgba(233,237,242,.08)">
+        <span style="width:44px;flex:none;font:600 11.5px 'JetBrains Mono',monospace;color:#ffb02e">17:30</span>
+        <span style="width:12px;height:12px;flex:none;border:1.5px solid #ffb02e"></span>
+        <div style="flex:1"><div style="font:600 14.5px 'Saira',sans-serif">Tempo run · 8 km</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.8);margin-top:2px">Riverside loop · 4:45 /km target</div></div>
+        <span style="font:700 18px 'JetBrains Mono',monospace;color:#ffb02e">›</span>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;padding:11px 0">
+        <span style="width:44px;flex:none;font:500 11.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.78)">21:30</span>
+        <span style="width:12px;height:12px;flex:none;border:1.5px solid rgba(233,237,242,.4)"></span>
+        <div style="flex:1"><div style="font:500 14px 'Saira',sans-serif">PM stack · magnesium, omega-3</div></div>
+      </div>
+    </div>
+
+    <div style="margin-top:auto;border-left:3px solid #ff6b4a;background:rgba(255,107,74,.1);padding:12px 14px;display:flex;align-items:center;gap:12px">
+      <div style="flex:1"><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.18em;color:#ff6b4a">OPEN FLAG · DAY 4</div><div style="font:400 13px/1.4 'Saira',sans-serif;margin-top:4px">Right knee — keep tempo pace conservative. Auto-clears in 3 days.</div></div>
+    </div>
+  </div>
+  <dc-import name="PipNavA" active="{{ tabStatus }}" hint-size="390px,78px"></dc-import>
+</div>
+<div class="cap">Launch · Day line</div>
+</div>
+
+
+<div class="dv-opt" id="3d">
+<div class="dv-olabel"><a class="dv-oid" href="#3d">3d</a>Body console — schematic figure carries condition, dials carry the numbers. Read in one look, no words needed.</div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.6);border-radius:2px;display:inline-block;position:relative"><span style="position:absolute;inset:2px;right:7px;background:#ffb02e;display:block"></span></span></span></div>
+  <div style="padding:16px 22px 12px;background:#0e1013;border-bottom:2px solid #ffb02e;display:flex;align-items:flex-end;justify-content:space-between">
+    <div><div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ffb02e">STATUS</div><div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);margin-top:4px;letter-spacing:.04em">SUN 13 SEP · 09:41</div></div>
+    <div style="display:flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid rgba(233,237,242,.2);background:#1a1d22"><span style="width:7px;height:7px;background:#7ef2a8;box-shadow:0 0 8px #7ef2a8;display:block"></span><span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:rgba(233,237,242,.78)">SYNCED</span></div>
+  </div>
+
+  <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+    <div style="flex:1;position:relative;background:#0e1013;background-image:linear-gradient(rgba(255,176,46,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(255,176,46,.07) 1px,transparent 1px);background-size:26px 26px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid rgba(233,237,242,.12)">
+      <div style="position:absolute;top:14px;left:18px;font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:rgba(233,237,242,.8)">CONDITION</div>
+      <div style="position:absolute;top:14px;right:18px;display:flex;align-items:baseline;gap:6px"><span style="font:700 34px/1 'Saira Condensed',sans-serif;color:#ffb02e">82</span><span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.8)">READY</span></div>
+
+      <svg width="330" height="254" viewBox="0 0 260 200" fill="none" style="display:block">
+        <g stroke="#ffb02e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" opacity=".9">
+          <circle cx="130" cy="22" r="13"/>
+          <path d="M130 35v16"/>
+          <path d="M105 58 L130 51 L155 58 L153 104 L107 104 Z"/>
+          <path d="M105 58 L87 92 L83 124"/>
+          <path d="M155 58 L173 92 L177 124"/>
+          <path d="M113 104 L110 146 L107 186"/>
+          <path d="M147 104 L150 146 L153 186"/>
+        </g>
+        <g stroke="rgba(126,242,168,.55)" stroke-width="1.2">
+          <path d="M117 70h26M117 80h26M117 90h18"/>
+        </g>
+        <circle cx="150" cy="146" r="13" fill="rgba(255,107,74,.18)" stroke="#ff6b4a" stroke-width="2"/>
+        <circle cx="150" cy="146" r="4.4" fill="#ff6b4a"/>
+        <path d="M164 146 H204" stroke="#ff6b4a" stroke-width="1.4"/>
+        <circle cx="130" cy="78" r="9" fill="rgba(126,242,168,.14)" stroke="#7ef2a8" stroke-width="1.8"/>
+        <path d="M120 78 H58" stroke="rgba(126,242,168,.7)" stroke-width="1.4"/>
+        <text x="54" y="70" text-anchor="end" fill="#7ef2a8" style="font:700 9px 'JetBrains Mono',monospace;letter-spacing:.1em">ENGINE</text>
+        <text x="54" y="83" text-anchor="end" fill="#e9edf2" style="font:500 9.5px 'JetBrains Mono',monospace">HRV 64</text>
+        <text x="54" y="96" text-anchor="end" fill="#e9edf2" style="font:500 9.5px 'JetBrains Mono',monospace">RHR 49</text>
+        <text x="208" y="143" fill="#ff6b4a" style="font:700 9px 'JetBrains Mono',monospace;letter-spacing:.1em">R KNEE</text>
+        <text x="208" y="156" fill="#e9edf2" style="font:500 9.5px 'JetBrains Mono',monospace">DAY 4</text>
+        <text x="208" y="169" fill="#e9edf2" style="font:500 9.5px 'JetBrains Mono',monospace">EASE OFF</text>
+      </svg>
+
+      <div style="position:absolute;bottom:12px;left:18px;right:18px;display:flex;gap:8px;align-items:center">
+        <span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:rgba(233,237,242,.8)">SLEEP 7:20</span>
+        <span style="flex:1;height:1px;background:rgba(233,237,242,.16)"></span>
+        <span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:#7ef2a8">1 FLAG · 5 SYSTEMS OK</span>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(233,237,242,.14);border-bottom:1px solid rgba(233,237,242,.14)">
+      <div style="background:#14161a;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:8px">
+        <div style="width:66px;height:66px;border-radius:50%;background:conic-gradient(#ffb02e 0 78%,rgba(233,237,242,.14) 78% 100%);display:flex;align-items:center;justify-content:center">
+          <div style="width:50px;height:50px;border-radius:50%;background:#14161a;display:flex;flex-direction:column;align-items:center;justify-content:center"><span style="font:700 17px/1 'Saira Condensed',sans-serif;color:#e9edf2">2140</span><span style="font:500 8.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.8);margin-top:2px">KCAL</span></div>
+        </div>
+        <span style="font:700 9.5px 'JetBrains Mono',monospace;letter-spacing:.16em;color:#ffb02e">FUEL</span>
+      </div>
+      <div style="background:#14161a;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:8px">
+        <div style="width:66px;height:66px;border-radius:50%;background:conic-gradient(#6fd8ff 0 63%,rgba(233,237,242,.14) 63% 100%);display:flex;align-items:center;justify-content:center">
+          <div style="width:50px;height:50px;border-radius:50%;background:#14161a;display:flex;flex-direction:column;align-items:center;justify-content:center"><span style="font:700 17px/1 'Saira Condensed',sans-serif;color:#e9edf2">1.9</span><span style="font:500 8.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.8);margin-top:2px">LITRES</span></div>
+        </div>
+        <span style="font:700 9.5px 'JetBrains Mono',monospace;letter-spacing:.16em;color:#6fd8ff">WATER</span>
+      </div>
+      <div style="background:#14161a;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:8px">
+        <div style="width:66px;height:66px;border-radius:50%;background:conic-gradient(#7ef2a8 0 50%,rgba(233,237,242,.14) 50% 100%);display:flex;align-items:center;justify-content:center">
+          <div style="width:50px;height:50px;border-radius:50%;background:#14161a;display:flex;flex-direction:column;align-items:center;justify-content:center"><span style="font:700 17px/1 'Saira Condensed',sans-serif;color:#e9edf2">2/4</span><span style="font:500 8.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.8);margin-top:2px">TAKEN</span></div>
+        </div>
+        <span style="font:700 9.5px 'JetBrains Mono',monospace;letter-spacing:.16em;color:#7ef2a8">SUPP</span>
+      </div>
+    </div>
+
+    <div style="padding:14px 18px;display:flex;align-items:center;gap:14px;background:#1a1d22">
+      <div style="flex:1"><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ffb02e">NEXT UP · 17:30</div><div style="font:600 15.5px 'Saira',sans-serif;margin-top:4px">Tempo run · 8 km, 4:45 /km</div></div>
+      <span style="font:700 22px 'JetBrains Mono',monospace;color:#ffb02e">›</span>
+    </div>
+  </div>
+  <dc-import name="PipNavA" active="{{ tabStatus }}" hint-size="390px,78px"></dc-import>
+</div>
+<div class="cap">Launch · Body console</div>
+</div>
+
+</div>
+</section>
+
+<section class="dv-turn">
+<div class="dv-thd"><a class="dv-tid" href="#2a">2</a><div class="dv-tname">Field Terminal — full screen set</div></div>
+<p class="dv-note">Status sub-tabs, Map, the add-entry flow and Settings.</p>
+<div class="dv-opts" style="flex-direction:column;gap:44px">
+<div class="dv-opt" id="2a" style="max-width:1760px">
+<div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Field Terminal — full set. Gunmetal plate, signal amber, machined tab rail.</div>
+<div class="dv-row" style="flex-wrap:wrap;gap:18px 18px">
+<div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.6);border-radius:2px;display:inline-block;position:relative"><span style="position:absolute;inset:2px;right:7px;background:#ffb02e;display:block"></span></span></span></div>
+  <div style="padding:18px 22px 14px;background:#0e1013;border-bottom:2px solid #ffb02e;display:flex;align-items:flex-end;justify-content:space-between">
+    <div>
+      <div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ffb02e">STATUS</div>
+      <div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px;letter-spacing:.04em">SUN 13 SEP · 09:41</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid rgba(233,237,242,.2);background:#1a1d22"><span style="width:7px;height:7px;background:#7ef2a8;box-shadow:0 0 8px #7ef2a8;display:block"></span><span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:rgba(233,237,242,.7)">SYNCED</span></div>
+  </div>
+
+  <div style="padding:20px 22px 16px;background:linear-gradient(#1a1d22,#14161a);border-bottom:1px solid rgba(233,237,242,.1)">
+    <div style="display:flex;align-items:flex-end;gap:16px">
+      <div style="position:relative;width:104px;height:104px;flex:none">
+        <div style="position:absolute;inset:0;border:2px solid rgba(233,237,242,.14)"></div>
+        <div style="position:absolute;left:-1px;top:-1px;width:16px;height:16px;border-left:3px solid #ffb02e;border-top:3px solid #ffb02e"></div>
+        <div style="position:absolute;right:-1px;bottom:-1px;width:16px;height:16px;border-right:3px solid #ffb02e;border-bottom:3px solid #ffb02e"></div>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <div style="font:700 52px/1 'Saira Condensed',sans-serif;color:#ffb02e;letter-spacing:-.01em">78</div>
+          <div style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.18em;color:rgba(233,237,242,.72);margin-top:3px">READINESS</div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding-bottom:4px">
+        <div style="font:600 15px/1.25 'Saira',sans-serif;color:#e9edf2">Cleared for a hard session.<br><span style="color:rgba(233,237,242,.72);font-weight:400;font-size:13.5px">HRV trending up 3 days.</span></div>
+        <div style="display:flex;gap:3px;height:26px;align-items:flex-end">
+          <div style="flex:1;height:40%;background:rgba(233,237,242,.2)"></div><div style="flex:1;height:52%;background:rgba(233,237,242,.2)"></div><div style="flex:1;height:44%;background:rgba(233,237,242,.2)"></div><div style="flex:1;height:66%;background:rgba(233,237,242,.28)"></div><div style="flex:1;height:72%;background:rgba(255,176,46,.55)"></div><div style="flex:1;height:84%;background:rgba(255,176,46,.75)"></div><div style="flex:1;height:100%;background:#ffb02e"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:0;background:#0e1013;border-bottom:1px solid rgba(233,237,242,.1);overflow:hidden">
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">FUEL</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#14161a;background:#ffb02e">TRAIN</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">SUPP</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">LABS</div>
+    <div style="flex:none;padding:13px 12px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">HEALTH</div>
+  </div>
+
+  <div style="flex:1;overflow:hidden;padding:16px 22px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:rgba(233,237,242,.62)">7-DAY LOAD</span>
+      <span style="flex:1;height:1px;background:rgba(233,237,242,.12)"></span>
+      <span style="font:600 12px 'JetBrains Mono',monospace;color:#7ef2a8">+12%</span>
+    </div>
+
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22">
+      <div style="padding:9px 14px;background:rgba(233,237,242,.06);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(233,237,242,.12)">
+        <span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ffb02e">STRENGTH</span>
+        <span style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7)">4 SESSIONS</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(233,237,242,.1)">
+        <div style="background:#1a1d22;padding:12px 14px"><div style="font:700 30px/1 'Saira Condensed',sans-serif">18.4<span style="font-size:14px;color:rgba(233,237,242,.7)">t</span></div><div style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px;letter-spacing:.08em">VOLUME</div></div>
+        <div style="background:#1a1d22;padding:12px 14px"><div style="font:700 30px/1 'Saira Condensed',sans-serif">142<span style="font-size:14px;color:rgba(233,237,242,.7)">kg</span></div><div style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px;letter-spacing:.08em">SQUAT 1RM E</div></div>
+      </div>
+    </div>
+
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22">
+      <div style="padding:9px 14px;background:rgba(233,237,242,.06);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(233,237,242,.12)">
+        <span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#6fd8ff">ENDURANCE</span>
+        <span style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7)">3 SESSIONS</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(233,237,242,.1)">
+        <div style="background:#1a1d22;padding:12px 14px"><div style="font:700 30px/1 'Saira Condensed',sans-serif">46.2<span style="font-size:14px;color:rgba(233,237,242,.7)">km</span></div><div style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px;letter-spacing:.08em">DISTANCE</div></div>
+        <div style="background:#1a1d22;padding:12px 14px"><div style="font:700 30px/1 'Saira Condensed',sans-serif">4:52<span style="font-size:14px;color:rgba(233,237,242,.7)">/km</span></div><div style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px;letter-spacing:.08em">AVG PACE</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:12px;border-left:3px solid #ff6b4a;background:rgba(255,107,74,.1);padding:12px 14px">
+      <span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.16em;color:#ff6b4a">FLAG</span>
+      <span style="font:400 13.5px/1.35 'Saira',sans-serif;color:#e9edf2;flex:1">Left knee — day 4 of 7. Auto-clears Thu.</span>
+    </div>
+  </div>
+
+  <div style="height:78px;background:#0e1013;border-top:2px solid rgba(233,237,242,.12);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:14px">
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-top:3px solid #ffb02e;margin-top:-2px;background:rgba(255,176,46,.08)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#ffb02e" stroke-width="1.9" stroke-linecap="round"><path d="M3 12h4l2-5 3 10 2.5-7 1.5 4h5"/></svg><span style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#ffb02e">STATUS</span></div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="rgba(233,237,242,.7)" stroke-width="1.9" stroke-linecap="round"><path d="M12 21s6.5-6.3 6.5-11a6.5 6.5 0 1 0-13 0C5.5 14.7 12 21 12 21z"/><circle cx="12" cy="10" r="2.3"/></svg><span style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.7)">MAP</span></div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="rgba(233,237,242,.7)" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.7)">LOG</span></div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="rgba(233,237,242,.7)" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg><span style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.7)">SETUP</span></div>
+  </div>
+</div>
+<div class="cap">Status · Training</div>
+</div>
+<div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.6);border-radius:2px;display:inline-block;position:relative"><span style="position:absolute;inset:2px;right:7px;background:#ffb02e;display:block"></span></span></span></div>
+  <div style="padding:18px 22px 14px;background:#0e1013;border-bottom:2px solid #ffb02e;display:flex;align-items:flex-end;justify-content:space-between">
+    <div>
+      <div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ffb02e">LOG</div>
+      <div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px;letter-spacing:.04em">LAST 3 DAYS · 26 ENTRIES</div>
+    </div>
+    <div style="display:flex;gap:7px;align-items:center;padding:7px 11px;border:1px solid rgba(233,237,242,.2);background:#1a1d22;font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:rgba(233,237,242,.7)">FILTER</div>
+  </div>
+
+  <div style="flex:1;overflow:hidden">
+    <div style="padding:10px 22px;background:rgba(233,237,242,.05);font:700 10px 'JetBrains Mono',monospace;letter-spacing:.22em;color:rgba(233,237,242,.66);display:flex;justify-content:space-between"><span>TODAY</span><span>13 SEP</span></div>
+
+    <div style="display:flex;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(233,237,242,.08)"><div style="font:500 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.66);width:42px;flex:none;padding-top:2px">09:12</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px"><span style="font:700 9px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#14161a;background:#6fd8ff;padding:2px 6px">RUN</span><span style="font:600 14px 'Saira',sans-serif">8.4 km · 41:20</span></div><div style="font:400 12.5px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:4px">Zone 2 · avg 148 bpm · synced from watch</div></div></div>
+
+    <div style="display:flex;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(233,237,242,.08)"><div style="font:500 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.66);width:42px;flex:none;padding-top:2px">08:30</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px"><span style="font:700 9px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#14161a;background:#b9f27e;padding:2px 6px">FOOD</span><span style="font:600 14px 'Saira',sans-serif">Oats, whey, berries</span></div><div style="font:400 12.5px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:4px">612 kcal · 44 P / 68 C / 14 F</div></div></div>
+
+    <div style="display:flex;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(233,237,242,.08)"><div style="font:500 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.66);width:42px;flex:none;padding-top:2px">07:55</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px"><span style="font:700 9px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#14161a;background:#ffb02e;padding:2px 6px">SUPP</span><span style="font:600 14px 'Saira',sans-serif">Creatine 5 g · D3 4000 IU</span></div><div style="font:400 12.5px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:4px">Confirmed from notification</div></div></div>
+
+    <div style="display:flex;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(233,237,242,.08)"><div style="font:500 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.66);width:42px;flex:none;padding-top:2px">07:20</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px"><span style="font:700 9px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.85);border:1px solid rgba(233,237,242,.35);padding:2px 6px">SLEEP</span><span style="font:600 14px 'Saira',sans-serif">7 h 12 m · eff 91%</span></div><div style="font:400 12.5px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:4px">HRV 62 ms · RHR 51 bpm</div></div></div>
+
+    <div style="display:flex;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(233,237,242,.08)"><div style="font:500 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.66);width:42px;flex:none;padding-top:2px">07:05</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px"><span style="font:700 9px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.85);border:1px solid rgba(233,237,242,.35);padding:2px 6px">NOTE</span><span style="font:600 14px 'Saira',sans-serif">Knee stiff on waking</span></div></div></div>
+
+    <div style="padding:10px 22px;background:rgba(233,237,242,.05);font:700 10px 'JetBrains Mono',monospace;letter-spacing:.22em;color:rgba(233,237,242,.66);display:flex;justify-content:space-between"><span>YESTERDAY</span><span>12 SEP</span></div>
+
+    <div style="display:flex;gap:14px;padding:14px 22px;border-bottom:1px solid rgba(233,237,242,.08)"><div style="font:500 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.66);width:42px;flex:none;padding-top:2px">21:40</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px"><span style="font:700 9px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#14161a;background:#ff9ec4;padding:2px 6px">ENC</span><span style="font:600 14px 'Saira',sans-serif">Logged · intensity 4/5</span></div></div></div>
+
+    <div style="display:flex;gap:14px;padding:14px 22px"><div style="font:500 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.66);width:42px;flex:none;padding-top:2px">19:10</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px"><span style="font:700 9px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#14161a;background:#b9f27e;padding:2px 6px">FOOD</span><span style="font:600 14px 'Saira',sans-serif">Rice, chicken, kimchi</span></div><div style="font:400 12.5px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:4px">780 kcal · 58 P / 82 C / 18 F</div></div></div>
+
+    <div style="text-align:center;padding:16px 22px"><span style="font:600 11px 'JetBrains Mono',monospace;letter-spacing:.16em;color:rgba(233,237,242,.7);border:1px solid rgba(233,237,242,.2);padding:10px 18px;display:inline-block">LOAD OLDER</span></div>
+  </div>
+
+  <div style="position:absolute;right:20px;bottom:96px;width:58px;height:58px;background:#ffb02e;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(0,0,0,.45)"><svg width="26" height="26" viewBox="0 0 24 24" stroke="#14161a" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+
+  <div style="height:78px;background:#0e1013;border-top:2px solid rgba(233,237,242,.12);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:14px">
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="rgba(233,237,242,.7)" stroke-width="1.9" stroke-linecap="round"><path d="M3 12h4l2-5 3 10 2.5-7 1.5 4h5"/></svg><span style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.7)">STATUS</span></div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="rgba(233,237,242,.7)" stroke-width="1.9" stroke-linecap="round"><path d="M12 21s6.5-6.3 6.5-11a6.5 6.5 0 1 0-13 0C5.5 14.7 12 21 12 21z"/><circle cx="12" cy="10" r="2.3"/></svg><span style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.7)">MAP</span></div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-top:3px solid #ffb02e;margin-top:-2px;background:rgba(255,176,46,.08)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#ffb02e" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#ffb02e">LOG</span></div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="rgba(233,237,242,.7)" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg><span style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.7)">SETUP</span></div>
+  </div>
+</div>
+<div class="cap">Log · unified feed</div>
+</div>
+<div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.6);border-radius:2px;display:inline-block;position:relative"><span style="position:absolute;inset:2px;right:7px;background:#ffb02e;display:block"></span></span></span></div>
+  <div style="padding:18px 22px 14px;background:#0e1013;border-bottom:2px solid #ffb02e;display:flex;align-items:flex-end;justify-content:space-between">
+    <div><div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ffb02e">STATUS</div><div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px;letter-spacing:.04em">SUN 13 SEP · 09:41</div></div>
+    <div style="display:flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid rgba(233,237,242,.2);background:#1a1d22"><span style="width:7px;height:7px;background:#7ef2a8;box-shadow:0 0 8px #7ef2a8;display:block"></span><span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:rgba(233,237,242,.72)">SYNCED</span></div>
+  </div>
+  <div style="display:flex;background:#0e1013;border-bottom:1px solid rgba(233,237,242,.1);overflow:hidden">
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#14161a;background:#ffb02e">FUEL</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">TRAIN</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">SUPP</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">LABS</div>
+    <div style="flex:none;padding:13px 12px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">HEALTH</div>
+  </div>
+  <div style="flex:1;overflow:hidden;padding:18px 22px;display:flex;flex-direction:column;gap:16px">
+    <div>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between">
+        <div><span style="font:700 46px/1 'Saira Condensed',sans-serif;color:#ffb02e">2140</span><span style="font:500 16px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7)"> / 2750 kcal</span></div>
+        <div style="font:600 13px 'JetBrains Mono',monospace;color:#7ef2a8;padding-bottom:6px">−610</div>
+      </div>
+      <div style="margin-top:10px;height:10px;background:rgba(233,237,242,.12);position:relative"><div style="position:absolute;left:0;top:0;bottom:0;width:78%;background:#ffb02e"></div></div>
+      <div style="font:500 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66);margin-top:7px">TARGET PACE · 4 MEALS LOGGED</div>
+    </div>
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22">
+      <div style="padding:9px 14px;background:rgba(233,237,242,.06);border-bottom:1px solid rgba(233,237,242,.12);font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ffb02e">MACROS</div>
+      <div style="padding:14px;display:flex;flex-direction:column;gap:13px">
+        <div><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 13.5px 'Saira',sans-serif">Protein</span><span style="font:500 13px 'JetBrains Mono',monospace">148<span style="color:rgba(233,237,242,.7)"> / 180 g</span></span></div><div style="margin-top:6px;height:6px;background:rgba(233,237,242,.12)"><div style="height:6px;width:82%;background:#7ef2a8"></div></div></div>
+        <div><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 13.5px 'Saira',sans-serif">Carbs</span><span style="font:500 13px 'JetBrains Mono',monospace">232<span style="color:rgba(233,237,242,.7)"> / 310 g</span></span></div><div style="margin-top:6px;height:6px;background:rgba(233,237,242,.12)"><div style="height:6px;width:75%;background:#6fd8ff"></div></div></div>
+        <div><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 13.5px 'Saira',sans-serif">Fat</span><span style="font:500 13px 'JetBrains Mono',monospace">68<span style="color:rgba(233,237,242,.7)"> / 85 g</span></span></div><div style="margin-top:6px;height:6px;background:rgba(233,237,242,.12)"><div style="height:6px;width:80%;background:#ffb02e"></div></div></div>
+      </div>
+    </div>
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22">
+      <div style="padding:9px 14px;background:rgba(233,237,242,.06);border-bottom:1px solid rgba(233,237,242,.12);display:flex;justify-content:space-between"><span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#6fd8ff">HYDRATION</span><span style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7)">LAST 250 ML · 09:05</span></div>
+      <div style="padding:14px">
+        <div><span style="font:700 32px/1 'Saira Condensed',sans-serif">1.9</span><span style="font:500 14px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7)"> / 3.0 L</span></div>
+        <div style="display:flex;gap:5px;margin-top:12px">
+          <div style="flex:1;height:26px;background:#6fd8ff"></div><div style="flex:1;height:26px;background:#6fd8ff"></div><div style="flex:1;height:26px;background:#6fd8ff"></div><div style="flex:1;height:26px;background:#6fd8ff"></div><div style="flex:1;height:26px;background:rgba(111,216,255,.45)"></div><div style="flex:1;height:26px;border:1px solid rgba(233,237,242,.2)"></div><div style="flex:1;height:26px;border:1px solid rgba(233,237,242,.2)"></div><div style="flex:1;height:26px;border:1px solid rgba(233,237,242,.2)"></div>
+        </div>
+      </div>
+    </div>
+    <div style="font:400 13px/1.4 'Saira',sans-serif;color:rgba(233,237,242,.7)">Last meal 19:10 yesterday — 14 h fasted window.</div>
+  </div>
+  <dc-import name="PipNavA" active="{{ tabStatus }}" hint-size="390px,78px"></dc-import>
+</div>
+<div class="cap">Status · Nutrition &amp; hydration</div>
+</div>
+
+<div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.6);border-radius:2px;display:inline-block;position:relative"><span style="position:absolute;inset:2px;right:7px;background:#ffb02e;display:block"></span></span></span></div>
+  <div style="padding:18px 22px 14px;background:#0e1013;border-bottom:2px solid #ffb02e;display:flex;align-items:flex-end;justify-content:space-between">
+    <div><div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ffb02e">STATUS</div><div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px;letter-spacing:.04em">4 ACTIVE · 2 ENDED</div></div>
+    <div style="display:flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid rgba(233,237,242,.2);background:#1a1d22"><span style="width:7px;height:7px;background:#7ef2a8;box-shadow:0 0 8px #7ef2a8;display:block"></span><span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:rgba(233,237,242,.72)">SYNCED</span></div>
+  </div>
+  <div style="display:flex;background:#0e1013;border-bottom:1px solid rgba(233,237,242,.1);overflow:hidden">
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">FUEL</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">TRAIN</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#14161a;background:#ffb02e">SUPP</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">LABS</div>
+    <div style="flex:none;padding:13px 12px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">HEALTH</div>
+  </div>
+  <div style="flex:1;overflow:hidden;padding:18px 22px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ffb02e">ACTIVE</span><span style="flex:1;height:1px;background:rgba(233,237,242,.14)"></span></div>
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22">
+      <div style="padding:13px 14px;border-bottom:1px solid rgba(233,237,242,.1);display:flex;gap:12px;align-items:flex-start"><div style="flex:1"><div style="font:600 15px 'Saira',sans-serif">Creatine monohydrate</div><div style="font:400 12.5px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:3px">Strength output · cell hydration</div></div><div style="text-align:right;flex:none"><div style="font:600 13px 'JetBrains Mono',monospace">5 g</div><div style="font:500 10.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:3px">DAILY</div></div></div>
+      <div style="padding:13px 14px;border-bottom:1px solid rgba(233,237,242,.1);display:flex;gap:12px;align-items:flex-start"><div style="flex:1"><div style="font:600 15px 'Saira',sans-serif">Vitamin D3 + K2</div><div style="font:400 12.5px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:3px">Immune load · testosterone floor</div></div><div style="text-align:right;flex:none"><div style="font:600 13px 'JetBrains Mono',monospace">4000 IU</div><div style="font:500 10.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:3px">AM</div></div></div>
+      <div style="padding:13px 14px;border-bottom:1px solid rgba(233,237,242,.1);display:flex;gap:12px;align-items:flex-start"><div style="flex:1"><div style="font:600 15px 'Saira',sans-serif">Magnesium glycinate</div><div style="font:400 12.5px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:3px">Sleep depth · cramp control</div></div><div style="text-align:right;flex:none"><div style="font:600 13px 'JetBrains Mono',monospace">400 mg</div><div style="font:500 10.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:3px">PM</div></div></div>
+      <div style="padding:13px 14px;display:flex;gap:12px;align-items:flex-start"><div style="flex:1"><div style="font:600 15px 'Saira',sans-serif">Omega-3 EPA/DHA</div><div style="font:400 12.5px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:3px">Joint inflammation · hs-CRP</div></div><div style="text-align:right;flex:none"><div style="font:600 13px 'JetBrains Mono',monospace">2 g</div><div style="font:500 10.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:3px">WITH MEAL</div></div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px"><span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:rgba(233,237,242,.66)">ENDED</span><span style="flex:1;height:1px;background:rgba(233,237,242,.14)"></span></div>
+    <div style="border:1px solid rgba(233,237,242,.1)">
+      <div style="padding:12px 14px;border-bottom:1px solid rgba(233,237,242,.1);display:flex;justify-content:space-between;align-items:center"><div><div style="font:600 14px 'Saira',sans-serif;color:rgba(233,237,242,.72)">Ashwagandha KSM-66</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.66);margin-top:2px">Cycled off · 8 weeks on</div></div><span style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7)">02 SEP</span></div>
+      <div style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font:600 14px 'Saira',sans-serif;color:rgba(233,237,242,.72)">Zinc picolinate</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.66);margin-top:2px">Labs normalised</div></div><span style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7)">14 AUG</span></div>
+    </div>
+  </div>
+  <dc-import name="PipNavA" active="{{ tabStatus }}" hint-size="390px,78px"></dc-import>
+</div>
+<div class="cap">Status · Supplements</div>
+</div>
+
+<div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.6);border-radius:2px;display:inline-block;position:relative"><span style="position:absolute;inset:2px;right:7px;background:#ffb02e;display:block"></span></span></span></div>
+  <div style="padding:18px 22px 14px;background:#0e1013;border-bottom:2px solid #ffb02e;display:flex;align-items:flex-end;justify-content:space-between">
+    <div><div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ffb02e">STATUS</div><div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px;letter-spacing:.04em">BLOODWORK · 2 DRAWS</div></div>
+    <div style="display:flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid rgba(233,237,242,.2);background:#1a1d22"><span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:rgba(233,237,242,.72)">ALL MARKERS</span></div>
+  </div>
+  <div style="display:flex;background:#0e1013;border-bottom:1px solid rgba(233,237,242,.1);overflow:hidden">
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">FUEL</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">TRAIN</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">SUPP</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#14161a;background:#ffb02e">LABS</div>
+    <div style="flex:none;padding:13px 12px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">HEALTH</div>
+  </div>
+  <div style="flex:1;overflow:hidden;padding:18px 22px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:grid;grid-template-columns:1fr 74px 74px 30px;gap:0;align-items:end;padding-bottom:8px;border-bottom:1px solid rgba(233,237,242,.16)">
+      <span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.18em;color:rgba(233,237,242,.66)">MARKER</span>
+      <span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.7);text-align:right">12 MAR</span>
+      <span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#ffb02e;text-align:right">08 SEP</span>
+      <span></span>
+    </div>
+    <div style="display:flex;flex-direction:column">
+      <div style="display:grid;grid-template-columns:1fr 74px 74px 30px;align-items:center;padding:13px 0;border-bottom:1px solid rgba(233,237,242,.08)"><div><div style="font:600 14px 'Saira',sans-serif">Testosterone</div><div style="font:400 11.5px 'Saira',sans-serif;color:rgba(233,237,242,.66)">nmol/L · 8.6–29</div></div><span style="font:500 14px 'JetBrains Mono',monospace;color:rgba(233,237,242,.72);text-align:right">17.8</span><span style="font:700 15px 'JetBrains Mono',monospace;text-align:right">21.4</span><span style="font:600 13px 'JetBrains Mono',monospace;color:#7ef2a8;text-align:right">▲</span></div>
+      <div style="display:grid;grid-template-columns:1fr 74px 74px 30px;align-items:center;padding:13px 0;border-bottom:1px solid rgba(233,237,242,.08)"><div><div style="font:600 14px 'Saira',sans-serif">SHBG</div><div style="font:400 11.5px 'Saira',sans-serif;color:rgba(233,237,242,.66)">nmol/L · 18–54</div></div><span style="font:500 14px 'JetBrains Mono',monospace;color:rgba(233,237,242,.72);text-align:right">41</span><span style="font:700 15px 'JetBrains Mono',monospace;text-align:right">38</span><span style="font:600 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);text-align:right">▼</span></div>
+      <div style="display:grid;grid-template-columns:1fr 74px 74px 30px;align-items:center;padding:13px 0;border-bottom:1px solid rgba(233,237,242,.08)"><div><div style="font:600 14px 'Saira',sans-serif">Ferritin</div><div style="font:400 11.5px 'Saira',sans-serif;color:rgba(233,237,242,.66)">µg/L · 30–400</div></div><span style="font:500 14px 'JetBrains Mono',monospace;color:rgba(233,237,242,.72);text-align:right">52</span><span style="font:700 15px 'JetBrains Mono',monospace;text-align:right">68</span><span style="font:600 13px 'JetBrains Mono',monospace;color:#7ef2a8;text-align:right">▲</span></div>
+      <div style="display:grid;grid-template-columns:1fr 74px 74px 30px;align-items:center;padding:13px 0;border-bottom:1px solid rgba(233,237,242,.08)"><div><div style="font:600 14px 'Saira',sans-serif">hs-CRP</div><div style="font:400 11.5px 'Saira',sans-serif;color:rgba(233,237,242,.66)">mg/L · &lt;1.0</div></div><span style="font:500 14px 'JetBrains Mono',monospace;color:rgba(233,237,242,.72);text-align:right">1.4</span><span style="font:700 15px 'JetBrains Mono',monospace;color:#7ef2a8;text-align:right">0.6</span><span style="font:600 13px 'JetBrains Mono',monospace;color:#7ef2a8;text-align:right">▼</span></div>
+      <div style="display:grid;grid-template-columns:1fr 74px 74px 30px;align-items:center;padding:13px 0;border-bottom:1px solid rgba(233,237,242,.08)"><div><div style="font:600 14px 'Saira',sans-serif">HbA1c</div><div style="font:400 11.5px 'Saira',sans-serif;color:rgba(233,237,242,.66)">% · &lt;5.7</div></div><span style="font:500 14px 'JetBrains Mono',monospace;color:rgba(233,237,242,.72);text-align:right">5.2</span><span style="font:700 15px 'JetBrains Mono',monospace;text-align:right">5.1</span><span style="font:600 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);text-align:right">▼</span></div>
+      <div style="display:grid;grid-template-columns:1fr 74px 74px 30px;align-items:center;padding:13px 0;border-bottom:1px solid rgba(233,237,242,.08)"><div><div style="font:600 14px 'Saira',sans-serif">Vitamin D</div><div style="font:400 11.5px 'Saira',sans-serif;color:rgba(233,237,242,.66)">nmol/L · 75–150</div></div><span style="font:500 14px 'JetBrains Mono',monospace;color:rgba(233,237,242,.72);text-align:right">61</span><span style="font:700 15px 'JetBrains Mono',monospace;text-align:right">94</span><span style="font:600 13px 'JetBrains Mono',monospace;color:#7ef2a8;text-align:right">▲</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;border-left:3px solid #6fd8ff;background:rgba(111,216,255,.1);padding:12px 14px"><span style="font:400 13px/1.4 'Saira',sans-serif;flex:1">D3 protocol started after the March draw — Vitamin D now in range.</span></div>
+  </div>
+  <dc-import name="PipNavA" active="{{ tabStatus }}" hint-size="390px,78px"></dc-import>
+</div>
+<div class="cap">Status · Labs</div>
+</div>
+
+<div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.6);border-radius:2px;display:inline-block;position:relative"><span style="position:absolute;inset:2px;right:7px;background:#ffb02e;display:block"></span></span></span></div>
+  <div style="padding:18px 22px 14px;background:#0e1013;border-bottom:2px solid #ff6b4a;display:flex;align-items:flex-end;justify-content:space-between">
+    <div><div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ff6b4a">STATUS</div><div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px;letter-spacing:.04em">1 OPEN EVENT</div></div>
+    <div style="display:flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid rgba(233,237,242,.2);background:#1a1d22"><span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:rgba(233,237,242,.72)">+ EVENT</span></div>
+  </div>
+  <div style="display:flex;background:#0e1013;border-bottom:1px solid rgba(233,237,242,.1);overflow:hidden">
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">FUEL</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">TRAIN</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">SUPP</div>
+    <div style="flex:none;padding:13px 14px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.66)">LABS</div>
+    <div style="flex:none;padding:13px 12px;font:600 11px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#14161a;background:#ffb02e">HEALTH</div>
+  </div>
+  <div style="flex:1;overflow:hidden;padding:18px 22px;display:flex;flex-direction:column;gap:14px">
+    <div style="border:1px solid rgba(255,107,74,.45);background:rgba(255,107,74,.1)">
+      <div style="padding:9px 14px;border-bottom:1px solid rgba(255,107,74,.3);display:flex;justify-content:space-between"><span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ff6b4a">INJURY · OPEN</span><span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(233,237,242,.75)">DAY 4 / 7</span></div>
+      <div style="padding:14px">
+        <div style="font:600 18px 'Saira',sans-serif">Left knee — patellar tendinopathy</div>
+        <div style="font:400 13px/1.45 'Saira',sans-serif;color:rgba(233,237,242,.75);margin-top:5px">Onset 10 Sep after hill repeats. Load capped, no plyometrics.</div>
+        <div style="display:flex;gap:4px;margin-top:14px"><div style="flex:1;height:8px;background:#ff6b4a"></div><div style="flex:1;height:8px;background:#ff6b4a"></div><div style="flex:1;height:8px;background:#ff6b4a"></div><div style="flex:1;height:8px;background:#ff6b4a"></div><div style="flex:1;height:8px;background:rgba(233,237,242,.14)"></div><div style="flex:1;height:8px;background:rgba(233,237,242,.14)"></div><div style="flex:1;height:8px;background:rgba(233,237,242,.14)"></div></div>
+        <div style="font:500 11px 'JetBrains Mono',monospace;letter-spacing:.08em;color:rgba(233,237,242,.75);margin-top:8px">AUTO-CLEARS THU 17 SEP UNLESS RE-FLAGGED</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px"><span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:rgba(233,237,242,.66)">CLEARED</span><span style="flex:1;height:1px;background:rgba(233,237,242,.14)"></span></div>
+    <div style="border:1px solid rgba(233,237,242,.12)">
+      <div style="padding:13px 14px;border-bottom:1px solid rgba(233,237,242,.1);display:flex;justify-content:space-between;align-items:center"><div><div style="display:flex;align-items:center;gap:8px"><span style="font:700 9px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#14161a;background:#6fd8ff;padding:2px 6px">ILLNESS</span><span style="font:600 14.5px 'Saira',sans-serif">Head cold</span></div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:4px">28 Aug – 1 Sep · 3 sessions missed</div></div><span style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7)">5 D</span></div>
+      <div style="padding:13px 14px;display:flex;justify-content:space-between;align-items:center"><div><div style="display:flex;align-items:center;gap:8px"><span style="font:700 9px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#14161a;background:#ffb02e;padding:2px 6px">INJURY</span><span style="font:600 14.5px 'Saira',sans-serif">Right calf strain</span></div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:4px">Cleared 20 Aug · full load restored</div></div><span style="font:500 11px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7)">12 D</span></div>
+    </div>
+    <div style="font:400 12.5px/1.45 'Saira',sans-serif;color:rgba(233,237,242,.7)">Injuries and illness share one list. Cleared events drop out of Status after 7 days and stay here.</div>
+  </div>
+  <dc-import name="PipNavA" active="{{ tabStatus }}" hint-size="390px,78px"></dc-import>
+</div>
+<div class="cap">Status · Injuries &amp; illness</div>
+</div>
+
+<div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.6);border-radius:2px;display:inline-block;position:relative"><span style="position:absolute;inset:2px;right:7px;background:#ffb02e;display:block"></span></span></span></div>
+  <div style="padding:18px 22px 14px;background:#0e1013;border-bottom:2px solid #ffb02e;display:flex;align-items:flex-end;justify-content:space-between">
+    <div><div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ffb02e">MAP</div><div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px;letter-spacing:.04em">NEXT SESSION · TUE 15 SEP 06:30</div></div>
+  </div>
+  <div style="position:relative;height:318px;background:#0b0d10;overflow:hidden;border-bottom:1px solid rgba(233,237,242,.14)">
+    <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(233,237,242,.07) 0 1px,transparent 1px 36px),repeating-linear-gradient(90deg,rgba(233,237,242,.07) 0 1px,transparent 1px 36px)"></div>
+    <div style="position:absolute;left:-20px;top:88px;width:440px;height:30px;background:rgba(233,237,242,.07);transform:rotate(-7deg)"></div>
+    <div style="position:absolute;left:-20px;top:216px;width:440px;height:20px;background:rgba(233,237,242,.07);transform:rotate(4deg)"></div>
+    <div style="position:absolute;left:210px;top:-40px;width:24px;height:420px;background:rgba(233,237,242,.07);transform:rotate(12deg)"></div>
+    <div style="position:absolute;left:24px;top:150px;width:126px;height:104px;background:rgba(126,242,168,.1);border:1px solid rgba(126,242,168,.25)"></div>
+    <div style="position:absolute;left:254px;top:168px;width:112px;height:84px;background:rgba(111,216,255,.1);border:1px solid rgba(111,216,255,.25)"></div>
+    <svg viewBox="0 0 390 318" style="position:absolute;inset:0" fill="none"><path d="M70 262C110 222 120 182 165 162s60-40 95-30 55 40 40 70" stroke="#ffb02e" stroke-width="3" stroke-dasharray="9 7" stroke-linecap="round"/></svg>
+    <div style="position:absolute;left:152px;top:104px;display:flex;flex-direction:column;align-items:center">
+      <div style="border:1px solid #ffb02e;background:rgba(10,12,15,.85);color:#ffb02e;font:700 10px 'JetBrains Mono',monospace;letter-spacing:.14em;padding:6px 9px">START · 06:30</div>
+      <div style="width:1px;height:14px;background:#ffb02e"></div>
+      <div style="width:13px;height:13px;background:#ffb02e;box-shadow:0 0 14px rgba(255,176,46,.8)"></div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;padding:9px 14px;background:linear-gradient(rgba(11,13,16,0),rgba(11,13,16,.9));font:500 10px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.7)">GPX ROUTE · 12.4 KM · 420 M GAIN</div>
+  </div>
+  <div style="flex:1;overflow:hidden;padding:18px 22px;display:flex;flex-direction:column;gap:14px">
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22">
+      <div style="padding:9px 14px;background:rgba(233,237,242,.06);border-bottom:1px solid rgba(233,237,242,.12);display:flex;justify-content:space-between"><span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#6fd8ff">ENDURANCE · HILL LOOP</span><span style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#14161a;background:#ffb02e;padding:1px 5px">GPX</span></div>
+      <div style="padding:14px">
+        <div style="font:600 18px 'Saira',sans-serif">Vondelpark north gate</div>
+        <div style="font:400 13px/1.45 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:5px">Target 1 h 05 · 4:58/km · 6 × hill repeat</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(233,237,242,.12);font:500 13px 'JetBrains Mono',monospace;color:#e9edf2">11 °C · LIGHT RAIN · WSW 18 KM/H</div>
+      </div>
+    </div>
+    <div style="border:1px dashed rgba(233,237,242,.24);padding:13px 14px;font:400 12.5px/1.45 'Saira',sans-serif;color:rgba(233,237,242,.7)">Gym and strength sessions carry no location — they stay on Status. Multi-event view is phase two.</div>
+  </div>
+  <dc-import name="PipNavA" active="{{ tabMap }}" hint-size="390px,78px"></dc-import>
+</div>
+<div class="cap">Map · next session</div>
+</div>
+
+<div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.55);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.45);border-radius:2px;display:inline-block"></span></span></div>
+  <div style="flex:1;position:relative;overflow:hidden">
+    <div style="position:absolute;inset:0;background:rgba(10,12,15,.82)"></div>
+    <div style="position:absolute;left:0;right:0;bottom:0;background:#14161a;border-top:2px solid #ffb02e;padding:18px 22px 26px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ffb02e">NEW ENTRY</div>
+        <div style="font:600 11px 'JetBrains Mono',monospace;letter-spacing:.12em;color:rgba(233,237,242,.72)">CANCEL</div>
+      </div>
+      <div style="font:400 13px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:6px">Pick a type — each writes to its own table.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">
+        <div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:14px 14px 13px"><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#ffb02e">01</div><div style="font:600 16px 'Saira',sans-serif;margin-top:6px">Training</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.7);margin-top:2px">Strength or route</div></div>
+        <div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:14px 14px 13px"><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#ffb02e">02</div><div style="font:600 16px 'Saira',sans-serif;margin-top:6px">Food</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.7);margin-top:2px">Meal + macros</div></div>
+        <div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:14px 14px 13px"><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#ffb02e">03</div><div style="font:600 16px 'Saira',sans-serif;margin-top:6px">Drink</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.7);margin-top:2px">Water, coffee</div></div>
+        <div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:14px 14px 13px"><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#ffb02e">04</div><div style="font:600 16px 'Saira',sans-serif;margin-top:6px">Supplement</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.7);margin-top:2px">Confirm a dose</div></div>
+        <div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:14px 14px 13px"><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#ffb02e">05</div><div style="font:600 16px 'Saira',sans-serif;margin-top:6px">Encounter</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.7);margin-top:2px">Private</div></div>
+        <div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:14px 14px 13px"><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#ffb02e">06</div><div style="font:600 16px 'Saira',sans-serif;margin-top:6px">Arousal</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.7);margin-top:2px">Scale 1–5</div></div>
+        <div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:14px 14px 13px"><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#ffb02e">07</div><div style="font:600 16px 'Saira',sans-serif;margin-top:6px">Stool</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.7);margin-top:2px">Bristol type</div></div>
+        <div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:14px 14px 13px"><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#ffb02e">08</div><div style="font:600 16px 'Saira',sans-serif;margin-top:6px">Note</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.7);margin-top:2px">Free text</div></div>
+      </div>
+    </div>
+  </div>
+  <dc-import name="PipNavA" active="{{ tabLog }}" hint-size="390px,78px"></dc-import>
+</div>
+<div class="cap">Log · add-entry type picker</div>
+</div>
+
+<div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.6);border-radius:2px;display:inline-block;position:relative"><span style="position:absolute;inset:2px;right:7px;background:#ffb02e;display:block"></span></span></span></div>
+  <div style="padding:18px 22px 14px;background:#0e1013;border-bottom:2px solid #ffb02e;display:flex;align-items:center;gap:14px">
+    <div style="font:600 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75)">←</div>
+    <div><div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ffb02e">NEW · FOOD</div><div style="font:500 12.5px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px">WRITES TO FOOD_LOG</div></div>
+  </div>
+  <div style="flex:1;overflow:hidden;padding:18px 22px;display:flex;flex-direction:column;gap:16px">
+    <div>
+      <div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:rgba(233,237,242,.66);margin-bottom:7px">DESCRIPTION</div>
+      <div style="border:1px solid #ffb02e;background:#1a1d22;padding:13px 14px;font:500 15.5px 'Saira',sans-serif;display:flex;align-items:center">Rice, chicken, kimchi<span style="width:2px;height:19px;background:#ffb02e;margin-left:2px"></span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:rgba(233,237,242,.66);margin-bottom:7px">TIME</div><div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:13px 14px;font:500 15px 'JetBrains Mono',monospace">19:10</div></div>
+      <div><div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:rgba(233,237,242,.66);margin-bottom:7px">ENERGY</div><div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:13px 14px;font:500 15px 'JetBrains Mono',monospace">780 kcal</div></div>
+    </div>
+    <div>
+      <div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:rgba(233,237,242,.66);margin-bottom:7px">MACROS · GRAMS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:12px 13px"><div style="font:500 10.5px 'JetBrains Mono',monospace;color:#7ef2a8;letter-spacing:.1em">PROTEIN</div><div style="font:700 24px 'Saira Condensed',sans-serif;margin-top:4px">58</div></div>
+        <div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:12px 13px"><div style="font:500 10.5px 'JetBrains Mono',monospace;color:#6fd8ff;letter-spacing:.1em">CARBS</div><div style="font:700 24px 'Saira Condensed',sans-serif;margin-top:4px">82</div></div>
+        <div style="border:1px solid rgba(233,237,242,.2);background:#1a1d22;padding:12px 13px"><div style="font:500 10.5px 'JetBrains Mono',monospace;color:#ffb02e;letter-spacing:.1em">FAT</div><div style="font:700 24px 'Saira Condensed',sans-serif;margin-top:4px">18</div></div>
+      </div>
+    </div>
+    <div>
+      <div style="font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:rgba(233,237,242,.66);margin-bottom:7px">SLOT</div>
+      <div style="display:flex;border:1px solid rgba(233,237,242,.2)">
+        <div style="flex:1;padding:12px 0;text-align:center;font:600 11.5px 'JetBrains Mono',monospace;letter-spacing:.06em;color:rgba(233,237,242,.66);border-right:1px solid rgba(233,237,242,.2)">AM</div>
+        <div style="flex:1;padding:12px 0;text-align:center;font:600 11.5px 'JetBrains Mono',monospace;letter-spacing:.06em;color:rgba(233,237,242,.66);border-right:1px solid rgba(233,237,242,.2)">MIDDAY</div>
+        <div style="flex:1;padding:12px 0;text-align:center;font:600 11.5px 'JetBrains Mono',monospace;letter-spacing:.06em;color:#14161a;background:#ffb02e;border-right:1px solid rgba(233,237,242,.2)">PM</div>
+        <div style="flex:1;padding:12px 0;text-align:center;font:600 11.5px 'JetBrains Mono',monospace;letter-spacing:.06em;color:rgba(233,237,242,.66)">SNACK</div>
+      </div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;gap:10px">
+      <div style="flex:none;padding:16px 18px;border:1px solid rgba(233,237,242,.24);font:600 12px 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(233,237,242,.75)">CANCEL</div>
+      <div style="flex:1;padding:16px 0;text-align:center;background:#ffb02e;font:700 12px 'JetBrains Mono',monospace;letter-spacing:.18em;color:#14161a">SAVE ENTRY</div>
+    </div>
+  </div>
+  <dc-import name="PipNavA" active="{{ tabLog }}" hint-size="390px,78px"></dc-import>
+</div>
+<div class="cap">Log · type-specific form</div>
+</div>
+
+<div>
+<div class="ph" style="background:#14161a;font-family:'Saira',sans-serif;color:#e9edf2">
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font:600 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.75);letter-spacing:.06em;background:#0e1013"><span>9:41</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px">LTE</span><span style="width:22px;height:11px;border:1.5px solid rgba(233,237,242,.6);border-radius:2px;display:inline-block;position:relative"><span style="position:absolute;inset:2px;right:7px;background:#ffb02e;display:block"></span></span></span></div>
+  <div style="padding:18px 22px 14px;background:#0e1013;border-bottom:2px solid #ffb02e">
+    <div style="font:700 11px 'JetBrains Mono',monospace;letter-spacing:.26em;color:#ffb02e">SETUP</div>
+    <div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px;letter-spacing:.04em">BUILD 0.4.1 · ANDROID</div>
+  </div>
+  <div style="flex:1;overflow:hidden;padding:18px 22px;display:flex;flex-direction:column;gap:16px">
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22">
+      <div style="padding:9px 14px;background:rgba(233,237,242,.06);border-bottom:1px solid rgba(233,237,242,.12);font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ffb02e">ACCOUNT</div>
+      <div style="padding:14px"><div style="font:600 15.5px 'Saira',sans-serif">m.dekker@proton.me</div><div style="font:500 12px 'JetBrains Mono',monospace;color:rgba(233,237,242,.7);margin-top:4px">SUPABASE AUTH · SESSION 14 D</div></div>
+    </div>
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22">
+      <div style="padding:9px 14px;background:rgba(233,237,242,.06);border-bottom:1px solid rgba(233,237,242,.12);font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ffb02e">CONNECTIONS</div>
+      <div style="padding:13px 14px;border-bottom:1px solid rgba(233,237,242,.1);display:flex;justify-content:space-between;align-items:center"><div><div style="font:600 14.5px 'Saira',sans-serif">Supabase</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:2px">Last sync 09:39</div></div><span style="display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;background:#7ef2a8;box-shadow:0 0 8px #7ef2a8"></span><span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:rgba(233,237,242,.75)">LIVE</span></span></div>
+      <div style="padding:13px 14px;border-bottom:1px solid rgba(233,237,242,.1);display:flex;justify-content:space-between;align-items:center"><div><div style="font:600 14.5px 'Saira',sans-serif">Watch · Garmin</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:2px">Sleep, HRV, routes</div></div><span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:rgba(233,237,242,.75)">PAIRED</span></div>
+      <div style="padding:13px 14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font:600 14.5px 'Saira',sans-serif">Health Connect</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:2px">Steps, weight</div></div><span style="font:600 10px 'JetBrains Mono',monospace;letter-spacing:.12em;color:#ff6b4a">RE-AUTH</span></div>
+    </div>
+    <div style="border:1px solid rgba(233,237,242,.14);background:#1a1d22">
+      <div style="padding:9px 14px;background:rgba(233,237,242,.06);border-bottom:1px solid rgba(233,237,242,.12);font:700 10px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#ffb02e">NOTIFICATIONS</div>
+      <div style="padding:13px 14px;display:flex;justify-content:space-between;align-items:center"><div style="flex:1"><div style="font:600 14.5px 'Saira',sans-serif">Quick-log buttons</div><div style="font:400 12px 'Saira',sans-serif;color:rgba(233,237,242,.72);margin-top:2px">Water, supplement, mood</div></div><span style="width:46px;height:24px;background:#ffb02e;position:relative;flex:none"><span style="position:absolute;right:3px;top:3px;width:18px;height:18px;background:#14161a"></span></span></div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="padding:16px 0;text-align:center;border:1px solid rgba(255,107,74,.6);font:700 12px 'JetBrains Mono',monospace;letter-spacing:.18em;color:#ff6b4a">SIGN OUT</div>
+  </div>
+  <dc-import name="PipNavA" active="{{ tabSetup }}" hint-size="390px,78px"></dc-import>
+</div>
+<div class="cap">Settings</div>
+</div></div>
+</div>
+</div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return { tabStatus: "status", tabMap: "map", tabLog: "log", tabSetup: "setup" };
+  }
+}
+</script>
+</body>
+</html>

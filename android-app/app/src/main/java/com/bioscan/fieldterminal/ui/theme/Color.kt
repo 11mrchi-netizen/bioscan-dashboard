@@ -30,4 +30,8 @@ object FieldColors {
     val Sand = Color(0xFFC9A876) // stool
     val Azure = Color(0xFF3FA9E8) // wellness
     val Red = Color(0xFFE5484D) // encounter, arousal
+
+    // Same literal (#ff4cd6) as the web dashboard's GPX route end-marker --
+    // used only there (Map tab, Step 14), not a general-purpose category color.
+    val Magenta = Color(0xFFFF4CD6)
 }

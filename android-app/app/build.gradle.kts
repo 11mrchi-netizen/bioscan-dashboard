@@ -92,5 +92,12 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
+    // Step 14: Play Services' Authorization API -- a distinct flow from the
+    // Credential Manager sign-in above, used only to request the
+    // calendar.readonly/drive.readonly scopes the Map tab needs. Confirmed
+    // current API/dependency directly against Android's own developer docs
+    // (developer.android.com/identity/authorization), not assumed.
+    implementation("com.google.android.gms:play-services-auth:22.0.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

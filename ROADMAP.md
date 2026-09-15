@@ -1260,6 +1260,69 @@ the "add or remove single items" requirement holds. Confirmed a RUN entry's acti
 offers only DELETE, no EDIT. Test data (the supplement-log rows created during verification) was
 deleted afterward so no synthetic entries were left in the real account's data.
 
+### ✅ Step 14 — Map tab: real Calendar + Drive GPX route (done 2026-09-15, Claude Code)
+**Scope decision, made by the user, not silently picked**: the web dashboard's "Map" isn't a map
+at all — it's a stylized GPX route line for the next training-session calendar event, gated
+behind Calendar+Drive OAuth scopes the native app's sign-in never requested. Full replication
+needed a genuinely new native OAuth flow, so this was flagged explicitly rather than assumed;
+the user chose full parity over a Calendar-only or deferred option.
+
+**Real architectural finding, not a guess**: the web dashboard needs a whole extra layer — a
+`user_google_tokens` table + `refresh-google-token` Edge Function holding the Google Client
+Secret — specifically because a *browser* has no OS-level Google account layer to silently
+remint an expired access token; it has to keep a refresh token server-side and mint fresh access
+tokens through Supabase on every calendar/drive call. **Android doesn't have that problem.**
+Play Services' Authorization API (`com.google.android.gms:play-services-auth`, confirmed current
+dependency/API directly against Android's own developer docs, not assumed) mints a fresh
+short-lived access token on-device, silently, whenever the requested scopes (`calendar.readonly`,
+`drive.readonly`) are already granted for the signed-in Google account — no UI, no stored
+refresh token, no new Edge Function, no new Supabase table or RLS policy needed at all. This is a
+real simplification versus the web, not a shortcut: the whole reason the web's extra machinery
+exists simply doesn't apply on-device. See `auth/GoogleAuthorizationManager.kt` for the full
+reasoning. The one manual step this still needed was already done for the web (the OAuth consent
+screen's scopes are project-level, not per-client) — no additional Google Cloud Console changes
+were required.
+
+Distinct from `GoogleAuthManager`'s existing Credential Manager sign-in, which only ever verifies
+identity for Supabase auth and never requests OAuth scopes at all — this is a second, separate
+authorization step (`GoogleAuthorizationManager`), called fresh every time the Map tab loads, same
+no-client-caching principle as the web's `getFreshGoogleToken()`.
+
+**Ported 1:1 from index.html**: `classifySessionType()` → `classifySessionKind()` (same
+🏋️/⛰️/🏃-plus-trail-keyword detection), `parseGpxLink()`, `parseGpxPoints()` (same trkpt-then-rtept
+XML fallback, no library), `extractDriveFileId()`, and the route-projection math in
+`drawGpxRoute()` (same cos(latitude) longitude scaling so the route isn't stretched at this
+latitude) → `RouteCanvas` in `ui/screens/MapScreen.kt`, drawn with Compose `Canvas` instead of raw
+SVG. Same colorId `'8'` == training-session filter as `fetchNextSession()`, confirmed still
+correct against this account's real calendar (see verification below) — meal-prep events use
+colorId `'10'` and are correctly excluded.
+
+**One deliberate deviation**: `daysUntilSession()` drops the web's hardcoded `Asia/Taipei` zone
+in favor of `ZoneId.systemDefault()` — that hardcoding exists on web specifically to correct for
+an arbitrary browser's timezone; on the user's own phone, the system zone is already correct,
+and every other date computation in this app already uses `ZoneId.systemDefault()`.
+
+**Real, computed, not fabricated**: route distance (haversine sum over the actual downloaded GPX
+points) and elevation gain (sum of positive `<ele>` deltas, only shown when the file actually
+carries elevation data). The mockup (`design/Field Terminal Mockups.dc.html`, "Map · next
+session") also shows an invented pace target and a weather line ("11°C · LIGHT RAIN · WSW 18
+KM/H") — neither has a real data source in this app (weather is a separate, unbuilt P2 scope on
+Android), so both are omitted rather than invented, same principle as every other Status tab.
+
+**New design token**: `FieldColors.Magenta` (`#ff4cd6`), same literal as the web's end-of-route
+marker — used only there, documented in `design/README.md`'s Color Tokens table as GPX-only, not
+a general log category.
+
+**Verified live, cross-checked against the real Google Calendar API directly** (not just the
+app's own render): the Map tab showed "⛰️ Hill Session", Wed 16 Sep 07:00, a real rendered GPX
+route, and "12.8 KM · 1345 M GAIN" computed independently from the downloaded GPX file's own
+points. Queried the same account's Google Calendar directly (via the Calendar connector) for that
+day and got an exact match — same event, same `colorId: "8"`, same Drive link, and the event's
+own description text ("Route: TGT Section 5 (12.8km, +1345m)") matches the app's independently
+*computed* numbers rather than a copied string, confirming the distance/elevation math is correct,
+not just the passthrough text. The two same-day meal-prep events (`colorId: "10"`) were correctly
+excluded. No crashes or exceptions in logcat during the full authorize → fetch → render flow.
+
 ---
 
 ## Summary — rough remaining build time

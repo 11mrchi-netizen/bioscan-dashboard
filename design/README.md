@@ -262,6 +262,7 @@ Colours
 | Sand | `#c9a876` | log category: stool |
 | Azure | `#3fa9e8` | log category: wellness |
 | Red | `#e5484d` | log category: encounter, arousal |
+| Magenta | `#ff4cd6` | Map tab GPX route end-marker only — not a log category |
 
 The five "log category" rows (added 2026-09-15, direct user request) exist so Log-feed entry
 chips are tellable apart by hue, not just by their text label — each is a distinct color from its

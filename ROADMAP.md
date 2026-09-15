@@ -1042,6 +1042,31 @@ not a bug.
 **Status tab is now fully complete** — launch screen (Step 5) + all 5 sub-tabs (Steps 6–10), all
 real Supabase data, no fabricated numbers anywhere. Phase C, done.
 
+### ✅ Step 11 — Log tab, unified read-only feed (done 2026-09-15, Claude Code)
+Real data merged from six tables (`meals`, `runs`, `sleep_daily`, `arousal_daily`, `stool_log`,
+`encounters`) into one descending-time feed, day-grouped with TODAY/YESTERDAY headers —
+`domain/Log.kt`'s `buildLogEntries()`. `runs`/`sleep_daily`/`arousal_daily` only store a `date`,
+no time-of-day, so same-day entries get a fixed nominal time (e.g. runs at 07:00) purely for
+stable sort order within the day — documented in code as not a factual time claim, since these
+tables have no real time-of-day column to draw from.
+
+**Step 11's own flagged open question — pagination — resolved concretely**: fetch a bounded
+window (60 rows per source, well past this account's real volume) once, merge + sort
+client-side, then reveal 20 entries at a time via a real "LOAD OLDER" button
+(`data/LogRepository.kt`, `ui/screens/LogScreen.kt`). Not infinite-scroll, not a second network
+round-trip per page — one fetch, windowed client-side.
+
+**Two entry types deliberately omitted, not faked**: supplement-taken confirmations and
+freeform notes appear in the mockup's Log examples but have no backing Supabase table yet: they
+simply don't appear rather than being invented. `encounters` is queried but currently empty for
+this account, contributing zero entries — expected, not a bug.
+
+**Verified on the emulator**: "113 ENTRIES" total, correct day-grouping and descending
+within-day order, real meal descriptions/macros, real run distance/duration/HR, real sleep
+hours/scores. Tapped "LOAD OLDER" and confirmed it revealed entries beyond the initial 20 (the
+"11 SEP" day-group grew to include a dinner and a sleep entry not shown before) while the process
+stayed alive (`pidof` unchanged) — `visibleCount` incrementing correctly.
+
 ---
 
 ## Summary — rough remaining build time

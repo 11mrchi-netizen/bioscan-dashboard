@@ -33,11 +33,12 @@ import com.bioscan.fieldterminal.ui.nav.StatusSubTab
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 
-// Step 5 (Phase C): the "3d — Body console" launch screen (user's pick, see
-// ROADMAP.md P8) now loads real readiness/HRV/RHR/sleep/health-flag data,
-// shown above the sub-tab rail per design/README.md's own layout note ("the
-// launch screen sits above the rail as the default Status view"). The 5
-// sub-tabs below it are still Step 3/4 placeholders -- Steps 6-10.
+// Status tab, complete as of Step 10: the "3d — Body console" launch screen
+// (user's pick, see ROADMAP.md P8) above the sub-tab rail per design/
+// README.md's own layout note ("the launch screen sits above the rail as
+// the default Status view"), and all 5 sub-tabs now real Supabase-backed
+// screens (Steps 6-10). Phase C is done; Log/Map/Settings remain
+// (Steps 11-15).
 @Composable
 fun StatusScreen() {
     var selectedSubTab by remember { mutableStateOf(StatusSubTab.Nutrition) }
@@ -81,15 +82,7 @@ fun StatusScreen() {
             StatusSubTab.Training -> TrainingScreen()
             StatusSubTab.Supplements -> SupplementsScreen()
             StatusSubTab.Labs -> LabsScreen()
-            else -> Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                // Placeholder per remaining sub-tab -- Step 10 replaces it
-                // with real Supabase-backed content.
-                Text(
-                    text = "${selectedSubTab.label} — placeholder",
-                    style = FieldTextStyles.placeholderBody,
-                    color = FieldColors.InkMuted,
-                )
-            }
+            StatusSubTab.Injuries -> HealthEventsScreen()
         }
     }
 }

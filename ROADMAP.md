@@ -1012,6 +1012,36 @@ didn't test them. Cross-checked against the web dashboard's own hardcoded narrat
 "DIGESTIVE/LIVER — JAN ONLY") — the independently computed merge landed on exactly the same
 per-marker draw coverage the web version describes by hand, a good sign the logic is right.
 
+### ✅ Step 10 — Injuries & Illness sub-tab (done 2026-09-15, Claude Code) — Status tab complete
+Real data from `injuries`/`illnesses`, merged for display only (genuinely different fields
+underneath — `domain/HealthEvents.kt`), same approach as `index.html`'s real (not hardcoded)
+`PANELS.history`. Open = active/monitoring, shown first; resolved shows **unfiltered** below,
+matching both `PANELS.history`'s "complete, unfiltered" framing and the committed mockup's own
+closing line ("cleared events drop out of Status after 7 days and stay here").
+
+**One deliberate deviation from the mockup's copy, checked against the real spec rather than
+assumed**: the committed mockup shows an open injury with "DAY 4/7... AUTO-CLEARS THU 17 SEP
+UNLESS RE-FLAGGED" — implying open events auto-resolve after 7 days. Checked
+`claude-code-new-domains-handoff.md` section 4 (the actual governing spec) directly: no such
+rule exists anywhere in this project. An active/monitoring event stays open indefinitely until
+someone manually resolves it; the 7-day cutoff only ever applies to *already-resolved* events'
+display window (Step 5's `isHealthEventActive`, reused here). Built the real rule, not the
+mockup's flavor text — shows "DAY N" as an honest fact (days since reported), never a fabricated
+countdown-to-auto-clear.
+
+**Verified on the emulator, landing directly on Step 10's own explicitly-requested edge case**:
+this account's real data is exactly the sparse case the roadmap flagged in advance (1 injury,
+0 illnesses) — confirmed "0 OPEN" correctly hides the Open section entirely rather than
+rendering awkwardly, and the one resolved injury (cleared 2026-09-08, exactly 7 days before
+today) shows correctly in RESOLVED. Cross-checked against Step 5's Body Console: that resolved
+injury *also* still shows as a "1 FLAG" ring there, since 7 days since resolution sits exactly
+on `isHealthEventActive`'s inclusive cutoff (`daysSince <= 7`) — two different, both-correct
+answers to two different questions ("is this literally open" vs. "is this still ring-worthy"),
+not a bug.
+
+**Status tab is now fully complete** — launch screen (Step 5) + all 5 sub-tabs (Steps 6–10), all
+real Supabase data, no fabricated numbers anywhere. Phase C, done.
+
 ---
 
 ## Summary — rough remaining build time

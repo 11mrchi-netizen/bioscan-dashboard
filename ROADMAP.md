@@ -915,7 +915,34 @@ display-filter logic as the web dashboard's Head-marker ring. Cross-checking aga
 web dashboard shows for the same day (Step 5's actual "done when" criterion) is still worth
 doing explicitly, but every piece independently matches the ported logic's expected behavior.
 
-**Remaining**: Steps 6–15 per `mobile-app-implementation-roadmap.md` (Status's other 4 sub-tabs,
+### ✅ Step 6 — Nutrition/Hydration sub-tab (done 2026-09-15, Claude Code)
+Real data from `meals`/`hydration_daily`. `domain/Nutrition.kt` ports `index.html`'s
+meals-→daily-aggregation 1:1 (same UTC-calendar-date grouping via the timestamp string's first
+10 characters, same per-day sums) — "today" means the most recent day with any logged data,
+matching the web dashboard's own established convention (`nutrition.cal[length-1]`), not a
+strict calendar-date filter that would show "0 kcal" before today's first meal is logged.
+
+**Same honest-data pattern as Step 5, applied again**: the committed mockup
+(`design/Field Terminal Mockups.dc.html`, "Status · Nutrition & hydration") shows every bar
+against a personal target — 2750 kcal, 180g protein, 3.0L water — and none of these exist
+anywhere in this project's real data (confirmed by grep; the web dashboard's own
+Kidneys/Hydration panel explicitly discloses "No stored personal target — 2500–3000 ml/day is a
+common general guideline, not a specific goal pulled from any table"). Built the same generic
+sanity-range bars the web dashboard's Nutrition/Hydration panels actually use instead (0-3500
+kcal watch<1800, 0-220g protein, 0-450g carbs, 0-180g fat, 0-4000ml water) with one honest
+disclosure line, rather than inventing target numbers the mockup implies but nothing backs.
+Also skipped the mockup's implied meal-by-meal list — neither the design's own prose scope nor
+Step 6's roadmap text calls for one, and per-meal detail is really Log's job (Step 11's unified
+feed already covers every meal chronologically).
+
+Added a 7-day calorie trend (relative to the week's own max, not a fixed target) using the same
+mini-bar-histogram motif already established by the launch-screen mockups' "TRAIN tile."
+
+**Verified on the emulator with real Supabase data**: 1170 kcal (correctly shown in alert-red,
+below the 1800 watch threshold), real macros (100g/130g/30g), real hydration (0.8L, 2/8 segments
+filled), and a real 7-day trend with varying bar heights.
+
+**Remaining**: Steps 7–15 per `mobile-app-implementation-roadmap.md` (Status's other 3 sub-tabs,
 Log, Map, Settings), then Health Connect in Phase G. Not started.
 
 ---

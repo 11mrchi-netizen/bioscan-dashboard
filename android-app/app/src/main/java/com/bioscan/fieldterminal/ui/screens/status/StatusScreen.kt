@@ -76,14 +76,17 @@ fun StatusScreen() {
         // Fixed height, not fillMaxSize() -- the parent Column now scrolls
         // (needed once BodyConsole made this screen taller than one page),
         // and a scrolling container measures children with unbounded height.
-        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-            // Placeholder per sub-tab -- Steps 6-10 replace each of these
-            // with real Supabase-backed content.
-            Text(
-                text = "${selectedSubTab.label} — placeholder",
-                style = FieldTextStyles.placeholderBody,
-                color = FieldColors.InkMuted,
-            )
+        when (selectedSubTab) {
+            StatusSubTab.Nutrition -> NutritionHydrationScreen()
+            else -> Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                // Placeholder per remaining sub-tab -- Steps 7-10 replace
+                // each of these with real Supabase-backed content.
+                Text(
+                    text = "${selectedSubTab.label} — placeholder",
+                    style = FieldTextStyles.placeholderBody,
+                    color = FieldColors.InkMuted,
+                )
+            }
         }
     }
 }

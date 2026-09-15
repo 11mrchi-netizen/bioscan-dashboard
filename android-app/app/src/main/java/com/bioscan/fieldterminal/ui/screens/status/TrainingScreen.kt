@@ -35,23 +35,13 @@ import com.bioscan.fieldterminal.ui.theme.Saira
 import com.bioscan.fieldterminal.ui.theme.SairaCondensed
 import java.time.LocalDate
 
-// Step 7 (Phase C). Real Endurance data from `runs`/`wearable_daily` -- read
-// only; per 2026-09-15 direction Training was removed from the "+" add-entry
-// flow entirely (see domain/AddEntry.kt), so this screen has no write path
-// of its own to add. Runs still display here exactly as before -- data
-// index.html's own fetchDashboardData() already fetches into
-// DASHBOARD_DATA.runs, but its Training panel's render() never actually
-// reads from it (confirmed by reading the function directly): every number
-// shown there, strength AND endurance alike, is a hardcoded literal from a
-// one-off narrative pass ("17.9km this week", "+9.4% pace trend", every
-// squat/deadlift/pull-up PR), not a live query.
-//
-// Strength has no live Supabase source at all -- no exercises/lifts table
-// exists; the web panel's own "SOURCE: LIVE — get_exercise_history per lift"
-// label refers to a Wellness Project MCP tool only ever run manually in a
-// chat, never synced into a queryable table. Shown here as an honest empty
-// state rather than porting the web's stale hardcoded numbers as if real.
-// See ROADMAP.md P8 Step 7 for the full finding.
+// Step 7 (Phase C), generalized in Phase G3 from runs-only to any exercise
+// type via `exercise_sessions` (see data/TrainingRepository.kt). STRENGTH
+// finally has a real data source -- Step 7's own finding was that none
+// existed anywhere in this project; Health Connect is the first. Kept
+// basic here per the user's own framing: counts/minutes this week, not a
+// full per-lift breakdown -- that's Phase G5's "combined session detail"
+// view, once one exists to link to.
 @Composable
 fun TrainingScreen() {
     var overview by remember { mutableStateOf<TrainingOverview?>(null) }
@@ -76,8 +66,8 @@ private fun TrainingContent(overview: TrainingOverview) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        if (!overview.hasAnyRuns) {
-            Text("No runs logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+        if (!overview.hasAnyEndurance) {
+            Text("No endurance sessions logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
         } else {
             Card(title = "ENDURANCE — THIS WEEK") {
                 BigValueRow(value = "%.1f".format(overview.thisWeekDistanceKm), unit = "KM")
@@ -107,27 +97,38 @@ private fun TrainingContent(overview: TrainingOverview) {
         }
 
         Card(title = "STRENGTH") {
-            Text(
-                text = "No data source yet.",
-                style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
-                color = FieldColors.InkMuted,
-            )
-            Text(
-                text = "Per-lift history isn't synced to a Supabase table this app can read — it's only ever pulled manually in a Wellness Project chat, never stored anywhere queryable. Nothing to show honestly until that changes.",
-                style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-                color = FieldColors.InkMuted,
-            )
+            if (overview.hasAnyStrength) {
+                BigValueRow(value = "${overview.strengthSessionsThisWeek}", unit = if (overview.strengthSessionsThisWeek == 1) "SESSION" else "SESSIONS")
+                StatLine("This week", "${overview.strengthMinutesThisWeek} min")
+                Text(
+                    "Synced from Health Connect. Per-lift/set detail isn't shown here yet.",
+                    style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+                    color = FieldColors.InkMuted,
+                )
+            } else {
+                Text(
+                    text = "No strength sessions synced yet.",
+                    style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    color = FieldColors.InkMuted,
+                )
+                Text(
+                    text = "Health Connect is this app's real data source for strength training now — " +
+                        "log a workout with any Health-Connect-aware app on your phone and it'll show up here after the next sync.",
+                    style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+                    color = FieldColors.InkMuted,
+                )
+            }
         }
     }
 }
 
 // Distance run over a selectable window -- computed client-side from the
-// same `runs` rows the ENDURANCE card above already fetched, using the
-// existing sumDistanceKmSince(). No new query per period switch.
+// same `exercise_sessions` rows the ENDURANCE card above already fetched,
+// using the existing sumDistanceKmSince(). No new query per period switch.
 @Composable
 private fun DistanceTotalsCard(overview: TrainingOverview) {
     var period by remember { mutableStateOf(TotalsPeriod.Week) }
-    val totalKm = sumDistanceKmSince(overview.runs, LocalDate.now(), period.days)
+    val totalKm = sumDistanceKmSince(overview.enduranceSessions, LocalDate.now(), period.days)
 
     Card(title = "DISTANCE TOTALS") {
         PeriodToggle(selected = period, onSelect = { period = it })

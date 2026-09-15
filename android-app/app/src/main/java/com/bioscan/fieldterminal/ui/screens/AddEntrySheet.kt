@@ -50,6 +50,7 @@ import com.bioscan.fieldterminal.data.NutritionEstimationRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.LogArousalRow
+import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
@@ -137,9 +138,10 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
 
 // Tapping a Log entry opens this first -- EDIT (when the source has a
 // corresponding form) and DELETE, with an inline confirm step rather than a
-// second popup. Sleep, Run and Supplement have no add-entry form (runs
-// aren't loggable at all any more; a taken supplement is add-or-remove, not
-// field-editable), so all three are delete-only here too.
+// second popup. Sleep and Supplement have no add-entry form at all (a taken
+// supplement is add-or-remove, not field-editable), so those two are
+// delete-only. Exercise (Phase G3) IS editable -- not its Health-Connect-
+// sourced fields, just rpe/notes via ExerciseDetailsForm.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EntryActionSheet(entry: LogEntry, onDismiss: () -> Unit, onEdit: () -> Unit, onDeleted: () -> Unit) {
@@ -148,7 +150,7 @@ fun EntryActionSheet(entry: LogEntry, onDismiss: () -> Unit, onEdit: () -> Unit,
     val scope = rememberCoroutineScope()
     var confirmingDelete by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
-    val editable = entry.source !in setOf(LogSource.Sleep, LogSource.Run, LogSource.Supplement)
+    val editable = entry.source !in setOf(LogSource.Sleep, LogSource.Supplement)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -238,7 +240,8 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Arousal -> repo.fetchArousal(entry.id)
             LogSource.Note -> repo.fetchNote(entry.id)
             LogSource.Wellbeing -> repo.fetchWellbeing(entry.id)
-            LogSource.Sleep, LogSource.Run, LogSource.Supplement -> null // no edit form; EntryActionSheet never offers EDIT for these
+            LogSource.Exercise -> repo.fetchExerciseSession(entry.id)
+            LogSource.Sleep, LogSource.Supplement -> null // no edit form; EntryActionSheet never offers EDIT for these
         }
     }
 
@@ -324,6 +327,13 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialStress = row.stress,
                     initialSoreness = row.soreness,
                     onSave = { date, e, m, s, so -> onSubmit { it.updateWellbeing(row.id, date, e, m, s, so) } },
+                )
+                is FullExerciseSessionRow -> ExerciseDetailsForm(
+                    saving,
+                    typeLabel = row.type,
+                    initialRpe = row.rpe,
+                    initialNotes = row.notes ?: "",
+                    onSave = { rpe, notes -> onSubmit { it.updateExerciseDetails(row.id, rpe, notes) } },
                 )
             }
             Spacer(Modifier.height(12.dp))
@@ -818,6 +828,38 @@ private fun WellnessForm(
         val valid = listOf(energy, mood, stress, soreness).any { it.isNotBlank() }
         SaveButton(saving, valid) {
             onSave(date.toString(), energy.toIntOrNull(), mood.toIntOrNull(), stress.toIntOrNull(), soreness.toIntOrNull())
+        }
+    }
+}
+
+// Phase G3: the only editable part of a Health-Connect-sourced exercise
+// session. Everything else (times, distance, heart rate) comes from Health
+// Connect and isn't editable in this app. Deliberately basic per the
+// user's own "keep it basic, see how to add later" framing for
+// type-specific extras (sets/reps for strength, surface for runs) -- free-
+// text notes can carry that informally until a structured editor exists.
+@Composable
+private fun ExerciseDetailsForm(
+    saving: Boolean,
+    typeLabel: String,
+    initialRpe: Int? = null,
+    initialNotes: String = "",
+    onSave: (rpe: Int?, notes: String?) -> Unit,
+) {
+    var rpe by remember { mutableStateOf(initialRpe?.toString() ?: "") }
+    var notes by remember { mutableStateOf(initialNotes) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(
+            "Health Connect supplies the time, distance, and heart rate for this $typeLabel session — " +
+                "only RPE and notes are editable here.",
+            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+            color = FieldColors.InkMuted,
+        )
+        Column { FormLabel("RPE 0-10 (OPTIONAL)"); FieldTextField(rpe, { rpe = it }, "e.g. 6", keyboardType = KeyboardType.Number) }
+        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Sets, reps, surface, etc.", singleLine = false) }
+        SaveButton(saving, true) {
+            onSave(rpe.toIntOrNull(), notes.trim().ifBlank { null })
         }
     }
 }

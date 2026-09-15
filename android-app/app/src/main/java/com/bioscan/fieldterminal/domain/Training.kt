@@ -1,35 +1,40 @@
 package com.bioscan.fieldterminal.domain
 
-import com.bioscan.fieldterminal.data.model.RunRow
+import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.Vo2MaxRow
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
 
-// Real computation over the `runs` table -- notably, this is data
-// index.html's own fetchDashboardData() already pulls into DASHBOARD_DATA
-// .runs, but its Training panel's render() never actually reads from it
-// (confirmed by reading the function directly): every strength AND
-// endurance number shown there ("17.9km this week", "+9.4% pace trend",
-// all squat/deadlift/pull-up PRs) is a hardcoded literal from a one-off
-// narrative pass, not a live query. Rather than port stale hardcoded
-// numbers as if they were the "current web-dashboard source of truth"
-// (Step 7's literal done-when wording), this computes real numbers from
-// the same table the web dashboard already fetches but doesn't use.
-// See ROADMAP.md P8 Step 7 for the full finding.
+// Phase G3: generalized from run-only (the old `runs` table, one RunRow per
+// row) to any exercise type (`exercise_sessions`). These functions only
+// ever cared about distance/duration, never "is this specifically a run" --
+// the endurance-vs-strength type filtering now happens once in
+// TrainingRepository when it builds the lists passed in here, so this file
+// stays exactly as generic as it always effectively was.
+//
+// `exercise_sessions.start_time` is a real timestamptz (even migrated
+// pre-Health-Connect rows carry a nominal-but-real one), so "which day did
+// this happen" is a real OffsetDateTime parse now, not a bare LocalDate.
 
-fun sumDistanceKmSince(runs: List<RunRow>, today: LocalDate, days: Long): Double =
-    runs.filter { run ->
-        val d = LocalDate.parse(run.date)
-        ChronoUnit.DAYS.between(d, today) < days
-    }.sumOf { it.distanceKm ?: 0.0 }
+private fun localDateOf(startTime: String): LocalDate = OffsetDateTime.parse(startTime).toLocalDate()
 
-fun longestRunKm(runs: List<RunRow>): Double? = runs.mapNotNull { it.distanceKm }.maxOrNull()
+fun sumDistanceKmSince(sessions: List<ExerciseSessionRow>, today: LocalDate, days: Long): Double =
+    sessions.filter { s -> ChronoUnit.DAYS.between(localDateOf(s.startTime), today) < days }
+        .sumOf { it.distanceKm ?: 0.0 }
 
-fun averagePaceMinPerKmSince(runs: List<RunRow>, today: LocalDate, days: Long): Double? {
-    val paces = runs.filter { run ->
-        val d = LocalDate.parse(run.date)
-        ChronoUnit.DAYS.between(d, today) < days
-    }.mapNotNull { it.paceMinPerKm }
+fun longestRunKm(sessions: List<ExerciseSessionRow>): Double? = sessions.mapNotNull { it.distanceKm }.maxOrNull()
+
+// Health Connect gives distance + duration, not a stored pace -- derived
+// here the same way the old `runs.pace_min_per_km` column was presumably
+// computed in the first place, rather than carrying a redundant column.
+fun averagePaceMinPerKmSince(sessions: List<ExerciseSessionRow>, today: LocalDate, days: Long): Double? {
+    val paces = sessions.filter { s -> ChronoUnit.DAYS.between(localDateOf(s.startTime), today) < days }
+        .mapNotNull { s ->
+            val distance = s.distanceKm
+            val duration = s.durationMin
+            if (distance != null && distance > 0 && duration != null) duration / distance else null
+        }
     return if (paces.isEmpty()) null else paces.average()
 }
 

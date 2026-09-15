@@ -42,16 +42,18 @@ class HealthConnectSyncCoordinator(private val context: Context, private val sup
             val until = Instant.now()
             val since = (readWatermark()?.minus(overlap)) ?: until.minus(defaultLookback)
 
-            val repo = HealthConnectDailySyncRepository(context, supabase)
+            val daily = HealthConnectDailySyncRepository(context, supabase)
+            val exercise = HealthConnectExerciseSyncRepository(context, supabase)
             val counts = linkedMapOf(
-                "steps" to repo.syncSteps(since, until),
-                "active_calories" to repo.syncActiveCalories(since, until),
-                "total_calories" to repo.syncTotalCalories(since, until),
-                "vo2max" to repo.syncVo2Max(since, until),
-                "bmr" to repo.syncBmr(since, until),
-                "body_composition" to repo.syncBodyComposition(since, until),
-                "vitals" to repo.syncVitals(since, until),
-                "sleep" to repo.syncSleep(since, until),
+                "steps" to daily.syncSteps(since, until),
+                "active_calories" to daily.syncActiveCalories(since, until),
+                "total_calories" to daily.syncTotalCalories(since, until),
+                "vo2max" to daily.syncVo2Max(since, until),
+                "bmr" to daily.syncBmr(since, until),
+                "body_composition" to daily.syncBodyComposition(since, until),
+                "vitals" to daily.syncVitals(since, until),
+                "sleep" to daily.syncSleep(since, until),
+                "exercise_sessions" to exercise.syncSessions(since, until),
             )
             writeWatermark(until, counts)
             HealthConnectSyncResult.Success(counts)

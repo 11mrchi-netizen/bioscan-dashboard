@@ -1522,6 +1522,57 @@ Connect and Supabase APIs with zero crashes, and existing data is provably untou
 sleep stage summation) — that needs the user's real phone, which has real Zepp/wearable data
 flowing into Health Connect. Flagged rather than silently assumed correct.
 
+### ✅ Phase G3 — generic `exercise_sessions`, `runs` migration, editable Log entry (done 2026-09-16, Claude Code)
+The run-only `runs` table is retired (renamed to `runs_retired`, not dropped) in favor of a new
+generic `exercise_sessions` table covering any Health Connect activity type, with a `details`
+jsonb column reserved (but not yet used by any UI) for future type-specific extras. The 19
+existing rows migrated in with a nominal 07:00 start time (same convention `domain/Log.kt` already
+used for date-only tables) and `route_type` moved into `details`.
+
+**Real API facts, same AAR-extraction discipline as G1/G2**: confirmed `ExerciseSessionRecord`'s
+50+ `EXERCISE_TYPE_*` constants, and the exact field shapes for `DistanceRecord`/
+`ElevationGainedRecord` (interval, single value) vs. `SpeedRecord`/`PowerRecord` (series, sample
+lists like `HeartRateRecord`) by extracting the real AAR again. One real correction mid-build: the
+regex-based string scan initially missed `Velocity.inKilometersPerHour` (a length/pattern quirk in
+the extraction script, not the library) and the compiler caught the resulting wrong guess
+(`.kilometersPerHour`) immediately — re-scanning without the overly strict filter found the real
+name. Kept as a reminder that this project's own bytecode-scanning technique still needs the
+compiler as a second check, not just the scan.
+
+**Real architecture decision**: `exercise_sessions` stays Health-Connect-sourced only, per the
+2026-09-15 fix pass's own removal of manual exercise logging — no "add a workout from scratch"
+form exists or was added. What Log tab entries for exercise sessions gained instead is a real
+**EDIT** action (previously runs were delete-only) opening a new `ExerciseDetailsForm` that edits
+only `rpe`/`notes` — every other field (time, distance, heart rate, ...) is Health-Connect-sourced
+and stays read-only in this app. The user's own "keep it basic, see how to add later" framing for
+structured sets/reps/surface extras is taken literally: `notes` is free text for now, not a
+structured editor — the `details` jsonb column exists in the schema for when that's wanted, but
+nothing writes to it yet.
+
+**Also generalizes**: `domain/Log.kt`'s `LogEntryKind.Run`/`LogSource.Run` → `Exercise` (Orange
+chip, label now shows the real type e.g. "Run · 13.0 km · 1h 22m" instead of a fixed "RUN"
+label — headline text carries the specificity now that the chip itself covers any activity type).
+`TrainingRepository`/`domain/Training.kt` filter to endurance types (run/walk/hike/ride) for the
+existing ENDURANCE/pace/distance-totals math, unchanged in spirit; pace is now derived from
+duration/distance rather than read from a stored `pace_min_per_km` column, since Health Connect
+doesn't supply pace directly. **STRENGTH finally gets a real (if basic) data source** — Step 7's
+own finding was that none existed anywhere in this project; the card shows session count + total
+minutes this week once any strength-type session syncs, replacing the old permanent "No data
+source yet" placeholder with an honest "no sessions synced yet, but the source now exists" message.
+
+**Verified live on the emulator against real, pre-existing data (not fabricated)**: the Log feed
+correctly shows a migrated run as "EXERCISE · Run · 13.0 km · 1h 22m, avg 147 bpm" at its original
+07:00 nominal time; tapping it now offers EDIT (previously delete-only); the edit form correctly
+pre-filled the real migrated `rpe` value (3) and the explanatory copy correctly named the real
+session type ("this run session"); typing a note and tapping SAVE persisted it to Supabase
+(confirmed via direct SQL), then reverted afterward since it was test content, not something the
+user actually wrote. The Training tab's ENDURANCE card showed real recomputed numbers (46.3 km
+this week, 8:28/km avg pace, 18.36 km longest run, 35.2 km/wk 4-week avg) matching the migrated
+data, and the Distance Totals period toggle worked unchanged. The Health Connect sync's
+`sync_log` entry correctly included a new `"exercise_sessions": 0` count alongside G2's metrics
+(honestly zero — no real Health Connect exercise data exists on this emulator, same caveat as G2).
+No exceptions in logcat through the full flow.
+
 ---
 
 ## Summary — rough remaining build time

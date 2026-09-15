@@ -1,6 +1,8 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.data.model.ExerciseDetailsUpdateRow
 import com.bioscan.fieldterminal.data.model.ExistingHydrationRow
+import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
@@ -160,10 +162,19 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
-    // Generic delete, usable on every source including Sleep, Run and
-    // Supplement (none of which has a corresponding add/update form) --
-    // delete is still a valid "undo" for a bad wearable-synced row or a
-    // mistakenly-checked supplement.
+    // Phase G3: the only editable fields on a Health-Connect-sourced
+    // exercise session -- times/distance/HR/etc. all come from Health
+    // Connect and are never written here.
+    suspend fun updateExerciseDetails(id: Long, rpe: Int?, notes: String?) {
+        supabase.postgrest.from("exercise_sessions").update(
+            ExerciseDetailsUpdateRow(rpe = rpe, notes = notes)
+        ) { filter { eq("id", id) } }
+    }
+
+    // Generic delete, usable on every source including Sleep and Supplement
+    // (neither has a corresponding add/update form) -- delete is still a
+    // valid "undo" for a bad wearable-synced row or a mistakenly-checked
+    // supplement.
     suspend fun deleteEntry(source: LogSource, id: Long) {
         supabase.postgrest.from(source.table).delete { filter { eq("id", id) } }
     }
@@ -173,8 +184,10 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // headline/detail strings, so the edit form starts from real field
     // values. Reuses the exact Log*Row read models LogRepository already
     // decodes with, just scoped to a single id instead of the whole feed.
-    // No fetchRun/fetchSupplement -- neither source is editable (see
-    // LogSource's own doc comment).
+    // No fetchSupplement -- that source isn't editable (see LogSource's own
+    // doc comment). fetchExerciseSession only selects the editable fields
+    // (id, type, rpe, notes) -- everything else is Health-Connect-sourced
+    // and read-only in this app.
     suspend fun fetchMeal(id: Long) = fetchById<LogMealRow>("meals", "id,logged_at,description,calories,protein_g,carbs_g,fat_g", id)
     suspend fun fetchHydration(id: Long) = fetchById<LogHydrationRow>("hydration_daily", "id,date,ml", id)
     suspend fun fetchEncounter(id: Long) = fetchById<LogEncounterRow>("encounters", "id,date,status,encounter_type,notes,calendar_event_title", id)
@@ -182,6 +195,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     suspend fun fetchArousal(id: Long) = fetchById<LogArousalRow>("arousal_daily", "id,date,morning_erection_quality,arousal_level", id)
     suspend fun fetchNote(id: Long) = fetchById<LogNoteRow>("notes", "id,occurred_at,text", id)
     suspend fun fetchWellbeing(id: Long) = fetchById<LogWellbeingRow>("wellbeing_daily", "id,date,energy,mood,stress,soreness", id)
+    suspend fun fetchExerciseSession(id: Long) = fetchById<FullExerciseSessionRow>("exercise_sessions", "id,type,rpe,notes", id)
 
     private suspend inline fun <reified T : Any> fetchById(table: String, columns: String, id: Long): T =
         supabase.postgrest.from(table)

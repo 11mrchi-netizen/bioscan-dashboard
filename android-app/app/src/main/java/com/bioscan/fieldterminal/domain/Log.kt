@@ -2,10 +2,10 @@ package com.bioscan.fieldterminal.domain
 
 import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
+import com.bioscan.fieldterminal.data.model.LogExerciseRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
-import com.bioscan.fieldterminal.data.model.LogRunRow
 import com.bioscan.fieldterminal.data.model.LogSleepRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
@@ -16,19 +16,22 @@ import java.time.LocalTime
 import java.time.OffsetDateTime
 
 enum class LogEntryKind(val label: String) {
-    Run("RUN"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
+    Exercise("EXERCISE"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
     Arousal("AROUSAL"), Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
     Wellness("WELL"), Supplement("SUPP"),
 }
 
 // Which table (and which AddEntryRepository calls) an entry came from --
-// needed for Log tab edit/delete, added alongside that flow. Sleep, Run and
-// Supplement have no corresponding add/edit form (runs are no longer
-// manually loggable at all per 2026-09-15 direction, and a taken supplement
-// is add-or-remove-as-a-whole, not field-editable), so all three are
+// needed for Log tab edit/delete, added alongside that flow. Phase G3:
+// Exercise (was Run) points at the generic `exercise_sessions` table and,
+// unlike the old runs-only source, IS editable -- not its Health-Connect-
+// sourced fields, just the rpe/notes "extra details" (see
+// ExerciseDetailsForm in ui/screens/AddEntrySheet.kt). Sleep and Supplement
+// still have no corresponding edit form (a taken supplement is
+// add-or-remove-as-a-whole, not field-editable), so those two stay
 // delete-only; every other source is also editable.
 enum class LogSource(val table: String) {
-    Meal("meals"), Run("runs"), Sleep("sleep_daily"), Arousal("arousal_daily"),
+    Meal("meals"), Exercise("exercise_sessions"), Sleep("sleep_daily"), Arousal("arousal_daily"),
     Stool("stool_log"), Encounter("encounters"), Note("notes"), Hydration("hydration_daily"),
     Wellbeing("wellbeing_daily"), Supplement("supplement_log"),
 }
@@ -42,12 +45,11 @@ data class LogEntry(
     val detail: String?,
 )
 
-// `runs`/`sleep_daily`/`arousal_daily`/`hydration_daily`/`wellbeing_daily`
-// only store a `date`, no time-of-day -- these nominal times exist purely to
+// `sleep_daily`/`arousal_daily`/`hydration_daily`/`wellbeing_daily` only
+// store a `date`, no time-of-day -- these nominal times exist purely to
 // give same-day entries a stable sort position, not a claim about when the
-// real thing happened. Meals, stool, notes and supplement_log have real
-// timestamps and use them as-is.
-private val RUN_NOMINAL_TIME = LocalTime.of(7, 0)
+// real thing happened. Meals, stool, notes, supplement_log and (since
+// Phase G3) exercise_sessions all have real timestamps and use them as-is.
 private val SLEEP_NOMINAL_TIME = LocalTime.of(7, 30)
 private val AROUSAL_NOMINAL_TIME = LocalTime.of(7, 15)
 private val ENCOUNTER_NOMINAL_TIME = LocalTime.of(21, 0)
@@ -56,7 +58,7 @@ private val WELLNESS_NOMINAL_TIME = LocalTime.of(8, 0)
 
 fun buildLogEntries(
     meals: List<LogMealRow>,
-    runs: List<LogRunRow>,
+    exerciseSessions: List<LogExerciseRow>,
     sleep: List<LogSleepRow>,
     arousal: List<LogArousalRow>,
     stool: List<LogStoolRow>,
@@ -84,18 +86,19 @@ fun buildLogEntries(
         )
     }
 
-    runs.forEach { r ->
+    exerciseSessions.forEach { e ->
         val headline = listOfNotNull(
-            r.distanceKm?.let { "%.1f km".format(it) },
-            r.durationMin?.let { formatDuration(it) },
+            e.type.replaceFirstChar { it.uppercase() },
+            e.distanceKm?.let { "%.1f km".format(it) },
+            e.durationMin?.let { formatDuration(it) },
         ).joinToString(" · ")
         entries += LogEntry(
-            id = r.id,
-            source = LogSource.Run,
-            kind = LogEntryKind.Run,
-            timestamp = LocalDateTime.of(LocalDate.parse(r.date), RUN_NOMINAL_TIME),
-            headline = headline.ifEmpty { "Run" },
-            detail = r.avgHr?.let { "avg ${it.toInt()} bpm" },
+            id = e.id,
+            source = LogSource.Exercise,
+            kind = LogEntryKind.Exercise,
+            timestamp = parseTimestamp(e.startTime),
+            headline = headline,
+            detail = e.avgHr?.let { "avg ${it.toInt()} bpm" },
         )
     }
 

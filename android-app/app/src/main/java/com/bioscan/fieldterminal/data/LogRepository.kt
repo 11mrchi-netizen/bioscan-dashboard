@@ -2,10 +2,10 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
+import com.bioscan.fieldterminal.data.model.LogExerciseRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
-import com.bioscan.fieldterminal.data.model.LogRunRow
 import com.bioscan.fieldterminal.data.model.LogSleepRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
@@ -40,11 +40,11 @@ class LogRepository(private val supabase: SupabaseClient) {
                 limit(FETCH_LIMIT_PER_SOURCE)
             }.decodeList<LogMealRow>()
 
-        val runs = supabase.postgrest.from("runs")
-            .select(columns = Columns.list("id,date,distance_km,duration_min,avg_hr")) {
-                order("date", Order.DESCENDING)
+        val exerciseSessions = supabase.postgrest.from("exercise_sessions")
+            .select(columns = Columns.list("id,type,start_time,distance_km,duration_min,avg_hr")) {
+                order("start_time", Order.DESCENDING)
                 limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogRunRow>()
+            }.decodeList<LogExerciseRow>()
 
         val sleep = supabase.postgrest.from("sleep_daily")
             .select(columns = Columns.list("id,date,hours,score")) {
@@ -94,6 +94,6 @@ class LogRepository(private val supabase: SupabaseClient) {
                 limit(FETCH_LIMIT_PER_SOURCE)
             }.decodeList<LogSupplementTakenRow>()
 
-        return buildLogEntries(meals, runs, sleep, arousal, stool, encounters, notes, hydration, wellbeing, supplementsTaken)
+        return buildLogEntries(meals, exerciseSessions, sleep, arousal, stool, encounters, notes, hydration, wellbeing, supplementsTaken)
     }
 }

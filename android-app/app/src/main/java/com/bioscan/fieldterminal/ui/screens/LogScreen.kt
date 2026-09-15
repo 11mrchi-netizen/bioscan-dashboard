@@ -220,7 +220,7 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
 @Composable
 private fun TypeChip(kind: LogEntryKind) {
     val color = when (kind) {
-        LogEntryKind.Run -> FieldColors.Orange
+        LogEntryKind.Exercise -> FieldColors.Orange
         LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> FieldColors.Green
         LogEntryKind.Sleep -> FieldColors.DeepBlue
         LogEntryKind.Arousal, LogEntryKind.Encounter -> FieldColors.Red
@@ -228,7 +228,7 @@ private fun TypeChip(kind: LogEntryKind) {
         LogEntryKind.Stool -> FieldColors.Sand
         LogEntryKind.Wellness -> FieldColors.Azure
     }
-    val filled = kind in setOf(LogEntryKind.Run, LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement, LogEntryKind.Stool)
+    val filled = kind in setOf(LogEntryKind.Exercise, LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement, LogEntryKind.Stool)
     Box(
         modifier = Modifier
             .background(if (filled) color else Color.Transparent)

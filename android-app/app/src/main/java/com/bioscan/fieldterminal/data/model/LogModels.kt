@@ -14,10 +14,16 @@ data class LogMealRow(
     @SerialName("fat_g") val fatG: Double? = null,
 )
 
+// Phase G3: replaces LogRunRow -- `exercise_sessions` covers any activity
+// type, always with a real start_time (even migrated pre-Health-Connect
+// rows carry a nominal-but-real timestamp), so this needs no separate
+// nominal-time handling in domain/Log.kt the way the old date-only `runs`
+// table did.
 @Serializable
-data class LogRunRow(
+data class LogExerciseRow(
     val id: Long,
-    val date: String,
+    val type: String,
+    @SerialName("start_time") val startTime: String,
     @SerialName("distance_km") val distanceKm: Double? = null,
     @SerialName("duration_min") val durationMin: Double? = null,
     @SerialName("avg_hr") val avgHr: Double? = null,

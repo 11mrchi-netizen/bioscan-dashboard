@@ -15,8 +15,6 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
-import androidx.health.connect.client.request.ReadRecordsRequest
-import androidx.health.connect.client.time.TimeRangeFilter
 import com.bioscan.fieldterminal.data.model.ActiveCaloriesUpsertRow
 import com.bioscan.fieldterminal.data.model.BmrUpsertRow
 import com.bioscan.fieldterminal.data.model.BodyFatUpsertRow
@@ -37,6 +35,7 @@ import com.bioscan.fieldterminal.domain.latestByLocalDate
 import com.bioscan.fieldterminal.domain.sumByLocalDate
 import com.bioscan.fieldterminal.domain.sumStageMinutes
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
+import com.bioscan.fieldterminal.healthconnect.readAllRecords
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import java.time.Instant
@@ -200,21 +199,8 @@ class HealthConnectDailySyncRepository(
         return sessions.size
     }
 
-    private suspend fun <T : Record> readAll(type: KClass<T>, since: Instant, until: Instant): List<T> {
-        val client = HealthConnectManager.client(context)
-        val results = mutableListOf<T>()
-        var pageToken: String? = null
-        do {
-            val response = client.readRecords(
-                ReadRecordsRequest(
-                    recordType = type,
-                    timeRangeFilter = TimeRangeFilter.between(since, until),
-                    pageToken = pageToken,
-                ),
-            )
-            results += response.records
-            pageToken = response.pageToken?.takeIf { it.isNotEmpty() }
-        } while (pageToken != null)
-        return results
-    }
+    // Delegates to the shared pagination loop in healthconnect/HealthConnectReading.kt
+    // (also used by HealthConnectExerciseSyncRepository, Phase G3).
+    private suspend fun <T : Record> readAll(type: KClass<T>, since: Instant, until: Instant): List<T> =
+        HealthConnectManager.client(context).readAllRecords(type, since, until)
 }

@@ -17,4 +17,8 @@
 plugins {
     id("com.android.application") version "9.4.0" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.4.20" apply false
+    // kotlinx.serialization -- needed from Step 5 onward to decode Postgrest
+    // query results into typed data classes. Version tracks the Kotlin
+    // compiler version above, same convention as the Compose plugin.
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.20" apply false
 }

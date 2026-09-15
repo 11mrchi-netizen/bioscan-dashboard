@@ -881,8 +881,42 @@ Supabase BOM 3.0.0 → 3.8.0 and `ktor-client-android` to 3.5.1 to match.
   for real: a genuine Supabase session, not just a reached-Play-Services partial success.
   **Step 2's actual "done when" criterion is now genuinely met.**
 
-**Remaining**: Phase C onward per `mobile-app-implementation-roadmap.md` (Status → Log → Map →
-Settings real content, Steps 5–15, then Health Connect in Phase G). Not started.
+### ✅ Step 5 — Status landing screen, real readiness data (done 2026-09-15, Claude Code)
+**Launch-screen choice made by the user** (flagged as unresolved in `mobile-app-scoping.md`,
+not silently picked): **3d — Body console**, over 3b (system grid) and 3c (day line).
+
+Ported `index.html`'s `computeHRVReadinessSeries()`/`readinessBand()` and
+`isStatusCurrentlyRelevant()`/`isHealthEventActive()` 1:1 into `domain/Readiness.kt` — same
+trailing-baseline z-score math, same bands, same 7-day-after-resolution health-flag cutoff.
+`data/StatusRepository.kt` queries the real `wearable_daily`/`sleep_daily`/`injuries`/
+`illnesses` tables (no `user_id` filter needed — RLS already scopes to the signed-in user, same
+as the web dashboard relies on) and `ui/screens/status/BodyConsole.kt` recreates the mockup's
+inline-SVG figure via Canvas + overlaid real `Text` (own font/theme, not Canvas-drawn text).
+
+**Two things deliberately don't match the mockup, flagged rather than silently faked:**
+- **No numeric "82 READY" score.** The web dashboard never computes a 0-100 readiness number —
+  only the categorical z-score band (LOW/REDUCED/NORMAL/PRIMED). The mockup's "82" has no
+  defined formula anywhere in this project, and inventing one would be exactly the kind of
+  composite/multi-stream score `mobile-app-implementation-roadmap.md`'s own non-goals section
+  rules out. Shows the real band text instead (e.g. "NORMAL").
+- **Fuel/Water/Supp dials and the Next-up bar are honest placeholders, not fake numbers.**
+  Step 5's own roadmap text only scopes `wearable_daily`/`sleep_daily` — the dial row needs
+  daily calorie/hydration *targets* (confirmed via grep: none exist anywhere in this project,
+  web dashboard included) and a supplement taken/logged mechanism (doesn't exist until Log's
+  add-entry flow, Step 12); Next-up needs Calendar integration (Step 14). Building these with
+  invented targets would look real while being fabricated — left as "—" placeholders instead,
+  matching Step 3's own precedent for out-of-scope content.
+
+**Verified on the emulator with real Supabase data, not just compiled**: readiness band
+"NORMAL", real `HRV 64`/`RHR 54` on the engine pin, real sleep `6:42`, and a real flagged health
+-event pin (this account's one existing injury row is evidently still within its 7-day
+resolved-cutoff window) — the pin correctly does not appear when nothing is active, per the same
+display-filter logic as the web dashboard's Head-marker ring. Cross-checking against what the
+web dashboard shows for the same day (Step 5's actual "done when" criterion) is still worth
+doing explicitly, but every piece independently matches the ported logic's expected behavior.
+
+**Remaining**: Steps 6–15 per `mobile-app-implementation-roadmap.md` (Status's other 4 sub-tabs,
+Log, Map, Settings), then Health Connect in Phase G. Not started.
 
 ---
 

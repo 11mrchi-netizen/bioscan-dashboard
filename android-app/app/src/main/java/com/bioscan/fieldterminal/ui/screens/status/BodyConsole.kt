@@ -1,0 +1,253 @@
+package com.bioscan.fieldterminal.ui.screens.status
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.StatusOverview
+import com.bioscan.fieldterminal.domain.ReadinessLabel
+import com.bioscan.fieldterminal.ui.theme.FieldColors
+import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
+import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
+import com.bioscan.fieldterminal.ui.theme.SairaCondensed
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+
+// design/README.md's "3d — Body console" launch screen (user's pick over 3b/
+// 3c, see ROADMAP.md P8 Step 5). Real data for readiness/HRV/RHR/sleep/health
+// -flag; Fuel/Water/Supp dials and the Next-up bar are honest placeholders --
+// Step 5's own scope is wearable_daily/sleep_daily only, and real numbers for
+// those three need targets/tracking/Calendar integration that don't exist
+// yet (Steps 6, 8, 14). See ROADMAP.md for the full reasoning.
+@Composable
+fun BodyConsole(overview: StatusOverview?, isLoading: Boolean) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.fillMaxWidth().height(380.dp)) {
+            ConditionFigureField(overview, isLoading)
+        }
+        PlaceholderDialRow()
+        NextUpBarPlaceholder()
+    }
+}
+
+@Composable
+private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(FieldColors.Panel)
+            .drawBehind {
+                val step = 26.dp.toPx()
+                var x = 0f
+                while (x < size.width) {
+                    drawLine(FieldColors.Amber.copy(alpha = 0.07f), Offset(x, 0f), Offset(x, size.height), 1f)
+                    x += step
+                }
+                var y = 0f
+                while (y < size.height) {
+                    drawLine(FieldColors.Amber.copy(alpha = 0.07f), Offset(0f, y), Offset(size.width, y), 1f)
+                    y += step
+                }
+            },
+    ) {
+        Text(
+            text = "CONDITION",
+            style = FieldTextStyles.subTabLabel,
+            color = FieldColors.InkMuted,
+            modifier = Modifier.align(Alignment.TopStart).padding(14.dp),
+        )
+
+        when {
+            isLoading -> CircularProgressIndicator(
+                color = FieldColors.Amber,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            overview != null -> {
+                Text(
+                    text = overview.readiness.label.display,
+                    style = TextStyle(fontFamily = SairaCondensed, fontWeight = FontWeight.Bold, fontSize = 26.sp),
+                    color = if (overview.readiness.label == ReadinessLabel.Unknown) FieldColors.InkMuted else FieldColors.Amber,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(14.dp),
+                )
+                BodySchematic(overview, modifier = Modifier.align(Alignment.Center).size(330.dp, 254.dp))
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                ) {
+                    Text(
+                        text = "SLEEP " + (overview.sleepHours?.let { formatHours(it) } ?: "—"),
+                        style = FieldTextStyles.syncLabel,
+                        color = FieldColors.InkMuted,
+                    )
+                    Text(
+                        text = if (overview.activeHealthEvent) "1 FLAG" else "0 FLAGS",
+                        style = FieldTextStyles.syncLabel,
+                        color = if (overview.activeHealthEvent) FieldColors.Alert else FieldColors.Green,
+                        modifier = Modifier.padding(start = 16.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Inline-SVG figure from design/Field Terminal Mockups.dc.html's `3d` block,
+// recreated with Canvas + overlaid Text (not a literal image import, per
+// design/README.md's own instruction) -- viewBox 260x200 scaled uniformly to
+// this composable's 330x254dp size, same ratio the mockup itself renders at.
+@Composable
+private fun BodySchematic(overview: StatusOverview, modifier: Modifier = Modifier) {
+    val scale = 330f / 260f // uniform on both axes -- 254/200 is the same ratio
+
+    Box(modifier = modifier) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val s = size.width / 260f // actual px-per-viewbox-unit at draw time
+
+            fun p(x: Float, y: Float) = Offset(x * s, y * s)
+
+            // Base figure -- amber, matches every other "nominal instrument" line
+            drawCircle(FieldColors.Amber, radius = 13f * s, center = p(130f, 22f), style = Stroke(2.4f * s))
+            drawLine(FieldColors.Amber, p(130f, 35f), p(130f, 51f), 2.4f * s, StrokeCap.Round)
+            val torso = androidx.compose.ui.graphics.Path().apply {
+                moveTo(p(105f, 58f).x, p(105f, 58f).y)
+                lineTo(p(130f, 51f).x, p(130f, 51f).y)
+                lineTo(p(155f, 58f).x, p(155f, 58f).y)
+                lineTo(p(153f, 104f).x, p(153f, 104f).y)
+                lineTo(p(107f, 104f).x, p(107f, 104f).y)
+                close()
+            }
+            drawPath(torso, FieldColors.Amber, style = Stroke(2.4f * s, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawLine(FieldColors.Amber, p(105f, 58f), p(87f, 92f), 2.4f * s, StrokeCap.Round)
+            drawLine(FieldColors.Amber, p(87f, 92f), p(83f, 124f), 2.4f * s, StrokeCap.Round)
+            drawLine(FieldColors.Amber, p(155f, 58f), p(173f, 92f), 2.4f * s, StrokeCap.Round)
+            drawLine(FieldColors.Amber, p(173f, 92f), p(177f, 124f), 2.4f * s, StrokeCap.Round)
+            drawLine(FieldColors.Amber, p(113f, 104f), p(110f, 146f), 2.4f * s, StrokeCap.Round)
+            drawLine(FieldColors.Amber, p(110f, 146f), p(107f, 186f), 2.4f * s, StrokeCap.Round)
+            drawLine(FieldColors.Amber, p(147f, 104f), p(150f, 146f), 2.4f * s, StrokeCap.Round)
+            drawLine(FieldColors.Amber, p(150f, 146f), p(153f, 186f), 2.4f * s, StrokeCap.Round)
+
+            // Rib lines
+            val rib = FieldColors.Green.copy(alpha = 0.55f)
+            drawLine(rib, p(117f, 70f), p(143f, 70f), 1.2f * s)
+            drawLine(rib, p(117f, 80f), p(143f, 80f), 1.2f * s)
+            drawLine(rib, p(117f, 90f), p(135f, 90f), 1.2f * s)
+
+            // Engine pin (HRV/RHR) -- always shown when any wearable data exists
+            drawCircle(FieldColors.Green.copy(alpha = 0.14f), radius = 9f * s, center = p(130f, 78f))
+            drawCircle(FieldColors.Green, radius = 9f * s, center = p(130f, 78f), style = Stroke(1.8f * s))
+            drawLine(FieldColors.Green.copy(alpha = 0.7f), p(120f, 78f), p(58f, 78f), 1.4f * s)
+
+            // Health-event pin -- only drawn when something is actually active
+            if (overview.activeHealthEvent) {
+                drawCircle(FieldColors.Alert.copy(alpha = 0.18f), radius = 13f * s, center = p(150f, 146f))
+                drawCircle(FieldColors.Alert, radius = 13f * s, center = p(150f, 146f), style = Stroke(2f * s))
+                drawCircle(FieldColors.Alert, radius = 4.4f * s, center = p(150f, 146f))
+                drawLine(FieldColors.Alert, p(164f, 146f), p(204f, 146f), 1.4f * s)
+            }
+        }
+
+        // Text overlays -- real Compose Text (own font/theme) rather than
+        // Canvas-drawn text, positioned at the same viewBox coordinates.
+        LabelAt(x = 54f, y = 62f, scale = scale, align = Alignment.TopEnd) {
+            Text("ENGINE", style = smallLabel, color = FieldColors.Green)
+        }
+        LabelAt(x = 54f, y = 75f, scale = scale, align = Alignment.TopEnd) {
+            Text("HRV " + (overview.latestHrv?.let { "%.0f".format(it) } ?: "—"), style = smallValue, color = FieldColors.Ink)
+        }
+        LabelAt(x = 54f, y = 88f, scale = scale, align = Alignment.TopEnd) {
+            Text("RHR " + (overview.latestRhr?.let { "%.0f".format(it) } ?: "—"), style = smallValue, color = FieldColors.Ink)
+        }
+
+        if (overview.activeHealthEvent) {
+            LabelAt(x = 208f, y = 135f, scale = scale, align = Alignment.TopStart) {
+                Text("FLAGGED", style = smallLabel, color = FieldColors.Alert)
+            }
+            LabelAt(x = 208f, y = 161f, scale = scale, align = Alignment.TopStart) {
+                Text("SEE HEALTH", style = smallValue, color = FieldColors.Ink)
+            }
+        }
+    }
+}
+
+private val smallLabel = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+private val smallValue = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 9.5.sp)
+
+// x/y are viewBox coordinates (0-260, 0-200), same space the Canvas above
+// draws in. TopEnd anchors the text so it ends at x (grows leftward),
+// matching the mockup SVG's text-anchor="end" labels (ENGINE/HRV/RHR);
+// TopStart grows rightward from x, matching its unanchored labels.
+@Composable
+private fun LabelAt(x: Float, y: Float, scale: Float, align: Alignment, content: @Composable () -> Unit) {
+    val padding = if (align == Alignment.TopEnd) {
+        Modifier.padding(end = ((260f - x) * scale).dp, top = (y * scale).dp)
+    } else {
+        Modifier.padding(start = (x * scale).dp, top = (y * scale).dp)
+    }
+    Box(
+        modifier = Modifier.fillMaxSize().then(padding),
+        contentAlignment = align,
+    ) {
+        content()
+    }
+}
+
+// Honest placeholder -- real Fuel/Water/Supp numbers need daily targets
+// (none exist anywhere in this project yet, web dashboard included) and a
+// taken/logged mechanism for supplements (doesn't exist until Log's add-entry
+// flow, Step 12). Not fabricated here. See ROADMAP.md P8 Step 5.
+@Composable
+private fun PlaceholderDialRow() {
+    Row(modifier = Modifier.fillMaxWidth().height(90.dp)) {
+        listOf("FUEL", "WATER", "SUPP").forEach { label ->
+            Box(
+                modifier = Modifier.weight(1f).fillMaxSize().background(FieldColors.Ground),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("—", style = FieldTextStyles.placeholderBody, color = FieldColors.Hairline)
+                    Text(label, style = FieldTextStyles.tabBarLabel, color = FieldColors.InkMuted)
+                }
+            }
+        }
+    }
+}
+
+// Honest placeholder -- real "next up" needs Calendar API integration
+// (Phase E, Step 14), not built yet.
+@Composable
+private fun NextUpBarPlaceholder() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(FieldColors.RaisedSurface)
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+    ) {
+        Text("NEXT UP — placeholder", style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
+    }
+}
+
+private fun formatHours(hours: Double): String {
+    val h = hours.toInt()
+    val m = ((hours - h) * 60).toInt()
+    return "%d:%02d".format(h, m)
+}

@@ -6,6 +6,7 @@ plugins {
     // replaces it (see root build.gradle.kts). The Compose Compiler plugin
     // is still required separately, unrelated to that change.
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 // Google's Web OAuth client ID (NOT a secret -- client IDs are public
@@ -82,6 +83,7 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:auth-kt")
     implementation("io.ktor:ktor-client-android:3.5.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     // Native Google sign-in via Android's Credential Manager (confirmed current
     // approach per Supabase's own native-Android-auth docs -- see Step 2 notes

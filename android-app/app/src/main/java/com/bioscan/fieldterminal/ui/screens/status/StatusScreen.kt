@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,21 +25,37 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.StatusOverview
+import com.bioscan.fieldterminal.data.StatusRepository
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.nav.StatusSubTab
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 
-// Step 3 nav mechanism + Step 4 visual styling. Real per-sub-tab content is
-// Phase C (Steps 5-10) -- still placeholders here.
+// Step 5 (Phase C): the "3d — Body console" launch screen (user's pick, see
+// ROADMAP.md P8) now loads real readiness/HRV/RHR/sleep/health-flag data,
+// shown above the sub-tab rail per design/README.md's own layout note ("the
+// launch screen sits above the rail as the default Status view"). The 5
+// sub-tabs below it are still Step 3/4 placeholders -- Steps 6-10.
 @Composable
 fun StatusScreen() {
     var selectedSubTab by remember { mutableStateOf(StatusSubTab.Nutrition) }
+    var overview by remember { mutableStateOf<StatusOverview?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        overview = StatusRepository(SupabaseClientProvider.client).loadOverview()
+        isLoading = false
+    }
 
     Column(modifier = Modifier
         .fillMaxSize()
-        .background(FieldColors.Ground)) {
+        .background(FieldColors.Ground)
+        .verticalScroll(rememberScrollState())) {
         ScreenHeader(title = "STATUS", context = "ALL SYSTEMS")
+
+        BodyConsole(overview = overview, isLoading = isLoading)
 
         Row(
             modifier = Modifier
@@ -55,8 +73,11 @@ fun StatusScreen() {
             }
         }
 
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            // Placeholder per sub-tab -- Steps 5-10 replace each of these
+        // Fixed height, not fillMaxSize() -- the parent Column now scrolls
+        // (needed once BodyConsole made this screen taller than one page),
+        // and a scrolling container measures children with unbounded height.
+        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+            // Placeholder per sub-tab -- Steps 6-10 replace each of these
             // with real Supabase-backed content.
             Text(
                 text = "${selectedSubTab.label} — placeholder",

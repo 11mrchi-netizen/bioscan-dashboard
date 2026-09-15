@@ -44,3 +44,29 @@ data class ExerciseDetailsUpdateRow(
     val rpe: Int? = null,
     val notes: String? = null,
 )
+
+// Phase G4: the full row for SessionDetailScreen's summary card, plus
+// health_connect_record_id/end_time -- neither of which the edit/log-feed
+// rows above need, but the detail screen does (end_time to bound the
+// on-demand Health Connect read; health_connect_record_id, null for
+// migrated pre-Health-Connect rows, to know whether a time-series read is
+// even possible for this session).
+@Serializable
+data class ExerciseSessionDetailRow(
+    val id: Long,
+    val type: String,
+    @SerialName("start_time") val startTime: String,
+    @SerialName("end_time") val endTime: String,
+    @SerialName("duration_min") val durationMin: Double? = null,
+    @SerialName("distance_km") val distanceKm: Double? = null,
+    @SerialName("calories_active") val caloriesActive: Double? = null,
+    @SerialName("calories_total") val caloriesTotal: Double? = null,
+    @SerialName("avg_hr") val avgHr: Double? = null,
+    @SerialName("max_hr") val maxHr: Double? = null,
+    @SerialName("elevation_gain_m") val elevationGainM: Double? = null,
+    @SerialName("avg_power_w") val avgPowerW: Double? = null,
+    @SerialName("avg_speed_kmh") val avgSpeedKmh: Double? = null,
+    val rpe: Int? = null,
+    val notes: String? = null,
+    @SerialName("health_connect_record_id") val healthConnectRecordId: String? = null,
+)

@@ -32,6 +32,7 @@ import androidx.navigation.compose.rememberNavController
 import com.bioscan.fieldterminal.R
 import com.bioscan.fieldterminal.ui.screens.LogScreen
 import com.bioscan.fieldterminal.ui.screens.MapScreen
+import com.bioscan.fieldterminal.ui.screens.SessionDetailScreen
 import com.bioscan.fieldterminal.ui.screens.SettingsScreen
 import com.bioscan.fieldterminal.ui.screens.status.StatusScreen
 import com.bioscan.fieldterminal.ui.theme.FieldColors
@@ -64,8 +65,20 @@ fun FieldTerminalNavHost() {
         ) {
             composable(TopLevelTab.Status.route) { StatusScreen() }
             composable(TopLevelTab.Map.route) { MapScreen() }
-            composable(TopLevelTab.Log.route) { LogScreen() }
+            composable(TopLevelTab.Log.route) {
+                LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") })
+            }
             composable(TopLevelTab.Setup.route) { SettingsScreen(scope) }
+            // Phase G4: the app's first pushed detail route (every other
+            // screen so far is a flat tab or a bottom sheet) -- a session's
+            // on-demand Health Connect time-series detail, reached by
+            // tapping an Exercise entry's DETAIL action in the Log tab.
+            composable("session_detail/{sessionId}") { backStackEntry ->
+                val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull()
+                if (sessionId != null) {
+                    SessionDetailScreen(sessionId = sessionId, onBack = { navController.popBackStack() })
+                }
+            }
         }
     }
 }

@@ -1575,6 +1575,61 @@ No exceptions in logcat through the full flow.
 
 ---
 
+### ✅ Phase G4 — on-demand per-session detail read (done 2026-09-16, Claude Code)
+Directly extends Step 14's Map-tab precedent (fetch fresh from Drive on screen load, persist
+nothing) to Health Connect: a new `SessionDetailRepository.loadTimeSeries()` reads
+`HeartRateRecord`/`SpeedRecord`/`PowerRecord` samples for one session's exact `[start_time,
+end_time]` window straight from Health Connect, returned as plain `TimePoint(offsetSeconds,
+value)` series — never written to Supabase. `domain/SessionDetail.kt` keeps this shape
+framework-free, per this project's domain-layer purity convention. A new `SessionDetailScreen`
+(the app's first pushed navigation route — `composable("session_detail/{sessionId}")`, previously
+every screen was a flat top-level tab or a bottom sheet) shows a SUMMARY card of the session's
+Supabase-stored aggregates, plus an honest "No time-series available for sessions logged before
+Health Connect" message for the 19 migrated `runs`-origin rows (none of which carry a
+`health_connect_record_id` for a time-series read to key off). Reached from the Log tab via a new
+DETAIL button on `EntryActionSheet`, shown only for `LogSource.Exercise` entries.
+
+**Real bug caught by this project's own "verify on a real device, cross-check via direct SQL"
+discipline, before it was ever presented as done**: the first working version of
+`SessionDetailScreen` formatted `header.startTime` with
+`OffsetDateTime.parse(...).atZoneSameInstant(ZoneId.systemDefault())` — textbook-correct timezone
+conversion — and on the emulator (real timezone Asia/Taipei, confirmed via `adb shell getprop
+persist.sys.timezone` and `adb shell date`) it displayed "15:00" for the same migrated run the Log
+feed shows as "07:00". The instinctive read was "the G3 migration baked in the wrong timezone," so
+a SQL migration was written and applied to shift the 19 migrated rows' timestamps from
+UTC-interpreted to Asia/Taipei-interpreted. Before calling that fix done, a live re-check of the
+Log tab caught the actual problem: with the "fix" applied, the *same* run's Log-feed entry had
+itself shifted, from "07:00 · 15 SEP" to "23:00 · 14 SEP" — proving the data was never wrong.
+`domain/Log.kt`'s `parseTimestamp()` has always parsed every timestamp in this app **naively**
+(`OffsetDateTime.parse(iso).toLocalDateTime()`, extracting the raw UTC-labeled clock digits with no
+actual zone conversion) — an app-wide convention, not a bug, that G3's migration already matched
+correctly. The real fix was two-fold: revert the SQL change (a `revert_migrated_run_timezone_fix`
+migration, confirmed via direct SQL that `exercise_sessions` rows are back to their original
+values), and change `SessionDetailScreen.kt` to use the same naive `.toLocalDateTime()` parse as
+`Log.kt` instead of "correct" zone-aware conversion. Recorded here as a concrete reminder that
+this app's timestamp convention is a real, load-bearing constraint on any future screen that
+displays a stored timestamp — not something to "fix" without checking why it's there first.
+
+**Open, flagged not assumed**: reading a session's GPS route (for a future map-on-detail-screen
+view) may need a separate per-record consent flow beyond this app's bulk G1 permission grant —
+Health Connect's route-read API can return a "consent required" result. Not needed for G4's
+HR/speed/power series, which read under the existing bulk grant; left for whichever future phase
+adds a route view to this screen.
+
+**Verified live on the emulator against real, pre-existing data**: opened the Log tab's migrated
+"Run · 13.0 km · 1h 22m" entry (15 Sep), tapped DETAIL, and confirmed the SUMMARY card shows "Tue
+15 Sep · 07:00" — matching the Log feed's own "07:00" for the identical entry exactly, both before
+and after the SQL revert — plus real duration (1h 22m), distance (13.02 km), avg heart rate (147
+bpm), and RPE (3/10) pulled from the same Supabase row Training/Log already use. The honest
+"No time-series available for sessions logged before Health Connect" message rendered correctly,
+since this migrated row has no `health_connect_record_id`. No exceptions in logcat through the
+full flow. Time-series rendering itself (actual HR/speed/power charts for a real Health-Connect-
+sourced session) is deferred to G5, since no such session exists yet on this emulator to verify
+against — `loadTimeSeries()` compiles and is wired in, but is not yet exercised end-to-end with
+real sample data.
+
+---
+
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and

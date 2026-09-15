@@ -35,6 +35,7 @@ import com.bioscan.fieldterminal.data.LogRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogEntryKind
+import com.bioscan.fieldterminal.domain.LogSource
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
@@ -55,7 +56,7 @@ import java.time.format.DateTimeFormatter
 // ui/screens/AddEntrySheet.kt). Any successful save or delete bumps
 // `reloadKey` so the feed re-fetches immediately.
 @Composable
-fun LogScreen() {
+fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     var allEntries by remember { mutableStateOf<List<LogEntry>?>(null) }
     var visibleCount by remember { mutableStateOf(LOG_PAGE_SIZE) }
     var reloadKey by remember { mutableStateOf(0) }
@@ -129,6 +130,14 @@ fun LogScreen() {
             onDeleted = {
                 actionEntry = null
                 refresh()
+            },
+            onViewDetail = if (entry.source == LogSource.Exercise) {
+                {
+                    actionEntry = null
+                    onOpenSessionDetail(entry.id)
+                }
+            } else {
+                null
             },
         )
     }

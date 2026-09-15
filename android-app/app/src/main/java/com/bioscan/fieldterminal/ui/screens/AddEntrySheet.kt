@@ -141,10 +141,17 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
 // second popup. Sleep and Supplement have no add-entry form at all (a taken
 // supplement is add-or-remove, not field-editable), so those two are
 // delete-only. Exercise (Phase G3) IS editable -- not its Health-Connect-
-// sourced fields, just rpe/notes via ExerciseDetailsForm.
+// sourced fields, just rpe/notes via ExerciseDetailsForm. Phase G4 adds a
+// DETAIL action for Exercise entries, pushing SessionDetailScreen.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EntryActionSheet(entry: LogEntry, onDismiss: () -> Unit, onEdit: () -> Unit, onDeleted: () -> Unit) {
+fun EntryActionSheet(
+    entry: LogEntry,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDeleted: () -> Unit,
+    onViewDetail: (() -> Unit)? = null,
+) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
@@ -163,6 +170,9 @@ fun EntryActionSheet(entry: LogEntry, onDismiss: () -> Unit, onEdit: () -> Unit,
             Text(entry.headline, style = FieldTextStyles.headerTitle, color = FieldColors.Amber)
 
             if (!confirmingDelete) {
+                if (onViewDetail != null) {
+                    AmberButton(label = "DETAIL", onClick = onViewDetail)
+                }
                 if (editable) {
                     AmberButton(label = "EDIT", onClick = onEdit)
                 }

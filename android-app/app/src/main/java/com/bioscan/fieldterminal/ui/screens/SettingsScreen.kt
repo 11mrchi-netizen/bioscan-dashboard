@@ -25,8 +25,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.input.KeyboardType
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
+import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.Card
 import com.bioscan.fieldterminal.ui.components.FieldTextField
@@ -47,6 +49,12 @@ fun SettingsScreen(scope: CoroutineScope) {
     val context = LocalContext.current
     var apiKeyInput by remember { mutableStateOf("") }
     var keySaved by remember { mutableStateOf(GeminiApiKeyStore.get(context) != null) }
+
+    var cartoKeyInput by remember { mutableStateOf("") }
+    var cartoKeySaved by remember { mutableStateOf(MapSettingsStore.getCartoKey(context) != null) }
+    val savedHome = remember { mutableStateOf(MapSettingsStore.getHome(context)) }
+    var homeLatInput by remember { mutableStateOf(savedHome.value?.first?.toString() ?: "") }
+    var homeLonInput by remember { mutableStateOf(savedHome.value?.second?.toString() ?: "") }
 
     Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground)) {
         ScreenHeader(title = "SETUP", context = "PLACEHOLDER")
@@ -75,21 +83,9 @@ fun SettingsScreen(scope: CoroutineScope) {
                         }
                     }
                     if (keySaved) {
-                        Box(
-                            modifier = Modifier
-                                .border(1.dp, FieldColors.Hairline)
-                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                    GeminiApiKeyStore.clear(context)
-                                    keySaved = false
-                                }
-                                .padding(horizontal = 20.dp, vertical = 12.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                "CLEAR",
-                                style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                                color = FieldColors.InkMuted,
-                            )
+                        ClearChip {
+                            GeminiApiKeyStore.clear(context)
+                            keySaved = false
                         }
                     }
                 }
@@ -100,9 +96,101 @@ fun SettingsScreen(scope: CoroutineScope) {
                 )
             }
 
+            Card(title = "MAP") {
+                Text(
+                    "Free CARTO API key for the Map tab's dark basemap tiles (no billing — " +
+                        "get one at carto.com/basemaps/apikey). Stored on this device only.",
+                    style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                    color = FieldColors.InkMuted,
+                )
+                FieldTextField(
+                    value = cartoKeyInput,
+                    onValueChange = { cartoKeyInput = it },
+                    placeholder = if (cartoKeySaved) "•••••••• (key saved — paste to replace)" else "Paste your CARTO API key",
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AmberButton(label = "SAVE KEY") {
+                        if (cartoKeyInput.isNotBlank()) {
+                            MapSettingsStore.saveCartoKey(context, cartoKeyInput.trim())
+                            cartoKeySaved = true
+                            cartoKeyInput = ""
+                        }
+                    }
+                    if (cartoKeySaved) {
+                        ClearChip {
+                            MapSettingsStore.clearCartoKey(context)
+                            cartoKeySaved = false
+                        }
+                    }
+                }
+
+                Text(
+                    "Home location — the starting point for the Map tab's \"DIRECTIONS\" link. " +
+                        "Never synced anywhere; used only to build a Google Maps link on this device.",
+                    style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                    color = FieldColors.InkMuted,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FieldTextField(
+                        value = homeLatInput,
+                        onValueChange = { homeLatInput = it },
+                        placeholder = "Latitude",
+                        keyboardType = KeyboardType.Decimal,
+                        modifier = Modifier.weight(1f),
+                    )
+                    FieldTextField(
+                        value = homeLonInput,
+                        onValueChange = { homeLonInput = it },
+                        placeholder = "Longitude",
+                        keyboardType = KeyboardType.Decimal,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AmberButton(label = "SAVE HOME") {
+                        val lat = homeLatInput.toDoubleOrNull()
+                        val lon = homeLonInput.toDoubleOrNull()
+                        if (lat != null && lon != null) {
+                            MapSettingsStore.saveHome(context, lat, lon)
+                            savedHome.value = lat to lon
+                        }
+                    }
+                    if (savedHome.value != null) {
+                        ClearChip {
+                            MapSettingsStore.clearHome(context)
+                            savedHome.value = null
+                            homeLatInput = ""
+                            homeLonInput = ""
+                        }
+                    }
+                }
+                Text(
+                    savedHome.value?.let { "Home set: %.4f, %.4f".format(it.first, it.second) } ?: "No home location set — the DIRECTIONS link is hidden until one is saved.",
+                    style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+                    color = FieldColors.InkMuted,
+                )
+            }
+
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 AmberButton(label = "SIGN OUT") { scope.launch { GoogleAuthManager.signOut() } }
             }
         }
+    }
+}
+
+// Bordered "CLEAR" chip -- shared by every saved-value field on this screen
+// (Gemini key, CARTO key, home location) rather than repeating the same
+// Box/clickable/Text block per field.
+@Composable
+private fun ClearChip(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .border(1.dp, FieldColors.Hairline)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("CLEAR", style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp), color = FieldColors.InkMuted)
     }
 }

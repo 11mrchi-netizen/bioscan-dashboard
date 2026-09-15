@@ -99,5 +99,11 @@ dependencies {
     // (developer.android.com/identity/authorization), not assumed.
     implementation("com.google.android.gms:play-services-auth:22.0.0")
 
+    // Map tab background: osmdroid (free, no API key of its own, no billing)
+    // over CARTO's free-tier Dark Matter tiles -- chosen over the Google Maps
+    // SDK specifically to avoid requiring a billing-enabled Google Cloud
+    // project just to display a map. See ROADMAP.md for the comparison.
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

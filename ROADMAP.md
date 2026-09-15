@@ -1323,6 +1323,81 @@ own description text ("Route: TGT Section 5 (12.8km, +1345m)") matches the app's
 not just the passthrough text. The two same-day meal-prep events (`colorId: "10"`) were correctly
 excluded. No crashes or exceptions in logcat during the full authorize → fetch → render flow.
 
+### ✅ Step 14 follow-up — real map background, directions, weather popup (done 2026-09-15, Claude Code)
+User-requested revision, not a numbered step: a real map background (dark-styled, "manageable
+overlays"), a way to preview the drive there with an "arrive by" setting, a weather-at-session-time
+popup with a weather-symbol icon, full-bleed layout, and the activity details moved into a popup.
+
+**Scope decisions, verified against Google's own docs before building, not assumed**:
+- **Map SDK**: the Google Maps SDK for Android needs a *billing-enabled* Google Cloud project even
+  for light personal use (confirmed directly against Google's Maps SDK for Android usage-and-billing
+  docs) — a real, material cost/commitment difference from the free OAuth scopes Step 14 used. Asked
+  the user whether that was acceptable; they asked to check for a free alternative first. Found one:
+  **osmdroid** (`org.osmdroid:osmdroid-android:6.1.20`, MIT-licensed, no API key of its own) rendering
+  **CARTO's free-tier Dark Matter basemap** (`basemaps.cartocdn.com/rastertiles/dark_all`, a free
+  API key from carto.com/basemaps/apikey — no billing, no card, 5M tiles/month fair-use limit,
+  confirmed directly against CARTO's own docs). Genuinely free end to end; no Google Maps SDK,
+  no Cloud Console billing step needed.
+- **"Arrive by" directions**: Google's consumer Maps deep link (`maps.google.com/maps/dir/?api=1&…`)
+  does not accept a pre-filled arrival time — that parameter exists only in Google's separate,
+  also-billed Directions API (confirmed via Google's own Directions API and Maps URLs docs). Asked
+  the user to choose between building a real in-app ETA (another billed API) or deep-linking to the
+  real Google Maps app and letting the person set "Arrive by" themselves once it opens; they chose
+  the deep-link. `directionsIntent()` in `ui/screens/MapScreen.kt` builds a plain
+  `https://www.google.com/maps/dir/?api=1&origin=…&destination=…&travelmode=driving` URL — no API
+  key, no billing, opens the real Maps app.
+- **Home location**: manual latitude/longitude entry in Settings (user's choice over device-GPS
+  "use current location", to avoid a location permission for a one-time value) — `data/
+  MapSettingsStore.kt`, plain (unencrypted) `SharedPreferences`, local-only, never synced to
+  Supabase. Stored as strings, not `Float`, so a coordinate like `121.5654321` doesn't lose its
+  last digit to `Float`'s ~7-significant-figure precision.
+
+**New Settings card ("MAP")**: CARTO API key (plain SharedPreferences — unlike `GeminiApiKeyStore`'s
+Keystore encryption, this key has no billing exposure if leaked, only a shared rate limit, so the
+lighter storage is a deliberate, not accidental, difference) plus the home lat/lon fields. A shared
+`ClearChip` composable replaced the one-off "CLEAR" button Step 13 wrote inline, now reused by all
+three saved-value fields on the screen (Gemini key, CARTO key, home location).
+
+**MapScreen.kt rewritten for full-bleed layout**: the osmdroid `MapView` (wrapped via `AndroidView`,
+app-specific cache dirs so no `WRITE_EXTERNAL_STORAGE` permission is needed on any supported API
+level) fills the entire screen below the header. The real GPX route and its start/end markers are
+now drawn as real lat/lon overlays (`Polyline`, `Marker`) on the actual map and auto-fit to the
+route's bounds, replacing the previous version's stylized Canvas-projected line. Two floating,
+squared (no radius, per design/README.md) chips sit over the map: a `WEATHER` chip (idle → loading
+→ `☀️ 25°`) and a bottom `DETAILS`/`DIRECTIONS` action row — `DIRECTIONS` only renders when a home
+location is saved. Both `DETAILS` and `WEATHER` open a `ModalBottomSheet`, same pattern
+`AddEntrySheet.kt` already established, rather than a new popup mechanism.
+
+**New weather integration** (first use of Open-Meteo on Android — the web dashboard already uses
+it for AQI/UV/sunrise-sunset): `data/WeatherRepository.kt` fetches Open-Meteo's keyless hourly
+forecast (16-day window) for the route's start coordinate and picks the hour closest to the
+session's own start time (not "now" — a session can be up to a week out). `domain/Weather.kt` ports
+the web's WMO weather-code → label table 1:1 (`weatherCodeLabel()`) and adds a new
+`weatherCodeSymbol()` (plain emoji, since this app has no illustrated weather-icon set the way the
+web dashboard does).
+
+**Verified live on the emulator, real network calls throughout, no logcat exceptions**:
+- Settings round-trip: saved a placeholder CARTO key and a test coordinate near Taipei 101
+  (25.0330, 121.5645 — not the user's real home), confirmed both persisted and displayed correctly
+  ("Home set: 25.0330, 121.5645"), then cleared both afterward so no placeholder values were left
+  on the device.
+- Map tab rendered a real, full-bleed dark basemap of the actual Taipei area matching the real GPX
+  route's location — CARTO serves tiles even against an invalid key, stamping an "API KEY REQUIRED"
+  watermark rather than refusing outright, which itself confirmed the tile-fetch/render pipeline is
+  wired correctly end to end (same "the error itself is proof of a real round-trip" logic as Step
+  13's Gemini key test). The real polyline + green/magenta start/end markers rendered correctly
+  fitted to the route bounds.
+- **DIRECTIONS**, tapped for real, launched the actual Google Maps app with the test home
+  coordinate correctly reverse-geocoded to "Taipei 101/World Trade Center Station" as origin and
+  the GPX route's real start point as destination, and Maps computed a real driving route (16 min,
+  9.3 km) — full proof the deep-link mechanism works with zero API key or billing involved.
+- **DETAILS** popup showed the same session title/description/GPX link/countdown as before, plus
+  the route's real computed distance and elevation gain (12.8 KM · 1345 M GAIN) inside the popup.
+- **WEATHER** popup fetched a real live forecast for tomorrow 07:00 at the route's start
+  coordinate: 25°C, Mainly clear, wind 7 km/h, 0.0 mm precipitation — plausible September Taipei
+  weather, genuinely fetched, not fabricated.
+- Test/placeholder values (CARTO key, home coordinate) cleared from the device after verification.
+
 ---
 
 ## Summary — rough remaining build time

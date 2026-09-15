@@ -112,7 +112,7 @@ private fun KindBadge(kind: HealthEventKind) {
     Box(modifier = Modifier.background(color).padding(horizontal = 6.dp, vertical = 2.dp)) {
         Text(
             kind.name.uppercase(),
-            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 9.sp),
+            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 10.5.sp),
             color = FieldColors.Ground,
         )
     }
@@ -138,13 +138,13 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate) {
             Text("DAY $days", style = FieldTextStyles.tabBarLabel, color = FieldColors.InkMuted)
         }
         Column(modifier = Modifier.padding(14.dp)) {
-            Text(event.title, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 16.sp), color = FieldColors.Ink)
+            Text(event.title, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 17.5.sp), color = FieldColors.Ink)
             event.detail?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(top = 5.dp))
+                Text(it, style = TextStyle(fontFamily = Saira, fontSize = 14.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(top = 5.dp))
             }
             Text(
                 "Reported ${event.startDate}",
-                style = TextStyle(fontFamily = JetBrainsMono, fontSize = 10.5.sp),
+                style = TextStyle(fontFamily = JetBrainsMono, fontSize = 12.sp),
                 color = FieldColors.InkMuted,
                 modifier = Modifier.padding(top = 10.dp),
             )
@@ -162,11 +162,11 @@ private fun ResolvedRow(event: HealthEvent, today: LocalDate, showDivider: Boole
             Column(modifier = Modifier.weight(1f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     KindBadge(event.kind)
-                    Text(event.title, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp), color = FieldColors.InkMuted)
+                    Text(event.title, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 16.sp), color = FieldColors.InkMuted)
                 }
                 Text(
                     "Cleared ${event.endDate ?: "—"}",
-                    style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
+                    style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
                     color = FieldColors.InkMuted,
                     modifier = Modifier.padding(top = 4.dp),
                 )

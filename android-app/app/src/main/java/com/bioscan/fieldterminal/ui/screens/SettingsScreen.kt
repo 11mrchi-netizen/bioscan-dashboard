@@ -58,7 +58,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                 Text(
                     "Gemini API key for photo-based calorie/macro estimation on the Food entry form. " +
                         "Stored on this device only (Android Keystore-encrypted) — never synced to Supabase.",
-                    style = TextStyle(fontFamily = Saira, fontSize = 11.5.sp),
+                    style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
                     color = FieldColors.InkMuted,
                 )
                 FieldTextField(
@@ -87,7 +87,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                         ) {
                             Text(
                                 "CLEAR",
-                                style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
+                                style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
                                 color = FieldColors.InkMuted,
                             )
                         }
@@ -95,7 +95,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                 }
                 Text(
                     if (keySaved) "AI estimation is available on the Food entry form." else "No key set — AI estimation is hidden on the Food entry form until one is saved.",
-                    style = TextStyle(fontFamily = Saira, fontSize = 11.sp),
+                    style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
                     color = FieldColors.InkMuted,
                 )
             }

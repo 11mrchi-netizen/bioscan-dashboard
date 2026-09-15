@@ -112,22 +112,22 @@ private fun ActiveRow(s: SupplementRow, showDivider: Boolean) {
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(s.name, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 15.sp), color = FieldColors.Ink)
+                Text(s.name, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 16.5.sp), color = FieldColors.Ink)
                 val outcome = supplementOutcome(s.name)
                 if (outcome.isNotEmpty()) {
                     Text(
                         outcome,
-                        style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+                        style = TextStyle(fontFamily = Saira, fontSize = 14.sp),
                         color = FieldColors.InkMuted,
                         modifier = Modifier.padding(top = 3.dp),
                     )
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(s.dose, style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp), color = FieldColors.Ink)
+                Text(s.dose, style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp), color = FieldColors.Ink)
                 Text(
                     s.timeOfDay.uppercase(),
-                    style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 10.5.sp),
+                    style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 12.sp),
                     color = FieldColors.InkMuted,
                     modifier = Modifier.padding(top = 3.dp),
                 )
@@ -145,10 +145,10 @@ private fun EndedRow(s: SupplementRow, showDivider: Boolean) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(s.name, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 14.sp), color = FieldColors.InkMuted)
+        Text(s.name, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FieldColors.InkMuted)
         Text(
             s.endDate ?: "",
-            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 11.sp),
+            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 12.5.sp),
             color = FieldColors.InkMuted,
         )
     }

@@ -4,14 +4,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class NewRunRow(
-    val date: String,
-    @SerialName("distance_km") val distanceKm: Double,
-    @SerialName("duration_min") val durationMin: Double,
-    @SerialName("avg_hr") val avgHr: Double? = null,
-)
-
-@Serializable
 data class NewMealRow(
     @SerialName("logged_at") val loggedAt: String,
     val description: String,
@@ -52,4 +44,20 @@ data class NewArousalRow(
 data class NewNoteRow(
     @SerialName("occurred_at") val occurredAt: String,
     val text: String,
+)
+
+@Serializable
+data class NewWellbeingRow(
+    val date: String,
+    val energy: Int? = null,
+    val mood: Int? = null,
+    val stress: Int? = null,
+    val soreness: Int? = null,
+)
+
+@Serializable
+data class NewSupplementLogRow(
+    @SerialName("supplement_id") val supplementId: Long,
+    @SerialName("supplement_name") val supplementName: String,
+    @SerialName("taken_at") val takenAt: String,
 )

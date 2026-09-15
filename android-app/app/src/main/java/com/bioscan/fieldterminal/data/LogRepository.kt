@@ -8,6 +8,8 @@ import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogRunRow
 import com.bioscan.fieldterminal.data.model.LogSleepRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
+import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
+import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.buildLogEntries
 import io.github.jan.supabase.SupabaseClient
@@ -20,11 +22,12 @@ import io.github.jan.supabase.postgrest.query.Order
 // account's current real volume), merge + sort once, then reveal the merged
 // pool 20 entries at a time via "LOAD OLDER" -- client-side windowing over
 // one real fetch, not unbounded, and not a fake infinite-scroll illusion.
-// Not scoped: `supplements` "taken" confirmations -- no real backing table
-// (see ROADMAP.md P8 Step 11); it simply doesn't appear rather than being
-// faked. Notes and hydration (as a "day total" entry) gained real Log
-// presence in Step 12 alongside the add-entry flow. Every row now also
-// selects `id`, needed for Log tab edit/delete (also added in Step 12).
+// Notes, hydration (as a "day total" entry), wellbeing and supplement-taken
+// confirmations all gained real Log presence across Steps 12 and this
+// follow-up pass -- `supplement_log` in particular is a new table (a
+// supplement's roster row isn't itself a loggable event; a taken
+// confirmation is). Every row now also selects `id`, needed for Log tab
+// edit/delete.
 private const val FETCH_LIMIT_PER_SOURCE = 60L
 const val LOG_PAGE_SIZE = 20
 
@@ -79,6 +82,18 @@ class LogRepository(private val supabase: SupabaseClient) {
                 limit(FETCH_LIMIT_PER_SOURCE)
             }.decodeList<LogHydrationRow>()
 
-        return buildLogEntries(meals, runs, sleep, arousal, stool, encounters, notes, hydration)
+        val wellbeing = supabase.postgrest.from("wellbeing_daily")
+            .select(columns = Columns.list("id,date,energy,mood,stress,soreness")) {
+                order("date", Order.DESCENDING)
+                limit(FETCH_LIMIT_PER_SOURCE)
+            }.decodeList<LogWellbeingRow>()
+
+        val supplementsTaken = supabase.postgrest.from("supplement_log")
+            .select(columns = Columns.list("id,supplement_name,taken_at")) {
+                order("taken_at", Order.DESCENDING)
+                limit(FETCH_LIMIT_PER_SOURCE)
+            }.decodeList<LogSupplementTakenRow>()
+
+        return buildLogEntries(meals, runs, sleep, arousal, stool, encounters, notes, hydration, wellbeing, supplementsTaken)
     }
 }

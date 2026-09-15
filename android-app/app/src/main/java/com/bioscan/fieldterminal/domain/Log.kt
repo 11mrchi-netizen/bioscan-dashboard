@@ -8,6 +8,8 @@ import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogRunRow
 import com.bioscan.fieldterminal.data.model.LogSleepRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
+import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
+import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -16,15 +18,19 @@ import java.time.OffsetDateTime
 enum class LogEntryKind(val label: String) {
     Run("RUN"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
     Arousal("AROUSAL"), Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
+    Wellness("WELL"), Supplement("SUPP"),
 }
 
 // Which table (and which AddEntryRepository calls) an entry came from --
-// needed for Log tab edit/delete, added alongside that flow. Sleep has no
-// corresponding add-entry form (Step 12's picker never offered "Sleep"), so
-// it's delete-only; every other source is also editable.
+// needed for Log tab edit/delete, added alongside that flow. Sleep, Run and
+// Supplement have no corresponding add/edit form (runs are no longer
+// manually loggable at all per 2026-09-15 direction, and a taken supplement
+// is add-or-remove-as-a-whole, not field-editable), so all three are
+// delete-only; every other source is also editable.
 enum class LogSource(val table: String) {
     Meal("meals"), Run("runs"), Sleep("sleep_daily"), Arousal("arousal_daily"),
     Stool("stool_log"), Encounter("encounters"), Note("notes"), Hydration("hydration_daily"),
+    Wellbeing("wellbeing_daily"), Supplement("supplement_log"),
 }
 
 data class LogEntry(
@@ -36,15 +42,17 @@ data class LogEntry(
     val detail: String?,
 )
 
-// `runs`/`sleep_daily`/`arousal_daily`/`hydration_daily` only store a `date`,
-// no time-of-day -- these nominal times exist purely to give same-day
-// entries a stable sort position, not a claim about when the real thing
-// happened. Meals, stool and notes have real timestamps and use them as-is.
+// `runs`/`sleep_daily`/`arousal_daily`/`hydration_daily`/`wellbeing_daily`
+// only store a `date`, no time-of-day -- these nominal times exist purely to
+// give same-day entries a stable sort position, not a claim about when the
+// real thing happened. Meals, stool, notes and supplement_log have real
+// timestamps and use them as-is.
 private val RUN_NOMINAL_TIME = LocalTime.of(7, 0)
 private val SLEEP_NOMINAL_TIME = LocalTime.of(7, 30)
 private val AROUSAL_NOMINAL_TIME = LocalTime.of(7, 15)
 private val ENCOUNTER_NOMINAL_TIME = LocalTime.of(21, 0)
 private val DRINK_NOMINAL_TIME = LocalTime.of(12, 0)
+private val WELLNESS_NOMINAL_TIME = LocalTime.of(8, 0)
 
 fun buildLogEntries(
     meals: List<LogMealRow>,
@@ -55,6 +63,8 @@ fun buildLogEntries(
     encounters: List<LogEncounterRow>,
     notes: List<LogNoteRow> = emptyList(),
     hydration: List<LogHydrationRow> = emptyList(),
+    wellbeing: List<LogWellbeingRow> = emptyList(),
+    supplementsTaken: List<LogSupplementTakenRow> = emptyList(),
 ): List<LogEntry> {
     val entries = mutableListOf<LogEntry>()
 
@@ -159,6 +169,36 @@ fun buildLogEntries(
             kind = LogEntryKind.Drink,
             timestamp = LocalDateTime.of(LocalDate.parse(h.date), DRINK_NOMINAL_TIME),
             headline = "$ml ml (day total)",
+            detail = null,
+        )
+    }
+
+    wellbeing.forEach { w ->
+        val parts = listOfNotNull(
+            w.energy?.let { "Energy $it" },
+            w.mood?.let { "Mood $it" },
+            w.stress?.let { "Stress $it" },
+            w.soreness?.let { "Soreness $it" },
+        )
+        if (parts.isNotEmpty()) {
+            entries += LogEntry(
+                id = w.id,
+                source = LogSource.Wellbeing,
+                kind = LogEntryKind.Wellness,
+                timestamp = LocalDateTime.of(LocalDate.parse(w.date), WELLNESS_NOMINAL_TIME),
+                headline = parts.joinToString(" · "),
+                detail = null,
+            )
+        }
+    }
+
+    supplementsTaken.forEach { s ->
+        entries += LogEntry(
+            id = s.id,
+            source = LogSource.Supplement,
+            kind = LogEntryKind.Supplement,
+            timestamp = parseTimestamp(s.takenAt),
+            headline = s.supplementName,
             detail = null,
         )
     }

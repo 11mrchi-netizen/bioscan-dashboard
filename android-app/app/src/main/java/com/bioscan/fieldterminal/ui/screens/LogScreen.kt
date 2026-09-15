@@ -197,32 +197,38 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
     ) {
         Text(
             entry.timestamp.format(DateTimeFormatter.ofPattern("HH:mm")),
-            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.5.sp),
+            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 13.sp),
             color = FieldColors.InkMuted,
             modifier = Modifier.width(42.dp).padding(top = 2.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TypeChip(entry.kind)
-                Text(entry.headline, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 14.sp), color = FieldColors.Ink)
+                Text(entry.headline, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FieldColors.Ink)
             }
             entry.detail?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(top = 4.dp))
+                Text(it, style = TextStyle(fontFamily = Saira, fontSize = 14.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }
 }
 
+// Category colors per direct user request (2026-09-15): deep blue for
+// sleep, orange for activity (runs, strength, ...), green for food/drink/
+// supplements, sand for stool, azure for wellness, red for encounter and
+// arousal. Note has no assigned category -- stays neutral InkMuted.
 @Composable
 private fun TypeChip(kind: LogEntryKind) {
     val color = when (kind) {
-        LogEntryKind.Run -> FieldColors.Cyan
-        LogEntryKind.Food -> FieldColors.Green
-        LogEntryKind.Sleep, LogEntryKind.Arousal, LogEntryKind.Encounter, LogEntryKind.Note -> FieldColors.InkMuted
-        LogEntryKind.Stool -> FieldColors.Amber
-        LogEntryKind.Drink -> FieldColors.Cyan
+        LogEntryKind.Run -> FieldColors.Orange
+        LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> FieldColors.Green
+        LogEntryKind.Sleep -> FieldColors.DeepBlue
+        LogEntryKind.Arousal, LogEntryKind.Encounter -> FieldColors.Red
+        LogEntryKind.Note -> FieldColors.InkMuted
+        LogEntryKind.Stool -> FieldColors.Sand
+        LogEntryKind.Wellness -> FieldColors.Azure
     }
-    val filled = kind == LogEntryKind.Run || kind == LogEntryKind.Food || kind == LogEntryKind.Stool || kind == LogEntryKind.Drink
+    val filled = kind in setOf(LogEntryKind.Run, LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement, LogEntryKind.Stool)
     Box(
         modifier = Modifier
             .background(if (filled) color else Color.Transparent)
@@ -231,7 +237,7 @@ private fun TypeChip(kind: LogEntryKind) {
     ) {
         Text(
             kind.label,
-            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 9.sp, letterSpacing = 0.14f.em),
+            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, letterSpacing = 0.14f.em),
             color = if (filled) FieldColors.Ground else color,
         )
     }

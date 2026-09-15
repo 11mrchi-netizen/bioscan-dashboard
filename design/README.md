@@ -254,19 +254,32 @@ Colours
 | Hairline faint | `rgba(233,237,242,.08)` | list row dividers |
 | Track | `rgba(233,237,242,.12)` | progress-bar background |
 | Signal amber | `#ffb02e` | primary accent, active state, fuel |
-| Green | `#7ef2a8` | nominal / done / supplements |
-| Cyan | `#6fd8ff` | water, labs |
-| Alert | `#ff6b4a` | flags, out-of-range, errors |
+| Green | `#7ef2a8` | nominal / done / food, drink, supplements |
+| Cyan | `#6fd8ff` | labs (blood work) only — water moved to Green 2026-09-15 |
+| Alert | `#ff6b4a` | flags, out-of-range, errors — not reused for Red below |
+| Deep blue | `#4a5fd9` | log category: sleep |
+| Orange | `#ff8040` | log category: activity (runs, strength, ...) |
+| Sand | `#c9a876` | log category: stool |
+| Azure | `#3fa9e8` | log category: wellness |
+| Red | `#e5484d` | log category: encounter, arousal |
+
+The five "log category" rows (added 2026-09-15, direct user request) exist so Log-feed entry
+chips are tellable apart by hue, not just by their text label — each is a distinct color from its
+warm/cool neighbors above.
 
 Typography
 - **JetBrains Mono** — all labels, times, units, tab labels, small data. Weights 500/600/700.
-  Sizes 8.5 / 9.5 / 10 / 11 / 11.5 / 12 / 12.5 / 13px. Letter-spacing .1em–.26em on uppercase labels.
-- **Saira** — body copy and item names. Weights 400/500/600. Sizes 12 / 12.5 / 13 / 14 / 14.5 /
-  15 / 15.5 / 16px.
+  Sizes 10 / 11 / 11.5 / 12 / 12.5 / 13 / 13.5 / 14.5px. Letter-spacing .1em–.26em on uppercase
+  labels. (Bumped up one step from the original mockup scale on 2026-09-15 per direct user
+  request — "bigger font, only text" — since real-device legibility mattered more than matching
+  the mockup's literal pixel values; large numerics were left alone, see below.)
+- **Saira** — body copy and item names. Weights 400/500/600. Sizes 13.5 / 14 / 14.5 / 15.5 / 16 /
+  16.5 / 17 / 17.5px. Same 2026-09-15 bump as JetBrains Mono, same reasoning.
 - **Saira Condensed** — large numerics only. Weight 700. Sizes 17 / 21 / 30 / 34 / 58px,
-  line-height .9–1.
-- Minimum text size anywhere is 8.5px (unit labels inside dials only); nothing interactive is
-  labelled below 9.5px.
+  line-height .9–1. Deliberately NOT bumped — the request was for text specifically, "numbers are
+  big enough" already at this scale.
+- Minimum text size anywhere is 10px (unit labels inside dials only); nothing interactive is
+  labelled below 11px.
 
 Spacing — 4px base. Used steps: 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22px.
 Screen horizontal padding is 22px (18px on grid-based screens).

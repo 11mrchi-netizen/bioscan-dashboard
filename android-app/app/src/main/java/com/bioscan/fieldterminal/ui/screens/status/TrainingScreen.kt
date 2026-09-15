@@ -35,7 +35,10 @@ import com.bioscan.fieldterminal.ui.theme.Saira
 import com.bioscan.fieldterminal.ui.theme.SairaCondensed
 import java.time.LocalDate
 
-// Step 7 (Phase C). Real Endurance data from `runs`/`wearable_daily` -- data
+// Step 7 (Phase C). Real Endurance data from `runs`/`wearable_daily` -- read
+// only; per 2026-09-15 direction Training was removed from the "+" add-entry
+// flow entirely (see domain/AddEntry.kt), so this screen has no write path
+// of its own to add. Runs still display here exactly as before -- data
 // index.html's own fetchDashboardData() already fetches into
 // DASHBOARD_DATA.runs, but its Training panel's render() never actually
 // reads from it (confirmed by reading the function directly): every number
@@ -78,7 +81,7 @@ private fun TrainingContent(overview: TrainingOverview) {
         } else {
             Card(title = "ENDURANCE — THIS WEEK") {
                 BigValueRow(value = "%.1f".format(overview.thisWeekDistanceKm), unit = "KM")
-                RangeBar(value = overview.thisWeekDistanceKm, max = 32.0, watchBelow = null, color = FieldColors.Cyan)
+                RangeBar(value = overview.thisWeekDistanceKm, max = 32.0, watchBelow = null, color = FieldColors.Orange)
 
                 overview.avgPaceThisWeek?.let { pace ->
                     StatLine("Avg pace this week", formatPace(pace))
@@ -94,7 +97,7 @@ private fun TrainingContent(overview: TrainingOverview) {
                     BigValueRow(value = "%.1f".format(vo2), unit = "")
                     Text(
                         "Wearable-estimated, not lab-confirmed.",
-                        style = TextStyle(fontFamily = Saira, fontSize = 11.sp),
+                        style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
                         color = FieldColors.InkMuted,
                     )
                 }
@@ -106,12 +109,12 @@ private fun TrainingContent(overview: TrainingOverview) {
         Card(title = "STRENGTH") {
             Text(
                 text = "No data source yet.",
-                style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
+                style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
                 color = FieldColors.InkMuted,
             )
             Text(
                 text = "Per-lift history isn't synced to a Supabase table this app can read — it's only ever pulled manually in a Wellness Project chat, never stored anywhere queryable. Nothing to show honestly until that changes.",
-                style = TextStyle(fontFamily = Saira, fontSize = 11.sp),
+                style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
                 color = FieldColors.InkMuted,
             )
         }
@@ -131,7 +134,7 @@ private fun DistanceTotalsCard(overview: TrainingOverview) {
         BigValueRow(value = "%.1f".format(totalKm), unit = "KM")
         Text(
             "over the last ${period.label.lowercase()}",
-            style = TextStyle(fontFamily = Saira, fontSize = 11.sp),
+            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
             color = FieldColors.InkMuted,
         )
     }
@@ -159,8 +162,8 @@ private fun BigValueRow(value: String, unit: String) {
 @Composable
 private fun StatLine(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.InkMuted)
-        Text(value, style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp), color = FieldColors.Ink)
+        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
+        Text(value, style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp), color = FieldColors.Ink)
     }
 }
 

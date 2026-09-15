@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class SupplementRow(
+    val id: Long,
     val name: String,
     val dose: String,
     @SerialName("time_of_day") val timeOfDay: String,

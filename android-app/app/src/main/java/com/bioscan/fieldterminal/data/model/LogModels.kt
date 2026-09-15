@@ -70,3 +70,20 @@ data class LogHydrationRow(
     val date: String,
     val ml: Int? = null,
 )
+
+@Serializable
+data class LogWellbeingRow(
+    val id: Long,
+    val date: String,
+    val energy: Int? = null,
+    val mood: Int? = null,
+    val stress: Int? = null,
+    val soreness: Int? = null,
+)
+
+@Serializable
+data class LogSupplementTakenRow(
+    val id: Long,
+    @SerialName("supplement_name") val supplementName: String,
+    @SerialName("taken_at") val takenAt: String,
+)

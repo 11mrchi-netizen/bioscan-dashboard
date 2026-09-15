@@ -35,9 +35,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,18 +48,23 @@ import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.NutritionEstimationRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
-import com.bioscan.fieldterminal.data.model.LogRunRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
+import com.bioscan.fieldterminal.data.model.LogWellbeingRow
+import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.AddEntryType
 import com.bioscan.fieldterminal.domain.FoodEstimate
+import com.bioscan.fieldterminal.domain.FuelSubType
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogSource
 import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.DateField
+import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
@@ -66,12 +73,16 @@ import com.bioscan.fieldterminal.ui.theme.Saira
 import com.bioscan.fieldterminal.util.createCameraCaptureUri
 import com.bioscan.fieldterminal.util.readAndCompressImage
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
 
-// Step 12 (Phase D): the "+" add-entry flow. Type picker first, then a
-// minimal per-type form that writes straight to the real table Step 11
-// already reads -- see data/AddEntryRepository.kt for the writes themselves.
-// This is read-write's first appearance in the app; Step 11 was read-only by
-// design, per the roadmap's own sequencing.
+// Step 12 (Phase D) + the 2026-09-15 follow-up pass: the "+" add-entry flow.
+// Type picker first, then a minimal per-type form that writes straight to
+// the real table Step 11 already reads -- see data/AddEntryRepository.kt for
+// the writes themselves. Every form now carries its own date/time picker
+// (default "now", editable) per direct user request, and Food/Drink/
+// Supplements share one FUEL entry point with a three-way sub-picker.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
@@ -111,13 +122,12 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     }
                 }
                 when (type) {
-                    AddEntryType.Training -> TrainingForm(saving, onSave = { d, dur, hr -> onSubmit { it.addTraining(d, dur, hr) } })
-                    AddEntryType.Food -> FoodForm(saving, onSave = { desc, cal, p, c, f -> onSubmit { it.addFood(desc, cal, p, c, f) } })
-                    AddEntryType.Drink -> DrinkForm(saving, onSave = { ml -> onSubmit { it.addDrink(ml) } })
-                    AddEntryType.Encounter -> EncounterForm(saving, onSave = { et, n -> onSubmit { it.addEncounter(et, n) } })
-                    AddEntryType.Stool -> StoolForm(saving, onSave = { bt, d -> onSubmit { it.addStool(bt, d) } })
-                    AddEntryType.Arousal -> ArousalForm(saving, onSave = { mw, al -> onSubmit { it.addArousal(mw, al) } })
-                    AddEntryType.Note -> NoteForm(saving, onSave = { text -> onSubmit { it.addNote(text) } })
+                    AddEntryType.Fuel -> FuelForm(saving, onSubmit)
+                    AddEntryType.Encounter -> EncounterForm(saving, onSave = { date, et, n -> onSubmit { it.addEncounter(date, et, n) } })
+                    AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d -> onSubmit { it.addStool(occurredAt, bt, d) } })
+                    AddEntryType.Arousal -> ArousalForm(saving, onSave = { date, mw, al -> onSubmit { it.addArousal(date, mw, al) } })
+                    AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so -> onSubmit { it.addWellbeing(date, e, m, s, so) } })
+                    AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -127,8 +137,9 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
 
 // Tapping a Log entry opens this first -- EDIT (when the source has a
 // corresponding form) and DELETE, with an inline confirm step rather than a
-// second popup. Sleep has no add-entry form (Step 12's picker never offered
-// it), so it's delete-only here too.
+// second popup. Sleep, Run and Supplement have no add-entry form (runs
+// aren't loggable at all any more; a taken supplement is add-or-remove, not
+// field-editable), so all three are delete-only here too.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EntryActionSheet(entry: LogEntry, onDismiss: () -> Unit, onEdit: () -> Unit, onDeleted: () -> Unit) {
@@ -137,6 +148,7 @@ fun EntryActionSheet(entry: LogEntry, onDismiss: () -> Unit, onEdit: () -> Unit,
     val scope = rememberCoroutineScope()
     var confirmingDelete by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    val editable = entry.source !in setOf(LogSource.Sleep, LogSource.Run, LogSource.Supplement)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -149,7 +161,7 @@ fun EntryActionSheet(entry: LogEntry, onDismiss: () -> Unit, onEdit: () -> Unit,
             Text(entry.headline, style = FieldTextStyles.headerTitle, color = FieldColors.Amber)
 
             if (!confirmingDelete) {
-                if (entry.source != LogSource.Sleep) {
+                if (editable) {
                     AmberButton(label = "EDIT", onClick = onEdit)
                 }
                 Box(
@@ -165,7 +177,7 @@ fun EntryActionSheet(entry: LogEntry, onDismiss: () -> Unit, onEdit: () -> Unit,
             } else {
                 Text(
                     "Delete this entry? This can't be undone.",
-                    style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                    style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp),
                     color = FieldColors.InkMuted,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -220,13 +232,13 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
     LaunchedEffect(entry.id) {
         loaded = when (entry.source) {
             LogSource.Meal -> repo.fetchMeal(entry.id)
-            LogSource.Run -> repo.fetchRun(entry.id)
             LogSource.Hydration -> repo.fetchHydration(entry.id)
             LogSource.Encounter -> repo.fetchEncounter(entry.id)
             LogSource.Stool -> repo.fetchStool(entry.id)
             LogSource.Arousal -> repo.fetchArousal(entry.id)
             LogSource.Note -> repo.fetchNote(entry.id)
-            LogSource.Sleep -> null // no edit form for Sleep; EntryActionSheet never offers EDIT for it
+            LogSource.Wellbeing -> repo.fetchWellbeing(entry.id)
+            LogSource.Sleep, LogSource.Run, LogSource.Supplement -> null // no edit form; EntryActionSheet never offers EDIT for these
         }
     }
 
@@ -261,55 +273,72 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     CircularProgressIndicator(color = FieldColors.Amber)
                 }
             } else when (row) {
-                is LogRunRow -> TrainingForm(
-                    saving,
-                    initialDistanceKm = row.distanceKm,
-                    initialDurationMin = row.durationMin,
-                    initialAvgHr = row.avgHr,
-                    onSave = { d, dur, hr -> onSubmit { it.updateTraining(row.id, row.date, d, dur, hr) } },
-                )
                 is LogMealRow -> FoodForm(
                     saving,
+                    initialDateTime = parseIsoToLocalDateTime(row.loggedAt),
                     initialDescription = row.description ?: "",
                     initialCalories = row.calories,
                     initialProtein = row.proteinG,
                     initialCarbs = row.carbsG,
                     initialFat = row.fatG,
-                    onSave = { desc, cal, p, c, f -> onSubmit { it.updateFood(row.id, row.loggedAt, desc, cal, p, c, f) } },
+                    onSave = { dt, desc, cal, p, c, f -> onSubmit { it.updateFood(row.id, dt, desc, cal, p, c, f) } },
                 )
                 is LogHydrationRow -> DrinkForm(
                     saving,
+                    initialDate = LocalDate.parse(row.date),
                     initialMl = row.ml,
-                    onSave = { ml -> onSubmit { it.updateDrink(row.id, row.date, ml) } },
+                    onSave = { date, ml -> onSubmit { it.updateDrink(row.id, date, ml) } },
                 )
                 is LogEncounterRow -> EncounterForm(
                     saving,
+                    initialDate = LocalDate.parse(row.date),
                     initialType = row.encounterType ?: "",
                     initialNotes = row.notes ?: "",
-                    onSave = { et, n -> onSubmit { it.updateEncounter(row.id, row.date, et, n) } },
+                    onSave = { date, et, n -> onSubmit { it.updateEncounter(row.id, date, et, n) } },
                 )
                 is LogStoolRow -> StoolForm(
                     saving,
+                    initialDateTime = parseIsoToLocalDateTime(row.occurredAt),
                     initialBristolType = row.bristolType,
                     initialDiscomfort = row.discomfort,
-                    onSave = { bt, d -> onSubmit { it.updateStool(row.id, row.occurredAt, bt, d) } },
+                    onSave = { occurredAt, bt, d -> onSubmit { it.updateStool(row.id, occurredAt, bt, d) } },
                 )
                 is LogArousalRow -> ArousalForm(
                     saving,
+                    initialDate = LocalDate.parse(row.date),
                     initialMorningWood = row.morningErectionQuality,
                     initialArousalLevel = row.arousalLevel,
-                    onSave = { mw, al -> onSubmit { it.updateArousal(row.id, row.date, mw, al) } },
+                    onSave = { date, mw, al -> onSubmit { it.updateArousal(row.id, date, mw, al) } },
                 )
                 is LogNoteRow -> NoteForm(
                     saving,
+                    initialDateTime = parseIsoToLocalDateTime(row.occurredAt),
                     initialText = row.text,
-                    onSave = { text -> onSubmit { it.updateNote(row.id, row.occurredAt, text) } },
+                    onSave = { occurredAt, text -> onSubmit { it.updateNote(row.id, occurredAt, text) } },
+                )
+                is LogWellbeingRow -> WellnessForm(
+                    saving,
+                    initialDate = LocalDate.parse(row.date),
+                    initialEnergy = row.energy,
+                    initialMood = row.mood,
+                    initialStress = row.stress,
+                    initialSoreness = row.soreness,
+                    onSave = { date, e, m, s, so -> onSubmit { it.updateWellbeing(row.id, date, e, m, s, so) } },
                 )
             }
             Spacer(Modifier.height(12.dp))
         }
     }
 }
+
+private fun parseIsoToLocalDateTime(iso: String): LocalDateTime =
+    try {
+        java.time.OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime()
+    } catch (e: Exception) {
+        LocalDateTime.parse(iso)
+    }
+
+private fun LocalDateTime.toIsoWithOffset(): String = this.atZone(ZoneId.systemDefault()).toOffsetDateTime().toString()
 
 @Composable
 private fun SheetBackHeader(label: String, onBack: () -> Unit) {
@@ -367,46 +396,52 @@ private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
+// FUEL: one entry point, three sub-tabs. Reuses FoodForm/DrinkForm/
+// SupplementsForm exactly as they'd be used standalone -- only the picker
+// wrapping them is new.
 @Composable
-private fun TrainingForm(
-    saving: Boolean,
-    initialDistanceKm: Double? = null,
-    initialDurationMin: Double? = null,
-    initialAvgHr: Double? = null,
-    onSave: (distanceKm: Double, durationMin: Double, avgHr: Double?) -> Unit,
-) {
-    var distance by remember { mutableStateOf(initialDistanceKm?.toString() ?: "") }
-    var duration by remember { mutableStateOf(initialDurationMin?.toString() ?: "") }
-    var avgHr by remember { mutableStateOf(initialAvgHr?.toString() ?: "") }
-    val distanceKm = distance.toDoubleOrNull()
-    val durationMin = duration.toDoubleOrNull()
+private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit) {
+    var subType by remember { mutableStateOf(FuelSubType.Food) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Column { FormLabel("DISTANCE (KM)"); FieldTextField(distance, { distance = it }, "e.g. 10.0", keyboardType = KeyboardType.Decimal) }
-        Column { FormLabel("DURATION (MIN)"); FieldTextField(duration, { duration = it }, "e.g. 55", keyboardType = KeyboardType.Decimal) }
-        Column { FormLabel("AVG HR (OPTIONAL)"); FieldTextField(avgHr, { avgHr = it }, "e.g. 152", keyboardType = KeyboardType.Number) }
-        SaveButton(saving, distanceKm != null && durationMin != null) {
-            onSave(distanceKm!!, durationMin!!, avgHr.toDoubleOrNull())
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FuelSubType.entries.forEach { sub ->
+                val isSelected = sub == subType
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .border(1.dp, if (isSelected) FieldColors.Amber else FieldColors.Hairline)
+                        .background(if (isSelected) FieldColors.Amber.copy(alpha = 0.14f) else Color.Transparent)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { subType = sub }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(sub.label, style = FieldTextStyles.subTabLabel, color = if (isSelected) FieldColors.Amber else FieldColors.InkMuted)
+                }
+            }
+        }
+        when (subType) {
+            FuelSubType.Food -> FoodForm(saving, onSave = { dt, desc, cal, p, c, f -> onSubmit { it.addFood(dt, desc, cal, p, c, f) } })
+            FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } })
+            FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items -> onSubmit { it.addSupplementsTaken(takenAt, items) } })
         }
     }
 }
 
-// Step 13: adds AI photo estimation on top of Step 12's plain manual form.
-// Pre-fills fields from a Gemini vision call -- the existing SAVE button
-// below is the confirmation step (per the roadmap's "do not auto-save"
-// requirement); a photo never writes to Supabase by itself.
 @Composable
 private fun FoodForm(
     saving: Boolean,
+    initialDateTime: LocalDateTime = LocalDateTime.now(),
     initialDescription: String = "",
     initialCalories: Double? = null,
     initialProtein: Double? = null,
     initialCarbs: Double? = null,
     initialFat: Double? = null,
-    onSave: (description: String, calories: Double?, proteinG: Double?, carbsG: Double?, fatG: Double?) -> Unit,
+    onSave: (loggedAt: String, description: String, calories: Double?, proteinG: Double?, carbsG: Double?, fatG: Double?) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var dateTime by remember { mutableStateOf(initialDateTime) }
     var description by remember { mutableStateOf(initialDescription) }
     var calories by remember { mutableStateOf(initialCalories?.toString() ?: "") }
     var protein by remember { mutableStateOf(initialProtein?.toString() ?: "") }
@@ -459,12 +494,13 @@ private fun FoodForm(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DateTimeField("WHEN", dateTime, { dateTime = it })
         Column { FormLabel("DESCRIPTION"); FieldTextField(description, { description = it }, "e.g. Chicken rice bowl") }
 
         if (apiKey == null) {
             Text(
                 "Set a Gemini API key in Setup to enable AI photo estimation.",
-                style = TextStyle(fontFamily = Saira, fontSize = 11.sp),
+                style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
                 color = FieldColors.InkMuted,
             )
         } else {
@@ -488,11 +524,11 @@ private fun FoodForm(
                 if (estimating) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
                         CircularProgressIndicator(color = FieldColors.Amber, modifier = Modifier.size(14.dp))
-                        Text("Estimating from photo...", style = TextStyle(fontFamily = Saira, fontSize = 11.5.sp), color = FieldColors.InkMuted)
+                        Text("Estimating from photo...", style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.InkMuted)
                     }
                 }
                 estimationError?.let {
-                    Text(it, style = TextStyle(fontFamily = Saira, fontSize = 11.5.sp), color = FieldColors.Alert, modifier = Modifier.padding(top = 10.dp))
+                    Text(it, style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.Alert, modifier = Modifier.padding(top = 10.dp))
                 }
             }
         }
@@ -504,7 +540,148 @@ private fun FoodForm(
             Column(Modifier.weight(1f)) { FormLabel("FAT G"); FieldTextField(fat, { fat = it }, "0", keyboardType = KeyboardType.Number) }
         }
         SaveButton(saving, description.isNotBlank()) {
-            onSave(description.trim(), calories.toDoubleOrNull(), protein.toDoubleOrNull(), carbs.toDoubleOrNull(), fat.toDoubleOrNull())
+            onSave(dateTime.toIsoWithOffset(), description.trim(), calories.toDoubleOrNull(), protein.toDoubleOrNull(), carbs.toDoubleOrNull(), fat.toDoubleOrNull())
+        }
+    }
+}
+
+@Composable
+private fun DrinkForm(saving: Boolean, initialDate: LocalDate = LocalDate.now(), initialMl: Int? = null, onSave: (date: String, ml: Int) -> Unit) {
+    var date by remember { mutableStateOf(initialDate) }
+    var ml by remember { mutableStateOf(initialMl?.toString() ?: "") }
+    val mlValue = ml.toIntOrNull()
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DateField("DATE", date, { date = it })
+        Column { FormLabel("AMOUNT (ML)"); FieldTextField(ml, { ml = it }, "e.g. 500", keyboardType = KeyboardType.Number) }
+        SaveButton(saving, mlValue != null && mlValue > 0) {
+            onSave(date.toString(), mlValue!!)
+        }
+    }
+}
+
+// "Bundled by time of day" (added 2026-09-15 per direct user request):
+// morning/afternoon/night supplements are logged as one group -- checking
+// the group logs every supplement in it, since you take them together, not
+// individually. As-needed supplements get their own checkbox each, since
+// which ones you take genuinely varies. Each checked supplement becomes its
+// own supplement_log row on save, so afterward it's individually deletable
+// from the Log feed like any other entry -- no separate "batch" concept
+// needed for "add or remove single items."
+@Composable
+private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Pair<Long, String>>) -> Unit) {
+    var dateTime by remember { mutableStateOf(initialDateTime) }
+    var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
+    var checkedBundles by remember { mutableStateOf(setOf<String>()) }
+    var checkedAsNeeded by remember { mutableStateOf(setOf<Long>()) }
+
+    LaunchedEffect(Unit) {
+        supplements = SupplementsRepository(SupabaseClientProvider.client).loadOverview().active
+    }
+
+    val list = supplements ?: emptyList()
+    val groups = list.filter { it.timeOfDay != "as-needed" }.groupBy { it.timeOfDay }
+    val asNeeded = list.filter { it.timeOfDay == "as-needed" }
+    val selectedItems = buildList {
+        checkedBundles.forEach { tod -> groups[tod]?.forEach { add(it.id to it.name) } }
+        asNeeded.filter { it.id in checkedAsNeeded }.forEach { add(it.id to it.name) }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DateTimeField("WHEN", dateTime, { dateTime = it })
+        when {
+            supplements == null -> Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = FieldColors.Amber)
+            }
+            list.isEmpty() -> Text(
+                "No active supplements to log.",
+                style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
+                color = FieldColors.InkMuted,
+            )
+            else -> {
+                listOf("morning", "afternoon", "night").forEach { timeOfDay ->
+                    val itemsInGroup = groups[timeOfDay]
+                    if (!itemsInGroup.isNullOrEmpty()) {
+                        BundleToggleRow(
+                            label = timeOfDay.uppercase(),
+                            itemNames = itemsInGroup.joinToString(", ") { it.name },
+                            checked = timeOfDay in checkedBundles,
+                            onToggle = {
+                                checkedBundles = if (timeOfDay in checkedBundles) checkedBundles - timeOfDay else checkedBundles + timeOfDay
+                            },
+                        )
+                    }
+                }
+                if (asNeeded.isNotEmpty()) {
+                    FormLabel("AS NEEDED")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        asNeeded.forEach { supp ->
+                            CheckToggleRow(
+                                label = supp.name,
+                                checked = supp.id in checkedAsNeeded,
+                                onToggle = {
+                                    checkedAsNeeded = if (supp.id in checkedAsNeeded) checkedAsNeeded - supp.id else checkedAsNeeded + supp.id
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        SaveButton(saving, selectedItems.isNotEmpty()) {
+            onSave(dateTime.toIsoWithOffset(), selectedItems)
+        }
+    }
+}
+
+@Composable
+private fun BundleToggleRow(label: String, itemNames: String, checked: Boolean, onToggle: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, if (checked) FieldColors.Green else FieldColors.Hairline)
+            .background(if (checked) FieldColors.Green.copy(alpha = 0.12f) else Color.Transparent)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggle)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        CheckboxGlyph(checked)
+        Column {
+            Text(label, style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 12.5.sp), color = FieldColors.Ink)
+            Text(itemNames, style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(top = 2.dp))
+        }
+    }
+}
+
+@Composable
+private fun CheckToggleRow(label: String, checked: Boolean, onToggle: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, if (checked) FieldColors.Green else FieldColors.Hairline)
+            .background(if (checked) FieldColors.Green.copy(alpha = 0.12f) else Color.Transparent)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggle)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        CheckboxGlyph(checked)
+        Text(label, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.Medium, fontSize = 15.sp), color = FieldColors.Ink)
+    }
+}
+
+@Composable
+private fun CheckboxGlyph(checked: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(18.dp)
+            .border(1.dp, if (checked) FieldColors.Green else FieldColors.Hairline)
+            .background(if (checked) FieldColors.Green else Color.Transparent),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (checked) {
+            Text("✓", style = TextStyle(fontSize = 12.sp), color = FieldColors.Ground)
         }
     }
 }
@@ -523,33 +700,23 @@ private fun PhotoActionButton(label: String, modifier: Modifier = Modifier, onCl
 }
 
 @Composable
-private fun DrinkForm(saving: Boolean, initialMl: Int? = null, onSave: (ml: Int) -> Unit) {
-    var ml by remember { mutableStateOf(initialMl?.toString() ?: "") }
-    val mlValue = ml.toIntOrNull()
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Column { FormLabel("AMOUNT (ML)"); FieldTextField(ml, { ml = it }, "e.g. 500", keyboardType = KeyboardType.Number) }
-        SaveButton(saving, mlValue != null && mlValue > 0) {
-            onSave(mlValue!!)
-        }
-    }
-}
-
-@Composable
 private fun EncounterForm(
     saving: Boolean,
+    initialDate: LocalDate = LocalDate.now(),
     initialType: String = "",
     initialNotes: String = "",
-    onSave: (encounterType: String?, notes: String?) -> Unit,
+    onSave: (date: String, encounterType: String?, notes: String?) -> Unit,
 ) {
+    var date by remember { mutableStateOf(initialDate) }
     var encounterType by remember { mutableStateOf(initialType) }
     var notes by remember { mutableStateOf(initialNotes) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DateField("DATE", date, { date = it })
         Column { FormLabel("TYPE (OPTIONAL)"); FieldTextField(encounterType, { encounterType = it }, "e.g. date, call, hangout") }
         Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Notes...", singleLine = false) }
         SaveButton(saving, true) {
-            onSave(encounterType.trim().ifBlank { null }, notes.trim().ifBlank { null })
+            onSave(date.toString(), encounterType.trim().ifBlank { null }, notes.trim().ifBlank { null })
         }
     }
 }
@@ -557,14 +724,17 @@ private fun EncounterForm(
 @Composable
 private fun StoolForm(
     saving: Boolean,
+    initialDateTime: LocalDateTime = LocalDateTime.now(),
     initialBristolType: Int? = null,
     initialDiscomfort: Int? = null,
-    onSave: (bristolType: Int, discomfort: Int?) -> Unit,
+    onSave: (occurredAt: String, bristolType: Int, discomfort: Int?) -> Unit,
 ) {
+    var dateTime by remember { mutableStateOf(initialDateTime) }
     var bristolType by remember { mutableStateOf(initialBristolType) }
     var discomfort by remember { mutableStateOf(initialDiscomfort?.toString() ?: "") }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DateTimeField("WHEN", dateTime, { dateTime = it })
         Column {
             FormLabel("BRISTOL TYPE (1-7)")
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -584,7 +754,7 @@ private fun StoolForm(
                     ) {
                         Text(
                             "$n",
-                            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 13.sp),
+                            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp),
                             color = if (selected) FieldColors.Amber else FieldColors.InkMuted,
                         )
                     }
@@ -593,7 +763,7 @@ private fun StoolForm(
         }
         Column { FormLabel("DISCOMFORT 0-10 (OPTIONAL)"); FieldTextField(discomfort, { discomfort = it }, "e.g. 2", keyboardType = KeyboardType.Number) }
         SaveButton(saving, bristolType != null) {
-            onSave(bristolType!!, discomfort.toIntOrNull())
+            onSave(dateTime.toIsoWithOffset(), bristolType!!, discomfort.toIntOrNull())
         }
     }
 }
@@ -601,33 +771,67 @@ private fun StoolForm(
 @Composable
 private fun ArousalForm(
     saving: Boolean,
+    initialDate: LocalDate = LocalDate.now(),
     initialMorningWood: Int? = null,
     initialArousalLevel: Int? = null,
-    onSave: (morningWood: Int, arousalLevel: Int) -> Unit,
+    onSave: (date: String, morningWood: Int, arousalLevel: Int) -> Unit,
 ) {
+    var date by remember { mutableStateOf(initialDate) }
     var morningWood by remember { mutableStateOf(initialMorningWood?.toString() ?: "5") }
     var arousalLevel by remember { mutableStateOf(initialArousalLevel?.toString() ?: "5") }
     val morningWoodValue = morningWood.toIntOrNull()
     val arousalValue = arousalLevel.toIntOrNull()
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DateField("DATE", date, { date = it })
         Column { FormLabel("MORNING WOOD (0-10)"); FieldTextField(morningWood, { morningWood = it }, "5", keyboardType = KeyboardType.Number) }
         Column { FormLabel("AROUSAL LEVEL (0-10)"); FieldTextField(arousalLevel, { arousalLevel = it }, "5", keyboardType = KeyboardType.Number) }
         val valid = morningWoodValue != null && morningWoodValue in 0..10 && arousalValue != null && arousalValue in 0..10
         SaveButton(saving, valid) {
-            onSave(morningWoodValue!!, arousalValue!!)
+            onSave(date.toString(), morningWoodValue!!, arousalValue!!)
         }
     }
 }
 
 @Composable
-private fun NoteForm(saving: Boolean, initialText: String = "", onSave: (text: String) -> Unit) {
+private fun WellnessForm(
+    saving: Boolean,
+    initialDate: LocalDate = LocalDate.now(),
+    initialEnergy: Int? = null,
+    initialMood: Int? = null,
+    initialStress: Int? = null,
+    initialSoreness: Int? = null,
+    onSave: (date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?) -> Unit,
+) {
+    var date by remember { mutableStateOf(initialDate) }
+    var energy by remember { mutableStateOf(initialEnergy?.toString() ?: "") }
+    var mood by remember { mutableStateOf(initialMood?.toString() ?: "") }
+    var stress by remember { mutableStateOf(initialStress?.toString() ?: "") }
+    var soreness by remember { mutableStateOf(initialSoreness?.toString() ?: "") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DateField("DATE", date, { date = it })
+        Column { FormLabel("ENERGY 0-10 (OPTIONAL)"); FieldTextField(energy, { energy = it }, "e.g. 7", keyboardType = KeyboardType.Number) }
+        Column { FormLabel("MOOD 0-10 (OPTIONAL)"); FieldTextField(mood, { mood = it }, "e.g. 7", keyboardType = KeyboardType.Number) }
+        Column { FormLabel("STRESS 0-10 (OPTIONAL)"); FieldTextField(stress, { stress = it }, "e.g. 3", keyboardType = KeyboardType.Number) }
+        Column { FormLabel("SORENESS 0-10 (OPTIONAL)"); FieldTextField(soreness, { soreness = it }, "e.g. 2", keyboardType = KeyboardType.Number) }
+        val valid = listOf(energy, mood, stress, soreness).any { it.isNotBlank() }
+        SaveButton(saving, valid) {
+            onSave(date.toString(), energy.toIntOrNull(), mood.toIntOrNull(), stress.toIntOrNull(), soreness.toIntOrNull())
+        }
+    }
+}
+
+@Composable
+private fun NoteForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), initialText: String = "", onSave: (occurredAt: String, text: String) -> Unit) {
+    var dateTime by remember { mutableStateOf(initialDateTime) }
     var text by remember { mutableStateOf(initialText) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DateTimeField("WHEN", dateTime, { dateTime = it })
         Column { FormLabel("NOTE"); FieldTextField(text, { text = it }, "Write a note...", singleLine = false) }
         SaveButton(saving, text.isNotBlank()) {
-            onSave(text.trim())
+            onSave(dateTime.toIsoWithOffset(), text.trim())
         }
     }
 }

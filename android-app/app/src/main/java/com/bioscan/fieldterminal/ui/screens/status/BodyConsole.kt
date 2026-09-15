@@ -189,8 +189,8 @@ private fun BodySchematic(overview: StatusOverview, modifier: Modifier = Modifie
     }
 }
 
-private val smallLabel = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 9.sp)
-private val smallValue = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 9.5.sp)
+private val smallLabel = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 10.5.sp)
+private val smallValue = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 11.sp)
 
 // x/y are viewBox coordinates (0-260, 0-200), same space the Canvas above
 // draws in. TopEnd anchors the text so it ends at x (grows leftward),

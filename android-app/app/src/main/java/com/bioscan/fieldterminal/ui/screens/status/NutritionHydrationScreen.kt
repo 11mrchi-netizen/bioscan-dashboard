@@ -144,7 +144,7 @@ private fun NutritionContent(overview: NutritionOverview) {
 
         Text(
             text = "Ranges shown are general reference points — no personal targets are stored anywhere in this project yet.",
-            style = TextStyle(fontFamily = Saira, fontSize = 11.sp),
+            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
             color = FieldColors.InkMuted,
         )
     }
@@ -179,7 +179,7 @@ private fun MacroTotalsCard(allDays: List<DailyNutrition>) {
         StatLine("Fat", "${totals.fatG.roundToInt()} g")
         Text(
             "over the last ${period.label.lowercase()} — ${totals.dayCount} day${if (totals.dayCount == 1) "" else "s"} with logged meals",
-            style = TextStyle(fontFamily = Saira, fontSize = 11.sp),
+            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
             color = FieldColors.InkMuted,
         )
     }
@@ -188,8 +188,8 @@ private fun MacroTotalsCard(allDays: List<DailyNutrition>) {
 @Composable
 private fun StatLine(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.InkMuted)
-        Text(value, style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp), color = FieldColors.Ink)
+        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
+        Text(value, style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp), color = FieldColors.Ink)
     }
 }
 
@@ -197,10 +197,10 @@ private fun StatLine(label: String, value: String) {
 private fun MacroRow(label: String, valueG: Double, max: Double, color: androidx.compose.ui.graphics.Color) {
     Column {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp), color = FieldColors.Ink)
+            Text(label, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 15.sp), color = FieldColors.Ink)
             Text(
                 "${valueG.roundToInt()} g",
-                style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
                 color = FieldColors.Ink,
             )
         }
@@ -220,7 +220,7 @@ private fun HydrationSegments(ml: Int) {
                     .weight(1f)
                     .height(26.dp)
                     .then(
-                        if (i < filledSegments) Modifier.background(FieldColors.Cyan)
+                        if (i < filledSegments) Modifier.background(FieldColors.Green)
                         else Modifier.border(1.dp, FieldColors.Hairline),
                     ),
             )

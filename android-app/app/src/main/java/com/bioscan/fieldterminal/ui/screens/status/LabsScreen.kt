@@ -90,7 +90,7 @@ private fun LabsContent(overview: LabsOverview) {
             }
             Text(
                 shortDate(overview.latestDraw!!.drawDate),
-                style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 10.sp, letterSpacing = 0.1f.em),
+                style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.1f.em),
                 color = FieldColors.Amber,
                 modifier = Modifier.width(64.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.End,
@@ -110,16 +110,16 @@ private fun MarkerRow(marker: MarkerComparison, hasEarlierColumn: Boolean) {
     Column {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(marker.name, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 14.sp), color = FieldColors.Ink)
+                Text(marker.name, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FieldColors.Ink)
                 val refText = formatRef(marker.unit, marker.refLow, marker.refHigh)
                 if (refText.isNotEmpty()) {
-                    Text(refText, style = TextStyle(fontFamily = Saira, fontSize = 11.5.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(top = 2.dp))
+                    Text(refText, style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(top = 2.dp))
                 }
             }
             if (hasEarlierColumn) {
                 Text(
                     marker.earlierDisplay ?: "—",
-                    style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                    style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
                     color = FieldColors.InkMuted,
                     modifier = Modifier.width(64.dp),
                     textAlign = androidx.compose.ui.text.style.TextAlign.End,
@@ -127,7 +127,7 @@ private fun MarkerRow(marker: MarkerComparison, hasEarlierColumn: Boolean) {
             }
             Text(
                 marker.latestDisplay ?: "—",
-                style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 14.sp),
+                style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 15.5.sp),
                 color = flagColor(marker.latestFlag),
                 modifier = Modifier.width(64.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.End,
@@ -135,7 +135,7 @@ private fun MarkerRow(marker: MarkerComparison, hasEarlierColumn: Boolean) {
             Box(modifier = Modifier.width(24.dp), contentAlignment = Alignment.CenterEnd) {
                 Text(
                     directionSymbol(marker.direction),
-                    style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+                    style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp),
                     color = flagColor(marker.latestFlag),
                 )
             }

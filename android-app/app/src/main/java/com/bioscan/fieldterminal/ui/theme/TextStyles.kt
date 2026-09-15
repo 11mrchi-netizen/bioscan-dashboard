@@ -16,13 +16,13 @@ object FieldTextStyles {
     val headerTitle = TextStyle(
         fontFamily = JetBrainsMono,
         fontWeight = FontWeight.Bold,
-        fontSize = 11.sp,
+        fontSize = 12.5.sp,
         letterSpacing = 0.26.em,
     )
     val headerContext = TextStyle(
         fontFamily = JetBrainsMono,
         fontWeight = FontWeight.Medium,
-        fontSize = 13.sp,
+        fontSize = 14.5.sp,
         letterSpacing = 0.04.em,
     )
 
@@ -30,7 +30,7 @@ object FieldTextStyles {
     val syncLabel = TextStyle(
         fontFamily = JetBrainsMono,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 10.sp,
+        fontSize = 11.5.sp,
         letterSpacing = 0.12.em,
     )
 
@@ -38,7 +38,7 @@ object FieldTextStyles {
     val subTabLabel = TextStyle(
         fontFamily = JetBrainsMono,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 10.sp,
+        fontSize = 11.5.sp,
         letterSpacing = 0.14.em,
     )
 
@@ -46,7 +46,7 @@ object FieldTextStyles {
     val tabBarLabel = TextStyle(
         fontFamily = JetBrainsMono,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 9.5.sp,
+        fontSize = 11.sp,
         letterSpacing = 0.14.em,
     )
 
@@ -54,6 +54,6 @@ object FieldTextStyles {
     val placeholderBody = TextStyle(
         fontFamily = Saira,
         fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
+        fontSize = 15.5.sp,
     )
 }

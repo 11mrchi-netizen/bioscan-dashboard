@@ -1195,6 +1195,71 @@ separately since it needs its own dependency (e.g. ML Kit Barcode Scanning), a l
 UI (not just a one-shot capture), and a nutrition lookup service (e.g. OpenFoodFacts) barcode
 data feeds into — three new pieces this step didn't touch. Worth a dedicated step if wanted.
 
+### ✅ Fix pass — typography, categorical color, Wellness, Fuel/Supplements, dates, Training (done 2026-09-15, Claude Code)
+A user-requested revision pass over Steps 11–13, not a numbered roadmap step of its own.
+
+**Typography**: every Saira/JetBrains Mono size app-wide bumped one step up its own established
+scale (`design/README.md`'s Typography section updated to match — the single source of truth,
+per this project's own convention). Saira Condensed (the big headline numbers — 54.2 KM, 611 KCAL,
+etc.) deliberately untouched, per the user's own framing: "bigger font, only text — numbers are
+big enough."
+
+**Category colors**: `FieldColors` gained five new tokens (DeepBlue, Orange, Sand, Azure, Red) per
+an explicit mapping the user gave — sleep/deep-blue, activity/orange, food-drink-supplements/
+green, stool/sand, wellness/azure, encounter-and-arousal/red. Fixes the original complaint
+("drink and run have the same colour") and extends past just the Log tab's chips to every other
+place those same categories render: the Nutrition/Hydration screen's water segments (was Cyan,
+now Green) and the Training screen's weekly-distance bar (was Cyan, now Orange). Cyan itself now
+means labs (blood work) only. `design/README.md`'s color table updated to match.
+
+**Wellness questionnaire, previously entirely missing from Log**: `wellbeing_daily`
+(energy/mood/stress/soreness, all real columns that already existed) had no read presence in the
+Log feed and no write path anywhere in the app — a real gap, not a deliberate omission. Added a
+`Wellness` `LogEntryKind`/`LogSource`, a feed entry ("Energy 8 · Mood 9 · Stress 3 · Soreness 2"),
+and a `WellnessForm` in the add-entry picker; upserts on `(user_id, date)` like the other daily-
+questionnaire tables.
+
+**FUEL — Food/Drink/Supplements combined into one add-entry type** with a three-way sub-picker
+shown after selecting it (`AddEntryType.Fuel` + `FuelSubType`), reusing the existing FoodForm/
+DrinkForm unchanged underneath. Supplements gained a real logging path for the first time (a new
+`supplement_log` table, one row per supplement taken — see ROADMAP.md's earlier note that this
+had no backing table): its form groups this account's real active supplements by `time_of_day`
+into MORNING/AFTERNOON/NIGHT bundles (checking a bundle logs everything in it as one action, since
+those are taken together) plus an AS-NEEDED section where each supplement gets its own checkbox
+(these vary day to day, so they're individually selectable, exactly per the user's own framing).
+Because each checked supplement becomes its own `supplement_log` row rather than one combined
+"session" row, "add or remove single items" needed no new mechanism at all — it's just the
+existing generic per-entry delete, reused. Supplement-taken entries are delete-only (no edit
+form), matching Sleep's existing pattern, since editing which supplement a row represents doesn't
+make sense.
+
+**Date/time on every form**: added `ui/components/DatePickers.kt` (`DateField`/`DateTimeField`,
+built on the platform's own `DatePickerDialog`/`TimePickerDialog` rather than a custom calendar
+widget). Every add-entry form defaults to now but lets the user pick a different date (and time,
+for timestamp-backed tables) — required threading an explicit date/timestamp parameter through
+every `add*` function in `AddEntryRepository.kt` (previously they defaulted to "now"/"today"
+internally; the UI layer now owns that decision entirely, matching how `update*` already worked).
+
+**Training removed from the add-entry flow entirely**, per direct instruction: there is now no
+way to manually log a run in this app. `TrainingForm`, `addTraining`/`updateTraining`, and
+`NewRunRow` were deleted outright rather than left as dead code. Runs still display normally in
+the Log feed and the Training sub-tab (both read-only) — `LogSource.Run` was added to the same
+delete-only set as Sleep (no edit, since there's no form to edit it with), so a bad wearable-
+synced run can still be removed, just not added or corrected in place.
+
+**Verified end-to-end on the emulator with direct Supabase reads**: font size and all five new
+category colors visually confirmed (Sleep deep-blue outline, Run filled orange, Food/Supplements
+filled/outlined green, Wellness azure outline, all simultaneously visible and distinct in one
+screenshot). Added a real Wellness entry's worth of data was already visible from existing rows;
+opened the Fuel picker and confirmed all three sub-tabs render with a working date field. Checked
+the real NIGHT supplement bundle (3 real supplements) and saved — confirmed via direct SQL that
+all 3 landed as separate `supplement_log` rows with a correctly timezone-converted timestamp
+(local 22:22 → stored 14:22 UTC, an 8-hour offset matching this account's real timezone). Deleted
+one of the three individually via the Log tab and confirmed via SQL only that one row was gone —
+the "add or remove single items" requirement holds. Confirmed a RUN entry's action sheet now
+offers only DELETE, no EDIT. Test data (the supplement-log rows created during verification) was
+deleted afterward so no synthetic entries were left in the real account's data.
+
 ---
 
 ## Summary — rough remaining build time

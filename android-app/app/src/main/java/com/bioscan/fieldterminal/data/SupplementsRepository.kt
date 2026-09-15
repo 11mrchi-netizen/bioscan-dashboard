@@ -18,7 +18,7 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadOverview(): SupplementsOverview {
         val rows = supabase.postgrest.from("supplements")
-            .select(columns = Columns.list("name,dose,time_of_day,status,end_date"))
+            .select(columns = Columns.list("id,name,dose,time_of_day,status,end_date"))
             .decodeList<SupplementRow>()
 
         val today = LocalDate.now()

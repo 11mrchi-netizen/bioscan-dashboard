@@ -31,7 +31,7 @@ fun FieldTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     singleLine: Boolean = true,
 ) {
-    val textStyle = TextStyle(fontFamily = Saira, fontSize = 14.sp, color = FieldColors.Ink)
+    val textStyle = TextStyle(fontFamily = Saira, fontSize = 15.5.sp, color = FieldColors.Ink)
     BasicTextField(
         value = value,
         onValueChange = onValueChange,

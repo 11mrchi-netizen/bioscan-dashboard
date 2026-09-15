@@ -1,0 +1,180 @@
+package com.bioscan.fieldterminal.ui.screens.status
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.data.LabsOverview
+import com.bioscan.fieldterminal.data.LabsRepository
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.domain.MarkerComparison
+import com.bioscan.fieldterminal.domain.MarkerDirection
+import com.bioscan.fieldterminal.ui.theme.FieldColors
+import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
+import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
+import com.bioscan.fieldterminal.ui.theme.Saira
+
+// Step 9 (Phase C). Real data from `lab_draws`/`lab_results` -- NOT a port of
+// index.html's Labs panel, which is entirely hardcoded prose with an empty
+// draw() (same pattern as Step 7's Training panel). Merges markers across
+// the earliest and latest draw by name (domain/Labs.kt); a marker tested in
+// only one draw shows "—" for the other, which this account's real data
+// genuinely has. See ROADMAP.md P8 Step 9.
+@Composable
+fun LabsScreen() {
+    var overview by remember { mutableStateOf<LabsOverview?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        overview = LabsRepository(SupabaseClientProvider.client).loadOverview()
+        isLoading = false
+    }
+
+    when {
+        isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = FieldColors.Amber)
+        }
+        overview?.latestDraw == null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            Text("No lab draws logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+        }
+        else -> LabsContent(overview!!)
+    }
+}
+
+@Composable
+private fun LabsContent(overview: LabsOverview) {
+    val drawCount = if (overview.earlierDraw != null) 2 else 1
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
+        Text(
+            text = "BLOODWORK · $drawCount DRAW${if (drawCount == 1) "" else "S"} · ${overview.markers.size} MARKERS",
+            style = FieldTextStyles.headerContext,
+            color = FieldColors.InkMuted,
+            modifier = Modifier.padding(bottom = 14.dp),
+        )
+
+        // Column header row
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text("MARKER", style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted, modifier = Modifier.weight(1f))
+            if (overview.earlierDraw != null) {
+                Text(
+                    shortDate(overview.earlierDraw.drawDate),
+                    style = FieldTextStyles.tabBarLabel,
+                    color = FieldColors.InkMuted,
+                    modifier = Modifier.width(64.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                )
+            }
+            Text(
+                shortDate(overview.latestDraw!!.drawDate),
+                style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 10.sp, letterSpacing = 0.1f.em),
+                color = FieldColors.Amber,
+                modifier = Modifier.width(64.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            )
+            Box(modifier = Modifier.width(24.dp))
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(FieldColors.Hairline))
+
+        overview.markers.forEach { marker ->
+            MarkerRow(marker, hasEarlierColumn = overview.earlierDraw != null)
+        }
+    }
+}
+
+@Composable
+private fun MarkerRow(marker: MarkerComparison, hasEarlierColumn: Boolean) {
+    Column {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(marker.name, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 14.sp), color = FieldColors.Ink)
+                val refText = formatRef(marker.unit, marker.refLow, marker.refHigh)
+                if (refText.isNotEmpty()) {
+                    Text(refText, style = TextStyle(fontFamily = Saira, fontSize = 11.5.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(top = 2.dp))
+                }
+            }
+            if (hasEarlierColumn) {
+                Text(
+                    marker.earlierDisplay ?: "—",
+                    style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                    color = FieldColors.InkMuted,
+                    modifier = Modifier.width(64.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                )
+            }
+            Text(
+                marker.latestDisplay ?: "—",
+                style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 14.sp),
+                color = flagColor(marker.latestFlag),
+                modifier = Modifier.width(64.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            )
+            Box(modifier = Modifier.width(24.dp), contentAlignment = Alignment.CenterEnd) {
+                Text(
+                    directionSymbol(marker.direction),
+                    style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+                    color = flagColor(marker.latestFlag),
+                )
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(FieldColors.HairlineFaint))
+    }
+}
+
+private fun flagColor(flag: String?): Color = when (flag) {
+    "high", "low" -> FieldColors.Alert
+    "watch" -> FieldColors.Amber
+    else -> FieldColors.Ink
+}
+
+private fun directionSymbol(direction: MarkerDirection): String = when (direction) {
+    MarkerDirection.UP -> "▲"
+    MarkerDirection.DOWN -> "▼"
+    MarkerDirection.FLAT -> "—"
+    MarkerDirection.UNKNOWN -> ""
+}
+
+private fun formatRef(unit: String?, low: Double?, high: Double?): String {
+    val range = when {
+        low != null && high != null -> "${trimZero(low)}–${trimZero(high)}"
+        high != null -> "<${trimZero(high)}"
+        low != null -> ">${trimZero(low)}"
+        else -> null
+    }
+    return listOfNotNull(unit, range).joinToString(" · ")
+}
+
+private fun trimZero(v: Double): String = if (v == v.toLong().toDouble()) v.toLong().toString() else v.toString()
+
+private fun shortDate(iso: String): String {
+    // "2026-04-12" -> "12 APR" -- avoids pulling in a date-formatting
+    // dependency for one label.
+    val months = listOf("JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC")
+    val parts = iso.take(10).split("-")
+    if (parts.size != 3) return iso
+    val month = parts[1].toIntOrNull()?.let { months.getOrNull(it - 1) } ?: parts[1]
+    return "${parts[2]} $month"
+}

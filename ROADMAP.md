@@ -991,6 +991,27 @@ supplements' outcome text matched correctly by name regex against real product n
 (e.g. "Activated B Complex (Swanson)" → "Methylation cofactors", "Iron (California Gold
 Nutrition)" → "RBC production support").
 
+### ✅ Step 9 — Labs sub-tab (done 2026-09-15, Claude Code)
+**Same finding as Step 7, a third time**: `index.html`'s Labs panel is entirely hardcoded prose
+(every marker, value, and range typed literally) with a completely empty `draw(){}` — despite
+`DASHBOARD_DATA.labs` already holding the real structured `lab_draws`/`lab_results` data. Step
+9's own scope explicitly wants the real tables with reference ranges shown (which the hardcoded
+panel mostly doesn't display anyway), so built directly against Supabase instead of the web
+panel's narrative.
+
+`domain/Labs.kt` merges markers by name across the earliest and latest draw — a marker tested
+in only one draw shows "—" for the other rather than being dropped or faked, which this
+account's real 2-draw data genuinely needs (many markers are one-draw-only). Direction arrows
+and value coloring come from real computable facts (numeric change, and the latest draw's own
+stored `flag`), not the mockup's seemingly hand-picked highlighting choices.
+
+**Verified on the emulator with real data — both of Step 9's explicit criteria met**: real draw
+dates (14 JAN / 25 APR) with every marker and unit-specific reference range rendering
+(`g/dL · 3.5–5`, `ng/mL · 0–7`, etc.), and markers correctly showing "—" for whichever draw
+didn't test them. Cross-checked against the web dashboard's own hardcoded narrative text (e.g.
+"DIGESTIVE/LIVER — JAN ONLY") — the independently computed merge landed on exactly the same
+per-marker draw coverage the web version describes by hand, a good sign the logic is right.
+
 ---
 
 ## Summary — rough remaining build time

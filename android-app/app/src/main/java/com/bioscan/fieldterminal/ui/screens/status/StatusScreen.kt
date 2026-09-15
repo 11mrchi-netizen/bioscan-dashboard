@@ -80,9 +80,10 @@ fun StatusScreen() {
             StatusSubTab.Nutrition -> NutritionHydrationScreen()
             StatusSubTab.Training -> TrainingScreen()
             StatusSubTab.Supplements -> SupplementsScreen()
+            StatusSubTab.Labs -> LabsScreen()
             else -> Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                // Placeholder per remaining sub-tab -- Steps 9-10 replace
-                // each of these with real Supabase-backed content.
+                // Placeholder per remaining sub-tab -- Step 10 replaces it
+                // with real Supabase-backed content.
                 Text(
                     text = "${selectedSubTab.label} — placeholder",
                     style = FieldTextStyles.placeholderBody,

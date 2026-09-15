@@ -27,6 +27,8 @@ import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.DailyNutrition
+import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
@@ -143,29 +145,6 @@ private fun NutritionContent(overview: NutritionOverview) {
 }
 
 @Composable
-private fun Card(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, FieldColors.Hairline)
-            .background(FieldColors.RaisedSurface),
-    ) {
-        Text(
-            text = title,
-            style = FieldTextStyles.subTabLabel,
-            color = FieldColors.Amber,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(FieldColors.Hairline)
-                .padding(horizontal = 14.dp, vertical = 9.dp),
-        )
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-            content()
-        }
-    }
-}
-
-@Composable
 private fun MacroRow(label: String, valueG: Double, max: Double, color: androidx.compose.ui.graphics.Color) {
     Column {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -177,33 +156,6 @@ private fun MacroRow(label: String, valueG: Double, max: Double, color: androidx
             )
         }
         RangeBar(value = valueG, max = max, watchBelow = null, color = color, height = 6.dp, topPadding = 6.dp)
-    }
-}
-
-@Composable
-private fun RangeBar(
-    value: Double,
-    max: Double,
-    watchBelow: Double?,
-    color: androidx.compose.ui.graphics.Color,
-    height: androidx.compose.ui.unit.Dp = 8.dp,
-    topPadding: androidx.compose.ui.unit.Dp = 8.dp,
-) {
-    val fraction = (value / max).coerceIn(0.0, 1.0).toFloat()
-    val fillColor = if (watchBelow != null && value < watchBelow) FieldColors.Alert else color
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = topPadding) // true top margin -- applied outside the track's own size
-            .height(height)
-            .background(FieldColors.Track),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(fraction)
-                .height(height)
-                .background(fillColor),
-        )
     }
 }
 
@@ -244,5 +196,3 @@ private fun CalorieTrendBars(days: List<DailyNutrition>) {
         }
     }
 }
-
-private typealias ColumnScope = androidx.compose.foundation.layout.ColumnScope

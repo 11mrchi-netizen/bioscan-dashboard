@@ -78,8 +78,9 @@ fun StatusScreen() {
         // and a scrolling container measures children with unbounded height.
         when (selectedSubTab) {
             StatusSubTab.Nutrition -> NutritionHydrationScreen()
+            StatusSubTab.Training -> TrainingScreen()
             else -> Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                // Placeholder per remaining sub-tab -- Steps 7-10 replace
+                // Placeholder per remaining sub-tab -- Steps 8-10 replace
                 // each of these with real Supabase-backed content.
                 Text(
                     text = "${selectedSubTab.label} — placeholder",

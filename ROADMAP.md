@@ -942,8 +942,37 @@ mini-bar-histogram motif already established by the launch-screen mockups' "TRAI
 below the 1800 watch threshold), real macros (100g/130g/30g), real hydration (0.8L, 2/8 segments
 filled), and a real 7-day trend with varying bar heights.
 
-**Remaining**: Steps 7–15 per `mobile-app-implementation-roadmap.md` (Status's other 3 sub-tabs,
+**Remaining**: Steps 8–15 per `mobile-app-implementation-roadmap.md` (Status's other 2 sub-tabs,
 Log, Map, Settings), then Health Connect in Phase G. Not started.
+
+### ✅ Step 7 — Training sub-tab (done 2026-09-15, Claude Code)
+**Real finding, not an assumption**: Step 7's own text says to check whether the web dashboard's
+Strength+Endurance merge has landed and mirror whatever's actually live. Reading `index.html`'s
+`PANELS.training.render()` directly (not just its "SOURCE: LIVE" label) found that **almost none
+of it is actually live** — every strength number (squat/deadlift/pull-up PRs, all with specific
+dates like "Apr'25") and even the endurance figures ("17.9km this week," "+9.4% pace trend") are
+hardcoded literals from a one-off narrative pass, not computed from anything. Confirmed further:
+`fetchDashboardData()` already fetches real rows into `DASHBOARD_DATA.runs`, but the Training
+panel's `render()` never reads from that variable at all — the one genuinely live number in the
+whole panel is VO2max (`wearable.vo2`).
+
+Built the mobile Training sub-tab against the *real* data instead of porting the web's stale
+hardcoded numbers as "the current source of truth" (which Step 7's literal wording could have
+been read as sanctioning) — `domain/Training.kt` computes this-week distance, all-time longest
+run, and 4-week average directly from `runs` (the same table the web dashboard fetches but
+ignores), plus VO2max via the same "latest non-null" logic index.html uses. **Strength shown as
+an honest, explained empty state** — no `exercises`/lifts table exists in Supabase at all; the
+per-lift history the web panel's label implies is only ever pulled manually in a Wellness
+Project chat, never synced anywhere queryable. This is arguably a bug worth fixing in the web
+dashboard itself at some point (wire its Training panel to the `runs` data it already fetches) —
+flagged here, not fixed, since it's outside this mobile roadmap's scope.
+
+Promoted the `Card`/`RangeBar` pieces built for Step 6 into `ui/components/` — this is the third
+sub-tab wanting the identical shape, no longer worth keeping screen-local.
+
+**Verified on the emulator with real Supabase data**: 15.4km this week, 6:27/km avg pace, 17.59km
+longest run, 26.2 km/wk 4-week average, VO2max 55.4 — all independently computed from real rows,
+matching neither the web dashboard's stale numbers nor any fabricated substitute.
 
 ---
 

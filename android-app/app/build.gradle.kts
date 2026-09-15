@@ -105,5 +105,10 @@ dependencies {
     // project just to display a map. See ROADMAP.md for the comparison.
     implementation("org.osmdroid:osmdroid-android:6.1.20")
 
+    // Phase G1: Health Connect, current stable release (1.2.0 exists but is
+    // alpha-only as of writing -- confirmed against the Jetpack releases
+    // page, not assumed). See ROADMAP.md for the full Phase G plan.
+    implementation("androidx.health.connect:connect-client:1.1.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

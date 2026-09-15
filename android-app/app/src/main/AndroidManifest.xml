@@ -8,6 +8,44 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!-- Phase G1: Health Connect. Package-visibility declaration required to
+         detect/launch the Health Connect app/controller on any API level;
+         on this project's target devices (Android 14+) it's framework-
+         integrated, but the app package name is still how the client
+         library locates it. One READ_*/WRITE_* permission per record type
+         this app actually uses; ActivityIntensityRecord is deliberately
+         NOT requested here: confirmed absent from connect-client:1.1.0
+         stable (only in the 1.2.0-alpha series) by extracting the real AAR
+         and listing its classes, not assumed from docs alone. See
+         ROADMAP.md Phase G1 for the full write-up. -->
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
+
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+    <uses-permission android:name="android.permission.health.READ_ELEVATION_GAINED" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.health.READ_POWER" />
+    <uses-permission android:name="android.permission.health.READ_SPEED" />
+    <uses-permission android:name="android.permission.health.READ_VO2_MAX" />
+    <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE" />
+    <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+    <uses-permission android:name="android.permission.health.READ_HEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <uses-permission android:name="android.permission.health.READ_RESPIRATORY_RATE" />
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_HYDRATION" />
+    <uses-permission android:name="android.permission.health.WRITE_HYDRATION" />
+    <uses-permission android:name="android.permission.health.READ_NUTRITION" />
+    <uses-permission android:name="android.permission.health.WRITE_NUTRITION" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -37,6 +75,29 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Phase G1: Health Connect requires an activity that answers this
+             intent (the "why does this app want my health data" rationale
+             view a user reaches from Health Connect's own permission
+             screen), even for a personal, unpublished, sideloaded app;
+             confirmed against Google's own get-started doc, not assumed. -->
+        <activity
+            android:name=".healthconnect.PermissionsRationaleActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".healthconnect.PermissionsRationaleActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
     </application>
 
 </manifest>

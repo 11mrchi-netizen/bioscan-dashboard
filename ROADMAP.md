@@ -1398,6 +1398,73 @@ web dashboard does).
   weather, genuinely fetched, not fabricated.
 - Test/placeholder values (CARTO key, home coordinate) cleared from the device after verification.
 
+### ✅ Phase G1 — Health Connect foundation: permissions + plumbing (done 2026-09-16, Claude Code)
+Start of Phase G (Health Connect), scoped via a full 7-phase plan (G1–G7) covering read-only
+import of every requested metric, a generic multi-type exercise schema replacing `runs`, an
+on-demand combined session-detail view, and bidirectional nutrition/hydration sync with a
+one-time backfill. **Only G1 (foundation) is built now** — each later phase is its own future
+step, verified the same way as every step before it, not built blind in one pass. The full phase
+breakdown lives in this session's plan file; summarized here so the design intent isn't lost:
+
+- **G2** — read-only daily-aggregate sync (steps, active/total calories, VO2max, BMR, body
+  fat/height/weight, SpO2/respiratory rate/resting HR/HRV, sleep) into the *existing*
+  `wearable_daily`/`body_metrics`/`sleep_daily` tables (extended with new columns), auto-synced on
+  every app open via a new `sync_log`-backed watermark.
+- **G3** — a new generic `exercise_sessions` table (any activity type, not just runs, with a
+  flexible `details` jsonb for sets/reps/surface/etc.) replacing `runs` (19 rows migrated,
+  `runs` renamed not dropped); also what finally gives the Training tab's "STRENGTH" card
+  (an honest empty state since Step 7 — no data source existed) real data.
+- **G4** — on-demand per-session time-series read (HR/speed/elevation/power) straight from Health
+  Connect when a session's detail screen opens, never persisted to Supabase — same fetch-fresh
+  principle Step 14's GPX route already established for Drive.
+- **G5** — the actual "show it all together" combined chart UI (new reusable `LineChart`
+  component), deliberately sequenced after G3/G4 since it's presentation work, not data plumbing.
+- **G6** — bidirectional nutrition/hydration sync (this app's Fuel-form writes also land in Health
+  Connect; external apps' entries get pulled into Supabase), de-duplicated via each record's own
+  `metadata.dataOrigin.packageName` rather than an invented matching scheme.
+- **G7** — one-time backfill of existing `meals` history into Health Connect, sequenced last
+  (reuses G6's writer/de-dup), idempotent via a `health_connect_backfilled_at` flag.
+
+**Real architectural decision, not silently picked**: unlike Calendar/Drive (Step 14), which
+needed a whole server-side refresh-token apparatus specifically because a browser has no
+OS-level account layer, Health Connect *is itself* the on-device consolidation layer everything
+else was missing — the Android app becomes the thing that syncs it into Supabase automatically on
+every open, finally solving the exact "manual, chat-triggered" pain point ROADMAP's own P7 section
+flagged as the reason to move off Wellness Project. Per-session time-series data is deliberately
+**not** persisted to Supabase (matches the existing GPX-route precedent) — those rich combined
+charts are an Android-only feature, a real trade-off surfaced to and confirmed by the user rather
+than assumed.
+
+**What G1 actually built**: `androidx.health.connect:connect-client:1.1.0` (current stable — the
+newer 1.2.0 exists but is alpha-only, confirmed via the Jetpack releases page). Manifest gained a
+`<queries>` entry for the Health Connect package, one `READ_*`/`WRITE_*` permission per record
+type actually used (23 total), and the required `PermissionsRationaleActivity` +
+`ViewPermissionUsageActivity` activity-alias boilerplate. New `healthconnect/HealthConnectManager.kt`
+(availability check, the permission set, a grant check) and `healthconnect/
+PermissionsRationaleActivity.kt` (the static rationale screen the platform requires even for a
+personal sideloaded app). Settings gained a "HEALTH CONNECT" card: status line + a connect button,
+checked once per screen load rather than re-requested every time (unlike the Calendar/Drive
+authorization flow) since Health Connect grants persist at the OS level.
+
+**Real finding, not assumed**: `ActivityIntensityRecord` (needed for "activity intensity") does
+**not** exist in `connect-client:1.1.0` stable — confirmed by extracting the real AAR from the
+Gradle cache and listing its actual class files, not by trusting the (newer, alpha-reflecting)
+public docs page. It only appears in the 1.2.0-alpha series. Deferred rather than pulling in an
+alpha dependency for one field; every other requested metric's record class was confirmed present
+in the 1.1.0 stable AAR the same way.
+
+**Verified live on the emulator (Android 17/API 37, Health Connect framework-integrated — no
+separate Play Store install needed)**: Settings showed the honest "Not connected yet" state before
+granting; tapping CONNECT HEALTH CONNECT opened the real Health Connect consent screen (not a
+mock), showing "Field Terminal" by name and "Activity — 0 of 9 selected" confirming the requested
+permission set reached the OS correctly; granting flipped Settings to "Connected — all requested
+permissions granted" in green. Force-stopping and relaunching the app confirmed the grant persists
+and is detected on a fresh `LaunchedEffect` without re-prompting. Cross-checked directly against
+Health Connect's own system settings (`android.health.connect.action.HEALTH_HOME_SETTINGS`) —
+Field Terminal appears under "Your health apps" with its real launcher icon, proving the grant is
+genuinely registered at the OS level, not just believed true by the app's own local state. No
+exceptions in logcat through the full flow.
+
 ---
 
 ## Summary — rough remaining build time

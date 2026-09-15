@@ -15,10 +15,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -26,9 +28,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.health.connect.client.PermissionController
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.MapSettingsStore
+import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.Card
 import com.bioscan.fieldterminal.ui.components.FieldTextField
@@ -55,6 +59,18 @@ fun SettingsScreen(scope: CoroutineScope) {
     val savedHome = remember { mutableStateOf(MapSettingsStore.getHome(context)) }
     var homeLatInput by remember { mutableStateOf(savedHome.value?.first?.toString() ?: "") }
     var homeLonInput by remember { mutableStateOf(savedHome.value?.second?.toString() ?: "") }
+
+    val hcAvailable = remember { HealthConnectManager.isAvailable(context) }
+    var hcChecked by remember { mutableStateOf(false) }
+    var hcGranted by remember { mutableStateOf(false) }
+    val hcPermissionLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract(),
+    ) { granted -> hcGranted = granted.containsAll(HealthConnectManager.PERMISSIONS) }
+
+    LaunchedEffect(Unit) {
+        if (hcAvailable) hcGranted = HealthConnectManager.hasAllPermissions(context)
+        hcChecked = true
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground)) {
         ScreenHeader(title = "SETUP", context = "PLACEHOLDER")
@@ -170,6 +186,31 @@ fun SettingsScreen(scope: CoroutineScope) {
                     style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
                     color = FieldColors.InkMuted,
                 )
+            }
+
+            Card(title = "HEALTH CONNECT") {
+                Text(
+                    "Phase G1: foundation only -- reads activity, body, sleep, and vitals data and " +
+                        "syncs hydration/nutrition once a later phase wires up the actual sync. " +
+                        "Grants are managed by the OS, not re-requested every screen load.",
+                    style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                    color = FieldColors.InkMuted,
+                )
+                Text(
+                    text = when {
+                        !hcAvailable -> "Health Connect isn't available on this device."
+                        !hcChecked -> "Checking access…"
+                        hcGranted -> "Connected — all requested permissions granted."
+                        else -> "Not connected yet."
+                    },
+                    style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
+                    color = if (hcGranted) FieldColors.Green else FieldColors.InkMuted,
+                )
+                if (hcAvailable && hcChecked && !hcGranted) {
+                    AmberButton(label = "CONNECT HEALTH CONNECT") {
+                        hcPermissionLauncher.launch(HealthConnectManager.PERMISSIONS)
+                    }
+                }
             }
 
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {

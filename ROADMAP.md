@@ -974,6 +974,23 @@ sub-tab wanting the identical shape, no longer worth keeping screen-local.
 longest run, 26.2 km/wk 4-week average, VO2max 55.4 — all independently computed from real rows,
 matching neither the web dashboard's stale numbers nor any fabricated substitute.
 
+### ✅ Step 8 — Supplements sub-tab (done 2026-09-15, Claude Code)
+Real data from `supplements`. Ports `index.html`'s `isSupplementActive()`/`supplementOutcome()`
+1:1 into `domain/Supplements.kt` — same active-or-ended-within-7-days display filter (reusing
+Step 5's already-generic `isStatusCurrentlyRelevant()` rather than re-deriving it), same
+outcome-by-name keyword map. Unlike the web dashboard, this screen does **not** exclude
+Tadalafil or split supplements across body-region panels — that distribution was a web-specific
+design decision from an earlier chapter, outside Step 8's own "active/ended list, condensed"
+scope. Every supplement shows here in one list, same pattern as every other mobile sub-tab.
+
+**Verified on the emulator against Step 8's own explicit test**: "confirm a supplement whose
+end_date is >7 days old is excluded from the active view" — this account's real data already
+had exactly that case (Apigenin, ended 2026-08-30, 16 days before today) and it correctly
+appeared under ENDED, not ACTIVE, with no contrived test data needed. All 14 active
+supplements' outcome text matched correctly by name regex against real product names
+(e.g. "Activated B Complex (Swanson)" → "Methylation cofactors", "Iron (California Gold
+Nutrition)" → "RBC production support").
+
 ---
 
 ## Summary — rough remaining build time

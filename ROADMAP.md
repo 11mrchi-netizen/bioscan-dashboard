@@ -1136,6 +1136,65 @@ inline confirm) render correctly. Verified both totals cards: Training's 7D→30
 17955 kcal / 1080g protein / 2018g carbs / 610g fat across "7 days with logged meals" — a
 plausible real aggregate, not a placeholder.
 
+### ✅ Step 13 — AI photo-based nutrition estimation (done 2026-09-15, Claude Code)
+**Deviates from the roadmap's own Step 13 text by explicit user request**: the roadmap called for
+Claude's vision API; the user asked for Google's Gemini API instead (larger free tier), plus two
+things the roadmap didn't mention — a Setup-screen field to paste the API key, and a note that
+barcode scanning could be useful "at times." Built the Gemini flow in full; barcode scanning is
+flagged below as a real but separately-scoped follow-up, not built here.
+
+**API key storage** (`data/GeminiApiKeyStore.kt`): local to the device only, never synced to
+Supabase — unlike the Google Calendar refresh token (`user_google_tokens`), which has to live
+server-side for an Edge Function to use, this key is only ever used for a direct client → Gemini
+call, so there's no server-side reason to store it centrally. `androidx.security:security-crypto`
+(EncryptedSharedPreferences) would be the obvious library, but its 1.1.0 stable release
+(confirmed directly against the AndroidX release notes, not assumed) deprecated the whole API in
+favor of using Android Keystore directly — so that's what this does: an AES-GCM key generated
+inside the hardware-backed AndroidKeyStore encrypts the pasted key before it touches plain
+SharedPreferences. A restored/reinstalled app can't decrypt an old ciphertext (the Keystore entry
+doesn't survive a device change) — treated as "no key set" rather than a crash, since re-pasting
+is the only real recovery anyway.
+
+**Vision call** (`data/NutritionEstimationRepository.kt`): reuses the Ktor HTTP client already
+pulled in by supabase-kt rather than adding a separate Google AI SDK dependency. Model id
+(`gemini-3.8-flash`) and the REST request/response shape (`inline_data`/`mime_type` for the photo,
+`response_mime_type`/`response_schema` for structured JSON output) were confirmed live against
+Google's own API docs rather than assumed — a wrong model id 404s at runtime with no compile-time
+warning, so this wasn't worth guessing. Structured output means the response is real JSON
+(calories/protein_g/carbs_g/fat_g/food_description) rather than prose to parse. Photos are
+downscaled to 1024px/JPEG-80 before upload (`util/ImageUtils.kt`) — bounds both the request size
+and this app's mobile-data usage; food-estimation accuracy doesn't need full camera resolution.
+The prompt explicitly tells the model not to read any visible nutrition-label text, matching the
+roadmap's own note that this instruction improves reliability when no label is present.
+
+**Food form integration** (`ui/screens/AddEntrySheet.kt`): an "AI PHOTO ESTIMATION" section
+appears on the Food form only when a key is saved (otherwise a one-line hint points at Setup) —
+this reads live from `GeminiApiKeyStore` each time the sheet opens, no separate settings sync
+needed. TAKE PHOTO (camera, via a new `CAMERA` permission + a `FileProvider` declaration for the
+capture Uri) and CHOOSE PHOTO (gallery, via the modern `PickVisualMedia` photo picker, which needs
+no permission at all) both feed the same estimate pipeline. Matches the roadmap's explicit
+"pre-fill, do not auto-save" requirement exactly as before: a successful estimate fills the
+existing editable fields, and the same SAVE button is still the only thing that writes to
+Supabase — a photo by itself never inserts anything.
+
+**Verified on the emulator as far as possible without a real Gemini key** (none was available to
+test with): Settings screen saves/persists/clears a key correctly (confirmed the Food form's AI
+section appears and disappears with it). CHOOSE PHOTO opens the real Android Photo Picker and a
+selected image correctly triggers the estimation call. TAKE PHOTO correctly requests the `CAMERA`
+runtime permission (dialog shows "Field Terminal" by name, confirming the manifest declaration is
+wired) and, once granted, launches the camera via the `FileProvider` Uri without a crash. Ran a
+real photo through the full pipeline with a syntactically-valid but fake key end-to-end: the app
+returned Gemini's own real error, "API key not valid. Please pass a valid API key." — this
+confirms the request actually reached Gemini's API correctly formed (a wrong model id or
+malformed request would have failed differently), and that the error surfaces in the UI instead
+of crashing or failing silently. A genuine successful-estimation response is unverified pending a
+real user-supplied key.
+
+**Barcode scanning, flagged not built**: the user mentioned it could help "at times." Scoped
+separately since it needs its own dependency (e.g. ML Kit Barcode Scanning), a live camera-preview
+UI (not just a one-shot capture), and a nutrition lookup service (e.g. OpenFoodFacts) barcode
+data feeds into — three new pieces this step didn't touch. Worth a dedicated step if wanted.
+
 ---
 
 ## Summary — rough remaining build time

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Matches the cache subdirectory NutritionEstimation's camera capture
+         writes temp photos to before they're read, compressed, and deleted. -->
+    <cache-path name="camera_photos" path="camera_photos/" />
+</paths>

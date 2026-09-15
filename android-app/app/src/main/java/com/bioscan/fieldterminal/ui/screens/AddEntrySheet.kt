@@ -1,5 +1,11 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,11 +36,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
+import com.bioscan.fieldterminal.data.GeminiApiKeyStore
+import com.bioscan.fieldterminal.data.NutritionEstimationRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
@@ -43,6 +54,7 @@ import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogRunRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.domain.AddEntryType
+import com.bioscan.fieldterminal.domain.FoodEstimate
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogSource
 import com.bioscan.fieldterminal.ui.components.AmberButton
@@ -51,6 +63,8 @@ import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.util.createCameraCaptureUri
+import com.bioscan.fieldterminal.util.readAndCompressImage
 import kotlinx.coroutines.launch
 
 // Step 12 (Phase D): the "+" add-entry flow. Type picker first, then a
@@ -377,6 +391,10 @@ private fun TrainingForm(
     }
 }
 
+// Step 13: adds AI photo estimation on top of Step 12's plain manual form.
+// Pre-fills fields from a Gemini vision call -- the existing SAVE button
+// below is the confirmation step (per the roadmap's "do not auto-save"
+// requirement); a photo never writes to Supabase by itself.
 @Composable
 private fun FoodForm(
     saving: Boolean,
@@ -387,14 +405,98 @@ private fun FoodForm(
     initialFat: Double? = null,
     onSave: (description: String, calories: Double?, proteinG: Double?, carbsG: Double?, fatG: Double?) -> Unit,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var description by remember { mutableStateOf(initialDescription) }
     var calories by remember { mutableStateOf(initialCalories?.toString() ?: "") }
     var protein by remember { mutableStateOf(initialProtein?.toString() ?: "") }
     var carbs by remember { mutableStateOf(initialCarbs?.toString() ?: "") }
     var fat by remember { mutableStateOf(initialFat?.toString() ?: "") }
 
+    val apiKey = remember { GeminiApiKeyStore.get(context) }
+    var estimating by remember { mutableStateOf(false) }
+    var estimationError by remember { mutableStateOf<String?>(null) }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    fun applyEstimate(estimate: FoodEstimate) {
+        if (description.isBlank()) estimate.description?.let { description = it }
+        estimate.calories?.let { calories = it.toString() }
+        estimate.proteinG?.let { protein = it.toString() }
+        estimate.carbsG?.let { carbs = it.toString() }
+        estimate.fatG?.let { fat = it.toString() }
+    }
+
+    fun runEstimate(uri: Uri) {
+        val key = apiKey ?: return
+        estimating = true
+        estimationError = null
+        scope.launch {
+            try {
+                val bytes = readAndCompressImage(context, uri)
+                applyEstimate(NutritionEstimationRepository(key).estimate(bytes))
+            } catch (e: Exception) {
+                estimationError = e.message ?: "Estimation failed"
+            } finally {
+                estimating = false
+            }
+        }
+    }
+
+    val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success) pendingCameraUri?.let { runEstimate(it) }
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val uri = createCameraCaptureUri(context)
+            pendingCameraUri = uri
+            takePictureLauncher.launch(uri)
+        } else {
+            estimationError = "Camera permission denied"
+        }
+    }
+    val pickPhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) runEstimate(uri)
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Column { FormLabel("DESCRIPTION"); FieldTextField(description, { description = it }, "e.g. Chicken rice bowl") }
+
+        if (apiKey == null) {
+            Text(
+                "Set a Gemini API key in Setup to enable AI photo estimation.",
+                style = TextStyle(fontFamily = Saira, fontSize = 11.sp),
+                color = FieldColors.InkMuted,
+            )
+        } else {
+            Column {
+                FormLabel("AI PHOTO ESTIMATION (OPTIONAL)")
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PhotoActionButton(label = "TAKE PHOTO", modifier = Modifier.weight(1f)) {
+                        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                        if (granted) {
+                            val uri = createCameraCaptureUri(context)
+                            pendingCameraUri = uri
+                            takePictureLauncher.launch(uri)
+                        } else {
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
+                    }
+                    PhotoActionButton(label = "CHOOSE PHOTO", modifier = Modifier.weight(1f)) {
+                        pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }
+                }
+                if (estimating) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
+                        CircularProgressIndicator(color = FieldColors.Amber, modifier = Modifier.size(14.dp))
+                        Text("Estimating from photo...", style = TextStyle(fontFamily = Saira, fontSize = 11.5.sp), color = FieldColors.InkMuted)
+                    }
+                }
+                estimationError?.let {
+                    Text(it, style = TextStyle(fontFamily = Saira, fontSize = 11.5.sp), color = FieldColors.Alert, modifier = Modifier.padding(top = 10.dp))
+                }
+            }
+        }
+
         Column { FormLabel("CALORIES (OPTIONAL)"); FieldTextField(calories, { calories = it }, "e.g. 650", keyboardType = KeyboardType.Number) }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) { FormLabel("PROTEIN G"); FieldTextField(protein, { protein = it }, "0", keyboardType = KeyboardType.Number) }
@@ -404,6 +506,19 @@ private fun FoodForm(
         SaveButton(saving, description.isNotBlank()) {
             onSave(description.trim(), calories.toDoubleOrNull(), protein.toDoubleOrNull(), carbs.toDoubleOrNull(), fat.toDoubleOrNull())
         }
+    }
+}
+
+@Composable
+private fun PhotoActionButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .border(1.dp, FieldColors.Amber)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = FieldTextStyles.subTabLabel, color = FieldColors.Amber)
     }
 }
 

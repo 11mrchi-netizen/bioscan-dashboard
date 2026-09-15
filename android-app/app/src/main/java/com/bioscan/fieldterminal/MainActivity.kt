@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -15,7 +16,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
+import com.bioscan.fieldterminal.data.HealthConnectSyncCoordinator
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.nav.FieldTerminalNavHost
 import com.bioscan.fieldterminal.ui.theme.FieldColors
@@ -44,6 +47,18 @@ private fun AuthGate() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sessionStatus by SupabaseClientProvider.client.auth.sessionStatus.collectAsState()
+
+    // Phase G2: auto-sync once per app open, replacing the old manual/
+    // chat-triggered Wellness Project sync for the metrics Health Connect
+    // now covers. Fire-and-forget -- the nav host renders immediately
+    // regardless of outcome; screens just show slightly stale data until it
+    // finishes. Never blocks sign-in/sign-out.
+    LaunchedEffect(sessionStatus) {
+        if (sessionStatus is SessionStatus.Authenticated) {
+            val result = HealthConnectSyncCoordinator(context, SupabaseClientProvider.client).syncAll()
+            HealthConnectSyncStatus.record(result)
+        }
+    }
 
     Box(
         modifier = Modifier

@@ -1465,6 +1465,63 @@ Field Terminal appears under "Your health apps" with its real launcher icon, pro
 genuinely registered at the OS level, not just believed true by the app's own local state. No
 exceptions in logcat through the full flow.
 
+### ✅ Phase G2 — read-only daily-aggregate sync (done 2026-09-16, Claude Code)
+Steps, active/total calories, VO2max, BMR, body fat/height/weight, resting HR/HRV/SpO2, and sleep
+(with stage minutes), auto-synced into the existing `wearable_daily`/`body_metrics`/`sleep_daily`
+tables every time the app opens.
+
+**Real API facts, extracted from the actual library, not the (sometimes alpha-reflecting) public
+docs**: this project has no JDK/`javap` available, so verified every record class's real field
+names and unit-wrapper accessors (`Energy.inKilocalories`, `Mass.inKilograms`, `Length.inMeters`,
+`Power.inKilocaloriesPerDay`, `Percentage.value`, plus each record's own getter like
+`Vo2MaxRecord.vo2MillilitersPerMinuteKilogram`) by unzipping the real `connect-client-1.1.0.aar`
+from the Gradle cache and scanning its class files' constant-pool strings for method names — a
+`strings`-equivalent done in Python since neither `strings` nor `javap` exist in this environment.
+This is the same "check the real thing, not the docs" discipline as G1's AAR-class-listing check,
+applied one level deeper (field shapes, not just class presence) — and it paid off: the full sync
+repository compiled clean on the very first real attempt (one unrelated nullability fix aside).
+
+**Real architecture decision, not silently picked**: `HealthConnectSyncModels.kt` uses one minimal,
+single-metric row class per upsert call (`StepsUpsertRow`, `Vo2MaxUpsertRow`, etc.) rather than one
+shared row with every column as a nullable field. kotlinx.serialization encodes nulls explicitly by
+default, and Postgrest's upsert applies every column present in the request body on conflict — a
+shared row would silently null out a Wellness-Project-sourced value (e.g. `steps`) the moment any
+*other* metric synced for that date and left it null. Each upsert here touches exactly the one
+column it names. Verified directly: after syncing, all 34 existing `wearable_daily` rows still have
+their original `steps`/`rhr` values intact.
+
+**Real refinement to the original phase plan, made during implementation**: dropped the planned
+`wearable_daily.respiratory_rate_avg` column entirely. `sleep_daily.respiratory_rate` already
+existed pre-Health-Connect for exactly this purpose (nightly respiratory rate); adding a second,
+all-day column would have meant two places meaning almost the same thing. `RespiratoryRateRecord`
+readings are now matched to whichever `SleepSessionRecord` covers their timestamp and averaged into
+that night's existing `sleep_daily.respiratory_rate` column instead.
+
+**Sync mechanism**: `HealthConnectSyncCoordinator.syncAll()`, called from a `LaunchedEffect` in
+`MainActivity`'s `AuthGate` on every `SessionStatus.Authenticated`, fire-and-forget (never blocks
+the nav host). Watermark reuses the existing `sync_log` table (`sync_source='health_connect'`,
+`changes_summary` holding per-metric row counts) with a 2-day overlap and a 30-day first-run
+lookback (matching Health Connect's own no-extra-permission read window) — every write is an
+`onConflict="user_id,date"` upsert, so reprocessing the overlap is naturally idempotent, not a bug.
+Settings' HEALTH CONNECT card now shows "Last synced HH:MM — steps: N, ..." reflecting the real
+result via a small `HealthConnectSyncStatus` Compose-state object (in-memory, per-session, not
+persisted — a status line, not a setting).
+
+**Verified live on the emulator, real end-to-end execution, honestly incomplete on real numbers**:
+the sync ran with zero exceptions across two consecutive app opens, wrote two real, distinct
+`sync_log` rows to Supabase (confirmed via direct SQL) with the watermark correctly advancing
+between them, and the Settings card showed the real result ("Last synced 06:37 — steps: 0,
+active_calories: 0, ... sleep: 0"). **All-zero is the honest, correct result here, not a bug** —
+this emulator has no paired wearable and Health Connect's own consumer app has no manual data-entry
+UI for these record types (confirmed by navigating it directly — it's purely a broker between
+source apps, not a data-entry tool), so there was no real data anywhere on this device for the sync
+to find. What's genuinely verified: the full permission-check → watermark-read → read-aggregate-
+upsert (all 8 metric groups) → watermark-write pipeline executes correctly against live Health
+Connect and Supabase APIs with zero crashes, and existing data is provably untouched. What's
+**not** yet verified: correct handling of real non-zero values (unit conversions, per-day bucketing,
+sleep stage summation) — that needs the user's real phone, which has real Zepp/wearable data
+flowing into Health Connect. Flagged rather than silently assumed correct.
+
 ---
 
 ## Summary — rough remaining build time

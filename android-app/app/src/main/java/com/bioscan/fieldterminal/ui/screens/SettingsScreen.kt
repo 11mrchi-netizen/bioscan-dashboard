@@ -31,14 +31,18 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.health.connect.client.PermissionController
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
+import com.bioscan.fieldterminal.data.HealthConnectSyncResult
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
+import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.Card
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.Saira
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -190,8 +194,8 @@ fun SettingsScreen(scope: CoroutineScope) {
 
             Card(title = "HEALTH CONNECT") {
                 Text(
-                    "Phase G1: foundation only -- reads activity, body, sleep, and vitals data and " +
-                        "syncs hydration/nutrition once a later phase wires up the actual sync. " +
+                    "Reads activity, body, sleep, and vitals data on every app open. " +
+                        "Hydration/nutrition sync and the one-time meal backfill land in a later phase. " +
                         "Grants are managed by the OS, not re-requested every screen load.",
                     style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
                     color = FieldColors.InkMuted,
@@ -210,6 +214,24 @@ fun SettingsScreen(scope: CoroutineScope) {
                     AmberButton(label = "CONNECT HEALTH CONNECT") {
                         hcPermissionLauncher.launch(HealthConnectManager.PERMISSIONS)
                     }
+                }
+                if (hcGranted) {
+                    Text(
+                        text = when (val result = HealthConnectSyncStatus.lastResult) {
+                            null -> "Syncing…"
+                            is HealthConnectSyncResult.Success -> {
+                                val at = HealthConnectSyncStatus.lastSyncedAt
+                                    ?.atZone(ZoneId.systemDefault())
+                                    ?.format(DateTimeFormatter.ofPattern("HH:mm"))
+                                "Last synced $at — " + result.counts.entries.joinToString(", ") { (k, v) -> "$k: $v" }
+                            }
+                            is HealthConnectSyncResult.Failed -> "Sync failed: ${result.message}"
+                            HealthConnectSyncResult.NotGranted -> "Sync skipped — permissions not granted."
+                            HealthConnectSyncResult.Unavailable -> "Sync skipped — Health Connect unavailable."
+                        },
+                        style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+                        color = FieldColors.InkMuted,
+                    )
                 }
             }
 

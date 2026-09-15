@@ -19,17 +19,19 @@ data class TrainingOverview(
     val avgPaceThisWeek: Double?,
     val latestVo2Max: Double?,
     val hasAnyRuns: Boolean,
+    val runs: List<RunRow>, // raw rows, kept for the 1D/7D/30D/90D distance-totals widget
 )
 
 class TrainingRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadOverview(): TrainingOverview {
-        // 28 days covers both "this week" and the 4-week average in one
-        // query rather than two.
+        // 200 is a generous row-count margin, not a real 90-day date filter
+        // -- fine while this account's real run volume is ~20 total, same
+        // "bounded, not unbounded" tradeoff LogRepository already makes.
         val runs = supabase.postgrest.from("runs")
             .select(columns = Columns.list("date,distance_km,pace_min_per_km")) {
                 order("date", Order.DESCENDING)
-                limit(60) // generous margin over 28 days' worth of runs
+                limit(200)
             }
             .decodeList<RunRow>()
 
@@ -51,6 +53,7 @@ class TrainingRepository(private val supabase: SupabaseClient) {
             avgPaceThisWeek = averagePaceMinPerKmSince(runs, today, 7),
             latestVo2Max = latestNonNullVo2Max(vo2Rows),
             hasAnyRuns = runs.isNotEmpty(),
+            runs = runs,
         )
     }
 }

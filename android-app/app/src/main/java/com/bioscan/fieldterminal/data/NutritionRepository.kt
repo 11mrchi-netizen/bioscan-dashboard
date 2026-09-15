@@ -14,6 +14,7 @@ data class NutritionOverview(
                                  // index.html's own convention (nutrition.cal[length-1]),
                                  // not a strict calendar-date filter -- see ROADMAP.md P8 Step 6.
     val last7Days: List<DailyNutrition>,
+    val allDays: List<DailyNutrition>, // kept for the 1D/7D/30D/90D macro-totals widget
     val todayHydrationMl: Int?,
     val lastHydrationLoggedDate: String?,
 )
@@ -21,14 +22,13 @@ data class NutritionOverview(
 class NutritionRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadOverview(): NutritionOverview {
-        // 30 days of meals is enough to reliably cover the last 7 *days with
-        // any entries* even across a real logging gap (this project's own
-        // data has a documented 16-day gap once) -- narrower windows risked
-        // an empty or misleadingly-short trend.
+        // 500 is a generous row-count margin, not a real 90-day date filter
+        // -- fine while this account's real meal volume is under 100 total,
+        // same "bounded, not unbounded" tradeoff LogRepository already makes.
         val meals = supabase.postgrest.from("meals")
             .select(columns = Columns.list("logged_at,calories,protein_g,fat_g,carbs_g")) {
                 order("logged_at", Order.DESCENDING)
-                limit(200)
+                limit(500)
             }
             .decodeList<MealRow>()
 
@@ -46,6 +46,7 @@ class NutritionRepository(private val supabase: SupabaseClient) {
         return NutritionOverview(
             today = dailyTotals.lastOrNull(),
             last7Days = last7,
+            allDays = dailyTotals,
             todayHydrationMl = hydration?.ml,
             lastHydrationLoggedDate = hydration?.date,
         )

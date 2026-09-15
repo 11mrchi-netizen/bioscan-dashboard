@@ -27,13 +27,17 @@ import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.DailyNutrition
+import com.bioscan.fieldterminal.domain.TotalsPeriod
+import com.bioscan.fieldterminal.domain.sumNutritionSince
 import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.PeriodToggle
 import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 import com.bioscan.fieldterminal.ui.theme.SairaCondensed
+import java.time.LocalDate
 import kotlin.math.roundToInt
 
 // Step 6 (Phase C). Real data from `meals`/`hydration_daily`. "Today" means
@@ -127,6 +131,8 @@ private fun NutritionContent(overview: NutritionOverview) {
             }
         }
 
+        MacroTotalsCard(overview.allDays)
+
         // 7-day trend -- relative to the week's own max, not a fixed target
         // (matches the "TRAIN tile" histogram motif already used in the
         // Status launch-screen mockups).
@@ -141,6 +147,49 @@ private fun NutritionContent(overview: NutritionOverview) {
             style = TextStyle(fontFamily = Saira, fontSize = 11.sp),
             color = FieldColors.InkMuted,
         )
+    }
+}
+
+// Calories + macros summed over a selectable window -- computed client-side
+// from the same day-aggregated meals data the rest of this screen already
+// fetched, using the existing sumNutritionSince(). No new query per period
+// switch.
+@Composable
+private fun MacroTotalsCard(allDays: List<DailyNutrition>) {
+    var period by remember { mutableStateOf(TotalsPeriod.Week) }
+    val totals = sumNutritionSince(allDays, LocalDate.now(), period.days)
+
+    Card(title = "NUTRITION TOTALS") {
+        PeriodToggle(selected = period, onSelect = { period = it })
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = totals.calories.roundToInt().toString(),
+                style = TextStyle(fontFamily = SairaCondensed, fontWeight = FontWeight.Bold, fontSize = 30.sp),
+                color = FieldColors.Amber,
+            )
+            Text(
+                text = " KCAL",
+                style = FieldTextStyles.headerContext,
+                color = FieldColors.InkMuted,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+        StatLine("Protein", "${totals.proteinG.roundToInt()} g")
+        StatLine("Carbs", "${totals.carbsG.roundToInt()} g")
+        StatLine("Fat", "${totals.fatG.roundToInt()} g")
+        Text(
+            "over the last ${period.label.lowercase()} — ${totals.dayCount} day${if (totals.dayCount == 1) "" else "s"} with logged meals",
+            style = TextStyle(fontFamily = Saira, fontSize = 11.sp),
+            color = FieldColors.InkMuted,
+        )
+    }
+}
+
+@Composable
+private fun StatLine(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.InkMuted)
+        Text(value, style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp), color = FieldColors.Ink)
     }
 }
 

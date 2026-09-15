@@ -1059,13 +1059,82 @@ round-trip per page — one fetch, windowed client-side.
 **Two entry types deliberately omitted, not faked**: supplement-taken confirmations and
 freeform notes appear in the mockup's Log examples but have no backing Supabase table yet: they
 simply don't appear rather than being invented. `encounters` is queried but currently empty for
-this account, contributing zero entries — expected, not a bug.
+this account, contributing zero entries — expected, not a bug. *(Notes gained a real table in
+Step 12 below — this line is left as the accurate record of Step 11's own scope at the time.)*
 
 **Verified on the emulator**: "113 ENTRIES" total, correct day-grouping and descending
 within-day order, real meal descriptions/macros, real run distance/duration/HR, real sleep
 hours/scores. Tapped "LOAD OLDER" and confirmed it revealed entries beyond the initial 20 (the
 "11 SEP" day-group grew to include a dinner and a sleep entry not shown before) while the process
 stayed alive (`pidof` unchanged) — `visibleCount` incrementing correctly.
+
+### ✅ Step 12 — Add-entry flow, plus edit/delete and running totals (done 2026-09-15, Claude Code)
+**Scope grew beyond the roadmap's own Step 12 text during this step**, at the user's explicit
+request mid-build: the roadmap only asked for "+" → type picker → minimal form → write. The user
+also asked for (a) a way to undo/edit a logged entry, since add-only has no recovery from a
+mistake, and (b) running totals (calories/macros, distance) over 1D/7D/30D/90D windows, visible
+in their respective sub-tabs. Both are covered below alongside the original scope.
+
+**Add flow** (`ui/screens/AddEntrySheet.kt`, `data/AddEntryRepository.kt`): "+" FAB on the Log tab
+opens a type picker (Training/Food/Drink/Encounter/Stool/Arousal/Note), each with a minimal form
+writing straight to the real table Step 11 already reads. One real gap surfaced immediately:
+Notes has no backing table anywhere in this project (confirmed via `list_tables`) — asked the
+user directly rather than guessing, and per their choice, added a small `public.notes` table
+(`user_id`, `occurred_at`, `text`) via a real migration, mirroring `stool_log`'s existing RLS
+policy shape exactly. Notes now also appear in the Log feed (Step 11's `buildLogEntries()`
+extended to accept them).
+
+**Two real schema findings shaped the writes**: `hydration_daily` and `arousal_daily` both carry
+a genuine `unique(user_id, date)` index (confirmed directly against `pg_indexes`, and consistent
+with the existing quick-log Edge Function's own upsert-on-conflict usage for both) — one row per
+day, not a per-event log. `addTraining`/`addFood`/`addStool`/`addEncounter`/`addNote` are plain
+inserts; `addDrink`/`addArousal` upsert on `(user_id, date)`. `addDrink` specifically accumulates
+onto today's existing total (a human contribution — see below) rather than overwriting it, since
+someone drinks water in several small amounts across a day, not one final number.
+
+**Human contribution**: `addDrink`'s accumulate-vs-overwrite decision was posed as a Learn by
+Doing exercise (the fetch-existing-row scaffolding was built, the combine-and-write step left as
+`TODO(human)`). The user didn't write the snippet directly — instead they came back with two new
+feature requests (edit/delete, running totals), which made the drink semantics question moot on
+its own terms: with edit now available, a bad accumulate has a real fix path, so accumulate was
+the safe default to implement directly rather than block on. Resolved that way, then built both
+requested features.
+
+**Edit/delete flow** (`EntryActionSheet` and `EditEntrySheet` in `AddEntrySheet.kt`): tapping any
+Log entry opens EDIT/DELETE. DELETE asks for confirmation inline (no second popup) then removes
+the row by id. EDIT re-fetches the row fresh from Supabase by id — deliberately not reconstructed
+from the feed's already-formatted headline/detail strings — and opens the same form used for
+adding, pre-filled, wired to a matching `update*` function instead of `add*`. Every `update*`
+takes the entry's original date/timestamp explicitly so editing a past entry can't silently move
+it to today. `updateDrink` overwrites the day's total outright (unlike `addDrink`'s accumulate) —
+editing means "this number was wrong," not "another drink happened." Sleep has no add form (it
+was never one of the picker's types), so it's delete-only, matching what actually exists.
+Required adding real `id` columns to every `LogModels.kt` row type and selecting them in
+`LogRepository.kt` — needed for `update`/`delete` to target the right row.
+
+**Running totals** (`domain/Totals.kt`'s shared `TotalsPeriod` enum, `ui/components/PeriodToggle.kt`):
+a DISTANCE TOTALS card on the Training sub-tab and a NUTRITION TOTALS card on Nutrition/Hydration,
+each with a 1D/7D/30D/90D toggle. Computed entirely client-side from data the screens already
+fetch (`sumDistanceKmSince()` already existed from Step 7; added `sumNutritionSince()` alongside
+it using the identical windowing convention) — no new query fires on switching periods.
+`TrainingRepository`/`NutritionRepository`'s fetch limits were widened (200/500 rows) as a
+row-count safety margin for a 90-day window, not a real date filter — acceptable while this
+account's real volume is in the dozens, same tradeoff Step 11's `FETCH_LIMIT_PER_SOURCE` already
+made.
+
+**Verified end-to-end on the emulator, including direct Supabase reads to catch UI/reload timing
+gaps that a screenshot alone would have misread as bugs**: added a Drink entry (500ml) — confirmed
+a new `hydration_daily` row (not an update) since no row existed yet today, appeared correctly in
+the Log feed at its 12:00 nominal time with the right day-total headline. Edited it to 750ml —
+confirmed via direct SQL the row was overwritten to exactly 750 (not accumulated to 1250),
+matching `updateDrink`'s designed behavior, and the feed reflected it after reload. Deleted it —
+confirmed the row was gone from Supabase and the Nutrition/Hydration screen's own hydration card
+correctly fell back to the next-most-recent real row (2026-09-11, 0.8L) once the deleted one was
+gone. Verified the type picker renders all 7 types and the action sheet's EDIT/DELETE (with
+inline confirm) render correctly. Verified both totals cards: Training's 7D→30D toggle went from
+54.2km to 153.1km (a real, larger number over the wider window); Nutrition's 7D total showed
+17955 kcal / 1080g protein / 2018g carbs / 610g fat across "7 days with logged meals" — a
+plausible real aggregate, not a placeholder.
 
 ---
 

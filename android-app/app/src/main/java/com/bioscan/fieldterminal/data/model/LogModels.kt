@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class LogMealRow(
+    val id: Long,
     @SerialName("logged_at") val loggedAt: String,
     val description: String? = null,
     val calories: Double? = null,
@@ -15,6 +16,7 @@ data class LogMealRow(
 
 @Serializable
 data class LogRunRow(
+    val id: Long,
     val date: String,
     @SerialName("distance_km") val distanceKm: Double? = null,
     @SerialName("duration_min") val durationMin: Double? = null,
@@ -23,6 +25,7 @@ data class LogRunRow(
 
 @Serializable
 data class LogSleepRow(
+    val id: Long,
     val date: String,
     val hours: Double? = null,
     val score: Int? = null,
@@ -30,6 +33,7 @@ data class LogSleepRow(
 
 @Serializable
 data class LogArousalRow(
+    val id: Long,
     val date: String,
     @SerialName("morning_erection_quality") val morningErectionQuality: Int? = null,
     @SerialName("arousal_level") val arousalLevel: Int? = null,
@@ -37,6 +41,7 @@ data class LogArousalRow(
 
 @Serializable
 data class LogStoolRow(
+    val id: Long,
     @SerialName("occurred_at") val occurredAt: String,
     @SerialName("bristol_type") val bristolType: Int,
     val discomfort: Int? = null,
@@ -44,7 +49,24 @@ data class LogStoolRow(
 
 @Serializable
 data class LogEncounterRow(
+    val id: Long,
     val date: String,
     val status: String,
+    @SerialName("encounter_type") val encounterType: String? = null,
+    val notes: String? = null,
     @SerialName("calendar_event_title") val calendarEventTitle: String? = null,
+)
+
+@Serializable
+data class LogNoteRow(
+    val id: Long,
+    @SerialName("occurred_at") val occurredAt: String,
+    val text: String,
+)
+
+@Serializable
+data class LogHydrationRow(
+    val id: Long,
+    val date: String,
+    val ml: Int? = null,
 )

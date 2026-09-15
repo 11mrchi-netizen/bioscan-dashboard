@@ -23,13 +23,17 @@ import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingOverview
 import com.bioscan.fieldterminal.data.TrainingRepository
+import com.bioscan.fieldterminal.domain.TotalsPeriod
+import com.bioscan.fieldterminal.domain.sumDistanceKmSince
 import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.PeriodToggle
 import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 import com.bioscan.fieldterminal.ui.theme.SairaCondensed
+import java.time.LocalDate
 
 // Step 7 (Phase C). Real Endurance data from `runs`/`wearable_daily` -- data
 // index.html's own fetchDashboardData() already fetches into
@@ -95,6 +99,8 @@ private fun TrainingContent(overview: TrainingOverview) {
                     )
                 }
             }
+
+            DistanceTotalsCard(overview)
         }
 
         Card(title = "STRENGTH") {
@@ -109,6 +115,25 @@ private fun TrainingContent(overview: TrainingOverview) {
                 color = FieldColors.InkMuted,
             )
         }
+    }
+}
+
+// Distance run over a selectable window -- computed client-side from the
+// same `runs` rows the ENDURANCE card above already fetched, using the
+// existing sumDistanceKmSince(). No new query per period switch.
+@Composable
+private fun DistanceTotalsCard(overview: TrainingOverview) {
+    var period by remember { mutableStateOf(TotalsPeriod.Week) }
+    val totalKm = sumDistanceKmSince(overview.runs, LocalDate.now(), period.days)
+
+    Card(title = "DISTANCE TOTALS") {
+        PeriodToggle(selected = period, onSelect = { period = it })
+        BigValueRow(value = "%.1f".format(totalKm), unit = "KM")
+        Text(
+            "over the last ${period.label.lowercase()}",
+            style = TextStyle(fontFamily = Saira, fontSize = 11.sp),
+            color = FieldColors.InkMuted,
+        )
     }
 }
 

@@ -44,52 +44,121 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-// Step 11 (Phase D): the unified, read-only log feed. Real data merged from
-// meals/runs/sleep_daily/arousal_daily/stool_log/encounters -- see
+// Log tab: Step 11's unified read feed plus Step 12's "+" add-entry flow and
+// its edit/delete counterpart. Real data merged from meals/runs/sleep_daily/
+// arousal_daily/stool_log/encounters/notes/hydration_daily -- see
 // domain/Log.kt for what's deliberately NOT included (supplement-taken
-// confirmations and freeform notes have no backing table yet) and
-// data/LogRepository.kt for the pagination approach Step 11's roadmap text
-// explicitly asked to be decided. Step 12 adds the "+" add-entry flow on
-// top of this; this step is read-only by design.
+// confirmations have no backing table) and data/LogRepository.kt for the
+// pagination approach Step 11's roadmap text explicitly asked to be decided.
+// Tapping "+" opens AddEntrySheet; tapping an existing entry opens
+// EntryActionSheet (EDIT/DELETE), and EDIT opens EditEntrySheet (all in
+// ui/screens/AddEntrySheet.kt). Any successful save or delete bumps
+// `reloadKey` so the feed re-fetches immediately.
 @Composable
 fun LogScreen() {
     var allEntries by remember { mutableStateOf<List<LogEntry>?>(null) }
     var visibleCount by remember { mutableStateOf(LOG_PAGE_SIZE) }
+    var reloadKey by remember { mutableStateOf(0) }
+    var showAddSheet by remember { mutableStateOf(false) }
+    var actionEntry by remember { mutableStateOf<LogEntry?>(null) }
+    var editingEntry by remember { mutableStateOf<LogEntry?>(null) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(reloadKey) {
         allEntries = LogRepository(SupabaseClientProvider.client).loadAllEntries()
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground)) {
-        val entries = allEntries
-        ScreenHeader(
-            title = "LOG",
-            context = if (entries != null) "${entries.size} ENTRIES" else "LOADING",
-        )
+    fun refresh() {
+        visibleCount = LOG_PAGE_SIZE
+        reloadKey += 1
+    }
 
-        when {
-            entries == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FieldColors.Amber)
-            }
-            entries.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Nothing logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
-            }
-            else -> {
-                val visible = entries.take(visibleCount)
-                val grouped = visible.groupBy { it.timestamp.toLocalDate() }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground)) {
+            val entries = allEntries
+            ScreenHeader(
+                title = "LOG",
+                context = if (entries != null) "${entries.size} ENTRIES" else "LOADING",
+            )
 
-                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    grouped.forEach { (date, dayEntries) ->
-                        DayHeader(date)
-                        dayEntries.forEach { EntryRow(it) }
+            when {
+                entries == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = FieldColors.Amber)
+                }
+                entries.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Nothing logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+                }
+                else -> {
+                    val visible = entries.take(visibleCount)
+                    val grouped = visible.groupBy { it.timestamp.toLocalDate() }
+
+                    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                        grouped.forEach { (date, dayEntries) ->
+                            DayHeader(date)
+                            dayEntries.forEach { entry -> EntryRow(entry, onClick = { actionEntry = entry }) }
+                        }
+                        if (visibleCount < entries.size) {
+                            LoadOlderButton(onClick = { visibleCount += LOG_PAGE_SIZE })
+                        }
+                        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp))
                     }
-                    if (visibleCount < entries.size) {
-                        LoadOlderButton(onClick = { visibleCount += LOG_PAGE_SIZE })
-                    }
-                    Box(Modifier.fillMaxWidth().padding(vertical = 24.dp))
                 }
             }
         }
+
+        AddEntryFab(onClick = { showAddSheet = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(22.dp))
+    }
+
+    if (showAddSheet) {
+        AddEntrySheet(
+            onDismiss = { showAddSheet = false },
+            onSaved = {
+                showAddSheet = false
+                refresh()
+            },
+        )
+    }
+
+    actionEntry?.let { entry ->
+        EntryActionSheet(
+            entry = entry,
+            onDismiss = { actionEntry = null },
+            onEdit = {
+                editingEntry = entry
+                actionEntry = null
+            },
+            onDeleted = {
+                actionEntry = null
+                refresh()
+            },
+        )
+    }
+
+    editingEntry?.let { entry ->
+        EditEntrySheet(
+            entry = entry,
+            onDismiss = { editingEntry = null },
+            onSaved = {
+                editingEntry = null
+                refresh()
+            },
+        )
+    }
+}
+
+@Composable
+private fun AddEntryFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(FieldColors.Amber)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(horizontal = 22.dp, vertical = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            "+",
+            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
+            color = FieldColors.Ground,
+        )
     }
 }
 
@@ -118,10 +187,11 @@ private fun DayHeader(date: LocalDate) {
 }
 
 @Composable
-private fun EntryRow(entry: LogEntry) {
+private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -148,10 +218,11 @@ private fun TypeChip(kind: LogEntryKind) {
     val color = when (kind) {
         LogEntryKind.Run -> FieldColors.Cyan
         LogEntryKind.Food -> FieldColors.Green
-        LogEntryKind.Sleep, LogEntryKind.Arousal, LogEntryKind.Encounter -> FieldColors.InkMuted
+        LogEntryKind.Sleep, LogEntryKind.Arousal, LogEntryKind.Encounter, LogEntryKind.Note -> FieldColors.InkMuted
         LogEntryKind.Stool -> FieldColors.Amber
+        LogEntryKind.Drink -> FieldColors.Cyan
     }
-    val filled = kind == LogEntryKind.Run || kind == LogEntryKind.Food || kind == LogEntryKind.Stool
+    val filled = kind == LogEntryKind.Run || kind == LogEntryKind.Food || kind == LogEntryKind.Stool || kind == LogEntryKind.Drink
     Box(
         modifier = Modifier
             .background(if (filled) color else Color.Transparent)

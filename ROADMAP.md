@@ -795,8 +795,9 @@ not assumed:
   its documented reason for existing (Foundation section above): a valid session skips straight
   past any sign-in screen, so signing out is the only way to re-trigger consent, e.g. after a
   new OAuth scope is added later.
-- **Not yet verified against a real device** — needs the three manual steps above done first,
-  then a real build in Android Studio.
+- **✅ Verified end-to-end on a real emulator (2026-09-15)**: real Google account added, tapped
+  "SIGN IN WITH GOOGLE," got a real Supabase session back. Step 2's actual "done when" criterion
+  — the whole reason this step existed — is now genuinely met, not just built.
 
 ### ✅ Step 3 — Navigation skeleton (done 2026-09-14, Claude Code)
 Real 4-tab structure (`FieldTerminalNavHost.kt`, Navigation Compose) + Status's 5-sub-tab
@@ -863,9 +864,22 @@ Supabase BOM 3.0.0 → 3.8.0 and `ktor-client-android` to 3.5.1 to match.
   without crashing, screenshotted — ground/amber/mono-type rendering matches `/design/`'s
   tokens. Tapped "SIGN IN WITH GOOGLE" for real: it correctly reaches Google Play services'
   Credential Manager and returns `NoCredentialException: No credentials available` — expected
-  and correct, since this emulator has no Google account added yet, not a bug in this app. The
-  real credential exchange (Step 2's actual "done when" criterion) still needs a Google account
-  added to the emulator to test end-to-end.
+  and correct at that point, since the emulator had no Google account yet, not a bug in this app.
+- **Buttons reported as "unresponsive" — root cause was missing press feedback, not a broken
+  hitbox.** Confirmed via logcat that taps were reaching `GoogleAuthManager` correctly even
+  before this fix — `indication = null` (needed to kill Material's bouncy ripple, which the
+  design's "no spring, no scale bounce" motion rule rules out) had removed all visual feedback,
+  not just the bounce. Fixed with an instant, non-animated amber background tint on press
+  instead — verified with a held-down screenshot showing the tint appear. Also brought
+  `AmberButton` and the Status sub-tab chips up to Android's 48dp minimum touch target (both
+  were 30–38dp, padding-only) as a real secondary fix, regardless of which one was the actual
+  cause.
+- **First "no account" diagnosis was a real finding, not a guess**: `adb shell dumpsys account`
+  showed `Accounts: 0` on the running emulator despite the user having added one — the account
+  had evidently landed on a different AVD, or the add-flow hadn't actually completed. Once
+  re-added on the correct running emulator and confirmed present, the sign-in flow completed
+  for real: a genuine Supabase session, not just a reached-Play-Services partial success.
+  **Step 2's actual "done when" criterion is now genuinely met.**
 
 **Remaining**: Phase C onward per `mobile-app-implementation-roadmap.md` (Status → Log → Map →
 Settings real content, Steps 5–15, then Health Connect in Phase G). Not started.

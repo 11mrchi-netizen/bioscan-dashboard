@@ -13,14 +13,11 @@ applied across all of it). Still placeholder *content* everywhere — Phase C
 onward replaces each screen's placeholder text with real Supabase-backed
 data.
 
-**Verified on a real running emulator, not just compiled** (2026-09-15):
-installed, launched without crashing, screenshotted — the ground/amber/
-mono-type look matches `/design/`'s tokens. The sign-in button was tapped for
-real too: it correctly reaches Google Play services' Credential Manager and
-fails with `NoCredentialException: No credentials available` -- expected,
-since this emulator has no Google account added yet, not a bug. Add one
-(Settings → Accounts → Add account → Google on the emulator) to test the
-actual credential exchange.
+**Fully verified end-to-end on a real emulator** (2026-09-15): installed,
+launched without crashing, renders matching `/design/`'s tokens, and
+"SIGN IN WITH GOOGLE" produces a real Supabase session with a real Google
+account. Step 2's actual "done when" criterion is genuinely met, not just
+built.
 
 The first install crashed on launch with `NoClassDefFoundError` on
 `io.ktor.client.plugins.HttpTimeout` -- a real Ktor/Supabase version

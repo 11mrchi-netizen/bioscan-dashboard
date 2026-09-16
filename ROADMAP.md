@@ -1802,6 +1802,49 @@ the rest of this screen, but is unverified with a real flamingo event until one 
 
 ---
 
+### ✅ Phase M3 — minimal encounter logging from the Map tab (done 2026-09-16, Claude Code)
+The last phase of the Map tab rework. Once a pin's partner is matched/searched/created (Phase M2),
+`PartnerSection` now shows a real "LOG ENCOUNTER" action: optional type/notes (the same two fields
+the Log tab's own `EncounterForm` already collects) plus the event's own date and matched
+`person_id`, writing a real row to `encounters` — the first time this app has ever set that table's
+`person_id` FK or `calendar_event_title` column, both of which existed unused since before this
+project's mobile app work began. Kept deliberately minimal per the user's own confirmed choice: the
+richer unused columns (`activities`, the three rating columns, `location_type`, `duration_min`)
+stay untouched, and `status` stays at the table's `'logged'` default — the `'pending'` state this
+schema also supports is explicitly not used by this phase.
+
+`NewEncounterRow` gained `person_id`/`calendar_event_title` (both nullable, defaulted null);
+`AddEntryRepository.addEncounter(...)` gained the matching optional parameters, defaulted so the
+Log tab's existing call site (`date`/`encounterType`/`notes` only) needed no changes at all.
+`LogEncounterRow` and `fetchEncounter`'s column list gained `person_id` too, so a Map-tab-logged
+encounter's partner link would be visible if a future phase ever surfaces it in the edit form (not
+done here — `EncounterForm` itself is untouched).
+
+**Verified against the real Supabase `encounters` table** (0 rows before and after — this table has
+stayed genuinely empty since it was created, per every prior phase's own notes) via the same
+discipline as M1/M2: called `AddEntryRepository.addEncounter(...)` with real `personId`/
+`calendarEventTitle` values through the actual compiled app code (temporary trigger, removed before
+committing), confirmed via direct SQL that the row landed with every field correct
+(`person_id=25`, `calendar_event_title`, `date`, `status='logged'` by default), confirmed the Log
+tab immediately showed it as a real `ENC` entry with the calendar title as its headline, confirmed
+opening EDIT on it worked without error (proving `fetchEncounter`'s now-expanded column list
+decodes cleanly), then deleted the test row via direct SQL and confirmed the table was back to
+exactly 0 rows and the Log tab back to its real 136-entry count. Rebuilt the final,
+debug-code-free version afterward and re-confirmed no exceptions in logcat.
+
+**Honestly unverified**: same standing limitation as M2 — no Flamingo event exists on the real
+calendar in the current test window, so the "LOG ENCOUNTER" button itself was never tapped through
+the real `PinDetailSheet` UI; only the repository method it calls was exercised directly. The write
+path, the schema, and the Log tab's read-back are all proven against real data; the button and form
+wrapped around that write path follow this screen's established patterns but remain unclicked.
+
+This completes the Map tab rework (M1–M3) and the original request: a real multi-pin map of the
+next 24h, Flamingo/title-based encounter and social classification, partner matching with
+search/create, and a minimal encounter-logging action — all Android-only, per the user's own
+confirmed scope.
+
+---
+
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and

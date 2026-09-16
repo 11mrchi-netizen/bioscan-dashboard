@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
+import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.GeocodingRepository
 import com.bioscan.fieldterminal.data.MapRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
@@ -543,11 +544,14 @@ private fun PartnerSection(event: MapEvent) {
                 style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
                 color = FieldColors.InkMuted,
             )
-            is PartnerUiState.Matched -> Text(
-                s.person.name,
-                style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
-                color = FieldColors.Ink,
-            )
+            is PartnerUiState.Matched -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    s.person.name,
+                    style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+                    color = FieldColors.Ink,
+                )
+                EncounterLogRow(event = event, personId = s.person.id)
+            }
             is PartnerUiState.Error -> Text(
                 "Couldn't check for a matching partner (${s.message}).",
                 style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
@@ -585,6 +589,64 @@ private fun PartnerSection(event: MapEvent) {
                                 creating = false
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Phase M3. Minimal by the user's own choice -- date (from the event) +
+// optional type/notes, same 3 real fields the Log tab's own EncounterForm
+// collects (see AddEntrySheet.kt), just with person_id and the real
+// calendar title threaded through too. The encounters table's richer unused
+// columns (activities, ratings, location_type, duration) stay untouched, as
+// does `status` (left at its 'logged' default -- the 'pending' state is
+// explicitly not used by this phase).
+@Composable
+private fun EncounterLogRow(event: MapEvent, personId: Long) {
+    var type by remember(event.id) { mutableStateOf("") }
+    var notes by remember(event.id) { mutableStateOf("") }
+    var saving by remember(event.id) { mutableStateOf(false) }
+    var saved by remember(event.id) { mutableStateOf(false) }
+    var error by remember(event.id) { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    if (saved) {
+        Text(
+            "Encounter logged.",
+            style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
+            color = FieldColors.Green,
+        )
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("LOG ENCOUNTER", style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
+        FieldTextField(value = type, onValueChange = { type = it }, placeholder = "Type (optional) — e.g. date, call, hangout")
+        FieldTextField(value = notes, onValueChange = { notes = it }, placeholder = "Notes (optional)", singleLine = false)
+        error?.let {
+            Text("Couldn't log this encounter (${it}).", style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp), color = FieldColors.InkMuted)
+        }
+        AmberButton(label = if (saving) "SAVING…" else "LOG ENCOUNTER") {
+            if (!saving) {
+                saving = true
+                error = null
+                scope.launch {
+                    try {
+                        val date = parseSessionZonedDateTime(event.startIso).toLocalDate().toString()
+                        AddEntryRepository(SupabaseClientProvider.client).addEncounter(
+                            date = date,
+                            encounterType = type.trim().ifBlank { null },
+                            notes = notes.trim().ifBlank { null },
+                            personId = personId,
+                            calendarEventTitle = event.title,
+                        )
+                        saved = true
+                    } catch (e: Exception) {
+                        error = e.message ?: "Unknown error."
+                    } finally {
+                        saving = false
                     }
                 }
             }

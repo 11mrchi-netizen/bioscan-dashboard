@@ -19,11 +19,17 @@ data class ExistingHydrationRow(val ml: Int? = null)
 @Serializable
 data class NewHydrationRow(val date: String, val ml: Int)
 
+// personId/calendarEventTitle (Phase M3) are only ever set by the Map tab's
+// "LOG ENCOUNTER" action (see ui/screens/MapScreen.kt) -- the Log tab's own
+// EncounterForm still only collects date/encounter_type/notes, so those two
+// fields stay null on every write that goes through it.
 @Serializable
 data class NewEncounterRow(
     val date: String,
     @SerialName("encounter_type") val encounterType: String? = null,
     val notes: String? = null,
+    @SerialName("person_id") val personId: Long? = null,
+    @SerialName("calendar_event_title") val calendarEventTitle: String? = null,
 )
 
 @Serializable

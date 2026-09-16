@@ -61,6 +61,7 @@ data class LogEncounterRow(
     @SerialName("encounter_type") val encounterType: String? = null,
     val notes: String? = null,
     @SerialName("calendar_event_title") val calendarEventTitle: String? = null,
+    @SerialName("person_id") val personId: Long? = null,
 )
 
 @Serializable

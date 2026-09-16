@@ -70,9 +70,12 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { onConflict = "user_id,date" }
     }
 
-    suspend fun addEncounter(date: String, encounterType: String?, notes: String?) {
+    // personId/calendarEventTitle (Phase M3) are only ever passed by the Map
+    // tab's "LOG ENCOUNTER" action -- defaulted null so the Log tab's own
+    // EncounterForm call site (date/encounterType/notes only) is unchanged.
+    suspend fun addEncounter(date: String, encounterType: String?, notes: String?, personId: Long? = null, calendarEventTitle: String? = null) {
         supabase.postgrest.from("encounters").insert(
-            NewEncounterRow(date = date, encounterType = encounterType, notes = notes)
+            NewEncounterRow(date = date, encounterType = encounterType, notes = notes, personId = personId, calendarEventTitle = calendarEventTitle)
         )
     }
 
@@ -190,7 +193,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // and read-only in this app.
     suspend fun fetchMeal(id: Long) = fetchById<LogMealRow>("meals", "id,logged_at,description,calories,protein_g,carbs_g,fat_g", id)
     suspend fun fetchHydration(id: Long) = fetchById<LogHydrationRow>("hydration_daily", "id,date,ml", id)
-    suspend fun fetchEncounter(id: Long) = fetchById<LogEncounterRow>("encounters", "id,date,status,encounter_type,notes,calendar_event_title", id)
+    suspend fun fetchEncounter(id: Long) = fetchById<LogEncounterRow>("encounters", "id,date,status,encounter_type,notes,calendar_event_title,person_id", id)
     suspend fun fetchStool(id: Long) = fetchById<LogStoolRow>("stool_log", "id,occurred_at,bristol_type,discomfort", id)
     suspend fun fetchArousal(id: Long) = fetchById<LogArousalRow>("arousal_daily", "id,date,morning_erection_quality,arousal_level", id)
     suspend fun fetchNote(id: Long) = fetchById<LogNoteRow>("notes", "id,occurred_at,text", id)

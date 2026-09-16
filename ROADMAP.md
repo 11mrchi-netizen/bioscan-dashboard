@@ -2129,6 +2129,57 @@ logcat.
 **Still not started**: A4's remaining three categories — 7 (rest cadence), 8 (Bristol/injury), 9
 (bloodwork) — each remains its own future unit of work.
 
+**Paused mid-implementation**: Category 7 (rest cadence)'s `domain/RestCadenceEvaluation.kt` has
+Signal A (consecutive days without rest + TSB) fully wired; Signal B's deload-cadence search is an
+open `TODO(human)` pending a design decision on the account owner's own side, paused deliberately
+rather than filled in automatically.
+
+---
+
+## Phase B — Exercise Session Detail Schema
+
+A separate handoff document (`exercise-session-detail-handoff.md`, distinct from the Evaluation
+Method Spec / Training Cycle Framing docs driving Phase A) specs two real gaps in
+`exercise_sessions`: strength sessions have zero structured representation, and running sessions
+have a terrain flag (`route_type`) but no workout-intent classification. Tracked as its own phase
+letter since it's a separate document/scope, even though it feeds Category 6's future strength/
+volume-load work.
+
+### ✅ Phase B1–B3 — schema for strength + run detail shapes (done 2026-09-16, Claude Code)
+Three additive CHECK constraints on `exercise_sessions`, no new columns — `details` is already
+`jsonb not null default '{}'` and accepts any shape:
+
+- **B1**: `type` gets a real CHECK constraint for the first time
+  (`run|walk|hike|ride|swim|strength|yoga|other`) — a genuine pre-existing gap, not a new decision:
+  `healthconnect/HealthConnectExerciseTypes.kt` and `data/TrainingRepository.kt` already treated
+  `type` as exactly this closed 8-value vocabulary (including `strength`, with zero real rows using
+  it yet), but the database never enforced it until now.
+- **B2**: `details->>'route_type'` widened from `road|trail|null` to add `mixed` and `track` (the
+  real fix the handoff flagged — a route can genuinely be part-road-part-trail, or a measured
+  track surface, neither representable before); `details->>'run_type'` added
+  (`easy|tempo|long|hills|intervals|race|recovery`), nullable, no backfill of the 19 existing real
+  rows — left `null` rather than guessing an intent nobody actually logged at the time. Both are
+  scalar jsonb-key CHECK expressions gated on `type = 'run'`, so they never touch strength rows.
+- **B3 — deliberately NOT enforced via CHECK**: the strength shape
+  (`details.exercises[].sets[].{reps, weight_kg, rpe?, percent_1rm?}`) stays representable in the
+  existing jsonb column with zero migration needed, but its nested array-of-objects structure isn't
+  validated at the DB level — the same trade-off already made for `training_cycles.focus` in Phase
+  A1 (a `jsonb_array_elements`-scanning CHECK is real added complexity for a pass with zero real
+  strength rows to test against yet). Deferred to application-level validation once a real
+  strength-logging create/edit path exists.
+- **Deferred entirely, per explicit choice**: exercise-name normalization + a muscle-mapped
+  exercise library (e.g. importing wger's open dataset) — the handoff itself frames this as a
+  build-time decision best made with real library data in hand, not a schema question.
+
+**Verified via real insert → verify → delete** (Supabase `execute_sql`, no application code changes
+in this schema-only phase): a `type='strength'` row with a real 3-set `back squat` `exercises`
+array inserted successfully; a `type='run'` row with `route_type: 'mixed'` and
+`run_type: 'intervals'` inserted successfully; `type='jog'`, `route_type='gravel'`, and
+`run_type='sprint'` each correctly rejected by their respective CHECK constraint (confirmed via the
+real Postgres `23514` constraint-violation errors, not just an absence of complaint); both valid
+test rows deleted afterward, `exercise_sessions` back to its real 19-row count, no existing rows
+touched.
+
 ---
 
 ## Summary — rough remaining build time

@@ -41,6 +41,15 @@ private const val CTL_TAU_DAYS = 42.0
 private const val ATL_TAU_DAYS = 7.0
 private const val CTL_GATE_DAYS = 42
 
+// Shared by Category 7 (domain/RestCadenceEvaluation.kt), so both categories
+// walk the identical daily total rather than two slightly-different ones.
+// Same-day sessions (this account's real data has one exact duplicate --
+// two identical rows, same timestamp/duration/rpe -- flagged during Phase A4
+// verification, not silently deduplicated here) are summed into one daily
+// total.
+fun dailySessionLoadMap(sessionLoads: List<Pair<LocalDate, Double>>): Map<LocalDate, Double> =
+    sessionLoads.groupBy { it.first }.mapValues { (_, v) -> v.sumOf { it.second } }
+
 // sessionLoads: one (date, session_load) pair per exercise session that has
 // both duration_min and rpe logged -- multiple sessions on the same day are
 // summed into that day's total load before the EWMA walk.
@@ -55,11 +64,8 @@ fun evaluateTrainingLoad(sessionLoads: List<Pair<LocalDate, Double>>, asOf: Loca
 
     // CTL/ATL are EWMAs over a continuous daily series -- a rest day is a
     // real 0 to walk through, not a gap to skip, unlike the gap-tolerant
-    // date-filtered windows Categories 1/2/5 use. Same-day sessions (this
-    // account's real data has one exact duplicate -- two identical rows,
-    // same timestamp/duration/rpe -- flagged during Phase A4 verification,
-    // not silently deduplicated here) are summed into one daily total.
-    val dailyLoad = sessionLoads.groupBy { it.first }.mapValues { (_, v) -> v.sumOf { it.second } }
+    // date-filtered windows Categories 1/2/5 use.
+    val dailyLoad = dailySessionLoadMap(sessionLoads)
     val alphaCtl = 2.0 / (CTL_TAU_DAYS + 1.0)
     val alphaAtl = 2.0 / (ATL_TAU_DAYS + 1.0)
 

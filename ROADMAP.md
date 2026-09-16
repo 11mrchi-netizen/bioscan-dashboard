@@ -2182,6 +2182,48 @@ touched.
 
 ---
 
+## Phase C — Exercise Library (name normalization + muscle mapping)
+
+Phase B deferred exercise-name normalization + a muscle-mapped exercise library entirely, framing
+it (per the original handoff) as "a build-time decision best made with actual data in hand." This
+phase resolves it: real data from both real open-dataset candidates was fetched and inspected
+directly (not assumed) before choosing.
+
+### ✅ Phase C — `exercise_library` table + one-time import (done 2026-09-16, Claude Code)
+**Real comparison, not just the handoff's word taken**: fetched wger's real API output (confirmed
+880 exercises, real primary/secondary muscle split, but the one exercise inspected had an *empty*
+`aliases` array — undercutting its main claimed edge for name-matching — and its license is
+CC-BY-SA 4.0, requiring attribution) against Free Exercise DB's real, full dataset (downloaded and
+inspected with a script: **876 exercises, zero duplicate names, every row has ≥1 primary muscle**,
+four completely clean closed vocabularies — `force`/`level`/`mechanic`/`equipment` — and a 17-value
+muscle vocabulary, under the public-domain Unlicense). Chose Free Exercise DB — cleaner license fit
+for this project's existing preference for owned, no-dependency data.
+
+New `exercise_library` table: `id` (the dataset's own stable text slug, not a `bigint identity` —
+deliberate, so a future re-import is naturally idempotent on conflict), `name`, `category` (the
+dataset's own movement category — strength/cardio/stretching/etc., a different axis from
+`exercise_sessions.type`, not the same vocabulary reused), `force`/`level`/`mechanic`/`equipment`,
+`primary_muscles`/`secondary_muscles` (`text[]`). A real, deliberate schema-pattern departure from
+every other table in this project: this is global reference data, not user-owned, so it gets RLS
+enabled with exactly one `select` policy (`using (true)`) and **no insert/update/delete policy at
+all** — confirmed via `pg_policy` after creation that no write policy exists, so the app itself can
+never modify this table.
+
+**Real scope trim, stated rather than silent**: the dataset's `instructions` and `images` fields
+were dropped from the import — this pass's purpose is name/muscle normalization, not an
+instructional library. Re-importable later if wanted.
+
+**Verified against the real imported data**: `select count(*)` returns exactly 876; a spot-check of
+every real "squat" entry (53 rows) shows correct, sensible primary/secondary muscle assignments
+(quadriceps primary on every barbell/dumbbell/machine squat variant, glutes/hamstrings/calves as
+secondary, matching real anatomy) and correct equipment values.
+
+**Still deferred, unchanged from Phase B's own framing**: fuzzy-matching a logged free-text exercise
+name (`exercise_sessions.details.exercises[].name`) against this library's canonical names — real,
+separate future work once there's an actual UI/query path that needs it.
+
+---
+
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and

@@ -29,6 +29,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -50,8 +51,11 @@ import com.bioscan.fieldterminal.data.NutritionEstimationRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.LogArousalRow
+import com.bioscan.fieldterminal.data.model.ExerciseSessionDetails
 import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
+import com.bioscan.fieldterminal.data.model.StrengthExerciseDto
+import com.bioscan.fieldterminal.data.model.StrengthSetDto
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
@@ -340,10 +344,11 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                 )
                 is FullExerciseSessionRow -> ExerciseDetailsForm(
                     saving,
-                    typeLabel = row.type,
+                    type = row.type,
                     initialRpe = row.rpe,
                     initialNotes = row.notes ?: "",
-                    onSave = { rpe, notes -> onSubmit { it.updateExerciseDetails(row.id, rpe, notes) } },
+                    initialDetails = row.details,
+                    onSave = { rpe, notes, details -> onSubmit { it.updateExerciseDetails(row.id, rpe, notes, details) } },
                 )
             }
             Spacer(Modifier.height(12.dp))
@@ -842,36 +847,167 @@ private fun WellnessForm(
     }
 }
 
-// Phase G3: the only editable part of a Health-Connect-sourced exercise
-// session. Everything else (times, distance, heart rate) comes from Health
-// Connect and isn't editable in this app. Deliberately basic per the
-// user's own "keep it basic, see how to add later" framing for
-// type-specific extras (sets/reps for strength, surface for runs) -- free-
-// text notes can carry that informally until a structured editor exists.
+private val ROUTE_TYPE_OPTIONS = listOf("road", "trail", "mixed", "track")
+private val RUN_TYPE_OPTIONS = listOf("easy", "tempo", "long", "hills", "intervals", "race", "recovery")
+
+// Phase G3 + Phase B follow-up: Health Connect still supplies the time,
+// distance, and heart rate for every session -- never editable here. RPE and
+// notes were the only hand-entered fields until now; type='run' sessions now
+// also get route_type/run_type chip pickers, and type='strength' sessions
+// get a real exercises/sets editor, matching the exercise_sessions.details
+// shapes Phase B's CHECK constraints enforce. Every other type keeps the
+// original rpe/notes-only form -- no jsonb shape is spec'd for those.
 @Composable
 private fun ExerciseDetailsForm(
     saving: Boolean,
-    typeLabel: String,
+    type: String,
     initialRpe: Int? = null,
     initialNotes: String = "",
-    onSave: (rpe: Int?, notes: String?) -> Unit,
+    initialDetails: ExerciseSessionDetails = ExerciseSessionDetails(),
+    onSave: (rpe: Int?, notes: String?, details: ExerciseSessionDetails) -> Unit,
 ) {
     var rpe by remember { mutableStateOf(initialRpe?.toString() ?: "") }
     var notes by remember { mutableStateOf(initialNotes) }
+    var routeType by remember { mutableStateOf(initialDetails.routeType) }
+    var runType by remember { mutableStateOf(initialDetails.runType) }
+    val exercises = remember {
+        val seeded = initialDetails.exercises.orEmpty().map { it.toEditable() }
+        mutableStateListOf(*seeded.ifEmpty { listOf(EditableExercise()) }.toTypedArray())
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(
-            "Health Connect supplies the time, distance, and heart rate for this $typeLabel session — " +
-                "only RPE and notes are editable here.",
+            "Health Connect supplies the time, distance, and heart rate for this $type session — " +
+                "everything below is entered by hand.",
             style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
             color = FieldColors.InkMuted,
         )
+
+        if (type == "run") {
+            Column { FormLabel("ROUTE (OPTIONAL)"); TextChipRow(ROUTE_TYPE_OPTIONS, routeType) { routeType = it } }
+            Column { FormLabel("RUN TYPE (OPTIONAL)"); TextChipRow(RUN_TYPE_OPTIONS, runType) { runType = it } }
+        }
+
+        if (type == "strength") {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                FormLabel("EXERCISES")
+                exercises.forEachIndexed { i, exercise -> ExerciseEditor(exercise, canRemove = exercises.size > 1) { exercises.removeAt(i) } }
+                Text(
+                    "+ ADD EXERCISE",
+                    style = TextStyle(fontFamily = JetBrainsMono, fontSize = 12.sp),
+                    color = FieldColors.Amber,
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { exercises.add(EditableExercise()) },
+                )
+            }
+        }
+
         Column { FormLabel("RPE 0-10 (OPTIONAL)"); FieldTextField(rpe, { rpe = it }, "e.g. 6", keyboardType = KeyboardType.Number) }
-        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Sets, reps, surface, etc.", singleLine = false) }
+        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
         SaveButton(saving, true) {
-            onSave(rpe.toIntOrNull(), notes.trim().ifBlank { null })
+            val details = ExerciseSessionDetails(
+                routeType = routeType,
+                runType = runType,
+                exercises = if (type == "strength") exercises.mapNotNull { it.toDtoOrNull() }.ifEmpty { null } else initialDetails.exercises,
+            )
+            onSave(rpe.toIntOrNull(), notes.trim().ifBlank { null }, details)
         }
     }
+}
+
+// Tap-to-select chip row over a small fixed vocabulary, generalizing
+// StoolForm's Bristol-type row (below) to string values -- these fields are
+// optional (unlike Bristol), so tapping the already-selected chip again
+// clears it back to null rather than always leaving exactly one selected.
+@Composable
+private fun TextChipRow(options: List<String>, selected: String?, perRow: Int = 4, onSelect: (String?) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        options.chunked(perRow).forEach { rowOptions ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                rowOptions.forEach { option ->
+                    val isSelected = option == selected
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(1.dp, if (isSelected) FieldColors.Amber else FieldColors.Hairline)
+                            .background(if (isSelected) FieldColors.Amber.copy(alpha = 0.18f) else FieldColors.RaisedSurface)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { onSelect(if (isSelected) null else option) }
+                            .padding(vertical = 10.dp, horizontal = 2.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            option.uppercase(),
+                            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp),
+                            color = if (isSelected) FieldColors.Amber else FieldColors.InkMuted,
+                        )
+                    }
+                }
+                repeat(perRow - rowOptions.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+// Local editable mirror of StrengthExerciseDto/StrengthSetDto -- text-field-
+// backed (reps/weight_kg parse to Int/Double only on Save) since a set
+// mid-entry is routinely blank or partial, which the DTO's non-nullable
+// reps/weight_kg can't represent.
+private class EditableSet(reps: String = "", weightKg: String = "", rpe: String = "", percentOneRm: String = "") {
+    var reps by mutableStateOf(reps)
+    var weightKg by mutableStateOf(weightKg)
+    var rpe by mutableStateOf(rpe)
+    var percentOneRm by mutableStateOf(percentOneRm)
+}
+
+private class EditableExercise(name: String = "") {
+    var name by mutableStateOf(name)
+    val sets = mutableStateListOf(EditableSet())
+}
+
+private fun StrengthExerciseDto.toEditable() = EditableExercise(name).also { editable ->
+    editable.sets.clear()
+    sets.forEach { s -> editable.sets.add(EditableSet(s.reps.toString(), s.weightKg.toString(), s.rpe?.toString() ?: "", s.percentOneRm?.toString() ?: "")) }
+}
+
+// Drops a set with no reps/weight rather than saving a garbage 0; drops an
+// exercise with no valid sets entirely rather than saving an empty shell.
+private fun EditableExercise.toDtoOrNull(): StrengthExerciseDto? {
+    if (name.isBlank()) return null
+    val validSets = sets.mapNotNull { s ->
+        val reps = s.reps.toIntOrNull()
+        val weightKg = s.weightKg.toDoubleOrNull()
+        if (reps == null || weightKg == null) null
+        else StrengthSetDto(reps = reps, weightKg = weightKg, rpe = s.rpe.toIntOrNull(), percentOneRm = s.percentOneRm.toDoubleOrNull())
+    }
+    return if (validSets.isEmpty()) null else StrengthExerciseDto(name.trim(), validSets)
+}
+
+// TODO(human): render one exercise's editable form -- the name field, its
+// list of sets, and the add-set/remove-set controls.
+//
+// `exercise` is the live EditableExercise (its `name` is a mutableStateOf
+// String, `sets` is a mutableStateListOf<EditableSet>, each EditableSet's
+// reps/weightKg/rpe/percentOneRm are also mutableStateOf String -- mutate
+// them directly, Compose will recompose). `onRemove` removes this whole
+// exercise from the list one level up; only call it when `canRemove` is
+// true (the form always keeps at least one exercise row on screen).
+//
+// Reuse FieldTextField(value, onValueChange, placeholder, modifier, keyboardType,
+// singleLine) for every field -- KeyboardType.Number for reps/weightKg/rpe/
+// percentOneRm. A real layout choice is yours: how much of each set's four
+// fields to show side-by-side in one Row (reps and weight_kg are required;
+// rpe and percent_1rm are optional per the handoff and could be visually
+// secondary, e.g. smaller/narrower), and how "add set" / "remove set" should
+// read (a text link like the "+ ADD EXERCISE" control above it, or something
+// else consistent with this file's plain-text-button style -- there are no
+// icons anywhere in this file).
+@Composable
+private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRemove: () -> Unit) {
 }
 
 @Composable

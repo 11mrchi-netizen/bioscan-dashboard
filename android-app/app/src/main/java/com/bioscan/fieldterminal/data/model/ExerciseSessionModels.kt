@@ -27,7 +27,7 @@ data class NewExerciseSessionRow(
 )
 
 // Fetched when editing a Log entry's "extra details" -- see
-// ui/screens/AddEntrySheet.kt's ExerciseDetailsForm. Only rpe/notes are
+// ui/screens/AddEntrySheet.kt's ExerciseDetailsForm. rpe/notes/details are
 // editable; every other field is Health-Connect-sourced and read-only in
 // this app (per the 2026-09-15 direction that removed manual exercise
 // logging entirely).
@@ -37,12 +37,41 @@ data class FullExerciseSessionRow(
     val type: String,
     val rpe: Int? = null,
     val notes: String? = null,
+    val details: ExerciseSessionDetails = ExerciseSessionDetails(),
 )
 
 @Serializable
 data class ExerciseDetailsUpdateRow(
     val rpe: Int? = null,
     val notes: String? = null,
+    val details: ExerciseSessionDetails,
+)
+
+// Phase B follow-up. The type-specific keys exercise_sessions.details can
+// hold, per the Phase B migration's own CHECK constraints -- route_type/
+// run_type only meaningful (and only DB-constrained) when type='run',
+// exercises only meaningful when type='strength'. All nullable: a session
+// of one type simply carries null for the other type's fields, which is
+// harmless to write back untouched.
+@Serializable
+data class ExerciseSessionDetails(
+    @SerialName("route_type") val routeType: String? = null,
+    @SerialName("run_type") val runType: String? = null,
+    val exercises: List<StrengthExerciseDto>? = null,
+)
+
+@Serializable
+data class StrengthExerciseDto(
+    val name: String,
+    val sets: List<StrengthSetDto>,
+)
+
+@Serializable
+data class StrengthSetDto(
+    val reps: Int,
+    @SerialName("weight_kg") val weightKg: Double,
+    val rpe: Int? = null,
+    @SerialName("percent_1rm") val percentOneRm: Double? = null,
 )
 
 // Phase G4: the full row for SessionDetailScreen's summary card, plus

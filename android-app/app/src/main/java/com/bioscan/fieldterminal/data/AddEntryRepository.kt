@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.ExerciseDetailsUpdateRow
+import com.bioscan.fieldterminal.data.model.ExerciseSessionDetails
 import com.bioscan.fieldterminal.data.model.ExistingHydrationRow
 import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.LogArousalRow
@@ -165,12 +166,16 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
-    // Phase G3: the only editable fields on a Health-Connect-sourced
-    // exercise session -- times/distance/HR/etc. all come from Health
-    // Connect and are never written here.
-    suspend fun updateExerciseDetails(id: Long, rpe: Int?, notes: String?) {
+    // Phase G3 + Phase B follow-up: the only editable fields on a
+    // Health-Connect-sourced exercise session -- times/distance/HR/etc. all
+    // come from Health Connect and are never written here. `details` is
+    // written in full (not merged server-side) -- the caller (AddEntrySheet's
+    // ExerciseDetailsForm) always starts from the row's existing details and
+    // only changes the fields its own type's UI exposes, so this is never a
+    // blind overwrite in practice.
+    suspend fun updateExerciseDetails(id: Long, rpe: Int?, notes: String?, details: ExerciseSessionDetails) {
         supabase.postgrest.from("exercise_sessions").update(
-            ExerciseDetailsUpdateRow(rpe = rpe, notes = notes)
+            ExerciseDetailsUpdateRow(rpe = rpe, notes = notes, details = details)
         ) { filter { eq("id", id) } }
     }
 
@@ -198,7 +203,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     suspend fun fetchArousal(id: Long) = fetchById<LogArousalRow>("arousal_daily", "id,date,morning_erection_quality,arousal_level", id)
     suspend fun fetchNote(id: Long) = fetchById<LogNoteRow>("notes", "id,occurred_at,text", id)
     suspend fun fetchWellbeing(id: Long) = fetchById<LogWellbeingRow>("wellbeing_daily", "id,date,energy,mood,stress,soreness", id)
-    suspend fun fetchExerciseSession(id: Long) = fetchById<FullExerciseSessionRow>("exercise_sessions", "id,type,rpe,notes", id)
+    suspend fun fetchExerciseSession(id: Long) = fetchById<FullExerciseSessionRow>("exercise_sessions", "id,type,rpe,notes,details", id)
 
     private suspend inline fun <reified T : Any> fetchById(table: String, columns: String, id: Long): T =
         supabase.postgrest.from(table)

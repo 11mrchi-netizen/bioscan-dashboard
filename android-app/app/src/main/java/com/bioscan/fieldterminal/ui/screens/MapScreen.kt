@@ -46,13 +46,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
+import com.bioscan.fieldterminal.data.GeocodingRepository
 import com.bioscan.fieldterminal.data.MapRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.WeatherRepository
 import com.bioscan.fieldterminal.domain.GpxPoint
-import com.bioscan.fieldterminal.domain.NextSession
+import com.bioscan.fieldterminal.domain.MapEvent
+import com.bioscan.fieldterminal.domain.MapPin
 import com.bioscan.fieldterminal.domain.SessionWeather
-import com.bioscan.fieldterminal.domain.daysUntilSession
+import com.bioscan.fieldterminal.domain.TRAINING_COLOR_ID
+import com.bioscan.fieldterminal.domain.classifySessionKind
 import com.bioscan.fieldterminal.domain.parseSessionZonedDateTime
 import com.bioscan.fieldterminal.domain.routeDistanceKm
 import com.bioscan.fieldterminal.domain.routeElevationGainM
@@ -66,6 +69,8 @@ import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 import com.bioscan.fieldterminal.ui.theme.SairaCondensed
 import com.google.android.gms.common.api.ApiException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.XYTileSource
@@ -75,23 +80,25 @@ import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
-// Step 14 follow-up (user request, 2026-09-15): a real map background, a
-// directions link to the session location, a weather-at-session-time popup,
-// and full-bleed layout with the session details moved into a popup instead
-// of an always-visible card. See ROADMAP.md for the full write-up, including
-// why this uses osmdroid + CARTO's free Dark Matter tiles rather than the
-// Google Maps SDK (which needs a billing-enabled Cloud project just to
-// display a map -- confirmed against Google's own docs, not assumed) and why
-// "arrive by" is a manual step inside the Google Maps app rather than
-// pre-filled (Maps' consumer deep link doesn't accept an arrival time --
-// only its separate, also-billed Directions API does).
+// Phase M1 (Map tab rework, see ROADMAP.md). Replaces Step 14's single
+// "next training session" view with a real multi-pin map of every calendar
+// event in the next 24h -- events with a real address are geocoded (see
+// data/GeocodingRepository.kt); events with none, or whose address fails to
+// geocode, pin at the user's home coordinates (already stored as raw
+// lat/lon in Settings, so no geocoding is needed for that fallback).
+// Training events (colorId '8') keep their GPX route/weather/directions
+// detail; everything else gets a plain detail sheet. Flamingo-colored
+// encounter/social classification and partner matching are Phase M2/M3, not
+// built here.
 private sealed interface MapState {
     data object CheckingAccess : MapState
     data class NeedsConsent(val pendingIntent: android.app.PendingIntent) : MapState
     data class Error(val message: String) : MapState
-    data class Ready(val session: NextSession?, val gpxPoints: List<GpxPoint>?, val gpxError: String?) : MapState
+    data class Ready(val pins: List<MapPin>, val droppedCount: Int, val accessToken: String) : MapState
 }
 
 private sealed interface WeatherUiState {
@@ -110,18 +117,24 @@ fun MapScreen() {
     suspend fun loadWithToken(token: String) {
         try {
             val repo = MapRepository(token)
-            val session = repo.fetchNextSession()
-            var points: List<GpxPoint>? = null
-            var gpxError: String? = null
-            val gpxLink = session?.gpxLink
-            if (gpxLink != null) {
-                try {
-                    points = repo.fetchGpxPoints(gpxLink)
-                } catch (e: Exception) {
-                    gpxError = e.message
-                }
+            val events = repo.fetchUpcomingEvents()
+            val geocoder = GeocodingRepository()
+            val home = MapSettingsStore.getHome(activity)
+
+            val resolved = coroutineScope {
+                events.map { event ->
+                    async {
+                        val geocoded = event.location?.let { geocoder.geocode(it) }
+                        when {
+                            geocoded != null -> MapPin(event, geocoded.first, geocoded.second, isHomeFallback = false)
+                            home != null -> MapPin(event, home.first, home.second, isHomeFallback = true)
+                            else -> null
+                        }
+                    }
+                }.map { it.await() }
             }
-            state = MapState.Ready(session, points, gpxError)
+            val pins = resolved.filterNotNull()
+            state = MapState.Ready(pins, droppedCount = resolved.size - pins.size, accessToken = token)
         } catch (e: Exception) {
             state = MapState.Error(e.message ?: "Failed to load calendar data.")
         }
@@ -156,10 +169,10 @@ fun MapScreen() {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground)) {
-        val readySession = (state as? MapState.Ready)?.session
+        val readyState = state as? MapState.Ready
         ScreenHeader(
             title = "MAP",
-            context = readySession?.let { "NEXT SESSION · " + formatHeaderDate(it.startIso) } ?: "—",
+            context = readyState?.let { "${it.pins.size} EVENT" + (if (it.pins.size == 1) "" else "S") + " · NEXT 24H" } ?: "—",
         )
 
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
@@ -170,7 +183,7 @@ fun MapScreen() {
                 is MapState.NeedsConsent -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(
-                            "Grant Calendar and Drive access to see your next training session and its route.",
+                            "Grant Calendar and Drive access to see your upcoming events on the map.",
                             style = FieldTextStyles.placeholderBody,
                             color = FieldColors.InkMuted,
                         )
@@ -190,106 +203,129 @@ fun MapScreen() {
 
 @Composable
 private fun MapReadyContent(state: MapState.Ready) {
-    val session = state.session
-    if (session == null) {
+    if (state.pins.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
-            Text("No training session in the next 7 days.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
-        }
-        return
-    }
-    if (session.gpxLink == null) {
-        Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp)) {
-            NoLocationCard(session)
+            Text(
+                if (state.droppedCount > 0) {
+                    "${state.droppedCount} event(s) in the next 24 hours have no location and no home location is set — add one in Settings to see them here."
+                } else {
+                    "No calendar events in the next 24 hours."
+                },
+                style = FieldTextStyles.placeholderBody,
+                color = FieldColors.InkMuted,
+            )
         }
         return
     }
 
     val context = LocalContext.current
     val cartoKey = remember { MapSettingsStore.getCartoKey(context) }
-    val home = remember { MapSettingsStore.getHome(context) }
-    var showDetails by remember { mutableStateOf(false) }
+    val repo = remember(state.accessToken) { MapRepository(state.accessToken) }
+    var selectedPin by remember { mutableStateOf<MapPin?>(null) }
+    var routePoints by remember { mutableStateOf<List<GpxPoint>?>(null) }
+    var routeError by remember { mutableStateOf<String?>(null) }
     var showWeather by remember { mutableStateOf(false) }
     var weatherState by remember { mutableStateOf<WeatherUiState>(WeatherUiState.Idle) }
     val scope = rememberCoroutineScope()
 
+    LaunchedEffect(selectedPin) {
+        routePoints = null
+        routeError = null
+        weatherState = WeatherUiState.Idle
+        val pin = selectedPin
+        val gpxLink = pin?.event?.gpxLink
+        if (pin != null && pin.event.colorId == TRAINING_COLOR_ID && gpxLink != null) {
+            try {
+                routePoints = repo.fetchGpxPoints(gpxLink)
+            } catch (e: Exception) {
+                routeError = e.message
+            }
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
-        when {
-            cartoKey == null -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
+        if (cartoKey == null) {
+            Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
                 Text(
                     "Add a free CARTO API key in Settings to show the map background (carto.com/basemaps/apikey — no billing).",
                     style = FieldTextStyles.placeholderBody,
                     color = FieldColors.InkMuted,
                 )
             }
-            state.gpxError != null -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
-                Text("Couldn't load the route (${state.gpxError}).", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
-            }
-            state.gpxPoints == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FieldColors.Amber)
-            }
-            else -> {
-                val points = state.gpxPoints
-                OsmMapView(points = points, cartoKey = cartoKey, modifier = Modifier.fillMaxSize())
-
-                WeatherChip(
-                    state = weatherState,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
-                    onClick = {
-                        showWeather = true
-                        if (weatherState !is WeatherUiState.Loaded) {
-                            val start = points.first()
-                            val at = parseSessionZonedDateTime(session.startIso)
-                            weatherState = WeatherUiState.Loading
-                            scope.launch {
-                                weatherState = try {
-                                    WeatherUiState.Loaded(WeatherRepository().fetchAt(start.lat, start.lon, at))
-                                } catch (e: Exception) {
-                                    WeatherUiState.Failed(e.message ?: "Weather request failed.")
-                                }
-                            }
-                        }
-                    },
-                )
-
-                Row(
-                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+        } else {
+            MultiPinMapView(
+                pins = state.pins,
+                routePoints = routePoints,
+                cartoKey = cartoKey,
+                onPinClick = { selectedPin = it },
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (state.droppedCount > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(16.dp)
+                        .background(FieldColors.Panel.copy(alpha = 0.92f))
+                        .border(1.dp, FieldColors.Hairline)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                 ) {
-                    MapActionChip(label = "DETAILS", modifier = Modifier.weight(1f)) { showDetails = true }
-                    if (home != null) {
-                        MapActionChip(label = "DIRECTIONS", modifier = Modifier.weight(1f)) {
-                            val dest = points.first()
-                            context.startActivity(directionsIntent(home.first, home.second, dest.lat, dest.lon))
-                        }
-                    }
+                    Text(
+                        "${state.droppedCount} event(s) couldn't be placed — set a home location in Settings.",
+                        style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
+                        color = FieldColors.InkMuted,
+                    )
                 }
             }
         }
     }
 
-    if (showDetails) {
-        SessionDetailsSheet(session, gpxPoints = state.gpxPoints, onDismiss = { showDetails = false })
+    selectedPin?.let { pin ->
+        PinDetailSheet(
+            pin = pin,
+            routePoints = routePoints,
+            routeError = routeError,
+            weatherState = weatherState,
+            onRequestWeather = {
+                showWeather = true
+                if (weatherState !is WeatherUiState.Loaded) {
+                    val at = parseSessionZonedDateTime(pin.event.startIso)
+                    weatherState = WeatherUiState.Loading
+                    scope.launch {
+                        weatherState = try {
+                            WeatherUiState.Loaded(WeatherRepository().fetchAt(pin.lat, pin.lon, at))
+                        } catch (e: Exception) {
+                            WeatherUiState.Failed(e.message ?: "Weather request failed.")
+                        }
+                    }
+                }
+            },
+            onDismiss = { selectedPin = null },
+        )
     }
     if (showWeather) {
         WeatherSheet(weatherState, onDismiss = { showWeather = false })
     }
 }
 
-// osmdroid MapView wrapped for Compose -- CARTO's free Dark Matter raster
-// tiles (basemaps.cartocdn.com), not the Google Maps SDK, so this needs no
-// billing-enabled Cloud project (see the file header note). The route and
-// its start/end markers are real lat/lon overlays on the actual map, not the
-// stylized projected line the previous version of this screen drew on a
-// bare Canvas.
+// osmdroid MapView wrapped for Compose -- same CARTO Dark Matter tile setup
+// as Step 14, but one Marker per MapPin instead of a single route's start/end
+// dots, and the currently-selected training pin's route (if any) drawn as a
+// Polyline via AndroidView's update callback, so selecting a different pin
+// swaps the route without recreating the whole map (which would otherwise
+// reset the user's own pan/zoom).
 @Composable
-private fun OsmMapView(points: List<GpxPoint>, cartoKey: String, modifier: Modifier = Modifier) {
+private fun MultiPinMapView(
+    pins: List<MapPin>,
+    routePoints: List<GpxPoint>?,
+    cartoKey: String,
+    onPinClick: (MapPin) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
             Configuration.getInstance().apply {
                 userAgentValue = ctx.packageName
-                // App-specific directories -- no WRITE_EXTERNAL_STORAGE needed
-                // on any supported API level, unlike osmdroid's older default.
                 osmdroidBasePath = ctx.filesDir
                 osmdroidTileCache = ctx.cacheDir
             }
@@ -307,23 +343,16 @@ private fun OsmMapView(points: List<GpxPoint>, cartoKey: String, modifier: Modif
                 setMultiTouchControls(true)
                 zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
 
-                val geoPoints = points.map { GeoPoint(it.lat, it.lon) }
-                overlays.add(
-                    Polyline(this).apply {
-                        setPoints(geoPoints)
-                        outlinePaint.color = FieldColors.Cyan.toArgb()
-                        outlinePaint.strokeWidth = 9f
-                    },
-                )
-                overlays.add(dotMarker(this, geoPoints.first(), FieldColors.Green.toArgb()))
-                overlays.add(dotMarker(this, geoPoints.last(), FieldColors.Magenta.toArgb()))
+                pins.forEach { pin ->
+                    val color = if (pin.event.colorId == TRAINING_COLOR_ID) FieldColors.Cyan.toArgb() else FieldColors.Amber.toArgb()
+                    overlays.add(pinMarker(this, GeoPoint(pin.lat, pin.lon), color) { onPinClick(pin) })
+                }
 
-                // zoomToBoundingBox needs a laid-out view to compute a real
-                // zoom level -- post() defers until after the first layout pass.
                 post {
+                    val geoPoints = pins.map { GeoPoint(it.lat, it.lon) }
                     val box = BoundingBox.fromGeoPoints(geoPoints)
-                    val latPad = (box.latNorth - box.latSouth).coerceAtLeast(0.001) * 0.2
-                    val lonPad = (box.lonEast - box.lonWest).coerceAtLeast(0.001) * 0.2
+                    val latPad = (box.latNorth - box.latSouth).coerceAtLeast(0.005) * 0.3
+                    val lonPad = (box.lonEast - box.lonWest).coerceAtLeast(0.005) * 0.3
                     zoomToBoundingBox(
                         BoundingBox(box.latNorth + latPad, box.lonEast + lonPad, box.latSouth - latPad, box.lonWest - lonPad),
                         false,
@@ -331,61 +360,51 @@ private fun OsmMapView(points: List<GpxPoint>, cartoKey: String, modifier: Modif
                 }
             }
         },
+        update = { mapView ->
+            mapView.overlays.removeAll { it is Polyline }
+            if (routePoints != null && routePoints.size >= 2) {
+                mapView.overlays.add(
+                    Polyline(mapView).apply {
+                        setPoints(routePoints.map { GeoPoint(it.lat, it.lon) })
+                        outlinePaint.color = FieldColors.Cyan.toArgb()
+                        outlinePaint.strokeWidth = 9f
+                    },
+                )
+            }
+            mapView.invalidate()
+        },
     )
 }
 
-private fun dotMarker(mapView: MapView, point: GeoPoint, color: Int): Marker =
+private fun pinMarker(mapView: MapView, point: GeoPoint, color: Int, onClick: () -> Unit): Marker =
     Marker(mapView).apply {
         position = point
         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
         icon = ShapeDrawable(OvalShape()).apply {
             paint.color = color
-            intrinsicWidth = 34
-            intrinsicHeight = 34
-            setBounds(0, 0, 34, 34)
+            intrinsicWidth = 40
+            intrinsicHeight = 40
+            setBounds(0, 0, 40, 40)
         }
-        setOnMarkerClickListener { _, _ -> true } // consume tap, suppress default info-window popup
+        setOnMarkerClickListener { _, _ -> onClick(); true }
     }
-
-@Composable
-private fun WeatherChip(state: WeatherUiState, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .background(FieldColors.Panel.copy(alpha = 0.92f))
-            .border(1.dp, FieldColors.Hairline)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        when (state) {
-            is WeatherUiState.Loaded -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(weatherCodeSymbol(state.weather.code), fontSize = 16.sp)
-                Text("%.0f°".format(state.weather.temperatureC), style = FieldTextStyles.syncLabel, color = FieldColors.Ink)
-            }
-            WeatherUiState.Loading -> Text("···", style = FieldTextStyles.syncLabel, color = FieldColors.InkMuted)
-            is WeatherUiState.Failed -> Text("WEATHER ⚠", style = FieldTextStyles.syncLabel, color = FieldColors.Alert)
-            WeatherUiState.Idle -> Text("WEATHER", style = FieldTextStyles.syncLabel, color = FieldColors.InkMuted)
-        }
-    }
-}
-
-@Composable
-private fun MapActionChip(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .background(FieldColors.Amber.copy(alpha = 0.14f))
-            .border(1.dp, FieldColors.Amber)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(vertical = 14.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, style = FieldTextStyles.subTabLabel, color = FieldColors.Amber)
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SessionDetailsSheet(session: NextSession, gpxPoints: List<GpxPoint>?, onDismiss: () -> Unit) {
+private fun PinDetailSheet(
+    pin: MapPin,
+    routePoints: List<GpxPoint>?,
+    routeError: String?,
+    weatherState: WeatherUiState,
+    onRequestWeather: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val event = pin.event
+    val isTraining = event.colorId == TRAINING_COLOR_ID
+    val context = LocalContext.current
+    val home = remember { MapSettingsStore.getHome(context) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -393,29 +412,85 @@ private fun SessionDetailsSheet(session: NextSession, gpxPoints: List<GpxPoint>?
         containerColor = FieldColors.Panel,
         contentColor = FieldColors.Ink,
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(sessionCardTitle(session.kind), style = FieldTextStyles.headerTitle, color = FieldColors.Amber)
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             Text(
-                text = session.title.trim(),
+                if (isTraining) sessionCardTitle(classifySessionKind(event.title)) else "EVENT",
+                style = FieldTextStyles.headerTitle,
+                color = FieldColors.Amber,
+            )
+            Text(
+                text = event.title.trim().ifBlank { "Untitled event" },
                 style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 18.sp),
                 color = FieldColors.Ink,
             )
-            session.description.takeIf { it.isNotBlank() }?.let {
+            event.description.takeIf { it.isNotBlank() }?.let {
                 Text(it, style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp), color = FieldColors.InkMuted)
             }
             Text(
-                text = formatSessionMeta(session),
+                text = formatEventMeta(event),
                 style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
                 color = FieldColors.InkMuted,
             )
-            if (gpxPoints != null) {
-                Text(
-                    text = routeSummary(gpxPoints),
-                    style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
-                    color = FieldColors.Cyan,
-                )
+            Text(
+                text = if (pin.isHomeFallback) "Pinned at home — this event has no location." else (event.location ?: ""),
+                style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+                color = FieldColors.InkMuted,
+            )
+
+            if (isTraining) {
+                when {
+                    routeError != null -> Text(
+                        "Couldn't load the route (${routeError}).",
+                        style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                        color = FieldColors.InkMuted,
+                    )
+                    routePoints != null -> Text(
+                        routeSummary(routePoints),
+                        style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                        color = FieldColors.Cyan,
+                    )
+                    event.gpxLink == null -> Text(
+                        "No route file linked to this session.",
+                        style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+                        color = FieldColors.InkMuted,
+                    )
+                }
+                WeatherRow(weatherState, onClick = onRequestWeather)
+            }
+
+            if (!pin.isHomeFallback && home != null) {
+                AmberButton(label = "DIRECTIONS") {
+                    context.startActivity(directionsIntent(home.first, home.second, pin.lat, pin.lon))
+                }
             }
             Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun WeatherRow(state: WeatherUiState, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, FieldColors.Hairline)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("WEATHER AT SESSION TIME", style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
+        when (state) {
+            is WeatherUiState.Loaded -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(weatherCodeSymbol(state.weather.code), fontSize = 16.sp)
+                Text("%.0f°".format(state.weather.temperatureC), style = FieldTextStyles.syncLabel, color = FieldColors.Ink)
+            }
+            WeatherUiState.Loading -> Text("···", style = FieldTextStyles.syncLabel, color = FieldColors.InkMuted)
+            is WeatherUiState.Failed -> Text("⚠", style = FieldTextStyles.syncLabel, color = FieldColors.Alert)
+            WeatherUiState.Idle -> Text("VIEW", style = FieldTextStyles.syncLabel, color = FieldColors.Amber)
         }
     }
 }
@@ -473,31 +548,6 @@ private fun WeatherSheet(state: WeatherUiState, onDismiss: () -> Unit) {
     }
 }
 
-@Composable
-private fun NoLocationCard(session: NextSession) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(sessionCardTitle(session.kind), style = FieldTextStyles.headerTitle, color = FieldColors.Amber)
-        Text(
-            text = session.title.trim(),
-            style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 18.sp),
-            color = FieldColors.Ink,
-        )
-        session.description.takeIf { it.isNotBlank() }?.let {
-            Text(it, style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp), color = FieldColors.InkMuted)
-        }
-        Text(
-            text = formatSessionMeta(session),
-            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
-            color = FieldColors.InkMuted,
-        )
-        Text(
-            "Gym and strength sessions carry no location — no route file linked to this session.",
-            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-            color = FieldColors.InkMuted,
-        )
-    }
-}
-
 // Consumer Google Maps deep link -- no API key, no billing. Doesn't accept a
 // pre-filled arrival time (that parameter only exists in Google's separate,
 // also-billed Directions API) -- the person sets "Arrive by" themselves once
@@ -517,22 +567,20 @@ private fun sessionCardTitle(kind: String): String = when (kind) {
     else -> "TRAINING SESSION"
 }
 
-private fun formatHeaderDate(startIso: String): String =
-    parseSessionZonedDateTime(startIso).format(DateTimeFormatter.ofPattern("EEE d MMM HH:mm")).uppercase()
-
-private fun formatSessionMeta(session: NextSession): String {
-    val dateText = formatHeaderDate(session.startIso)
-    val whenLabel = when (val days = daysUntilSession(session.startIso)) {
-        0L -> "TODAY"
-        1L -> "TOMORROW"
-        else -> if (days > 0) "IN $days DAYS" else "OVERDUE"
+private fun formatEventMeta(event: MapEvent): String {
+    val start = parseSessionZonedDateTime(event.startIso)
+    val dateText = start.format(DateTimeFormatter.ofPattern("EEE d MMM HH:mm")).uppercase()
+    val minutesUntil = ChronoUnit.MINUTES.between(ZonedDateTime.now(start.zone), start)
+    val whenLabel = when {
+        minutesUntil <= 0 -> "NOW / IN PROGRESS"
+        minutesUntil < 60 -> "IN $minutesUntil MIN"
+        else -> "IN ${minutesUntil / 60}H ${minutesUntil % 60}M"
     }
     return "$dateText — $whenLabel"
 }
 
 // Real distance/elevation-gain, computed from the actual GPX points (not
-// fabricated) -- now shown inside the details popup rather than as an
-// always-visible caption over the map, since the map itself shows the route.
+// fabricated).
 private fun routeSummary(points: List<GpxPoint>): String {
     val distanceKm = routeDistanceKm(points)
     val gainM = routeElevationGainM(points)

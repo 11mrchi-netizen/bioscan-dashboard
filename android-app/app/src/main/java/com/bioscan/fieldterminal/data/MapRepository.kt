@@ -1,8 +1,7 @@
 package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.domain.GpxPoint
-import com.bioscan.fieldterminal.domain.NextSession
-import com.bioscan.fieldterminal.domain.classifySessionKind
+import com.bioscan.fieldterminal.domain.MapEvent
 import com.bioscan.fieldterminal.domain.parseGpxLink
 import com.bioscan.fieldterminal.domain.parseGpxPoints
 import io.ktor.client.HttpClient
@@ -18,13 +17,6 @@ import java.time.temporal.ChronoUnit
 
 class MapFetchException(message: String) : Exception(message)
 
-// Step 14. Same colorId '8' == training-session convention index.html's
-// fetchNextSession() already established (confirmed there, not guessed) --
-// more reliable than matching emoji/title text, which can vary. Meal-prep
-// and other non-training events use different colorIds and are correctly
-// excluded.
-private const val TRAINING_COLOR_ID = "8"
-
 private val json = Json { ignoreUnknownKeys = true }
 
 // Takes a live Google access token (from GoogleAuthorizationManager, minted
@@ -33,15 +25,19 @@ private val json = Json { ignoreUnknownKeys = true }
 class MapRepository(private val accessToken: String) {
     private val client = HttpClient(Android)
 
-    suspend fun fetchNextSession(): NextSession? {
+    // Phase M1: every event in a rolling 24h window, not just the first
+    // training-colored one -- replaces the old fetchNextSession(), which is
+    // unused anywhere else in this app (confirmed by a project-wide search
+    // before removing it, not assumed safe to drop).
+    suspend fun fetchUpcomingEvents(): List<MapEvent> {
         val now = Instant.now()
-        val weekOut = now.plus(7, ChronoUnit.DAYS)
+        val dayOut = now.plus(24, ChronoUnit.HOURS)
 
         val response = client.get("https://www.googleapis.com/calendar/v3/calendars/primary/events") {
             header("Authorization", "Bearer $accessToken")
             url {
                 parameters.append("timeMin", now.toString())
-                parameters.append("timeMax", weekOut.toString())
+                parameters.append("timeMax", dayOut.toString())
                 parameters.append("singleEvents", "true")
                 parameters.append("orderBy", "startTime")
                 parameters.append("maxResults", "50")
@@ -54,17 +50,19 @@ class MapRepository(private val accessToken: String) {
         }
 
         val parsed = json.decodeFromString<CalendarEventsResponse>(bodyText)
-        val next = parsed.items.firstOrNull { it.colorId == TRAINING_COLOR_ID } ?: return null
-        val summary = next.summary ?: ""
-        val startIso = next.start.dateTime ?: next.start.date ?: return null
-
-        return NextSession(
-            title = summary,
-            startIso = startIso,
-            description = next.description ?: "",
-            kind = classifySessionKind(summary),
-            gpxLink = parseGpxLink(next.description),
-        )
+        return parsed.items.mapNotNull { item ->
+            val startIso = item.start.dateTime ?: item.start.date ?: return@mapNotNull null
+            MapEvent(
+                id = item.id,
+                title = item.summary ?: "",
+                startIso = startIso,
+                endIso = item.end.dateTime ?: item.end.date,
+                description = item.description ?: "",
+                location = item.location?.takeIf { it.isNotBlank() },
+                colorId = item.colorId,
+                gpxLink = parseGpxLink(item.description),
+            )
+        }
     }
 
     // The GPX file lives in the user's own Drive, not publicly shared --
@@ -107,10 +105,13 @@ private data class CalendarEventsResponse(val items: List<CalendarEvent> = empty
 
 @Serializable
 private data class CalendarEvent(
+    val id: String? = null,
     val summary: String? = null,
     val description: String? = null,
+    val location: String? = null,
     val colorId: String? = null,
     val start: CalendarEventDateTime = CalendarEventDateTime(),
+    val end: CalendarEventDateTime = CalendarEventDateTime(),
 )
 
 @Serializable

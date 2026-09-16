@@ -15,23 +15,17 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-// Step 14 (Map tab). Real data from the signed-in user's own Google Calendar
-// -- same colorId '8' == training-session convention index.html's
-// fetchNextSession() already established (confirmed there, not guessed here;
-// more reliable than matching emoji/title text, which can vary) -- and,
-// when its description links one, a GPX route file from Drive. Ported 1:1
-// from index.html's classifySessionType()/parseGpxLink()/parseGpxPoints(),
-// except daysUntilSession(): the web hardcodes Asia/Taipei there specifically
-// to correct for an arbitrary browser's timezone; this uses the device's own
+// Step 14 (Map tab), generalized in Phase M1 from the single-event
+// NextSession (removed -- see domain/MapEvent.kt) to any MapEvent. Real data
+// from the signed-in user's own Google Calendar -- same colorId '8' ==
+// training-session convention index.html's fetchNextSession() already
+// established (confirmed there, not guessed here; more reliable than
+// matching emoji/title text, which can vary) -- and, when its description
+// links one, a GPX route file from Drive. Ported 1:1 from index.html's
+// classifySessionType()/parseGpxLink()/parseGpxPoints(), except
+// daysUntilSession(): the web hardcodes Asia/Taipei there specifically to
+// correct for an arbitrary browser's timezone; this uses the device's own
 // zone instead, matching every other date computation already in this app.
-data class NextSession(
-    val title: String,
-    val startIso: String,
-    val description: String,
-    val kind: String,
-    val gpxLink: String?,
-)
-
 data class GpxPoint(val lat: Double, val lon: Double, val elevationM: Double?)
 
 fun classifySessionKind(summary: String): String = when {

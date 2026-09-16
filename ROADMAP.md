@@ -1687,6 +1687,67 @@ samples exists on a device running this app — flagged here rather than present
 
 ---
 
+### ✅ Phase M1 — Map tab rework: multi-pin map + geocoding (done 2026-09-16, Claude Code)
+Replaces Step 14's single "next training session" view with a real map of every calendar event in
+the next 24 hours. The old gap this fixes: the Map tab only ever showed exactly one event (the
+soonest one within 7 days whose color was Graphite), and when that one event had no Drive-linked
+GPX route — true for every gym/strength session — the screen fell back to a text-only card with
+nothing else to show. Not a missing back button (there was nothing to navigate to); a genuine
+architectural limit on "more than one event" that this phase removes.
+
+`MapRepository.fetchNextSession()` (single event, 7-day window, training-color filter) is replaced
+by `fetchUpcomingEvents()` (every event, rolling 24h window, no filter) — confirmed via a
+project-wide grep before removal that nothing else depended on the old method or `domain.
+NextSession`. Each event's free-text `location` (Calendar's own field, already returned by the API
+but never parsed before this phase) is geocoded via a new `data/GeocodingRepository.kt` — Nominatim
+(OpenStreetMap's free public geocoder), chosen for the same "free tier, no Google billing" reason
+this app already picked CARTO tiles and Open-Meteo weather over their Google-billed equivalents; no
+API key needed, just a real `User-Agent` header per its usage policy. Events with no location, or
+whose address fails to geocode, fall back to the user's home coordinates (already stored as raw
+lat/lon in Settings — no geocoding needed for that path). A new `MultiPinMapView` (same
+osmdroid/CARTO setup as before, one `Marker` per pin instead of a single route) renders all of
+them; tapping a pin opens `PinDetailSheet`, which still gives training events their full
+route/weather/directions treatment (the one thing carried forward untouched from the old single-
+session view) and gives everything else a plain title/time/description view.
+
+**Real bug found and fixed during verification, not just structurally reviewed**: the first working
+version returned early with a plain "No calendar events in the next 24 hours" whenever `pins` was
+empty — without checking *why* it was empty. Live testing against the real calendar (3 genuine
+events: two meal-plan entries and a strength session, all with no location) surfaced the real case:
+with no home location configured in Settings, all 3 real events legitimately fetched from Google
+Calendar got silently dropped (no address, no home fallback to use), and the screen reported "no
+events" as if the calendar were empty — actively misleading, not just incomplete. Fixed by
+threading `droppedCount` into the empty-state branch, so it now says "N event(s) ... no home
+location is set — add one in Settings" when that's what actually happened. Caught by the same
+"verify on the real device, don't trust the code review" discipline as G4's timezone bug.
+
+**Verified live on the emulator against the real, live calendar** (via temporary `Log.d` calls
+added, checked, then fully removed before committing — not shipped): `fetchUpcomingEvents()`
+correctly returned exactly the 3 real events genuinely on the calendar in the next 24h with their
+real titles/colorIds/start times; the geocode-or-home-fallback resolver correctly fell through to
+home coordinates for all 3 (each has no location) once a real (test) home value was set in
+Settings, each pin's `isHomeFallback` flag correctly `true`; the above empty-state bug was caught
+and fixed this way *before* it could be presented as done. The placeholder home coordinate used to
+prove this (a Taipei-area test value, not the user's real home) was cleared from Settings
+afterward — a home location is real, persistent configuration this app relies on for real
+Directions, not disposable test data, so it wasn't left behind.
+
+**Honestly unverified**: actual street-address geocoding (none of the 3 real events on the calendar
+in this test window carry a `location` string — every real event tested was location-less, so only
+the home-fallback branch of the geocode-or-fallback logic was exercised against real data) and
+the map's own tile rendering plus pin-tap → detail-sheet interaction (blocked by no CARTO API key
+being configured on this emulator right now — a pre-existing, separate setup requirement unrelated
+to this phase's code, the same gate the old single-session map view already had). Both need a real
+located calendar event and a CARTO key in Settings to verify end-to-end; flagged here rather than
+assumed working from the parts that could be checked.
+
+**Deferred to M2/M3 (see the approved plan, not re-litigated here)**: Flamingo-color classification,
+title-keyword sub-classification (meet/party/munch/GB), partner name-matching against the `people`
+table, and the minimal encounter-logging action are none of them built yet — every pin from this
+phase renders as a plain Training/Other event regardless of its real calendar color.
+
+---
+
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and

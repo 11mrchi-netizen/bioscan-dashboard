@@ -49,12 +49,17 @@ import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
 import com.bioscan.fieldterminal.data.GeocodingRepository
 import com.bioscan.fieldterminal.data.MapRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
+import com.bioscan.fieldterminal.data.PeopleRepository
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.WeatherRepository
+import com.bioscan.fieldterminal.data.model.PersonRow
 import com.bioscan.fieldterminal.domain.GpxPoint
 import com.bioscan.fieldterminal.domain.MapEvent
+import com.bioscan.fieldterminal.domain.MapEventCategory
 import com.bioscan.fieldterminal.domain.MapPin
 import com.bioscan.fieldterminal.domain.SessionWeather
 import com.bioscan.fieldterminal.domain.TRAINING_COLOR_ID
+import com.bioscan.fieldterminal.domain.classifyMapEvent
 import com.bioscan.fieldterminal.domain.classifySessionKind
 import com.bioscan.fieldterminal.domain.parseSessionZonedDateTime
 import com.bioscan.fieldterminal.domain.routeDistanceKm
@@ -62,6 +67,8 @@ import com.bioscan.fieldterminal.domain.routeElevationGainM
 import com.bioscan.fieldterminal.domain.weatherCodeLabel
 import com.bioscan.fieldterminal.domain.weatherCodeSymbol
 import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
@@ -84,16 +91,17 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
-// Phase M1 (Map tab rework, see ROADMAP.md). Replaces Step 14's single
+// Phase M1/M2 (Map tab rework, see ROADMAP.md). Replaces Step 14's single
 // "next training session" view with a real multi-pin map of every calendar
 // event in the next 24h -- events with a real address are geocoded (see
 // data/GeocodingRepository.kt); events with none, or whose address fails to
 // geocode, pin at the user's home coordinates (already stored as raw
 // lat/lon in Settings, so no geocoding is needed for that fallback).
 // Training events (colorId '8') keep their GPX route/weather/directions
-// detail; everything else gets a plain detail sheet. Flamingo-colored
-// encounter/social classification and partner matching are Phase M2/M3, not
-// built here.
+// detail; Flamingo events (see domain/MapEvent.kt's classifyMapEvent) are
+// Encounter/Social and get a partner match/search/create section instead
+// (see PartnerSection below). Logging a real encounter from one of these is
+// Phase M3, not built here.
 private sealed interface MapState {
     data object CheckingAccess : MapState
     data class NeedsConsent(val pendingIntent: android.app.PendingIntent) : MapState
@@ -344,7 +352,12 @@ private fun MultiPinMapView(
                 zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
 
                 pins.forEach { pin ->
-                    val color = if (pin.event.colorId == TRAINING_COLOR_ID) FieldColors.Cyan.toArgb() else FieldColors.Amber.toArgb()
+                    val category = classifyMapEvent(pin.event.colorId, pin.event.title)
+                    val color = when (category) {
+                        MapEventCategory.Training -> FieldColors.Cyan.toArgb()
+                        MapEventCategory.Encounter, MapEventCategory.Social -> FieldColors.Red.toArgb()
+                        MapEventCategory.Other -> FieldColors.Amber.toArgb()
+                    }
                     overlays.add(pinMarker(this, GeoPoint(pin.lat, pin.lon), color) { onPinClick(pin) })
                 }
 
@@ -400,7 +413,7 @@ private fun PinDetailSheet(
     onDismiss: () -> Unit,
 ) {
     val event = pin.event
-    val isTraining = event.colorId == TRAINING_COLOR_ID
+    val category = remember(event.id, event.colorId, event.title) { classifyMapEvent(event.colorId, event.title) }
     val context = LocalContext.current
     val home = remember { MapSettingsStore.getHome(context) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -417,7 +430,12 @@ private fun PinDetailSheet(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                if (isTraining) sessionCardTitle(classifySessionKind(event.title)) else "EVENT",
+                when (category) {
+                    MapEventCategory.Training -> sessionCardTitle(classifySessionKind(event.title))
+                    MapEventCategory.Encounter -> "ENCOUNTER"
+                    MapEventCategory.Social -> "SOCIAL EVENT"
+                    MapEventCategory.Other -> "EVENT"
+                },
                 style = FieldTextStyles.headerTitle,
                 color = FieldColors.Amber,
             )
@@ -440,25 +458,29 @@ private fun PinDetailSheet(
                 color = FieldColors.InkMuted,
             )
 
-            if (isTraining) {
-                when {
-                    routeError != null -> Text(
-                        "Couldn't load the route (${routeError}).",
-                        style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                        color = FieldColors.InkMuted,
-                    )
-                    routePoints != null -> Text(
-                        routeSummary(routePoints),
-                        style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
-                        color = FieldColors.Cyan,
-                    )
-                    event.gpxLink == null -> Text(
-                        "No route file linked to this session.",
-                        style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-                        color = FieldColors.InkMuted,
-                    )
+            when (category) {
+                MapEventCategory.Training -> {
+                    when {
+                        routeError != null -> Text(
+                            "Couldn't load the route (${routeError}).",
+                            style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                            color = FieldColors.InkMuted,
+                        )
+                        routePoints != null -> Text(
+                            routeSummary(routePoints),
+                            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                            color = FieldColors.Cyan,
+                        )
+                        event.gpxLink == null -> Text(
+                            "No route file linked to this session.",
+                            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+                            color = FieldColors.InkMuted,
+                        )
+                    }
+                    WeatherRow(weatherState, onClick = onRequestWeather)
                 }
-                WeatherRow(weatherState, onClick = onRequestWeather)
+                MapEventCategory.Encounter, MapEventCategory.Social -> PartnerSection(event)
+                MapEventCategory.Other -> {}
             }
 
             if (!pin.isHomeFallback && home != null) {
@@ -467,6 +489,105 @@ private fun PinDetailSheet(
                 }
             }
             Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+// Phase M2. NoMatch shows a search field over the 168-row `people` table
+// plus a create-new action -- per the user's own choice, not create-only,
+// since a typo or nickname in the calendar title shouldn't force a
+// duplicate partner record. Deliberately no "change match" action once
+// Matched -- a wrong auto-match is a real, accepted rough edge for this
+// phase's "keep it minimal" scope, not solved here.
+private sealed interface PartnerUiState {
+    data object Loading : PartnerUiState
+    data class Matched(val person: PersonRow) : PartnerUiState
+    data object NoMatch : PartnerUiState
+    data class Error(val message: String) : PartnerUiState
+}
+
+@Composable
+private fun PartnerSection(event: MapEvent) {
+    val repo = remember { PeopleRepository(SupabaseClientProvider.client) }
+    val scope = rememberCoroutineScope()
+    var state by remember(event.id) { mutableStateOf<PartnerUiState>(PartnerUiState.Loading) }
+    var query by remember(event.id) { mutableStateOf("") }
+    var searchResults by remember(event.id) { mutableStateOf<List<PersonRow>>(emptyList()) }
+    var creating by remember(event.id) { mutableStateOf(false) }
+
+    LaunchedEffect(event.id, event.title) {
+        state = PartnerUiState.Loading
+        state = try {
+            repo.findByNameInTitle(event.title)?.let { PartnerUiState.Matched(it) } ?: PartnerUiState.NoMatch
+        } catch (e: Exception) {
+            PartnerUiState.Error(e.message ?: "Couldn't check for a matching partner.")
+        }
+    }
+
+    LaunchedEffect(query, state) {
+        searchResults = if (state is PartnerUiState.NoMatch && query.isNotBlank()) {
+            try {
+                repo.search(query)
+            } catch (e: Exception) {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+    }
+
+    Card(title = "PARTNER") {
+        when (val s = state) {
+            PartnerUiState.Loading -> Text(
+                "Checking this event's title for a partner match…",
+                style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                color = FieldColors.InkMuted,
+            )
+            is PartnerUiState.Matched -> Text(
+                s.person.name,
+                style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+                color = FieldColors.Ink,
+            )
+            is PartnerUiState.Error -> Text(
+                "Couldn't check for a matching partner (${s.message}).",
+                style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                color = FieldColors.InkMuted,
+            )
+            PartnerUiState.NoMatch -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "No partner matched in this event's title.",
+                    style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                    color = FieldColors.InkMuted,
+                )
+                FieldTextField(value = query, onValueChange = { query = it }, placeholder = "Search partners…")
+                searchResults.forEach { person ->
+                    Text(
+                        person.name,
+                        style = TextStyle(fontFamily = Saira, fontSize = 14.sp),
+                        color = FieldColors.Amber,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                state = PartnerUiState.Matched(person)
+                            }
+                            .padding(vertical = 6.dp),
+                    )
+                }
+                if (query.isNotBlank() && !creating) {
+                    AmberButton(label = "NEW PARTNER: \"${query.trim()}\"") {
+                        creating = true
+                        scope.launch {
+                            state = try {
+                                PartnerUiState.Matched(repo.createPerson(query.trim()))
+                            } catch (e: Exception) {
+                                PartnerUiState.Error(e.message ?: "Couldn't create this partner.")
+                            } finally {
+                                creating = false
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

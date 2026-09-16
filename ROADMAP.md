@@ -1748,6 +1748,60 @@ phase renders as a plain Training/Other event regardless of its real calendar co
 
 ---
 
+### ✅ Phase M2 — Flamingo classification + partner match/search/create (done 2026-09-16, Claude Code)
+Resolves the discrepancy this project had already flagged as open (P4, Push Notifications section):
+earlier planning couldn't decide between colorId `'4'` (Flamingo) and a `"Meet "` title prefix as
+the encounter-detection signal. `domain/MapEvent.kt`'s new `classifyMapEvent(colorId, title)` uses
+both together, not as competitors — Flamingo gates which events are in scope at all; the title then
+sub-classifies "meet" as `Encounter`, "party"/"munch"/"GB" as `Social`, and anything flamingo-colored
+matching neither keyword defaults to `Social` too ("possible encounter, needs review" reads truer
+than silently dropping it or folding it into Training). Training and non-flamingo/non-training
+events are unaffected — `Training`/`Other` as before. Map pins are now colored by category (Training
+stays Cyan; Encounter/Social get `FieldColors.Red`, matching the Log tab's own 2026-09-15
+encounter-category convention rather than inventing a new hue; Other stays Amber).
+
+**New**: `data/model/PersonModels.kt` (`PersonRow(id, name)`, `NewPersonRow(name)`) and
+`data/PeopleRepository.kt` give the `people` table (168 real rows, rich schema, zero UI anywhere in
+either the Android app or the web dashboard until now) its first real read/write path —
+`findByNameInTitle`, `search`, `createPerson`, all scoped to just `id`/`name` per this project's
+"only the columns actually used" convention. `PinDetailSheet`'s Encounter/Social branch is a new
+`PartnerSection`: an automatic name match against the event's title, or (per the user's own
+confirmed choice — search-existing-plus-create-new, not create-only) a search field over `people`
+plus a "NEW PARTNER" action when nothing matches. Nothing here writes to `encounters` yet or links
+the selected partner anywhere durable — that's Phase M3.
+
+**Real bug found and fixed via live testing against the real `people` table, not just structural
+review**: the first version of `findByNameInTitle` matched with a plain `title.contains(name)`.
+Live testing surfaced a genuine false positive: this table has a real person whose name is just
+"C", and that plain substring check matched it against the word "matches" (which contains the
+letter "c") — a title like "this title matches absolutely nobody" would have wrongly shown "C" as
+the matched partner. Fixed to a word-boundary regex match (`\bC\b`), confirmed on-device against
+both the original false-positive title (now correctly `null`) and a real positive case ("Meet C for
+coffee", still correctly matches). A short name colliding with an unrelated word it happens to
+appear inside of is exactly the kind of thing "keep it basic" title-matching can't fully rule out in
+general — word-boundary matching is the standard, proportionate mitigation, not a complete solution.
+
+**Verified live against the real Supabase `people` table** (168 rows) through the actual compiled
+app code (temporary `Log.d` calls, checked then fully removed before committing, same discipline as
+M1): `search("a")` returned 91 real matching names; `findByNameInTitle` correctly returned `null`
+for a title matching nobody and correctly matched a real row for a title containing "C" as a whole
+word; `createPerson("ZZZ_TEST_DELETE_ME_M2")` inserted a real row (confirmed via direct SQL,
+id=169) with no `user_id` handling needed, exactly matching the RLS-column-default pattern already
+established for every other table this app writes to — then deleted via direct SQL immediately
+after, confirmed back to exactly 168 rows. Rebuilt the final (debug-code-free) version afterward and
+re-opened the Map tab: still 0 pins with the same honest "no home location set" message from M1 (no
+regression), no exceptions in logcat.
+
+**Honestly unverified**: no Flamingo-colored event exists on the real calendar in the current 24h
+test window (the only 3 real events are 2 meal-plan entries and 1 strength session), so
+`PartnerSection`'s actual on-screen rendering — the automatic-match path, the search-results list,
+the "NEW PARTNER" button inside a real bottom sheet — was not exercised through the UI itself, only
+through `PeopleRepository` directly. The classification logic and the data layer it depends on are
+proven against real data; the UI wiring on top of them compiles and follows the same patterns as
+the rest of this screen, but is unverified with a real flamingo event until one exists to open.
+
+---
+
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and

@@ -23,3 +23,28 @@ data class MapEvent(
 data class MapPin(val event: MapEvent, val lat: Double, val lon: Double, val isHomeFallback: Boolean)
 
 const val TRAINING_COLOR_ID = "8"
+
+// Phase M2. Flamingo (colorId '4') reconciles this project's own previously
+// unresolved discrepancy (ROADMAP.md, P4/Push Notifications) between two
+// candidate encounter-detection signals -- colorId '4' vs. a "Meet " title
+// prefix. Here they're not competing: color gates which events are in scope
+// at all, title text sub-classifies what kind. A flamingo event matching
+// neither "meet" nor "party"/"munch"/"GB" still needs a real answer, not a
+// silent guess -- it defaults to Social ("possible encounter, needs review"
+// reads truer than quietly dropping it or treating it as training-adjacent).
+private const val FLAMINGO_COLOR_ID = "4"
+
+enum class MapEventCategory { Training, Encounter, Social, Other }
+
+fun classifyMapEvent(colorId: String?, title: String): MapEventCategory = when (colorId) {
+    TRAINING_COLOR_ID -> MapEventCategory.Training
+    FLAMINGO_COLOR_ID -> {
+        val t = title.lowercase()
+        when {
+            "meet" in t -> MapEventCategory.Encounter
+            "party" in t || "munch" in t || "gb" in t -> MapEventCategory.Social
+            else -> MapEventCategory.Social
+        }
+    }
+    else -> MapEventCategory.Other
+}

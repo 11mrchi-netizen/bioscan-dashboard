@@ -15,6 +15,7 @@ enum class AddEntryType(val label: String) {
     Arousal("AROUSAL"),
     Wellness("WELLNESS"),
     Note("NOTE"),
+    Ostrc("OSTRC"),
 }
 
 // FUEL's own three-way sub-picker, shown after FUEL is selected.

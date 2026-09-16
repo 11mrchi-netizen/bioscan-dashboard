@@ -61,6 +61,7 @@ import com.bioscan.fieldterminal.data.model.StrengthSetDto
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
+import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
@@ -136,6 +137,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     AddEntryType.Arousal -> ArousalForm(saving, onSave = { date, mw, al -> onSubmit { it.addArousal(date, mw, al) } })
                     AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so -> onSubmit { it.addWellbeing(date, e, m, s, so) } })
                     AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
+                    AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -258,6 +260,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Note -> repo.fetchNote(entry.id)
             LogSource.Wellbeing -> repo.fetchWellbeing(entry.id)
             LogSource.Exercise -> repo.fetchExerciseSession(entry.id)
+            LogSource.Ostrc -> repo.fetchOstrc(entry.id)
             LogSource.Sleep, LogSource.Supplement -> null // no edit form; EntryActionSheet never offers EDIT for these
         }
     }
@@ -344,6 +347,17 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialStress = row.stress,
                     initialSoreness = row.soreness,
                     onSave = { date, e, m, s, so -> onSubmit { it.updateWellbeing(row.id, date, e, m, s, so) } },
+                )
+                is LogOstrcRow -> OstrcForm(
+                    saving,
+                    initialDate = LocalDate.parse(row.checkDate),
+                    initialBodyArea = row.bodyArea,
+                    initialQ1 = row.q1,
+                    initialQ2 = row.q2,
+                    initialQ3 = row.q3,
+                    initialQ4 = row.q4,
+                    initialNotes = row.notes ?: "",
+                    onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.updateOstrc(row.id, date, ba, q1, q2, q3, q4, n) } },
                 )
                 is FullExerciseSessionRow -> ExerciseDetailsForm(
                     saving,
@@ -792,6 +806,50 @@ private fun StoolForm(
         Column { FormLabel("DISCOMFORT 0-10 (OPTIONAL)"); FieldTextField(discomfort, { discomfort = it }, "e.g. 2", keyboardType = KeyboardType.Number) }
         SaveButton(saving, bristolType != null) {
             onSave(dateTime.toIsoWithOffset(), bristolType!!, discomfort.toIntOrNull())
+        }
+    }
+}
+
+private val OSTRC_Q1Q4_OPTIONS = listOf("0", "8", "17", "25")
+private val OSTRC_Q2Q3_OPTIONS = listOf("0", "6", "13", "19", "25")
+
+// Phase A4 (Category 8). OSTRC-H2's own four-question weekly prompt per body
+// area -- q1/q4 (participation/performance) share one value set, q2/q3
+// (training volume/performance reduction) share a different, five-value
+// set. severity_score is a stored generated column (Phase A1) -- computed
+// server-side, never sent from here. body_area stays free text (the schema
+// has no fixed list -- see the A1 migration's own column definition).
+@Composable
+private fun OstrcForm(
+    saving: Boolean,
+    initialDate: LocalDate = LocalDate.now(),
+    initialBodyArea: String = "",
+    initialQ1: Int? = null,
+    initialQ2: Int? = null,
+    initialQ3: Int? = null,
+    initialQ4: Int? = null,
+    initialNotes: String = "",
+    onSave: (date: String, bodyArea: String, q1: Int, q2: Int, q3: Int, q4: Int, notes: String?) -> Unit,
+) {
+    var date by remember { mutableStateOf(initialDate) }
+    var bodyArea by remember { mutableStateOf(initialBodyArea) }
+    var q1 by remember { mutableStateOf(initialQ1?.toString()) }
+    var q2 by remember { mutableStateOf(initialQ2?.toString()) }
+    var q3 by remember { mutableStateOf(initialQ3?.toString()) }
+    var q4 by remember { mutableStateOf(initialQ4?.toString()) }
+    var notes by remember { mutableStateOf(initialNotes) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DateField("WEEK OF", date, { date = it })
+        Column { FormLabel("BODY AREA"); FieldTextField(bodyArea, { bodyArea = it }, "e.g. Right knee") }
+        Column { FormLabel("Q1 — PARTICIPATION IN SPORT"); TextChipRow(OSTRC_Q1Q4_OPTIONS, q1) { q1 = it } }
+        Column { FormLabel("Q2 — TRAINING VOLUME REDUCED"); TextChipRow(OSTRC_Q2Q3_OPTIONS, q2, perRow = 5) { q2 = it } }
+        Column { FormLabel("Q3 — PERFORMANCE AFFECTED"); TextChipRow(OSTRC_Q2Q3_OPTIONS, q3, perRow = 5) { q3 = it } }
+        Column { FormLabel("Q4 — PAIN DURING PARTICIPATION"); TextChipRow(OSTRC_Q1Q4_OPTIONS, q4) { q4 = it } }
+        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
+        val valid = bodyArea.isNotBlank() && q1 != null && q2 != null && q3 != null && q4 != null
+        SaveButton(saving, valid) {
+            onSave(date.toString(), bodyArea.trim(), q1!!.toInt(), q2!!.toInt(), q3!!.toInt(), q4!!.toInt(), notes.trim().ifBlank { null })
         }
     }
 }

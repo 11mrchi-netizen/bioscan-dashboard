@@ -9,6 +9,7 @@ import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
+import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.NewArousalRow
@@ -16,6 +17,7 @@ import com.bioscan.fieldterminal.data.model.NewEncounterRow
 import com.bioscan.fieldterminal.data.model.NewHydrationRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
 import com.bioscan.fieldterminal.data.model.NewNoteRow
+import com.bioscan.fieldterminal.data.model.NewOstrcRow
 import com.bioscan.fieldterminal.data.model.NewStoolRow
 import com.bioscan.fieldterminal.data.model.NewSupplementLogRow
 import com.bioscan.fieldterminal.data.model.NewWellbeingRow
@@ -102,6 +104,15 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { onConflict = "user_id,date" }
     }
 
+    // Phase A4 (Category 8). severity_score is a stored generated column --
+    // never written here, matching NewOstrcRow's own shape (q1-q4 + notes
+    // only).
+    suspend fun addOstrc(checkDate: String, bodyArea: String, q1: Int, q2: Int, q3: Int, q4: Int, notes: String?) {
+        supabase.postgrest.from("ostrc_checkins").insert(
+            NewOstrcRow(checkDate = checkDate, bodyArea = bodyArea, q1 = q1, q2 = q2, q3 = q3, q4 = q4, notes = notes)
+        )
+    }
+
     // One row per supplement taken (not one combined row per session) --
     // this is what makes "add or remove single items" free: each is just a
     // normal Log entry, deletable with the same generic deleteEntry() every
@@ -166,6 +177,12 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
+    suspend fun updateOstrc(id: Long, checkDate: String, bodyArea: String, q1: Int, q2: Int, q3: Int, q4: Int, notes: String?) {
+        supabase.postgrest.from("ostrc_checkins").update(
+            NewOstrcRow(checkDate = checkDate, bodyArea = bodyArea, q1 = q1, q2 = q2, q3 = q3, q4 = q4, notes = notes)
+        ) { filter { eq("id", id) } }
+    }
+
     // Phase G3 + Phase B follow-up: the only editable fields on a
     // Health-Connect-sourced exercise session -- times/distance/HR/etc. all
     // come from Health Connect and are never written here. `details` is
@@ -204,6 +221,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     suspend fun fetchNote(id: Long) = fetchById<LogNoteRow>("notes", "id,occurred_at,text", id)
     suspend fun fetchWellbeing(id: Long) = fetchById<LogWellbeingRow>("wellbeing_daily", "id,date,energy,mood,stress,soreness", id)
     suspend fun fetchExerciseSession(id: Long) = fetchById<FullExerciseSessionRow>("exercise_sessions", "id,type,rpe,notes,details", id)
+    suspend fun fetchOstrc(id: Long) = fetchById<LogOstrcRow>("ostrc_checkins", "id,check_date,body_area,q1,q2,q3,q4,notes", id)
 
     private suspend inline fun <reified T : Any> fetchById(table: String, columns: String, id: Long): T =
         supabase.postgrest.from(table)

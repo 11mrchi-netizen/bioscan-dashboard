@@ -2,7 +2,9 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.MealRow
+import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
+import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
@@ -91,4 +93,25 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<MealRow>()
         return aggregateMealsByDay(meals)
     }
+
+    // Phase A4 (Category 8, Bristol half). Same generous margin as every
+    // other read here.
+    suspend fun loadStoolLog(): List<StoolAnalysisRow> =
+        supabase.postgrest.from("stool_log")
+            .select(columns = Columns.list("occurred_at,bristol_type")) {
+                order("occurred_at", Order.DESCENDING)
+                limit(200)
+            }
+            .decodeList<StoolAnalysisRow>()
+            .reversed()
+
+    // Phase A4 (Category 8, OSTRC-H2 half).
+    suspend fun loadOstrcCheckins(): List<OstrcAnalysisRow> =
+        supabase.postgrest.from("ostrc_checkins")
+            .select(columns = Columns.list("check_date,body_area,severity_score")) {
+                order("check_date", Order.DESCENDING)
+                limit(200)
+            }
+            .decodeList<OstrcAnalysisRow>()
+            .reversed()
 }

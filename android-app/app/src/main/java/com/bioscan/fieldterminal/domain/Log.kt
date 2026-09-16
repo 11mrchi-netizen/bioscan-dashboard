@@ -6,6 +6,7 @@ import com.bioscan.fieldterminal.data.model.LogExerciseRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
+import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogSleepRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
@@ -18,7 +19,7 @@ import java.time.OffsetDateTime
 enum class LogEntryKind(val label: String) {
     Exercise("EXERCISE"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
     Arousal("AROUSAL"), Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
-    Wellness("WELL"), Supplement("SUPP"),
+    Wellness("WELL"), Supplement("SUPP"), Ostrc("OSTRC"),
 }
 
 // Which table (and which AddEntryRepository calls) an entry came from --
@@ -33,7 +34,7 @@ enum class LogEntryKind(val label: String) {
 enum class LogSource(val table: String) {
     Meal("meals"), Exercise("exercise_sessions"), Sleep("sleep_daily"), Arousal("arousal_daily"),
     Stool("stool_log"), Encounter("encounters"), Note("notes"), Hydration("hydration_daily"),
-    Wellbeing("wellbeing_daily"), Supplement("supplement_log"),
+    Wellbeing("wellbeing_daily"), Supplement("supplement_log"), Ostrc("ostrc_checkins"),
 }
 
 data class LogEntry(
@@ -55,6 +56,7 @@ private val AROUSAL_NOMINAL_TIME = LocalTime.of(7, 15)
 private val ENCOUNTER_NOMINAL_TIME = LocalTime.of(21, 0)
 private val DRINK_NOMINAL_TIME = LocalTime.of(12, 0)
 private val WELLNESS_NOMINAL_TIME = LocalTime.of(8, 0)
+private val OSTRC_NOMINAL_TIME = LocalTime.of(8, 15)
 
 fun buildLogEntries(
     meals: List<LogMealRow>,
@@ -67,6 +69,7 @@ fun buildLogEntries(
     hydration: List<LogHydrationRow> = emptyList(),
     wellbeing: List<LogWellbeingRow> = emptyList(),
     supplementsTaken: List<LogSupplementTakenRow> = emptyList(),
+    ostrc: List<LogOstrcRow> = emptyList(),
 ): List<LogEntry> {
     val entries = mutableListOf<LogEntry>()
 
@@ -202,6 +205,17 @@ fun buildLogEntries(
             kind = LogEntryKind.Supplement,
             timestamp = parseTimestamp(s.takenAt),
             headline = s.supplementName,
+            detail = null,
+        )
+    }
+
+    ostrc.forEach { o ->
+        entries += LogEntry(
+            id = o.id,
+            source = LogSource.Ostrc,
+            kind = LogEntryKind.Ostrc,
+            timestamp = LocalDateTime.of(LocalDate.parse(o.checkDate), OSTRC_NOMINAL_TIME),
+            headline = "${o.bodyArea} · severity ${o.q1 + o.q2 + o.q3 + o.q4}/100",
             detail = null,
         )
     }

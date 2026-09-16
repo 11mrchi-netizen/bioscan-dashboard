@@ -6,6 +6,7 @@ import com.bioscan.fieldterminal.data.model.LogExerciseRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
+import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogSleepRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
@@ -94,6 +95,12 @@ class LogRepository(private val supabase: SupabaseClient) {
                 limit(FETCH_LIMIT_PER_SOURCE)
             }.decodeList<LogSupplementTakenRow>()
 
-        return buildLogEntries(meals, exerciseSessions, sleep, arousal, stool, encounters, notes, hydration, wellbeing, supplementsTaken)
+        val ostrc = supabase.postgrest.from("ostrc_checkins")
+            .select(columns = Columns.list("id,check_date,body_area,q1,q2,q3,q4,notes")) {
+                order("check_date", Order.DESCENDING)
+                limit(FETCH_LIMIT_PER_SOURCE)
+            }.decodeList<LogOstrcRow>()
+
+        return buildLogEntries(meals, exerciseSessions, sleep, arousal, stool, encounters, notes, hydration, wellbeing, supplementsTaken, ostrc)
     }
 }

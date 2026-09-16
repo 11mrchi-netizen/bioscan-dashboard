@@ -89,6 +89,18 @@ data class LogWellbeingRow(
 )
 
 @Serializable
+data class LogOstrcRow(
+    val id: Long,
+    @SerialName("check_date") val checkDate: String,
+    @SerialName("body_area") val bodyArea: String,
+    val q1: Int,
+    val q2: Int,
+    val q3: Int,
+    val q4: Int,
+    val notes: String? = null,
+)
+
+@Serializable
 data class LogSupplementTakenRow(
     val id: Long,
     @SerialName("supplement_name") val supplementName: String,

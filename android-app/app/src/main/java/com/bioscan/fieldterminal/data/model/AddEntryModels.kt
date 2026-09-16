@@ -67,3 +67,16 @@ data class NewSupplementLogRow(
     @SerialName("supplement_name") val supplementName: String,
     @SerialName("taken_at") val takenAt: String,
 )
+
+// Phase A4 (Category 8). severity_score is a stored generated column
+// (q1+q2+q3+q4, see Phase A1's migration) -- never written by the client.
+@Serializable
+data class NewOstrcRow(
+    @SerialName("check_date") val checkDate: String,
+    @SerialName("body_area") val bodyArea: String,
+    val q1: Int,
+    val q2: Int,
+    val q3: Int,
+    val q4: Int,
+    val notes: String? = null,
+)

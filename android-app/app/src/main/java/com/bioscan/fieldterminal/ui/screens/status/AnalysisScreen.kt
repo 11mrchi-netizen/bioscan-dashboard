@@ -24,17 +24,22 @@ import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
+import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
+import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.BodyFatEvaluation
+import com.bioscan.fieldterminal.domain.BristolEvaluation
+import com.bioscan.fieldterminal.domain.BristolPattern
 import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.DeloadCadenceFlag
 import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.domain.ExpectationTier
 import com.bioscan.fieldterminal.domain.MetricCategory
 import com.bioscan.fieldterminal.domain.NutritionEvaluation
+import com.bioscan.fieldterminal.domain.OstrcEvaluation
 import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
 import com.bioscan.fieldterminal.domain.RestCadenceEvaluation
 import com.bioscan.fieldterminal.domain.SleepNight
@@ -45,8 +50,10 @@ import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.domain.TrainingLoadEvaluation
 import com.bioscan.fieldterminal.domain.WeightEvaluation
 import com.bioscan.fieldterminal.domain.evaluateBodyFat
+import com.bioscan.fieldterminal.domain.evaluateBristol
 import com.bioscan.fieldterminal.domain.evaluateHrv
 import com.bioscan.fieldterminal.domain.evaluateNutrition
+import com.bioscan.fieldterminal.domain.evaluateOstrc
 import com.bioscan.fieldterminal.domain.evaluateRespiratoryAnomaly
 import com.bioscan.fieldterminal.domain.evaluateRestCadence
 import com.bioscan.fieldterminal.domain.evaluateRhr
@@ -84,6 +91,8 @@ fun AnalysisScreen() {
     var trainingSessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
     var nutrition by remember { mutableStateOf<List<DailyNutrition>?>(null) }
+    var stool by remember { mutableStateOf<List<StoolAnalysisRow>?>(null) }
+    var ostrc by remember { mutableStateOf<List<OstrcAnalysisRow>?>(null) }
     var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
     var cycleLoaded by remember { mutableStateOf(false) }
 
@@ -95,6 +104,8 @@ fun AnalysisScreen() {
         trainingSessions = repo.loadExerciseSessionsForTrainingLoad()
         wellbeing = repo.loadWellbeingDaily()
         nutrition = repo.loadDailyNutrition()
+        stool = repo.loadStoolLog()
+        ostrc = repo.loadOstrcCheckins()
         activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle()
         cycleLoaded = true
     }
@@ -105,7 +116,9 @@ fun AnalysisScreen() {
     val t = trainingSessions
     val wb = wellbeing
     val n = nutrition
-    if (w == null || s == null || b == null || t == null || wb == null || n == null || !cycleLoaded) {
+    val st = stool
+    val os = ostrc
+    if (w == null || s == null || b == null || t == null || wb == null || n == null || st == null || os == null || !cycleLoaded) {
         Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FieldColors.Amber)
         }
@@ -159,14 +172,30 @@ fun AnalysisScreen() {
         val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
         TrainingLoadCard(trainingLoadEval, resolveTier(MetricCategory.TrainingLoad, activeCycle))
 
-        RestCadenceCard(evaluateRestCadence(sessionLoads, trainingLoadEval.tsb, trainingLoadEval.confidence.met))
+        val restCadenceEval = evaluateRestCadence(sessionLoads, trainingLoadEval.tsb, trainingLoadEval.confidence.met)
+        RestCadenceCard(restCadenceEval)
 
         SubjectiveCard("ENERGY", wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } })
         SubjectiveCard("MOOD", wb.mapNotNull { row -> row.mood?.let { LocalDate.parse(row.date) to it.toDouble() } })
         SubjectiveCard("STRESS", wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } })
-        SubjectiveCard("SORENESS", wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } })
+        val sorenessPoints = wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }
+        val sorenessEval = evaluateSubjective(sorenessPoints)
+        SubjectiveCard("SORENESS", sorenessEval)
 
         NutritionCard(evaluateNutrition(n))
+
+        val stoolEntries = st.mapNotNull { row -> row.bristolType?.let { OffsetDateTime.parse(row.occurredAt).toLocalDateTime().toLocalDate() to it } }
+        BristolCard(evaluateBristol(stoolEntries))
+
+        val ostrcByBodyArea = os.mapNotNull { row -> row.severityScore?.let { row.bodyArea to (LocalDate.parse(row.checkDate) to it) } }
+            .groupBy({ it.first }, { it.second })
+        if (ostrcByBodyArea.isEmpty()) {
+            OstrcCard(evaluateOstrc("—", emptyList()), trainingLoadEval.tsb, restCadenceEval.consecutiveDaysWithoutRest, sorenessEval.median7d)
+        } else {
+            ostrcByBodyArea.forEach { (bodyArea, entries) ->
+                OstrcCard(evaluateOstrc(bodyArea, entries), trainingLoadEval.tsb, restCadenceEval.consecutiveDaysWithoutRest, sorenessEval.median7d)
+            }
+        }
     }
 }
 
@@ -307,6 +336,59 @@ private fun deloadCadenceLabel(flag: DeloadCadenceFlag): String = when (flag) {
     DeloadCadenceFlag.Firm -> "FIRM FLAG (6+ WEEKS)"
 }
 
+// Phase A4 (Category 8, Bristol half). No StateRow -- this category never
+// got the six-state vocabulary, only descriptive pattern labels. The
+// disclaimer line is load-bearing, not decorative: the spec's own
+// non-medical guard requires it.
+@Composable
+private fun BristolCard(eval: BristolEvaluation) {
+    Card(title = "DIGESTIVE PATTERN (BRISTOL)") {
+        StatLine("Confidence", eval.confidence.label)
+        eval.pattern?.let { StatLine("Pattern", bristolPatternLabel(it)) }
+        eval.pctHard?.let { StatLine("Hard (types 1-2)", "%.0f%%".format(it)) }
+        eval.pctNormal?.let { StatLine("Normal (types 3-5)", "%.0f%%".format(it)) }
+        eval.pctLoose?.let { StatLine("Loose (types 6-7)", "%.0f%%".format(it)) }
+        Text(
+            "Descriptive pattern only — not a diagnostic tool.",
+            style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
+            color = FieldColors.InkMuted,
+        )
+    }
+}
+
+private fun bristolPatternLabel(p: BristolPattern): String = when (p) {
+    BristolPattern.PredominantlyFirm -> "PREDOMINANTLY FIRM"
+    BristolPattern.PredominantlyLoose -> "PREDOMINANTLY LOOSE"
+    BristolPattern.Mixed -> "MIXED PATTERN"
+    BristolPattern.Typical -> "TYPICAL PATTERN"
+}
+
+// Phase A4 (Category 8, OSTRC-H2 half). The "load context panel" per the
+// spec: OSTRC severity, TSB, days-without-rest, and subjective soreness
+// shown adjacent -- never combined into one score (see
+// domain/OstrcEvaluation.kt's own header comment for why).
+@Composable
+private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int, sorenessMedian: Double?) {
+    Card(title = "OSTRC-H2 · ${eval.bodyArea.uppercase()}") {
+        StatLine("Confidence", eval.confidence.label)
+        eval.latestSeverityScore?.let { StatLine("Latest severity", "$it / 100") }
+        eval.latestCheckDate?.let { StatLine("Last check-in", it.toString()) }
+        Text(
+            "LOAD CONTEXT (shown adjacent, never combined into one score)",
+            style = FieldTextStyles.subTabLabel,
+            color = FieldColors.InkMuted,
+        )
+        tsb?.let { StatLine("TSB (form)", "%+.1f".format(it)) }
+        StatLine("Days without rest", "$daysWithoutRest")
+        sorenessMedian?.let { StatLine("7-day soreness median", "%.1f".format(it)) }
+        Text(
+            "No injury risk score — single-factor screening doesn't predict injury. You do the synthesis; this doesn't.",
+            style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
+            color = FieldColors.InkMuted,
+        )
+    }
+}
+
 // Phase A4 (Category 3). One card per dimension, called four times --
 // energy/mood/stress/soreness are never summed into a Hooper Index or any
 // other composite, per the spec's own explicit "keep the four items
@@ -314,8 +396,10 @@ private fun deloadCadenceLabel(flag: DeloadCadenceFlag): String = when (flag) {
 // result, not decorative: it's absent whenever the 14-day trend doesn't
 // clear p<0.05, per the spec's own "otherwise render no arrow" rule.
 @Composable
-private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>) {
-    val eval = evaluateSubjective(points)
+private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>) = SubjectiveCard(title, evaluateSubjective(points))
+
+@Composable
+private fun SubjectiveCard(title: String, eval: SubjectiveEvaluation) {
     Card(title = title) {
         StateRow(eval.state)
         StatLine("Confidence", eval.confidence.label)

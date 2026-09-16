@@ -225,7 +225,9 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
 // Category colors per direct user request (2026-09-15): deep blue for
 // sleep, orange for activity (runs, strength, ...), green for food/drink/
 // supplements, sand for stool, azure for wellness, red for encounter and
-// arousal. Note has no assigned category -- stays neutral InkMuted.
+// arousal. Note has no assigned category -- stays neutral InkMuted. OSTRC
+// (added later, Category 8) shares stool's sand -- both are the Evaluation
+// Method Spec's own "digestive & injury tracking" category.
 @Composable
 private fun TypeChip(kind: LogEntryKind) {
     val color = when (kind) {
@@ -234,7 +236,7 @@ private fun TypeChip(kind: LogEntryKind) {
         LogEntryKind.Sleep -> FieldColors.DeepBlue
         LogEntryKind.Arousal, LogEntryKind.Encounter -> FieldColors.Red
         LogEntryKind.Note -> FieldColors.InkMuted
-        LogEntryKind.Stool -> FieldColors.Sand
+        LogEntryKind.Stool, LogEntryKind.Ostrc -> FieldColors.Sand
         LogEntryKind.Wellness -> FieldColors.Azure
     }
     val filled = kind in setOf(LogEntryKind.Exercise, LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement, LogEntryKind.Stool)

@@ -2292,6 +2292,42 @@ by whole-string character overlap, not per-word — "Box Squat" outranked "Barbe
 squat" since "Box" and "Bak" share more trigrams than "Barbell" does; still a materially useful
 suggestion list, not a defect worth a more complex ranking function for this pass.)
 
+### ✅ Phase A4 (partial, cont'd) — Category 8: Bristol + OSTRC-H2 (done 2026-09-16, Claude Code)
+**Bristol half** — `domain/BristolEvaluation.kt`: rolling 14-day distribution (not a daily value),
+`pct_hard`/`pct_normal`/`pct_loose` from `bristol_type`, a 25%-Rome-IV-style-cut-point pattern label
+(predominantly firm / predominantly loose / mixed / typical) — descriptive only, never phrased as a
+condition, per the spec's own non-medical guard (the on-screen card carries the disclaimer line
+directly). Gate: ≥8 logged entries in the trailing 14 days. No new logging UI needed — `stool_log`
+already had a real add/edit path (`StoolForm`, built earlier for an unrelated reason); this phase
+only adds the Layer-2 read/evaluate/display side.
+
+**OSTRC-H2 half** — `domain/OstrcEvaluation.kt`: per-body-area latest severity + a consecutive-
+weekly-cadence gate (≥3 weeks, walking backward from the entry's own week rather than from "today"
+so a same-week check-in isn't punished for the calendar not having rolled over yet). **New minimal
+logging form** (`OstrcForm` in `AddEntrySheet.kt`, a new `AddEntryType.Ostrc`/`LogSource.Ostrc`):
+body area (free text — the schema has no fixed list), Q1/Q4 four-choice (0/8/17/25) and Q2/Q3
+five-choice (0/6/13/19/25) chip pickers reusing the exercise-detail form's `TextChipRow`,
+`severity_score` never sent from the client (stored generated column, Phase A1). Full Log-feed
+integration too (`domain/Log.kt`'s `buildLogEntries`, `LogRepository`), matching every other
+source's own completeness bar — sand-colored chip, grouped with Stool as this spec's own
+"digestive & injury tracking" category.
+
+**No injury risk score anywhere** — per the spec's own Bahr/Bittencourt-Meeuwisse reasoning against
+single-factor screening, the OSTRC card instead renders a **load context panel**: OSTRC severity,
+Category 6's TSB, Category 7's days-without-rest, and Category 3's 7-day soreness median shown
+*adjacent*, each `?.let`-gated independently so an ungated value (e.g. TSB, not yet past its own
+42-day gate on this account's real data) is simply omitted rather than shown as a fabricated number
+— never arithmetically combined into one score.
+
+**Verified end-to-end on real device**: logged one real OSTRC check-in through the actual UI
+(body area "Right knee", Q1=0/Q2=13/Q3=6/Q4=0), confirmed via SQL the row landed with
+`severity_score=19` (server-computed, matching 0+13+6+0), confirmed the entry rendered correctly in
+both the Log feed ("OSTRC · Right knee · severity 19/100") and the Analysis tab's new OSTRC-H2 card
+(confidence `1/3`, correct load-context gating — TSB and soreness lines correctly absent since
+neither of those categories' own gates are met on this account's real data yet). Bristol renders an
+honest `0/8` — zero real `stool_log` rows exist. Test check-in deleted afterward (fabricated for
+verification, not a real report) — `ostrc_checkins` back to 0 rows. No exceptions in logcat.
+
 ---
 
 ## Summary — rough remaining build time

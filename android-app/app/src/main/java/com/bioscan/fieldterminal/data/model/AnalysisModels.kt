@@ -55,3 +55,18 @@ data class WellbeingAnalysisRow(
     val stress: Int? = null,
     val soreness: Int? = null,
 )
+
+// Phase A4 (Category 8). Bristol half.
+@Serializable
+data class StoolAnalysisRow(
+    @SerialName("occurred_at") val occurredAt: String,
+    @SerialName("bristol_type") val bristolType: Int? = null,
+)
+
+// Phase A4 (Category 8). OSTRC-H2 half.
+@Serializable
+data class OstrcAnalysisRow(
+    @SerialName("check_date") val checkDate: String,
+    @SerialName("body_area") val bodyArea: String,
+    @SerialName("severity_score") val severityScore: Int? = null,
+)

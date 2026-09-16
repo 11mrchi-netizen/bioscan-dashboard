@@ -2243,6 +2243,31 @@ secondary, matching real anatomy) and correct equipment values.
 name (`exercise_sessions.details.exercises[].name`) against this library's canonical names — real,
 separate future work once there's an actual UI/query path that needs it.
 
+### ✅ Exercise detail entry UI: route_type/run_type + strength sets (done 2026-09-16, Claude Code)
+Extends `ui/screens/AddEntrySheet.kt`'s `ExerciseDetailsForm` (previously rpe/notes-only) to branch
+by session type, giving Phase B's schema-only shapes a real edit path — extending the same tap an
+entry → edit its details flow that already existed for rpe/notes, not a new manual-creation flow
+(manual exercise-session *creation* stays removed, per the 2026-09-15 direction):
+
+- **`type == 'run'`**: two tap-to-select `TextChipRow` pickers (`route_type`, `run_type`), a small
+  new composable generalizing `StoolForm`'s existing Bristol-type row to string values with
+  deselect-on-reselect (these are optional, unlike Bristol).
+- **`type == 'strength'`**: a real dynamic exercises/sets editor (`ExerciseEditor`) — name field,
+  reps/weight_kg (required) and RPE/%1RM (optional) per set, `+ ADD SET`/`+ ADD EXERCISE`/`REMOVE`
+  text controls matching this file's existing no-icon convention. Blank names/sets are dropped on
+  save rather than persisted as garbage.
+- `FullExerciseSessionRow`/`ExerciseDetailsUpdateRow` now carry the full `details` object so a save
+  always round-trips whatever the form didn't touch (e.g. editing `run_type` never wipes an existing
+  `route_type` from Health Connect) — confirmed safe against resync too: `HealthConnectExerciseSyncRepository`'s
+  upsert payload has no `details` field at all, so `ON CONFLICT DO UPDATE` never touches it.
+
+**Verified against a real seeded row through the actual UI** (not just SQL): inserted one real
+`type='strength'` test row, opened it via Log → EDIT, typed a real "Back Squat" / 5 reps / 100 kg
+set through the on-device form, saved, and confirmed via SQL the row's `details` now held exactly
+`{"exercises":[{"name":"Back Squat","sets":[{"reps":5,"weight_kg":100}]}]}` — a genuine end-to-end
+round trip, not just a schema check. Test row deleted afterward, `exercise_sessions` back to 19. No
+exceptions in logcat.
+
 ---
 
 ## Summary — rough remaining build time

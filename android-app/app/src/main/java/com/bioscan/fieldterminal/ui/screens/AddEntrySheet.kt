@@ -987,27 +987,66 @@ private fun EditableExercise.toDtoOrNull(): StrengthExerciseDto? {
     return if (validSets.isEmpty()) null else StrengthExerciseDto(name.trim(), validSets)
 }
 
-// TODO(human): render one exercise's editable form -- the name field, its
-// list of sets, and the add-set/remove-set controls.
-//
-// `exercise` is the live EditableExercise (its `name` is a mutableStateOf
-// String, `sets` is a mutableStateListOf<EditableSet>, each EditableSet's
-// reps/weightKg/rpe/percentOneRm are also mutableStateOf String -- mutate
-// them directly, Compose will recompose). `onRemove` removes this whole
-// exercise from the list one level up; only call it when `canRemove` is
-// true (the form always keeps at least one exercise row on screen).
-//
-// Reuse FieldTextField(value, onValueChange, placeholder, modifier, keyboardType,
-// singleLine) for every field -- KeyboardType.Number for reps/weightKg/rpe/
-// percentOneRm. A real layout choice is yours: how much of each set's four
-// fields to show side-by-side in one Row (reps and weight_kg are required;
-// rpe and percent_1rm are optional per the handoff and could be visually
-// secondary, e.g. smaller/narrower), and how "add set" / "remove set" should
-// read (a text link like the "+ ADD EXERCISE" control above it, or something
-// else consistent with this file's plain-text-button style -- there are no
-// icons anywhere in this file).
+// One exercise's editable form: name, its list of sets, and add/remove
+// controls -- all plain text links (REMOVE / + ADD SET), matching this
+// file's existing convention (no icons anywhere else in it). Reps and
+// weight_kg get the wider, primary row; RPE and % 1RM are optional per the
+// handoff's own scope and sit in a secondary row underneath.
 @Composable
 private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRemove: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().border(1.dp, FieldColors.Hairline).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FieldTextField(exercise.name, { exercise.name = it }, "Exercise name", modifier = Modifier.weight(1f))
+            if (canRemove) {
+                Text(
+                    "REMOVE",
+                    style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp),
+                    color = FieldColors.Alert,
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { onRemove() },
+                )
+            }
+        }
+
+        exercise.sets.forEachIndexed { i, set ->
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FieldTextField(set.reps, { set.reps = it }, "Reps", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number)
+                    FieldTextField(set.weightKg, { set.weightKg = it }, "Weight (kg)", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FieldTextField(set.rpe, { set.rpe = it }, "RPE (optional)", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number)
+                    FieldTextField(set.percentOneRm, { set.percentOneRm = it }, "% 1RM (optional)", modifier = Modifier.weight(1f), keyboardType = KeyboardType.Number)
+                    if (exercise.sets.size > 1) {
+                        Text(
+                            "REMOVE",
+                            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp),
+                            color = FieldColors.Alert,
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { exercise.sets.removeAt(i) },
+                        )
+                    }
+                }
+            }
+        }
+
+        Text(
+            "+ ADD SET",
+            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 12.sp),
+            color = FieldColors.Amber,
+            modifier = Modifier.clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { exercise.sets.add(EditableSet()) },
+        )
+    }
 }
 
 @Composable

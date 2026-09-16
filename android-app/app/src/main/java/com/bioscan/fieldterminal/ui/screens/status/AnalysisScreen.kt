@@ -1,0 +1,228 @@
+package com.bioscan.fieldterminal.ui.screens.status
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.data.AnalysisRepository
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
+import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
+import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
+import com.bioscan.fieldterminal.domain.BodyFatEvaluation
+import com.bioscan.fieldterminal.domain.EvalState
+import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
+import com.bioscan.fieldterminal.domain.SleepNight
+import com.bioscan.fieldterminal.domain.SriEvaluation
+import com.bioscan.fieldterminal.domain.SwcEvaluation
+import com.bioscan.fieldterminal.domain.WeightEvaluation
+import com.bioscan.fieldterminal.domain.evaluateBodyFat
+import com.bioscan.fieldterminal.domain.evaluateHrv
+import com.bioscan.fieldterminal.domain.evaluateRespiratoryAnomaly
+import com.bioscan.fieldterminal.domain.evaluateRhr
+import com.bioscan.fieldterminal.domain.evaluateSleepDuration
+import com.bioscan.fieldterminal.domain.evaluateSri
+import com.bioscan.fieldterminal.domain.evaluateWeightTrend
+import com.bioscan.fieldterminal.domain.expValue
+import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.theme.FieldColors
+import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
+import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
+import com.bioscan.fieldterminal.ui.theme.Saira
+import java.time.Instant
+import java.time.LocalDate
+
+// Phase A2 (Analysis Layer, see ROADMAP.md). First real implementation of
+// the Evaluation Method Spec's Categories 1 (HRV/RHR), 2 (Sleep), and 5
+// (Body composition) -- five per-stream evaluations, each independently
+// resolving to one of the spec's six states via its own chosen formula and
+// gate. Deliberately raw/unstyled, same precedent as Phase G4's first pass:
+// proving these real, cited statistical methods compute correctly against
+// real (often sparse) data is this phase's job; charts/granular-vs-trend
+// views are Phase A5. No composite score anywhere here -- five separate
+// cards, never blended into one number, matching this project's own
+// existing "no composite health index" precedent (domain/Readiness.kt).
+@Composable
+fun AnalysisScreen() {
+    var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
+    var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
+    var bodyMetrics by remember { mutableStateOf<List<BodyMetricsAnalysisRow>?>(null) }
+
+    LaunchedEffect(Unit) {
+        val repo = AnalysisRepository(SupabaseClientProvider.client)
+        wearable = repo.loadWearableDaily()
+        sleep = repo.loadSleepDaily()
+        bodyMetrics = repo.loadBodyMetrics()
+    }
+
+    val w = wearable
+    val s = sleep
+    val b = bodyMetrics
+    if (w == null || s == null || b == null) {
+        Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = FieldColors.Amber)
+        }
+        return
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        Text(
+            text = "PER-STREAM EVALUATION · WITHIN-PERSON ONLY",
+            style = FieldTextStyles.headerContext,
+            color = FieldColors.InkMuted,
+        )
+
+        val hrvPoints = w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }
+        EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms")
+
+        val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
+        EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm")
+
+        val hoursPoints = s.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } }
+        EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints), "h")
+
+        val nights = s.mapNotNull { row ->
+            val bedtime = row.bedtime?.let { runCatching { Instant.parse(it) }.getOrNull() }
+            val wake = row.wakeTime?.let { runCatching { Instant.parse(it) }.getOrNull() }
+            if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
+        }
+        SriCard(evaluateSri(nights))
+
+        val rrPoints = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
+        RespiratoryCard(evaluateRespiratoryAnomaly(rrPoints))
+
+        val weightPoints = b.mapNotNull { row -> row.weightKg?.let { LocalDate.parse(row.date) to it } }
+        WeightCard(evaluateWeightTrend(weightPoints))
+
+        val bodyFatPoints = b.mapNotNull { row -> row.bodyFatPct?.let { LocalDate.parse(row.date) to it } }
+        BodyFatCard(evaluateBodyFat(bodyFatPoints))
+    }
+}
+
+// HRV's baseline7d/mean60d come back in ln-space (see evaluateHrv) --
+// exponentiated here, at the display boundary, so the domain layer itself
+// never has to know it's being displayed in "ms."
+private fun SwcEvaluation.toExpSpace(): SwcEvaluation =
+    copy(baseline7d = expValue(baseline7d), mean60d = expValue(mean60d))
+
+@Composable
+private fun EvalCard(title: String, eval: SwcEvaluation, unit: String) {
+    Card(title = title) {
+        StateRow(eval.state)
+        StatLine("Confidence", eval.confidence.label)
+        eval.baseline7d?.let { StatLine("7-day baseline", "%.1f %s".format(it, unit)) }
+        eval.mean60d?.let { StatLine("60-day mean", "%.1f %s".format(it, unit)) }
+        eval.swcPct?.let { StatLine("SWC band", "±%.1f%%".format(it)) }
+        eval.cv7d?.let { StatLine("7-day CV", "%.1f%%".format(it)) }
+    }
+}
+
+@Composable
+private fun SriCard(eval: SriEvaluation) {
+    Card(title = "SLEEP REGULARITY (SRI)") {
+        StatLine("Confidence", eval.confidence.label)
+        if (eval.value != null) {
+            StatLine("SRI", "%.0f / 100".format(eval.value))
+        } else {
+            Text(
+                "Not enough consecutive nights yet (gaps over 2 nights reset the count).",
+                style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                color = FieldColors.InkMuted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation) {
+    Card(title = "RESPIRATORY RATE") {
+        StatLine("Confidence", eval.confidence.label)
+        eval.baseline?.let { StatLine("14-night baseline", "%.1f breaths/min".format(it)) }
+        Text(
+            if (eval.flagged) {
+                "Physiological anomaly flagged — 2 consecutive nights outside your baseline ±2 SD. Not a diagnosis."
+            } else {
+                "No anomaly flagged."
+            },
+            style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+            color = if (eval.flagged) FieldColors.Alert else FieldColors.InkMuted,
+        )
+    }
+}
+
+@Composable
+private fun WeightCard(eval: WeightEvaluation) {
+    Card(title = "WEIGHT TREND") {
+        StateRow(eval.state)
+        StatLine("Confidence", eval.confidence.label)
+        eval.emaToday?.let { StatLine("EMA (today)", "%.1f kg".format(it)) }
+        eval.rateKgPerWeek?.let { StatLine("Rate", "%+.2f kg/week".format(it)) }
+    }
+}
+
+@Composable
+private fun BodyFatCard(eval: BodyFatEvaluation) {
+    Card(title = "BODY FAT %") {
+        StateRow(eval.state)
+        StatLine("Confidence", eval.confidence.label)
+        eval.latest?.let { StatLine("Latest", "%.1f%%".format(it)) }
+        eval.previous?.let { StatLine("Previous (≥30d prior)", "%.1f%%".format(it)) }
+        eval.delta?.let { StatLine("Delta", "%+.1f pp".format(it)) }
+    }
+}
+
+@Composable
+private fun StateRow(state: EvalState) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text("State", style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
+        Text(stateLabel(state), style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp), color = stateColor(state))
+    }
+}
+
+@Composable
+private fun StatLine(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
+        Text(value, style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp), color = FieldColors.Ink)
+    }
+}
+
+// Neutral labels per the spec's own explicit rule -- "above your band," not
+// "improved": a SHIFT_UP is not automatically good (chronically elevated
+// HRV can mean parasympathetic saturation, not great recovery), so no color
+// or word here implies a value judgement except UNSTABLE, which really is
+// always worth a second look regardless of direction.
+private fun stateLabel(state: EvalState): String = when (state) {
+    EvalState.NoData -> "NO DATA"
+    EvalState.Building -> "BUILDING"
+    EvalState.Stable -> "STABLE"
+    EvalState.ShiftUp -> "ABOVE YOUR BAND"
+    EvalState.ShiftDown -> "BELOW YOUR BAND"
+    EvalState.Unstable -> "UNSTABLE"
+}
+
+private fun stateColor(state: EvalState): Color = when (state) {
+    EvalState.NoData, EvalState.Building -> FieldColors.InkMuted
+    EvalState.Stable -> FieldColors.Green
+    EvalState.ShiftUp, EvalState.ShiftDown -> FieldColors.Amber
+    EvalState.Unstable -> FieldColors.Alert
+}

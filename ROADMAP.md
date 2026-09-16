@@ -1903,13 +1903,70 @@ traffic; a real insert (`q1=8,q2=6,q3=6,q4=8`) confirmed `severity_score` comput
 test row was then deleted and the table confirmed back to 0 rows. No application code exists yet
 in this phase, so there's nothing to build or run on-device.
 
-**Future phases (design only, not started)**: A2 (Android Layer 2 for Categories 1/2/5 — HRV/RHR,
-sleep, body composition — as framework-free Kotlin domain functions, per the Evaluation Method
-Spec's own build order), A3 (Layer 3 mesocycle re-interpretation, starting with Category 6), A4
+**Future phases (design only, not started at the time A1 shipped)**: A2 (Android Layer 2 for
+Categories 1/2/5), A3 (Layer 3 mesocycle re-interpretation, starting with Category 6), A4
 (remaining Layer 2 categories, including the strength-training `exercise_sessions.details` jsonb
 extension the synthesis document proposed), A5 (visualization, trailing each category's own
 completion rather than batched at the end). Each starts only on its own explicit go-ahead, matching
 the G1→G5 and M1→M3 pattern.
+
+### ✅ Phase A2 — Android Layer 2: Categories 1, 2, 5 (done 2026-09-16, Claude Code)
+The first real per-stream evaluation code, per the Evaluation Method Spec's own build order
+(Categories 1/2/5 first — highest data density, shared SWC/EMA machinery, fastest visible payoff).
+Five framework-free Kotlin domain functions, five independent cards on a new **ANALYSIS** sub-tab
+under Status (`StatusSubTab.Analysis`, alongside Nutrition/Training/Supplements/Labs/Injuries) —
+never blended into one number, consistent with this project's existing "no composite health index"
+precedent (`domain/Readiness.kt`).
+
+**New shared primitives**: `domain/Stats.kt` (`mean`/`populationStdDev`/`median` — this project's
+domain layer had none before this; `domain/Readiness.kt`'s own `computeHrvReadinessSeries()`
+inlines its mean/variance math rather than calling a shared helper) and `domain/EvalState.kt` (the
+spec's six-state vocabulary + the `Confidence` "n/N" chip, per its own global rules section 0).
+
+**Category 1 (HRV/RHR)**, `domain/HrvRhrEvaluation.kt`: 7-day rolling ln(rMSSD) + Smallest
+Worthwhile Change band, with a genuine rolling-CV instability check (today's 7-day CV against the
+median of every trailing 7-day CV over the last 60 days — a real "CV of a rolling CV," not
+simplified away) driving the `UNSTABLE` state. Real, carried-forward caveat stated in the code, not
+silently assumed: whether `wearable_daily.hrv` is actually rMSSD or SDNN is still genuinely
+unconfirmed (Health Connect sync hasn't run yet) — this assumes rMSSD per the spec's chosen method,
+flagged for whoever eventually checks the real Health Connect record type. `evaluateSwcStream()` is
+generic and reused verbatim for RHR (untransformed, per the spec's own instruction) and for
+Category 2's sleep-duration sub-metric.
+
+**Category 2 (Sleep)**, `domain/SleepEvaluation.kt`: three separate sub-metrics, never one score.
+Duration reuses `evaluateSwcStream()` directly. Sleep Regularity Index is a real from-scratch
+implementation of the spec's own formula — 5-minute epoch binning (288 bins/day) across consecutive
+nights, comparing clock-time sleep/wake state day-over-day, gated on 14+ nights with no gap over 2.
+Respiratory-rate anomaly checks the last two nights against a 14-night personal baseline ±2 SD,
+labeled "physiological anomaly" per the spec's own non-medical guard.
+
+**Category 5 (Body composition)**, `domain/BodyCompositionEvaluation.kt`: weight gets a real
+time-aware EMA (`α_eff = 1 - (1-α)^Δt`, alpha auto-picked from actual measurement cadence over the
+trailing 30 days, not a fixed setting) with a 2-week-trailing rate-of-change; body fat % is gated
+hard on the spec's Least Significant Change rule — only ever compares two readings ≥30 days apart,
+`STABLE` for anything inside 1.5 percentage points regardless of the raw number.
+
+**Real bug caught during on-device verification, not just code review**: the body-fat evaluation's
+`BUILDING` branch initially reported its confidence chip as raw reading count vs. 2 (e.g. "3/2"
+when 3 real readings existed but none were properly spaced) — a confidence chip showing more than
+its own denominator reads like a broken fraction, undermining the whole point of the chip (never
+making the user guess, per the spec's rule 0.5). Fixed to count qualifying comparison pairs instead
+(0 or 1 vs. 1 needed), confirmed correct on rebuild.
+
+**Verified live on the emulator against this account's real, current data** (34 days of
+`wearable_daily`/`sleep_daily` history spanning 2026-08-13 to 2026-09-15; 5 `body_metrics` rows
+spanning 19 days): HRV, RHR, and Sleep Duration all correctly show `BUILDING` at `35/60` (35 real
+days of history against SWC's real 60-day gate — genuinely not enough yet, shown honestly rather
+than computed on a shaky baseline); SRI correctly shows `5/14` with a plain-language explanation
+(only 5 of the 34 real sleep rows carry `bedtime`/`wake_time`); **Respiratory Rate is the one
+category with enough real data to fully compute** — `13/14`, baseline correctly derived from real
+nightly values, correctly reports no anomaly flagged; Weight Trend correctly shows `BUILDING` at
+`5/10` (this account has only ever logged 5 real weigh-ins, `body_metrics` had no read path
+anywhere in this app before this phase); Body Fat % correctly shows `BUILDING` at `0/1` post-fix,
+with the real latest value (20.7%) displayed. No exceptions in logcat through the full flow. This
+mix — mostly honest `BUILDING` states, one real computed result — is exactly what this account's
+real, currently-sparse data should produce; a screen showing five confident trend lines today would
+have meant the gates were wrong, not that the data was ready.
 
 ---
 

@@ -83,6 +83,7 @@ fun StatusScreen() {
             StatusSubTab.Supplements -> SupplementsScreen()
             StatusSubTab.Labs -> LabsScreen()
             StatusSubTab.Injuries -> HealthEventsScreen()
+            StatusSubTab.Analysis -> AnalysisScreen()
         }
     }
 }

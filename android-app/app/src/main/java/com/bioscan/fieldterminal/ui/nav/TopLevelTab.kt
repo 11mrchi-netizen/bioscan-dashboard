@@ -24,4 +24,5 @@ enum class StatusSubTab(val label: String) {
     Supplements("SUPPLEMENTS"),
     Labs("LABS"),
     Injuries("INJURIES & ILLNESS"),
+    Analysis("ANALYSIS"), // Phase A2 -- Evaluation Method Spec per-stream states
 }

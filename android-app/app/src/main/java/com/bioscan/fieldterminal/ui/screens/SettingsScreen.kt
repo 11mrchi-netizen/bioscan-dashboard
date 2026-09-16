@@ -33,8 +33,12 @@ import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HealthConnectSyncResult
 import com.bioscan.fieldterminal.data.MapSettingsStore
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.healthconnect.BackfillResult
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
+import com.bioscan.fieldterminal.healthconnect.OneOffBackfillStatus
+import com.bioscan.fieldterminal.healthconnect.runNutritionHydrationBackfill
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.Card
 import com.bioscan.fieldterminal.ui.components.FieldTextField
@@ -67,6 +71,7 @@ fun SettingsScreen(scope: CoroutineScope) {
     val hcAvailable = remember { HealthConnectManager.isAvailable(context) }
     var hcChecked by remember { mutableStateOf(false) }
     var hcGranted by remember { mutableStateOf(false) }
+    var backfillRunning by remember { mutableStateOf(false) }
     val hcPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract(),
     ) { granted -> hcGranted = granted.containsAll(HealthConnectManager.PERMISSIONS) }
@@ -195,7 +200,6 @@ fun SettingsScreen(scope: CoroutineScope) {
             Card(title = "HEALTH CONNECT") {
                 Text(
                     "Reads activity, body, sleep, and vitals data on every app open. " +
-                        "Hydration/nutrition sync and the one-time meal backfill land in a later phase. " +
                         "Grants are managed by the OS, not re-requested every screen load.",
                     style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
                     color = FieldColors.InkMuted,
@@ -232,6 +236,54 @@ fun SettingsScreen(scope: CoroutineScope) {
                         style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
                         color = FieldColors.InkMuted,
                     )
+                }
+            }
+
+            // TEMPORARY -- delete this card (and
+            // healthconnect/OneOffNutritionHydrationBackfill.kt) before the
+            // next real release. Exists only to backfill this account's real
+            // historical meals/hydration_daily rows into Health Connect once,
+            // since this app has only ever read from Health Connect, never
+            // written to it.
+            if (hcAvailable) {
+                Card(title = "ONE-OFF: BACKFILL HISTORY") {
+                    Text(
+                        "Writes this account's existing meal and hydration history into Health Connect " +
+                            "(it has none today). Safe to run more than once — matching entries are updated, " +
+                            "not duplicated. Temporary utility, removed in a future update.",
+                        style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                        color = FieldColors.InkMuted,
+                    )
+                    if (hcGranted) {
+                        AmberButton(label = if (backfillRunning) "BACKFILLING…" else "BACKFILL NUTRITION + HYDRATION") {
+                            if (!backfillRunning) {
+                                backfillRunning = true
+                                scope.launch {
+                                    val result = runNutritionHydrationBackfill(context, SupabaseClientProvider.client)
+                                    OneOffBackfillStatus.record(result)
+                                    backfillRunning = false
+                                }
+                            }
+                        }
+                    } else {
+                        Text(
+                            "Connect Health Connect above first.",
+                            style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                            color = FieldColors.InkMuted,
+                        )
+                    }
+                    OneOffBackfillStatus.lastResult?.let { result ->
+                        Text(
+                            text = when (result) {
+                                is BackfillResult.Success -> "Backfilled ${result.mealsWritten} meals, ${result.hydrationDaysWritten} hydration days."
+                                is BackfillResult.Failed -> "Backfill failed: ${result.message}"
+                                BackfillResult.NotGranted -> "Backfill skipped — permissions not granted."
+                                BackfillResult.Unavailable -> "Backfill skipped — Health Connect unavailable."
+                            },
+                            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+                            color = if (result is BackfillResult.Success) FieldColors.Green else FieldColors.InkMuted,
+                        )
+                    }
                 }
             }
 

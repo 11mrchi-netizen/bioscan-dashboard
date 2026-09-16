@@ -2404,6 +2404,39 @@ its own future pass once there's real data worth charting.
 
 ---
 
+### ✅ One-off Health Connect backfill: nutrition + hydration from Supabase (done 2026-09-16, Claude Code)
+**Temporary utility — remove before the next real release.** Health Connect had zero nutrition/
+hydration history (this app has only ever read from it, never written), even though the
+`NutritionRecord`/`HydrationRecord` write permissions were already in place from Phase G1. New
+`healthconnect/OneOffNutritionHydrationBackfill.kt` reads this account's real `meals` (77 rows) and
+`hydration_daily` (5 rows) straight from Supabase and writes them into Health Connect as
+`NutritionRecord`/`HydrationRecord` entries, plus a "ONE-OFF: BACKFILL HISTORY" card in
+`SettingsScreen.kt`. Deliberately self-contained — its own private read models, no shared-model
+dependency — so removal later is exactly "delete this file + one Settings block." A header comment
+in the file states this explicitly.
+
+**Real on-device finding that changed the design twice**: the plan assumed Health Connect's
+documented `Metadata.manualEntryWithId(clientRecordId)` behavior — that re-inserting with the same
+client ID updates in place rather than duplicating. **Verified false on this device**: a second
+backfill run produced real duplicate `NutritionRecord` entries (confirmed in Health Connect's own
+Data and access UI, not just assumed). A follow-up fix that deleted by `clientRecordId` before
+inserting *also* failed to match anything (0 deleted, then a 3rd duplicate appeared) — the platform's
+clientRecordId matching isn't reliable for either insert-time upsert or delete on this environment.
+Final approach: read back whatever this app already wrote in the covered time span using Health
+Connect's own real record IDs (`metadata.id`, the platform's actual primary key, not the
+client-supplied string), delete those, then insert fresh. This is a real "clear and rewrite" that
+depends on nothing but guaranteed-real platform IDs.
+
+**Verified on real device**: status line reports real counts ("Backfilled 77 meals, 5 hydration
+days"); spot-checked in Health Connect's own Data and access UI — a real Sep 15 breakfast entry
+(611 Cal, 62g protein, correctly classified `MealType.MEAL_TYPE_BREAKFAST` from its "Breakfast:"
+description prefix) and a real Sep 11 hydration entry (0.8 L) both match Supabase exactly; running
+the backfill a second time reports the same counts with zero duplicate records left behind (checked
+directly in Health Connect, not inferred from the status line); zero exceptions in logcat across
+both runs.
+
+---
+
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and

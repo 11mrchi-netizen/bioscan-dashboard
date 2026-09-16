@@ -1845,6 +1845,74 @@ confirmed scope.
 
 ---
 
+## Phase A — Analysis Layer (per-stream evaluation + mesocycle framing)
+
+A new, separate phase sequence from G (Health Connect) and M (Map tab rework), starting from two
+fully-specced design-decision documents the user provided directly (not written in this repo): an
+**Evaluation Method Spec** (one chosen statistical approach per 9 health-data categories — HRV/RHR,
+sleep, subjective wellbeing, nutrition, body composition, training load/running, rest cadence,
+Bristol/injury, bloodwork — each resolving to one of six states via a named noise threshold and
+minimum-data gate) and a **Training Cycle Framing** doc (a mesocycle context layer that re-labels,
+never recomputes, those states as `PRIMARY_TARGET`/`MAINTAINED`/`UNMANAGED` depending on the active
+training cycle's stated focus, with recovery/safety signals — HRV, sleep, subjective wellbeing,
+injury/illness — explicitly exempt from that re-labeling). A third document cross-referenced both
+against this project's real live schema and proposed the phased build below. Confirmed with the
+user before planning: OSTRC-H2 gets its own table (not columns on the episode-shaped `injuries`
+table); this effort is built **mobile-first** (Android Field Terminal), not the web dashboard,
+which keeps running unchanged; Phase A1 is schema-only.
+
+### ✅ Phase A1 — schema foundation (done 2026-09-16, Claude Code)
+Three independent Supabase migrations, applied directly (this project doesn't track migration SQL
+as files in git — only this write-up is committed, same as every prior schema-only change).
+
+**`lab_draws`** gains `draw_time`, `fasted` (boolean), `hours_since_training` (numeric) — the
+Evaluation Method Spec's own Category 9 requirement ("record these four fields with every draw" —
+`draw_date` already existed) needed to make its Reference Change Value comparisons defensible.
+All nullable, matching this project's "add a column, don't backfill fiction" convention for the 2
+pre-existing real draws.
+
+**New `ostrc_checkins` table** — OSTRC-H2's weekly, per-body-area injury/overuse questionnaire.
+Deliberately its own table rather than columns on `injuries`: OSTRC is a recurring score decoupled
+from any specific injury episode, while `injuries` models discrete start/end episodes — forcing
+one onto the other would have been the wrong shape for both. `q1`/`q4` are constrained to OSTRC's
+real `{0,8,17,25}` value set and `q2`/`q3` to `{0,6,13,19,25}` via actual `CHECK` constraints
+(matching this project's existing convention of enforcing domain constraints at the DB level, e.g.
+`rpe 0-10`, `bristol_type 1-7`) — not left to application-level trust. `severity_score` is a
+stored generated column (`q1+q2+q3+q4`), not something app code computes and writes.
+
+**New `training_cycles` table + `focus_quality` enum** — verbatim from the Training Cycle
+Framing doc's own resolved schema (all three of that document's original open items — quality
+taxonomy, undulation timing, cycle-to-training-data linking — were already resolved there: a
+9-value enum not free text, planned-in-advance not inferred/backfilled undulation, and implicit
+date-range-overlap linking with no join table). One real trade-off flagged rather than silently
+handled: `focus`'s `quality` field sits inside a jsonb array, so it can't be constrained against
+the `focus_quality` enum with a plain column-level `CHECK` the way `ostrc_checkins`' flat columns
+can — validating it is deferred to app-level code once a create/edit UI exists (Phase A3+), not
+solved with a more complex jsonb-validating `CHECK` expression in this schema-only pass.
+
+**Verified via direct SQL** (Supabase MCP `execute_sql`): all three tables'/columns' exact types,
+nullability, and defaults confirmed against the plan; `ostrc_checkins` and `training_cycles` each
+carry the identical 4-policy RLS pattern already used by `exercise_sessions`/`sleep_daily`/
+`wellbeing_daily` (`select/insert/update/delete own <table>`, each `auth.uid() = user_id`),
+confirmed via `pg_policies`; the `focus_quality` enum's 9 values confirmed present and correctly
+ordered; the `q1`/`q4` `CHECK` constraint confirmed to genuinely reject an invalid value (a real
+insert attempt with `q1=5` was rejected by Postgres, not just assumed to work from the DDL) — note
+this required supplying a real `user_id` explicitly, since the SQL tool executes outside an
+authenticated session and `user_id`'s `auth.uid()` default resolves to null there, unlike real app
+traffic; a real insert (`q1=8,q2=6,q3=6,q4=8`) confirmed `severity_score` computes to `28`; the
+test row was then deleted and the table confirmed back to 0 rows. No application code exists yet
+in this phase, so there's nothing to build or run on-device.
+
+**Future phases (design only, not started)**: A2 (Android Layer 2 for Categories 1/2/5 — HRV/RHR,
+sleep, body composition — as framework-free Kotlin domain functions, per the Evaluation Method
+Spec's own build order), A3 (Layer 3 mesocycle re-interpretation, starting with Category 6), A4
+(remaining Layer 2 categories, including the strength-training `exercise_sessions.details` jsonb
+extension the synthesis document proposed), A5 (visualization, trailing each category's own
+completion rather than batched at the end). Each starts only on its own explicit go-ahead, matching
+the G1→G5 and M1→M3 pattern.
+
+---
+
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and

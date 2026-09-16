@@ -1,6 +1,8 @@
 package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
+import com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow
+import com.bioscan.fieldterminal.data.model.LabResultAnalysisRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
@@ -114,4 +116,23 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             }
             .decodeList<OstrcAnalysisRow>()
             .reversed()
+
+    // Phase A4 (Category 9). Two small real tables (2 draws, 77 results
+    // today) -- no server-side date filtering needed at this account's real
+    // volume, same "generous margin" reasoning as everywhere else here.
+    suspend fun loadLabDraws(): List<LabDrawAnalysisRow> =
+        supabase.postgrest.from("lab_draws")
+            .select(columns = Columns.list("id,draw_date")) {
+                order("draw_date", Order.DESCENDING)
+                limit(200)
+            }
+            .decodeList<LabDrawAnalysisRow>()
+            .reversed()
+
+    suspend fun loadLabResults(): List<LabResultAnalysisRow> =
+        supabase.postgrest.from("lab_results")
+            .select(columns = Columns.list("draw_id,marker_name,value,unit,ref_low,ref_high")) {
+                limit(500)
+            }
+            .decodeList<LabResultAnalysisRow>()
 }

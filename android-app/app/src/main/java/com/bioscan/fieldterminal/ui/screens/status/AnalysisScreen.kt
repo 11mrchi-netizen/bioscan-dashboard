@@ -24,12 +24,16 @@ import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
+import com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow
+import com.bioscan.fieldterminal.data.model.LabResultAnalysisRow
 import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
+import com.bioscan.fieldterminal.domain.BloodworkMarkerEvaluation
+import com.bioscan.fieldterminal.domain.BloodworkTrendState
 import com.bioscan.fieldterminal.domain.BodyFatEvaluation
 import com.bioscan.fieldterminal.domain.BristolEvaluation
 import com.bioscan.fieldterminal.domain.BristolPattern
@@ -49,6 +53,7 @@ import com.bioscan.fieldterminal.domain.SwcEvaluation
 import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.domain.TrainingLoadEvaluation
 import com.bioscan.fieldterminal.domain.WeightEvaluation
+import com.bioscan.fieldterminal.domain.evaluateBloodworkMarker
 import com.bioscan.fieldterminal.domain.evaluateBodyFat
 import com.bioscan.fieldterminal.domain.evaluateBristol
 import com.bioscan.fieldterminal.domain.evaluateHrv
@@ -93,6 +98,8 @@ fun AnalysisScreen() {
     var nutrition by remember { mutableStateOf<List<DailyNutrition>?>(null) }
     var stool by remember { mutableStateOf<List<StoolAnalysisRow>?>(null) }
     var ostrc by remember { mutableStateOf<List<OstrcAnalysisRow>?>(null) }
+    var labDraws by remember { mutableStateOf<List<LabDrawAnalysisRow>?>(null) }
+    var labResults by remember { mutableStateOf<List<LabResultAnalysisRow>?>(null) }
     var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
     var cycleLoaded by remember { mutableStateOf(false) }
 
@@ -106,6 +113,8 @@ fun AnalysisScreen() {
         nutrition = repo.loadDailyNutrition()
         stool = repo.loadStoolLog()
         ostrc = repo.loadOstrcCheckins()
+        labDraws = repo.loadLabDraws()
+        labResults = repo.loadLabResults()
         activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle()
         cycleLoaded = true
     }
@@ -117,8 +126,10 @@ fun AnalysisScreen() {
     val wb = wellbeing
     val n = nutrition
     val st = stool
+    val ld = labDraws
+    val lr = labResults
     val os = ostrc
-    if (w == null || s == null || b == null || t == null || wb == null || n == null || st == null || os == null || !cycleLoaded) {
+    if (w == null || s == null || b == null || t == null || wb == null || n == null || st == null || os == null || ld == null || lr == null || !cycleLoaded) {
         Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FieldColors.Amber)
         }
@@ -196,6 +207,23 @@ fun AnalysisScreen() {
                 OstrcCard(evaluateOstrc(bodyArea, entries), trainingLoadEval.tsb, restCadenceEval.consecutiveDaysWithoutRest, sorenessEval.median7d)
             }
         }
+
+        val drawDatesById = ld.associate { it.id to LocalDate.parse(it.drawDate) }
+        val bloodworkEvals = lr
+            .mapNotNull { row -> row.value?.let { v -> drawDatesById[row.drawId]?.let { date -> Triple(row, date, v) } } }
+            .groupBy { it.first.markerName }
+            .map { (markerName, rows) ->
+                val first = rows.first().first
+                evaluateBloodworkMarker(
+                    markerName = markerName,
+                    draws = rows.map { it.second to it.third },
+                    unit = first.unit,
+                    refLow = first.refLow,
+                    refHigh = first.refHigh,
+                )
+            }
+            .sortedBy { it.markerName }
+        BloodworkCard(bloodworkEvals)
     }
 }
 
@@ -386,6 +414,72 @@ private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int,
             style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
             color = FieldColors.InkMuted,
         )
+    }
+}
+
+// Phase A4 (Category 9). One compact row per real marker rather than one
+// card each (60 distinct markers in this account's real data today) -- the
+// granular dot-plot-per-marker the spec calls for is Phase A5's job; this
+// proves the RCV/Index-of-Individuality math against real data first, the
+// same raw/unstyled-first precedent every other category in this phase
+// started from. No trend line anywhere -- the spec is explicit that ~1
+// draw/year doesn't support the continuity a line chart implies.
+@Composable
+private fun BloodworkCard(evals: List<BloodworkMarkerEvaluation>) {
+    Card(title = "BLOODWORK (RCV)") {
+        Text(
+            "~1 draw/year means every comparison here is a single two-point delta against a real, marker-specific noise threshold — never a trend.",
+            style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
+            color = FieldColors.InkMuted,
+        )
+        evals.forEach { m -> BloodworkMarkerRow(m) }
+    }
+}
+
+@Composable
+private fun BloodworkMarkerRow(m: BloodworkMarkerEvaluation) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(m.markerName, style = TextStyle(fontFamily = Saira, fontSize = 14.sp), color = FieldColors.Ink)
+            Text(
+                "%.2f%s".format(m.latestValue, m.unit?.let { " $it" } ?: ""),
+                style = TextStyle(fontFamily = JetBrainsMono, fontSize = 13.sp),
+                color = FieldColors.Ink,
+            )
+        }
+        val rangeText = if (m.refLow != null && m.refHigh != null) {
+            "range %.2f–%.2f".format(m.refLow, m.refHigh)
+        } else {
+            "no reference range on file"
+        }
+        val stateText = if (m.previousValue == null) {
+            "BUILDING (1 draw)"
+        } else if (m.rcv == null || m.deltaPercent == null) {
+            "no RCV citation for this marker"
+        } else {
+            when (m.state) {
+                BloodworkTrendState.Stable -> "STABLE (Δ%+.1f%%, within RCV ±%.1f%%)".format(m.deltaPercent, m.rcv)
+                BloodworkTrendState.ShiftUp -> "SHIFT UP (Δ%+.1f%% exceeds RCV ±%.1f%%)".format(m.deltaPercent, m.rcv)
+                BloodworkTrendState.ShiftDown -> "SHIFT DOWN (Δ%+.1f%% exceeds RCV ±%.1f%%)".format(m.deltaPercent, m.rcv)
+                null -> "" // unreachable -- rcv/deltaPercent both non-null here
+            }
+        }
+        Text(
+            "$rangeText · $stateText",
+            style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
+            color = when (m.state) {
+                BloodworkTrendState.ShiftUp, BloodworkTrendState.ShiftDown -> FieldColors.Amber
+                BloodworkTrendState.Stable -> FieldColors.Green
+                null -> FieldColors.InkMuted
+            },
+        )
+        m.indexOfIndividuality?.takeIf { it < 0.6 }?.let {
+            Text(
+                "Index of Individuality %.2f — population range less informative here; read against your own history.".format(it),
+                style = TextStyle(fontFamily = Saira, fontSize = 11.5.sp),
+                color = FieldColors.InkMuted,
+            )
+        }
     }
 }
 

@@ -2328,6 +2328,46 @@ neither of those categories' own gates are met on this account's real data yet).
 honest `0/8` — zero real `stool_log` rows exist. Test check-in deleted afterward (fabricated for
 verification, not a real report) — `ostrc_checkins` back to 0 rows. No exceptions in logcat.
 
+### ✅ Phase A4 (partial, cont'd) — Category 9: Bloodwork / RCV (done 2026-09-16, Claude Code)
+**Real research step, same discipline as Phase C's dataset comparison**: fetched real CVI/CVG
+values from a published mirror of the Ricos et al. desirable-biological-variation database (the
+spec's own named authoritative source) for every marker this account's real `lab_results` shares
+across both real draws — `domain/BiologicalVariation.kt`, 11 markers with a real citation (Albumin,
+Creatinine, Hematocrit, Hemoglobin, hs-CRP, MCH, MCHC, MCV, Platelets, RBC, RDW).
+
+**Two real, stated gaps, not silently worked around**: `eGFR` is a calculated/derived value (from
+creatinine via CKD-EPI or similar), not its own primary analyte in the standard BV database — no
+defensible citation found. The five WBC differential *percentages* (Basophils/Eosinophils/
+Lymphocytes/Monocytes/Neutrophils %) only have a published CVI as *absolute counts* in the standard
+database — a genuinely different measurement (ratio vs. concentration) — so applying that number
+would be a real citation mismatch, unlike hs-CRP sharing CRP's own entry (same analyte, different
+assay sensitivity — a defensible match, stated as such in code). Both gaps degrade gracefully to
+value-vs-range display, no RCV claim, exactly the spec's own "no CVA available" default extended
+one step further.
+
+**A real bug caught by hand-verifying against real data before trusting the screen**: RCV is
+derived from a coefficient of variation, so it's a *percentage* — the first implementation compared
+it directly against the raw absolute delta, silently mixing units (Hematocrit's raw delta of 3.2
+looked tiny next to an RCV of ~8.4, hiding a real, genuine 8.44%-vs-8.37% shift). Fixed by computing
+`deltaPercent` and comparing that against RCV instead — caught specifically because Hematocrit's
+real numbers landed right on the boundary, which forced a hand-calculation before trusting the
+on-screen state.
+
+`domain/BloodworkEvaluation.kt` evaluates **every** distinct real marker in `lab_results` (60 today,
+not just the 17 with a repeat draw) — single-draw markers correctly render `BUILDING (1 draw)`, per
+the spec's own gate. Index of Individuality (`II = √(CVA²+CVI²)/CVG`, `II<0.6` → "read against your
+own history") is shown per marker where computable. `BloodworkCard` in `AnalysisScreen.kt` renders
+one compact row per marker rather than one card each — the spec's own dot-plot-with-reference-band
+display is deferred to Phase A5 (Part 6), matching this phase's own "raw/unstyled first pass, charts
+later" precedent used for every prior category rather than the more elaborate treatment sketched in
+this plan's own draft.
+
+**Verified on real device against hand-calculated real values**: Albumin (`Δ-2.1%, within RCV
+±9.9%`), Hemoglobin (`Δ+8.1%, within RCV ±8.8%`), and — the real, deliberately-checked borderline
+case — Hematocrit (`SHIFT UP, Δ+8.4% exceeds RCV ±8.4%`) all matched hand computation from the raw
+`lab_results` values exactly. `Eosinophils %` correctly showed "no RCV citation for this marker."
+No exceptions in logcat.
+
 ---
 
 ## Summary — rough remaining build time

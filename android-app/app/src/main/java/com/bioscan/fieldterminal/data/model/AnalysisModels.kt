@@ -70,3 +70,22 @@ data class OstrcAnalysisRow(
     @SerialName("body_area") val bodyArea: String,
     @SerialName("severity_score") val severityScore: Int? = null,
 )
+
+// Phase A4 (Category 9). Joined client-side by draw_id -> draw_date
+// (matching this project's existing "no relational embedding, join in
+// Kotlin" convention -- see TrainingCyclesRepository for the same pattern).
+@Serializable
+data class LabDrawAnalysisRow(
+    val id: Long,
+    @SerialName("draw_date") val drawDate: String,
+)
+
+@Serializable
+data class LabResultAnalysisRow(
+    @SerialName("draw_id") val drawId: Long,
+    @SerialName("marker_name") val markerName: String,
+    val value: Double? = null,
+    val unit: String? = null,
+    @SerialName("ref_low") val refLow: Double? = null,
+    @SerialName("ref_high") val refHigh: Double? = null,
+)

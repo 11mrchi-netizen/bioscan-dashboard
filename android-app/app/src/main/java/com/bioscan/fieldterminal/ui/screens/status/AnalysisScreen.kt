@@ -22,16 +22,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.domain.BodyFatEvaluation
 import com.bioscan.fieldterminal.domain.EvalState
+import com.bioscan.fieldterminal.domain.ExpectationTier
+import com.bioscan.fieldterminal.domain.MetricCategory
 import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.SriEvaluation
 import com.bioscan.fieldterminal.domain.SwcEvaluation
+import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.domain.TrainingLoadEvaluation
 import com.bioscan.fieldterminal.domain.WeightEvaluation
 import com.bioscan.fieldterminal.domain.evaluateBodyFat
@@ -43,6 +47,7 @@ import com.bioscan.fieldterminal.domain.evaluateSri
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.evaluateWeightTrend
 import com.bioscan.fieldterminal.domain.expValue
+import com.bioscan.fieldterminal.domain.resolveTier
 import com.bioscan.fieldterminal.ui.components.Card
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
@@ -68,6 +73,8 @@ fun AnalysisScreen() {
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
     var bodyMetrics by remember { mutableStateOf<List<BodyMetricsAnalysisRow>?>(null) }
     var trainingSessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
+    var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
+    var cycleLoaded by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val repo = AnalysisRepository(SupabaseClientProvider.client)
@@ -75,13 +82,15 @@ fun AnalysisScreen() {
         sleep = repo.loadSleepDaily()
         bodyMetrics = repo.loadBodyMetrics()
         trainingSessions = repo.loadExerciseSessionsForTrainingLoad()
+        activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle()
+        cycleLoaded = true
     }
 
     val w = wearable
     val s = sleep
     val b = bodyMetrics
     val t = trainingSessions
-    if (w == null || s == null || b == null || t == null) {
+    if (w == null || s == null || b == null || t == null || !cycleLoaded) {
         Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FieldColors.Amber)
         }
@@ -132,7 +141,7 @@ fun AnalysisScreen() {
                 null
             }
         }
-        TrainingLoadCard(evaluateTrainingLoad(sessionLoads))
+        TrainingLoadCard(evaluateTrainingLoad(sessionLoads), resolveTier(MetricCategory.TrainingLoad, activeCycle))
     }
 }
 
@@ -213,7 +222,7 @@ private fun BodyFatCard(eval: BodyFatEvaluation) {
 // StateRow uses for the SWC-based categories -- TSB is a TrainingPeaks
 // convention, not a personal-baseline band, so it gets its own row.
 @Composable
-private fun TrainingLoadCard(eval: TrainingLoadEvaluation) {
+private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier?) {
     Card(title = "TRAINING LOAD (CTL/ATL/TSB)") {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("State", style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
@@ -227,6 +236,10 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation) {
         eval.ctl?.let { StatLine("CTL (fitness)", "%.1f".format(it)) }
         eval.atl?.let { StatLine("ATL (fatigue)", "%.1f".format(it)) }
         eval.tsb?.let { StatLine("TSB (form)", "%+.1f".format(it)) }
+        // Phase A3: a pure re-label of the state above, never a recomputation
+        // -- only rendered when a training cycle is actually active. No
+        // active cycle means no framing applies, not "unmanaged."
+        tier?.let { StatLine("This cycle", tierLabel(it)) }
         Text(
             "Grade-adjusted pace / Efficiency Factor not built yet — needs per-point route " +
                 "elevation data this app doesn't persist for logged sessions.",
@@ -234,6 +247,12 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation) {
             color = FieldColors.InkMuted,
         )
     }
+}
+
+private fun tierLabel(tier: ExpectationTier): String = when (tier) {
+    ExpectationTier.PrimaryTarget -> "PRIMARY TARGET"
+    ExpectationTier.Maintained -> "MAINTAINED"
+    ExpectationTier.Unmanaged -> "NOT A TARGET THIS CYCLE"
 }
 
 @Composable

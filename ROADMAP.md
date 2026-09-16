@@ -2012,6 +2012,46 @@ fields) — each is its own future unit of work, not bundled into this pass.
 
 ---
 
+### ✅ Phase A3 — Layer 3: mesocycle re-interpretation for Category 6 (done 2026-09-16, Claude Code)
+The Training Cycle Framing doc's actual design core: a pure re-labeling layer over Layer 2's
+already-computed states, never recomputing anything. `domain/TrainingCycle.kt` mirrors
+`training_cycles`' real schema (the `focus_quality` enum, weighted focus entries with a primary/
+maintained role) as framework-free Kotlin. `domain/MesocycleReinterpretation.kt` is the
+three-tier model itself — `PrimaryTarget`/`Maintained`/`Unmanaged` — plus the safety carve-out from
+the design doc's section 3.3, implemented exactly as specified: Categories 1 (HRV/RHR), 2 (Sleep),
+3 (Subjective), and 8 (Bristol/Injury) are hard-exempt from re-labeling regardless of cycle focus,
+returning `null` (render Layer 2's state directly, full weight) rather than ever being computed.
+
+Category 6 (Training Load) is the one category with a concrete mapping wired up, per the design
+doc's own sequencing logic (it's the category the mesocycle concept was originally motivated by,
+and the only performance-adaptation Layer 2 metric this app has today — strength volume-load is
+still A4 remaining work). An active cycle whose focus includes `aerobic_base`/
+`race_specific_endurance` maps Training Load to `PRIMARY_TARGET` (primary role) or `MAINTAINED`
+(maintained role); no such quality stated maps to `UNMANAGED`. Every other non-exempt category
+correctly falls through to `UNMANAGED` for now — the design doc's own section 3.2 explicitly calls
+its full lookup table a sketch, needing "real per-focus-type definition work once actual cycle data
+exists to test against," so categories without a concrete real use case yet are left honestly
+unmapped rather than guessed at.
+
+New `data/TrainingCyclesRepository.kt` reads whichever `training_cycles` row's date range contains
+today (no create/edit UI exists yet — flagged as future work back in Phase A1, not built here), with
+defensive per-entry parsing: a focus entry with an unparseable quality or role is dropped from that
+cycle's list rather than crashing the whole read. Wired into the Training Load card as a new "This
+cycle" line, shown only when a cycle is actually active.
+
+**Verified against real Supabase writes, not just structural review** — `training_cycles` had zero
+rows before this phase (no create UI exists), so verification meant creating real test data through
+the same real backend, checking it, then removing it (same insert-check-delete discipline as every
+write-path check this session): confirmed the app renders no "This cycle" line against the real
+empty table; inserted a real test cycle (`aerobic_base`, primary, covering today) and confirmed the
+Training Load card correctly rendered `PRIMARY TARGET`; updated that same row's `focus` jsonb to
+`aerobic_base`/maintained + `strength`/primary and confirmed the card correctly switched to
+`MAINTAINED` — proving the role field, not just quality presence, actually drives the tier; deleted
+the test row and confirmed both the database (`0` rows) and a fresh app launch were back to showing
+no cycle framing. No exceptions in logcat through any of these states.
+
+---
+
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and

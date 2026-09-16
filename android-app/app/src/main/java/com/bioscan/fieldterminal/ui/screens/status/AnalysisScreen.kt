@@ -30,11 +30,13 @@ import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.BodyFatEvaluation
 import com.bioscan.fieldterminal.domain.DailyNutrition
+import com.bioscan.fieldterminal.domain.DeloadCadenceFlag
 import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.domain.ExpectationTier
 import com.bioscan.fieldterminal.domain.MetricCategory
 import com.bioscan.fieldterminal.domain.NutritionEvaluation
 import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
+import com.bioscan.fieldterminal.domain.RestCadenceEvaluation
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.SriEvaluation
 import com.bioscan.fieldterminal.domain.SubjectiveEvaluation
@@ -46,6 +48,7 @@ import com.bioscan.fieldterminal.domain.evaluateBodyFat
 import com.bioscan.fieldterminal.domain.evaluateHrv
 import com.bioscan.fieldterminal.domain.evaluateNutrition
 import com.bioscan.fieldterminal.domain.evaluateRespiratoryAnomaly
+import com.bioscan.fieldterminal.domain.evaluateRestCadence
 import com.bioscan.fieldterminal.domain.evaluateRhr
 import com.bioscan.fieldterminal.domain.evaluateSleepDuration
 import com.bioscan.fieldterminal.domain.evaluateSri
@@ -153,7 +156,10 @@ fun AnalysisScreen() {
                 null
             }
         }
-        TrainingLoadCard(evaluateTrainingLoad(sessionLoads), resolveTier(MetricCategory.TrainingLoad, activeCycle))
+        val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
+        TrainingLoadCard(trainingLoadEval, resolveTier(MetricCategory.TrainingLoad, activeCycle))
+
+        RestCadenceCard(evaluateRestCadence(sessionLoads, trainingLoadEval.tsb, trainingLoadEval.confidence.met))
 
         SubjectiveCard("ENERGY", wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } })
         SubjectiveCard("MOOD", wb.mapNotNull { row -> row.mood?.let { LocalDate.parse(row.date) to it.toDouble() } })
@@ -266,6 +272,39 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier
             color = FieldColors.InkMuted,
         )
     }
+}
+
+// Phase A4 (Category 7). Two independent signals, never combined into one
+// state -- Signal A (acute, gated on Category 6's own TSB gate) and Signal B
+// (deload cadence, its own 8-week gate) are shown as separate lines, per the
+// spec's own "these are two different questions" framing. No StateRow here:
+// this category was never given the six-state vocabulary in the spec, only
+// a flagged/not-flagged signal and a cadence classification.
+@Composable
+private fun RestCadenceCard(eval: RestCadenceEvaluation) {
+    Card(title = "REST CADENCE") {
+        StatLine("Days without rest", "${eval.consecutiveDaysWithoutRest}")
+        Text(
+            if (!eval.gateAMet) {
+                "Signal A (acute): needs Category 6's own 42-day TSB gate first."
+            } else if (eval.signalAFlagged) {
+                "Signal A (acute): flagged — 9+ days without rest and TSB below -20."
+            } else {
+                "Signal A (acute): not flagged."
+            },
+            style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+            color = if (eval.signalAFlagged) FieldColors.Alert else FieldColors.InkMuted,
+        )
+        StatLine("Deload cadence", deloadCadenceLabel(eval.deloadCadenceFlag))
+        eval.weeksSinceDeload?.let { StatLine("Weeks since deload", "$it") }
+    }
+}
+
+private fun deloadCadenceLabel(flag: DeloadCadenceFlag): String = when (flag) {
+    DeloadCadenceFlag.InsufficientHistory -> "NEEDS 8 WEEKS OF LOAD HISTORY"
+    DeloadCadenceFlag.None -> "ON TRACK"
+    DeloadCadenceFlag.Soft -> "SOFT FLAG (4+ WEEKS)"
+    DeloadCadenceFlag.Firm -> "FIRM FLAG (6+ WEEKS)"
 }
 
 // Phase A4 (Category 3). One card per dimension, called four times --

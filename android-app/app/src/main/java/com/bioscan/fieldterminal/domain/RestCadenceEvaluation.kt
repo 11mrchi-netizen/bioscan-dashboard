@@ -76,32 +76,31 @@ fun evaluateRestCadence(
     var deloadFlag = DeloadCadenceFlag.InsufficientHistory
 
     if (gateBMet) {
-        // TODO(human): find the most recent deload week and classify the
-        // cadence flag.
-        //
-        // A "deload week" is any week whose own load is <= 60% of the
-        // average of the 4 weeks immediately before it
-        // (DELOAD_LOAD_THRESHOLD_PCT, weeklyLoad(weekIndex) vs. the mean of
-        // weeklyLoad(weekIndex+1)..weeklyLoad(weekIndex+4)).
-        //
-        // Walk weekIndex outward from 0 (this week) for as many weeks as the
-        // real history can support a full 4-week trailing average (i.e. stop
-        // before weekIndex+4 would reach past weeksOfHistory -- don't let a
-        // candidate's trailing average silently pull in weeks before this
-        // account's own tracked history, where weeklyLoad() would return a
-        // real 0 that isn't a real rest week, just missing data).
-        //
-        // Set weeksSinceDeload to the first (most recent) qualifying
-        // weekIndex found. Decide what to do if none is found within that
-        // search range -- there's a real, honest choice here about how to
-        // represent "no deload visible in the account's whole history" that
-        // isn't the same thing as "not enough history to check" (that case
-        // is already handled by gateBMet above).
-        //
-        // Then set deloadFlag from weeksSinceDeload:
-        //   >= DELOAD_FIRM_WEEKS -> Firm
-        //   >= DELOAD_SOFT_WEEKS -> Soft
-        //   else                 -> None
+        // Only search candidate weeks whose own 4-week trailing average stays
+        // entirely within real tracked history -- a candidate at
+        // weekIndex needs weeklyLoad(weekIndex+1..weekIndex+4), so the
+        // furthest searchable week is weeksOfHistory-4.
+        val maxWeekIndex = (weeksOfHistory - 4).toInt().coerceAtLeast(0)
+        var found: Int? = null
+        for (weekIndex in 0 until maxWeekIndex) {
+            val trailing4WeekAvg = (1..4).map { weeklyLoad(weekIndex + it) }.average()
+            if (trailing4WeekAvg > 0 && weeklyLoad(weekIndex) <= DELOAD_LOAD_THRESHOLD_PCT * trailing4WeekAvg) {
+                found = weekIndex
+                break
+            }
+        }
+        // No qualifying week found anywhere in the searchable history is a
+        // real, distinct finding from "not enough history to search" (that
+        // case never reaches this branch) -- report it as "at least
+        // maxWeekIndex weeks since any detectable deload," which naturally
+        // resolves to Firm once maxWeekIndex clears the firm threshold.
+        val weeks = found ?: maxWeekIndex
+        weeksSinceDeload = weeks
+        deloadFlag = when {
+            weeks >= DELOAD_FIRM_WEEKS -> DeloadCadenceFlag.Firm
+            weeks >= DELOAD_SOFT_WEEKS -> DeloadCadenceFlag.Soft
+            else -> DeloadCadenceFlag.None
+        }
     }
 
     return RestCadenceEvaluation(

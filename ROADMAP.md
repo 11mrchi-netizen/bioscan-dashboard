@@ -2126,13 +2126,34 @@ against a couple of real days' raw kcal/protein figures before trusting the on-s
 2026-09-11: 968 protein-kcal / 3440 total = 28.1%, correctly inside the band). No exceptions in
 logcat.
 
-**Still not started**: A4's remaining three categories — 7 (rest cadence), 8 (Bristol/injury), 9
-(bloodwork) — each remains its own future unit of work.
+**Still not started**: A4's remaining two categories — 8 (Bristol/injury), 9 (bloodwork) — each
+remains its own future unit of work.
 
-**Paused mid-implementation**: Category 7 (rest cadence)'s `domain/RestCadenceEvaluation.kt` has
-Signal A (consecutive days without rest + TSB) fully wired; Signal B's deload-cadence search is an
-open `TODO(human)` pending a design decision on the account owner's own side, paused deliberately
-rather than filled in automatically.
+### ✅ Phase A4 (partial, cont'd) — Category 7: rest cadence (done 2026-09-16, Claude Code)
+`domain/RestCadenceEvaluation.kt` implements both signals from the spec, sharing Category 6's own
+`dailySessionLoadMap()` (extracted from `TrainingLoadEvaluation.kt` so both categories walk the
+identical daily load total, never two slightly-different derivations of the same number):
+
+- **Signal A (acute)**: flags when `consecutive_days_without_rest >= 9 AND TSB < -20`. Reuses
+  Category 6's own TSB value and its 42-day gate directly — never recomputes either.
+- **Signal B (cadence)**: searches backward for the most recent week whose own load is ≤60% of the
+  trailing 4-week average, gated on 8 weeks of load history. Real, deliberately-made design
+  decisions in the search itself: the search only considers candidate weeks whose own trailing
+  4-week average stays entirely inside genuinely tracked history (a candidate near the edge of the
+  account's data would otherwise get an artificially-low trailing average from weeks that don't
+  really exist, not real rest weeks); and when no qualifying week is found anywhere in the
+  searchable range, that's reported as a real, distinct state ("at least N weeks since any
+  detectable deload," naturally resolving to a `Firm` flag once N clears the threshold) rather than
+  conflated with "not enough history to check."
+- **`consecutiveDaysWithoutRest`** itself is never gated — a simple, always-real count off the
+  daily load map, shown as a standing counter independent of whether either flag can fire.
+
+**Verified on real device against real data**: both gates are honestly unmet on this account's real
+~33 days of load history (Signal A needs Category 6's 42-day TSB gate; Signal B needs 56 days) — the
+REST CADENCE card correctly renders "Signal A (acute): needs Category 6's own 42-day TSB gate
+first," "Deload cadence: NEEDS 8 WEEKS OF LOAD HISTORY," and a real `Days without rest: 0` counter
+(today has no session logged yet, which correctly breaks the streak at 0 rather than showing a
+misleading "9 days" from stale data). No exceptions in logcat.
 
 ---
 

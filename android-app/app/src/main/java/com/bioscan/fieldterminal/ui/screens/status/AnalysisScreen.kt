@@ -27,6 +27,7 @@ import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
+import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.BodyFatEvaluation
 import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.domain.ExpectationTier
@@ -34,6 +35,7 @@ import com.bioscan.fieldterminal.domain.MetricCategory
 import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.SriEvaluation
+import com.bioscan.fieldterminal.domain.SubjectiveEvaluation
 import com.bioscan.fieldterminal.domain.SwcEvaluation
 import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.domain.TrainingLoadEvaluation
@@ -44,6 +46,7 @@ import com.bioscan.fieldterminal.domain.evaluateRespiratoryAnomaly
 import com.bioscan.fieldterminal.domain.evaluateRhr
 import com.bioscan.fieldterminal.domain.evaluateSleepDuration
 import com.bioscan.fieldterminal.domain.evaluateSri
+import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.evaluateWeightTrend
 import com.bioscan.fieldterminal.domain.expValue
@@ -73,6 +76,7 @@ fun AnalysisScreen() {
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
     var bodyMetrics by remember { mutableStateOf<List<BodyMetricsAnalysisRow>?>(null) }
     var trainingSessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
+    var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
     var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
     var cycleLoaded by remember { mutableStateOf(false) }
 
@@ -82,6 +86,7 @@ fun AnalysisScreen() {
         sleep = repo.loadSleepDaily()
         bodyMetrics = repo.loadBodyMetrics()
         trainingSessions = repo.loadExerciseSessionsForTrainingLoad()
+        wellbeing = repo.loadWellbeingDaily()
         activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle()
         cycleLoaded = true
     }
@@ -90,7 +95,8 @@ fun AnalysisScreen() {
     val s = sleep
     val b = bodyMetrics
     val t = trainingSessions
-    if (w == null || s == null || b == null || t == null || !cycleLoaded) {
+    val wb = wellbeing
+    if (w == null || s == null || b == null || t == null || wb == null || !cycleLoaded) {
         Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FieldColors.Amber)
         }
@@ -142,6 +148,11 @@ fun AnalysisScreen() {
             }
         }
         TrainingLoadCard(evaluateTrainingLoad(sessionLoads), resolveTier(MetricCategory.TrainingLoad, activeCycle))
+
+        SubjectiveCard("ENERGY", wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } })
+        SubjectiveCard("MOOD", wb.mapNotNull { row -> row.mood?.let { LocalDate.parse(row.date) to it.toDouble() } })
+        SubjectiveCard("STRESS", wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } })
+        SubjectiveCard("SORENESS", wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } })
     }
 }
 
@@ -246,6 +257,25 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier
             style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
             color = FieldColors.InkMuted,
         )
+    }
+}
+
+// Phase A4 (Category 3). One card per dimension, called four times --
+// energy/mood/stress/soreness are never summed into a Hooper Index or any
+// other composite, per the spec's own explicit "keep the four items
+// displayed separately" rule. The trend arrow is a real Mann-Kendall
+// result, not decorative: it's absent whenever the 14-day trend doesn't
+// clear p<0.05, per the spec's own "otherwise render no arrow" rule.
+@Composable
+private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>) {
+    val eval = evaluateSubjective(points)
+    Card(title = title) {
+        StateRow(eval.state)
+        StatLine("Confidence", eval.confidence.label)
+        eval.median7d?.let { StatLine("7-day median", "%.1f".format(it)) }
+        eval.medianBaseline30d?.let { StatLine("30-day baseline", "%.1f".format(it)) }
+        eval.iqr7d?.let { StatLine("7-day IQR", "%.1f".format(it)) }
+        eval.trendDirection?.let { StatLine("14-day trend", if (it > 0) "↑ rising (p<0.05)" else "↓ falling (p<0.05)") }
     }
 }
 

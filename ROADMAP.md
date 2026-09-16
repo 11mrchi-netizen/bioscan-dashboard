@@ -2052,6 +2052,44 @@ no cycle framing. No exceptions in logcat through any of these states.
 
 ---
 
+### ✅ Phase A4 (partial, cont'd) — Category 3: subjective wellbeing (done 2026-09-16, Claude Code)
+Continues A4 with the category the Evaluation Method Spec's own build order puts right after
+Category 6 ("cheap, and it feeds the context panels in 6 and 7"). `domain/SubjectiveEvaluation.kt`
+implements the spec's ordinal-safe treatment for energy/mood/stress/soreness — median + IQR for
+level, Mann-Kendall for direction, a fixed 2-point minimum shift — deliberately no mean/SD/z-score
+anywhere, since a 0-10 daily rating is ordinal with real floor/ceiling effects that naive statistics
+would quietly mis-measure. The four dimensions are never summed into a Hooper Index or any other
+composite: `evaluateSubjective()` is one function called four times, rendered as four separate
+cards, per the spec's own explicit rule.
+
+**New shared primitives in `domain/Stats.kt`**: `interquartileRange` (Tukey's hinges), a promoted
+`windowEndingAt` (was private to `HrvRhrEvaluation.kt`, now shared since Category 3 needed the
+identical logic — the duplicate was deleted, not kept alongside), and a real from-scratch
+**Mann-Kendall trend test** with tie-corrected variance (the ties an ordinal 0-10 scale is full of
+are exactly why the spec picked this test over a naive linear trend) and a standard
+Abramowitz-Stegun normal-CDF approximation to turn its z-score into a p-value — checked by hand
+against a known case (a strictly increasing 1-10 sequence correctly resolves to a positive,
+p≈0.0001 significant trend) before trusting it on real data.
+
+**A real ambiguity in the source spec, resolved and stated rather than silently picked**: the
+spec's own Gate section says a subjective baseline needs "30 days," but its state-resolution
+formula names the comparison value `median_baseline_60d` — Category 1's own baseline-window naming,
+almost certainly carried over rather than a deliberate 60-day instruction for this category. This
+implementation follows the Gate section (the more concrete, operational text) and uses a 30-day
+baseline, with the discrepancy documented directly in the code, not resolved by silent guesswork.
+
+**Verified against this account's real `wellbeing_daily` data** (18 rows, all four dimensions fully
+populated, spanning 2026-08-27 to 2026-09-15 — 19-20 real days): all four cards correctly render
+`BUILDING` at `21/30`, genuinely short of the 30-day baseline gate. **Honestly unverified**: the
+`STABLE`/`SHIFT_UP`/`SHIFT_DOWN`/`UNSTABLE` resolution and the Mann-Kendall trend arrow itself have
+not been exercised against real data past the gate — same standing limitation as every other
+sparse-real-data category this phase, not glossed over. No exceptions in logcat.
+
+**Still not started**: A4's remaining four categories — 4 (nutrition), 7 (rest cadence), 8
+(Bristol/injury), 9 (bloodwork) — each remains its own future unit of work.
+
+---
+
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and

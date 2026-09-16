@@ -42,3 +42,16 @@ data class TrainingLoadSessionRow(
     @SerialName("duration_min") val durationMin: Double? = null,
     val rpe: Int? = null,
 )
+
+// Phase A4 (Category 3). The Log tab's own LogRepository/LogWellbeingRow
+// already reads wellbeing_daily, but only the latest N rows for the feed --
+// this is the separate 60-day-lookback shape the Evaluation Method Spec's
+// formulas need, same reasoning as WearableAnalysisRow/SleepAnalysisRow.
+@Serializable
+data class WellbeingAnalysisRow(
+    val date: String,
+    val energy: Int? = null,
+    val mood: Int? = null,
+    val stress: Int? = null,
+    val soreness: Int? = null,
+)

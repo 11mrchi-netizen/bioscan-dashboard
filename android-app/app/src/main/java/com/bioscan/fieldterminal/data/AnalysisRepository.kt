@@ -4,6 +4,7 @@ import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
+import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -61,5 +62,16 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
                 limit(200)
             }
             .decodeList<TrainingLoadSessionRow>()
+            .reversed()
+
+    // Phase A4 (Category 3). 30-day baseline gate, same margin reasoning as
+    // everything else here.
+    suspend fun loadWellbeingDaily(): List<WellbeingAnalysisRow> =
+        supabase.postgrest.from("wellbeing_daily")
+            .select(columns = Columns.list("date,energy,mood,stress,soreness")) {
+                order("date", Order.DESCENDING)
+                limit(200)
+            }
+            .decodeList<WellbeingAnalysisRow>()
             .reversed()
 }

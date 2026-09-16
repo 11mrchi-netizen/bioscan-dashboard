@@ -80,11 +80,9 @@ fun evaluateSwcStream(dailyValues: List<Pair<LocalDate, Double>>, asOf: LocalDat
     return SwcEvaluation(state, Confidence(window7.size, MIN_READINGS_PER_WINDOW), baseline7d, mean60d, swcPct, cv7dToday)
 }
 
-private fun windowEndingAt(values: List<Pair<LocalDate, Double>>, end: LocalDate, days: Int): List<Pair<LocalDate, Double>> {
-    val start = end.minusDays((days - 1).toLong())
-    return values.filter { !it.first.isBefore(start) && !it.first.isAfter(end) }
-}
-
+// windowEndingAt() moved to domain/Stats.kt (Phase A3) -- Category 3 needs
+// the identical "last N calendar days ending here" logic, so this is no
+// longer HRV-specific.
 private fun cv7dAt(values: List<Pair<LocalDate, Double>>, date: LocalDate): Double? {
     val window = windowEndingAt(values, date, ROLLING_WINDOW_DAYS)
     if (window.size < MIN_READINGS_PER_WINDOW) return null

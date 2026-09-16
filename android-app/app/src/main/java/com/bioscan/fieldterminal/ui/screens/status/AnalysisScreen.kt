@@ -70,6 +70,7 @@ import com.bioscan.fieldterminal.domain.evaluateWeightTrend
 import com.bioscan.fieldterminal.domain.expValue
 import com.bioscan.fieldterminal.domain.resolveTier
 import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.DotPlot
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
@@ -214,15 +215,16 @@ fun AnalysisScreen() {
             .groupBy { it.first.markerName }
             .map { (markerName, rows) ->
                 val first = rows.first().first
+                val draws = rows.map { it.second to it.third }
                 evaluateBloodworkMarker(
                     markerName = markerName,
-                    draws = rows.map { it.second to it.third },
+                    draws = draws,
                     unit = first.unit,
                     refLow = first.refLow,
                     refHigh = first.refHigh,
-                )
+                ) to draws
             }
-            .sortedBy { it.markerName }
+            .sortedBy { it.first.markerName }
         BloodworkCard(bloodworkEvals)
     }
 }
@@ -425,19 +427,24 @@ private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int,
 // started from. No trend line anywhere -- the spec is explicit that ~1
 // draw/year doesn't support the continuity a line chart implies.
 @Composable
-private fun BloodworkCard(evals: List<BloodworkMarkerEvaluation>) {
+private fun BloodworkCard(evals: List<Pair<BloodworkMarkerEvaluation, List<Pair<LocalDate, Double>>>>) {
     Card(title = "BLOODWORK (RCV)") {
         Text(
             "~1 draw/year means every comparison here is a single two-point delta against a real, marker-specific noise threshold — never a trend.",
             style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
             color = FieldColors.InkMuted,
         )
-        evals.forEach { m -> BloodworkMarkerRow(m) }
+        evals.forEach { (m, draws) -> BloodworkMarkerRow(m, draws) }
     }
 }
 
+// Phase A5, Part 1: the dot plot renders every real draw for this marker,
+// isolated (never connected by a line -- see ui/components/DotPlot.kt's own
+// header comment for why), with the reference band behind them. The most
+// recent draw is colored by this marker's own state; earlier draws stay
+// neutral -- they're real history, not independently re-evaluated points.
 @Composable
-private fun BloodworkMarkerRow(m: BloodworkMarkerEvaluation) {
+private fun BloodworkMarkerRow(m: BloodworkMarkerEvaluation, draws: List<Pair<LocalDate, Double>>) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(m.markerName, style = TextStyle(fontFamily = Saira, fontSize = 14.sp), color = FieldColors.Ink)
@@ -480,6 +487,19 @@ private fun BloodworkMarkerRow(m: BloodworkMarkerEvaluation) {
                 color = FieldColors.InkMuted,
             )
         }
+        val latestValue = draws.maxByOrNull { it.first }?.second
+        val latestColor = when (m.state) {
+            BloodworkTrendState.ShiftUp, BloodworkTrendState.ShiftDown -> FieldColors.Amber
+            BloodworkTrendState.Stable -> FieldColors.Green
+            null -> FieldColors.InkMuted
+        }
+        DotPlot(
+            points = draws,
+            refLow = m.refLow,
+            refHigh = m.refHigh,
+            dotColor = { v -> if (v == latestValue) latestColor else FieldColors.InkMuted },
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 

@@ -2368,6 +2368,40 @@ case — Hematocrit (`SHIFT UP, Δ+8.4% exceeds RCV ±8.4%`) all matched hand co
 `lab_results` values exactly. `Eosinophils %` correctly showed "no RCV citation for this marker."
 No exceptions in logcat.
 
+## Phase A5 — visualization layer
+
+Real data checked before starting: almost every category is still gated/BUILDING on this account's
+real data today (HRV, RHR, sleep, weight, TSB, subjective, rest cadence, OSTRC, Bristol) — a chart
+for any of those would render on sparse or empty real data right now. Bloodwork (Category 9) is the
+one category with genuinely rich, varied real data (60 markers, several real `STABLE`/`SHIFT_UP`
+states) and is also the spec's own most explicit "don't use a line chart" case — the clearest,
+most verifiable first slice of A5. Confirmed with the user: build this one now; the other five
+treatments (daily-value charts for HRV/RHR/sleep/weight/subjective showing real partial data even
+pre-gate, a Training Load CTL/ATL/TSB Performance Management Chart, a rest-cadence weekly strip)
+are separate future passes, each verified against real data on its own.
+
+### ✅ Phase A5, Part 1 — Bloodwork dot plot (done 2026-09-16, Claude Code)
+New `ui/components/DotPlot.kt`: isolated real draws plotted against a shaded reference-range band,
+**never connected by a line** — the spec is explicit that ~1 draw/year doesn't support the
+continuity a line would imply. Shares `LineChart.kt`'s (Phase G5) own Canvas + bounding-box +
+local `xFor`/`yFor`-closure technique, adapted to a calendar-date x-axis instead of elapsed-session-
+seconds — a genuinely different domain, not a generalization of that file. Handles a single real
+draw correctly (centered, no fabricated second point) and a missing reference range correctly (no
+band drawn). Wired into `BloodworkMarkerRow` (Part 5): the most recent draw is colored by the
+marker's own state (green/amber/muted); earlier draws stay neutral, since they're real history, not
+independently re-evaluated points.
+
+**Verified on real device against the exact values hand-checked in Part 5**: Hematocrit's dot plot
+shows both real points sitting below the 42–52% reference band (matching the real low values of
+37.9% and 41.1%), with the latest point correctly amber for its real `SHIFT_UP` state; Hemoglobin
+shows both real points near the band's lower edge, latest correctly green for `STABLE`; single-draw
+markers (Iron, LDL Cholesterol) render one isolated dot with no line and no fabricated range band
+when none exists. No exceptions in logcat.
+
+**Still deferred, unchanged from this plan's own framing**: daily-value charts for HRV/RHR/sleep/
+weight/subjective, the Training Load CTL/ATL/TSB chart, and the rest-cadence weekly strip — each
+its own future pass once there's real data worth charting.
+
 ---
 
 ## Summary — rough remaining build time

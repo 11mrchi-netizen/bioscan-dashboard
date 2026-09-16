@@ -46,10 +46,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
+import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.NutritionEstimationRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsRepository
+import com.bioscan.fieldterminal.data.model.ExerciseLibraryMatch
 import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetails
 import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
@@ -77,6 +79,7 @@ import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 import com.bioscan.fieldterminal.util.createCameraCaptureUri
 import com.bioscan.fieldterminal.util.readAndCompressImage
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -992,8 +995,30 @@ private fun EditableExercise.toDtoOrNull(): StrengthExerciseDto? {
 // file's existing convention (no icons anywhere else in it). Reps and
 // weight_kg get the wider, primary row; RPE and % 1RM are optional per the
 // handoff's own scope and sit in a secondary row underneath.
+//
+// Phase C follow-up: the name field autocompletes against exercise_library's
+// 876 real entries via pg_trgm similarity (ExerciseLibraryRepository),
+// debounced so every keystroke doesn't fire a query. A read-side
+// convenience only -- tapping a suggestion just fills in that exact string,
+// the field stays free text underneath (matching the original handoff's own
+// "typo-tolerant at entry time" framing).
 @Composable
 private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRemove: () -> Unit) {
+    val libraryRepo = remember { ExerciseLibraryRepository(SupabaseClientProvider.client) }
+    var suggestions by remember { mutableStateOf<List<ExerciseLibraryMatch>>(emptyList()) }
+    var suppressSearch by remember { mutableStateOf(false) }
+
+    LaunchedEffect(exercise.name) {
+        if (suppressSearch) {
+            suppressSearch = false
+        } else if (exercise.name.trim().length >= 3) {
+            delay(250)
+            suggestions = runCatching { libraryRepo.matchExerciseName(exercise.name) }.getOrDefault(emptyList())
+        } else {
+            suggestions = emptyList()
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth().border(1.dp, FieldColors.Hairline).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1010,6 +1035,32 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                         indication = null,
                     ) { onRemove() },
                 )
+            }
+        }
+
+        if (suggestions.isNotEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxWidth().border(1.dp, FieldColors.Hairline),
+                verticalArrangement = Arrangement.spacedBy(1.dp),
+            ) {
+                suggestions.forEach { match ->
+                    Text(
+                        match.name,
+                        style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
+                        color = FieldColors.InkMuted,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) {
+                                suppressSearch = true
+                                exercise.name = match.name
+                                suggestions = emptyList()
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
             }
         }
 

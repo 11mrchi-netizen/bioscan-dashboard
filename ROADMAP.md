@@ -2268,6 +2268,30 @@ set through the on-device form, saved, and confirmed via SQL the row's `details`
 round trip, not just a schema check. Test row deleted afterward, `exercise_sessions` back to 19. No
 exceptions in logcat.
 
+### ✅ Exercise-name fuzzy matching (done 2026-09-16, Claude Code)
+Enabled `pg_trgm` and added a `gin (name gin_trgm_ops)` index on `exercise_library`, plus a
+`match_exercise_library(search_query, match_limit)` SQL function (runs as the calling role, no
+`security definer` — bound by the table's own `select`-only RLS policy, not a privilege-escalation
+path) returning trigram-similarity-ranked matches. `data/ExerciseLibraryRepository.kt` calls it via
+Postgrest RPC (the first RPC call in this codebase — `postgrest.rpc()` in supabase-kt 3.8.0 takes a
+`JsonObject`, not an arbitrary `@Serializable` class directly, so parameters are encoded through
+`Json.encodeToJsonElement(...).jsonObject` first).
+
+Wired into `ExerciseEditor`'s name field as debounced (250ms) autocomplete — a new suggestion list
+appears once ≥3 characters are typed, tap a suggestion to accept it verbatim (a `suppressSearch`
+flag stops the resulting name change from immediately re-triggering its own search). Purely a
+read-side convenience: the field stays free text underneath, matching the original handoff's own
+"typo-tolerant at entry time" framing — never a hard foreign key.
+
+**Verified end-to-end on real device**: typing "bak squat" surfaced real library matches (Box
+Squat, Barbell Squat, Squat with Bands, Hack Squat, Barbell Full Squat) identical to a direct SQL
+call to the same function; tapping "Barbell Squat" filled the field and correctly dismissed the
+suggestion list without re-querying; saving confirmed via SQL that `details` held the exact
+canonical name. No exceptions in logcat. (Real, minor finding: plain trigram `similarity()` ranks
+by whole-string character overlap, not per-word — "Box Squat" outranked "Barbell Squat" for "bak
+squat" since "Box" and "Bak" share more trigrams than "Barbell" does; still a materially useful
+suggestion list, not a defect worth a more complex ranking function for this pass.)
+
 ---
 
 ## Summary — rough remaining build time

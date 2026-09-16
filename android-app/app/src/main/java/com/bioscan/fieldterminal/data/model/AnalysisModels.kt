@@ -32,3 +32,13 @@ data class BodyMetricsAnalysisRow(
     @SerialName("weight_kg") val weightKg: Double? = null,
     @SerialName("body_fat_pct") val bodyFatPct: Double? = null,
 )
+
+// Phase A4. Narrower than TrainingRepository's own ExerciseSessionRow --
+// this needs only what session_load's formula (duration_min * rpe) uses,
+// plus start_time to bucket by date.
+@Serializable
+data class TrainingLoadSessionRow(
+    @SerialName("start_time") val startTime: String,
+    @SerialName("duration_min") val durationMin: Double? = null,
+    val rpe: Int? = null,
+)

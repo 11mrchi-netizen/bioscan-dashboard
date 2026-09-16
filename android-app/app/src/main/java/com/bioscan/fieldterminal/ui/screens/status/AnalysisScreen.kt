@@ -24,6 +24,7 @@ import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
+import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.domain.BodyFatEvaluation
 import com.bioscan.fieldterminal.domain.EvalState
@@ -31,6 +32,7 @@ import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.SriEvaluation
 import com.bioscan.fieldterminal.domain.SwcEvaluation
+import com.bioscan.fieldterminal.domain.TrainingLoadEvaluation
 import com.bioscan.fieldterminal.domain.WeightEvaluation
 import com.bioscan.fieldterminal.domain.evaluateBodyFat
 import com.bioscan.fieldterminal.domain.evaluateHrv
@@ -38,6 +40,7 @@ import com.bioscan.fieldterminal.domain.evaluateRespiratoryAnomaly
 import com.bioscan.fieldterminal.domain.evaluateRhr
 import com.bioscan.fieldterminal.domain.evaluateSleepDuration
 import com.bioscan.fieldterminal.domain.evaluateSri
+import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.evaluateWeightTrend
 import com.bioscan.fieldterminal.domain.expValue
 import com.bioscan.fieldterminal.ui.components.Card
@@ -47,6 +50,7 @@ import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
 
 // Phase A2 (Analysis Layer, see ROADMAP.md). First real implementation of
 // the Evaluation Method Spec's Categories 1 (HRV/RHR), 2 (Sleep), and 5
@@ -63,18 +67,21 @@ fun AnalysisScreen() {
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
     var bodyMetrics by remember { mutableStateOf<List<BodyMetricsAnalysisRow>?>(null) }
+    var trainingSessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
 
     LaunchedEffect(Unit) {
         val repo = AnalysisRepository(SupabaseClientProvider.client)
         wearable = repo.loadWearableDaily()
         sleep = repo.loadSleepDaily()
         bodyMetrics = repo.loadBodyMetrics()
+        trainingSessions = repo.loadExerciseSessionsForTrainingLoad()
     }
 
     val w = wearable
     val s = sleep
     val b = bodyMetrics
-    if (w == null || s == null || b == null) {
+    val t = trainingSessions
+    if (w == null || s == null || b == null || t == null) {
         Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FieldColors.Amber)
         }
@@ -115,6 +122,17 @@ fun AnalysisScreen() {
 
         val bodyFatPoints = b.mapNotNull { row -> row.bodyFatPct?.let { LocalDate.parse(row.date) to it } }
         BodyFatCard(evaluateBodyFat(bodyFatPoints))
+
+        val sessionLoads = t.mapNotNull { row ->
+            val duration = row.durationMin
+            val rpe = row.rpe
+            if (duration != null && rpe != null) {
+                OffsetDateTime.parse(row.startTime).toLocalDateTime().toLocalDate() to duration * rpe
+            } else {
+                null
+            }
+        }
+        TrainingLoadCard(evaluateTrainingLoad(sessionLoads))
     }
 }
 
@@ -187,6 +205,34 @@ private fun BodyFatCard(eval: BodyFatEvaluation) {
         eval.latest?.let { StatLine("Latest", "%.1f%%".format(it)) }
         eval.previous?.let { StatLine("Previous (≥30d prior)", "%.1f%%".format(it)) }
         eval.delta?.let { StatLine("Delta", "%+.1f pp".format(it)) }
+    }
+}
+
+// Phase A4. TSB's own descriptive band (Freshened/Neutral/Loaded/...) is
+// the real label here, not the generic ABOVE/BELOW-YOUR-BAND wording
+// StateRow uses for the SWC-based categories -- TSB is a TrainingPeaks
+// convention, not a personal-baseline band, so it gets its own row.
+@Composable
+private fun TrainingLoadCard(eval: TrainingLoadEvaluation) {
+    Card(title = "TRAINING LOAD (CTL/ATL/TSB)") {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("State", style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
+            Text(
+                eval.tsbBand?.uppercase() ?: stateLabel(eval.state),
+                style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp),
+                color = stateColor(eval.state),
+            )
+        }
+        StatLine("Confidence", eval.confidence.label)
+        eval.ctl?.let { StatLine("CTL (fitness)", "%.1f".format(it)) }
+        eval.atl?.let { StatLine("ATL (fatigue)", "%.1f".format(it)) }
+        eval.tsb?.let { StatLine("TSB (form)", "%+.1f".format(it)) }
+        Text(
+            "Grade-adjusted pace / Efficiency Factor not built yet — needs per-point route " +
+                "elevation data this app doesn't persist for logged sessions.",
+            style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
+            color = FieldColors.InkMuted,
+        )
     }
 }
 

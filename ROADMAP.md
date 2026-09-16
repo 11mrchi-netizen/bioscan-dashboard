@@ -1970,6 +1970,48 @@ have meant the gates were wrong, not that the data was ready.
 
 ---
 
+### ✅ Phase A4 (partial) — Category 6: training load, CTL/ATL/TSB (done 2026-09-16, Claude Code)
+Sequenced ahead of the rest of A4 (Categories 3/4/7/8/9, still not started) specifically because
+Category 6 is what Phase A3's mesocycle re-interpretation needs to exist first — the framing doc's
+own motivating example (running vs. strength) is a Category 6 story. `domain/TrainingLoadEvaluation.kt`
+adds the spec's chosen CTL/ATL/TSB (Banister-derived Performance Management Chart) — this app's
+Android side never had ACWR to retire (only `index.html`'s web dashboard carries the old metric,
+untouched, since this whole effort stays mobile-first per the user's own confirmed scope).
+`session_load = duration_min * rpe`, since the spec's HR-based TRIMP alternative needs per-minute
+heart-rate data this app doesn't persist for logged sessions (only `avg_hr` survives to Supabase).
+CTL/ATL are true EWMAs walked over every calendar day from the earliest RPE-bearing session to
+today — rest days are a real 0 in that walk, not a gap to skip, unlike Categories 1/2/5's
+gap-tolerant date-filtered windows (a real methodological difference this phase's own code comment
+makes explicit, not glossed over).
+
+**A real, structural gap flagged rather than approximated around**: Grade Adjusted Pace and
+Efficiency Factor (the spec's other Category 6 metrics) are not built. Checked against this
+account's real `exercise_sessions` data first, not assumed: `avg_speed_kmh` and `elevation_gain_m`
+are null on every one of the 19 real rows, and even fully populated, a single total-ascent number
+couldn't reconstruct the per-point gradient GAP's Minetti-polynomial formula needs — that only
+exists as Health Connect's per-point `ExerciseRoute`, fetched on demand for one session's own detail
+screen (`data/SessionDetailRepository.kt`) and never persisted back into daily training-load data.
+Recorded in the code and shown in the app's own UI, not silently dropped.
+
+**Real data-quality finding, surfaced not silently worked around**: this account's real
+`exercise_sessions` table has two exact-duplicate rows (ids 1 and 17 — identical timestamp,
+duration, distance, heart rate, and RPE). The daily-load aggregation correctly sums whatever
+sessions exist on a given day by design (multiple real sessions on one day are a real thing to
+sum), so this duplicate does inflate that one day's computed load slightly — flagged here for
+awareness, not fixed, since deleting a data row wasn't asked for and is a separate, judgment-call
+action from building the evaluation code itself.
+
+**Verified against this account's real data**: 19 real sessions, 11 with a real logged RPE, span
+2026-08-14 to 2026-09-15; the earliest RPE-bearing session is 2026-08-28, giving 20 real days of
+history against Category 6's 42-day CTL gate — correctly renders `BUILDING` at `20/42`, not a
+fabricated CTL/ATL/TSB number computed on an unstable 20-day EWMA. No exceptions in logcat.
+
+**Still not started**: A4's other five categories (3 subjective, 4 nutrition, 7 rest cadence, 8
+Bristol/injury via the new `ostrc_checkins` table, 9 bloodwork via `lab_draws`'s new confounder
+fields) — each is its own future unit of work, not bundled into this pass.
+
+---
+
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and

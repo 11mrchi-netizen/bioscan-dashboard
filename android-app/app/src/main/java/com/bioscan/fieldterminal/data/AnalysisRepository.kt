@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
+import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -46,5 +47,19 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
                 limit(200)
             }
             .decodeList<BodyMetricsAnalysisRow>()
+            .reversed()
+
+    // Phase A4 (Category 6). CTL/ATL's 42-day EWMA needs the same generous
+    // margin as everything else here -- exercise_sessions is smaller today
+    // (19 real rows) than the other tables, but this stays consistent with
+    // this repository's own "don't special-case the query, let the domain
+    // layer's date filtering decide" convention.
+    suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> =
+        supabase.postgrest.from("exercise_sessions")
+            .select(columns = Columns.list("start_time,duration_min,rpe")) {
+                order("start_time", Order.DESCENDING)
+                limit(200)
+            }
+            .decodeList<TrainingLoadSessionRow>()
             .reversed()
 }

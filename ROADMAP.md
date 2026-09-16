@@ -2090,6 +2090,47 @@ sparse-real-data category this phase, not glossed over. No exceptions in logcat.
 
 ---
 
+### ✅ Phase A4 (partial, cont'd) — Category 4: nutrition (done 2026-09-16, Claude Code)
+`domain/NutritionEvaluation.kt` implements MacroFactor's classify-then-exclude pattern: each day
+gets classified `Complete`/`Partial`/`Missing` (≥3 meals logged AND kcal ≥ 50% of the trailing
+28-day median of other qualifying days; 0 meals is `Missing`; anything else `Partial`), and only
+`Complete` days feed the displayed 14-day energy trend, 28-day energy CV, and 14-day protein
+adherence — energy CV is treated as its own first-class displayed number, not a diagnostic, per the
+spec's own instruction. Reuses this project's existing `domain/Nutrition.kt` (`DailyNutrition`/
+`aggregateMealsByDay`, from Step 6) for daily meal totals rather than re-deriving them a second way.
+
+**A real circularity in the spec's own classification formula, resolved and stated**: classifying a
+day needs "the trailing 28-day median" of already-*complete* days' calories, which needs those days
+to already be classified — resolved by classifying strictly chronologically, each day compared only
+against days *before* it, with a stated bootstrap rule (no qualifying prior days yet → `≥3 meals`
+alone is enough to call a day Complete) rather than blocking classification on data that can't exist
+yet for the earliest days in the account's history.
+
+**A real scope limit, stated rather than invented**: the spec never defines a threshold for calling
+an energy-trend movement a "shift" the way it does for every other category — once gated, this
+renders `STABLE` unconditionally, not because nothing here moves, but because there's no spec rule
+to judge whether a move here is meaningful, and inventing one wasn't asked for.
+
+**A real, deliberate choice on protein adherence, consistent with this app's own existing stance**:
+uses the AMDR macro-distribution range (10–35% of energy from protein), not a body-weight-based ISSN
+target (1.4–2.0 g/kg/day) — the existing Nutrition sub-tab already carries its own "no personal
+targets are stored anywhere in this project yet" disclaimer, and introducing a body-weight-based
+target here would have been the first personal target stored anywhere, breaking that stance.
+
+**Verified against this account's real `meals` data** (77 real meals across 20 real days,
+2026-08-27 to 2026-09-15) — and the first Category in this phase to show a real computed result
+rather than `BUILDING`: 12 of the trailing 14 days classified `Complete` (clearing the ≥10 gate),
+rendering `STABLE` with a real 14-day energy trend of 2683 kcal, a real 28-day energy CV of 15.0%,
+and 100% of Complete days landing inside the AMDR protein band — all three numbers checked by hand
+against a couple of real days' raw kcal/protein figures before trusting the on-screen output (e.g.
+2026-09-11: 968 protein-kcal / 3440 total = 28.1%, correctly inside the band). No exceptions in
+logcat.
+
+**Still not started**: A4's remaining three categories — 7 (rest cadence), 8 (Bristol/injury), 9
+(bloodwork) — each remains its own future unit of work.
+
+---
+
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and

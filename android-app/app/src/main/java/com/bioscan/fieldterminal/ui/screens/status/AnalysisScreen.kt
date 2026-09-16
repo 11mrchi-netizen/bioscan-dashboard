@@ -29,9 +29,11 @@ import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.BodyFatEvaluation
+import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.domain.ExpectationTier
 import com.bioscan.fieldterminal.domain.MetricCategory
+import com.bioscan.fieldterminal.domain.NutritionEvaluation
 import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.SriEvaluation
@@ -42,6 +44,7 @@ import com.bioscan.fieldterminal.domain.TrainingLoadEvaluation
 import com.bioscan.fieldterminal.domain.WeightEvaluation
 import com.bioscan.fieldterminal.domain.evaluateBodyFat
 import com.bioscan.fieldterminal.domain.evaluateHrv
+import com.bioscan.fieldterminal.domain.evaluateNutrition
 import com.bioscan.fieldterminal.domain.evaluateRespiratoryAnomaly
 import com.bioscan.fieldterminal.domain.evaluateRhr
 import com.bioscan.fieldterminal.domain.evaluateSleepDuration
@@ -77,6 +80,7 @@ fun AnalysisScreen() {
     var bodyMetrics by remember { mutableStateOf<List<BodyMetricsAnalysisRow>?>(null) }
     var trainingSessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
+    var nutrition by remember { mutableStateOf<List<DailyNutrition>?>(null) }
     var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
     var cycleLoaded by remember { mutableStateOf(false) }
 
@@ -87,6 +91,7 @@ fun AnalysisScreen() {
         bodyMetrics = repo.loadBodyMetrics()
         trainingSessions = repo.loadExerciseSessionsForTrainingLoad()
         wellbeing = repo.loadWellbeingDaily()
+        nutrition = repo.loadDailyNutrition()
         activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle()
         cycleLoaded = true
     }
@@ -96,7 +101,8 @@ fun AnalysisScreen() {
     val b = bodyMetrics
     val t = trainingSessions
     val wb = wellbeing
-    if (w == null || s == null || b == null || t == null || wb == null || !cycleLoaded) {
+    val n = nutrition
+    if (w == null || s == null || b == null || t == null || wb == null || n == null || !cycleLoaded) {
         Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FieldColors.Amber)
         }
@@ -153,6 +159,8 @@ fun AnalysisScreen() {
         SubjectiveCard("MOOD", wb.mapNotNull { row -> row.mood?.let { LocalDate.parse(row.date) to it.toDouble() } })
         SubjectiveCard("STRESS", wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } })
         SubjectiveCard("SORENESS", wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } })
+
+        NutritionCard(evaluateNutrition(n))
     }
 }
 
@@ -276,6 +284,21 @@ private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>)
         eval.medianBaseline30d?.let { StatLine("30-day baseline", "%.1f".format(it)) }
         eval.iqr7d?.let { StatLine("7-day IQR", "%.1f".format(it)) }
         eval.trendDirection?.let { StatLine("14-day trend", if (it > 0) "↑ rising (p<0.05)" else "↓ falling (p<0.05)") }
+    }
+}
+
+// Phase A4 (Category 4). No SHIFT_UP/SHIFT_DOWN here -- the spec never
+// defines a threshold for calling an energy-trend move a "shift" the way it
+// does for Categories 1/2/3/5/6, so `Stable` is shown once the gate is met,
+// not because nothing moves but because there's no rule to judge it by.
+@Composable
+private fun NutritionCard(eval: NutritionEvaluation) {
+    Card(title = "NUTRITION") {
+        StateRow(eval.state)
+        StatLine("Confidence", eval.confidence.label)
+        eval.energyTrend14d?.let { StatLine("14-day energy trend", "%.0f kcal".format(it)) }
+        eval.energyCv28d?.let { StatLine("28-day energy CV", "%.1f%%".format(it)) }
+        eval.proteinAdherence14d?.let { StatLine("Protein in AMDR band (10-35% kcal)", "%.0f%%".format(it)) }
     }
 }
 

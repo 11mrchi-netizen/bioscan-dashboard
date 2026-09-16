@@ -1,10 +1,13 @@
 package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
+import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
+import com.bioscan.fieldterminal.domain.DailyNutrition
+import com.bioscan.fieldterminal.domain.aggregateMealsByDay
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -74,4 +77,18 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             }
             .decodeList<WellbeingAnalysisRow>()
             .reversed()
+
+    // Phase A4 (Category 4). Reuses domain/Nutrition.kt's own
+    // aggregateMealsByDay() (Step 6) rather than re-deriving daily totals a
+    // second way -- same MealRow model NutritionRepository already reads,
+    // just fetched here for the Evaluation Method Spec's own consumer.
+    suspend fun loadDailyNutrition(): List<DailyNutrition> {
+        val meals = supabase.postgrest.from("meals")
+            .select(columns = Columns.list("logged_at,calories,protein_g,fat_g,carbs_g")) {
+                order("logged_at", Order.DESCENDING)
+                limit(500)
+            }
+            .decodeList<MealRow>()
+        return aggregateMealsByDay(meals)
+    }
 }

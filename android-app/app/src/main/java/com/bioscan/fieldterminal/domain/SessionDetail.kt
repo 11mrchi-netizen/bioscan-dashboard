@@ -9,8 +9,14 @@ package com.bioscan.fieldterminal.domain
 // store nothing) -- see data/SessionDetailRepository.kt.
 data class TimePoint(val offsetSeconds: Long, val value: Double)
 
+// caloriesKcal (Phase G5) is a running sum, not a raw sample series like the
+// other three -- ActiveCaloriesBurnedRecord only reports kcal per interval
+// (same interval-not-sample shape as ElevationGainedRecord), so
+// SessionDetailRepository sums successive intervals into a stepped
+// cumulative curve rather than reading anything HC calls a "sample."
 data class SessionDetail(
     val heartRate: List<TimePoint>,
     val speedKmh: List<TimePoint>,
     val powerW: List<TimePoint>,
+    val caloriesKcal: List<TimePoint>,
 )

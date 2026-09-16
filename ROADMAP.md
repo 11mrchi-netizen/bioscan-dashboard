@@ -1630,6 +1630,63 @@ real sample data.
 
 ---
 
+### ✅ Phase G5 — combined session detail charts + route (done 2026-09-16, Claude Code)
+Adds the actual chart UI the original request asked for ("a run can also include a visual of the
+heart rate, elevation, calories burned, speed distance and intensity"), sequenced after G3's schema
+and G4's on-demand read path both existed. New `ui/components/LineChart.kt` is this app's first
+general-purpose line/area chart primitive — it generalizes Step 14's old `RouteCanvas` (removed
+when the Map tab switched to a real osmdroid map, recovered from git history to check its pattern)
+from lat/lon-specific bounding-box math to a plain `(offsetSeconds, value)` domain: bounding-box
+min/max, one derived scale, local `xFor`/`yFor` closures, `Path()` + `drawPath(Stroke(...))`. Every
+`SeriesSummaryCard` (HR, speed, power, and new cumulative calories) now renders one of these beneath
+its existing stat lines, each with a real, non-arbitrary color from the existing token set (Red for
+heart rate, Azure for speed, Amber for power, Green for calories, Sand for elevation) rather than
+inventing new ones.
+
+**Cumulative calories** is genuinely new data, not just a new chart: `ActiveCaloriesBurnedRecord` is
+interval-shaped like `ElevationGainedRecord` (a kcal delta per interval, not a sample), so
+`loadTimeSeries()` sums successive intervals into a stepped running total — real read, no new
+permission needed (`ActiveCaloriesBurnedRecord` read access was already part of G1's bulk grant).
+
+**Route + elevation, the "Open, flagged not assumed" item from G4, now resolved with real API
+facts** (via the same AAR-extraction discipline as G1–G3): `ExerciseSessionRecord.exerciseRouteResult`
+reports directly, on the record itself, which of three states a session's route is in — real data
+already attached (`ExerciseRouteResult.Data`), a one-time consent screen is required
+(`ConsentRequired`), or there's simply no route (`NoData`) — no guessing or separate probe call
+needed. `ConsentRequired` is real and load-bearing: confirmed via bytecode that Health Connect has
+no `READ_EXERCISE_ROUTE` permission constant at all (only `WRITE_EXERCISE_ROUTE` exists) — reading
+a route is *never* covered by this app's bulk grant, no matter what's declared in the manifest, and
+always needs `ExerciseRouteRequestContract` (an `ActivityResultContract<String, ExerciseRoute>`,
+same "launch an intent for extra consent" category as `GoogleAuthorizationManager`) launched with
+the session's own record id. `SessionDetailScreen` now shows a real "VIEW ROUTE" button for that
+case; on `Data`/consent-granted, an elevation `LineChart` (built from `ExerciseRoute.Location.altitude`
+— confirmed nullable by the Kotlin compiler rejecting a non-null assumption here, not assumed up
+front, so the elevation profile filters rather than defaults missing points to sea level) and a new
+`ui/components/RouteMiniMap.kt` (same osmdroid + CARTO Dark Matter setup as `MapScreen.kt`'s
+`OsmMapView`, deliberately kept as its own small component rather than generalizing that one, since
+this view's input is a plain lat/lon list with none of the Map tab's weather/directions concerns,
+and touching the already-verified Map tab for an unrelated screen wasn't worth the risk for ~30
+lines of setup) render the route as a real polyline with start/end markers.
+
+**Honestly unverified, and said so rather than assumed working**: this emulator has no real
+Health-Connect-sourced exercise session (no paired wearable — the same standing caveat as every
+sync phase since G2), so none of this phase's new rendering paths — the line charts with real
+numeric data, the `ConsentRequired` button and Health Connect's own consent screen, a real
+`ExerciseRoute` being converted and drawn, `RouteMiniMap` actually painting a route — have been
+exercised end to end. What *is* verified: the code compiles (the Kotlin compiler caught the
+`altitude` nullability mistake above before it shipped), the app installs and runs with no
+regressions to any existing screen, and the one real session on this emulator (the migrated
+15 Sep run, which has no `health_connect_record_id`) continues to render exactly as it did after
+G4 — SUMMARY card correct, honest "No time-series available" message, no route section rendered
+(correctly, since that code path is gated on a record id this row doesn't have). Confirmed via
+`adb logcat` that no exception was thrown anywhere in this flow, and spot-checked the Map tab
+afterward (unrelated screen, but shares `MapSettingsStore` and the same osmdroid embedding pattern
+this phase's `RouteMiniMap` duplicates) to confirm nothing there regressed either. Real
+chart/route/map rendering stays unverified until a real Health-Connect-sourced session with actual
+samples exists on a device running this app — flagged here rather than presented as done.
+
+---
+
 ## Summary — rough remaining build time
 
 Foundation, the full dashboard merge, live weather, live calendar/session integration, and

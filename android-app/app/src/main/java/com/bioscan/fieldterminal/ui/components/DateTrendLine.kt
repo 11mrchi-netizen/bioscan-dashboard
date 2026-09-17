@@ -34,6 +34,8 @@ import java.time.temporal.ChronoUnit
 // AMDR protein range) reuses DotPlot's exact band-drawing rectangle.
 private val TREND_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM")
 
+data class TrendSeries(val points: List<Pair<LocalDate, Double>>, val color: Color)
+
 @Composable
 fun DateTrendLine(
     points: List<Pair<LocalDate, Double>>,
@@ -41,20 +43,34 @@ fun DateTrendLine(
     refLow: Double? = null,
     refHigh: Double? = null,
     modifier: Modifier = Modifier,
+) = DateTrendLine(series = listOf(TrendSeries(points, color)), refLow = refLow, refHigh = refHigh, modifier = modifier)
+
+// DAV-80: multi-series overload -- raw/7-day-avg/28-day-avg VO2max all share
+// one y-axis (same unit, just different smoothing), unlike weight vs.
+// nutrition's genuinely different units, which stay on separate stacked
+// charts instead of one dual-axis plot. All series share one bounding box
+// so they read as directly comparable, not independently scaled.
+@Composable
+fun DateTrendLine(
+    series: List<TrendSeries>,
+    refLow: Double? = null,
+    refHigh: Double? = null,
+    modifier: Modifier = Modifier,
 ) {
-    if (points.size < 2) return
-    val sorted = points.sortedBy { it.first }
+    val sortedSeries = series.map { it.copy(points = it.points.sortedBy { p -> p.first }) }.filter { it.points.size >= 2 }
+    if (sortedSeries.isEmpty()) return
+    val allPoints = sortedSeries.flatMap { it.points }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Canvas(modifier = Modifier.fillMaxWidth().height(90.dp)) {
             val padX = 12f
             val padY = 10f
 
-            val dayMin = sorted.first().first
-            val dayMax = sorted.last().first
+            val dayMin = allPoints.minOf { it.first }
+            val dayMax = allPoints.maxOf { it.first }
             val daySpan = ChronoUnit.DAYS.between(dayMin, dayMax).toFloat().let { if (it < 1f) 1f else it }
 
-            val values = sorted.map { it.second }
+            val values = allPoints.map { it.second }
             var yMin = values.min()
             var yMax = values.max()
             if (refLow != null) yMin = minOf(yMin, refLow)
@@ -83,18 +99,20 @@ fun DateTrendLine(
                 )
             }
 
-            val line = Path().apply {
-                sorted.forEachIndexed { i, (day, value) ->
-                    val x = xFor(day)
-                    val y = yFor(value)
-                    if (i == 0) moveTo(x, y) else lineTo(x, y)
+            sortedSeries.forEach { s ->
+                val line = Path().apply {
+                    s.points.forEachIndexed { i, (day, value) ->
+                        val x = xFor(day)
+                        val y = yFor(value)
+                        if (i == 0) moveTo(x, y) else lineTo(x, y)
+                    }
                 }
+                drawPath(line, color = s.color, style = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
-            drawPath(line, color = color, style = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(sorted.first().first.format(TREND_DATE_FORMAT), style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp), color = FieldColors.InkMuted)
-            Text(sorted.last().first.format(TREND_DATE_FORMAT), style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp), color = FieldColors.InkMuted)
+            Text(allPoints.minOf { it.first }.format(TREND_DATE_FORMAT), style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp), color = FieldColors.InkMuted)
+            Text(allPoints.maxOf { it.first }.format(TREND_DATE_FORMAT), style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp), color = FieldColors.InkMuted)
         }
     }
 }

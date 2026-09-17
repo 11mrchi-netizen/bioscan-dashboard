@@ -1,11 +1,14 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,9 +28,12 @@ import com.bioscan.fieldterminal.data.TrainingOverview
 import com.bioscan.fieldterminal.data.TrainingRepository
 import com.bioscan.fieldterminal.domain.TotalsPeriod
 import com.bioscan.fieldterminal.domain.sumDistanceKmSince
+import com.bioscan.fieldterminal.domain.vo2MaxRollingAverage
 import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.PeriodToggle
 import com.bioscan.fieldterminal.ui.components.RangeBar
+import com.bioscan.fieldterminal.ui.components.TrendSeries
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
@@ -85,6 +91,7 @@ private fun TrainingContent(overview: TrainingOverview) {
             overview.latestVo2Max?.let { vo2 ->
                 Card(title = "VO2MAX (EST.)") {
                     BigValueRow(value = "%.1f".format(vo2), unit = "")
+                    Vo2MaxChart(overview.vo2MaxSeries)
                     Text(
                         "Wearable-estimated, not lab-confirmed.",
                         style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
@@ -138,6 +145,43 @@ private fun DistanceTotalsCard(overview: TrainingOverview) {
             style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
             color = FieldColors.InkMuted,
         )
+    }
+}
+
+// DAV-80. Raw readings are the noisiest series (wearable-estimated, landing
+// irregularly) so they get the dimmest line; the 28-day average -- the one
+// actually worth reading fitness trend from -- gets the card's own amber
+// accent. All three share one y-axis since they're the same unit at
+// different smoothing, not different quantities.
+@Composable
+private fun Vo2MaxChart(series: List<Pair<LocalDate, Double>>) {
+    if (series.size < 2) return
+    DateTrendLine(
+        series = listOf(
+            TrendSeries(series, FieldColors.InkMuted),
+            TrendSeries(vo2MaxRollingAverage(series, 7), FieldColors.Cyan),
+            TrendSeries(vo2MaxRollingAverage(series, 28), FieldColors.Amber),
+        ),
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        LegendItem("RAW", FieldColors.InkMuted)
+        LegendItem("7D AVG", FieldColors.Cyan)
+        LegendItem("28D AVG", FieldColors.Amber)
+    }
+}
+
+@Composable
+private fun LegendItem(label: String, color: androidx.compose.ui.graphics.Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Box(
+            modifier = Modifier
+                .padding(top = 1.dp)
+                .height(3.dp)
+                .width(12.dp)
+                .background(color),
+        )
+        Text(label, style = TextStyle(fontFamily = JetBrainsMono, fontSize = 10.5.sp), color = FieldColors.InkMuted)
     }
 }
 

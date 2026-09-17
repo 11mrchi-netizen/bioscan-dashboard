@@ -42,3 +42,20 @@ fun averagePaceMinPerKmSince(sessions: List<ExerciseSessionRow>, today: LocalDat
 // -- most recent non-null reading, not necessarily the very latest row.
 fun latestNonNullVo2Max(rows: List<Vo2MaxRow>): Double? =
     rows.asReversed().firstNotNullOfOrNull { it.vo2max }
+
+// DAV-80: the raw (date, value) series behind latestNonNullVo2Max, for the
+// Training tile's chart -- same rows, just not collapsed to one number.
+fun vo2MaxSeries(rows: List<Vo2MaxRow>): List<Pair<LocalDate, Double>> =
+    rows.mapNotNull { row -> row.vo2max?.let { LocalDate.parse(row.date) to it } }.sortedBy { it.first }
+
+// A calendar-day window average (not "last N readings") -- Health Connect's
+// own vo2max estimates land irregularly, so a reading-count window would
+// silently span a much wider or narrower real time range depending on how
+// often the watch happened to estimate. Matches this app's own established
+// day-aware smoothing approach (BodyCompositionEvaluation.kt's weight EMA).
+fun vo2MaxRollingAverage(series: List<Pair<LocalDate, Double>>, windowDays: Long): List<Pair<LocalDate, Double>> =
+    series.map { (date, _) ->
+        val windowStart = date.minusDays(windowDays - 1)
+        val inWindow = series.filter { it.first >= windowStart && it.first <= date }.map { it.second }
+        date to inWindow.average()
+    }

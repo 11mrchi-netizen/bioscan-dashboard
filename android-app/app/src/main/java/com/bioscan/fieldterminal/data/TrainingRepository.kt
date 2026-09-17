@@ -6,6 +6,7 @@ import com.bioscan.fieldterminal.domain.averagePaceMinPerKmSince
 import com.bioscan.fieldterminal.domain.latestNonNullVo2Max
 import com.bioscan.fieldterminal.domain.longestRunKm
 import com.bioscan.fieldterminal.domain.sumDistanceKmSince
+import com.bioscan.fieldterminal.domain.vo2MaxSeries
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -65,6 +66,7 @@ data class TrainingOverview(
     val longestRunKm: Double?,
     val avgPaceThisWeek: Double?,
     val latestVo2Max: Double?,
+    val vo2MaxSeries: List<Pair<LocalDate, Double>>, // DAV-80: raw series backing the Training tile's chart
     val hasAnyEndurance: Boolean,
     val enduranceSessions: List<ExerciseSessionRow>, // raw rows, kept for the 1D/7D/30D/90D distance-totals widget
     val hasAnyStrength: Boolean,
@@ -85,10 +87,14 @@ class TrainingRepository(private val supabase: SupabaseClient) {
             }
             .decodeList<ExerciseSessionRow>()
 
+        // 180 covers roughly 6 months of daily wearable rows -- enough real
+        // history for a 28-day rolling average to actually show movement,
+        // unlike the old limit(10) (fine for "just the latest value," far
+        // too small once this data backs a chart).
         val vo2Rows = supabase.postgrest.from("wearable_daily")
             .select(columns = Columns.list("date,vo2max")) {
                 order("date", Order.DESCENDING)
-                limit(10)
+                limit(180)
             }
             .decodeList<Vo2MaxRow>()
             .reversed()
@@ -110,6 +116,7 @@ class TrainingRepository(private val supabase: SupabaseClient) {
             longestRunKm = longestRunKm(endurance),
             avgPaceThisWeek = averagePaceMinPerKmSince(endurance, today, 7),
             latestVo2Max = latestNonNullVo2Max(vo2Rows),
+            vo2MaxSeries = vo2MaxSeries(vo2Rows),
             hasAnyEndurance = endurance.isNotEmpty(),
             enduranceSessions = endurance,
             hasAnyStrength = strength.isNotEmpty(),

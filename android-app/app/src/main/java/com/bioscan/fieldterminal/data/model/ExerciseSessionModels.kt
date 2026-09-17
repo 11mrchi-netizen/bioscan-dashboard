@@ -71,6 +71,7 @@ data class StrengthSetDto(
     val reps: Int,
     @SerialName("weight_kg") val weightKg: Double,
     val rpe: Int? = null,
+    val rir: Int? = null,
     @SerialName("percent_1rm") val percentOneRm: Double? = null,
 )
 

@@ -1,6 +1,8 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -27,6 +30,7 @@ import com.bioscan.fieldterminal.data.SupplementsOverview
 import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.supplementOutcome
+import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
@@ -43,8 +47,15 @@ import com.bioscan.fieldterminal.ui.theme.Saira
 fun SupplementsScreen() {
     var overview by remember { mutableStateOf<SupplementsOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    // DAV-81: bumping this re-runs the LaunchedEffect below to reload the
+    // roster after add/edit/end -- simpler than threading a repository
+    // callback through the sheet just to mutate `overview` in place.
+    var reloadKey by remember { mutableIntStateOf(0) }
+    var editing by remember { mutableStateOf<SupplementRow?>(null) }
+    var showAddSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(reloadKey) {
+        isLoading = true
         overview = SupplementsRepository(SupabaseClientProvider.client).loadOverview()
         isLoading = false
     }
@@ -53,21 +64,43 @@ fun SupplementsScreen() {
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FieldColors.Amber)
         }
-        else -> SupplementsContent(overview!!)
+        else -> SupplementsContent(
+            overview = overview!!,
+            onAddClick = { showAddSheet = true },
+            onSupplementClick = { editing = it },
+        )
+    }
+
+    if (showAddSheet) {
+        SupplementFormSheet(
+            existing = null,
+            onDismiss = { showAddSheet = false },
+            onSaved = { showAddSheet = false; reloadKey++ },
+        )
+    }
+    editing?.let { row ->
+        SupplementFormSheet(
+            existing = row,
+            onDismiss = { editing = null },
+            onSaved = { editing = null; reloadKey++ },
+        )
     }
 }
 
 @Composable
-private fun SupplementsContent(overview: SupplementsOverview) {
+private fun SupplementsContent(overview: SupplementsOverview, onAddClick: () -> Unit, onSupplementClick: (SupplementRow) -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        Text(
-            text = "${overview.active.size} ACTIVE · ${overview.ended.size} ENDED",
-            style = FieldTextStyles.headerContext,
-            color = FieldColors.InkMuted,
-        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "${overview.active.size} ACTIVE · ${overview.ended.size} ENDED",
+                style = FieldTextStyles.headerContext,
+                color = FieldColors.InkMuted,
+            )
+            AmberButton(label = "+ ADD") { onAddClick() }
+        }
 
         if (overview.active.isEmpty() && overview.ended.isEmpty()) {
             Text("No supplements logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
@@ -80,7 +113,7 @@ private fun SupplementsContent(overview: SupplementsOverview) {
                 modifier = Modifier.fillMaxWidth().background(FieldColors.RaisedSurface),
             ) {
                 overview.active.forEachIndexed { i, s ->
-                    ActiveRow(s, showDivider = i < overview.active.lastIndex)
+                    ActiveRow(s, showDivider = i < overview.active.lastIndex, onClick = { onSupplementClick(s) })
                 }
             }
         }
@@ -105,10 +138,13 @@ private fun SectionLabel(text: String, color: androidx.compose.ui.graphics.Color
 }
 
 @Composable
-private fun ActiveRow(s: SupplementRow, showDivider: Boolean) {
+private fun ActiveRow(s: SupplementRow, showDivider: Boolean, onClick: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+                .padding(14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(modifier = Modifier.weight(1f)) {

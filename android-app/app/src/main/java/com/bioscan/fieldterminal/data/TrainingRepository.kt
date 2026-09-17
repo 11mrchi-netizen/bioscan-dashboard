@@ -36,6 +36,29 @@ private const val MIN_WALK_DISTANCE_KM = 1.5
 private fun isRealWalk(session: ExerciseSessionRow): Boolean =
     (session.durationMin ?: 0.0) >= MIN_WALK_DURATION_MIN && (session.distanceKm ?: 0.0) >= MIN_WALK_DISTANCE_KM
 
+// Separate, real bug found via live on-device verification of the walk-noise
+// fix above: the current week's inflated total (still ~164km after that fix)
+// turned out to come from individual "run" sessions with a physically
+// impossible pace -- e.g. 38.49km in 82 minutes (2:13/km, faster than any
+// human has ever sustained for that distance) and 58.28km in 256 minutes
+// (4:23/km for an ultra distance, also implausible). These are real GPS/
+// tracking errors (likely multiple real activities merged into one session,
+// or a GPS drift spike), not deliberate training, and the walk-only filter
+// above never touched them since they're typed "run". 22 km/h (2:44/km,
+// just under the actual marathon world record pace) is a real, generous
+// ceiling for sustained foot-based movement -- nobody recreational or
+// amateur exceeds it, and even elite marathoners don't sustain faster than
+// that outside a WR attempt. Cycling ("ride") is deliberately excluded --
+// its own real speed norms are entirely different.
+private const val MAX_FOOT_SPEED_KMH = 22.0
+private fun hasPlausiblePace(session: ExerciseSessionRow): Boolean {
+    if (session.type == "ride") return true
+    val distance = session.distanceKm ?: return true
+    val durationHours = (session.durationMin ?: return true) / 60.0
+    if (durationHours <= 0) return true
+    return distance / durationHours <= MAX_FOOT_SPEED_KMH
+}
+
 data class TrainingOverview(
     val thisWeekDistanceKm: Double,
     val fourWeekAvgKmPerWeek: Double,
@@ -70,7 +93,9 @@ class TrainingRepository(private val supabase: SupabaseClient) {
             .decodeList<Vo2MaxRow>()
             .reversed()
 
-        val endurance = sessions.filter { it.type in ENDURANCE_TYPES && (it.type != "walk" || isRealWalk(it)) }
+        val endurance = sessions.filter {
+            it.type in ENDURANCE_TYPES && (it.type != "walk" || isRealWalk(it)) && hasPlausiblePace(it)
+        }
         val strength = sessions.filter { it.type == "strength" }
 
         val today = LocalDate.now()

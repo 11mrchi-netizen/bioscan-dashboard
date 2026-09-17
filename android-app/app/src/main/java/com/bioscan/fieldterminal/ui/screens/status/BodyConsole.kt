@@ -33,17 +33,17 @@ import androidx.compose.ui.text.font.FontWeight
 
 // design/README.md's "3d — Body console" launch screen (user's pick over 3b/
 // 3c, see ROADMAP.md P8 Step 5). Real data for readiness/HRV/RHR/sleep/health
-// -flag; Fuel/Water/Supp dials and the Next-up bar are honest placeholders --
-// Step 5's own scope is wearable_daily/sleep_daily only, and real numbers for
-// those three need targets/tracking/Calendar integration that don't exist
-// yet (Steps 6, 8, 14). See ROADMAP.md for the full reasoning.
+// -flag. The Fuel/Water/Supp dial row (DAV-68) was a permanent placeholder --
+// never had real targets/tracking behind it and never will here; that content
+// lives in the Fuel tile page instead (First feedback fixes project). The
+// Next-up bar stays as a placeholder pending real Calendar integration
+// (DAV-69).
 @Composable
 fun BodyConsole(overview: StatusOverview?, isLoading: Boolean) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(modifier = Modifier.fillMaxWidth().height(380.dp)) {
             ConditionFigureField(overview, isLoading)
         }
-        PlaceholderDialRow()
         NextUpBarPlaceholder()
     }
 }
@@ -208,27 +208,6 @@ private fun LabelAt(x: Float, y: Float, scale: Float, align: Alignment, content:
         contentAlignment = align,
     ) {
         content()
-    }
-}
-
-// Honest placeholder -- real Fuel/Water/Supp numbers need daily targets
-// (none exist anywhere in this project yet, web dashboard included) and a
-// taken/logged mechanism for supplements (doesn't exist until Log's add-entry
-// flow, Step 12). Not fabricated here. See ROADMAP.md P8 Step 5.
-@Composable
-private fun PlaceholderDialRow() {
-    Row(modifier = Modifier.fillMaxWidth().height(90.dp)) {
-        listOf("FUEL", "WATER", "SUPP").forEach { label ->
-            Box(
-                modifier = Modifier.weight(1f).fillMaxSize().background(FieldColors.Ground),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("—", style = FieldTextStyles.placeholderBody, color = FieldColors.Hairline)
-                    Text(label, style = FieldTextStyles.tabBarLabel, color = FieldColors.InkMuted)
-                }
-            }
-        }
     }
 }
 

@@ -16,7 +16,17 @@ private const val WEIGHT_MIN_MEASUREMENTS = 10
 private const val WEIGHT_MIN_SPAN_DAYS = 14
 private const val WEIGHT_STABLE_THRESHOLD_KG_PER_WEEK = 0.15
 
-data class WeightEvaluation(val state: EvalState, val confidence: Confidence, val emaToday: Double?, val rateKgPerWeek: Double?)
+// DAV-76: emaSeries carries the full smoothed line (not just today's value)
+// so the Weight/TDEE tab can render a real trend chart instead of a single
+// number -- the exact series this function already computes internally,
+// exposed rather than recomputed a second way by the UI.
+data class WeightEvaluation(
+    val state: EvalState,
+    val confidence: Confidence,
+    val emaToday: Double?,
+    val rateKgPerWeek: Double?,
+    val emaSeries: List<Pair<LocalDate, Double>> = emptyList(),
+)
 
 // alpha per the spec's cadence-based defaults; auto-picked from how often
 // this person actually weighs in over the trailing 30 days, rather than
@@ -74,7 +84,7 @@ fun evaluateWeightTrend(weightDaily: List<Pair<LocalDate, Double>>, asOf: LocalD
         else -> EvalState.ShiftDown
     }
 
-    return WeightEvaluation(state, Confidence(sorted.size, WEIGHT_MIN_MEASUREMENTS), emaToday, rateKgPerWeek)
+    return WeightEvaluation(state, Confidence(sorted.size, WEIGHT_MIN_MEASUREMENTS), emaToday, rateKgPerWeek, emaSeries)
 }
 
 private const val BODY_FAT_MIN_INTERVAL_DAYS = 30

@@ -43,8 +43,11 @@ private const val MIN_COMPLETE_FOR_PROTEIN = 7
 // carries its own "no personal targets are stored anywhere in this project
 // yet" disclaimer); picking a body-weight-based ISSN target here would be
 // the first one, breaking that established stance.
-private const val PROTEIN_PCT_LOW = 0.10
-private const val PROTEIN_PCT_HIGH = 0.35
+// Not private -- the Weight/TDEE tab's protein-on-target trend chart
+// (DAV-76) draws this same band as its reference range, rather than
+// duplicating the AMDR bounds as a second pair of magic numbers.
+const val PROTEIN_PCT_LOW = 0.10
+const val PROTEIN_PCT_HIGH = 0.35
 
 // A day only ever gets compared against days strictly before it -- never its
 // own value, and never an imputed one. `priorDays` should already be scoped
@@ -116,3 +119,14 @@ fun evaluateNutrition(dailyTotals: List<DailyNutrition>, asOf: LocalDate = Local
         proteinAdherence14d = proteinAdherence14d,
     )
 }
+
+// DAV-76: per-day protein-%-of-calories, for the Weight/TDEE tab's "on-target"
+// trend line -- same AMDR band and same COMPLETE_MEALS_MIN gate
+// proteinAdherence14d itself uses, just exposed as a series instead of one
+// rolled-up percentage so it can be charted day-by-day.
+fun proteinPercentSeries(dailyTotals: List<DailyNutrition>, asOf: LocalDate = LocalDate.now(), days: Int = 90): List<Pair<LocalDate, Double>> =
+    dailyTotals
+        .mapNotNull { d -> runCatching { LocalDate.parse(d.date) }.getOrNull()?.let { it to d } }
+        .filter { (date, day) -> !date.isAfter(asOf) && ChronoUnit.DAYS.between(date, asOf) < days && day.mealCount >= COMPLETE_MEALS_MIN && day.calories > 0 }
+        .map { (date, day) -> date to (day.proteinG * 4.0 / day.calories * 100) }
+        .sortedBy { it.first }

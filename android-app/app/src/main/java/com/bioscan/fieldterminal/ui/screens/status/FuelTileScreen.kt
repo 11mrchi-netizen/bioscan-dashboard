@@ -29,12 +29,17 @@ import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.domain.BodyFatEvaluation
+import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.NutritionEvaluation
+import com.bioscan.fieldterminal.domain.PROTEIN_PCT_HIGH
+import com.bioscan.fieldterminal.domain.PROTEIN_PCT_LOW
 import com.bioscan.fieldterminal.domain.WeightEvaluation
 import com.bioscan.fieldterminal.domain.evaluateBodyFat
 import com.bioscan.fieldterminal.domain.evaluateNutrition
 import com.bioscan.fieldterminal.domain.evaluateWeightTrend
+import com.bioscan.fieldterminal.domain.proteinPercentSeries
 import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.StateRow
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
@@ -44,6 +49,7 @@ import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 // DAV-72 (First feedback fixes): Fuel tile page, tabs Nutrition/Hydration/
 // Supplements/Weight-TDEE. Nutrition+Hydration migrated from the old
@@ -82,14 +88,14 @@ fun FuelTileScreen(onBack: () -> Unit) {
                 }
                 FuelTab.Hydration -> overview?.let { HydrationTabContent(it) }
                 FuelTab.Supplements -> SupplementsScreen()
-                FuelTab.Weight -> WeightTdeeTab()
+                FuelTab.Weight -> WeightTdeeTab(allDays = overview?.allDays ?: emptyList())
             }
         }
     }
 }
 
 @Composable
-private fun WeightTdeeTab() {
+private fun WeightTdeeTab(allDays: List<DailyNutrition>) {
     var bodyMetrics by remember { mutableStateOf<List<BodyMetricsAnalysisRow>?>(null) }
 
     LaunchedEffect(Unit) {
@@ -111,16 +117,26 @@ private fun WeightTdeeTab() {
         val weightPoints = b.mapNotNull { row -> row.weightKg?.let { LocalDate.parse(row.date) to it } }
         WeightCard(evaluateWeightTrend(weightPoints))
 
+        // DAV-76: read alongside weight rather than as a disconnected number
+        // -- no numeric calorie/macro goal exists anywhere in this project
+        // (see NutritionEvaluation.kt's own note on that), so "on-target"
+        // here is the one real target this project already has: the AMDR
+        // protein band evaluateNutrition() already gates proteinAdherence14d
+        // on, shown day-by-day instead of rolled into one percentage.
+        NutritionOnTargetCard(proteinPercentSeries(allDays))
+
         val bodyFatPoints = b.mapNotNull { row -> row.bodyFatPct?.let { LocalDate.parse(row.date) to it } }
         BodyFatCard(evaluateBodyFat(bodyFatPoints))
 
         Text(
-            "TDEE estimation isn't built yet — needs a real activity-level model this project doesn't have (see DAV-76/Category 10).",
+            "TDEE estimation isn't built yet — needs a real activity-level model this project doesn't have (see Category 10).",
             style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
             color = FieldColors.InkMuted,
         )
     }
 }
+
+private const val TREND_WINDOW_DAYS = 90L
 
 @Composable
 private fun WeightCard(eval: WeightEvaluation) {
@@ -129,6 +145,33 @@ private fun WeightCard(eval: WeightEvaluation) {
         StatLine("Confidence", eval.confidence.label)
         eval.emaToday?.let { StatLine("EMA (today)", "%.1f kg".format(it)) }
         eval.rateKgPerWeek?.let { StatLine("Rate", "%+.2f kg/week".format(it)) }
+        val today = LocalDate.now()
+        val recentSeries = eval.emaSeries.filter { ChronoUnit.DAYS.between(it.first, today) <= TREND_WINDOW_DAYS }
+        DateTrendLine(points = recentSeries, color = FieldColors.Amber, modifier = Modifier.padding(top = 6.dp))
+    }
+}
+
+// DAV-76. Amber (weight, directly above) and green (on-target here) so the
+// two trends read as a matched pair without needing a shared legend --
+// green already means "in range" everywhere else in this app (BLOODWORK
+// STABLE, 0 FLAGS), not a color picked fresh for this card.
+@Composable
+private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) {
+    Card(title = "PROTEIN ON-TARGET (AMDR 10–35%)") {
+        if (proteinSeries.size < 2) {
+            Text(
+                "Not enough complete-day nutrition logs yet to chart a trend.",
+                style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
+                color = FieldColors.InkMuted,
+            )
+        } else {
+            DateTrendLine(
+                points = proteinSeries,
+                color = FieldColors.Green,
+                refLow = PROTEIN_PCT_LOW * 100,
+                refHigh = PROTEIN_PCT_HIGH * 100,
+            )
+        }
     }
 }
 

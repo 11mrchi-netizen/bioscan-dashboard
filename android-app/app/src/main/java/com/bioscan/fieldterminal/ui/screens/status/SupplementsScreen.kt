@@ -43,6 +43,8 @@ import com.bioscan.fieldterminal.ui.theme.Saira
 // across body-region panels like the web dashboard does -- that's a
 // web-specific decision from an earlier chapter, outside Step 8's own
 // "active/ended list, condensed" scope). See ROADMAP.md P8 Step 8.
+private val TIME_OF_DAY_ORDER = listOf("morning", "afternoon", "night", "as-needed")
+
 @Composable
 fun SupplementsScreen() {
     var overview by remember { mutableStateOf<SupplementsOverview?>(null) }
@@ -109,11 +111,23 @@ private fun SupplementsContent(overview: SupplementsOverview, onAddClick: () -> 
 
         if (overview.active.isNotEmpty()) {
             SectionLabel("ACTIVE", FieldColors.Amber)
-            Column(
-                modifier = Modifier.fillMaxWidth().background(FieldColors.RaisedSurface),
-            ) {
-                overview.active.forEachIndexed { i, s ->
-                    ActiveRow(s, showDivider = i < overview.active.lastIndex, onClick = { onSupplementClick(s) })
+            // DAV-82: same morning/afternoon/night/as-needed grouping
+            // AddEntrySheet.kt's SupplementsForm already uses for the "log as
+            // taken" bundles -- this roster view and that logging view now
+            // read as the same mental model instead of a flat list here vs.
+            // grouped there.
+            val grouped = overview.active.groupBy { it.timeOfDay }
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                TIME_OF_DAY_ORDER.forEach { timeOfDay ->
+                    val items = grouped[timeOfDay] ?: return@forEach
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(timeOfDay.uppercase(), style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
+                        Column(modifier = Modifier.fillMaxWidth().background(FieldColors.RaisedSurface)) {
+                            items.forEachIndexed { i, s ->
+                                ActiveRow(s, showDivider = i < items.lastIndex, onClick = { onSupplementClick(s) })
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -118,7 +118,7 @@ private sealed interface WeatherUiState {
 }
 
 @Composable
-fun MapScreen() {
+fun MapScreen(focusEventId: String? = null) {
     val activity = LocalContext.current as Activity
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<MapState>(MapState.CheckingAccess) }
@@ -204,14 +204,14 @@ fun MapScreen() {
                 is MapState.Error -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
                     Text(s.message, style = FieldTextStyles.placeholderBody, color = FieldColors.Alert)
                 }
-                is MapState.Ready -> MapReadyContent(s)
+                is MapState.Ready -> MapReadyContent(s, focusEventId)
             }
         }
     }
 }
 
 @Composable
-private fun MapReadyContent(state: MapState.Ready) {
+private fun MapReadyContent(state: MapState.Ready, focusEventId: String? = null) {
     if (state.pins.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
             Text(
@@ -230,7 +230,19 @@ private fun MapReadyContent(state: MapState.Ready) {
     val context = LocalContext.current
     val cartoKey = remember { MapSettingsStore.getCartoKey(context) }
     val repo = remember(state.accessToken) { MapRepository(state.accessToken) }
-    var selectedPin by remember { mutableStateOf<MapPin?>(null) }
+    // DAV-69: Status's NEXT UP band passes the tapped event's real Calendar
+    // event ID here (via FieldTerminalNavHost's SavedStateHandle relay) so
+    // Map can open straight to that event's detail sheet. This fetch's own
+    // pins (this 24h window, geocoded/home-fallback/dropped) aren't
+    // guaranteed to contain a match -- Status's clock and Map's could
+    // disagree by the time the user taps, or the event never resolved to a
+    // pin at all. A silent no-match was rejected in favor of a real, visible
+    // "couldn't find that event" notice (see the banner below) -- landing on
+    // a blank map with no explanation would read as broken, not empty.
+    var selectedPin by remember {
+        mutableStateOf(focusEventId?.let { id -> state.pins.find { it.event.id == id } })
+    }
+    val focusNotFound = remember { focusEventId != null && state.pins.none { it.event.id == focusEventId } }
     var routePoints by remember { mutableStateOf<List<GpxPoint>?>(null) }
     var routeError by remember { mutableStateOf<String?>(null) }
     var showWeather by remember { mutableStateOf(false) }
@@ -269,20 +281,29 @@ private fun MapReadyContent(state: MapState.Ready) {
                 onPinClick = { selectedPin = it },
                 modifier = Modifier.fillMaxSize(),
             )
-            if (state.droppedCount > 0) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(16.dp)
-                        .background(FieldColors.Panel.copy(alpha = 0.92f))
-                        .border(1.dp, FieldColors.Hairline)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+            val banners = buildList {
+                if (state.droppedCount > 0) {
+                    add("${state.droppedCount} event(s) couldn't be placed — set a home location in Settings.")
+                }
+                if (focusNotFound) {
+                    add("Couldn't find that event on the map — it may have no location, or fell outside this 24h window.")
+                }
+            }
+            if (banners.isNotEmpty()) {
+                Column(
+                    modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(
-                        "${state.droppedCount} event(s) couldn't be placed — set a home location in Settings.",
-                        style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
-                        color = FieldColors.InkMuted,
-                    )
+                    banners.forEach { message ->
+                        Box(
+                            modifier = Modifier
+                                .background(FieldColors.Panel.copy(alpha = 0.92f))
+                                .border(1.dp, FieldColors.Hairline)
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        ) {
+                            Text(message, style = TextStyle(fontFamily = Saira, fontSize = 12.sp), color = FieldColors.InkMuted)
+                        }
+                    }
                 }
             }
         }

@@ -45,7 +45,7 @@ import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 // pages, not rebuilt -- see each tile screen's own file for what moved
 // where.
 @Composable
-fun StatusScreen(onOpenTile: (TileRoute) -> Unit) {
+fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenMap: (String) -> Unit) {
     var overview by remember { mutableStateOf<StatusOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -62,7 +62,7 @@ fun StatusScreen(onOpenTile: (TileRoute) -> Unit) {
     ) {
         ScreenHeader(title = "STATUS", context = "ALL SYSTEMS")
 
-        BodyConsole(overview = overview, isLoading = isLoading)
+        BodyConsole(overview = overview, isLoading = isLoading, onOpenMap = onOpenMap)
 
         TileGrid(onOpenTile)
     }

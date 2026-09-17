@@ -68,7 +68,26 @@ fun FieldTerminalNavHost() {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(TopLevelTab.Status.route) {
-                StatusScreen(onOpenTile = { tile -> navController.navigate(tile.route) })
+                StatusScreen(
+                    onOpenTile = { tile -> navController.navigate(tile.route) },
+                    // DAV-69: routed through the Map back stack entry's own
+                    // SavedStateHandle rather than a nav-route argument, so
+                    // TopLevelTab.Map.route stays a plain "map" -- FieldBottomBar's
+                    // currentRoute == tab.route check below would otherwise stop
+                    // recognizing Map as selected whenever it carries an argument.
+                    onOpenMap = { eventId ->
+                        // Set AFTER navigate(), not before -- currentBackStackEntry
+                        // is still Status's own entry until navigate() actually moves
+                        // the back stack, so setting it first stamps the value onto
+                        // the wrong entry and Map's composable below never sees it.
+                        navController.navigate(TopLevelTab.Map.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                        navController.currentBackStackEntry?.savedStateHandle?.set("focusEventId", eventId)
+                    },
+                )
             }
             // DAV-70 (First feedback fixes): the 4 tile pages, pushed routes
             // like session_detail rather than nested inside Status's own
@@ -79,7 +98,10 @@ fun FieldTerminalNavHost() {
             composable(TileRoute.Fuel.route) { FuelTileScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Heart.route) { HeartTileScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Labs.route) { LabsTileScreen(onBack = { navController.popBackStack() }) }
-            composable(TopLevelTab.Map.route) { MapScreen() }
+            composable(TopLevelTab.Map.route) { backStackEntry ->
+                val focusEventId = remember(backStackEntry) { backStackEntry.savedStateHandle.remove<String>("focusEventId") }
+                MapScreen(focusEventId = focusEventId)
+            }
             composable(TopLevelTab.Log.route) {
                 LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") })
             }

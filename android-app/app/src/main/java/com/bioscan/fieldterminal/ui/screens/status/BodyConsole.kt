@@ -1,7 +1,10 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import android.app.Activity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +16,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -20,9 +28,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
+import com.bioscan.fieldterminal.data.MapRepository
 import com.bioscan.fieldterminal.data.StatusOverview
+import com.bioscan.fieldterminal.domain.MapEvent
 import com.bioscan.fieldterminal.domain.ReadinessLabel
+import com.bioscan.fieldterminal.domain.parseSessionZonedDateTime
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
@@ -30,21 +43,21 @@ import com.bioscan.fieldterminal.ui.theme.SairaCondensed
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
+import java.time.ZonedDateTime
+import java.time.temporal.ChronoUnit
 
 // design/README.md's "3d — Body console" launch screen (user's pick over 3b/
 // 3c, see ROADMAP.md P8 Step 5). Real data for readiness/HRV/RHR/sleep/health
 // -flag. The Fuel/Water/Supp dial row (DAV-68) was a permanent placeholder --
 // never had real targets/tracking behind it and never will here; that content
-// lives in the Fuel tile page instead (First feedback fixes project). The
-// Next-up bar stays as a placeholder pending real Calendar integration
-// (DAV-69).
+// lives in the Fuel tile page instead (First feedback fixes project).
 @Composable
-fun BodyConsole(overview: StatusOverview?, isLoading: Boolean) {
+fun BodyConsole(overview: StatusOverview?, isLoading: Boolean, onOpenMap: (String) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(modifier = Modifier.fillMaxWidth().height(380.dp)) {
             ConditionFigureField(overview, isLoading)
         }
-        NextUpBarPlaceholder()
+        NextUpSection(onOpenMap)
     }
 }
 
@@ -211,17 +224,74 @@ private fun LabelAt(x: Float, y: Float, scale: Float, align: Alignment, content:
     }
 }
 
-// Honest placeholder -- real "next up" needs Calendar API integration
-// (Phase E, Step 14), not built yet.
+// DAV-69: real Calendar data, same silent-authorize + fetchUpcomingEvents()
+// path MapScreen.kt already uses. Deliberately never launches the OAuth
+// consent screen from this passive Status band -- if scopes aren't already
+// granted, authorize() reports a resolution and this just shows a hint to
+// visit Map (which does prompt), rather than a Status-tab surprise dialog.
+private sealed interface NextUpState {
+    data object Loading : NextUpState
+    data class Found(val event: MapEvent) : NextUpState
+    data object None : NextUpState
+    data object NeedsMapConsent : NextUpState
+    data class Error(val message: String) : NextUpState
+}
+
 @Composable
-private fun NextUpBarPlaceholder() {
+private fun NextUpSection(onOpenMap: (String) -> Unit) {
+    val activity = LocalContext.current as Activity
+    var state by remember { mutableStateOf<NextUpState>(NextUpState.Loading) }
+
+    LaunchedEffect(Unit) {
+        state = try {
+            val authResult = GoogleAuthorizationManager.authorize(activity)
+            val token = authResult.accessToken
+            when {
+                authResult.hasResolution() -> NextUpState.NeedsMapConsent
+                token == null -> NextUpState.Error("Could not get a Google access token.")
+                else -> MapRepository(token).fetchUpcomingEvents().firstOrNull()
+                    ?.let { NextUpState.Found(it) } ?: NextUpState.None
+            }
+        } catch (e: Exception) {
+            NextUpState.Error(e.message ?: "Couldn't load calendar.")
+        }
+    }
+
+    val found = state as? NextUpState.Found
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(FieldColors.RaisedSurface)
+            .then(
+                if (found != null) {
+                    Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        found.event.id?.let(onOpenMap)
+                    }
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 18.dp, vertical = 14.dp),
     ) {
-        Text("NEXT UP — placeholder", style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
+        Text(nextUpLabel(state), style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
+    }
+}
+
+private fun nextUpLabel(state: NextUpState): String = when (state) {
+    NextUpState.Loading -> "NEXT UP — loading…"
+    is NextUpState.Found -> "NEXT UP — ${state.event.title.trim().ifBlank { "Untitled event" }} · ${relativeTimeLabel(state.event)}"
+    NextUpState.None -> "NEXT UP — nothing in the next 24h"
+    NextUpState.NeedsMapConsent -> "NEXT UP — connect Calendar in the Map tab"
+    is NextUpState.Error -> "NEXT UP — unavailable"
+}
+
+private fun relativeTimeLabel(event: MapEvent): String {
+    val start = parseSessionZonedDateTime(event.startIso)
+    val minutesUntil = ChronoUnit.MINUTES.between(ZonedDateTime.now(start.zone), start)
+    return when {
+        minutesUntil <= 0 -> "NOW"
+        minutesUntil < 60 -> "IN $minutesUntil MIN"
+        else -> "IN ${minutesUntil / 60}H ${minutesUntil % 60}M"
     }
 }
 

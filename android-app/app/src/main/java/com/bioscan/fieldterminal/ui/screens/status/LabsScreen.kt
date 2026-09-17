@@ -1,6 +1,8 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,8 +31,10 @@ import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.LabsOverview
 import com.bioscan.fieldterminal.data.LabsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.domain.LabMarkerTheme
 import com.bioscan.fieldterminal.domain.MarkerComparison
 import com.bioscan.fieldterminal.domain.MarkerDirection
+import com.bioscan.fieldterminal.domain.labMarkerTheme
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
@@ -97,6 +101,11 @@ private fun AddResultButtons(onAddClick: () -> Unit, onUploadClick: () -> Unit) 
 @Composable
 private fun LabsContent(overview: LabsOverview, onAddClick: () -> Unit, onUploadClick: () -> Unit) {
     val drawCount = if (overview.earlierDraw != null) 2 else 1
+    // DAV-86: collapsed-by-default is the wrong first impression right after
+    // this grouped view replaces a flat list -- everything open, matching
+    // what was already visible before, lets the user collapse only the
+    // themes they don't care about rather than hunting for what disappeared.
+    var collapsedThemes by remember { mutableStateOf(setOf<LabMarkerTheme>()) }
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
         AddResultButtons(onAddClick = onAddClick, onUploadClick = onUploadClick)
         Text(
@@ -132,10 +141,45 @@ private fun LabsContent(overview: LabsOverview, onAddClick: () -> Unit, onUpload
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(FieldColors.Hairline))
 
-        overview.markers.forEach { marker ->
-            MarkerRow(marker, hasEarlierColumn = overview.earlierDraw != null)
+        val grouped = overview.markers.groupBy { labMarkerTheme(it.name) }
+        LabMarkerTheme.entries.forEach { theme ->
+            val markers = grouped[theme] ?: return@forEach
+            val collapsed = theme in collapsedThemes
+            ThemeGroupHeader(
+                theme = theme,
+                count = markers.size,
+                collapsed = collapsed,
+                onClick = { collapsedThemes = if (collapsed) collapsedThemes - theme else collapsedThemes + theme },
+            )
+            if (!collapsed) {
+                markers.forEach { marker -> MarkerRow(marker, hasEarlierColumn = overview.earlierDraw != null) }
+            }
         }
     }
+}
+
+@Composable
+private fun ThemeGroupHeader(theme: LabMarkerTheme, count: Int, collapsed: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "${theme.label} ($count)",
+            style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+            color = FieldColors.Amber,
+        )
+        Text(
+            if (collapsed) "▸" else "▾",
+            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.sp),
+            color = FieldColors.Amber,
+        )
+    }
+    Box(Modifier.fillMaxWidth().height(1.dp).background(FieldColors.Hairline))
 }
 
 @Composable

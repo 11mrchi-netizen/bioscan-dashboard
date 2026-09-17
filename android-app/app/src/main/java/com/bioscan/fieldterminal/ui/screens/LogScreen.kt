@@ -234,7 +234,7 @@ private fun TypeChip(kind: LogEntryKind) {
         LogEntryKind.Exercise -> FieldColors.Orange
         LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> FieldColors.Green
         LogEntryKind.Sleep -> FieldColors.DeepBlue
-        LogEntryKind.Arousal, LogEntryKind.Encounter -> FieldColors.Red
+        LogEntryKind.Arousal, LogEntryKind.Encounter, LogEntryKind.Masturbation -> FieldColors.Red
         LogEntryKind.Note -> FieldColors.InkMuted
         LogEntryKind.Stool, LogEntryKind.Ostrc -> FieldColors.Sand
         LogEntryKind.Wellness -> FieldColors.Azure

@@ -49,6 +49,16 @@ data class NewArousalRow(
     @SerialName("arousal_level") val arousalLevel: Int,
 )
 
+// DAV-91
+@Serializable
+data class NewMasturbationRow(
+    @SerialName("occurred_at") val occurredAt: String,
+    @SerialName("watched_porn") val watchedPorn: Boolean,
+    @SerialName("load_size") val loadSize: Int? = null,
+    @SerialName("orgasm_intensity") val orgasmIntensity: Int? = null,
+    val notes: String? = null,
+)
+
 @Serializable
 data class NewNoteRow(
     @SerialName("occurred_at") val occurredAt: String,

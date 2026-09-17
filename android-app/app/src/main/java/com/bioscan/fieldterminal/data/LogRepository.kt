@@ -4,6 +4,7 @@ import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogExerciseRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
+import com.bioscan.fieldterminal.data.model.LogMasturbationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
@@ -101,6 +102,15 @@ class LogRepository(private val supabase: SupabaseClient) {
                 limit(FETCH_LIMIT_PER_SOURCE)
             }.decodeList<LogOstrcRow>()
 
-        return buildLogEntries(meals, exerciseSessions, sleep, arousal, stool, encounters, notes, hydration, wellbeing, supplementsTaken, ostrc)
+        val masturbation = supabase.postgrest.from("masturbation_log")
+            .select(columns = Columns.list("id,occurred_at,watched_porn,load_size,orgasm_intensity,notes")) {
+                order("occurred_at", Order.DESCENDING)
+                limit(FETCH_LIMIT_PER_SOURCE)
+            }.decodeList<LogMasturbationRow>()
+
+        return buildLogEntries(
+            meals, exerciseSessions, sleep, arousal, stool, encounters, notes,
+            hydration, wellbeing, supplementsTaken, ostrc, masturbation,
+        )
     }
 }

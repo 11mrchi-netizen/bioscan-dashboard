@@ -7,6 +7,7 @@ import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
+import com.bioscan.fieldterminal.data.model.LogMasturbationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
@@ -15,6 +16,7 @@ import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.NewArousalRow
 import com.bioscan.fieldterminal.data.model.NewEncounterRow
 import com.bioscan.fieldterminal.data.model.NewHydrationRow
+import com.bioscan.fieldterminal.data.model.NewMasturbationRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
 import com.bioscan.fieldterminal.data.model.NewNoteRow
 import com.bioscan.fieldterminal.data.model.NewOstrcRow
@@ -98,6 +100,12 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     suspend fun addStool(occurredAt: String, bristolType: Int, discomfort: Int?) {
         supabase.postgrest.from("stool_log").insert(
             NewStoolRow(occurredAt = occurredAt, bristolType = bristolType, discomfort = discomfort)
+        )
+    }
+
+    suspend fun addMasturbation(occurredAt: String, watchedPorn: Boolean, loadSize: Int?, orgasmIntensity: Int?, notes: String?) {
+        supabase.postgrest.from("masturbation_log").insert(
+            NewMasturbationRow(occurredAt = occurredAt, watchedPorn = watchedPorn, loadSize = loadSize, orgasmIntensity = orgasmIntensity, notes = notes)
         )
     }
 
@@ -193,6 +201,12 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
+    suspend fun updateMasturbation(id: Long, occurredAt: String, watchedPorn: Boolean, loadSize: Int?, orgasmIntensity: Int?, notes: String?) {
+        supabase.postgrest.from("masturbation_log").update(
+            NewMasturbationRow(occurredAt = occurredAt, watchedPorn = watchedPorn, loadSize = loadSize, orgasmIntensity = orgasmIntensity, notes = notes)
+        ) { filter { eq("id", id) } }
+    }
+
     suspend fun updateArousal(id: Long, date: String, morningErectionQuality: Int, arousalLevel: Int) {
         supabase.postgrest.from("arousal_daily").update(
             NewArousalRow(date = date, morningErectionQuality = morningErectionQuality, arousalLevel = arousalLevel)
@@ -256,6 +270,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     suspend fun fetchWellbeing(id: Long) = fetchById<LogWellbeingRow>("wellbeing_daily", "id,date,energy,mood,stress,soreness", id)
     suspend fun fetchExerciseSession(id: Long) = fetchById<FullExerciseSessionRow>("exercise_sessions", "id,type,rpe,notes,details", id)
     suspend fun fetchOstrc(id: Long) = fetchById<LogOstrcRow>("ostrc_checkins", "id,check_date,body_area,q1,q2,q3,q4,notes", id)
+    suspend fun fetchMasturbation(id: Long) = fetchById<LogMasturbationRow>("masturbation_log", "id,occurred_at,watched_porn,load_size,orgasm_intensity,notes", id)
 
     private suspend inline fun <reified T : Any> fetchById(table: String, columns: String, id: Long): T =
         supabase.postgrest.from(table)

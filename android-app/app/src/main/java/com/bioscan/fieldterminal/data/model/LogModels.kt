@@ -56,6 +56,17 @@ data class LogStoolRow(
     val discomfort: Int? = null,
 )
 
+// DAV-91
+@Serializable
+data class LogMasturbationRow(
+    val id: Long,
+    @SerialName("occurred_at") val occurredAt: String,
+    @SerialName("watched_porn") val watchedPorn: Boolean? = null,
+    @SerialName("load_size") val loadSize: Int? = null,
+    @SerialName("orgasm_intensity") val orgasmIntensity: Int? = null,
+    val notes: String? = null,
+)
+
 @Serializable
 data class LogEncounterRow(
     val id: Long,

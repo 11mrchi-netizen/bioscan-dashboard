@@ -62,6 +62,7 @@ import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
+import com.bioscan.fieldterminal.data.model.LogMasturbationRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
@@ -138,6 +139,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so -> onSubmit { it.addWellbeing(date, e, m, s, so) } })
                     AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
                     AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
+                    AddEntryType.Masturbation -> MasturbationForm(saving, onSave = { occurredAt, wp, ls, oi, n -> onSubmit { it.addMasturbation(occurredAt, wp, ls, oi, n) } })
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -261,6 +263,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Wellbeing -> repo.fetchWellbeing(entry.id)
             LogSource.Exercise -> repo.fetchExerciseSession(entry.id)
             LogSource.Ostrc -> repo.fetchOstrc(entry.id)
+            LogSource.Masturbation -> repo.fetchMasturbation(entry.id)
             LogSource.Sleep, LogSource.Supplement -> null // no edit form; EntryActionSheet never offers EDIT for these
         }
     }
@@ -328,6 +331,15 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialBristolType = row.bristolType,
                     initialDiscomfort = row.discomfort,
                     onSave = { occurredAt, bt, d -> onSubmit { it.updateStool(row.id, occurredAt, bt, d) } },
+                )
+                is LogMasturbationRow -> MasturbationForm(
+                    saving,
+                    initialDateTime = parseIsoToLocalDateTime(row.occurredAt),
+                    initialWatchedPorn = row.watchedPorn,
+                    initialLoadSize = row.loadSize,
+                    initialOrgasmIntensity = row.orgasmIntensity,
+                    initialNotes = row.notes ?: "",
+                    onSave = { occurredAt, wp, ls, oi, n -> onSubmit { it.updateMasturbation(row.id, occurredAt, wp, ls, oi, n) } },
                 )
                 is LogArousalRow -> ArousalForm(
                     saving,
@@ -885,6 +897,41 @@ private fun StoolForm(
         Column { FormLabel("DISCOMFORT 0-10 (OPTIONAL)"); FieldTextField(discomfort, { discomfort = it }, "e.g. 2", keyboardType = KeyboardType.Number) }
         SaveButton(saving, bristolType != null) {
             onSave(dateTime.toIsoWithOffset(), bristolType!!, discomfort.toIntOrNull())
+        }
+    }
+}
+
+private val YES_NO_OPTIONS = listOf("Yes", "No")
+
+// DAV-91. Alongside the existing Arousal logging, but its own table
+// (masturbation_log) rather than columns on arousal_daily -- that table's
+// real unique(user_id, date) constraint makes it a once-per-day row, and
+// this can genuinely happen more than once in a day.
+@Composable
+private fun MasturbationForm(
+    saving: Boolean,
+    initialDateTime: LocalDateTime = LocalDateTime.now(),
+    initialWatchedPorn: Boolean? = null,
+    initialLoadSize: Int? = null,
+    initialOrgasmIntensity: Int? = null,
+    initialNotes: String = "",
+    onSave: (occurredAt: String, watchedPorn: Boolean, loadSize: Int?, orgasmIntensity: Int?, notes: String?) -> Unit,
+) {
+    var dateTime by remember { mutableStateOf(initialDateTime) }
+    var watchedPorn by remember { mutableStateOf(initialWatchedPorn?.let { if (it) "Yes" else "No" }) }
+    var loadSize by remember { mutableStateOf(initialLoadSize?.toString()) }
+    var orgasmIntensity by remember { mutableStateOf(initialOrgasmIntensity?.toString() ?: "") }
+    var notes by remember { mutableStateOf(initialNotes) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DateTimeField("WHEN", dateTime, { dateTime = it })
+        Column { FormLabel("WATCHED PORN"); TextChipRow(YES_NO_OPTIONS, watchedPorn) { watchedPorn = it } }
+        Column { FormLabel("LOAD SIZE 1-5 (OPTIONAL)"); TextChipRow(listOf("1", "2", "3", "4", "5"), loadSize, perRow = 5) { loadSize = it } }
+        Column { FormLabel("ORGASM INTENSITY 0-10 (OPTIONAL)"); FieldTextField(orgasmIntensity, { orgasmIntensity = it }, "e.g. 7", keyboardType = KeyboardType.Number) }
+        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
+        val valid = watchedPorn != null
+        SaveButton(saving, valid) {
+            onSave(dateTime.toIsoWithOffset(), watchedPorn == "Yes", loadSize?.toIntOrNull(), orgasmIntensity.toIntOrNull(), notes.trim().ifBlank { null })
         }
     }
 }

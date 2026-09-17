@@ -4,6 +4,7 @@ import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogExerciseRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
+import com.bioscan.fieldterminal.data.model.LogMasturbationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
@@ -19,7 +20,7 @@ import java.time.OffsetDateTime
 enum class LogEntryKind(val label: String) {
     Exercise("EXERCISE"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
     Arousal("AROUSAL"), Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
-    Wellness("WELL"), Supplement("SUPP"), Ostrc("OSTRC"),
+    Wellness("WELL"), Supplement("SUPP"), Ostrc("OSTRC"), Masturbation("MASTURBATION"),
 }
 
 // Which table (and which AddEntryRepository calls) an entry came from --
@@ -35,6 +36,7 @@ enum class LogSource(val table: String) {
     Meal("meals"), Exercise("exercise_sessions"), Sleep("sleep_daily"), Arousal("arousal_daily"),
     Stool("stool_log"), Encounter("encounters"), Note("notes"), Hydration("hydration_daily"),
     Wellbeing("wellbeing_daily"), Supplement("supplement_log"), Ostrc("ostrc_checkins"),
+    Masturbation("masturbation_log"),
 }
 
 data class LogEntry(
@@ -70,6 +72,7 @@ fun buildLogEntries(
     wellbeing: List<LogWellbeingRow> = emptyList(),
     supplementsTaken: List<LogSupplementTakenRow> = emptyList(),
     ostrc: List<LogOstrcRow> = emptyList(),
+    masturbation: List<LogMasturbationRow> = emptyList(),
 ): List<LogEntry> {
     val entries = mutableListOf<LogEntry>()
 
@@ -217,6 +220,22 @@ fun buildLogEntries(
             timestamp = LocalDateTime.of(LocalDate.parse(o.checkDate), OSTRC_NOMINAL_TIME),
             headline = "${o.bodyArea} · severity ${o.q1 + o.q2 + o.q3 + o.q4}/100",
             detail = null,
+        )
+    }
+
+    masturbation.forEach { m ->
+        val parts = listOfNotNull(
+            m.watchedPorn?.let { "Porn: ${if (it) "yes" else "no"}" },
+            m.loadSize?.let { "Load $it/5" },
+            m.orgasmIntensity?.let { "Intensity $it/10" },
+        )
+        entries += LogEntry(
+            id = m.id,
+            source = LogSource.Masturbation,
+            kind = LogEntryKind.Masturbation,
+            timestamp = parseTimestamp(m.occurredAt),
+            headline = parts.joinToString(" · ").ifEmpty { "Masturbation" },
+            detail = m.notes,
         )
     }
 

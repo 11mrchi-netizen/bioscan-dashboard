@@ -66,6 +66,14 @@ object HealthConnectManager {
         HealthPermission.getWritePermission(HydrationRecord::class),
         HealthPermission.getReadPermission(NutritionRecord::class),
         HealthPermission.getWritePermission(NutritionRecord::class),
+        // Lifts Health Connect's default 30-day read cap so the sync can
+        // pull this account's full real history, not just a rolling window.
+        HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY,
+        // Real on-device error without this: "Caller does not have
+        // permission to read data ... from other applications" -- most
+        // record types here are written by the watch/fitness app, not this
+        // one.
+        HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
     )
 
     fun isAvailable(context: Context): Boolean =

@@ -58,9 +58,9 @@ class HealthConnectDailySyncRepository(
     suspend fun syncSteps(since: Instant, until: Instant): Int {
         val values = readAll(StepsRecord::class, since, until).map { TimedValue(it.startTime, it.count.toDouble()) }
         val byDate = sumByLocalDate(values, zone)
-        byDate.forEach { (date, steps) ->
+        if (byDate.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
-                .upsert(StepsUpsertRow(date.toString(), steps.toInt())) { onConflict = "user_id,date" }
+                .upsert(byDate.map { (date, steps) -> StepsUpsertRow(date.toString(), steps.toInt()) }) { onConflict = "user_id,date" }
         }
         return byDate.size
     }
@@ -69,9 +69,9 @@ class HealthConnectDailySyncRepository(
         val values = readAll(ActiveCaloriesBurnedRecord::class, since, until)
             .map { TimedValue(it.startTime, it.energy.inKilocalories) }
         val byDate = sumByLocalDate(values, zone)
-        byDate.forEach { (date, kcal) ->
+        if (byDate.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
-                .upsert(ActiveCaloriesUpsertRow(date.toString(), kcal.toInt())) { onConflict = "user_id,date" }
+                .upsert(byDate.map { (date, kcal) -> ActiveCaloriesUpsertRow(date.toString(), kcal.toInt()) }) { onConflict = "user_id,date" }
         }
         return byDate.size
     }
@@ -80,9 +80,9 @@ class HealthConnectDailySyncRepository(
         val values = readAll(TotalCaloriesBurnedRecord::class, since, until)
             .map { TimedValue(it.startTime, it.energy.inKilocalories) }
         val byDate = sumByLocalDate(values, zone)
-        byDate.forEach { (date, kcal) ->
+        if (byDate.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
-                .upsert(TotalCaloriesUpsertRow(date.toString(), kcal.toInt())) { onConflict = "user_id,date" }
+                .upsert(byDate.map { (date, kcal) -> TotalCaloriesUpsertRow(date.toString(), kcal.toInt()) }) { onConflict = "user_id,date" }
         }
         return byDate.size
     }
@@ -91,9 +91,9 @@ class HealthConnectDailySyncRepository(
         val values = readAll(Vo2MaxRecord::class, since, until)
             .map { TimedValue(it.time, it.vo2MillilitersPerMinuteKilogram) }
         val byDate = latestByLocalDate(values, zone)
-        byDate.forEach { (date, v) ->
+        if (byDate.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
-                .upsert(Vo2MaxUpsertRow(date.toString(), v)) { onConflict = "user_id,date" }
+                .upsert(byDate.map { (date, v) -> Vo2MaxUpsertRow(date.toString(), v) }) { onConflict = "user_id,date" }
         }
         return byDate.size
     }
@@ -102,30 +102,30 @@ class HealthConnectDailySyncRepository(
         val values = readAll(BasalMetabolicRateRecord::class, since, until)
             .map { TimedValue(it.time, it.basalMetabolicRate.inKilocaloriesPerDay) }
         val byDate = latestByLocalDate(values, zone)
-        byDate.forEach { (date, v) ->
+        if (byDate.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
-                .upsert(BmrUpsertRow(date.toString(), v)) { onConflict = "user_id,date" }
+                .upsert(byDate.map { (date, v) -> BmrUpsertRow(date.toString(), v) }) { onConflict = "user_id,date" }
         }
         return byDate.size
     }
 
     suspend fun syncBodyComposition(since: Instant, until: Instant): Int {
         val weight = latestByLocalDate(readAll(WeightRecord::class, since, until).map { TimedValue(it.time, it.weight.inKilograms) }, zone)
-        weight.forEach { (date, v) ->
+        if (weight.isNotEmpty()) {
             supabase.postgrest.from("body_metrics")
-                .upsert(WeightUpsertRow(date.toString(), v)) { onConflict = "user_id,date" }
+                .upsert(weight.map { (date, v) -> WeightUpsertRow(date.toString(), v) }) { onConflict = "user_id,date" }
         }
 
         val bodyFat = latestByLocalDate(readAll(BodyFatRecord::class, since, until).map { TimedValue(it.time, it.percentage.value) }, zone)
-        bodyFat.forEach { (date, v) ->
+        if (bodyFat.isNotEmpty()) {
             supabase.postgrest.from("body_metrics")
-                .upsert(BodyFatUpsertRow(date.toString(), v)) { onConflict = "user_id,date" }
+                .upsert(bodyFat.map { (date, v) -> BodyFatUpsertRow(date.toString(), v) }) { onConflict = "user_id,date" }
         }
 
         val height = latestByLocalDate(readAll(HeightRecord::class, since, until).map { TimedValue(it.time, it.height.inMeters * 100.0) }, zone)
-        height.forEach { (date, v) ->
+        if (height.isNotEmpty()) {
             supabase.postgrest.from("body_metrics")
-                .upsert(HeightUpsertRow(date.toString(), v)) { onConflict = "user_id,date" }
+                .upsert(height.map { (date, v) -> HeightUpsertRow(date.toString(), v) }) { onConflict = "user_id,date" }
         }
 
         return weight.size + bodyFat.size + height.size
@@ -136,21 +136,21 @@ class HealthConnectDailySyncRepository(
     // HealthConnectSyncModels.kt's header comment for why not one shared row).
     suspend fun syncVitals(since: Instant, until: Instant): Int {
         val rhr = averageByLocalDate(readAll(RestingHeartRateRecord::class, since, until).map { TimedValue(it.time, it.beatsPerMinute.toDouble()) }, zone)
-        rhr.forEach { (date, v) ->
+        if (rhr.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
-                .upsert(RestingHeartRateUpsertRow(date.toString(), v)) { onConflict = "user_id,date" }
+                .upsert(rhr.map { (date, v) -> RestingHeartRateUpsertRow(date.toString(), v) }) { onConflict = "user_id,date" }
         }
 
         val hrv = averageByLocalDate(readAll(HeartRateVariabilityRmssdRecord::class, since, until).map { TimedValue(it.time, it.heartRateVariabilityMillis) }, zone)
-        hrv.forEach { (date, v) ->
+        if (hrv.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
-                .upsert(HrvUpsertRow(date.toString(), v)) { onConflict = "user_id,date" }
+                .upsert(hrv.map { (date, v) -> HrvUpsertRow(date.toString(), v) }) { onConflict = "user_id,date" }
         }
 
         val spo2 = averageByLocalDate(readAll(OxygenSaturationRecord::class, since, until).map { TimedValue(it.time, it.percentage.value) }, zone)
-        spo2.forEach { (date, v) ->
+        if (spo2.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
-                .upsert(Spo2UpsertRow(date.toString(), v)) { onConflict = "user_id,date" }
+                .upsert(spo2.map { (date, v) -> Spo2UpsertRow(date.toString(), v) }) { onConflict = "user_id,date" }
         }
 
         return rhr.size + hrv.size + spo2.size
@@ -165,11 +165,29 @@ class HealthConnectDailySyncRepository(
     // existed for exactly this, pre-Health-Connect) rather than given a
     // separate wearable_daily column, to avoid two places meaning the same
     // thing.
+    //
+    // Real on-device data showed multiple SleepSessionRecord entries landing
+    // on the same wake-up date -- short ones (a minute or two: brief
+    // wake-ups, or the watch app logging an interruption as its own session)
+    // alongside the real overnight one. Upserting every session
+    // unconditionally meant "last one Health Connect returned" won via
+    // onConflict=(user_id,date), sometimes silently overwriting a real ~7h
+    // night with a ~1-minute noise session. Grouping by date and keeping
+    // only the longest session per date fixes that without guessing at
+    // which of several real Health Connect records is "the" sleep -- the
+    // longest one is the one actually worth calling a night's sleep.
     suspend fun syncSleep(since: Instant, until: Instant): Int {
         val sessions = readAll(SleepSessionRecord::class, since, until)
         val respiratoryReadings = readAll(RespiratoryRateRecord::class, since, until)
 
-        sessions.forEach { session ->
+        val mainSessionByDate = sessions
+            .groupBy { it.endTime.atZone(zone).toLocalDate() }
+            .mapValues { (_, nights) -> nights.maxBy { it.endTime.epochSecond - it.startTime.epochSecond } }
+
+        val sleepRows = mutableListOf<SleepUpsertRow>()
+        val respiratoryRows = mutableListOf<RespiratoryRateUpsertRow>()
+
+        mainSessionByDate.forEach { (date, session) ->
             val stages = session.stages.map {
                 SleepStageInterval(it.startTime.epochSecond, it.endTime.epochSecond, it.stage)
             }
@@ -178,25 +196,27 @@ class HealthConnectDailySyncRepository(
                 .filter { it.time >= session.startTime && it.time <= session.endTime }
                 .map { it.rate }
 
-            supabase.postgrest.from("sleep_daily").upsert(
-                SleepUpsertRow(
-                    date = session.endTime.atZone(zone).toLocalDate().toString(),
-                    hours = hours,
-                    bedtime = session.startTime.toString(),
-                    wakeTime = session.endTime.toString(),
-                    deepMin = sumStageMinutes(stages, SleepSessionRecord.STAGE_TYPE_DEEP),
-                    remMin = sumStageMinutes(stages, SleepSessionRecord.STAGE_TYPE_REM),
-                    lightMin = sumStageMinutes(stages, SleepSessionRecord.STAGE_TYPE_LIGHT),
-                ),
-            ) { onConflict = "user_id,date" }
-
+            sleepRows += SleepUpsertRow(
+                date = date.toString(),
+                hours = hours,
+                bedtime = session.startTime.toString(),
+                wakeTime = session.endTime.toString(),
+                deepMin = sumStageMinutes(stages, SleepSessionRecord.STAGE_TYPE_DEEP),
+                remMin = sumStageMinutes(stages, SleepSessionRecord.STAGE_TYPE_REM),
+                lightMin = sumStageMinutes(stages, SleepSessionRecord.STAGE_TYPE_LIGHT),
+            )
             if (respiratoryForNight.isNotEmpty()) {
-                supabase.postgrest.from("sleep_daily").upsert(
-                    RespiratoryRateUpsertRow(session.endTime.atZone(zone).toLocalDate().toString(), respiratoryForNight.average()),
-                ) { onConflict = "user_id,date" }
+                respiratoryRows += RespiratoryRateUpsertRow(date.toString(), respiratoryForNight.average())
             }
         }
-        return sessions.size
+
+        if (sleepRows.isNotEmpty()) {
+            supabase.postgrest.from("sleep_daily").upsert(sleepRows) { onConflict = "user_id,date" }
+        }
+        if (respiratoryRows.isNotEmpty()) {
+            supabase.postgrest.from("sleep_daily").upsert(respiratoryRows) { onConflict = "user_id,date" }
+        }
+        return mainSessionByDate.size
     }
 
     // Delegates to the shared pagination loop in healthconnect/HealthConnectReading.kt

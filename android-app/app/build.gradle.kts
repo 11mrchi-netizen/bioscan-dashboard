@@ -110,5 +110,14 @@ dependencies {
     // page, not assumed). See ROADMAP.md for the full Phase G plan.
     implementation("androidx.health.connect:connect-client:1.1.0")
 
+    // Runs the Health Connect sync as real background work instead of a
+    // plain Activity-scoped coroutine -- the latter dies (real on-device
+    // error: "Software caused connection abort") the moment the user
+    // switches away mid-sync, since Android doesn't guarantee a foreground
+    // Activity's coroutines keep running once backgrounded. WorkManager
+    // survives that (and even process death), and retries on failure with
+    // its own backoff instead of requiring the user to babysit the app.
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

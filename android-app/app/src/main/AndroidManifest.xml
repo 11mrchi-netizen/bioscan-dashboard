@@ -45,6 +45,17 @@
     <uses-permission android:name="android.permission.health.WRITE_HYDRATION" />
     <uses-permission android:name="android.permission.health.READ_NUTRITION" />
     <uses-permission android:name="android.permission.health.WRITE_NUTRITION" />
+    <!-- Without this, Health Connect silently caps reads to the last 30 days
+         regardless of what TimeRangeFilter the app asks for. Needed so the
+         sync can pull this account's full real history, not just a rolling
+         window. -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
+    <!-- Real on-device error without this: "Caller does not have permission
+         to read data ... from other applications". Most record types
+         (steps, sleep, etc.) are written by the watch/fitness app, not this
+         one, and reading another app's contributions needs this explicit
+         grant regardless of the record-type-specific READ_* permission. -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
 
     <application
         android:allowBackup="true"

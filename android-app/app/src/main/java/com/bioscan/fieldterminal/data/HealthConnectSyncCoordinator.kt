@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.data
 
 import android.content.Context
+import android.util.Log
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -32,7 +33,17 @@ sealed interface HealthConnectSyncResult {
 // synced days on the next run is naturally idempotent, not a bug.
 class HealthConnectSyncCoordinator(private val context: Context, private val supabase: SupabaseClient) {
     private val overlap: Duration = Duration.ofDays(2)
-    private val defaultLookback: Duration = Duration.ofDays(30) // matches Health Connect's own no-extra-permission read window
+    companion object {
+        private const val TAG = "HealthConnectSync"
+    }
+    // Only applies to a user's very first sync (no watermark yet) -- every
+    // later run resumes from the watermark instead. Wide on purpose: with
+    // PERMISSION_READ_HEALTH_DATA_HISTORY granted, Health Connect will
+    // actually return however much real history exists in this window, not
+    // just a rolling 30 days. Analysis wants as much real history as
+    // possible; nothing displays this raw, so there's no UI cost to it being
+    // wide (Log tab already caps each source at FETCH_LIMIT_PER_SOURCE).
+    private val defaultLookback: Duration = Duration.ofDays(3650)
 
     suspend fun syncAll(): HealthConnectSyncResult {
         if (!HealthConnectManager.isAvailable(context)) return HealthConnectSyncResult.Unavailable
@@ -42,22 +53,31 @@ class HealthConnectSyncCoordinator(private val context: Context, private val sup
             val until = Instant.now()
             val since = (readWatermark()?.minus(overlap)) ?: until.minus(defaultLookback)
 
+            Log.d(TAG, "syncAll starting, since=$since until=$until")
             val daily = HealthConnectDailySyncRepository(context, supabase)
             val exercise = HealthConnectExerciseSyncRepository(context, supabase)
-            val counts = linkedMapOf(
-                "steps" to daily.syncSteps(since, until),
-                "active_calories" to daily.syncActiveCalories(since, until),
-                "total_calories" to daily.syncTotalCalories(since, until),
-                "vo2max" to daily.syncVo2Max(since, until),
-                "bmr" to daily.syncBmr(since, until),
-                "body_composition" to daily.syncBodyComposition(since, until),
-                "vitals" to daily.syncVitals(since, until),
-                "sleep" to daily.syncSleep(since, until),
-                "exercise_sessions" to exercise.syncSessions(since, until),
-            )
+
+            val counts = linkedMapOf<String, Int>()
+            // Step-by-step, not one linkedMapOf(... = a(), ... = b()) call --
+            // that gave zero visibility into which of the 9 real steps a
+            // multi-year sync was actually on. This was the difference
+            // between "still working" and "silently hung" being guessable
+            // from logcat instead of pure guesswork.
+            counts["steps"] = daily.syncSteps(since, until).also { Log.d(TAG, "steps: $it") }
+            counts["active_calories"] = daily.syncActiveCalories(since, until).also { Log.d(TAG, "active_calories: $it") }
+            counts["total_calories"] = daily.syncTotalCalories(since, until).also { Log.d(TAG, "total_calories: $it") }
+            counts["vo2max"] = daily.syncVo2Max(since, until).also { Log.d(TAG, "vo2max: $it") }
+            counts["bmr"] = daily.syncBmr(since, until).also { Log.d(TAG, "bmr: $it") }
+            counts["body_composition"] = daily.syncBodyComposition(since, until).also { Log.d(TAG, "body_composition: $it") }
+            counts["vitals"] = daily.syncVitals(since, until).also { Log.d(TAG, "vitals: $it") }
+            counts["sleep"] = daily.syncSleep(since, until).also { Log.d(TAG, "sleep: $it") }
+            counts["exercise_sessions"] = exercise.syncSessions(since, until).also { Log.d(TAG, "exercise_sessions: $it") }
+
             writeWatermark(until, counts)
+            Log.d(TAG, "syncAll succeeded: $counts")
             HealthConnectSyncResult.Success(counts)
         } catch (e: Exception) {
+            Log.e(TAG, "syncAll failed", e)
             HealthConnectSyncResult.Failed(e.message ?: "Health Connect sync failed.")
         }
     }

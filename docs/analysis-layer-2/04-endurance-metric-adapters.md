@@ -41,9 +41,12 @@ Needs: session `avg_hr`, a max-HR reference (session `max_hr`, or a fallback), a
 
 Degradation ladder when `max_hr` is missing (true for 100% of manual runs and 100% of hikes):
 1. Session `max_hr` if present (HC-sourced sessions, 88–98% of the time).
-2. Age-estimated max HR (220−age or a chosen formula) as an **inferred** fallback — explicitly
-   labeled `inferred` in the provenance tag, never silently presented as measured.
-3. If neither exists and `avg_hr` is also absent (hikes: 0% HR coverage) — skip TRIMP for that
+2. **Correction from implementation (DAV-58):** an age-estimated max-HR fallback was planned here,
+   but this account has no age/birthdate field anywhere in the schema — there's nothing to estimate
+   from. `trimp()` (`domain/EnduranceLoad.kt`) only computes when a session's own measured `max_hr`
+   is present; there is no fallback step. Adding one is real future work gated on an age field
+   existing at all, not a DAV-58 gap.
+3. If `max_hr` is absent and `avg_hr` is also absent (hikes: 0% HR coverage) — skip TRIMP for that
    session entirely and fall through to sRPE. Do not synthesize an HR value from RPE; that's what
    the sRPE model is for, kept as its own separate series rather than smuggled into "TRIMP."
 

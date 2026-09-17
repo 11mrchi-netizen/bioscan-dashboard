@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -30,6 +31,7 @@ import com.bioscan.fieldterminal.data.LabsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.MarkerComparison
 import com.bioscan.fieldterminal.domain.MarkerDirection
+import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
@@ -45,8 +47,11 @@ import com.bioscan.fieldterminal.ui.theme.Saira
 fun LabsScreen() {
     var overview by remember { mutableStateOf<LabsOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var reloadKey by remember { mutableIntStateOf(0) }
+    var showAddSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(reloadKey) {
+        isLoading = true
         overview = LabsRepository(SupabaseClientProvider.client).loadOverview()
         isLoading = false
     }
@@ -55,22 +60,40 @@ fun LabsScreen() {
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FieldColors.Amber)
         }
-        overview?.latestDraw == null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("No lab draws logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+        overview?.latestDraw == null -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
+            AddResultButton(onClick = { showAddSheet = true })
+            Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                Text("No lab draws logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+            }
         }
-        else -> LabsContent(overview!!)
+        else -> LabsContent(overview!!, onAddClick = { showAddSheet = true })
+    }
+
+    if (showAddSheet) {
+        LabResultFormSheet(
+            onDismiss = { showAddSheet = false },
+            onSaved = { showAddSheet = false; reloadKey++ },
+        )
     }
 }
 
 @Composable
-private fun LabsContent(overview: LabsOverview) {
+private fun AddResultButton(onClick: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        AmberButton(label = "+ ADD RESULT") { onClick() }
+    }
+}
+
+@Composable
+private fun LabsContent(overview: LabsOverview, onAddClick: () -> Unit) {
     val drawCount = if (overview.earlierDraw != null) 2 else 1
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
+        AddResultButton(onClick = onAddClick)
         Text(
             text = "BLOODWORK · $drawCount DRAW${if (drawCount == 1) "" else "S"} · ${overview.markers.size} MARKERS",
             style = FieldTextStyles.headerContext,
             color = FieldColors.InkMuted,
-            modifier = Modifier.padding(bottom = 14.dp),
+            modifier = Modifier.padding(top = 14.dp, bottom = 14.dp),
         )
 
         // Column header row

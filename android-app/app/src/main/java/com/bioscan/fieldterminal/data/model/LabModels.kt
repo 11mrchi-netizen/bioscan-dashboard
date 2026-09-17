@@ -21,3 +21,21 @@ data class LabResultRow(
     @SerialName("ref_high") val refHigh: Double? = null,
     val flag: String? = null,
 )
+
+// DAV-84
+@Serializable
+data class LabDrawIdRow(val id: Long)
+
+@Serializable
+data class NewLabDrawRow(@SerialName("draw_date") val drawDate: String, @SerialName("lab_name") val labName: String)
+
+@Serializable
+data class NewLabResultRow(
+    @SerialName("draw_id") val drawId: Long,
+    @SerialName("marker_name") val markerName: String,
+    val value: Double?,
+    val unit: String?,
+    @SerialName("ref_low") val refLow: Double?,
+    @SerialName("ref_high") val refHigh: Double?,
+    val flag: String?,
+)

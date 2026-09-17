@@ -21,7 +21,7 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadOverview(): SupplementsOverview {
         val rows = supabase.postgrest.from("supplements")
-            .select(columns = Columns.list("id,name,dose,time_of_day,status,end_date"))
+            .select(columns = Columns.list("id,name,dose,time_of_day,status,end_date,ai_note"))
             .decodeList<SupplementRow>()
 
         val today = LocalDate.now()
@@ -38,9 +38,9 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
     // DAV-81: the roster itself, previously only ever readable (loadOverview()
     // above) -- AddEntrySheet.kt's logging flow already assumed this roster
     // existed, with no UI anywhere to actually build or edit it.
-    suspend fun addSupplement(name: String, dose: String, timeOfDay: String, startDate: LocalDate) {
+    suspend fun addSupplement(name: String, dose: String, timeOfDay: String, startDate: LocalDate, aiNote: String? = null) {
         supabase.postgrest.from("supplements").insert(
-            NewSupplementRosterRow(name = name, dose = dose, timeOfDay = timeOfDay, status = "active", startDate = startDate.toString())
+            NewSupplementRosterRow(name = name, dose = dose, timeOfDay = timeOfDay, status = "active", startDate = startDate.toString(), aiNote = aiNote)
         )
     }
 

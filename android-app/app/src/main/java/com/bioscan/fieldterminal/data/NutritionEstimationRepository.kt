@@ -158,18 +158,6 @@ private val RESPONSE_SCHEMA = buildJsonObject {
 }
 
 @Serializable
-private data class GeminiResponse(val candidates: List<GeminiCandidate> = emptyList())
-
-@Serializable
-private data class GeminiCandidate(val content: GeminiContent? = null)
-
-@Serializable
-private data class GeminiContent(val parts: List<GeminiPart> = emptyList())
-
-@Serializable
-private data class GeminiPart(val text: String? = null)
-
-@Serializable
 private data class EstimatePayload(
     @SerialName("food_description") val foodDescription: String? = null,
     val calories: Double? = null,
@@ -181,8 +169,3 @@ private data class EstimatePayload(
     @SerialName("sodium_mg") val sodiumMg: Double? = null,
 )
 
-@Serializable
-private data class GeminiErrorResponse(val error: GeminiError? = null)
-
-@Serializable
-private data class GeminiError(val message: String? = null)

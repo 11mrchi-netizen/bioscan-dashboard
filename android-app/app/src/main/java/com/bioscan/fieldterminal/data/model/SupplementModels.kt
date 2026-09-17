@@ -11,6 +11,7 @@ data class SupplementRow(
     @SerialName("time_of_day") val timeOfDay: String,
     val status: String,
     @SerialName("end_date") val endDate: String? = null,
+    @SerialName("ai_note") val aiNote: String? = null,
 )
 
 // DAV-81
@@ -21,4 +22,5 @@ data class NewSupplementRosterRow(
     @SerialName("time_of_day") val timeOfDay: String,
     val status: String,
     @SerialName("start_date") val startDate: String,
+    @SerialName("ai_note") val aiNote: String? = null,
 )

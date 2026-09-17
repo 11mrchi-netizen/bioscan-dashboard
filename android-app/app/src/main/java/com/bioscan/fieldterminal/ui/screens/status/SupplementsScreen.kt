@@ -163,7 +163,11 @@ private fun ActiveRow(s: SupplementRow, showDivider: Boolean, onClick: () -> Uni
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(s.name, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 16.5.sp), color = FieldColors.Ink)
-                val outcome = supplementOutcome(s.name)
+                // DAV-83: the curated outcome map wins where it has a real,
+                // research-backed entry -- s.aiNote (a one-off Gemini guess
+                // made when this supplement was first added) only fills in
+                // for names that map has nothing for, never overwrites it.
+                val outcome = supplementOutcome(s.name).ifEmpty { s.aiNote ?: "" }
                 if (outcome.isNotEmpty()) {
                     Text(
                         outcome,

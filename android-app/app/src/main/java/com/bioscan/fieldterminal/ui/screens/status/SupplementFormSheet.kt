@@ -28,10 +28,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.SupplementImpactRepository
 import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.ui.components.AmberButton
@@ -56,6 +59,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val repo = remember { SupplementsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     var name by remember { mutableStateOf(existing?.name ?: "") }
     var dose by remember { mutableStateOf(existing?.dose ?: "") }
@@ -120,7 +124,20 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                     scope.launch {
                         try {
                             if (existing == null) {
-                                repo.addSupplement(name.trim(), dose.trim(), timeOfDay, LocalDate.now())
+                                // DAV-83: best-effort only -- a failed or
+                                // missing-key blurb attempt never blocks
+                                // adding the supplement itself, same as
+                                // NutritionEstimationRepository's own
+                                // review-before-save stance on estimation
+                                // failures elsewhere in this app.
+                                val aiNote = GeminiApiKeyStore.get(context)?.let { key ->
+                                    try {
+                                        SupplementImpactRepository(key).describeImpact(name.trim(), dose.trim())
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                }
+                                repo.addSupplement(name.trim(), dose.trim(), timeOfDay, LocalDate.now(), aiNote)
                             } else {
                                 repo.updateSupplement(existing.id, name.trim(), dose.trim(), timeOfDay)
                             }

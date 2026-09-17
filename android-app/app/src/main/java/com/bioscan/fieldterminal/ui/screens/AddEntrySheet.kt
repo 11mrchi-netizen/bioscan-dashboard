@@ -531,6 +531,25 @@ private fun FoodForm(
         }
     }
 
+    // DAV-90: same estimate, no photo required -- for whenever there isn't
+    // one to take. Reuses the exact same applyEstimate()/estimating/
+    // estimationError state as the photo path.
+    fun runEstimateFromDescription() {
+        val key = apiKey ?: return
+        if (description.isBlank()) return
+        estimating = true
+        estimationError = null
+        scope.launch {
+            try {
+                applyEstimate(NutritionEstimationRepository(key).estimateFromDescription(description))
+            } catch (e: Exception) {
+                estimationError = e.message ?: "Estimation failed"
+            } finally {
+                estimating = false
+            }
+        }
+    }
+
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success) pendingCameraUri?.let { runEstimate(it) }
     }
@@ -553,13 +572,13 @@ private fun FoodForm(
 
         if (apiKey == null) {
             Text(
-                "Set a Gemini API key in Setup to enable AI photo estimation.",
+                "Set a Gemini API key in Setup to enable AI estimation.",
                 style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
                 color = FieldColors.InkMuted,
             )
         } else {
             Column {
-                FormLabel("AI PHOTO ESTIMATION (OPTIONAL)")
+                FormLabel("AI ESTIMATION (OPTIONAL)")
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PhotoActionButton(label = "TAKE PHOTO", modifier = Modifier.weight(1f)) {
                         val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
@@ -575,10 +594,17 @@ private fun FoodForm(
                         pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }
                 }
+                // DAV-90: no photo required -- estimate straight from
+                // whatever's typed in DESCRIPTION above.
+                PhotoActionButton(
+                    label = "FROM DESCRIPTION",
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    enabled = description.isNotBlank(),
+                ) { runEstimateFromDescription() }
                 if (estimating) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
                         CircularProgressIndicator(color = FieldColors.Amber, modifier = Modifier.size(14.dp))
-                        Text("Estimating from photo...", style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.InkMuted)
+                        Text("Estimating...", style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.InkMuted)
                     }
                 }
                 estimationError?.let {
@@ -741,15 +767,16 @@ private fun CheckboxGlyph(checked: Boolean) {
 }
 
 @Composable
-private fun PhotoActionButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun PhotoActionButton(label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    val color = if (enabled) FieldColors.Amber else FieldColors.Hairline
     Box(
         modifier = modifier
-            .border(1.dp, FieldColors.Amber)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .border(1.dp, color)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = enabled, onClick = onClick)
             .padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = FieldTextStyles.subTabLabel, color = FieldColors.Amber)
+        Text(label, style = FieldTextStyles.subTabLabel, color = color)
     }
 }
 

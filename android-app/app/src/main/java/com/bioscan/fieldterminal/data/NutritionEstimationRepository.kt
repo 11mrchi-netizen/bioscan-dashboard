@@ -34,7 +34,7 @@ import kotlinx.serialization.json.put
 private const val MODEL = "gemini-3.8-flash"
 private const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent"
 
-private const val PROMPT = """
+private const val PHOTO_PROMPT = """
 Look at this food photo and estimate its nutritional content as eaten. Give
 your best estimate of total calories, protein (g), carbs (g), and fat (g)
 for everything visible in the photo, plus a short one-line description of
@@ -43,6 +43,19 @@ photo -- base the estimate on visual inspection of the food itself. If you
 genuinely cannot estimate a field, omit it from your response rather than
 guessing a number.
 """
+
+// DAV-90: same estimate, from a typed description instead of a photo, for
+// whenever there's no photo to take. Real accuracy here is a text-reasoning
+// task rather than a vision one, but subject to the same caveat as the
+// photo path (see below) -- still review-before-save, never auto-saved.
+private const val TEXT_PROMPT = """
+Estimate the nutritional content of the food described below, as eaten.
+Give your best estimate of total calories, protein (g), carbs (g), and fat
+(g) for everything described, plus a short one-line cleaned-up description
+of the food. If the description is too vague to estimate a field, omit it
+from your response rather than guessing a number.
+
+Food description: """
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -53,34 +66,34 @@ class NutritionEstimationRepository(private val apiKey: String) {
 
     suspend fun estimate(imageBytes: ByteArray, mimeType: String = "image/jpeg"): FoodEstimate {
         val base64Image = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
-
-        val requestBody = buildJsonObject {
-            put(
-                "contents",
-                buildJsonArray {
-                    add(
+        val parts = buildJsonArray {
+            add(buildJsonObject { put("text", PHOTO_PROMPT.trim()) })
+            add(
+                buildJsonObject {
+                    put(
+                        "inline_data",
                         buildJsonObject {
-                            put(
-                                "parts",
-                                buildJsonArray {
-                                    add(buildJsonObject { put("text", PROMPT.trim()) })
-                                    add(
-                                        buildJsonObject {
-                                            put(
-                                                "inline_data",
-                                                buildJsonObject {
-                                                    put("mime_type", mimeType)
-                                                    put("data", base64Image)
-                                                },
-                                            )
-                                        },
-                                    )
-                                },
-                            )
+                            put("mime_type", mimeType)
+                            put("data", base64Image)
                         },
                     )
                 },
             )
+        }
+        return runEstimate(parts)
+    }
+
+    // DAV-90.
+    suspend fun estimateFromDescription(description: String): FoodEstimate {
+        val parts = buildJsonArray {
+            add(buildJsonObject { put("text", TEXT_PROMPT.trimStart() + description.trim()) })
+        }
+        return runEstimate(parts)
+    }
+
+    private suspend fun runEstimate(parts: kotlinx.serialization.json.JsonArray): FoodEstimate {
+        val requestBody = buildJsonObject {
+            put("contents", buildJsonArray { add(buildJsonObject { put("parts", parts) }) })
             put(
                 "generationConfig",
                 buildJsonObject {

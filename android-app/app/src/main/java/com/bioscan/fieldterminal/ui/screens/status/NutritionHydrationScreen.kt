@@ -57,30 +57,19 @@ import kotlin.math.roundToInt
 // (0-3500 kcal, 0-220g protein, 0-450g carbs, 0-180g fat, 0-4000ml water,
 // same watch-thresholds) with one honest disclosure line instead of a fake
 // "/2750" denominator.
+// DAV-72 (First feedback fixes): split into separate public
+// NutritionTabContent/HydrationTabContent -- the Fuel tile page now hosts
+// Nutrition and Hydration as two switchable tabs sharing one
+// NutritionOverview load, instead of one combined screen.
 @Composable
-fun NutritionHydrationScreen() {
-    var overview by remember { mutableStateOf<NutritionOverview?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        overview = NutritionRepository(SupabaseClientProvider.client).loadOverview()
-        isLoading = false
-    }
-
-    when {
-        isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FieldColors.Amber)
-        }
-        overview?.today == null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+fun NutritionTabContent(overview: NutritionOverview) {
+    val today = overview.today
+    if (today == null) {
+        Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             Text("No meals logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
         }
-        else -> NutritionContent(overview!!)
+        return
     }
-}
-
-@Composable
-private fun NutritionContent(overview: NutritionOverview) {
-    val today = overview.today!!
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -116,24 +105,6 @@ private fun NutritionContent(overview: NutritionOverview) {
             MacroRow("Fat", today.fatG, max = 180.0, color = FieldColors.Amber)
         }
 
-        // Hydration card
-        Card(title = "HYDRATION") {
-            val ml = overview.todayHydrationMl
-            if (ml == null) {
-                Text("No hydration logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
-            } else {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        text = "%.1f".format(ml / 1000.0),
-                        style = TextStyle(fontFamily = SairaCondensed, fontWeight = FontWeight.Bold, fontSize = 26.sp),
-                        color = FieldColors.Ink,
-                    )
-                    Text(" L", style = FieldTextStyles.headerContext, color = FieldColors.InkMuted, modifier = Modifier.padding(bottom = 3.dp))
-                }
-                HydrationSegments(ml)
-            }
-        }
-
         MacroTotalsCard(overview.allDays)
 
         // 7-day trend -- relative to the week's own max, not a fixed target
@@ -150,6 +121,31 @@ private fun NutritionContent(overview: NutritionOverview) {
             style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
             color = FieldColors.InkMuted,
         )
+    }
+}
+
+@Composable
+fun HydrationTabContent(overview: NutritionOverview) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        Card(title = "HYDRATION") {
+            val ml = overview.todayHydrationMl
+            if (ml == null) {
+                Text("No hydration logged yet today.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+            } else {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = "%.1f".format(ml / 1000.0),
+                        style = TextStyle(fontFamily = SairaCondensed, fontWeight = FontWeight.Bold, fontSize = 26.sp),
+                        color = FieldColors.Ink,
+                    )
+                    Text(" L", style = FieldTextStyles.headerContext, color = FieldColors.InkMuted, modifier = Modifier.padding(bottom = 3.dp))
+                }
+                HydrationSegments(ml)
+            }
+        }
     }
 }
 

@@ -1,21 +1,24 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,24 +27,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.StatusOverview
 import com.bioscan.fieldterminal.data.StatusRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
-import com.bioscan.fieldterminal.ui.nav.StatusSubTab
+import com.bioscan.fieldterminal.ui.nav.TileRoute
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 
-// Status tab, complete as of Step 10: the "3d — Body console" launch screen
-// (user's pick, see ROADMAP.md P8) above the sub-tab rail per design/
-// README.md's own layout note ("the launch screen sits above the rail as
-// the default Status view"), and all 5 sub-tabs now real Supabase-backed
-// screens (Steps 6-10). Phase C is done; Log/Map/Settings remain
-// (Steps 11-15).
+// Status tab. The "3d — Body console" launch screen (user's pick, see
+// ROADMAP.md P8) stays above the fold; the old 6-chip sub-tab rail is
+// replaced by 4 tiles (DAV-70, First feedback fixes), each its own pushed
+// page with its own internal tabs (see TileRoute/FuelTab/HeartTab in
+// ui/nav/TopLevelTab.kt). Real content migrated wholesale into those 4
+// pages, not rebuilt -- see each tile screen's own file for what moved
+// where.
 @Composable
-fun StatusScreen() {
-    var selectedSubTab by remember { mutableStateOf(StatusSubTab.Nutrition) }
+fun StatusScreen(onOpenTile: (TileRoute) -> Unit) {
     var overview by remember { mutableStateOf<StatusOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -50,67 +54,64 @@ fun StatusScreen() {
         isLoading = false
     }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .background(FieldColors.Ground)
-        .verticalScroll(rememberScrollState())) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(FieldColors.Ground)
+            .verticalScroll(rememberScrollState()),
+    ) {
         ScreenHeader(title = "STATUS", context = "ALL SYSTEMS")
 
         BodyConsole(overview = overview, isLoading = isLoading)
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 22.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            StatusSubTab.entries.forEach { subTab ->
-                SubTabChip(
-                    label = subTab.label,
-                    selected = subTab == selectedSubTab,
-                    onClick = { selectedSubTab = subTab },
-                )
-            }
-        }
+        TileGrid(onOpenTile)
+    }
+}
 
-        // Fixed height, not fillMaxSize() -- the parent Column now scrolls
-        // (needed once BodyConsole made this screen taller than one page),
-        // and a scrolling container measures children with unbounded height.
-        when (selectedSubTab) {
-            StatusSubTab.Nutrition -> NutritionHydrationScreen()
-            StatusSubTab.Training -> TrainingScreen()
-            StatusSubTab.Supplements -> SupplementsScreen()
-            StatusSubTab.Labs -> LabsScreen()
-            StatusSubTab.Injuries -> HealthEventsScreen()
-            StatusSubTab.Analysis -> AnalysisScreen()
+private data class TileSpec(val route: TileRoute, val label: String, val icon: ImageVector)
+
+private val TILES = listOf(
+    TileSpec(TileRoute.Training, "TRAINING", Icons.Filled.FitnessCenter),
+    TileSpec(TileRoute.Fuel, "FUEL", Icons.Filled.Restaurant),
+    TileSpec(TileRoute.Heart, "HEART", Icons.Filled.Favorite),
+    TileSpec(TileRoute.Labs, "LABS", Icons.Filled.Science),
+)
+
+// A plain 2x2 Row/Column grid, not LazyVerticalGrid -- this codebase never
+// nests a Lazy* container inside an already-vertically-scrolling Column
+// (StatusScreen's own outer verticalScroll), which needs unbounded-height
+// handling a Lazy grid doesn't give for free. Four known tiles don't need
+// lazy layout anyway.
+@Composable
+private fun TileGrid(onOpenTile: (TileRoute) -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        TILES.chunked(2).forEach { row ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                row.forEach { tile -> StatusTile(tile, modifier = Modifier.weight(1f)) { onOpenTile(tile.route) } }
+            }
         }
     }
 }
 
-// design/README.md's "Status sub-tab rail" chip -- square, not Material3's
-// default rounded FilterChip, so built directly rather than restyled from it.
 @Composable
-private fun SubTabChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val (textColor, borderColor, background) = if (selected) {
-        Triple(FieldColors.Amber, FieldColors.Amber, FieldColors.Amber.copy(alpha = 0.1f))
-    } else {
-        Triple(FieldColors.InkMuted, FieldColors.Hairline, androidx.compose.ui.graphics.Color.Transparent)
-    }
-
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .defaultMinSize(minHeight = 48.dp) // was ~30dp before -- under Android's 48dp minimum touch target
-            .border(1.dp, borderColor)
-            .background(background)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+private fun StatusTile(tile: TileSpec, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(
+        modifier = modifier
+            .height(110.dp)
+            .background(FieldColors.RaisedSurface)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = label, style = FieldTextStyles.subTabLabel, color = textColor)
+        Icon(tile.icon, contentDescription = tile.label, tint = FieldColors.Amber, modifier = Modifier.height(28.dp))
+        Text(
+            text = tile.label,
+            style = FieldTextStyles.tabBarLabel,
+            color = FieldColors.Ink,
+            modifier = Modifier.padding(top = 8.dp),
+        )
     }
 }

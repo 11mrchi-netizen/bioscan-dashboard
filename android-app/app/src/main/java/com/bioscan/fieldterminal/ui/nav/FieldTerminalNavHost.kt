@@ -34,7 +34,11 @@ import com.bioscan.fieldterminal.ui.screens.LogScreen
 import com.bioscan.fieldterminal.ui.screens.MapScreen
 import com.bioscan.fieldterminal.ui.screens.SessionDetailScreen
 import com.bioscan.fieldterminal.ui.screens.SettingsScreen
+import com.bioscan.fieldterminal.ui.screens.status.FuelTileScreen
+import com.bioscan.fieldterminal.ui.screens.status.HeartTileScreen
+import com.bioscan.fieldterminal.ui.screens.status.LabsTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.StatusScreen
+import com.bioscan.fieldterminal.ui.screens.status.TrainingTileScreen
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 
@@ -63,7 +67,18 @@ fun FieldTerminalNavHost() {
             startDestination = TopLevelTab.Status.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(TopLevelTab.Status.route) { StatusScreen() }
+            composable(TopLevelTab.Status.route) {
+                StatusScreen(onOpenTile = { tile -> navController.navigate(tile.route) })
+            }
+            // DAV-70 (First feedback fixes): the 4 tile pages, pushed routes
+            // like session_detail rather than nested inside Status's own
+            // NavHost entry -- keeps their own back stack entries so
+            // Android's system back button behaves the same as everywhere
+            // else in this app.
+            composable(TileRoute.Training.route) { TrainingTileScreen(onBack = { navController.popBackStack() }) }
+            composable(TileRoute.Fuel.route) { FuelTileScreen(onBack = { navController.popBackStack() }) }
+            composable(TileRoute.Heart.route) { HeartTileScreen(onBack = { navController.popBackStack() }) }
+            composable(TileRoute.Labs.route) { LabsTileScreen(onBack = { navController.popBackStack() }) }
             composable(TopLevelTab.Map.route) { MapScreen() }
             composable(TopLevelTab.Log.route) {
                 LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") })

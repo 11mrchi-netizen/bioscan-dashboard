@@ -66,6 +66,11 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
+    // Status tile icons (barbell/food/heart/beaker, DAV-70) -- Favorite is in
+    // material3's own bundled core icon set, but FitnessCenter/Restaurant/
+    // Science are part of the extended set, which is its own separate
+    // artifact (version pinned to the same BOM everything else here uses).
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")

@@ -15,14 +15,39 @@ enum class TopLevelTab(val route: String, val label: String) {
     Setup("setup", "SETUP"),
 }
 
-// Segmented control under Status specifically -- NOT a separate nav level
-// (per mobile-app-implementation-roadmap.md Step 3), so this is plain state,
-// not a nested NavHost destination.
-enum class StatusSubTab(val label: String) {
-    Nutrition("NUTRITION/HYDRATION"),
-    Training("TRAINING"),
+// First feedback fixes (DAV-70): Status's old single sub-tab rail (6 chips,
+// one flat screen each) is replaced by 4 tiles, each its own pushed route
+// with its own internal tab strip. StatusSubTab is gone -- Training has no
+// sub-tabs at all (single page), Labs starts as one page (DAV-86 adds real
+// theme-bundle sub-navigation later), and Fuel/Heart get their own enums
+// below since their tab sets are real, named things a tile page switches
+// between, not simple flags.
+enum class TileRoute(val route: String) {
+    Training("tile_training"),
+    Fuel("tile_fuel"),
+    Heart("tile_heart"),
+    Labs("tile_labs"),
+}
+
+enum class FuelTab(val label: String) {
+    Nutrition("NUTRITION"),
+    Hydration("HYDRATION"),
     Supplements("SUPPLEMENTS"),
-    Labs("LABS"),
-    Injuries("INJURIES & ILLNESS"),
-    Analysis("ANALYSIS"), // Phase A2 -- Evaluation Method Spec per-stream states
+    Weight("WEIGHT / TDEE"),
+}
+
+// Category 1 (HRV/RHR) lives under "Heart" itself; Arousal has no Analysis
+// Layer evaluation yet (only ever logged, never evaluated) so that tab shows
+// real recent log history instead of an EvalCard. Sleep and Respiratory are
+// split into separate tabs per the user's own listing even though both come
+// from `sleep_daily` -- Sleep Duration/SRI vs. respiratory-rate anomaly are
+// genuinely different questions (Category 2's own two halves).
+enum class HeartTab(val label: String) {
+    Heart("HEART"),
+    Arousal("AROUSAL"),
+    Wellness("WELLNESS"),
+    Sleep("SLEEP"),
+    Stool("STOOL"),
+    Injuries("INJURIES"),
+    Respiratory("RESPIRATORY"),
 }

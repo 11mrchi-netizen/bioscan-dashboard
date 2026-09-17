@@ -53,7 +53,12 @@ fun ScreenHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom,
     ) {
-        Column {
+        // weight(1f) here, not an unconstrained Column -- a long context
+        // string (the new tile pages' "NUTRITION + HYDRATION + SUPPLEMENTS"
+        // vs. the original 4 screens' short "ALL SYSTEMS" etc.) otherwise
+        // squeezes SyncPill's own width down toward zero instead of
+        // wrapping itself, a real layout bug caught live on the Fuel tile.
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
             Text(text = title, style = FieldTextStyles.headerTitle, color = FieldColors.Amber)
             Text(
                 text = context,

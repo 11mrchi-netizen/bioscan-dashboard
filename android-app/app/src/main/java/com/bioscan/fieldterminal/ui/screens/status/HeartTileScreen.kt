@@ -52,6 +52,7 @@ import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.expValue
 import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.StateRow
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
@@ -66,6 +67,7 @@ import io.github.jan.supabase.postgrest.query.Order
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.temporal.ChronoUnit
 
 // DAV-73 (First feedback fixes): Heart tile page, 7 tabs. Every card here
 // (except Arousal, which has no Analysis Layer evaluation yet -- only ever
@@ -126,9 +128,9 @@ fun HeartTileScreen(onBack: () -> Unit) {
             when (tab) {
                 HeartTab.Heart -> {
                     val hrvPoints = w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }
-                    EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms")
+                    EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", points = hrvPoints)
                     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
-                    EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm")
+                    EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm", points = rhrPoints)
                 }
                 HeartTab.Arousal -> ArousalHistory(ar)
                 HeartTab.Wellness -> {
@@ -139,7 +141,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                 }
                 HeartTab.Sleep -> {
                     val hoursPoints = s.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } }
-                    EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints), "h")
+                    EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints), "h", points = hoursPoints)
                     val nights = s.mapNotNull { row ->
                         val bedtime = row.bedtime?.let { runCatching { Instant.parse(it) }.getOrNull() }
                         val wake = row.wakeTime?.let { runCatching { Instant.parse(it) }.getOrNull() }
@@ -210,8 +212,13 @@ private fun ArousalHistory(rows: List<LogArousalRow>) {
 
 private fun SwcEvaluation.toExpSpace(): SwcEvaluation = copy(baseline7d = expValue(baseline7d), mean60d = expValue(mean60d))
 
+// DAV-75: baseline/mean/CV were plain numbers with no sense of the real
+// day-to-day shape behind them -- the raw series each call site already
+// computes (to feed evaluateHrv/evaluateRhr/evaluateSleepDuration) gets
+// plotted here too, capped to the same 90-day window WeightCard/VO2max
+// already established, rather than every day this account has ever logged.
 @Composable
-private fun EvalCard(title: String, eval: SwcEvaluation, unit: String) {
+private fun EvalCard(title: String, eval: SwcEvaluation, unit: String, points: List<Pair<LocalDate, Double>>? = null) {
     Card(title = title) {
         StateRow(eval.state)
         StatLine("Confidence", eval.confidence.label)
@@ -219,7 +226,19 @@ private fun EvalCard(title: String, eval: SwcEvaluation, unit: String) {
         eval.mean60d?.let { StatLine("60-day mean", "%.1f %s".format(it, unit)) }
         eval.swcPct?.let { StatLine("SWC band", "±%.1f%%".format(it)) }
         eval.cv7d?.let { StatLine("7-day CV", "%.1f%%".format(it)) }
+        points?.let { recentTrendWindow(it) }?.let { recent ->
+            DateTrendLine(points = recent, color = FieldColors.Amber, modifier = Modifier.padding(top = 8.dp))
+        }
     }
+}
+
+private const val TREND_WINDOW_DAYS = 90L
+
+private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<LocalDate, Double>>? {
+    if (points.size < 2) return null
+    val today = LocalDate.now()
+    val recent = points.filter { ChronoUnit.DAYS.between(it.first, today) <= TREND_WINDOW_DAYS }
+    return recent.takeIf { it.size >= 2 }
 }
 
 @Composable
@@ -310,6 +329,9 @@ private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>)
         eval.medianBaseline30d?.let { StatLine("30-day baseline", "%.1f".format(it)) }
         eval.iqr7d?.let { StatLine("7-day IQR", "%.1f".format(it)) }
         eval.trendDirection?.let { StatLine("14-day trend", if (it > 0) "↑ rising (p<0.05)" else "↓ falling (p<0.05)") }
+        recentTrendWindow(points)?.let { recent ->
+            DateTrendLine(points = recent, color = FieldColors.Azure, modifier = Modifier.padding(top = 8.dp))
+        }
     }
 }
 

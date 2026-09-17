@@ -26,6 +26,10 @@ data class LabResultRow(
 @Serializable
 data class LabDrawIdRow(val id: Long)
 
+// DAV-85
+@Serializable
+data class MarkerNameRow(@SerialName("marker_name") val markerName: String)
+
 @Serializable
 data class NewLabDrawRow(@SerialName("draw_date") val drawDate: String, @SerialName("lab_name") val labName: String)
 

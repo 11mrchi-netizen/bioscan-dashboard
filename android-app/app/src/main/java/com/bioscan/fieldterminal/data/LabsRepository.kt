@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.data
 import com.bioscan.fieldterminal.data.model.LabDrawIdRow
 import com.bioscan.fieldterminal.data.model.LabDrawRow
 import com.bioscan.fieldterminal.data.model.LabResultRow
+import com.bioscan.fieldterminal.data.model.MarkerNameRow
 import com.bioscan.fieldterminal.data.model.NewLabDrawRow
 import com.bioscan.fieldterminal.data.model.NewLabResultRow
 import com.bioscan.fieldterminal.domain.MarkerComparison
@@ -52,12 +53,36 @@ class LabsRepository(private val supabase: SupabaseClient) {
         )
     }
 
+    // DAV-85: every distinct marker name this account's real lab_results
+    // already uses -- passed to Gemini as the extraction's "match to these
+    // names when it's clearly the same analyte" vocabulary, so an uploaded
+    // report's own label variations (e.g. "Vit. D 25-OH") don't fragment
+    // into a second marker identity alongside an existing "Vitamin D".
+    suspend fun knownMarkerNames(): List<String> =
+        supabase.postgrest.from("lab_results")
+            .select(columns = Columns.list("marker_name"))
+            .decodeList<MarkerNameRow>()
+            .map { it.markerName }
+            .distinct()
+            .sorted()
+
     // DAV-84. A real panel reports many markers for one draw date -- entering
     // them one at a time here should add to that same draw, not fragment
     // into a new one-marker draw per entry, so this finds-or-creates by date
-    // rather than always inserting a fresh lab_draws row.
-    suspend fun addLabResult(date: LocalDate, markerName: String, value: Double?, unit: String?, refLow: Double?, refHigh: Double?) {
-        val drawId = findOrCreateDraw(date)
+    // rather than always inserting a fresh lab_draws row. `source` labels a
+    // newly-created draw's lab_name -- manual entry vs. an uploaded report
+    // are both real, worth distinguishing at a glance from the same field
+    // the account's real imported draws already use for the lab's own name.
+    suspend fun addLabResult(
+        date: LocalDate,
+        markerName: String,
+        value: Double?,
+        unit: String?,
+        refLow: Double?,
+        refHigh: Double?,
+        source: String = "Manual entry",
+    ) {
+        val drawId = findOrCreateDraw(date, source)
         // Only ever high/low/normal, computed from this one value against
         // its own range -- "watch" (a real 3rd flag this table already uses
         // elsewhere) means something more than a single reading can justify,
@@ -73,7 +98,7 @@ class LabsRepository(private val supabase: SupabaseClient) {
         )
     }
 
-    private suspend fun findOrCreateDraw(date: LocalDate): Long {
+    private suspend fun findOrCreateDraw(date: LocalDate, source: String): Long {
         val existing = supabase.postgrest.from("lab_draws")
             .select(columns = Columns.list("id")) { filter { eq("draw_date", date.toString()) } }
             .decodeList<LabDrawIdRow>()
@@ -81,7 +106,7 @@ class LabsRepository(private val supabase: SupabaseClient) {
         if (existing != null) return existing.id
 
         return supabase.postgrest.from("lab_draws")
-            .insert(NewLabDrawRow(drawDate = date.toString(), labName = "Manual entry")) { select(Columns.list("id")) }
+            .insert(NewLabDrawRow(drawDate = date.toString(), labName = source)) { select(Columns.list("id")) }
             .decodeSingle<LabDrawIdRow>()
             .id
     }

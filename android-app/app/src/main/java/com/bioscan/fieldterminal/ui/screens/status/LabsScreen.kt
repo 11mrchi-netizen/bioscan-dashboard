@@ -49,6 +49,7 @@ fun LabsScreen() {
     var isLoading by remember { mutableStateOf(true) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var showAddSheet by remember { mutableStateOf(false) }
+    var showUploadSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(reloadKey) {
         isLoading = true
@@ -61,12 +62,12 @@ fun LabsScreen() {
             CircularProgressIndicator(color = FieldColors.Amber)
         }
         overview?.latestDraw == null -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
-            AddResultButton(onClick = { showAddSheet = true })
+            AddResultButtons(onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })
             Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
                 Text("No lab draws logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
             }
         }
-        else -> LabsContent(overview!!, onAddClick = { showAddSheet = true })
+        else -> LabsContent(overview!!, onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })
     }
 
     if (showAddSheet) {
@@ -75,20 +76,29 @@ fun LabsScreen() {
             onSaved = { showAddSheet = false; reloadKey++ },
         )
     }
-}
-
-@Composable
-private fun AddResultButton(onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        AmberButton(label = "+ ADD RESULT") { onClick() }
+    if (showUploadSheet) {
+        LabExtractionSheet(
+            onDismiss = { showUploadSheet = false },
+            onSaved = { showUploadSheet = false; reloadKey++ },
+        )
     }
 }
 
 @Composable
-private fun LabsContent(overview: LabsOverview, onAddClick: () -> Unit) {
+private fun AddResultButtons(onAddClick: () -> Unit, onUploadClick: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            AmberButton(label = "+ UPLOAD REPORT") { onUploadClick() }
+            AmberButton(label = "+ ADD RESULT") { onAddClick() }
+        }
+    }
+}
+
+@Composable
+private fun LabsContent(overview: LabsOverview, onAddClick: () -> Unit, onUploadClick: () -> Unit) {
     val drawCount = if (overview.earlierDraw != null) 2 else 1
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
-        AddResultButton(onClick = onAddClick)
+        AddResultButtons(onAddClick = onAddClick, onUploadClick = onUploadClick)
         Text(
             text = "BLOODWORK · $drawCount DRAW${if (drawCount == 1) "" else "S"} · ${overview.markers.size} MARKERS",
             style = FieldTextStyles.headerContext,

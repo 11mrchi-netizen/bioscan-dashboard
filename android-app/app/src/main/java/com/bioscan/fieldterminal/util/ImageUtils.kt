@@ -42,3 +42,11 @@ fun createCameraCaptureUri(context: Context): Uri {
     val file = File(dir, "capture_${System.currentTimeMillis()}.jpg")
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }
+
+// DAV-85: unlike readAndCompressImage(), a lab report upload can be a PDF
+// (BitmapFactory can't decode those) as well as a photo, and Gemini accepts
+// either as raw bytes with the real mime type -- no recompression needed
+// for either kind here.
+fun readFileBytes(context: Context, uri: Uri): ByteArray =
+    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        ?: throw IllegalStateException("Could not read the selected file")

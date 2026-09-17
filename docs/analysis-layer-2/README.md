@@ -1,9 +1,10 @@
 # Analysis Layer 2 — data & model contract
 
-Four design documents for Linear milestone **"1 — Data & model contract"** in the
-[Analysis Layer 2](https://linear.app/biodashboard/project/analysis-layer-2) project. Together
-they answer: what data actually exists, what a canonical metric is, and how the two hardest
-domains (strength, endurance) map real rows onto it.
+Design documents for the [Analysis Layer 2](https://linear.app/biodashboard/project/analysis-layer-2)
+project. Together they answer: what data actually exists, what a canonical metric is, how the two
+hardest domains (strength, endurance) map real rows onto it, how confidence propagates through
+derived values, and the stable shape everything downstream (this app's own UI, or P7's future
+Zepp-metric integration) reads.
 
 These are contract/design documents, not implementation — each is scoped to exactly one Linear
 issue's acceptance criteria. Where a doc surfaces a gap that isn't this project's own job to fix,
@@ -15,6 +16,12 @@ it's filed as a separate follow-up issue (linked inline) rather than solved here
 | [02-metric-registry.md](02-metric-registry.md) | [DAV-53](https://linear.app/biodashboard/issue/DAV-53) | The canonical name/unit/provenance contract every metric maps into |
 | [03-strength-session-model.md](03-strength-session-model.md) | [DAV-54](https://linear.app/biodashboard/issue/DAV-54) | How structured sets/reps/load fits into `exercise_sessions` |
 | [04-endurance-metric-adapters.md](04-endurance-metric-adapters.md) | [DAV-55](https://linear.app/biodashboard/issue/DAV-55) | How run/ride/swim/walk/hike map to load, without one universal score |
+| [05-confidence-propagation.md](05-confidence-propagation.md) | [DAV-66](https://linear.app/biodashboard/issue/DAV-66) | How confidence/breadth propagate through derived and combined values |
+| [06-output-contract.md](06-output-contract.md) | [DAV-67](https://linear.app/biodashboard/issue/DAV-67) | The stable output shapes every downstream consumer reads |
+
+Milestone 1 ("Data & model contract") is fully closed as of docs 01-04. Docs 05-06 pull forward two
+contract-defining tickets filed under milestones 3-4, ahead of the implementation work (DAV-56
+through DAV-63) that needs to conform to them — see each doc's own header for why.
 
 All real-data figures below are a snapshot of the live Supabase project (`ugfrglbcoivkprjqvjzz`) as
 queried on 2026-09-17 — re-run the queries in each doc's "Method" note if the numbers matter later

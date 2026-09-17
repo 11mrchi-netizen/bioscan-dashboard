@@ -20,3 +20,17 @@ data class ExerciseLibraryMatch(
     val name: String,
     val similarity: Float,
 )
+
+// DAV-65: the full row, for bulk anatomical-mapping work (regional load
+// vectors, movement-pattern classification) rather than one-at-a-time
+// autocomplete lookups -- see domain/RegionalLoad.kt.
+@Serializable
+data class ExerciseLibraryRow(
+    val id: String,
+    val name: String,
+    val category: String? = null,
+    val force: String? = null,
+    val mechanic: String? = null,
+    @SerialName("primary_muscles") val primaryMuscles: List<String> = emptyList(),
+    @SerialName("secondary_muscles") val secondaryMuscles: List<String> = emptyList(),
+)

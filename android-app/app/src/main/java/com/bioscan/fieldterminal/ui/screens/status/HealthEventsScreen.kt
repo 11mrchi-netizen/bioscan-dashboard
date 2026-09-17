@@ -2,6 +2,8 @@ package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,11 +16,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -30,10 +35,12 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.HealthEvent
 import com.bioscan.fieldterminal.domain.HealthEventKind
 import com.bioscan.fieldterminal.domain.daysSince
+import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.Saira
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 // Step 10 (Phase C, last Status sub-tab). Real data from `injuries`/
@@ -50,8 +57,11 @@ import java.time.LocalDate
 fun HealthEventsScreen() {
     var overview by remember { mutableStateOf<HealthEventsOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var reloadKey by remember { mutableIntStateOf(0) }
+    var showAddSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(reloadKey) {
+        isLoading = true
         overview = HealthEventsRepository(SupabaseClientProvider.client).loadOverview()
         isLoading = false
     }
@@ -60,20 +70,38 @@ fun HealthEventsScreen() {
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FieldColors.Amber)
         }
-        overview!!.open.isEmpty() && overview!!.resolved.isEmpty() -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("No injuries or illnesses logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+        overview!!.open.isEmpty() && overview!!.resolved.isEmpty() -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
+            AddInjuryButton(onClick = { showAddSheet = true })
+            Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                Text("No injuries or illnesses logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+            }
         }
-        else -> HealthEventsContent(overview!!)
+        else -> HealthEventsContent(overview!!, onAddClick = { showAddSheet = true }, onResolved = { reloadKey++ })
+    }
+
+    if (showAddSheet) {
+        InjuryFormSheet(
+            onDismiss = { showAddSheet = false },
+            onSaved = { showAddSheet = false; reloadKey++ },
+        )
     }
 }
 
 @Composable
-private fun HealthEventsContent(overview: HealthEventsOverview) {
+private fun AddInjuryButton(onClick: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        AmberButton(label = "+ ADD INJURY") { onClick() }
+    }
+}
+
+@Composable
+private fun HealthEventsContent(overview: HealthEventsOverview, onAddClick: () -> Unit, onResolved: () -> Unit) {
     val today = LocalDate.now()
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        AddInjuryButton(onClick = onAddClick)
         Text(
             text = "${overview.open.size} OPEN · ${overview.resolved.size} RESOLVED",
             style = FieldTextStyles.headerContext,
@@ -83,13 +111,13 @@ private fun HealthEventsContent(overview: HealthEventsOverview) {
         if (overview.open.isNotEmpty()) {
             SectionLabel("OPEN", FieldColors.Alert)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                overview.open.forEach { OpenEventCard(it, today) }
+                overview.open.forEach { OpenEventCard(it, today, onResolved = onResolved) }
             }
         }
 
         if (overview.resolved.isNotEmpty()) {
             SectionLabel("RESOLVED", FieldColors.InkMuted)
-            Column(modifier = Modifier.fillMaxWidth().background(FieldColors.RaisedSurface)) {
+            Column(modifier = Modifier.fillMaxWidth().background(FieldColors.RaisedSurface).alpha(0.55f)) {
                 overview.resolved.forEachIndexed { i, event ->
                     ResolvedRow(event, today, showDivider = i < overview.resolved.lastIndex)
                 }
@@ -119,8 +147,12 @@ private fun KindBadge(kind: HealthEventKind) {
 }
 
 @Composable
-private fun OpenEventCard(event: HealthEvent, today: LocalDate) {
+private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -> Unit) {
     val days = daysSince(event.startDate, today) + 1 // "day 1" on the day it was reported, matching the mockup's own inclusive counting
+    val repo = remember { HealthEventsRepository(SupabaseClientProvider.client) }
+    val scope = rememberCoroutineScope()
+    var resolving by remember { mutableStateOf(false) }
+    var resolveError by remember { mutableStateOf<String?>(null) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -148,6 +180,36 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate) {
                 color = FieldColors.InkMuted,
                 modifier = Modifier.padding(top = 10.dp),
             )
+            // DAV-88: illnesses aren't in this ticket's scope -- resolveInjury()
+            // only ever targets the injuries table, so this action only shows
+            // for that kind rather than silently no-op'ing on an illness card.
+            if (event.kind == HealthEventKind.Injury) {
+                Text(
+                    if (resolving) "RESOLVING..." else "RESOLVE",
+                    style = FieldTextStyles.tabBarLabel,
+                    color = FieldColors.Amber,
+                    modifier = Modifier
+                        .padding(top = 12.dp)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            if (!resolving) {
+                                resolving = true
+                                resolveError = null
+                                scope.launch {
+                                    try {
+                                        repo.resolveInjury(event.id)
+                                        onResolved()
+                                    } catch (e: Exception) {
+                                        resolveError = e.message ?: "Couldn't resolve this injury"
+                                        resolving = false
+                                    }
+                                }
+                            }
+                        },
+                )
+                resolveError?.let {
+                    Text(it, style = TextStyle(fontFamily = Saira, fontSize = 12.sp), color = FieldColors.Alert, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
         }
     }
 }

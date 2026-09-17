@@ -8,6 +8,7 @@ import java.time.temporal.ChronoUnit
 enum class HealthEventKind { Injury, Illness }
 
 data class HealthEvent(
+    val id: Long,
     val kind: HealthEventKind,
     val title: String,
     val detail: String?,
@@ -32,6 +33,7 @@ data class HealthEvent(
 fun mergeHealthEvents(injuries: List<InjuryRow>, illnesses: List<IllnessRow>): List<HealthEvent> {
     val fromInjuries = injuries.map {
         HealthEvent(
+            id = it.id,
             kind = HealthEventKind.Injury,
             title = "${it.part} — ${it.type}",
             detail = it.notes,
@@ -42,6 +44,7 @@ fun mergeHealthEvents(injuries: List<InjuryRow>, illnesses: List<IllnessRow>): L
     }
     val fromIllnesses = illnesses.map {
         HealthEvent(
+            id = it.id,
             kind = HealthEventKind.Illness,
             title = it.name,
             detail = it.symptoms,

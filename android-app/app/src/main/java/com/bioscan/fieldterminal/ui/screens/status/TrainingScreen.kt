@@ -72,10 +72,10 @@ private fun TrainingContent(overview: TrainingOverview) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        if (!overview.hasAnyEndurance) {
-            Text("No endurance sessions logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+        if (!overview.hasAnyRunning) {
+            Text("No running sessions logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
         } else {
-            Card(title = "ENDURANCE — THIS WEEK") {
+            Card(title = "RUNNING — THIS WEEK") {
                 BigValueRow(value = "%.1f".format(overview.thisWeekDistanceKm), unit = "KM")
                 RangeBar(value = overview.thisWeekDistanceKm, max = 32.0, watchBelow = null, color = FieldColors.Orange)
 
@@ -130,12 +130,12 @@ private fun TrainingContent(overview: TrainingOverview) {
 }
 
 // Distance run over a selectable window -- computed client-side from the
-// same `exercise_sessions` rows the ENDURANCE card above already fetched,
+// same `exercise_sessions` rows the RUNNING card above already fetched,
 // using the existing sumDistanceKmSince(). No new query per period switch.
 @Composable
 private fun DistanceTotalsCard(overview: TrainingOverview) {
     var period by remember { mutableStateOf(TotalsPeriod.Week) }
-    val totalKm = sumDistanceKmSince(overview.enduranceSessions, LocalDate.now(), period.days)
+    val totalKm = sumDistanceKmSince(overview.runningSessions, LocalDate.now(), period.days)
 
     Card(title = "DISTANCE TOTALS") {
         PeriodToggle(selected = period, onSelect = { period = it })

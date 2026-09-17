@@ -77,8 +77,20 @@ class HealthConnectExerciseSyncRepository(
         val start = session.startTime
         val end = session.endTime
 
+        // DAV-79 re-check: summing every DistanceRecord Health Connect
+        // returns for a session's window double/triple-counted real
+        // distance whenever more than one app/device reported distance for
+        // the same workout (confirmed against real synced data -- HC-sourced
+        // runs came out 1.6-3.2x this account's own manually-recorded
+        // distance for the same real run, with duration matching almost to
+        // the second). A record's own reported total for its source already
+        // covers the full session on its own; summing across sources is
+        // what double-counts. Group by source and take the largest single
+        // source's total instead of summing all of them together.
         val distanceKm = client.readAllRecords(DistanceRecord::class, start, end)
-            .sumOf { it.distance.inMeters } / 1000.0
+            .groupBy { it.metadata.dataOrigin.packageName }
+            .maxOfOrNull { (_, records) -> records.sumOf { it.distance.inMeters } }
+            ?.div(1000.0) ?: 0.0
         val elevationM = client.readAllRecords(ElevationGainedRecord::class, start, end)
             .sumOf { it.elevation.inMeters }
         val caloriesActive = client.readAllRecords(ActiveCaloriesBurnedRecord::class, start, end)

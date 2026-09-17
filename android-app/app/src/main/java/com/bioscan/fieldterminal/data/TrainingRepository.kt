@@ -21,6 +21,21 @@ import java.time.temporal.ChronoUnit
 // no strength data source existed anywhere -- Health Connect is the first).
 private val ENDURANCE_TYPES = setOf("run", "walk", "hike", "ride")
 
+// Health Connect's own auto-detected "walk" sessions are dominated by
+// incidental movement, not deliberate training -- confirmed against this
+// account's real data: 4,655 walk sessions averaging 10 minutes / 0.7km
+// each (3,734 of them under 1km), totaling 3,257km of pure noise across the
+// account's history. That's what inflated the Endurance Total to a real,
+// reported ~160km for a window nowhere close to that in reality. run/hike/
+// ride sessions show no equivalent noise floor (real averages: 14.3km/run,
+// 10.5km/hike, 7.0km/ride) and don't need this filter. A 20-minute + 1.5km
+// floor keeps the 214 walk sessions that clear both (real deliberate
+// walks, ~684km total) and drops the rest.
+private const val MIN_WALK_DURATION_MIN = 20.0
+private const val MIN_WALK_DISTANCE_KM = 1.5
+private fun isRealWalk(session: ExerciseSessionRow): Boolean =
+    (session.durationMin ?: 0.0) >= MIN_WALK_DURATION_MIN && (session.distanceKm ?: 0.0) >= MIN_WALK_DISTANCE_KM
+
 data class TrainingOverview(
     val thisWeekDistanceKm: Double,
     val fourWeekAvgKmPerWeek: Double,
@@ -55,7 +70,7 @@ class TrainingRepository(private val supabase: SupabaseClient) {
             .decodeList<Vo2MaxRow>()
             .reversed()
 
-        val endurance = sessions.filter { it.type in ENDURANCE_TYPES }
+        val endurance = sessions.filter { it.type in ENDURANCE_TYPES && (it.type != "walk" || isRealWalk(it)) }
         val strength = sessions.filter { it.type == "strength" }
 
         val today = LocalDate.now()

@@ -40,7 +40,17 @@ import io.github.jan.supabase.postgrest.query.Columns
 // someone logs on the same day, so those three go through upsert() instead.
 class AddEntryRepository(private val supabase: SupabaseClient) {
 
-    suspend fun addFood(loggedAt: String, description: String, calories: Double?, proteinG: Double?, carbsG: Double?, fatG: Double?) {
+    suspend fun addFood(
+        loggedAt: String,
+        description: String,
+        calories: Double?,
+        proteinG: Double?,
+        carbsG: Double?,
+        fatG: Double?,
+        fiberG: Double?,
+        sugarG: Double?,
+        sodiumMg: Double?,
+    ) {
         supabase.postgrest.from("meals").insert(
             NewMealRow(
                 loggedAt = loggedAt,
@@ -49,6 +59,9 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
                 proteinG = proteinG,
                 carbsG = carbsG,
                 fatG = fatG,
+                fiberG = fiberG,
+                sugarG = sugarG,
+                sodiumMg = sodiumMg,
             )
         )
     }
@@ -132,9 +145,30 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // defaulting to "now"/"today", so editing a past entry doesn't silently
     // move it to today.
 
-    suspend fun updateFood(id: Long, loggedAt: String, description: String, calories: Double?, proteinG: Double?, carbsG: Double?, fatG: Double?) {
+    suspend fun updateFood(
+        id: Long,
+        loggedAt: String,
+        description: String,
+        calories: Double?,
+        proteinG: Double?,
+        carbsG: Double?,
+        fatG: Double?,
+        fiberG: Double?,
+        sugarG: Double?,
+        sodiumMg: Double?,
+    ) {
         supabase.postgrest.from("meals").update(
-            NewMealRow(loggedAt = loggedAt, description = description, calories = calories, proteinG = proteinG, carbsG = carbsG, fatG = fatG)
+            NewMealRow(
+                loggedAt = loggedAt,
+                description = description,
+                calories = calories,
+                proteinG = proteinG,
+                carbsG = carbsG,
+                fatG = fatG,
+                fiberG = fiberG,
+                sugarG = sugarG,
+                sodiumMg = sodiumMg,
+            )
         ) { filter { eq("id", id) } }
     }
 
@@ -213,7 +247,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // doc comment). fetchExerciseSession only selects the editable fields
     // (id, type, rpe, notes) -- everything else is Health-Connect-sourced
     // and read-only in this app.
-    suspend fun fetchMeal(id: Long) = fetchById<LogMealRow>("meals", "id,logged_at,description,calories,protein_g,carbs_g,fat_g", id)
+    suspend fun fetchMeal(id: Long) = fetchById<LogMealRow>("meals", "id,logged_at,description,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg", id)
     suspend fun fetchHydration(id: Long) = fetchById<LogHydrationRow>("hydration_daily", "id,date,ml", id)
     suspend fun fetchEncounter(id: Long) = fetchById<LogEncounterRow>("encounters", "id,date,status,encounter_type,notes,calendar_event_title,person_id", id)
     suspend fun fetchStool(id: Long) = fetchById<LogStoolRow>("stool_log", "id,occurred_at,bristol_type,discomfort", id)

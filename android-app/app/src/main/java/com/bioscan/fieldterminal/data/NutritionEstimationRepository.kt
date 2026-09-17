@@ -36,12 +36,12 @@ private const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/m
 
 private const val PHOTO_PROMPT = """
 Look at this food photo and estimate its nutritional content as eaten. Give
-your best estimate of total calories, protein (g), carbs (g), and fat (g)
-for everything visible in the photo, plus a short one-line description of
-the food. Do not attempt to read any nutrition label text visible in the
-photo -- base the estimate on visual inspection of the food itself. If you
-genuinely cannot estimate a field, omit it from your response rather than
-guessing a number.
+your best estimate of total calories, protein (g), carbs (g), fat (g),
+fiber (g), sugar (g), and sodium (mg) for everything visible in the photo,
+plus a short one-line description of the food. Do not attempt to read any
+nutrition label text visible in the photo -- base the estimate on visual
+inspection of the food itself. If you genuinely cannot estimate a field,
+omit it from your response rather than guessing a number.
 """
 
 // DAV-90: same estimate, from a typed description instead of a photo, for
@@ -50,10 +50,11 @@ guessing a number.
 // photo path (see below) -- still review-before-save, never auto-saved.
 private const val TEXT_PROMPT = """
 Estimate the nutritional content of the food described below, as eaten.
-Give your best estimate of total calories, protein (g), carbs (g), and fat
-(g) for everything described, plus a short one-line cleaned-up description
-of the food. If the description is too vague to estimate a field, omit it
-from your response rather than guessing a number.
+Give your best estimate of total calories, protein (g), carbs (g), fat (g),
+fiber (g), sugar (g), and sodium (mg) for everything described, plus a
+short one-line cleaned-up description of the food. If the description is
+too vague to estimate a field, omit it from your response rather than
+guessing a number.
 
 Food description: """
 
@@ -125,6 +126,9 @@ class NutritionEstimationRepository(private val apiKey: String) {
             proteinG = payload.proteinG,
             carbsG = payload.carbsG,
             fatG = payload.fatG,
+            fiberG = payload.fiberG,
+            sugarG = payload.sugarG,
+            sodiumMg = payload.sodiumMg,
         )
     }
 
@@ -146,6 +150,9 @@ private val RESPONSE_SCHEMA = buildJsonObject {
             put("protein_g", buildJsonObject { put("type", "NUMBER") })
             put("carbs_g", buildJsonObject { put("type", "NUMBER") })
             put("fat_g", buildJsonObject { put("type", "NUMBER") })
+            put("fiber_g", buildJsonObject { put("type", "NUMBER") })
+            put("sugar_g", buildJsonObject { put("type", "NUMBER") })
+            put("sodium_mg", buildJsonObject { put("type", "NUMBER") })
         },
     )
 }
@@ -169,6 +176,9 @@ private data class EstimatePayload(
     @SerialName("protein_g") val proteinG: Double? = null,
     @SerialName("carbs_g") val carbsG: Double? = null,
     @SerialName("fat_g") val fatG: Double? = null,
+    @SerialName("fiber_g") val fiberG: Double? = null,
+    @SerialName("sugar_g") val sugarG: Double? = null,
+    @SerialName("sodium_mg") val sodiumMg: Double? = null,
 )
 
 @Serializable

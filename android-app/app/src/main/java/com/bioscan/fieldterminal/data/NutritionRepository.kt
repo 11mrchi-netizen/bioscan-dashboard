@@ -33,7 +33,7 @@ class NutritionRepository(private val supabase: SupabaseClient) {
         // -- fine while this account's real meal volume is under 100 total,
         // same "bounded, not unbounded" tradeoff LogRepository already makes.
         val meals = supabase.postgrest.from("meals")
-            .select(columns = Columns.list("logged_at,calories,protein_g,fat_g,carbs_g")) {
+            .select(columns = Columns.list("logged_at,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg")) {
                 order("logged_at", Order.DESCENDING)
                 limit(500)
             }

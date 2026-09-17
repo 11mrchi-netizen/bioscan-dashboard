@@ -10,4 +10,12 @@ data class FoodEstimate(
     val proteinG: Double?,
     val carbsG: Double?,
     val fatG: Double?,
+    // DAV-77: micronutrients kept to a small, real set rather than the dozens
+    // vitamins/minerals span -- fiber/sugar/sodium are the most commonly
+    // label-tracked "beyond macros" values, and the most plausible for a
+    // vision/text model to estimate at all reliably (an LLM guess at, say,
+    // milligrams of iron from a photo is far shakier than a calorie count).
+    val fiberG: Double?,
+    val sugarG: Double?,
+    val sodiumMg: Double?,
 )

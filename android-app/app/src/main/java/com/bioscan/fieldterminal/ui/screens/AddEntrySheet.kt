@@ -304,7 +304,10 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialProtein = row.proteinG,
                     initialCarbs = row.carbsG,
                     initialFat = row.fatG,
-                    onSave = { dt, desc, cal, p, c, f -> onSubmit { it.updateFood(row.id, dt, desc, cal, p, c, f) } },
+                    initialFiber = row.fiberG,
+                    initialSugar = row.sugarG,
+                    initialSodium = row.sodiumMg,
+                    onSave = { dt, desc, cal, p, c, f, fi, su, so -> onSubmit { it.updateFood(row.id, dt, desc, cal, p, c, f, fi, su, so) } },
                 )
                 is LogHydrationRow -> DrinkForm(
                     saving,
@@ -475,7 +478,7 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
             }
         }
         when (subType) {
-            FuelSubType.Food -> FoodForm(saving, onSave = { dt, desc, cal, p, c, f -> onSubmit { it.addFood(dt, desc, cal, p, c, f) } })
+            FuelSubType.Food -> FoodForm(saving, onSave = { dt, desc, cal, p, c, f, fi, su, so -> onSubmit { it.addFood(dt, desc, cal, p, c, f, fi, su, so) } })
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } })
             FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items -> onSubmit { it.addSupplementsTaken(takenAt, items) } })
         }
@@ -491,7 +494,20 @@ private fun FoodForm(
     initialProtein: Double? = null,
     initialCarbs: Double? = null,
     initialFat: Double? = null,
-    onSave: (loggedAt: String, description: String, calories: Double?, proteinG: Double?, carbsG: Double?, fatG: Double?) -> Unit,
+    initialFiber: Double? = null,
+    initialSugar: Double? = null,
+    initialSodium: Double? = null,
+    onSave: (
+        loggedAt: String,
+        description: String,
+        calories: Double?,
+        proteinG: Double?,
+        carbsG: Double?,
+        fatG: Double?,
+        fiberG: Double?,
+        sugarG: Double?,
+        sodiumMg: Double?,
+    ) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -501,6 +517,9 @@ private fun FoodForm(
     var protein by remember { mutableStateOf(initialProtein?.toString() ?: "") }
     var carbs by remember { mutableStateOf(initialCarbs?.toString() ?: "") }
     var fat by remember { mutableStateOf(initialFat?.toString() ?: "") }
+    var fiber by remember { mutableStateOf(initialFiber?.toString() ?: "") }
+    var sugar by remember { mutableStateOf(initialSugar?.toString() ?: "") }
+    var sodium by remember { mutableStateOf(initialSodium?.toString() ?: "") }
 
     val apiKey = remember { GeminiApiKeyStore.get(context) }
     var estimating by remember { mutableStateOf(false) }
@@ -513,6 +532,9 @@ private fun FoodForm(
         estimate.proteinG?.let { protein = it.toString() }
         estimate.carbsG?.let { carbs = it.toString() }
         estimate.fatG?.let { fat = it.toString() }
+        estimate.fiberG?.let { fiber = it.toString() }
+        estimate.sugarG?.let { sugar = it.toString() }
+        estimate.sodiumMg?.let { sodium = it.toString() }
     }
 
     fun runEstimate(uri: Uri) {
@@ -619,8 +641,26 @@ private fun FoodForm(
             Column(Modifier.weight(1f)) { FormLabel("CARBS G"); FieldTextField(carbs, { carbs = it }, "0", keyboardType = KeyboardType.Number) }
             Column(Modifier.weight(1f)) { FormLabel("FAT G"); FieldTextField(fat, { fat = it }, "0", keyboardType = KeyboardType.Number) }
         }
+        // DAV-77: kept to fiber/sugar/sodium -- the smallest real
+        // "beyond macros" set, not the dozens of vitamins/minerals a
+        // photo/description estimate can't plausibly guess anyway.
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f)) { FormLabel("FIBER G"); FieldTextField(fiber, { fiber = it }, "0", keyboardType = KeyboardType.Number) }
+            Column(Modifier.weight(1f)) { FormLabel("SUGAR G"); FieldTextField(sugar, { sugar = it }, "0", keyboardType = KeyboardType.Number) }
+            Column(Modifier.weight(1f)) { FormLabel("SODIUM MG"); FieldTextField(sodium, { sodium = it }, "0", keyboardType = KeyboardType.Number) }
+        }
         SaveButton(saving, description.isNotBlank()) {
-            onSave(dateTime.toIsoWithOffset(), description.trim(), calories.toDoubleOrNull(), protein.toDoubleOrNull(), carbs.toDoubleOrNull(), fat.toDoubleOrNull())
+            onSave(
+                dateTime.toIsoWithOffset(),
+                description.trim(),
+                calories.toDoubleOrNull(),
+                protein.toDoubleOrNull(),
+                carbs.toDoubleOrNull(),
+                fat.toDoubleOrNull(),
+                fiber.toDoubleOrNull(),
+                sugar.toDoubleOrNull(),
+                sodium.toDoubleOrNull(),
+            )
         }
     }
 }

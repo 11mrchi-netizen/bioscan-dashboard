@@ -176,6 +176,9 @@ private fun MacroTotalsCard(allDays: List<DailyNutrition>) {
         StatLine("Protein", "${totals.proteinG.roundToInt()} g")
         StatLine("Carbs", "${totals.carbsG.roundToInt()} g")
         StatLine("Fat", "${totals.fatG.roundToInt()} g")
+        StatLine("Fiber", "${totals.fiberG.roundToInt()} g")
+        StatLine("Sugar", "${totals.sugarG.roundToInt()} g")
+        StatLine("Sodium", "${totals.sodiumMg.roundToInt()} mg")
         Text(
             "over the last ${period.label.lowercase()} — ${totals.dayCount} day${if (totals.dayCount == 1) "" else "s"} with logged meals",
             style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),

@@ -11,6 +11,10 @@ data class DailyNutrition(
     val fatG: Double,
     val carbsG: Double,
     val mealCount: Int,
+    // DAV-77
+    val fiberG: Double = 0.0,
+    val sugarG: Double = 0.0,
+    val sodiumMg: Double = 0.0,
 )
 
 // Ported 1:1 from index.html's meals-\>daily-aggregation (see
@@ -33,6 +37,9 @@ fun aggregateMealsByDay(meals: List<MealRow>): List<DailyNutrition> {
                 fatG = rows.sumOf { it.fatG ?: 0.0 },
                 carbsG = rows.sumOf { it.carbsG ?: 0.0 },
                 mealCount = rows.size,
+                fiberG = rows.sumOf { it.fiberG ?: 0.0 },
+                sugarG = rows.sumOf { it.sugarG ?: 0.0 },
+                sodiumMg = rows.sumOf { it.sodiumMg ?: 0.0 },
             )
         }
         .sortedBy { it.date }
@@ -44,6 +51,10 @@ data class NutritionTotals(
     val carbsG: Double,
     val fatG: Double,
     val dayCount: Int,
+    // DAV-77
+    val fiberG: Double = 0.0,
+    val sugarG: Double = 0.0,
+    val sodiumMg: Double = 0.0,
 )
 
 // Same "< days" windowing convention as Training.kt's sumDistanceKmSince --
@@ -58,5 +69,8 @@ fun sumNutritionSince(daily: List<DailyNutrition>, today: LocalDate, days: Long)
         carbsG = matching.sumOf { it.carbsG },
         fatG = matching.sumOf { it.fatG },
         dayCount = matching.size,
+        fiberG = matching.sumOf { it.fiberG },
+        sugarG = matching.sumOf { it.sugarG },
+        sodiumMg = matching.sumOf { it.sodiumMg },
     )
 }

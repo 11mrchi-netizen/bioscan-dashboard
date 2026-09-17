@@ -41,8 +41,11 @@ import java.time.LocalDate
 import kotlin.math.roundToInt
 
 // Step 6 (Phase C). Real data from `meals`/`hydration_daily`. "Today" means
-// the most recent day with any logged data, matching index.html's own
-// convention (nutrition.cal[length-1]) -- see ROADMAP.md P8 Step 6.
+// the real calendar-today's totals -- null (rendered as "No meals logged
+// yet.") when nothing's been logged yet today, not silently carrying over
+// yesterday's full totals (the original "most recent day with data"
+// convention, ported from index.html's nutrition.cal[length-1], was a real
+// on-device bug: calories/macros never appeared to reset at the new day).
 //
 // The committed mockup (design/Field Terminal Mockups.dc.html, "Status ·
 // Nutrition & hydration") shows every bar against a personal target

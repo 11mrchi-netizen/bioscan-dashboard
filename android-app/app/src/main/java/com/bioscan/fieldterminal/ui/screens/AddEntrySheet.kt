@@ -373,14 +373,26 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
     }
 }
 
+// Every real-time-of-day column in this app is written as the device's
+// local wall-clock reading labeled with a fake zero/UTC offset -- readers
+// everywhere else (domain/Log.kt's parseTimestamp, Training.kt, etc.) take
+// the digits as-is and never apply a real zone conversion. These two
+// functions used to use the device's REAL offset instead (atZone(...)), which
+// is "more correct" in isolation but wrong for this app: Postgres normalizes
+// a timestamptz to true UTC on write regardless of the offset you send, so a
+// real +08:00 offset got silently converted to a real UTC value in storage,
+// which every naive reader then misread as local -- an 8-hour error, real
+// on-device bug (a supplement logged at 07:42 local showed up as 23:42 the
+// previous day). Matching the naive convention here, on both read and write,
+// fixes it without touching any of the naive readers.
 private fun parseIsoToLocalDateTime(iso: String): LocalDateTime =
     try {
-        java.time.OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime()
+        java.time.OffsetDateTime.parse(iso).toLocalDateTime()
     } catch (e: Exception) {
         LocalDateTime.parse(iso)
     }
 
-private fun LocalDateTime.toIsoWithOffset(): String = this.atZone(ZoneId.systemDefault()).toOffsetDateTime().toString()
+private fun LocalDateTime.toIsoWithOffset(): String = this.atOffset(java.time.ZoneOffset.UTC).toString()
 
 @Composable
 private fun SheetBackHeader(label: String, onBack: () -> Unit) {

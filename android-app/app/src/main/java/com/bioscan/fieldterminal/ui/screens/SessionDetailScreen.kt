@@ -48,6 +48,7 @@ import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 import java.time.Instant
 import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 // Phase G4/G5. The app's first pushed detail route (see ui/nav/
@@ -100,8 +101,15 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
 
         val recordId = row?.healthConnectRecordId
         if (recordId != null) {
-            val start = OffsetDateTime.parse(row.startTime).toInstant()
-            val end = OffsetDateTime.parse(row.endTime).toInstant()
+            // row.startTime/endTime store this app's usual local wall-clock
+            // reading (see HealthConnectExerciseSyncRepository's own comment
+            // on the convention), not the real Health Connect instant --
+            // reconstruct the real instant via the device's zone rather than
+            // trusting the string's own offset, since re-querying Health
+            // Connect below needs the genuine moment in time, not the label.
+            val zone = ZoneId.systemDefault()
+            val start = OffsetDateTime.parse(row.startTime).toLocalDateTime().atZone(zone).toInstant()
+            val end = OffsetDateTime.parse(row.endTime).toLocalDateTime().atZone(zone).toInstant()
             sessionStart = start
 
             loadingDetail = true

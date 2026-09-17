@@ -1165,7 +1165,19 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
             modifier = Modifier.clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-            ) { exercise.sets.add(EditableSet()) },
+            ) {
+                // Most sets in a real workout repeat or closely follow the
+                // one before it -- default to the previous set's values
+                // instead of blank fields, per direct user feedback.
+                val previous = exercise.sets.lastOrNull()
+                exercise.sets.add(
+                    if (previous != null) {
+                        EditableSet(previous.reps, previous.weightKg, previous.rpe, previous.percentOneRm)
+                    } else {
+                        EditableSet()
+                    },
+                )
+            },
         )
     }
 }

@@ -17,6 +17,12 @@ import kotlin.math.abs
 fun evaluateSleepDuration(hoursDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): SwcEvaluation =
     evaluateSwcStream(hoursDaily, asOf)
 
+// DAV-60: stage minutes (deep/rem/light) reuse the identical SWC machinery
+// as duration -- same treatment, different stream. Caller passes whichever
+// stage's daily minutes.
+fun evaluateSleepStage(minutesDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): SwcEvaluation =
+    evaluateSwcStream(minutesDaily, asOf)
+
 // One real night's sleep window, as absolute instants (not local-date-only)
 // since the SRI algorithm needs real clock-time-of-day, and a night's
 // bedtime/wake_time can straddle midnight.

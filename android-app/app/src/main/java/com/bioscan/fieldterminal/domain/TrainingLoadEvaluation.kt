@@ -64,28 +64,15 @@ fun evaluateTrainingLoad(sessionLoads: List<Pair<LocalDate, Double>>, asOf: Loca
 
     // CTL/ATL are EWMAs over a continuous daily series -- a rest day is a
     // real 0 to walk through, not a gap to skip, unlike the gap-tolerant
-    // date-filtered windows Categories 1/2/5 use.
+    // date-filtered windows Categories 1/2/5 use. dualEwma() (domain/Stats.kt,
+    // DAV-59) is this same walk generalized for reuse across load dimensions.
     val dailyLoad = dailySessionLoadMap(sessionLoads)
-    val alphaCtl = 2.0 / (CTL_TAU_DAYS + 1.0)
-    val alphaAtl = 2.0 / (ATL_TAU_DAYS + 1.0)
-
-    var ctl = 0.0
-    var atl = 0.0
-    var ctlYesterday = 0.0
-    var atlYesterday = 0.0
-    var date = earliest
-    while (!date.isAfter(asOf)) {
-        val load = dailyLoad[date] ?: 0.0
-        ctlYesterday = ctl
-        atlYesterday = atl
-        ctl += alphaCtl * (load - ctl)
-        atl += alphaAtl * (load - atl)
-        date = date.plusDays(1)
-    }
+    val (ctl, atl) = dualEwma(dailyLoad, earliest, asOf, ATL_TAU_DAYS, CTL_TAU_DAYS)
 
     // TSB = CTL_yesterday - ATL_yesterday, per the spec's own formula --
     // "yesterday" because today's own session (if any) hasn't yet been
     // absorbed into the fitness/fatigue trend it's being judged against.
+    val (ctlYesterday, atlYesterday) = dualEwma(dailyLoad, earliest, asOf.minusDays(1), ATL_TAU_DAYS, CTL_TAU_DAYS)
     val tsb = ctlYesterday - atlYesterday
     val state = when {
         tsb < -30 -> EvalState.Unstable // "heavily loaded" -- the spec's own flagged band

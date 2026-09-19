@@ -84,6 +84,29 @@ fun mannKendall(orderedValues: List<Double>): MannKendallResult {
     return MannKendallResult(tau, pValue, pValue < 0.05)
 }
 
+// DAV-59: the CTL/ATL dual-EWMA walk from TrainingLoadEvaluation.kt,
+// generalized so any DAV-56 load dimension can reuse it with its own tau
+// pair instead of duplicating the loop -- same promotion pattern as
+// windowEndingAt() above. A missing day is a real 0 to walk through (no
+// session that day really is zero load for a session-derived dimension),
+// not an invented measurement. Call twice (asOf and asOf.minusDays(1)) for
+// TSB-style "yesterday vs today" comparisons -- cheap to re-walk, no
+// special-casing needed inside the loop.
+fun dualEwma(dailyValues: Map<LocalDate, Double>, earliest: LocalDate, asOf: LocalDate, fatigueTauDays: Double, adaptationTauDays: Double): Pair<Double, Double> {
+    val alphaFatigue = 2.0 / (fatigueTauDays + 1.0)
+    val alphaAdaptation = 2.0 / (adaptationTauDays + 1.0)
+    var fatigue = 0.0
+    var adaptation = 0.0
+    var date = earliest
+    while (!date.isAfter(asOf)) {
+        val value = dailyValues[date] ?: 0.0
+        fatigue += alphaFatigue * (value - fatigue)
+        adaptation += alphaAdaptation * (value - adaptation)
+        date = date.plusDays(1)
+    }
+    return adaptation to fatigue
+}
+
 // Abramowitz & Stegun 7.1.26 -- a standard, widely-used erf approximation
 // (accurate to ~1.5e-7), used here only to turn Mann-Kendall's z-score into
 // a p-value without pulling in a full statistics library for one function.

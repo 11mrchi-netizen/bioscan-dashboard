@@ -36,8 +36,8 @@ import com.bioscan.fieldterminal.domain.Provenance
 import com.bioscan.fieldterminal.domain.TrendState
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-private val Telemetry = FontFamily.Monospace
-private val Interface = FontFamily.SansSerif
+private val Telemetry = com.bioscan.fieldterminal.ui.theme.RobotoMono
+private val Interface = com.bioscan.fieldterminal.ui.theme.Inter
 
 @Composable
 fun FTMetricValue(value: DisplayValue, modifier: Modifier = Modifier) {

@@ -44,3 +44,31 @@ val Saira = FontFamily(
 val SairaCondensed = FontFamily(
     Font(resId = R.font.saira_condensed_bold, weight = FontWeight.Bold),
 )
+
+// design/FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md's typography split: Inter for
+// interface language, Roboto Mono for telemetry. Both ship as variable fonts
+// upstream, same bundled-file + FontVariation.Settings pattern as the three
+// families above -- not a new approach, just two more font files.
+private fun inter(weight: FontWeight) = Font(
+    resId = R.font.inter_variable,
+    weight = weight,
+    variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
+)
+
+private fun robotoMono(weight: FontWeight) = Font(
+    resId = R.font.roboto_mono_variable,
+    weight = weight,
+    variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
+)
+
+val Inter = FontFamily(
+    inter(FontWeight.Normal), // 400 -- body
+    inter(FontWeight.Medium), // 500
+    inter(FontWeight.SemiBold), // 600 -- section title
+    inter(FontWeight.Bold), // 700 -- page title
+)
+
+val RobotoMono = FontFamily(
+    robotoMono(FontWeight.Normal), // 400 -- micro
+    robotoMono(FontWeight.Bold), // 700 -- telemetry/label
+)

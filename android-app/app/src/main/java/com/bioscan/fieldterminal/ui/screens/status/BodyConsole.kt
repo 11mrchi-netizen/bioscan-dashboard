@@ -3,8 +3,10 @@ package com.bioscan.fieldterminal.ui.screens.status
 import android.app.Activity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,7 +15,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,11 +32,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
@@ -36,9 +47,13 @@ import com.bioscan.fieldterminal.data.StatusOverview
 import com.bioscan.fieldterminal.domain.MapEvent
 import com.bioscan.fieldterminal.domain.ReadinessLabel
 import com.bioscan.fieldterminal.domain.parseSessionZonedDateTime
+import com.bioscan.fieldterminal.ui.nav.TileRoute
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.bioscan.fieldterminal.ui.theme.SairaCondensed
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
@@ -51,15 +66,81 @@ import java.time.temporal.ChronoUnit
 // -flag. The Fuel/Water/Supp dial row (DAV-68) was a permanent placeholder --
 // never had real targets/tracking behind it and never will here; that content
 // lives in the Fuel tile page instead (First feedback fixes project).
+//
+// DAV-95: the four system tiles now attach directly under the schematic
+// (SystemTileRow below) instead of sitting in their own section further down
+// the screen -- one body-centered composition per
+// design/FIELD_TERMINAL_IA_CONTRACT.md section 4. The schematic drawing
+// itself keeps its current amber Field Terminal styling on purpose (the
+// issue's own "preserve the current Status shell" direction, and it's
+// explicitly slated for a richer anatomical redraw later) -- only the new
+// tile row adopts the Futuristic Material tokens.
 @Composable
-fun BodyConsole(overview: StatusOverview?, isLoading: Boolean, onOpenMap: (String) -> Unit) {
+fun BodyConsole(overview: StatusOverview?, isLoading: Boolean, onOpenMap: (String) -> Unit, onOpenTile: (TileRoute) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(modifier = Modifier.fillMaxWidth().height(380.dp)) {
             ConditionFigureField(overview, isLoading)
         }
+        SystemTileRow(overview, onOpenTile)
         NextUpSection(onOpenMap)
     }
 }
+
+private data class SystemTileSpec(val route: TileRoute, val label: String, val icon: ImageVector)
+
+private val SYSTEM_TILES = listOf(
+    SystemTileSpec(TileRoute.Training, "TRAINING", Icons.Filled.FitnessCenter),
+    SystemTileSpec(TileRoute.Fuel, "FUEL", Icons.Filled.Restaurant),
+    SystemTileSpec(TileRoute.Heart, "HEART", Icons.Filled.Favorite),
+    SystemTileSpec(TileRoute.Labs, "LABS", Icons.Filled.Science),
+)
+
+// Compact state/metric preview per DAV-95's acceptance criteria -- real data
+// only. HEART is the one tile StatusOverview already backs (HRV/RHR, same
+// numbers the schematic itself surfaces) so it gets a real Roboto Mono
+// readout; TRAINING/FUEL/LABS have no summary data at this overview level
+// yet (that's each category's own screen, owned by DAV-98/100/102) so they
+// show a plain "OPEN" affordance rather than a fabricated number -- an
+// honest sparse state, not an oversight.
+private fun previewLine(route: TileRoute, overview: StatusOverview?): String = when (route) {
+    TileRoute.Heart -> overview?.let {
+        "HRV " + (it.latestHrv?.let { v -> "%.0f".format(v) } ?: "—") + " · RHR " + (it.latestRhr?.let { v -> "%.0f".format(v) } ?: "—")
+    } ?: "OPEN"
+    else -> "OPEN"
+}
+
+@Composable
+private fun SystemTileRow(overview: StatusOverview?, onOpenTile: (TileRoute) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SYSTEM_TILES.forEach { tile ->
+            SystemTile(tile, previewLine(tile.route, overview), modifier = Modifier.weight(1f)) { onOpenTile(tile.route) }
+        }
+    }
+}
+
+@Composable
+private fun SystemTile(tile: SystemTileSpec, preview: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(FT.RadiusModule))
+            .background(FT.GlassFill)
+            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(vertical = 14.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(tile.icon, contentDescription = tile.label, tint = FT.Emerald, modifier = Modifier.height(22.dp))
+        Text(tile.label, style = tileLabelStyle, color = FT.TextPrimary)
+        Text(preview, style = tilePreviewStyle, color = FT.TextSecondary)
+    }
+}
+
+private val tileLabelStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+private val tilePreviewStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 10.sp)
 
 @Composable
 private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean) {

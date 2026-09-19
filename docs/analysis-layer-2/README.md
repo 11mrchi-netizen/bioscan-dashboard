@@ -18,14 +18,18 @@ it's filed as a separate follow-up issue (linked inline) rather than solved here
 | [04-endurance-metric-adapters.md](04-endurance-metric-adapters.md) | [DAV-55](https://linear.app/biodashboard/issue/DAV-55) | How run/ride/swim/walk/hike map to load, without one universal score |
 | [05-confidence-propagation.md](05-confidence-propagation.md) | [DAV-66](https://linear.app/biodashboard/issue/DAV-66) | How confidence/breadth propagate through derived and combined values |
 | [06-output-contract.md](06-output-contract.md) | [DAV-67](https://linear.app/biodashboard/issue/DAV-67) | The stable output shapes every downstream consumer reads |
+| [07-performance-anchors.md](07-performance-anchors.md) | [DAV-61](https://linear.app/biodashboard/issue/DAV-61) | What counts as a real performance anchor vs. modeled capacity, and which candidates are blocked on data gaps |
+| [08-backtest-results.md](08-backtest-results.md) | [DAV-62](https://linear.app/biodashboard/issue/DAV-62) | Real backtest of rolling/EWMA, TRIMP/sRPE, and load-vs-outcome associations against this account's own history |
+| [09-parameter-learning.md](09-parameter-learning.md) | [DAV-63](https://linear.app/biodashboard/issue/DAV-63) | How default model priors become user-specific parameters, gated on doc 08's real data-volume findings |
 
 Milestone 1 ("Data & model contract") is fully closed as of docs 01-04. Docs 05-06 pull forward two
 contract-defining tickets filed under milestones 3-4, ahead of the implementation work (DAV-56
-through DAV-63) that needs to conform to them — see each doc's own header for why.
+through DAV-63) that needs to conform to them — see each doc's own header for why. Milestone 4
+("Validation & personalization") is fully closed as of docs 07-09.
 
 All real-data figures below are a snapshot of the live Supabase project (`ugfrglbcoivkprjqvjzz`) as
-queried on 2026-09-17 — re-run the queries in each doc's "Method" note if the numbers matter later
-and time has passed.
+queried on 2026-09-17 (docs 01-06) or 2026-09-19 (docs 07-09) — re-run the queries in each doc's
+"Method" note if the numbers matter later and time has passed.
 
 ## Prior art this builds on
 

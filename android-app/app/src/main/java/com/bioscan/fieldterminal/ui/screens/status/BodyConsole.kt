@@ -11,10 +11,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -104,7 +107,7 @@ private val SYSTEM_TILES = listOf(
 // honest sparse state, not an oversight.
 private fun previewLine(route: TileRoute, overview: StatusOverview?): String = when (route) {
     TileRoute.Heart -> overview?.let {
-        "HRV " + (it.latestHrv?.let { v -> "%.0f".format(v) } ?: "—") + " · RHR " + (it.latestRhr?.let { v -> "%.0f".format(v) } ?: "—")
+        "HRV" + (it.latestHrv?.let { v -> "%.0f".format(v) } ?: "—") + "·RHR" + (it.latestRhr?.let { v -> "%.0f".format(v) } ?: "—")
     } ?: "OPEN"
     else -> "OPEN"
 }
@@ -112,11 +115,16 @@ private fun previewLine(route: TileRoute, overview: StatusOverview?): String = w
 @Composable
 private fun SystemTileRow(overview: StatusOverview?, onOpenTile: (TileRoute) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+        // IntrinsicSize.Min + fillMaxHeight on each tile: without it, a
+        // longer preview line (e.g. Heart's real "HRV 64 · RHR 57" wrapping
+        // to two lines) makes that one tile taller than its three siblings --
+        // caught live on-device, not in the mockup where every tile said
+        // "OPEN".
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(horizontal = 18.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         SYSTEM_TILES.forEach { tile ->
-            SystemTile(tile, previewLine(tile.route, overview), modifier = Modifier.weight(1f)) { onOpenTile(tile.route) }
+            SystemTile(tile, previewLine(tile.route, overview), modifier = Modifier.weight(1f).fillMaxHeight()) { onOpenTile(tile.route) }
         }
     }
 }
@@ -135,7 +143,7 @@ private fun SystemTile(tile: SystemTileSpec, preview: String, modifier: Modifier
     ) {
         Icon(tile.icon, contentDescription = tile.label, tint = FT.Emerald, modifier = Modifier.height(22.dp))
         Text(tile.label, style = tileLabelStyle, color = FT.TextPrimary)
-        Text(preview, style = tilePreviewStyle, color = FT.TextSecondary)
+        Text(preview, style = tilePreviewStyle, color = FT.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

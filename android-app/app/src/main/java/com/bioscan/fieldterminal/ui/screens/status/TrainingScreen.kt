@@ -78,6 +78,24 @@ private fun TrainingContent(overview: TrainingOverview) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        // PERFORMANCE -- a wearable-derived trend independent of whether any
+        // running session has been logged, so it no longer sits gated behind
+        // hasAnyRunning below (a real display bug this reorder also fixed:
+        // VO2max previously never showed at all for a no-running-history
+        // account, despite coming from wearable_daily, not exercise_sessions).
+        overview.latestVo2Max?.let { vo2 ->
+            Card(title = "VO2MAX (EST.)") {
+                BigValueRow(value = "%.1f".format(vo2), unit = "")
+                Vo2MaxChart(overview.vo2MaxSeries)
+                Text(
+                    "Wearable-estimated, not lab-confirmed.",
+                    style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+                    color = FieldColors.InkMuted,
+                )
+            }
+        }
+
+        // SESSIONS
         if (!overview.hasAnyRunning) {
             Text("No running sessions logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
         } else {
@@ -92,18 +110,6 @@ private fun TrainingContent(overview: TrainingOverview) {
                     StatLine("Longest run (all-time)", "%.2f km".format(longest))
                 }
                 StatLine("4-week avg", "%.1f km/wk".format(overview.fourWeekAvgKmPerWeek))
-            }
-
-            overview.latestVo2Max?.let { vo2 ->
-                Card(title = "VO2MAX (EST.)") {
-                    BigValueRow(value = "%.1f".format(vo2), unit = "")
-                    Vo2MaxChart(overview.vo2MaxSeries)
-                    Text(
-                        "Wearable-estimated, not lab-confirmed.",
-                        style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-                        color = FieldColors.InkMuted,
-                    )
-                }
             }
 
             DistanceTotalsCard(overview)

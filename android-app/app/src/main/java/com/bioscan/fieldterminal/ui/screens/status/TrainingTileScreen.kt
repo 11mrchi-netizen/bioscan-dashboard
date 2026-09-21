@@ -46,20 +46,19 @@ import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 import java.time.OffsetDateTime
 
-// DAV-71 (First feedback fixes): Training tile page, single view (no
-// sub-tabs, per the user's own "barbell - with only training" spec). Wraps
-// the existing TrainingScreen() content (Step 7/Phase G3, untouched) and
-// folds in Category 6 (training load CTL/ATL/TSB) + Category 7 (rest
-// cadence) directly below it -- these were previously stranded on the old
-// Analysis sub-tab, disconnected from the training data they're actually
-// about. Cards themselves are unchanged from AnalysisScreen.kt (Phase A3/A4);
-// only their home moved.
+// DAV-98: LOAD first (dominant instrument), then PERFORMANCE, then SESSIONS
+// -- per design/FIELD_TERMINAL_IA_CONTRACT.md section 5, a hierarchy read
+// rather than the old equal-weight card stack. Every card here already
+// existed (Category 6/7's CTL/ATL/TSB + rest cadence were previously
+// stranded on the old Analysis sub-tab -- DAV-71 moved them here, unordered;
+// this only reorders what TrainingLoadSection()/TrainingScreen() already
+// render, nothing new).
 @Composable
 fun TrainingTileScreen(onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground).verticalScroll(rememberScrollState())) {
-        TileHeader(title = "TRAINING", context = "ENDURANCE + STRENGTH", onBack = onBack)
-        TrainingScreen()
+        TileHeader(title = "TRAINING", context = "LOAD · PERFORMANCE · SESSIONS", onBack = onBack)
         TrainingLoadSection()
+        TrainingScreen()
     }
 }
 

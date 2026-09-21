@@ -91,20 +91,22 @@ fun prepareVo2MaxTrendData(
     )
 }
 
-// DAV-153 follow-up: real 2026-09-20 case found live on-device after the
-// cross-source dedup fix already shipped -- a single Health Connect run row
-// (66.87km / 249min = 16.1km/h implied pace) whose own avg_speed_kmh
-// (4.96km/h, from independent SpeedRecord samples, consistent with its
-// 1118m elevation gain / "trail" route_type) implies a real distance of only
-// ~20.6km. `HealthConnectExerciseSyncRepository`'s DistanceRecord sum (even
-// the single-source-max version DAV-79 already applies) still over-counts
-// when one source itself emits multiple/overlapping distance records for one
-// long session -- dedupeRunSessions() below can't catch this, it operates on
-// whole rows, not what's inside one row. SpeedRecord samples don't share
-// that accumulation failure mode, so when the two disagree by more than this
-// factor, the speed-implied distance is more trustworthy than the summed one.
+// DAV-153 follow-up: real 2026-09-20 case found live on-device -- a single
+// Health Connect run row (66.87km / 249min = 16.1km/h implied pace) whose own
+// avg_speed_kmh (4.96km/h) implied a real distance of only ~20.6km. Initially
+// wired this in as an automatic write-time correction, but a broader scan of
+// the account's full history found 62 real rows past this same divergence
+// factor -- most of them real, plausible, heavily-technical trail runs
+// (climbs/switchbacks/elevation legitimately drag average GPS speed well
+// below distance/duration). Speed-vs-distance disagreement alone can't
+// safely tell a real slow trail effort from a genuine sensor duplication
+// artifact, so this is detection-only now (DataIntegrityValidator's matching
+// check) -- never wired back into what actually gets stored without a
+// person confirming the specific case first.
 const val DISTANCE_SPEED_DIVERGENCE_FACTOR = 1.5
 
+// Kept as a pure, tested utility for a future manual/one-off correction
+// tool or human-in-the-loop review -- not called from ingestion.
 fun reconcileDistanceWithSpeed(distanceKm: Double, durationMin: Double, avgSpeedKmh: Double?): Double {
     if (avgSpeedKmh == null || avgSpeedKmh <= 0 || distanceKm <= 0 || durationMin <= 0) return distanceKm
     val speedImpliedKm = avgSpeedKmh * (durationMin / 60.0)

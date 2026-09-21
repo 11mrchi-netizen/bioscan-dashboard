@@ -11,7 +11,6 @@ import androidx.health.connect.client.records.PowerRecord
 import androidx.health.connect.client.records.SpeedRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import com.bioscan.fieldterminal.data.model.NewExerciseSessionRow
-import com.bioscan.fieldterminal.domain.reconcileDistanceWithSpeed
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.mapHealthConnectExerciseType
 import com.bioscan.fieldterminal.healthconnect.readAllRecords
@@ -88,6 +87,18 @@ class HealthConnectExerciseSyncRepository(
         // covers the full session on its own; summing across sources is
         // what double-counts. Group by source and take the largest single
         // source's total instead of summing all of them together.
+        // DAV-153 follow-up: a real, plausible case (2026-09-12, 58.28km /
+        // 1170m elevation gain) and the actual 2026-09-20 duplicate both
+        // disagree with their own avg_speed_kmh by a similar factor --
+        // trail running with heavy elevation legitimately produces low
+        // average GPS speed relative to distance (climbs, switchbacks,
+        // technical terrain), so speed-vs-distance disagreement alone can't
+        // safely distinguish a real slow trail effort from a genuine sensor
+        // duplication artifact. A blanket auto-correction here silently
+        // shrank real long-run history (confirmed against a broader scan:
+        // 62 real rows would have been "corrected", most likely wrongly).
+        // Detection only -- see DataIntegrityValidator's matching check --
+        // never silently rewrite what actually gets stored.
         val summedDistanceKm = client.readAllRecords(DistanceRecord::class, start, end)
             .groupBy { it.metadata.dataOrigin.packageName }
             .maxOfOrNull { (_, records) -> records.sumOf { it.distance.inMeters } }
@@ -130,18 +141,12 @@ class HealthConnectExerciseSyncRepository(
         val startLocal = start.atZone(zone).toLocalDateTime().atOffset(ZoneOffset.UTC).toString()
         val endLocal = end.atZone(zone).toLocalDateTime().atOffset(ZoneOffset.UTC).toString()
 
-        // DAV-153 follow-up: cross-check the summed distance against this
-        // same session's own independently-measured avg_speed_kmh -- see
-        // domain/Training.kt's reconcileDistanceWithSpeed() for the real
-        // on-device case (2026-09-20) that motivated this.
-        val distanceKm = reconcileDistanceWithSpeed(summedDistanceKm, durationMin, avgSpeedKmh)
-
         return NewExerciseSessionRow(
             type = mapHealthConnectExerciseType(session.exerciseType),
             startTime = startLocal,
             endTime = endLocal,
             durationMin = durationMin,
-            distanceKm = distanceKm.takeIf { it > 0 },
+            distanceKm = summedDistanceKm.takeIf { it > 0 },
             caloriesActive = caloriesActive.takeIf { it > 0 },
             caloriesTotal = caloriesTotal.takeIf { it > 0 },
             avgHr = avgHr,

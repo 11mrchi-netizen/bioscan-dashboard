@@ -67,7 +67,10 @@ class DataIntegrityValidatorTest {
         // The real 2026-09-20 row -- passes hasPlausiblePace (16.1 km/h is
         // under the 22 km/h foot-speed ceiling) and isn't a cross-row
         // duplicate (only one session that day), but its own avg_speed_kmh
-        // says the summed distance is ~3.25x too high.
+        // disagrees with the summed distance by ~3.25x. WARNING, not ERROR:
+        // a broader account-wide scan found 62 rows past this same
+        // threshold, most of them plausible technical trail runs -- this
+        // check flags a disagreement worth a human look, not a confirmed bug.
         val sessions = listOf(
             ExerciseSessionRow(
                 type = "run",
@@ -82,7 +85,7 @@ class DataIntegrityValidatorTest {
         val issues = DataIntegrityValidator.validateExerciseSessions(sessions)
         val consistencyIssues = issues.filter { it.scope == "distance_speed_consistency" }
         assertEquals(1, consistencyIssues.size)
-        assertEquals(IntegritySeverity.ERROR, consistencyIssues.first().severity)
+        assertEquals(IntegritySeverity.WARNING, consistencyIssues.first().severity)
     }
 
     @Test

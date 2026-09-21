@@ -84,11 +84,13 @@ object DataIntegrityValidator {
             // DAV-153 follow-up: distance/duration-implied speed vs. the
             // session's own independently-measured avg_speed_kmh. Catches
             // the real 2026-09-20 case (16.1 km/h implied vs. 4.96 km/h
-            // measured) that MAX_FOOT_SPEED_KMH alone misses -- that check
-            // only catches physically-impossible speeds, not internally
-            // inconsistent ones. Flags already-synced rows retroactively,
-            // not just new ingestion (see HealthConnectExerciseSyncRepository's
-            // reconcileDistanceWithSpeed() for the write-time fix).
+            // measured) that MAX_FOOT_SPEED_KMH alone misses. WARNING, not
+            // ERROR, and deliberately never auto-applied anywhere: a broader
+            // scan found 62 real rows past this same divergence factor, most
+            // of them plausible heavily-technical trail runs where climbs/
+            // switchbacks legitimately drag average GPS speed well below
+            // distance/duration -- this flags a real disagreement worth a
+            // human look, not a confirmed bug.
             if (distance != null && duration != null && duration > 0 && s.avgSpeedKmh != null && s.avgSpeedKmh > 0) {
                 val impliedSpeedKmh = distance / (duration / 60.0)
                 val speedImpliedKm = s.avgSpeedKmh * (duration / 60.0)
@@ -99,8 +101,8 @@ object DataIntegrityValidator {
                             domain = "exercise_sessions",
                             scope = "distance_speed_consistency",
                             recordIdentifier = id,
-                            severity = IntegritySeverity.ERROR,
-                            message = "Distance implies %.1f km/h but measured avg speed is %.1f km/h -- distance likely over-counted".format(impliedSpeedKmh, s.avgSpeedKmh),
+                            severity = IntegritySeverity.WARNING,
+                            message = "Distance implies %.1f km/h but measured avg speed is %.1f km/h -- worth a manual look, not necessarily wrong (technical trail terrain can legitimately cause this)".format(impliedSpeedKmh, s.avgSpeedKmh),
                             details = mapOf(
                                 "implied_speed_kmh" to "%.2f".format(impliedSpeedKmh),
                                 "measured_speed_kmh" to "%.2f".format(s.avgSpeedKmh),

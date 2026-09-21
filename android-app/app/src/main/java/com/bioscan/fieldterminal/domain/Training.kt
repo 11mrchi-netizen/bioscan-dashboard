@@ -59,3 +59,115 @@ fun vo2MaxRollingAverage(series: List<Pair<LocalDate, Double>>, windowDays: Long
         val inWindow = series.filter { it.first >= windowStart && it.first <= date }.map { it.second }
         date to inWindow.average()
     }
+
+// DAV-152: Timeframe selector for VO2max chart. 2 months is the standard/default timeframe.
+enum class Vo2MaxTimeframe(val label: String, val months: Long?) {
+    TwoMonths("2M", 2),
+    SixMonths("6M", 6),
+    All("ALL", null),
+}
+
+data class Vo2MaxTrendData(
+    val raw: List<Pair<LocalDate, Double>>,
+    val avg7d: List<Pair<LocalDate, Double>>,
+    val avg28d: List<Pair<LocalDate, Double>>,
+)
+
+fun prepareVo2MaxTrendData(
+    series: List<Pair<LocalDate, Double>>,
+    timeframe: Vo2MaxTimeframe = Vo2MaxTimeframe.TwoMonths,
+    today: LocalDate = LocalDate.now(),
+): Vo2MaxTrendData {
+    val cutoff = timeframe.months?.let { today.minusMonths(it) }
+    val avg7 = vo2MaxRollingAverage(series, 7)
+    val avg28 = vo2MaxRollingAverage(series, 28)
+    fun filter(points: List<Pair<LocalDate, Double>>) =
+        if (cutoff != null) points.filter { it.first >= cutoff } else points
+
+    return Vo2MaxTrendData(
+        raw = filter(series),
+        avg7d = filter(avg7),
+        avg28d = filter(avg28),
+    )
+}
+
+// DAV-153 follow-up: real 2026-09-20 case found live on-device after the
+// cross-source dedup fix already shipped -- a single Health Connect run row
+// (66.87km / 249min = 16.1km/h implied pace) whose own avg_speed_kmh
+// (4.96km/h, from independent SpeedRecord samples, consistent with its
+// 1118m elevation gain / "trail" route_type) implies a real distance of only
+// ~20.6km. `HealthConnectExerciseSyncRepository`'s DistanceRecord sum (even
+// the single-source-max version DAV-79 already applies) still over-counts
+// when one source itself emits multiple/overlapping distance records for one
+// long session -- dedupeRunSessions() below can't catch this, it operates on
+// whole rows, not what's inside one row. SpeedRecord samples don't share
+// that accumulation failure mode, so when the two disagree by more than this
+// factor, the speed-implied distance is more trustworthy than the summed one.
+const val DISTANCE_SPEED_DIVERGENCE_FACTOR = 1.5
+
+fun reconcileDistanceWithSpeed(distanceKm: Double, durationMin: Double, avgSpeedKmh: Double?): Double {
+    if (avgSpeedKmh == null || avgSpeedKmh <= 0 || distanceKm <= 0 || durationMin <= 0) return distanceKm
+    val speedImpliedKm = avgSpeedKmh * (durationMin / 60.0)
+    if (speedImpliedKm <= 0) return distanceKm
+    return if (distanceKm / speedImpliedKm > DISTANCE_SPEED_DIVERGENCE_FACTOR) speedImpliedKm else distanceKm
+}
+
+// DAV-153: Fix doubled weekly distance aggregation.
+// Multiple recording sources (e.g. watch + phone, multi-app Health Connect sync, or
+// manual + Health Connect) can create duplicate records for the same physical run.
+// Clusters runs occurring on the same day within 15 minutes of each other and with
+// comparable durations (within 5 minutes or 20%), keeping exactly one representative
+// session rather than summing them. Manual entries are prioritized; otherwise the session
+// with richer telemetry / highest plausible distance is retained.
+const val SAME_RUN_DURATION_TOLERANCE_MIN = 5.0
+const val SAME_RUN_START_TOLERANCE_MIN = 15L
+const val MAX_FOOT_SPEED_KMH = 22.0
+
+fun hasPlausiblePace(distanceKm: Double?, durationMin: Double?): Boolean {
+    val distance = distanceKm ?: return true
+    val durationHours = (durationMin ?: return true) / 60.0
+    if (durationHours <= 0) return true
+    return distance / durationHours <= MAX_FOOT_SPEED_KMH
+}
+
+fun dedupeRunSessions(sessions: List<ExerciseSessionRow>): List<ExerciseSessionRow> {
+    if (sessions.isEmpty()) return emptyList()
+
+    val validSessions = sessions.filter { hasPlausiblePace(it.distanceKm, it.durationMin) }
+    val sorted = validSessions.sortedBy { OffsetDateTime.parse(it.startTime).toInstant() }
+
+    val clusters = mutableListOf<MutableList<ExerciseSessionRow>>()
+    for (session in sorted) {
+        val sessionStart = OffsetDateTime.parse(session.startTime)
+        val sessionDuration = session.durationMin ?: 0.0
+
+        val matchingCluster = clusters.find { cluster ->
+            val rep = cluster.first()
+            val repStart = OffsetDateTime.parse(rep.startTime)
+            val repDuration = rep.durationMin ?: 0.0
+
+            val sameDay = repStart.toLocalDate() == sessionStart.toLocalDate()
+            val startDiffMin = kotlin.math.abs(java.time.Duration.between(repStart, sessionStart).toMinutes())
+            val durationDiffMin = kotlin.math.abs(repDuration - sessionDuration)
+            val durationTolerance = maxOf(SAME_RUN_DURATION_TOLERANCE_MIN, minOf(repDuration, sessionDuration) * 0.2)
+
+            sameDay && startDiffMin <= SAME_RUN_START_TOLERANCE_MIN && durationDiffMin <= durationTolerance
+        }
+
+        if (matchingCluster != null) {
+            matchingCluster.add(session)
+        } else {
+            clusters.add(mutableListOf(session))
+        }
+    }
+
+    return clusters.map { cluster ->
+        cluster.maxWith(
+            compareBy<ExerciseSessionRow> { it.source == "manual" }
+                .thenBy { it.avgHr != null }
+                .thenBy { it.distanceKm ?: 0.0 }
+                .thenBy { it.durationMin ?: 0.0 }
+        )
+    }
+}
+

@@ -17,6 +17,7 @@ data class ExerciseSessionRow(
     @SerialName("duration_min") val durationMin: Double? = null,
     @SerialName("distance_km") val distanceKm: Double? = null,
     @SerialName("avg_hr") val avgHr: Double? = null,
+    @SerialName("avg_speed_kmh") val avgSpeedKmh: Double? = null,
     val source: String? = null,
 )
 

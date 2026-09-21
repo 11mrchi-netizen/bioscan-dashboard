@@ -4,11 +4,7 @@ import android.util.Base64
 import com.bioscan.fieldterminal.domain.FoodEstimate
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -32,7 +28,6 @@ import kotlinx.serialization.json.put
 // nutrition-label text -- the same research found that instruction improves
 // reliability when no label is present in the photo.
 private const val MODEL = "gemini-3.8-flash"
-private const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent"
 
 private const val PHOTO_PROMPT = """
 Look at this food photo and estimate its nutritional content as eaten. Give
@@ -104,11 +99,7 @@ class NutritionEstimationRepository(private val apiKey: String) {
             )
         }
 
-        val response = client.post(ENDPOINT) {
-            url { parameters.append("key", apiKey) }
-            contentType(ContentType.Application.Json)
-            setBody(requestBody.toString())
-        }
+        val response = client.postGeminiWithFallback(MODEL, apiKey, requestBody.toString())
 
         val bodyText = response.bodyAsText()
         if (!response.status.isSuccess()) {

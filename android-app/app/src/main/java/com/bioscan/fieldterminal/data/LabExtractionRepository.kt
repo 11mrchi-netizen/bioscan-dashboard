@@ -3,11 +3,7 @@ package com.bioscan.fieldterminal.data
 import android.util.Base64
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -22,7 +18,6 @@ import kotlinx.serialization.json.put
 // NutritionEstimationRepository's photo path already holds itself to, not a
 // high-frequency, low-stakes call.
 private const val MODEL = "gemini-3.8-flash"
-private const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent"
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -81,11 +76,7 @@ class LabExtractionRepository(private val apiKey: String) {
             )
         }
 
-        val response = client.post(ENDPOINT) {
-            url { parameters.append("key", apiKey) }
-            contentType(ContentType.Application.Json)
-            setBody(requestBody.toString())
-        }
+        val response = client.postGeminiWithFallback(MODEL, apiKey, requestBody.toString())
 
         val bodyText = response.bodyAsText()
         if (!response.status.isSuccess()) {

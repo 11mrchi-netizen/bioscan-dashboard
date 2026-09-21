@@ -236,6 +236,26 @@ fun SettingsScreen(scope: CoroutineScope) {
                         style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
                         color = FieldColors.InkMuted,
                     )
+                    HealthConnectSyncStatus.lastWriteBackResult?.let { wbResult ->
+                        val wbAt = HealthConnectSyncStatus.lastWriteBackAt
+                            ?.atZone(ZoneId.systemDefault())
+                            ?.format(DateTimeFormatter.ofPattern("HH:mm"))
+                        val wbText = when (wbResult) {
+                            is com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Success ->
+                                "Write-back $wbAt — ${wbResult.mealsWritten} meals, ${wbResult.hydrationDaysWritten} hydration days."
+                            is com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Failed ->
+                                "Write-back failed: ${wbResult.message}"
+                            com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.NotGranted ->
+                                "Write-back skipped — permissions not granted."
+                            com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Unavailable ->
+                                "Write-back skipped — Health Connect unavailable."
+                        }
+                        Text(
+                            text = wbText,
+                            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+                            color = if (wbResult is com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Success) FieldColors.InkMuted else FieldColors.Orange,
+                        )
+                    }
                 }
             }
 

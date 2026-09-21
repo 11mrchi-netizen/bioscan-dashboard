@@ -2,11 +2,7 @@ package com.bioscan.fieldterminal.data
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
@@ -20,7 +16,6 @@ import kotlinx.serialization.json.put
 // is a low-stakes, high-frequency call unrelated to the vision/estimation
 // accuracy NutritionEstimationRepository's gemini-3.8-flash calls need.
 private const val MODEL = "gemini-3.5-flash-lite"
-private const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent"
 
 private const val PROMPT_PREFIX = """
 In one short factual sentence (under 20 words, no medical advice framing,
@@ -53,11 +48,7 @@ class SupplementImpactRepository(private val apiKey: String) {
             )
         }
 
-        val response = client.post(ENDPOINT) {
-            url { parameters.append("key", apiKey) }
-            contentType(ContentType.Application.Json)
-            setBody(requestBody.toString())
-        }
+        val response = client.postGeminiWithFallback(MODEL, apiKey, requestBody.toString())
 
         val bodyText = response.bodyAsText()
         if (!response.status.isSuccess()) {

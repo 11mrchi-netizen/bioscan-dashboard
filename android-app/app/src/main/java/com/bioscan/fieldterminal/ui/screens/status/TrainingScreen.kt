@@ -1,6 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -27,6 +31,8 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingOverview
 import com.bioscan.fieldterminal.data.TrainingRepository
 import com.bioscan.fieldterminal.domain.TotalsPeriod
+import com.bioscan.fieldterminal.domain.Vo2MaxTimeframe
+import com.bioscan.fieldterminal.domain.prepareVo2MaxTrendData
 import com.bioscan.fieldterminal.domain.sumDistanceKmSince
 import com.bioscan.fieldterminal.domain.vo2MaxRollingAverage
 import com.bioscan.fieldterminal.ui.components.Card
@@ -148,26 +154,74 @@ private fun DistanceTotalsCard(overview: TrainingOverview) {
     }
 }
 
-// DAV-80. Raw readings are the noisiest series (wearable-estimated, landing
-// irregularly) so they get the dimmest line; the 28-day average -- the one
-// actually worth reading fitness trend from -- gets the card's own amber
-// accent. All three share one y-axis since they're the same unit at
-// different smoothing, not different quantities.
+// DAV-80 / DAV-152. Make 2 months the standard/default chart timeframe while
+// preserving the ability to inspect other ranges (6M, ALL). Raw readings are
+// the noisiest series so they get the dimmest line; the 28-day average gets
+// the amber accent.
 @Composable
 private fun Vo2MaxChart(series: List<Pair<LocalDate, Double>>) {
     if (series.size < 2) return
-    DateTrendLine(
-        series = listOf(
-            TrendSeries(series, FieldColors.InkMuted),
-            TrendSeries(vo2MaxRollingAverage(series, 7), FieldColors.Cyan),
-            TrendSeries(vo2MaxRollingAverage(series, 28), FieldColors.Amber),
-        ),
-        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-    )
-    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        LegendItem("RAW", FieldColors.InkMuted)
-        LegendItem("7D AVG", FieldColors.Cyan)
-        LegendItem("28D AVG", FieldColors.Amber)
+    var timeframe by remember { mutableStateOf(Vo2MaxTimeframe.TwoMonths) }
+    val trendData = prepareVo2MaxTrendData(series, timeframe)
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Vo2MaxTimeframeToggle(
+            selected = timeframe,
+            onSelect = { timeframe = it },
+        )
+        if (trendData.raw.size >= 2) {
+            DateTrendLine(
+                series = listOf(
+                    TrendSeries(trendData.raw, FieldColors.InkMuted),
+                    TrendSeries(trendData.avg7d, FieldColors.Cyan),
+                    TrendSeries(trendData.avg28d, FieldColors.Amber),
+                ),
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+            )
+        } else {
+            Text(
+                "Not enough readings in the last ${timeframe.label.lowercase()} to plot a trend.",
+                style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
+                color = FieldColors.InkMuted,
+                modifier = Modifier.padding(vertical = 10.dp),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            LegendItem("RAW", FieldColors.InkMuted)
+            LegendItem("7D AVG", FieldColors.Cyan)
+            LegendItem("28D AVG", FieldColors.Amber)
+        }
+    }
+}
+
+@Composable
+private fun Vo2MaxTimeframeToggle(
+    selected: Vo2MaxTimeframe,
+    onSelect: (Vo2MaxTimeframe) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Vo2MaxTimeframe.entries.forEach { timeframe ->
+            val isSelected = timeframe == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .border(1.dp, if (isSelected) FieldColors.Amber else FieldColors.Hairline)
+                    .background(if (isSelected) FieldColors.Amber.copy(alpha = 0.14f) else Color.Transparent)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { onSelect(timeframe) }
+                    .padding(vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    timeframe.label,
+                    style = FieldTextStyles.subTabLabel,
+                    color = if (isSelected) FieldColors.Amber else FieldColors.InkMuted,
+                )
+            }
+        }
     }
 }
 

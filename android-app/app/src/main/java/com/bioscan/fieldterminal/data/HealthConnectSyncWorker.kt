@@ -12,23 +12,28 @@ import androidx.work.WorkManager
 import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
 import java.time.Duration
 
-// Runs HealthConnectSyncCoordinator.syncAll() as real WorkManager background
-// work rather than a plain LaunchedEffect-scoped coroutine tied to
-// MainActivity's composition -- see build.gradle.kts's own comment on why:
-// a real on-device sync got killed ("Software caused connection abort") the
-// moment the user switched apps mid-sync, and WorkManager survives both
-// backgrounding and process death, retrying with backoff on failure instead
-// of forcing the user to keep the app open in the foreground.
+// Runs HealthConnectSyncCoordinator.syncAll() and HealthConnectWriteBackRepository.writeBackDaily()
+// as real WorkManager background work rather than a plain LaunchedEffect-scoped coroutine.
 class HealthConnectSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        val result = HealthConnectSyncCoordinator(applicationContext, SupabaseClientProvider.client).syncAll()
-        HealthConnectSyncStatus.record(result)
-        return when (result) {
-            is HealthConnectSyncResult.Success -> Result.success()
-            is HealthConnectSyncResult.Unavailable, is HealthConnectSyncResult.NotGranted -> Result.failure()
-            // Retry with WorkManager's own backoff -- covers exactly the
-            // transient network-abort case that motivated this file.
-            is HealthConnectSyncResult.Failed -> if (runAttemptCount < 5) Result.retry() else Result.failure()
+        val syncCoordinator = HealthConnectSyncCoordinator(applicationContext, SupabaseClientProvider.client)
+        val readResult = syncCoordinator.syncAll()
+        HealthConnectSyncStatus.record(readResult)
+
+        // DAV-154: Run daily Health Connect write-back alongside read sync
+        val writeBackRepo = HealthConnectWriteBackRepository(applicationContext, SupabaseClientProvider.client)
+        val writeBackResult = writeBackRepo.writeBackDaily()
+
+        android.util.Log.d("HealthConnectSyncWorker", "Read sync: $readResult, Write-back: $writeBackResult")
+
+        return when {
+            readResult is HealthConnectSyncResult.Failed || writeBackResult is HealthConnectWriteBackResult.Failed -> {
+                if (runAttemptCount < 5) Result.retry() else Result.failure()
+            }
+            readResult is HealthConnectSyncResult.Unavailable || readResult is HealthConnectSyncResult.NotGranted -> {
+                Result.failure()
+            }
+            else -> Result.success()
         }
     }
 

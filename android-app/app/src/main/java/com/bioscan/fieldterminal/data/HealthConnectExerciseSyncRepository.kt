@@ -11,6 +11,7 @@ import androidx.health.connect.client.records.PowerRecord
 import androidx.health.connect.client.records.SpeedRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import com.bioscan.fieldterminal.data.model.NewExerciseSessionRow
+import com.bioscan.fieldterminal.domain.reconcileDistanceWithSpeed
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.mapHealthConnectExerciseType
 import com.bioscan.fieldterminal.healthconnect.readAllRecords
@@ -87,7 +88,7 @@ class HealthConnectExerciseSyncRepository(
         // covers the full session on its own; summing across sources is
         // what double-counts. Group by source and take the largest single
         // source's total instead of summing all of them together.
-        val distanceKm = client.readAllRecords(DistanceRecord::class, start, end)
+        val summedDistanceKm = client.readAllRecords(DistanceRecord::class, start, end)
             .groupBy { it.metadata.dataOrigin.packageName }
             .maxOfOrNull { (_, records) -> records.sumOf { it.distance.inMeters } }
             ?.div(1000.0) ?: 0.0
@@ -128,6 +129,12 @@ class HealthConnectExerciseSyncRepository(
         // offset, is what actually stops Postgres from touching the digits.
         val startLocal = start.atZone(zone).toLocalDateTime().atOffset(ZoneOffset.UTC).toString()
         val endLocal = end.atZone(zone).toLocalDateTime().atOffset(ZoneOffset.UTC).toString()
+
+        // DAV-153 follow-up: cross-check the summed distance against this
+        // same session's own independently-measured avg_speed_kmh -- see
+        // domain/Training.kt's reconcileDistanceWithSpeed() for the real
+        // on-device case (2026-09-20) that motivated this.
+        val distanceKm = reconcileDistanceWithSpeed(summedDistanceKm, durationMin, avgSpeedKmh)
 
         return NewExerciseSessionRow(
             type = mapHealthConnectExerciseType(session.exerciseType),

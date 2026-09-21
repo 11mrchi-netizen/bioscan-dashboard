@@ -5,6 +5,7 @@ import com.bioscan.fieldterminal.data.model.Vo2MaxRow
 import com.bioscan.fieldterminal.domain.averagePaceMinPerKmSince
 import com.bioscan.fieldterminal.domain.latestNonNullVo2Max
 import com.bioscan.fieldterminal.domain.longestRunKm
+import com.bioscan.fieldterminal.domain.dedupeRunSessions
 import com.bioscan.fieldterminal.domain.sumDistanceKmSince
 import com.bioscan.fieldterminal.domain.vo2MaxSeries
 import io.github.jan.supabase.SupabaseClient
@@ -38,54 +39,6 @@ import java.time.temporal.ChronoUnit
 // one. One exact-duplicate manual row (id 1 == id 17, a leftover double
 // insert from before manual creation was retired 2026-09-15) is also
 // collapsed to one.
-private const val SAME_RUN_DURATION_TOLERANCE_MIN = 3.0
-
-private fun localDateOfRun(session: ExerciseSessionRow) =
-    OffsetDateTime.parse(session.startTime).toLocalDate()
-
-private fun dedupeRunSessions(sessions: List<ExerciseSessionRow>): List<ExerciseSessionRow> {
-    val exactDistinct = sessions.distinctBy {
-        Triple(it.startTime, it.durationMin, it.distanceKm)
-    }
-    val (manual, healthConnect) = exactDistinct.partition { it.source == "manual" }
-    val absorbedHcIndices = mutableSetOf<Int>()
-    manual.forEach { m ->
-        val mDay = localDateOfRun(m)
-        val mDur = m.durationMin ?: return@forEach
-        healthConnect.forEachIndexed { i, hc ->
-            if (i !in absorbedHcIndices && localDateOfRun(hc) == mDay &&
-                hc.durationMin != null && kotlin.math.abs(hc.durationMin - mDur) <= SAME_RUN_DURATION_TOLERANCE_MIN
-            ) {
-                absorbedHcIndices += i
-            }
-        }
-    }
-    val survivingHc = healthConnect.filterIndexed { i, _ -> i !in absorbedHcIndices }
-    return manual + survivingHc
-}
-
-// Considered also cross-checking distance against avg_speed_kmh (a separate,
-// unsummed record series that should be immune to the same-bug) to catch
-// remaining Health-Connect-only rows with no manual pair to dedupe against.
-// Dropped after checking real data: avg_speed_kmh is itself near-zero/broken
-// on plenty of otherwise-plausible historical rows (e.g. id 10127 -- a
-// perfectly sane 7.04km/56min run with avg_speed_kmh of 0.06), so trusting
-// it as a correction source would silently wreck more real distances than
-// it fixes. The duration-based pace ceiling below doesn't have that failure
-// mode -- it stays the only defense for HC-only rows.
-
-// 58.28km in 256 minutes and 38.49km in 82 minutes (real sessions in this
-// account) are both a physically implausible pace for sustained running --
-// a real GPS/tracking error, not deliberate training. 22 km/h (2:44/km,
-// just under the marathon world-record pace) is a generous ceiling nobody
-// recreational or amateur sustains.
-private const val MAX_FOOT_SPEED_KMH = 22.0
-private fun hasPlausiblePace(distanceKm: Double?, durationMin: Double?): Boolean {
-    val distance = distanceKm ?: return true
-    val durationHours = (durationMin ?: return true) / 60.0
-    if (durationHours <= 0) return true
-    return distance / durationHours <= MAX_FOOT_SPEED_KMH
-}
 
 data class TrainingOverview(
     val thisWeekDistanceKm: Double,
@@ -108,7 +61,7 @@ class TrainingRepository(private val supabase: SupabaseClient) {
         // -- same "bounded, not unbounded" tradeoff this query already made
         // when it only covered runs.
         val sessions = supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("type,start_time,duration_min,distance_km,avg_hr,source")) {
+            .select(columns = Columns.list("type,start_time,duration_min,distance_km,avg_hr,avg_speed_kmh,source")) {
                 order("start_time", Order.DESCENDING)
                 limit(200)
             }
@@ -127,7 +80,6 @@ class TrainingRepository(private val supabase: SupabaseClient) {
             .reversed()
 
         val running = dedupeRunSessions(sessions.filter { it.type == "run" })
-            .filter { hasPlausiblePace(it.distanceKm, it.durationMin) }
         val strength = sessions.filter { it.type == "strength" }
 
         val today = LocalDate.now()

@@ -124,5 +124,6 @@ dependencies {
     // its own backoff instead of requiring the user to babysit the app.
     implementation("androidx.work:work-runtime-ktx:2.10.0")
 
+    testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

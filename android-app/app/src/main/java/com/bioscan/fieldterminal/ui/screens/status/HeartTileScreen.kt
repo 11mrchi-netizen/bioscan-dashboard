@@ -28,19 +28,15 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
-import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
-import com.bioscan.fieldterminal.domain.BristolEvaluation
-import com.bioscan.fieldterminal.domain.BristolPattern
 import com.bioscan.fieldterminal.domain.OstrcEvaluation
 import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.SriEvaluation
 import com.bioscan.fieldterminal.domain.SubjectiveEvaluation
 import com.bioscan.fieldterminal.domain.SwcEvaluation
-import com.bioscan.fieldterminal.domain.evaluateBristol
 import com.bioscan.fieldterminal.domain.evaluateHrv
 import com.bioscan.fieldterminal.domain.evaluateOstrc
 import com.bioscan.fieldterminal.domain.evaluateRespiratoryAnomaly
@@ -69,20 +65,21 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
 
-// DAV-73 (First feedback fixes): Heart tile page, 7 tabs. Every card here
-// (except Arousal, which has no Analysis Layer evaluation yet -- only ever
-// logged, never evaluated) is migrated unchanged from AnalysisScreen.kt's
-// old monolithic Column (Phase A2-A4); only which tab shows it changed. One
-// shared load for the whole page so switching tabs is instant, matching the
-// Fuel/Training tile pattern.
+// DAV-97: 7 tabs collapsed to 4 (Cardio/Recovery/Wellbeing/Injury) per
+// design/FIELD_TERMINAL_IA_CONTRACT.md section 7. Every card here (except
+// Arousal, which has no Analysis Layer evaluation yet -- only ever logged,
+// never evaluated) is unchanged from before; only which tab shows it moved.
+// Stool/Bristol content moved out entirely to FuelTileScreen's new Digestion
+// tab (DAV-96) -- no longer loaded or rendered here at all. One shared load
+// for the whole page so switching tabs is instant, matching the Fuel/
+// Training tile pattern.
 @Composable
 fun HeartTileScreen(onBack: () -> Unit) {
-    var tab by remember { mutableStateOf(HeartTab.Heart) }
+    var tab by remember { mutableStateOf(HeartTab.Cardio) }
 
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
-    var stool by remember { mutableStateOf<List<StoolAnalysisRow>?>(null) }
     var ostrc by remember { mutableStateOf<List<OstrcAnalysisRow>?>(null) }
     var trainingSessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
     var arousal by remember { mutableStateOf<List<LogArousalRow>?>(null) }
@@ -92,7 +89,6 @@ fun HeartTileScreen(onBack: () -> Unit) {
         wearable = repo.loadWearableDaily()
         sleep = repo.loadSleepDaily()
         wellbeing = repo.loadWellbeingDaily()
-        stool = repo.loadStoolLog()
         ostrc = repo.loadOstrcCheckins()
         trainingSessions = repo.loadExerciseSessionsForTrainingLoad()
         arousal = SupabaseClientProvider.client.postgrest.from("arousal_daily")
@@ -104,17 +100,16 @@ fun HeartTileScreen(onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground).verticalScroll(rememberScrollState())) {
-        TileHeader(title = "HEART", context = "HRV · SLEEP · WELLNESS · INJURIES", onBack = onBack)
+        TileHeader(title = "HEART", context = "CARDIO · RECOVERY · WELLBEING · INJURY", onBack = onBack)
         SubTabRow(items = HeartTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
 
         val w = wearable
         val s = sleep
         val wb = wellbeing
-        val st = stool
         val os = ostrc
         val t = trainingSessions
         val ar = arousal
-        if (w == null || s == null || wb == null || st == null || os == null || t == null || ar == null) {
+        if (w == null || s == null || wb == null || os == null || t == null || ar == null) {
             Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = FieldColors.Amber)
             }
@@ -126,20 +121,15 @@ fun HeartTileScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             when (tab) {
-                HeartTab.Heart -> {
+                HeartTab.Cardio -> {
                     val hrvPoints = w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }
                     EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", points = hrvPoints)
                     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
                     EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm", points = rhrPoints)
+                    val rrPoints = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
+                    RespiratoryCard(evaluateRespiratoryAnomaly(rrPoints))
                 }
-                HeartTab.Arousal -> ArousalHistory(ar)
-                HeartTab.Wellness -> {
-                    SubjectiveCard("ENERGY", wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } })
-                    SubjectiveCard("MOOD", wb.mapNotNull { row -> row.mood?.let { LocalDate.parse(row.date) to it.toDouble() } })
-                    SubjectiveCard("STRESS", wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } })
-                    SubjectiveCard("SORENESS", wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } })
-                }
-                HeartTab.Sleep -> {
+                HeartTab.Recovery -> {
                     val hoursPoints = s.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } }
                     EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints), "h", points = hoursPoints)
                     val nights = s.mapNotNull { row ->
@@ -149,11 +139,14 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     }
                     SriCard(evaluateSri(nights))
                 }
-                HeartTab.Stool -> {
-                    val stoolEntries = st.mapNotNull { row -> row.bristolType?.let { OffsetDateTime.parse(row.occurredAt).toLocalDateTime().toLocalDate() to it } }
-                    BristolCard(evaluateBristol(stoolEntries))
+                HeartTab.Wellbeing -> {
+                    SubjectiveCard("ENERGY", wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } })
+                    SubjectiveCard("MOOD", wb.mapNotNull { row -> row.mood?.let { LocalDate.parse(row.date) to it.toDouble() } })
+                    SubjectiveCard("STRESS", wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } })
+                    SubjectiveCard("SORENESS", wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } })
+                    ArousalHistory(ar)
                 }
-                HeartTab.Injuries -> {
+                HeartTab.Injury -> {
                     HealthEventsScreen()
                     val sessionLoads = t.mapNotNull { row ->
                         val duration = row.durationMin
@@ -172,10 +165,6 @@ fun HeartTileScreen(onBack: () -> Unit) {
                             OstrcCard(evaluateOstrc(bodyArea, entries), trainingLoadEval.tsb, restCadenceEval.consecutiveDaysWithoutRest, sorenessEval.median7d)
                         }
                     }
-                }
-                HeartTab.Respiratory -> {
-                    val rrPoints = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
-                    RespiratoryCard(evaluateRespiratoryAnomaly(rrPoints))
                 }
             }
         }
@@ -272,29 +261,6 @@ private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation) {
             color = if (eval.flagged) FieldColors.Alert else FieldColors.InkMuted,
         )
     }
-}
-
-@Composable
-private fun BristolCard(eval: BristolEvaluation) {
-    Card(title = "DIGESTIVE PATTERN (BRISTOL)") {
-        StatLine("Confidence", eval.confidence.label)
-        eval.pattern?.let { StatLine("Pattern", bristolPatternLabel(it)) }
-        eval.pctHard?.let { StatLine("Hard (types 1-2)", "%.0f%%".format(it)) }
-        eval.pctNormal?.let { StatLine("Normal (types 3-5)", "%.0f%%".format(it)) }
-        eval.pctLoose?.let { StatLine("Loose (types 6-7)", "%.0f%%".format(it)) }
-        Text(
-            "Descriptive pattern only — not a diagnostic tool.",
-            style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
-            color = FieldColors.InkMuted,
-        )
-    }
-}
-
-private fun bristolPatternLabel(p: BristolPattern): String = when (p) {
-    BristolPattern.PredominantlyFirm -> "PREDOMINANTLY FIRM"
-    BristolPattern.PredominantlyLoose -> "PREDOMINANTLY LOOSE"
-    BristolPattern.Mixed -> "MIXED PATTERN"
-    BristolPattern.Typical -> "TYPICAL PATTERN"
 }
 
 @Composable

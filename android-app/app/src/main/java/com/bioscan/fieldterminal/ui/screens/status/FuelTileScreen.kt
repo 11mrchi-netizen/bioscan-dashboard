@@ -28,16 +28,21 @@ import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
+import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
 import com.bioscan.fieldterminal.domain.BodyFatEvaluation
+import com.bioscan.fieldterminal.domain.BristolEvaluation
+import com.bioscan.fieldterminal.domain.BristolPattern
 import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.NutritionEvaluation
 import com.bioscan.fieldterminal.domain.PROTEIN_PCT_HIGH
 import com.bioscan.fieldterminal.domain.PROTEIN_PCT_LOW
 import com.bioscan.fieldterminal.domain.WeightEvaluation
 import com.bioscan.fieldterminal.domain.evaluateBodyFat
+import com.bioscan.fieldterminal.domain.evaluateBristol
 import com.bioscan.fieldterminal.domain.evaluateNutrition
 import com.bioscan.fieldterminal.domain.evaluateWeightTrend
 import com.bioscan.fieldterminal.domain.proteinPercentSeries
+import java.time.OffsetDateTime
 import com.bioscan.fieldterminal.ui.components.Card
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.StateRow
@@ -64,19 +69,21 @@ import java.time.temporal.ChronoUnit
 fun FuelTileScreen(onBack: () -> Unit) {
     var tab by remember { mutableStateOf(FuelTab.Nutrition) }
     var overview by remember { mutableStateOf<NutritionOverview?>(null) }
+    var stool by remember { mutableStateOf<List<StoolAnalysisRow>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         overview = NutritionRepository(SupabaseClientProvider.client).loadOverview()
+        stool = AnalysisRepository(SupabaseClientProvider.client).loadStoolLog()
         isLoading = false
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground).verticalScroll(rememberScrollState())) {
-        TileHeader(title = "FUEL", context = "NUTRITION + HYDRATION + SUPPLEMENTS", onBack = onBack)
+        TileHeader(title = "FUEL", context = "NUTRITION · HYDRATION · SUPPLEMENTS · DIGESTION · BODY", onBack = onBack)
         SubTabRow(items = FuelTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
 
         when {
-            isLoading && tab != FuelTab.Supplements && tab != FuelTab.Weight -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            isLoading && tab != FuelTab.Supplements && tab != FuelTab.Body -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = FieldColors.Amber)
             }
             else -> when (tab) {
@@ -88,14 +95,47 @@ fun FuelTileScreen(onBack: () -> Unit) {
                 }
                 FuelTab.Hydration -> overview?.let { HydrationTabContent(it) }
                 FuelTab.Supplements -> SupplementsScreen()
-                FuelTab.Weight -> WeightTdeeTab(allDays = overview?.allDays ?: emptyList())
+                // DAV-96: relocated from Heart's old Stool tab -- descriptive
+                // pattern only, no food->stool causal link implied or computed.
+                FuelTab.Digestion -> stool?.let { rows ->
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
+                        val stoolEntries = rows.mapNotNull { row -> row.bristolType?.let { OffsetDateTime.parse(row.occurredAt).toLocalDateTime().toLocalDate() to it } }
+                        BristolCard(evaluateBristol(stoolEntries))
+                    }
+                }
+                FuelTab.Body -> BodyTab(allDays = overview?.allDays ?: emptyList())
             }
         }
     }
 }
 
 @Composable
-private fun WeightTdeeTab(allDays: List<DailyNutrition>) {
+private fun BristolCard(eval: BristolEvaluation) {
+    Card(title = "DIGESTIVE PATTERN (BRISTOL)") {
+        StatLine("Confidence", eval.confidence.label)
+        eval.pattern?.let { StatLine("Pattern", bristolPatternLabel(it)) }
+        eval.pctHard?.let { StatLine("Hard (types 1-2)", "%.0f%%".format(it)) }
+        eval.pctNormal?.let { StatLine("Normal (types 3-5)", "%.0f%%".format(it)) }
+        eval.pctLoose?.let { StatLine("Loose (types 6-7)", "%.0f%%".format(it)) }
+        Text(
+            "Descriptive pattern only — not a diagnostic tool.",
+            style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
+            color = FieldColors.InkMuted,
+        )
+    }
+}
+
+private fun bristolPatternLabel(p: BristolPattern): String = when (p) {
+    BristolPattern.PredominantlyFirm -> "PREDOMINANTLY FIRM"
+    BristolPattern.PredominantlyLoose -> "PREDOMINANTLY LOOSE"
+    BristolPattern.Mixed -> "MIXED PATTERN"
+    BristolPattern.Typical -> "TYPICAL PATTERN"
+}
+
+// DAV-96: renamed from WeightTdeeTab to match the Body tab it now lives
+// under -- same real weight/body-fat trend content, not rebuilt.
+@Composable
+private fun BodyTab(allDays: List<DailyNutrition>) {
     var bodyMetrics by remember { mutableStateOf<List<BodyMetricsAnalysisRow>?>(null) }
 
     LaunchedEffect(Unit) {

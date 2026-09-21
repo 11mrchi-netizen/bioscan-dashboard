@@ -29,25 +29,26 @@ enum class TileRoute(val route: String) {
     Labs("tile_labs"),
 }
 
+// DAV-96: Digestion is new (Stool content relocated here from Heart, see
+// design/FIELD_TERMINAL_IA_CONTRACT.md section 6); Weight renamed to Body
+// per the same doc rather than rebuilt (WeightTdeeTab's real trend content
+// carries over unchanged).
 enum class FuelTab(val label: String) {
     Nutrition("NUTRITION"),
     Hydration("HYDRATION"),
     Supplements("SUPPLEMENTS"),
-    Weight("WEIGHT / TDEE"),
+    Digestion("DIGESTION"),
+    Body("BODY"),
 }
 
-// Category 1 (HRV/RHR) lives under "Heart" itself; Arousal has no Analysis
-// Layer evaluation yet (only ever logged, never evaluated) so that tab shows
-// real recent log history instead of an EvalCard. Sleep and Respiratory are
-// split into separate tabs per the user's own listing even though both come
-// from `sleep_daily` -- Sleep Duration/SRI vs. respiratory-rate anomaly are
-// genuinely different questions (Category 2's own two halves).
+// DAV-97: 7 tabs collapsed to 4 per design/FIELD_TERMINAL_IA_CONTRACT.md
+// section 7 -- Heart+Respiratory merge into Cardio, Wellness+Arousal merge
+// into Wellbeing, Sleep renames to Recovery, Injuries renames to Injury.
+// Stool moves out entirely to Fuel/Digestion (FuelTab above), not collapsed
+// into any of these four.
 enum class HeartTab(val label: String) {
-    Heart("HEART"),
-    Arousal("AROUSAL"),
-    Wellness("WELLNESS"),
-    Sleep("SLEEP"),
-    Stool("STOOL"),
-    Injuries("INJURIES"),
-    Respiratory("RESPIRATORY"),
+    Cardio("CARDIO"),
+    Recovery("RECOVERY"),
+    Wellbeing("WELLBEING"),
+    Injury("INJURY"),
 }

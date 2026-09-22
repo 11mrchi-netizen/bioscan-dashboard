@@ -35,12 +35,27 @@ data class PlannedRouteFailureUpdate(
     @SerialName("last_error") val lastError: String,
 )
 
+// DAV-151. Confirms an existing preview is still current (checksum + both
+// algorithm versions matched) without touching any of its real numeric
+// fields -- nothing was recomputed, so nothing about the course should
+// change, only that it's known-fresh again.
+@Serializable
+data class PlannedRouteFreshUpdate(
+    @SerialName("is_stale") val isStale: Boolean = false,
+    @SerialName("last_error") val lastError: String? = null,
+    @SerialName("computed_at") val computedAt: String,
+)
+
 @Serializable
 data class PlannedRouteRow(
     val id: Long,
     @SerialName("calendar_event_id") val calendarEventId: String,
     @SerialName("event_title") val eventTitle: String? = null,
     @SerialName("event_start_time") val eventStartTime: String,
+    @SerialName("drive_file_id") val driveFileId: String? = null,
+    @SerialName("gpx_checksum") val gpxChecksum: String? = null,
+    @SerialName("parser_version") val parserVersion: String? = null,
+    @SerialName("terrain_analysis_version") val terrainAnalysisVersion: String? = null,
     @SerialName("distance_m") val distanceM: Double? = null,
     @SerialName("elevation_gain_m") val elevationGainM: Double? = null,
     @SerialName("elevation_loss_m") val elevationLossM: Double? = null,

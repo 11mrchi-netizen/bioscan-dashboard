@@ -18,6 +18,7 @@ doc 01 for why those are two separate data paths rather than one shared GPX pipe
 | [08-calendar-drive-sync.md](08-calendar-drive-sync.md) | [DAV-145](https://linear.app/biodashboard/issue/DAV-145) · [DAV-146](https://linear.app/biodashboard/issue/DAV-146) | Real Calendar incremental sync (syncToken, token-expiry recovery, dedup) and the Drive attachment-first GPX resolution priority |
 | [09-planned-route-pipeline.md](09-planned-route-pipeline.md) | [DAV-148](https://linear.app/biodashboard/issue/DAV-148) | The one-call end-to-end pipeline wiring DAV-145/146/147 and Phase 1's shared engine together |
 | [10-route-preview-ui.md](10-route-preview-ui.md) | [DAV-149](https://linear.app/biodashboard/issue/DAV-149) | Surfacing the cached preview in the Map tab's existing per-event sheet, live GPX summary kept as fallback |
+| [11-route-preview-caching.md](11-route-preview-caching.md) | [DAV-151](https://linear.app/biodashboard/issue/DAV-151) | Metadata-checksum skip-recompute, freshness confirmation, and the row-cleanup cutoff |
 
 ## Prior art this builds on
 

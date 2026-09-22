@@ -1,16 +1,18 @@
 # 15 — Barcode lookup and Gemini candidate extraction
 
-**Linear:** [DAV-165](https://linear.app/biodashboard/issue/DAV-165) · [DAV-166](https://linear.app/biodashboard/issue/DAV-166) · **Status:** edge functions deployed, Android repositories added
+**Linear:** [DAV-165](https://linear.app/biodashboard/issue/DAV-165) · [DAV-166](https://linear.app/biodashboard/issue/DAV-166) · [DAV-167](https://linear.app/biodashboard/issue/DAV-167) · **Status:** edge functions deployed, Android repositories added
 
 ## Overview
 
-Two Supabase Edge Functions, both producing *candidates* for DAV-164's deterministic resolver to
-turn into real nutrient totals — neither is ever the authoritative source for a nutrient value:
+Three Supabase Edge Functions, all producing *candidates* for DAV-164's deterministic resolver to
+turn into real nutrient totals — none is ever the authoritative source for a nutrient value:
 
 - **`nutrition-barcode-lookup`** (DAV-165): server-side Open Food Facts lookup, with `foods` itself
   acting as the cache.
 - **`nutrition-estimate-text`** (DAV-166): server-side Gemini call that extracts structured food/
   beverage candidates from natural language — never nutrient amounts.
+- **`nutrition-estimate-image`** (DAV-167): the same candidate extraction from a meal photo instead
+  of text, with an explicit low/high portion range since a photo can't weigh anything.
 
 ## Why server-side, when this app's other Gemini features aren't
 
@@ -76,19 +78,34 @@ reproducibility" requirement. `meal_id`/`meal_item_id`/`meal_input_id` are all n
 table (DAV-161), so the row can exist before any meal does — DAV-168's review/save step is expected
 to link it back once a real `meal_item` exists from the candidate.
 
+## `nutrition-estimate-image`
+
+Same shape as `nutrition-estimate-text`, with an image (`inline_data`, base64 — the same mechanism
+`NutritionEstimationRepository.kt`'s existing photo-estimation feature already uses) in place of raw
+text, and a vision prompt that explicitly tells Gemini what a photo cannot reveal (exact weight,
+hidden ingredients, cooking oil) per DAV-167's own "Important limitation" section — the response
+schema has `quantity_low`/`quantity_high` instead of a single explicit quantity, and no
+`quantity_value` field at all, since a photo estimate should never claim single-value precision.
+
+The image is never written anywhere: it's forwarded to Gemini inline and the request ends: DAV-167's
+"original images are temporary/not retained permanently by default" requirement is satisfied by
+construction rather than by an explicit deletion step. `ai_estimates.prompt_text` stores a fixed
+`"[image estimate]"` marker instead of image bytes, for the same reason.
+
 ## Android side
 
-`data/NutritionBarcodeLookupRepository.kt` and `data/NutritionTextEstimateRepository.kt` — plain
-Ktor POST calls carrying the current session's JWT (`supabase.auth.currentAccessTokenOrNull()`),
-matching this app's existing Gemini-call shape (`GeminiClient.kt`) rather than adding the
-`functions-kt` SDK module for two endpoints. Neither is wired into `AddEntrySheet.kt` yet — that
-UI integration, plus turning a chosen candidate into an actual `meal_item` via DAV-164's resolver,
-is DAV-168's job.
+`data/NutritionBarcodeLookupRepository.kt`, `data/NutritionTextEstimateRepository.kt`, and
+`data/NutritionImageEstimateRepository.kt` — plain Ktor POST calls carrying the current session's
+JWT (`supabase.auth.currentAccessTokenOrNull()`), matching this app's existing Gemini-call shape
+(`GeminiClient.kt`) rather than adding the `functions-kt` SDK module for three endpoints. None is
+wired into `AddEntrySheet.kt` yet — that UI integration, plus turning a chosen candidate into an
+actual `meal_item` via DAV-164's resolver, is DAV-168's job.
 
 ## What's deliberately not here
 
 - Food-name search (candidate description → an actual `foods.id`) — DAV-168's review step matches
   a candidate to a canonical food (via `foods`' existing GIN full-text index), lets the user
   confirm/correct that match, and only then calls the resolver.
-- Image-based Gemini estimation (DAV-167) — same server-side pattern, a separate ticket.
-- Any UI. Both repositories are ready for DAV-168 to call; nothing in `AddEntrySheet.kt` changed.
+- Any UI. All three repositories are ready for DAV-168 to call; nothing in `AddEntrySheet.kt`
+  changed, including its existing image-capture flow, which DAV-168 will point at the new
+  repository instead of `NutritionEstimationRepository`.

@@ -12,6 +12,7 @@ doc 01 for why those are two separate data paths rather than one shared GPX pipe
 | [02-trail-metric-conventions.md](02-trail-metric-conventions.md) | [DAV-129](https://linear.app/biodashboard/issue/DAV-129) | How Strava/TrainingPeaks/FFA-ITRA/coaching literature define each trail metric, and which canonical formula this app implements |
 | [03-trail-metric-registry.md](03-trail-metric-registry.md) | [DAV-128](https://linear.app/biodashboard/issue/DAV-128) | The canonical name/unit/formula/provenance contract every trail metric maps into |
 | [04-terrain-segmentation-rules.md](04-terrain-segmentation-rules.md) | [DAV-130](https://linear.app/biodashboard/issue/DAV-130) | Smoothing, noise threshold, grade bands, stop handling, and climb/descent comparability rules |
+| [05-trail-metrics-ui-presentation.md](05-trail-metrics-ui-presentation.md) | (folds into DAV-144) | Where trail metrics render (Session Detail's new TRAIL card, Training tab's weekly rollup) and how they map onto the existing Futuristic Material components |
 
 ## Prior art this builds on
 

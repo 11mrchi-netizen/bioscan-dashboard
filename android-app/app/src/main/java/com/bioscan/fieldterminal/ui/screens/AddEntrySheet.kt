@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -63,6 +64,7 @@ import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogMasturbationRow
+import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
@@ -87,6 +89,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 // Step 12 (Phase D) + the 2026-09-15 follow-up pass: the "+" add-entry flow.
 // Type picker first, then a minimal per-type form that writes straight to
@@ -409,6 +412,84 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
         }
     }
 }
+
+// DAV-160. Read-only detail view for Sleep, opened via the same DETAIL
+// action Exercise already uses (EntryActionSheet's onViewDetail) rather than
+// a new nav route -- a bottom sheet is proportionate for a handful of read-
+// only stats, matching every other sheet in this file. Sleep still has no
+// edit form (see LogSource's own doc comment); this only reads.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var row by remember { mutableStateOf<LogSleepDetailRow?>(null) }
+
+    LaunchedEffect(entryId) {
+        row = AddEntryRepository(SupabaseClientProvider.client).fetchSleepDetail(entryId)
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RectangleShape,
+        containerColor = FieldColors.Panel,
+        contentColor = FieldColors.Ink,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+            SheetBackHeader(label = "SLEEP DETAIL", onBack = onDismiss)
+            Spacer(Modifier.height(16.dp))
+            val r = row
+            if (r == null) {
+                Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = FieldColors.Amber)
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SleepDetailLine("Duration", formatSleepMinutes(r.hours?.let { it * 60 }))
+                    SleepDetailLine("Bedtime", r.bedtime?.let { formatSleepTime(it) } ?: "—")
+                    SleepDetailLine("Wake time", r.wakeTime?.let { formatSleepTime(it) } ?: "—")
+                    SleepDetailLine("Deep sleep", formatSleepMinutes(r.deepMin))
+                    SleepDetailLine("REM sleep", formatSleepMinutes(r.remMin))
+                    SleepDetailLine("Light sleep", formatSleepMinutes(r.lightMin))
+                    SleepDetailLine("Respiratory rate", r.respiratoryRate?.let { "%.1f breaths/min".format(it) } ?: "—")
+                    SleepDetailLine("Score", r.score?.toString() ?: "—")
+                    SleepDetailLine("Source", r.source?.replace("_", " ")?.uppercase() ?: "—")
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun SleepDetailLine(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
+        Text(
+            value,
+            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp),
+            color = FieldColors.Ink,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f).padding(start = 8.dp),
+        )
+    }
+}
+
+// "—" distinguishes a genuinely missing metric (null) from a real zero,
+// per this ticket's own requirement -- never render "0m" for a metric
+// Health Connect simply didn't report for this night.
+private fun formatSleepMinutes(minutes: Double?): String {
+    if (minutes == null) return "—"
+    val h = (minutes / 60).toInt()
+    val m = (minutes % 60).toInt()
+    return if (h > 0) "${h}h ${m}m" else "${m}m"
+}
+
+// Same naive local-wall-clock convention every other real timestamp in this
+// app uses (see parseIsoToLocalDateTime above) -- bedtime/wake_time are
+// written by HealthConnectDailySyncRepository following that same rule.
+private fun formatSleepTime(iso: String): String =
+    parseIsoToLocalDateTime(iso).format(DateTimeFormatter.ofPattern("d MMM, HH:mm"))
 
 // Every real-time-of-day column in this app is written as the device's
 // local wall-clock reading labeled with a fake zero/UTC offset -- readers

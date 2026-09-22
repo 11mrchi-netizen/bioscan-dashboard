@@ -119,6 +119,25 @@ data class LogOstrcRow(
     val notes: String? = null,
 )
 
+// DAV-160. The Log feed's own LogSleepRow only carries id/date/hours/score
+// (just enough for the row headline) -- this is the richer read for the
+// Sleep DETAIL sheet, selecting columns HealthConnectDailySyncRepository
+// already writes but no screen previously read in full.
+@Serializable
+data class LogSleepDetailRow(
+    val id: Long,
+    val date: String,
+    val hours: Double? = null,
+    val score: Int? = null,
+    @SerialName("respiratory_rate") val respiratoryRate: Double? = null,
+    val bedtime: String? = null,
+    @SerialName("wake_time") val wakeTime: String? = null,
+    @SerialName("deep_min") val deepMin: Double? = null,
+    @SerialName("rem_min") val remMin: Double? = null,
+    @SerialName("light_min") val lightMin: Double? = null,
+    val source: String? = null,
+)
+
 @Serializable
 data class LogSupplementTakenRow(
     val id: Long,

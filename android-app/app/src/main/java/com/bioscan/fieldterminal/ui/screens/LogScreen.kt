@@ -63,6 +63,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     var showAddSheet by remember { mutableStateOf(false) }
     var actionEntry by remember { mutableStateOf<LogEntry?>(null) }
     var editingEntry by remember { mutableStateOf<LogEntry?>(null) }
+    var sleepDetailEntryId by remember { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(reloadKey) {
         allEntries = LogRepository(SupabaseClientProvider.client).loadAllEntries()
@@ -131,13 +132,20 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
                 actionEntry = null
                 refresh()
             },
-            onViewDetail = if (entry.source == LogSource.Exercise) {
-                {
-                    actionEntry = null
-                    onOpenSessionDetail(entry.id)
+            onViewDetail = when (entry.source) {
+                LogSource.Exercise -> {
+                    {
+                        actionEntry = null
+                        onOpenSessionDetail(entry.id)
+                    }
                 }
-            } else {
-                null
+                LogSource.Sleep -> {
+                    {
+                        actionEntry = null
+                        sleepDetailEntryId = entry.id
+                    }
+                }
+                else -> null
             },
         )
     }
@@ -151,6 +159,10 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
                 refresh()
             },
         )
+    }
+
+    sleepDetailEntryId?.let { id ->
+        SleepDetailSheet(entryId = id, onDismiss = { sleepDetailEntryId = null })
     }
 }
 

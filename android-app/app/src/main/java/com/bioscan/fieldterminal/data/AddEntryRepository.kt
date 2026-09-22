@@ -21,6 +21,7 @@ import com.bioscan.fieldterminal.data.model.NewMasturbationRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
 import com.bioscan.fieldterminal.data.model.NewNoteRow
 import com.bioscan.fieldterminal.data.model.NewOstrcRow
+import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.NewStoolRow
 import com.bioscan.fieldterminal.data.model.NewSupplementLogRow
@@ -338,6 +339,15 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     suspend fun fetchOstrc(id: Long) = fetchById<LogOstrcRow>("ostrc_checkins", "id,check_date,body_area,q1,q2,q3,q4,notes", id)
     suspend fun fetchMasturbation(id: Long) = fetchById<LogMasturbationRow>("masturbation_log", "id,occurred_at,watched_porn,load_size,orgasm_intensity,notes", id)
     suspend fun fetchSupplementTaken(id: Long) = fetchById<LogSupplementTakenRow>("supplement_log", "id,supplement_name,taken_at,dose_value,dose_unit", id)
+
+    // DAV-160. Read-only -- Sleep has no edit form (see LogSource's own doc
+    // comment), this just exposes the richer columns Health Connect sync
+    // already writes but the Log feed's own LogSleepRow never selected.
+    suspend fun fetchSleepDetail(id: Long) = fetchById<LogSleepDetailRow>(
+        "sleep_daily",
+        "id,date,hours,score,respiratory_rate,bedtime,wake_time,deep_min,rem_min,light_min,source",
+        id,
+    )
 
     private suspend inline fun <reified T : Any> fetchById(table: String, columns: String, id: Long): T =
         supabase.postgrest.from(table)

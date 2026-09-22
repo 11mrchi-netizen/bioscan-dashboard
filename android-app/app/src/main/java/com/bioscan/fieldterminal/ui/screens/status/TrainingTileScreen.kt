@@ -28,22 +28,23 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.domain.DeloadCadenceFlag
+import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.domain.ExpectationTier
 import com.bioscan.fieldterminal.domain.MetricCategory
+import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.RestCadenceEvaluation
 import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.domain.TrainingLoadEvaluation
 import com.bioscan.fieldterminal.domain.evaluateRestCadence
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.resolveTier
-import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.TileHeader
-import com.bioscan.fieldterminal.ui.components.stateColor
-import com.bioscan.fieldterminal.ui.components.stateLabel
 import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
-import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.OffsetDateTime
 
 // DAV-98: LOAD first (dominant instrument), then PERFORMANCE, then SESSIONS
@@ -103,21 +104,18 @@ private fun TrainingLoadSection() {
     }
 }
 
-// Phase A4. TSB's own descriptive band (Freshened/Neutral/Loaded/...) is
-// the real label here, not the generic ABOVE/BELOW-YOUR-BAND wording
-// stateLabel() uses for the SWC-based categories -- TSB is a TrainingPeaks
-// convention, not a personal-baseline band, so it gets its own row.
 @Composable
 private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier?) {
-    Card(title = "TRAINING LOAD (CTL/ATL/TSB)") {
+    FTCard(title = "TRAINING LOAD (CTL/ATL/TSB)") {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("State", style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
-            Text(
-                eval.tsbBand?.uppercase() ?: stateLabel(eval.state),
-                style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp),
-                color = stateColor(eval.state),
-            )
+            Text("State", style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+            FTStatePill(eval.state.toMetricState())
         }
+        // TSB's own descriptive band (Freshened/Neutral/Loaded/...) is the
+        // real label here, not the generic pill text above -- TSB is a
+        // TrainingPeaks convention, not a personal-baseline band, so it gets
+        // its own row.
+        eval.tsbBand?.let { StatLine("TSB band", it.uppercase()) }
         StatLine("Confidence", eval.confidence.label)
         eval.ctl?.let { StatLine("CTL (fitness)", "%.1f".format(it)) }
         eval.atl?.let { StatLine("ATL (fatigue)", "%.1f".format(it)) }
@@ -129,10 +127,23 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier
         Text(
             "Grade-adjusted pace / Efficiency Factor not built yet — needs per-point route " +
                 "elevation data this app doesn't persist for logged sessions.",
-            style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
-            color = FieldColors.InkMuted,
+            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            color = FT.TextSecondary,
         )
     }
+}
+
+// Same EvalState -> MetricState bridge already established independently in
+// HeartTileScreen/FuelTileScreen -- preserves the same color/semantic
+// relationship (NoData/Building stay neutral-ish, Stable reads as the
+// positive case, ShiftUp/Down as a real but non-critical move, Unstable as
+// the one state that reads Critical).
+private fun EvalState.toMetricState(): MetricState = when (this) {
+    EvalState.NoData -> MetricState.Unavailable
+    EvalState.Building -> MetricState.Building
+    EvalState.Stable -> MetricState.Optimal
+    EvalState.ShiftUp, EvalState.ShiftDown -> MetricState.Warning
+    EvalState.Unstable -> MetricState.Critical
 }
 
 // Phase A4 (Category 7). Two independent signals, never combined into one
@@ -141,7 +152,7 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier
 // spec's own "these are two different questions" framing.
 @Composable
 private fun RestCadenceCard(eval: RestCadenceEvaluation) {
-    Card(title = "REST CADENCE") {
+    FTCard(title = "REST CADENCE") {
         StatLine("Days without rest", "${eval.consecutiveDaysWithoutRest}")
         Text(
             if (!eval.gateAMet) {
@@ -151,8 +162,8 @@ private fun RestCadenceCard(eval: RestCadenceEvaluation) {
             } else {
                 "Signal A (acute): not flagged."
             },
-            style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-            color = if (eval.signalAFlagged) FieldColors.Alert else FieldColors.InkMuted,
+            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            color = if (eval.signalAFlagged) FT.Critical else FT.TextSecondary,
         )
         StatLine("Deload cadence", deloadCadenceLabel(eval.deloadCadenceFlag))
         eval.weeksSinceDeload?.let { StatLine("Weeks since deload", "$it") }
@@ -175,7 +186,7 @@ private fun tierLabel(tier: ExpectationTier): String = when (tier) {
 @Composable
 private fun StatLine(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
-        Text(value, style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp), color = FieldColors.Ink)
+        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+        Text(value, style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp), color = FT.TextPrimary)
     }
 }

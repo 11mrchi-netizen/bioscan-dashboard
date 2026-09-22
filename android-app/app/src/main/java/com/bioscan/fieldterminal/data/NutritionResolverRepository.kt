@@ -46,8 +46,13 @@ class NutritionResolverRepository(private val supabase: SupabaseClient) {
         servingCount: Double? = null,
         hydrationModelVersion: String = DEFAULT_HYDRATION_MODEL_VERSION,
     ): ResolvedMealItem {
+        // FoodRow.name is non-nullable (every real food row has one), so it
+        // must always be in this select list even though the resolver
+        // itself never reads it -- decodeSingle<FoodRow> fails on a missing
+        // required field, not just a null one. Caught live: a partial
+        // select here decoded fine as raw JSON but threw on FoodRow decode.
         val food = supabase.postgrest.from("foods")
-            .select(columns = Columns.list("id,food_source_id,source_food_id,beverage_class,beverage_subtype")) {
+            .select(columns = Columns.list("id,food_source_id,source_food_id,name,beverage_class,beverage_subtype")) {
                 filter { eq("id", foodId) }
             }
             .decodeSingle<FoodRow>()

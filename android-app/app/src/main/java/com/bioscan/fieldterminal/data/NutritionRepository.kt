@@ -61,4 +61,15 @@ class NutritionRepository(private val supabase: SupabaseClient) {
             lastHydrationLoggedDate = hydration?.date,
         )
     }
+
+    // DAV-168's "repeat a recent meal" -- just the most recent real meals,
+    // for a tap-to-clone list (NutritionMealSaveRepository.cloneMeal does
+    // the actual duplication).
+    suspend fun loadRecentMeals(limit: Int = 10): List<MealRow> =
+        supabase.postgrest.from("meals")
+            .select(columns = Columns.list("id,logged_at,description,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg")) {
+                order("logged_at", Order.DESCENDING)
+                limit(limit.toLong())
+            }
+            .decodeList<MealRow>()
 }

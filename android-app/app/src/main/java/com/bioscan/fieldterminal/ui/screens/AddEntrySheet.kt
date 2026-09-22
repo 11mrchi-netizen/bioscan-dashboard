@@ -50,8 +50,12 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
-import com.bioscan.fieldterminal.data.GeminiApiKeyStore
-import com.bioscan.fieldterminal.data.NutritionEstimationRepository
+import com.bioscan.fieldterminal.data.NutritionBarcodeLookupRepository
+import com.bioscan.fieldterminal.data.NutritionImageEstimateRepository
+import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
+import com.bioscan.fieldterminal.data.NutritionRepository
+import com.bioscan.fieldterminal.data.NutritionTextEstimateRepository
+import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.ExerciseLibraryMatch
@@ -67,12 +71,12 @@ import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogMasturbationRow
 import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
+import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.AddEntryType
-import com.bioscan.fieldterminal.domain.FoodEstimate
 import com.bioscan.fieldterminal.domain.FuelSubType
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogSource
@@ -143,7 +147,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     }
                 }
                 when (type) {
-                    AddEntryType.Fuel -> FuelForm(saving, onSubmit)
+                    AddEntryType.Fuel -> FuelForm(saving, onSubmit, onCanonicalSaved = onSaved)
                     AddEntryType.Encounter -> EncounterForm(
                         saving,
                         onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
@@ -579,7 +583,7 @@ private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
 // SupplementsForm exactly as they'd be used standalone -- only the picker
 // wrapping them is new.
 @Composable
-private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit) {
+private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit, onCanonicalSaved: () -> Unit) {
     var subType by remember { mutableStateOf(FuelSubType.Food) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -600,7 +604,11 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
             }
         }
         when (subType) {
-            FuelSubType.Food -> FoodForm(saving, onSave = { dt, desc, cal, p, c, f, fi, su, so -> onSubmit { it.addFood(dt, desc, cal, p, c, f, fi, su, so) } })
+            FuelSubType.Food -> FoodForm(
+                saving,
+                onSave = { dt, desc, cal, p, c, f, fi, su, so -> onSubmit { it.addFood(dt, desc, cal, p, c, f, fi, su, so) } },
+                onCanonicalSaved = onCanonicalSaved,
+            )
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } })
             FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items -> onSubmit { it.addSupplementsTaken(takenAt, items) } })
         }
@@ -630,6 +638,12 @@ private fun FoodForm(
         sugarG: Double?,
         sodiumMg: Double?,
     ) -> Unit,
+    // DAV-168: the canonical (foods/meal_items) save path doesn't go through
+    // AddEntryRepository at all -- NutritionMealSaveRepository writes
+    // directly -- so it can't reuse onSave's addFood-shaped contract above.
+    // This is the same "the whole sheet is done" signal AddEntrySheet's own
+    // onSaved already is, just reachable from inside this nested form.
+    onCanonicalSaved: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -643,30 +657,41 @@ private fun FoodForm(
     var sugar by remember { mutableStateOf(initialSugar?.toString() ?: "") }
     var sodium by remember { mutableStateOf(initialSodium?.toString() ?: "") }
 
-    val apiKey = remember { GeminiApiKeyStore.get(context) }
     var estimating by remember { mutableStateOf(false) }
     var estimationError by remember { mutableStateOf<String?>(null) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
 
-    fun applyEstimate(estimate: FoodEstimate) {
-        if (description.isBlank()) estimate.description?.let { description = it }
-        estimate.calories?.let { calories = it.toString() }
-        estimate.proteinG?.let { protein = it.toString() }
-        estimate.carbsG?.let { carbs = it.toString() }
-        estimate.fatG?.let { fat = it.toString() }
-        estimate.fiberG?.let { fiber = it.toString() }
-        estimate.sugarG?.let { sugar = it.toString() }
-        estimate.sodiumMg?.let { sodium = it.toString() }
-    }
+    // DAV-168: candidates from any of the three sources funnel into the
+    // same review sheet before ever touching meal_items.
+    var reviewSeedItems by remember { mutableStateOf<List<ReviewSeedItem>?>(null) }
+    var barcodeInput by remember { mutableStateOf("") }
+    var barcodeLooking by remember { mutableStateOf(false) }
+    var barcodeError by remember { mutableStateOf<String?>(null) }
+    var showRecentMeals by remember { mutableStateOf(false) }
+    var recentMeals by remember { mutableStateOf<List<MealRow>?>(null) }
+    var cloning by remember { mutableStateOf(false) }
 
-    fun runEstimate(uri: Uri) {
-        val key = apiKey ?: return
+    fun runImageEstimate(uri: Uri) {
         estimating = true
         estimationError = null
         scope.launch {
             try {
                 val bytes = readAndCompressImage(context, uri)
-                applyEstimate(NutritionEstimationRepository(key).estimate(bytes))
+                val result = NutritionImageEstimateRepository(SupabaseClientProvider.client).estimate(bytes)
+                reviewSeedItems = result.candidates.map { c ->
+                    ReviewSeedItem(
+                        description = c.description,
+                        quantityLow = c.quantityLow,
+                        quantityHigh = c.quantityHigh,
+                        quantityUnit = c.quantityUnit,
+                        isBeverage = c.isBeverage,
+                        foodConfidence = c.foodConfidence,
+                        portionConfidence = c.portionConfidence,
+                        ambiguous = c.ambiguous,
+                        source = MealItemSource.AiImage,
+                        aiEstimateId = result.estimateId,
+                    )
+                }
             } catch (e: Exception) {
                 estimationError = e.message ?: "Estimation failed"
             } finally {
@@ -675,17 +700,31 @@ private fun FoodForm(
         }
     }
 
-    // DAV-90: same estimate, no photo required -- for whenever there isn't
-    // one to take. Reuses the exact same applyEstimate()/estimating/
-    // estimationError state as the photo path.
-    fun runEstimateFromDescription() {
-        val key = apiKey ?: return
+    // DAV-90/DAV-166: same idea, no photo required -- estimate straight
+    // from whatever's typed in DESCRIPTION, now via the server-side
+    // candidates-only Gemini path instead of NutritionEstimationRepository.
+    fun runTextEstimate() {
         if (description.isBlank()) return
         estimating = true
         estimationError = null
         scope.launch {
             try {
-                applyEstimate(NutritionEstimationRepository(key).estimateFromDescription(description))
+                val result = NutritionTextEstimateRepository(SupabaseClientProvider.client).estimate(description)
+                reviewSeedItems = result.candidates.map { c ->
+                    ReviewSeedItem(
+                        description = c.description,
+                        quantityValue = c.quantityValue,
+                        quantityUnit = c.quantityUnit,
+                        quantityLow = c.quantityLow,
+                        quantityHigh = c.quantityHigh,
+                        isBeverage = c.isBeverage,
+                        foodConfidence = c.foodConfidence,
+                        portionConfidence = c.portionConfidence,
+                        ambiguous = c.ambiguous,
+                        source = MealItemSource.AiText,
+                        aiEstimateId = result.estimateId,
+                    )
+                }
             } catch (e: Exception) {
                 estimationError = e.message ?: "Estimation failed"
             } finally {
@@ -694,8 +733,46 @@ private fun FoodForm(
         }
     }
 
+    fun runBarcodeLookup() {
+        val barcode = barcodeInput.trim()
+        if (barcode.isBlank()) return
+        barcodeLooking = true
+        barcodeError = null
+        scope.launch {
+            try {
+                val food = NutritionBarcodeLookupRepository(SupabaseClientProvider.client).lookup(barcode)
+                if (food == null) {
+                    barcodeError = "Barcode not recognized -- try search instead."
+                } else {
+                    reviewSeedItems = listOf(
+                        ReviewSeedItem(
+                            description = food.name,
+                            isBeverage = food.beverageClass != null,
+                            foodConfidence = 1.0,
+                            source = MealItemSource.Barcode,
+                            preMatchedFood = com.bioscan.fieldterminal.data.model.FoodRow(
+                                id = food.id,
+                                foodSourceId = 0,
+                                name = food.name,
+                                brand = food.brand,
+                                barcode = food.barcode,
+                                category = food.category,
+                                beverageClass = food.beverageClass,
+                                beverageSubtype = food.beverageSubtype,
+                            ),
+                        ),
+                    )
+                }
+            } catch (e: Exception) {
+                barcodeError = e.message ?: "Lookup failed"
+            } finally {
+                barcodeLooking = false
+            }
+        }
+    }
+
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success) pendingCameraUri?.let { runEstimate(it) }
+        if (success) pendingCameraUri?.let { runImageEstimate(it) }
     }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
@@ -707,52 +784,114 @@ private fun FoodForm(
         }
     }
     val pickPhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) runEstimate(uri)
+        if (uri != null) runImageEstimate(uri)
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateTimeField("WHEN", dateTime, { dateTime = it })
         Column { FormLabel("DESCRIPTION"); FieldTextField(description, { description = it }, "e.g. Chicken rice bowl") }
 
-        if (apiKey == null) {
+        // DAV-168: this section now talks to the server-side Gemini/barcode
+        // pipeline (DAV-165/166/167) -- no local Gemini key needed anymore,
+        // unlike the plain-macro-entry fields further down which are
+        // untouched. A candidate from any of these three actions opens the
+        // review sheet; nothing here writes to `meals` directly.
+        Column {
+            FormLabel("LOG WITH AI OR BARCODE")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PhotoActionButton(label = "TAKE PHOTO", modifier = Modifier.weight(1f)) {
+                    val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                    if (granted) {
+                        val uri = createCameraCaptureUri(context)
+                        pendingCameraUri = uri
+                        takePictureLauncher.launch(uri)
+                    } else {
+                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    }
+                }
+                PhotoActionButton(label = "CHOOSE PHOTO", modifier = Modifier.weight(1f)) {
+                    pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+            }
+            PhotoActionButton(
+                label = "FROM DESCRIPTION",
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                enabled = description.isNotBlank(),
+            ) { runTextEstimate() }
+            if (estimating) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
+                    CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.size(14.dp))
+                    Text("Estimating...", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary)
+                }
+            }
+            estimationError?.let {
+                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.Critical, modifier = Modifier.padding(top = 10.dp))
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 14.dp)) {
+                FieldTextField(
+                    barcodeInput,
+                    { barcodeInput = it },
+                    "Barcode number",
+                    modifier = Modifier.weight(1f),
+                    keyboardType = KeyboardType.Number,
+                )
+                PhotoActionButton(label = if (barcodeLooking) "..." else "LOOKUP", enabled = barcodeInput.isNotBlank() && !barcodeLooking) {
+                    runBarcodeLookup()
+                }
+            }
+            barcodeError?.let {
+                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.Critical, modifier = Modifier.padding(top = 8.dp))
+            }
+
             Text(
-                "Set a Gemini API key in Setup to enable AI estimation.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                if (showRecentMeals) "HIDE RECENT MEALS" else "REPEAT A RECENT MEAL",
+                style = sheetActionLabelStyle,
                 color = FT.TextSecondary,
+                modifier = Modifier
+                    .padding(top = 14.dp)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        showRecentMeals = !showRecentMeals
+                    },
             )
-        } else {
-            Column {
-                FormLabel("AI ESTIMATION (OPTIONAL)")
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PhotoActionButton(label = "TAKE PHOTO", modifier = Modifier.weight(1f)) {
-                        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-                        if (granted) {
-                            val uri = createCameraCaptureUri(context)
-                            pendingCameraUri = uri
-                            takePictureLauncher.launch(uri)
-                        } else {
-                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            if (showRecentMeals) {
+                LaunchedEffect(Unit) {
+                    if (recentMeals == null) {
+                        recentMeals = try { NutritionRepository(SupabaseClientProvider.client).loadRecentMeals() } catch (e: Exception) { emptyList() }
+                    }
+                }
+                val meals = recentMeals
+                if (meals == null) {
+                    CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.padding(top = 8.dp).size(14.dp))
+                } else if (meals.isEmpty()) {
+                    Text("No recent meals yet.", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 8.dp))
+                } else {
+                    Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        meals.forEach { meal ->
+                            Text(
+                                meal.description ?: "Meal",
+                                style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                color = if (cloning) FT.TextMuted else FT.TextPrimary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = !cloning) {
+                                        val id = meal.id ?: return@clickable
+                                        cloning = true
+                                        scope.launch {
+                                            try {
+                                                NutritionMealSaveRepository(SupabaseClientProvider.client).cloneMeal(id, dateTime.toIsoWithOffset())
+                                                onCanonicalSaved()
+                                            } catch (e: Exception) {
+                                                barcodeError = e.message ?: "Could not repeat this meal"
+                                            } finally {
+                                                cloning = false
+                                            }
+                                        }
+                                    }
+                                    .padding(vertical = 6.dp),
+                            )
                         }
                     }
-                    PhotoActionButton(label = "CHOOSE PHOTO", modifier = Modifier.weight(1f)) {
-                        pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }
-                }
-                // DAV-90: no photo required -- estimate straight from
-                // whatever's typed in DESCRIPTION above.
-                PhotoActionButton(
-                    label = "FROM DESCRIPTION",
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                    enabled = description.isNotBlank(),
-                ) { runEstimateFromDescription() }
-                if (estimating) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
-                        CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.size(14.dp))
-                        Text("Estimating...", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary)
-                    }
-                }
-                estimationError?.let {
-                    Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.Critical, modifier = Modifier.padding(top = 10.dp))
                 }
             }
         }
@@ -784,6 +923,18 @@ private fun FoodForm(
                 sodium.toDoubleOrNull(),
             )
         }
+    }
+
+    reviewSeedItems?.let { seeds ->
+        NutritionCandidateReviewSheet(
+            seedItems = seeds,
+            mealDateTime = dateTime,
+            onDismiss = { reviewSeedItems = null },
+            onSaved = {
+                reviewSeedItems = null
+                onCanonicalSaved()
+            },
+        )
     }
 }
 

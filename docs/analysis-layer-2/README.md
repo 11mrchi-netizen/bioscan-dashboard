@@ -26,7 +26,8 @@ it's filed as a separate follow-up issue (linked inline) rather than solved here
 | [12-beverage-hydration-caffeine-model.md](12-beverage-hydration-caffeine-model.md) | [DAV-181](https://linear.app/biodashboard/issue/DAV-181) | How beverages carry fluid/caffeine/effective-hydration as first-class, versioned fields |
 | [13-nutrition-resolver.md](13-nutrition-resolver.md) | [DAV-164](https://linear.app/biodashboard/issue/DAV-164) | The deterministic (non-AI) food+quantity -> nutrient totals calculation and its provenance chain |
 | [14-usda-fdc-import.md](14-usda-fdc-import.md) | [DAV-162](https://linear.app/biodashboard/issue/DAV-162) | The repeatable USDA FoodData Central importer, its scope decisions, and refresh procedure |
-| [15-barcode-and-gemini-logging.md](15-barcode-and-gemini-logging.md) | [DAV-165](https://linear.app/biodashboard/issue/DAV-165) · [DAV-166](https://linear.app/biodashboard/issue/DAV-166) | The server-side barcode lookup and Gemini candidate-extraction Edge Functions |
+| [15-barcode-and-gemini-logging.md](15-barcode-and-gemini-logging.md) | [DAV-165](https://linear.app/biodashboard/issue/DAV-165) · [DAV-166](https://linear.app/biodashboard/issue/DAV-166) · [DAV-167](https://linear.app/biodashboard/issue/DAV-167) | The server-side barcode lookup and Gemini candidate-extraction Edge Functions |
+| [16-nutrition-review-sheet.md](16-nutrition-review-sheet.md) | [DAV-168](https://linear.app/biodashboard/issue/DAV-168) | The review/correction UX connecting all three candidate sources to real meal_items, and three real decode bugs live testing caught |
 
 Milestone 1 ("Data & model contract") is fully closed as of docs 01-04. Docs 05-06 pull forward two
 contract-defining tickets filed under milestones 3-4, ahead of the implementation work (DAV-56

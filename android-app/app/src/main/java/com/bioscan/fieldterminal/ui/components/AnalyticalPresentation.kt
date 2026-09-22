@@ -150,11 +150,37 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier) {
             }
         }
         Text(
-            text = "CURRENT " + (range.current?.toString() ?: "—") + " · BASELINE " + (range.baseline?.toString() ?: "—"),
+            text = "CURRENT " + formatRangeValue(range.current) + " · BASELINE " + formatRangeValue(range.baseline),
             color = FT.TextMuted,
             fontFamily = Telemetry,
             fontSize = 10.sp,
         )
+    }
+}
+
+// Titled container matching Card.kt's exact shape/API (title bar + padded
+// content) for screens that have migrated to Futuristic Material -- Card.kt
+// itself stays legacy-amber until every one of its callers migrates (see
+// FuturisticMaterialTokens.kt's own "legacy tokens stay intact" precedent).
+@Composable
+fun FTCard(title: String, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusCard))
+            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusCard)),
+    ) {
+        Text(
+            text = title.uppercase(),
+            color = FT.Emerald,
+            fontFamily = Interface,
+            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        )
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            content()
+        }
     }
 }
 
@@ -238,6 +264,13 @@ fun FTAnalyticalCard(
             chartContent?.let { content -> FTChartFrame(chart, content = content) }
         }
     }
+}
+
+// Whole numbers print without a trailing ".0" (Double.toString() always
+// shows one); one decimal place otherwise.
+private fun formatRangeValue(value: Double?): String {
+    if (value == null) return "—"
+    return if (value == Math.floor(value)) value.toInt().toString() else "%.1f".format(value)
 }
 
 private data class StateTreatment(val label: String, val symbol: String, val color: Color)

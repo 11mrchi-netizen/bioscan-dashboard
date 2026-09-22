@@ -26,18 +26,28 @@ import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.domain.DailyNutrition
+import com.bioscan.fieldterminal.domain.DisplayValue
+import com.bioscan.fieldterminal.domain.PersonalRange
+import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.TotalsPeriod
 import com.bioscan.fieldterminal.domain.sumNutritionSince
-import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTMetricValue
+import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.PeriodToggle
-import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 import com.bioscan.fieldterminal.ui.theme.SairaCondensed
 import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
 // Step 6 (Phase C). Real data from `meals`/`hydration_daily`. "Today" means
@@ -61,6 +71,13 @@ import kotlin.math.roundToInt
 // NutritionTabContent/HydrationTabContent -- the Fuel tile page now hosts
 // Nutrition and Hydration as two switchable tabs sharing one
 // NutritionOverview load, instead of one combined screen.
+// DAV-100: calories headline -> macros -> meals logged -> 7-day trend,
+// migrated onto the shared Futuristic Material primitives (DAV-105).
+// RangeKind.ReferenceRange is used throughout (not PersonalRange/TargetRange)
+// because these stay real, generic sanity ranges -- no personal calorie/
+// macro target is stored anywhere in this project (see this file's own
+// long-standing note above); ReferenceRange is the one range kind whose
+// contract doesn't imply a personal history gate or an achieved goal.
 @Composable
 fun NutritionTabContent(overview: NutritionOverview) {
     val today = overview.today
@@ -76,33 +93,26 @@ fun NutritionTabContent(overview: NutritionOverview) {
     ) {
         // Calories headline
         Column {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = today.calories.roundToInt().toString(),
-                    style = TextStyle(fontFamily = SairaCondensed, fontWeight = FontWeight.Bold, fontSize = 40.sp),
-                    color = FieldColors.Amber,
-                )
-                Text(
-                    text = " KCAL",
-                    style = FieldTextStyles.headerContext,
-                    color = FieldColors.InkMuted,
-                    modifier = Modifier.padding(bottom = 6.dp),
-                )
-            }
-            RangeBar(value = today.calories, max = 3500.0, watchBelow = 1800.0, color = FieldColors.Amber)
+            FTMetricValue(DisplayValue(primary = today.calories.roundToInt().toString(), unit = "KCAL"))
+            FTRangeIndicator(referenceRange("DAILY REFERENCE RANGE", today.calories, 0.0, 3500.0))
             Text(
                 text = "${today.mealCount} MEAL${if (today.mealCount == 1) "" else "S"} LOGGED — ${today.date}",
                 style = FieldTextStyles.tabBarLabel,
-                color = FieldColors.InkMuted,
+                color = FT.TextSecondary,
                 modifier = Modifier.padding(top = 6.dp),
             )
         }
 
-        // Macros card
-        Card(title = "MACROS") {
-            MacroRow("Protein", today.proteinG, max = 220.0, color = FieldColors.Green)
-            MacroRow("Carbs", today.carbsG, max = 450.0, color = FieldColors.Cyan)
-            MacroRow("Fat", today.fatG, max = 180.0, color = FieldColors.Amber)
+        FTCard(title = "MACROS") {
+            FTRangeIndicator(referenceRange("PROTEIN (g)", today.proteinG, 0.0, 220.0))
+            FTRangeIndicator(referenceRange("CARBS (g)", today.carbsG, 0.0, 450.0))
+            FTRangeIndicator(referenceRange("FAT (g)", today.fatG, 0.0, 180.0))
+        }
+
+        if (overview.todaysMeals.isNotEmpty()) {
+            FTCard(title = "MEALS TODAY") {
+                overview.todaysMeals.forEach { meal -> MealRowItem(meal) }
+            }
         }
 
         MacroTotalsCard(overview.allDays)
@@ -111,39 +121,72 @@ fun NutritionTabContent(overview: NutritionOverview) {
         // (matches the "TRAIN tile" histogram motif already used in the
         // Status launch-screen mockups).
         if (overview.last7Days.size > 1) {
-            Card(title = "7-DAY CALORIE TREND") {
+            FTCard(title = "7-DAY CALORIE TREND") {
                 CalorieTrendBars(overview.last7Days)
             }
         }
 
         Text(
             text = "Ranges shown are general reference points — no personal targets are stored anywhere in this project yet.",
-            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-            color = FieldColors.InkMuted,
+            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            color = FT.TextMuted,
         )
     }
 }
 
+@Composable
+private fun MealRowItem(meal: MealRow) {
+    val time = runCatching { OffsetDateTime.parse(meal.loggedAt).format(DateTimeFormatter.ofPattern("HH:mm")) }.getOrDefault("—")
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Column(Modifier.weight(1f).padding(end = 10.dp)) {
+            Text(
+                meal.description ?: "Meal",
+                style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                color = FT.TextPrimary,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+            Text(time, style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextMuted)
+        }
+        meal.calories?.let {
+            Text(
+                "${it.roundToInt()} kcal",
+                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                color = FT.TextSecondary,
+            )
+        }
+    }
+}
+
+private fun referenceRange(label: String, current: Double, lower: Double, upper: Double) = PersonalRange(
+    kind = RangeKind.ReferenceRange,
+    lower = lower,
+    upper = upper,
+    current = current,
+    label = label,
+    sufficientHistory = true,
+)
+
+// DAV-100: liters headline + the existing segmented target/actual
+// visualization, migrated onto FT tokens/typography.
 @Composable
 fun HydrationTabContent(overview: NutritionOverview) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        Card(title = "HYDRATION") {
+        FTCard(title = "HYDRATION") {
             val ml = overview.todayHydrationMl
             if (ml == null) {
-                Text("No hydration logged yet today.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+                Text("No hydration logged yet today.", style = FieldTextStyles.placeholderBody, color = FT.TextSecondary)
             } else {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        text = "%.1f".format(ml / 1000.0),
-                        style = TextStyle(fontFamily = SairaCondensed, fontWeight = FontWeight.Bold, fontSize = 26.sp),
-                        color = FieldColors.Ink,
-                    )
-                    Text(" L", style = FieldTextStyles.headerContext, color = FieldColors.InkMuted, modifier = Modifier.padding(bottom = 3.dp))
-                }
+                FTMetricValue(DisplayValue(primary = "%.1f".format(ml / 1000.0), unit = "L"))
                 HydrationSegments(ml)
+                Text(
+                    "4.0 L reference — no personal hydration target is stored anywhere in this project yet.",
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                    color = FT.TextMuted,
+                )
             }
         }
     }
@@ -158,21 +201,9 @@ private fun MacroTotalsCard(allDays: List<DailyNutrition>) {
     var period by remember { mutableStateOf(TotalsPeriod.Week) }
     val totals = sumNutritionSince(allDays, LocalDate.now(), period.days)
 
-    Card(title = "NUTRITION TOTALS") {
+    FTCard(title = "NUTRITION TOTALS") {
         PeriodToggle(selected = period, onSelect = { period = it })
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                text = totals.calories.roundToInt().toString(),
-                style = TextStyle(fontFamily = SairaCondensed, fontWeight = FontWeight.Bold, fontSize = 30.sp),
-                color = FieldColors.Amber,
-            )
-            Text(
-                text = " KCAL",
-                style = FieldTextStyles.headerContext,
-                color = FieldColors.InkMuted,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
-        }
+        FTMetricValue(DisplayValue(primary = totals.calories.roundToInt().toString(), unit = "KCAL"))
         StatLine("Protein", "${totals.proteinG.roundToInt()} g")
         StatLine("Carbs", "${totals.carbsG.roundToInt()} g")
         StatLine("Fat", "${totals.fatG.roundToInt()} g")
@@ -181,8 +212,8 @@ private fun MacroTotalsCard(allDays: List<DailyNutrition>) {
         StatLine("Sodium", "${totals.sodiumMg.roundToInt()} mg")
         Text(
             "over the last ${period.label.lowercase()} — ${totals.dayCount} day${if (totals.dayCount == 1) "" else "s"} with logged meals",
-            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-            color = FieldColors.InkMuted,
+            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            color = FT.TextMuted,
         )
     }
 }
@@ -190,23 +221,8 @@ private fun MacroTotalsCard(allDays: List<DailyNutrition>) {
 @Composable
 private fun StatLine(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
-        Text(value, style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp), color = FieldColors.Ink)
-    }
-}
-
-@Composable
-private fun MacroRow(label: String, valueG: Double, max: Double, color: androidx.compose.ui.graphics.Color) {
-    Column {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 15.sp), color = FieldColors.Ink)
-            Text(
-                "${valueG.roundToInt()} g",
-                style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
-                color = FieldColors.Ink,
-            )
-        }
-        RangeBar(value = valueG, max = max, watchBelow = null, color = color, height = 6.dp, topPadding = 6.dp)
+        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+        Text(value, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp), color = FT.TextPrimary)
     }
 }
 
@@ -222,8 +238,8 @@ private fun HydrationSegments(ml: Int) {
                     .weight(1f)
                     .height(26.dp)
                     .then(
-                        if (i < filledSegments) Modifier.background(FieldColors.Green)
-                        else Modifier.border(1.dp, FieldColors.Hairline),
+                        if (i < filledSegments) Modifier.background(FT.Emerald)
+                        else Modifier.border(1.dp, FT.GlassBorder),
                     ),
             )
         }
@@ -241,7 +257,7 @@ private fun CalorieTrendBars(days: List<DailyNutrition>) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height((40 * fraction).dp)
-                        .background(FieldColors.Amber.copy(alpha = 0.7f)),
+                        .background(FT.Emerald.copy(alpha = 0.7f)),
                 )
             }
         }

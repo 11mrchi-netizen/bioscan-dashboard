@@ -22,6 +22,7 @@ data class NutritionOverview(
                                  // new day.
     val last7Days: List<DailyNutrition>,
     val allDays: List<DailyNutrition>, // kept for the 1D/7D/30D/90D macro-totals widget
+    val todaysMeals: List<MealRow>, // DAV-100: real logged-meal list, newest first
     val todayHydrationMl: Int?,
     val lastHydrationLoggedDate: String?,
 )
@@ -33,7 +34,7 @@ class NutritionRepository(private val supabase: SupabaseClient) {
         // -- fine while this account's real meal volume is under 100 total,
         // same "bounded, not unbounded" tradeoff LogRepository already makes.
         val meals = supabase.postgrest.from("meals")
-            .select(columns = Columns.list("logged_at,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg")) {
+            .select(columns = Columns.list("id,logged_at,description,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg")) {
                 order("logged_at", Order.DESCENDING)
                 limit(500)
             }
@@ -55,6 +56,7 @@ class NutritionRepository(private val supabase: SupabaseClient) {
             today = dailyTotals.lastOrNull { it.date == today },
             last7Days = last7,
             allDays = dailyTotals,
+            todaysMeals = meals.filter { it.loggedAt.take(10) == today },
             todayHydrationMl = hydration?.takeIf { it.date == today }?.ml,
             lastHydrationLoggedDate = hydration?.date,
         )

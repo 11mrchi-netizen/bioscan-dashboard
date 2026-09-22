@@ -45,13 +45,17 @@ import com.bioscan.fieldterminal.domain.proteinPercentSeries
 import java.time.OffsetDateTime
 import com.bioscan.fieldterminal.ui.components.Card
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
+import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.StateRow
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.FuelTab
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -95,12 +99,15 @@ fun FuelTileScreen(onBack: () -> Unit) {
                 }
                 FuelTab.Hydration -> overview?.let { HydrationTabContent(it) }
                 FuelTab.Supplements -> SupplementsScreen()
-                // DAV-96: relocated from Heart's old Stool tab -- descriptive
-                // pattern only, no food->stool causal link implied or computed.
+                // DAV-96/100: relocated from Heart's old Stool tab -- frequency
+                // and longitudinal pattern, descriptive only, no food->stool
+                // causal link implied or computed (room is left for a future
+                // correlation analysis once enough nutrition+digestion history
+                // exists, per the ticket's own framing -- not built here).
                 FuelTab.Digestion -> stool?.let { rows ->
-                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                         val stoolEntries = rows.mapNotNull { row -> row.bristolType?.let { OffsetDateTime.parse(row.occurredAt).toLocalDateTime().toLocalDate() to it } }
-                        BristolCard(evaluateBristol(stoolEntries))
+                        BristolCard(evaluateBristol(stoolEntries), stoolEntries)
                     }
                 }
                 FuelTab.Body -> BodyTab(allDays = overview?.allDays ?: emptyList())
@@ -109,18 +116,30 @@ fun FuelTileScreen(onBack: () -> Unit) {
     }
 }
 
+// DAV-100: frequency (real logged-entry count) and a longitudinal trend of
+// bristol type (1-7) alongside the existing 14-day pattern breakdown --
+// a single reading is nearly meaningless per evaluateBristol's own header
+// comment, the shape across days is the signal.
 @Composable
-private fun BristolCard(eval: BristolEvaluation) {
-    Card(title = "DIGESTIVE PATTERN (BRISTOL)") {
+private fun BristolCard(eval: BristolEvaluation, entries: List<Pair<LocalDate, Int>>) {
+    FTCard(title = "DIGESTIVE PATTERN (BRISTOL)") {
+        StatLine("Frequency (14d)", "${eval.confidence.have} entries logged")
         StatLine("Confidence", eval.confidence.label)
         eval.pattern?.let { StatLine("Pattern", bristolPatternLabel(it)) }
         eval.pctHard?.let { StatLine("Hard (types 1-2)", "%.0f%%".format(it)) }
         eval.pctNormal?.let { StatLine("Normal (types 3-5)", "%.0f%%".format(it)) }
         eval.pctLoose?.let { StatLine("Loose (types 6-7)", "%.0f%%".format(it)) }
+        if (entries.size >= 2) {
+            DateTrendLine(
+                points = entries.map { (date, type) -> date to type.toDouble() },
+                color = FT.Emerald,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
         Text(
             "Descriptive pattern only — not a diagnostic tool.",
-            style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
-            color = FieldColors.InkMuted,
+            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            color = FT.TextMuted,
         )
     }
 }

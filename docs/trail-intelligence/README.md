@@ -15,6 +15,7 @@ doc 01 for why those are two separate data paths rather than one shared GPX pipe
 | [05-trail-metrics-ui-presentation.md](05-trail-metrics-ui-presentation.md) | (folds into DAV-144) | Where trail metrics render (Session Detail's new TRAIL card, Training tab's weekly rollup) and how they map onto the existing Futuristic Material components |
 | [06-trail-metric-validation.md](06-trail-metric-validation.md) | [DAV-143](https://linear.app/biodashboard/issue/DAV-143) | The 40-case hand-verified fixture suite, and the real device backtest identified but pending emulator access |
 | [07-planned-route-data-model.md](07-planned-route-data-model.md) | [DAV-147](https://linear.app/biodashboard/issue/DAV-147) | The `planned_routes` table (absorbs DAV-132) — Calendar/Drive identity, cache/versioning, course-demand-only metrics |
+| [08-calendar-drive-sync.md](08-calendar-drive-sync.md) | [DAV-145](https://linear.app/biodashboard/issue/DAV-145) · [DAV-146](https://linear.app/biodashboard/issue/DAV-146) | Real Calendar incremental sync (syncToken, token-expiry recovery, dedup) and the Drive attachment-first GPX resolution priority |
 
 ## Prior art this builds on
 

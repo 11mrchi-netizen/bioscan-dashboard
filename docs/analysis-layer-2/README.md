@@ -25,6 +25,7 @@ it's filed as a separate follow-up issue (linked inline) rather than solved here
 | [11-data-quality-checks.md](11-data-quality-checks.md) | [DAV-179](https://linear.app/biodashboard/issue/DAV-179) | Cross-domain data-quality and provenance checks |
 | [12-beverage-hydration-caffeine-model.md](12-beverage-hydration-caffeine-model.md) | [DAV-181](https://linear.app/biodashboard/issue/DAV-181) | How beverages carry fluid/caffeine/effective-hydration as first-class, versioned fields |
 | [13-nutrition-resolver.md](13-nutrition-resolver.md) | [DAV-164](https://linear.app/biodashboard/issue/DAV-164) | The deterministic (non-AI) food+quantity -> nutrient totals calculation and its provenance chain |
+| [14-usda-fdc-import.md](14-usda-fdc-import.md) | [DAV-162](https://linear.app/biodashboard/issue/DAV-162) | The repeatable USDA FoodData Central importer, its scope decisions, and refresh procedure |
 
 Milestone 1 ("Data & model contract") is fully closed as of docs 01-04. Docs 05-06 pull forward two
 contract-defining tickets filed under milestones 3-4, ahead of the implementation work (DAV-56

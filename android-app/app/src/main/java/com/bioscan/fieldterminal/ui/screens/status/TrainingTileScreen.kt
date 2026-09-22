@@ -42,7 +42,6 @@ import com.bioscan.fieldterminal.domain.resolveTier
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.TileHeader
-import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -57,7 +56,7 @@ import java.time.OffsetDateTime
 // render, nothing new).
 @Composable
 fun TrainingTileScreen(onBack: () -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground).verticalScroll(rememberScrollState())) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
         TileHeader(title = "TRAINING", context = "LOAD · PERFORMANCE · SESSIONS", onBack = onBack)
         TrainingLoadSection()
         TrainingScreen()
@@ -79,7 +78,7 @@ private fun TrainingLoadSection() {
     val s = sessions
     if (s == null || !cycleLoaded) {
         Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FieldColors.Amber)
+            CircularProgressIndicator(color = FT.DomainTraining)
         }
         return
     }

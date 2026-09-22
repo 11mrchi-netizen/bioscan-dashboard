@@ -10,7 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.ui.theme.FieldColors
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // A generic sanity-range bar -- deliberately NOT a "percent of personal
 // target" bar. First built for Step 6 (Nutrition/Hydration) once it became
@@ -26,13 +26,13 @@ fun RangeBar(
     topPadding: Dp = 8.dp,
 ) {
     val fraction = (value / max).coerceIn(0.0, 1.0).toFloat()
-    val fillColor = if (watchBelow != null && value < watchBelow) FieldColors.Alert else color
+    val fillColor = if (watchBelow != null && value < watchBelow) FT.Critical else color
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = topPadding) // true top margin -- applied outside the track's own size
             .height(height)
-            .background(FieldColors.Track),
+            .background(FT.GlassFill),
     ) {
         Box(
             modifier = Modifier

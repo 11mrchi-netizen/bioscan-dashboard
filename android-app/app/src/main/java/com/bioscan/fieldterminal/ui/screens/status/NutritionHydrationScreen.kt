@@ -23,6 +23,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
@@ -38,14 +39,12 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.PeriodToggle
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import com.bioscan.fieldterminal.ui.theme.Saira
-import com.bioscan.fieldterminal.ui.theme.SairaCondensed
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
+import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.Inter
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -84,7 +83,7 @@ fun NutritionTabContent(overview: NutritionOverview) {
     val today = overview.today
     if (today == null) {
         Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("No meals logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+            Text("No meals logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
         }
         return
     }
@@ -98,7 +97,7 @@ fun NutritionTabContent(overview: NutritionOverview) {
             FTRangeIndicator(referenceRange("DAILY REFERENCE RANGE", today.calories, 0.0, 3500.0))
             Text(
                 text = "${today.mealCount} MEAL${if (today.mealCount == 1) "" else "S"} LOGGED — ${today.date}",
-                style = FieldTextStyles.tabBarLabel,
+                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.14f.em),
                 color = FT.TextSecondary,
                 modifier = Modifier.padding(top = 6.dp),
             )
@@ -179,7 +178,7 @@ fun HydrationTabContent(overview: NutritionOverview) {
         FTCard(title = "HYDRATION") {
             val ml = overview.todayHydrationMl
             if (ml == null) {
-                Text("No hydration logged yet today.", style = FieldTextStyles.placeholderBody, color = FT.TextSecondary)
+                Text("No hydration logged yet today.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
             } else {
                 FTMetricValue(DisplayValue(primary = "%.1f".format(ml / 1000.0), unit = "L"))
                 HydrationSegments(ml)

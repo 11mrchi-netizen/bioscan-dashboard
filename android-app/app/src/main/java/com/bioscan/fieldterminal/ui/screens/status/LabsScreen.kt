@@ -39,13 +39,11 @@ import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.labMarkerTheme
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
+import com.bioscan.fieldterminal.ui.theme.Inter
 
 // Step 9 (Phase C). Real data from `lab_draws`/`lab_results` -- NOT a port of
 // index.html's Labs panel, which is entirely hardcoded prose with an empty
@@ -69,12 +67,12 @@ fun LabsScreen() {
 
     when {
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FieldColors.Amber)
+            CircularProgressIndicator(color = FT.DomainLabs)
         }
         overview?.latestDraw == null -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
             AddResultButtons(onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })
             Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                Text("No lab draws logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+                Text("No lab draws logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
             }
         }
         else -> LabsContent(overview!!, onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })
@@ -116,7 +114,7 @@ private fun LabsContent(overview: LabsOverview, onAddClick: () -> Unit, onUpload
         AddResultButtons(onAddClick = onAddClick, onUploadClick = onUploadClick)
         Text(
             text = "BLOODWORK · $drawCount DRAW${if (drawCount == 1) "" else "S"} · ${overview.markers.size} MARKERS",
-            style = FieldTextStyles.headerContext,
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.08f.em),
             color = FT.TextSecondary,
             modifier = Modifier.padding(top = 14.dp, bottom = 4.dp),
         )

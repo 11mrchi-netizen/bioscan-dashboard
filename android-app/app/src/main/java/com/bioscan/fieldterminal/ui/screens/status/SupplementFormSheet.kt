@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -30,7 +31,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -39,9 +42,9 @@ import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
-import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -52,6 +55,8 @@ import java.time.LocalDate
 // supplement is a separate, single-tap action here rather than a 4th field,
 // since it's a status transition, not part of "what/how much/when."
 private val TIME_OF_DAY_OPTIONS = listOf("morning", "afternoon", "night", "as-needed")
+private val sheetHeaderTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
+private val sheetActionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,8 +77,8 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RectangleShape,
-        containerColor = FieldColors.Panel,
-        contentColor = FieldColors.Ink,
+        containerColor = FT.Surface,
+        contentColor = FT.TextPrimary,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -81,8 +86,8 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
         ) {
             Text(
                 if (existing == null) "ADD SUPPLEMENT" else "EDIT SUPPLEMENT",
-                style = FieldTextStyles.headerTitle,
-                color = FieldColors.Amber,
+                style = sheetHeaderTitleStyle,
+                color = FT.Emerald,
             )
 
             Column { FormFieldLabel("NAME"); FieldTextField(name, { name = it }, "e.g. Vitamin D3 (NOW Foods)") }
@@ -96,16 +101,16 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .border(1.dp, if (selected) FieldColors.Amber else FieldColors.Hairline)
-                                .background(if (selected) FieldColors.Amber.copy(alpha = 0.14f) else Color.Transparent)
+                                .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                                .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
                                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { timeOfDay = option }
                                 .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 option.uppercase(),
-                                style = TextStyle(fontFamily = Saira, fontSize = 11.sp),
-                                color = if (selected) FieldColors.Amber else FieldColors.InkMuted,
+                                style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                                color = if (selected) FT.Emerald else FT.TextSecondary,
                             )
                         }
                     }
@@ -113,7 +118,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
             }
 
             error?.let {
-                Text("Couldn't save ($it).", style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp), color = FieldColors.Alert)
+                Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical)
             }
 
             val valid = name.isNotBlank() && dose.isNotBlank()
@@ -155,8 +160,8 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                 Spacer(Modifier.height(4.dp))
                 Text(
                     if (ending) "ENDING..." else "END THIS SUPPLEMENT",
-                    style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                    color = FieldColors.Alert,
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    color = FT.Critical,
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
@@ -182,5 +187,5 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
 
 @Composable
 private fun FormFieldLabel(text: String) {
-    Text(text, style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted, modifier = Modifier.padding(bottom = 6.dp))
+    Text(text, style = sheetActionLabelStyle, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
 }

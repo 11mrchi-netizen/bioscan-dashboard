@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,8 +33,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.ExtractedLabMarker
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
@@ -43,9 +46,9 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FieldTextField
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
-import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -58,6 +61,8 @@ import java.time.LocalDate
 // (NutritionEstimationRepository's own review-before-save framing) already
 // refuses to trust unreviewed.
 private enum class ExtractionPhase { PickFile, Extracting, Review, Saving }
+private val sheetHeaderTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
+private val sheetContextStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.08f.em)
 
 private class EditableMarkerRow(marker: ExtractedLabMarker) {
     var name by mutableStateOf(marker.markerName)
@@ -112,17 +117,17 @@ fun LabExtractionSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RectangleShape,
-        containerColor = FieldColors.Panel,
-        contentColor = FieldColors.Ink,
+        containerColor = FT.Surface,
+        contentColor = FT.TextPrimary,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("UPLOAD LAB REPORT", style = FieldTextStyles.headerTitle, color = FieldColors.Amber)
+            Text("UPLOAD LAB REPORT", style = sheetHeaderTitleStyle, color = FT.Emerald)
 
             error?.let {
-                Text(it, style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.Alert)
+                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.Critical)
             }
 
             when (phase) {
@@ -131,14 +136,14 @@ fun LabExtractionSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     if (apiKey == null) {
                         Text(
                             "Set a Gemini API key in Setup to enable report extraction.",
-                            style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                            color = FieldColors.InkMuted,
+                            style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                            color = FT.TextSecondary,
                         )
                     } else {
                         Text(
                             "Choose a photo or PDF of a lab report. Gemini extracts the markers -- review and edit before anything saves.",
-                            style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                            color = FieldColors.InkMuted,
+                            style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                            color = FT.TextSecondary,
                         )
                         AmberButton(label = "CHOOSE FILE") {
                             filePickerLauncher.launch(arrayOf("application/pdf", "image/*"))
@@ -148,11 +153,11 @@ fun LabExtractionSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 ExtractionPhase.Extracting -> {
                     Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = FieldColors.Amber)
+                            CircularProgressIndicator(color = FT.Emerald)
                             Text(
                                 "Extracting markers...",
-                                style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                                color = FieldColors.InkMuted,
+                                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                                color = FT.TextSecondary,
                                 modifier = Modifier.padding(top = 12.dp),
                             )
                         }
@@ -162,8 +167,8 @@ fun LabExtractionSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     DateField("DRAW DATE", date, { date = it })
                     Text(
                         "${rows.size} marker${if (rows.size == 1) "" else "s"} found — review before saving",
-                        style = FieldTextStyles.headerContext,
-                        color = FieldColors.InkMuted,
+                        style = sheetContextStyle,
+                        color = FT.TextSecondary,
                     )
                     rows.forEachIndexed { index, row ->
                         EditableMarkerCard(row, onRemove = { rows.removeAt(index) })
@@ -204,15 +209,15 @@ fun LabExtractionSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
 @Composable
 private fun EditableMarkerCard(row: EditableMarkerRow, onRemove: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().background(FieldColors.RaisedSurface).padding(14.dp),
+        modifier = Modifier.fillMaxWidth().background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule)).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             FieldTextField(row.name, { row.name = it }, "Marker name", modifier = Modifier.weight(1f))
             Text(
                 "REMOVE",
-                style = TextStyle(fontFamily = Saira, fontSize = 11.5.sp),
-                color = FieldColors.Alert,
+                style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp),
+                color = FT.Critical,
                 modifier = Modifier
                     .padding(start = 10.dp)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onRemove),
@@ -231,5 +236,5 @@ private fun EditableMarkerCard(row: EditableMarkerRow, onRemove: () -> Unit) {
 
 @Composable
 private fun MiniLabel(text: String) {
-    Text(text, style = TextStyle(fontFamily = Saira, fontSize = 10.5.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(bottom = 4.dp))
+    Text(text, style = TextStyle(fontFamily = Inter, fontSize = 10.5.sp), color = FT.TextSecondary, modifier = Modifier.padding(bottom = 4.dp))
 }

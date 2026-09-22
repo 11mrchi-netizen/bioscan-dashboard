@@ -22,17 +22,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.LabsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FieldTextField
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
-import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -43,6 +45,8 @@ import java.time.LocalDate
 // saves (LabsRepository.addLabResult tolerates partial data the same way
 // this table's own imported rows already do -- not every real result comes
 // with both bounds).
+private val sheetHeaderTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
+private val sheetActionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LabResultFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
@@ -63,14 +67,14 @@ fun LabResultFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RectangleShape,
-        containerColor = FieldColors.Panel,
-        contentColor = FieldColors.Ink,
+        containerColor = FT.Surface,
+        contentColor = FT.TextPrimary,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("ADD LAB RESULT", style = FieldTextStyles.headerTitle, color = FieldColors.Amber)
+            Text("ADD LAB RESULT", style = sheetHeaderTitleStyle, color = FT.Emerald)
 
             DateField("DRAW DATE", date, { date = it })
             Column { FormFieldLabel("MARKER"); FieldTextField(markerName, { markerName = it }, "e.g. Ferritin") }
@@ -82,7 +86,7 @@ fun LabResultFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
             }
 
             error?.let {
-                Text("Couldn't save ($it).", style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp), color = FieldColors.Alert)
+                Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical)
             }
 
             val valid = markerName.isNotBlank() && value.toDoubleOrNull() != null
@@ -116,5 +120,5 @@ fun LabResultFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
 
 @Composable
 private fun FormFieldLabel(text: String) {
-    Text(text, style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted, modifier = Modifier.padding(bottom = 6.dp))
+    Text(text, style = sheetActionLabelStyle, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
 }

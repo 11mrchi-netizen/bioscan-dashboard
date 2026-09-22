@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.bioscan.fieldterminal.domain.RoutePoint
-import com.bioscan.fieldterminal.ui.theme.FieldColors
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.BoundingBox
@@ -56,12 +56,12 @@ fun RouteMiniMap(points: List<RoutePoint>, cartoKey: String, modifier: Modifier 
                 overlays.add(
                     Polyline(this).apply {
                         setPoints(geoPoints)
-                        outlinePaint.color = FieldColors.Cyan.toArgb()
+                        outlinePaint.color = FT.DomainTraining.toArgb() // matches MapScreen's own training-route color
                         outlinePaint.strokeWidth = 9f
                     },
                 )
-                overlays.add(dotMarker(this, geoPoints.first(), FieldColors.Green.toArgb()))
-                overlays.add(dotMarker(this, geoPoints.last(), FieldColors.Magenta.toArgb()))
+                overlays.add(dotMarker(this, geoPoints.first(), FT.Emerald.toArgb()))
+                overlays.add(dotMarker(this, geoPoints.last(), FT.Critical.toArgb()))
 
                 post {
                     val box = BoundingBox.fromGeoPoints(geoPoints)

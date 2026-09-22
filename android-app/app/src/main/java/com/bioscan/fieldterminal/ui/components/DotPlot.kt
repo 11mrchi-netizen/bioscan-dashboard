@@ -14,8 +14,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -76,7 +76,7 @@ fun DotPlot(
 
             if (refLow != null && refHigh != null) {
                 drawRect(
-                    color = FieldColors.InkMuted.copy(alpha = 0.14f),
+                    color = FT.TextSecondary.copy(alpha = 0.14f),
                     topLeft = androidx.compose.ui.geometry.Offset(0f, yFor(refHigh)),
                     size = androidx.compose.ui.geometry.Size(size.width, yFor(refLow) - yFor(refHigh)),
                 )
@@ -88,8 +88,8 @@ fun DotPlot(
         }
         if (sorted.size > 1) {
             Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(sorted.first().first.format(DOT_DATE_FORMAT), style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp), color = FieldColors.InkMuted)
-                Text(sorted.last().first.format(DOT_DATE_FORMAT), style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp), color = FieldColors.InkMuted)
+                Text(sorted.first().first.format(DOT_DATE_FORMAT), style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
+                Text(sorted.last().first.format(DOT_DATE_FORMAT), style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
             }
         }
     }

@@ -21,8 +21,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -61,13 +63,9 @@ import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.HeartTab
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import com.bioscan.fieldterminal.ui.theme.Saira
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
@@ -110,7 +108,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
             .decodeList()
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground).verticalScroll(rememberScrollState())) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
         TileHeader(title = "HEART", context = "CARDIO · RECOVERY · WELLBEING · INJURY", onBack = onBack)
         SubTabRow(items = HeartTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
 
@@ -122,7 +120,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
         val ar = arousal
         if (w == null || s == null || wb == null || os == null || t == null || ar == null) {
             Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FieldColors.Amber)
+                CircularProgressIndicator(color = FT.DomainHeart)
             }
             return@Column
         }
@@ -196,7 +194,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
 @Composable
 private fun ArousalHistory(rows: List<LogArousalRow>) {
     if (rows.isEmpty()) {
-        Text("No arousal entries logged yet.", style = FieldTextStyles.placeholderBody, color = FT.TextSecondary)
+        Text("No arousal entries logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
         return
     }
     FTCard(title = "RECENT ENTRIES") {
@@ -318,7 +316,7 @@ private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int,
         eval.latestCheckDate?.let { StatLine("Last check-in", it.toString()) }
         Text(
             "LOAD CONTEXT (shown adjacent, never combined into one score)",
-            style = FieldTextStyles.subTabLabel,
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
             color = FT.TextMuted,
         )
         tsb?.let { StatLine("TSB (form)", "%+.1f".format(it)) }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingOverview
@@ -43,8 +45,6 @@ import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.PeriodToggle
 import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.components.TrendSeries
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -69,7 +69,7 @@ fun TrainingScreen() {
 
     when {
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FieldColors.Amber)
+            CircularProgressIndicator(color = FT.DomainTraining)
         }
         else -> TrainingContent(overview!!)
     }
@@ -100,7 +100,7 @@ private fun TrainingContent(overview: TrainingOverview) {
 
         // SESSIONS
         if (!overview.hasAnyRunning) {
-            Text("No running sessions logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+            Text("No running sessions logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
         } else {
             FTCard(title = "RUNNING — THIS WEEK") {
                 FTMetricValue(DisplayValue(primary = "%.1f".format(overview.thisWeekDistanceKm), unit = "KM"))
@@ -220,8 +220,8 @@ private fun Vo2MaxTimeframeToggle(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .border(1.dp, if (isSelected) FieldColors.Amber else FieldColors.Hairline)
-                    .background(if (isSelected) FieldColors.Amber.copy(alpha = 0.14f) else Color.Transparent)
+                    .border(FT.BorderWidth, if (isSelected) FT.DomainTraining else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                    .background(if (isSelected) FT.DomainTraining.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -231,8 +231,8 @@ private fun Vo2MaxTimeframeToggle(
             ) {
                 Text(
                     timeframe.label,
-                    style = FieldTextStyles.subTabLabel,
-                    color = if (isSelected) FieldColors.Amber else FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+                    color = if (isSelected) FT.DomainTraining else FT.TextSecondary,
                 )
             }
         }

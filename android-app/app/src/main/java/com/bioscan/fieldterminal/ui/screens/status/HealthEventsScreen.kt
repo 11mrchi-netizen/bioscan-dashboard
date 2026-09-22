@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.HealthEventsOverview
 import com.bioscan.fieldterminal.data.HealthEventsRepository
@@ -36,13 +37,11 @@ import com.bioscan.fieldterminal.domain.HealthEvent
 import com.bioscan.fieldterminal.domain.HealthEventKind
 import com.bioscan.fieldterminal.domain.daysSince
 import com.bioscan.fieldterminal.ui.components.AmberButton
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
+import com.bioscan.fieldterminal.ui.theme.Inter
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -71,12 +70,12 @@ fun HealthEventsScreen() {
 
     when {
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FieldColors.Amber)
+            CircularProgressIndicator(color = FT.DomainHeart)
         }
         overview!!.open.isEmpty() && overview!!.resolved.isEmpty() -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
             AddInjuryButton(onClick = { showAddSheet = true })
             Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                Text("No injuries or illnesses logged yet.", style = FieldTextStyles.placeholderBody, color = FT.TextSecondary)
+                Text("No injuries or illnesses logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
             }
         }
         else -> HealthEventsContent(overview!!, onAddClick = { showAddSheet = true }, onResolved = { reloadKey++ })
@@ -107,7 +106,7 @@ private fun HealthEventsContent(overview: HealthEventsOverview, onAddClick: () -
         AddInjuryButton(onClick = onAddClick)
         Text(
             text = "${overview.open.size} OPEN · ${overview.resolved.size} RESOLVED",
-            style = FieldTextStyles.headerContext,
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.08f.em),
             color = if (overview.open.isNotEmpty()) FT.Critical else FT.TextSecondary,
         )
 
@@ -132,7 +131,7 @@ private fun HealthEventsContent(overview: HealthEventsOverview, onAddClick: () -
 @Composable
 private fun SectionLabel(text: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text, style = FieldTextStyles.subTabLabel, color = color)
+        Text(text, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = color)
         Box(Modifier.weight(1f).height(1.dp).background(FT.GlassBorder))
     }
 }
@@ -170,9 +169,9 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 KindBadge(event.kind)
-                Text(event.status.uppercase(), style = FieldTextStyles.tabBarLabel, color = FT.Critical)
+                Text(event.status.uppercase(), style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.14f.em), color = FT.Critical)
             }
-            Text("DAY $days", style = FieldTextStyles.tabBarLabel, color = FT.TextSecondary)
+            Text("DAY $days", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.14f.em), color = FT.TextSecondary)
         }
         Column(modifier = Modifier.padding(14.dp)) {
             Text(event.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.5.sp), color = FT.TextPrimary)
@@ -191,7 +190,7 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
             if (event.kind == HealthEventKind.Injury) {
                 Text(
                     if (resolving) "RESOLVING..." else "RESOLVE",
-                    style = FieldTextStyles.tabBarLabel,
+                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.14f.em),
                     color = FT.Emerald,
                     modifier = Modifier
                         .padding(top = 12.dp)
@@ -239,7 +238,7 @@ private fun ResolvedRow(event: HealthEvent, today: LocalDate, showDivider: Boole
                 )
             }
             event.endDate?.let { end ->
-                Text("${daysSince(end, today)} D AGO", style = FieldTextStyles.tabBarLabel, color = FT.TextSecondary)
+                Text("${daysSince(end, today)} D AGO", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.14f.em), color = FT.TextSecondary)
             }
         }
         if (showDivider) {

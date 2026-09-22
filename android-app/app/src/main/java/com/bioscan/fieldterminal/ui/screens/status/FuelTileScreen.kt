@@ -57,8 +57,6 @@ import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.FuelTab
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -88,13 +86,13 @@ fun FuelTileScreen(onBack: () -> Unit) {
         isLoading = false
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground).verticalScroll(rememberScrollState())) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
         TileHeader(title = "FUEL", context = "NUTRITION · HYDRATION · SUPPLEMENTS · DIGESTION · BODY", onBack = onBack)
         SubTabRow(items = FuelTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
 
         when {
             isLoading && tab != FuelTab.Supplements && tab != FuelTab.Body -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FieldColors.Amber)
+                CircularProgressIndicator(color = FT.DomainFuel)
             }
             else -> when (tab) {
                 FuelTab.Nutrition -> overview?.let {
@@ -171,7 +169,7 @@ private fun BodyTab(allDays: List<DailyNutrition>) {
     val b = bodyMetrics
     if (b == null) {
         Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FieldColors.Amber)
+            CircularProgressIndicator(color = FT.DomainFuel)
         }
         return
     }

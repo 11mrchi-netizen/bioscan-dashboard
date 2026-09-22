@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsOverview
@@ -31,10 +32,9 @@ import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.supplementOutcome
 import com.bioscan.fieldterminal.ui.components.AmberButton
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
-import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // Step 8 (Phase C). Real data from `supplements`. Ports index.html's
 // isSupplementActive()/supplementOutcome() 1:1 (domain/Supplements.kt) --
@@ -44,6 +44,7 @@ import com.bioscan.fieldterminal.ui.theme.Saira
 // web-specific decision from an earlier chapter, outside Step 8's own
 // "active/ended list, condensed" scope). See ROADMAP.md P8 Step 8.
 private val TIME_OF_DAY_ORDER = listOf("morning", "afternoon", "night", "as-needed")
+private val sectionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
 
 @Composable
 fun SupplementsScreen() {
@@ -64,7 +65,7 @@ fun SupplementsScreen() {
 
     when {
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FieldColors.Amber)
+            CircularProgressIndicator(color = FT.Emerald)
         }
         else -> SupplementsContent(
             overview = overview!!,
@@ -98,19 +99,19 @@ private fun SupplementsContent(overview: SupplementsOverview, onAddClick: () -> 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "${overview.active.size} ACTIVE · ${overview.ended.size} ENDED",
-                style = FieldTextStyles.headerContext,
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.08f.em),
+                color = FT.TextSecondary,
             )
             AmberButton(label = "+ ADD") { onAddClick() }
         }
 
         if (overview.active.isEmpty() && overview.ended.isEmpty()) {
-            Text("No supplements logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+            Text("No supplements logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
             return@Column
         }
 
         if (overview.active.isNotEmpty()) {
-            SectionLabel("ACTIVE", FieldColors.Amber)
+            SectionLabel("ACTIVE", FT.Emerald)
             // DAV-82: same morning/afternoon/night/as-needed grouping
             // AddEntrySheet.kt's SupplementsForm already uses for the "log as
             // taken" bundles -- this roster view and that logging view now
@@ -121,8 +122,8 @@ private fun SupplementsContent(overview: SupplementsOverview, onAddClick: () -> 
                 TIME_OF_DAY_ORDER.forEach { timeOfDay ->
                     val items = grouped[timeOfDay] ?: return@forEach
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(timeOfDay.uppercase(), style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
-                        Column(modifier = Modifier.fillMaxWidth().background(FieldColors.RaisedSurface)) {
+                        Text(timeOfDay.uppercase(), style = sectionLabelStyle, color = FT.TextSecondary)
+                        Column(modifier = Modifier.fillMaxWidth().background(FT.GlassFill)) {
                             items.forEachIndexed { i, s ->
                                 ActiveRow(s, showDivider = i < items.lastIndex, onClick = { onSupplementClick(s) })
                             }
@@ -133,7 +134,7 @@ private fun SupplementsContent(overview: SupplementsOverview, onAddClick: () -> 
         }
 
         if (overview.ended.isNotEmpty()) {
-            SectionLabel("ENDED", FieldColors.InkMuted)
+            SectionLabel("ENDED", FT.TextSecondary)
             Column(modifier = Modifier.fillMaxWidth()) {
                 overview.ended.forEachIndexed { i, s ->
                     EndedRow(s, showDivider = i < overview.ended.lastIndex)
@@ -146,8 +147,8 @@ private fun SupplementsContent(overview: SupplementsOverview, onAddClick: () -> 
 @Composable
 private fun SectionLabel(text: String, color: androidx.compose.ui.graphics.Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text, style = FieldTextStyles.subTabLabel, color = color)
-        Box(Modifier.weight(1f).height(1.dp).background(FieldColors.Hairline))
+        Text(text, style = sectionLabelStyle, color = color)
+        Box(Modifier.weight(1f).height(1.dp).background(FT.GlassBorder))
     }
 }
 
@@ -162,7 +163,7 @@ private fun ActiveRow(s: SupplementRow, showDivider: Boolean, onClick: () -> Uni
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(s.name, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 16.5.sp), color = FieldColors.Ink)
+                Text(s.name, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.5.sp), color = FT.TextPrimary)
                 // DAV-83: the curated outcome map wins where it has a real,
                 // research-backed entry -- s.aiNote (a one-off Gemini guess
                 // made when this supplement was first added) only fills in
@@ -171,24 +172,24 @@ private fun ActiveRow(s: SupplementRow, showDivider: Boolean, onClick: () -> Uni
                 if (outcome.isNotEmpty()) {
                     Text(
                         outcome,
-                        style = TextStyle(fontFamily = Saira, fontSize = 14.sp),
-                        color = FieldColors.InkMuted,
+                        style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                        color = FT.TextSecondary,
                         modifier = Modifier.padding(top = 3.dp),
                     )
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(s.dose, style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp), color = FieldColors.Ink)
+                Text(s.dose, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp), color = FT.TextPrimary)
                 Text(
                     s.timeOfDay.uppercase(),
-                    style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 12.sp),
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 12.sp),
+                    color = FT.TextSecondary,
                     modifier = Modifier.padding(top = 3.dp),
                 )
             }
         }
         if (showDivider) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(FieldColors.Hairline))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder))
         }
     }
 }
@@ -199,11 +200,11 @@ private fun EndedRow(s: SupplementRow, showDivider: Boolean) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(s.name, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FieldColors.InkMuted)
+        Text(s.name, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FT.TextSecondary)
         Text(
             s.endDate ?: "",
-            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 12.5.sp),
-            color = FieldColors.InkMuted,
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 12.5.sp),
+            color = FT.TextSecondary,
         )
     }
 }

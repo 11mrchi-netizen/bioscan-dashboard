@@ -86,7 +86,7 @@ class HealthConnectWriteBackRepository(
             val endIso = endDate.atStartOfDay().toString()
 
             val meals = supabase.postgrest.from("meals")
-                .select(columns = Columns.list("id,logged_at,description,calories,protein_g,carbs_g,fat_g")) {
+                .select(columns = Columns.list("id,logged_at,description,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg")) {
                     filter {
                         gte("logged_at", startIso)
                         lt("logged_at", endIso)
@@ -94,6 +94,25 @@ class HealthConnectWriteBackRepository(
                     order("logged_at", Order.ASCENDING)
                 }
                 .decodeList<WriteBackMealRow>()
+
+            // DAV-170: meal_items carries what the flat meals columns above
+            // don't -- per-item caffeine and beverage water content, from
+            // DAV-164's resolver. Queried once for every meal already
+            // fetched, not once per meal.
+            val mealItems = if (meals.isNotEmpty()) {
+                supabase.postgrest.from("meal_items")
+                    .select(columns = Columns.list("meal_id,is_beverage,water_ml,caffeine_mg")) {
+                        filter { isIn("meal_id", meals.map { it.id }) }
+                    }
+                    .decodeList<WriteBackMealItemRow>()
+            } else {
+                emptyList()
+            }
+
+            val caffeineMgByMealId: Map<Long, Double> = mealItems
+                .mapNotNull { item -> item.caffeineMg?.let { item.mealId to it } }
+                .groupBy({ it.first }, { it.second })
+                .mapValues { (_, values) -> values.sum() }
 
             val nutritionRecords = meals.map { meal ->
                 val instant = OffsetDateTime.parse(meal.loggedAt).toLocalDateTime().atZone(zone).toInstant()
@@ -109,6 +128,10 @@ class HealthConnectWriteBackRepository(
                     protein = meal.proteinG?.let { Mass.grams(it) },
                     totalCarbohydrate = meal.carbsG?.let { Mass.grams(it) },
                     totalFat = meal.fatG?.let { Mass.grams(it) },
+                    dietaryFiber = meal.fiberG?.let { Mass.grams(it) },
+                    sugar = meal.sugarG?.let { Mass.grams(it) },
+                    sodium = meal.sodiumMg?.let { Mass.milligrams(it) },
+                    caffeine = caffeineMgByMealId[meal.id]?.let { Mass.milligrams(it) },
                     metadata = Metadata.manualEntryWithId("bioscan-meal-${meal.id}"),
                 )
             }
@@ -122,10 +145,26 @@ class HealthConnectWriteBackRepository(
                     order("date", Order.ASCENDING)
                 }
                 .decodeList<WriteBackHydrationRow>()
+            val hydrationDailyMlByDate: Map<LocalDate, Double> = hydrationRows
+                .mapNotNull { row -> row.ml?.let { LocalDate.parse(row.date) to it.toDouble() } }
+                .toMap()
 
-            val hydrationRecords = hydrationRows.mapNotNull { row ->
-                val ml = row.ml ?: return@mapNotNull null
-                val day = LocalDate.parse(row.date)
+            // DAV-170/181: a beverage logged as part of a meal (Coca-Cola
+            // with lunch, coffee with breakfast) is real fluid intake too --
+            // added to, not instead of, hydration_daily's own manual "just
+            // water" log for the same day, since they're genuinely separate
+            // logged events rather than duplicates of the same fact.
+            val mealDateById: Map<Long, LocalDate> = meals.associate { meal ->
+                meal.id to OffsetDateTime.parse(meal.loggedAt).toLocalDateTime().atZone(zone).toLocalDate()
+            }
+            val beverageWaterMlByDate: Map<LocalDate, Double> = mealItems
+                .filter { it.isBeverage }
+                .mapNotNull { item -> item.waterMl?.let { ml -> mealDateById[item.mealId]?.let { date -> date to ml } } }
+                .groupBy({ it.first }, { it.second })
+                .mapValues { (_, values) -> values.sum() }
+
+            val hydrationRecords = (hydrationDailyMlByDate.keys + beverageWaterMlByDate.keys).map { day ->
+                val totalMl = (hydrationDailyMlByDate[day] ?: 0.0) + (beverageWaterMlByDate[day] ?: 0.0)
                 val start = day.atTime(LocalTime.MIDNIGHT).atZone(zone)
                 val end = day.plusDays(1).atTime(LocalTime.MIDNIGHT).atZone(zone).minusSeconds(1)
                 HydrationRecord(
@@ -133,8 +172,8 @@ class HealthConnectWriteBackRepository(
                     startZoneOffset = start.offset,
                     endTime = end.toInstant(),
                     endZoneOffset = end.offset,
-                    volume = Volume.milliliters(ml.toDouble()),
-                    metadata = Metadata.manualEntryWithId("bioscan-hydration-${row.date}"),
+                    volume = Volume.milliliters(totalMl),
+                    metadata = Metadata.manualEntryWithId("bioscan-hydration-$day"),
                 )
             }
 
@@ -223,6 +262,9 @@ private data class WriteBackMealRow(
     @SerialName("protein_g") val proteinG: Double? = null,
     @SerialName("carbs_g") val carbsG: Double? = null,
     @SerialName("fat_g") val fatG: Double? = null,
+    @SerialName("fiber_g") val fiberG: Double? = null,
+    @SerialName("sugar_g") val sugarG: Double? = null,
+    @SerialName("sodium_mg") val sodiumMg: Double? = null,
 )
 
 @Serializable
@@ -230,6 +272,14 @@ private data class WriteBackHydrationRow(
     val id: Long,
     val date: String,
     val ml: Int? = null,
+)
+
+@Serializable
+private data class WriteBackMealItemRow(
+    @SerialName("meal_id") val mealId: Long,
+    @SerialName("is_beverage") val isBeverage: Boolean = false,
+    @SerialName("water_ml") val waterMl: Double? = null,
+    @SerialName("caffeine_mg") val caffeineMg: Double? = null,
 )
 
 @Serializable

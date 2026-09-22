@@ -13,6 +13,8 @@ data class MarkerComparison(
     val latestDisplay: String?,  // same, from the latest draw
     val latestFlag: String?,     // 'normal' | 'low' | 'high' | 'watch' | null -- drives the latest value's color
     val direction: MarkerDirection,
+    val earlierValue: Double?, // DAV-102: raw numeric value (not the display string) for dot-plot positioning
+    val latestValue: Double?,  // against a reference range -- null for qualitative/non-numeric results
 )
 
 // Real markers merged across the two draws by name -- NOT a port of
@@ -57,6 +59,8 @@ fun mergeMarkersAcrossDraws(earlierResults: List<LabResultRow>, latestResults: L
             latestDisplay = displayValue(latest),
             latestFlag = latest?.flag,
             direction = direction,
+            earlierValue = earlier?.value,
+            latestValue = latest?.value,
         )
     }.sortedBy { it.name }
 }

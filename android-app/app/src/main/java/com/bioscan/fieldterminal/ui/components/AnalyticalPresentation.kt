@@ -126,7 +126,7 @@ fun FTProvenanceCue(provenance: List<Provenance>, modifier: Modifier = Modifier)
 }
 
 @Composable
-fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier) {
+fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, currentColor: Color = FT.TextPrimary) {
     val minimum = range.lower
     val maximum = range.upper
     if (!range.sufficientHistory || minimum == null || maximum == null) {
@@ -146,7 +146,7 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier) {
                 drawCircle(FT.TextSecondary, radius = 4f, center = androidx.compose.ui.geometry.Offset(x * size.width, y), style = Stroke(2f))
             }
             fraction(range.current)?.let { x ->
-                drawCircle(FT.TextPrimary, radius = 5f, center = androidx.compose.ui.geometry.Offset(x * size.width, y))
+                drawCircle(currentColor, radius = 5f, center = androidx.compose.ui.geometry.Offset(x * size.width, y))
             }
         }
         Text(

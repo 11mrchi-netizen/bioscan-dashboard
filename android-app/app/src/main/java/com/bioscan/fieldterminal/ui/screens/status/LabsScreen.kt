@@ -34,11 +34,17 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.LabMarkerTheme
 import com.bioscan.fieldterminal.domain.MarkerComparison
 import com.bioscan.fieldterminal.domain.MarkerDirection
+import com.bioscan.fieldterminal.domain.PersonalRange
+import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.labMarkerTheme
 import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 
 // Step 9 (Phase C). Real data from `lab_draws`/`lab_results` -- NOT a port of
@@ -111,35 +117,22 @@ private fun LabsContent(overview: LabsOverview, onAddClick: () -> Unit, onUpload
         Text(
             text = "BLOODWORK · $drawCount DRAW${if (drawCount == 1) "" else "S"} · ${overview.markers.size} MARKERS",
             style = FieldTextStyles.headerContext,
-            color = FieldColors.InkMuted,
-            modifier = Modifier.padding(top = 14.dp, bottom = 14.dp),
+            color = FT.TextSecondary,
+            modifier = Modifier.padding(top = 14.dp, bottom = 4.dp),
         )
-
-        // Column header row
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Text("MARKER", style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted, modifier = Modifier.weight(1f))
-            if (overview.earlierDraw != null) {
-                Text(
-                    shortDate(overview.earlierDraw.drawDate),
-                    style = FieldTextStyles.tabBarLabel,
-                    color = FieldColors.InkMuted,
-                    modifier = Modifier.width(64.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
-                )
-            }
-            Text(
-                shortDate(overview.latestDraw!!.drawDate),
-                style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.1f.em),
-                color = FieldColors.Amber,
-                modifier = Modifier.width(64.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.End,
-            )
-            Box(modifier = Modifier.width(24.dp))
-        }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(FieldColors.Hairline))
+        // DAV-102: comparing DATE1 vs DATE2, not a fixed-column table header
+        // anymore -- dot-plot rows below don't align to value columns.
+        Text(
+            text = if (overview.earlierDraw != null) {
+                "${shortDate(overview.earlierDraw.drawDate)} → ${shortDate(overview.latestDraw!!.drawDate)}"
+            } else {
+                shortDate(overview.latestDraw!!.drawDate)
+            },
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.1f.em),
+            color = FT.Emerald,
+            modifier = Modifier.padding(bottom = 10.dp),
+        )
+        Box(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder))
 
         val grouped = overview.markers.groupBy { labMarkerTheme(it.name) }
         LabMarkerTheme.entries.forEach { theme ->
@@ -152,7 +145,7 @@ private fun LabsContent(overview: LabsOverview, onAddClick: () -> Unit, onUpload
                 onClick = { collapsedThemes = if (collapsed) collapsedThemes - theme else collapsedThemes + theme },
             )
             if (!collapsed) {
-                markers.forEach { marker -> MarkerRow(marker, hasEarlierColumn = overview.earlierDraw != null) }
+                markers.forEach { marker -> MarkerRow(marker) }
             }
         }
     }
@@ -170,61 +163,92 @@ private fun ThemeGroupHeader(theme: LabMarkerTheme, count: Int, collapsed: Boole
     ) {
         Text(
             "${theme.label} ($count)",
-            style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
-            color = FieldColors.Amber,
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+            color = FT.Emerald,
         )
         Text(
             if (collapsed) "▸" else "▾",
-            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.sp),
-            color = FieldColors.Amber,
+            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.sp),
+            color = FT.Emerald,
         )
     }
-    Box(Modifier.fillMaxWidth().height(1.dp).background(FieldColors.Hairline))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder))
 }
 
+// DAV-102: a dot plot against the marker's own reference range when both
+// exist -- the earlier and latest draw positioned on one track makes an
+// out-of-range or shifted marker visible at a glance, without forcing a
+// line chart onto what's really just two points. Falls back to the
+// original compact text row for qualitative results (no numeric value) or
+// markers with no reference range on file -- a dot plot with no track
+// bounds would either fabricate a range or mislead with a "building" state
+// that more history can never fix.
 @Composable
-private fun MarkerRow(marker: MarkerComparison, hasEarlierColumn: Boolean) {
+private fun MarkerRow(marker: MarkerComparison) {
     Column {
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(marker.name, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FieldColors.Ink)
-                val refText = formatRef(marker.unit, marker.refLow, marker.refHigh)
-                if (refText.isNotEmpty()) {
-                    Text(refText, style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(top = 2.dp))
+        if (marker.refLow != null && marker.refHigh != null && marker.latestValue != null) {
+            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(marker.name, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FT.TextPrimary)
+                    Text(
+                        marker.latestDisplay ?: "—",
+                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 15.5.sp),
+                        color = flagColor(marker.latestFlag),
+                    )
                 }
+                FTRangeIndicator(
+                    PersonalRange(
+                        kind = RangeKind.ReferenceRange,
+                        lower = marker.refLow,
+                        upper = marker.refHigh,
+                        baseline = marker.earlierValue,
+                        current = marker.latestValue,
+                        label = formatRef(marker.unit, marker.refLow, marker.refHigh),
+                        sufficientHistory = true,
+                    ),
+                    currentColor = flagColor(marker.latestFlag),
+                )
             }
-            if (hasEarlierColumn) {
+        } else {
+            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(marker.name, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FT.TextPrimary)
+                    val refText = formatRef(marker.unit, marker.refLow, marker.refHigh)
+                    if (refText.isNotEmpty()) {
+                        Text(refText, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
+                    }
+                }
                 Text(
                     marker.earlierDisplay ?: "—",
-                    style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
+                    color = FT.TextSecondary,
                     modifier = Modifier.width(64.dp),
                     textAlign = androidx.compose.ui.text.style.TextAlign.End,
                 )
-            }
-            Text(
-                marker.latestDisplay ?: "—",
-                style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 15.5.sp),
-                color = flagColor(marker.latestFlag),
-                modifier = Modifier.width(64.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.End,
-            )
-            Box(modifier = Modifier.width(24.dp), contentAlignment = Alignment.CenterEnd) {
                 Text(
-                    directionSymbol(marker.direction),
-                    style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp),
+                    marker.latestDisplay ?: "—",
+                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 15.5.sp),
                     color = flagColor(marker.latestFlag),
+                    modifier = Modifier.width(64.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
                 )
+                Box(modifier = Modifier.width(24.dp), contentAlignment = Alignment.CenterEnd) {
+                    Text(
+                        directionSymbol(marker.direction),
+                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp),
+                        color = flagColor(marker.latestFlag),
+                    )
+                }
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(FieldColors.HairlineFaint))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder.copy(alpha = 0.5f)))
     }
 }
 
 private fun flagColor(flag: String?): Color = when (flag) {
-    "high", "low" -> FieldColors.Alert
-    "watch" -> FieldColors.Amber
-    else -> FieldColors.Ink
+    "high", "low" -> FT.Critical
+    "watch" -> FT.Warning
+    else -> FT.TextPrimary
 }
 
 private fun directionSymbol(direction: MarkerDirection): String = when (direction) {

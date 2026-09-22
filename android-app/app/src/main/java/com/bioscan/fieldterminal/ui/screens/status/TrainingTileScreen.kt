@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AnalysisRepository
@@ -183,10 +184,22 @@ private fun tierLabel(tier: ExpectationTier): String = when (tier) {
     ExpectationTier.Unmanaged -> "NOT A TARGET THIS CYCLE"
 }
 
+// DAV-108: label is unweighted (always a short fixed phrase in practice) so
+// it never shrinks; value takes the rest of the row via weight(1f) so a long
+// value (e.g. "NEEDS 8 WEEKS OF LOAD HISTORY") wraps within its own bounded
+// width and stays right-aligned instead of colliding with the label -- the
+// bug this exact Row+SpaceBetween-with-two-unweighted-Texts shape produced
+// identically across every screen's own private StatLine copy.
 @Composable
 private fun StatLine(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(modifier = Modifier.fillMaxWidth()) {
         Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
-        Text(value, style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp), color = FT.TextPrimary)
+        Text(
+            value,
+            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
+            color = FT.TextPrimary,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f).padding(start = 8.dp),
+        )
     }
 }

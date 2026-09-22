@@ -74,6 +74,14 @@ class DurabilityTest {
         assertEquals(30.0, computeHrDecouplingPercent(heartRate, speed)!!, 0.01)
     }
 
+    // A degenerate single-instant range would otherwise make both "halves"
+    // collapse onto the same point, producing a false 0% instead of null --
+    // a real bug caught while writing DAV-144's orchestration test.
+    @Test
+    fun testComputeHrDecouplingPercent_tooShortRangeIsNull() {
+        assertNull(computeHrDecouplingPercent(listOf(TimePoint(0, 140.0)), listOf(TimePoint(0, 10.0))))
+    }
+
     @Test
     fun testComputeHrDecouplingPercent_emptyDataIsNull() {
         assertNull(computeHrDecouplingPercent(emptyList(), emptyList()))

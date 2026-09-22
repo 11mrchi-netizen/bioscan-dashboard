@@ -22,19 +22,24 @@ class CourseDemandTest {
         val demand = computeCourseDemand(points, segments)
 
         assertEquals(1000.0, demand.totalDistanceM, 0.001)
-        assertEquals(50.0, demand.elevationGainM, 0.001)
-        assertEquals(60.0, demand.elevationLossM, 0.001)
-        assertEquals(110.0, demand.totalVerticalM, 0.001)
+        assertEquals(50.0, demand.elevationGainM!!, 0.001)
+        assertEquals(60.0, demand.elevationLossM!!, 0.001)
+        assertEquals(110.0, demand.totalVerticalM!!, 0.001)
         assertEquals(50.0, demand.mountainIndex!!, 0.001)
         assertEquals(1.5, demand.kmEffort!!, 0.001)
     }
 
+    // A single point isn't a real route -- every derived figure is null,
+    // never a fabricated 0.0 sum-of-nothing.
     @Test
-    fun testComputeCourseDemand_zeroDistanceGivesNullRatios() {
+    fun testComputeCourseDemand_noRealRouteGivesAllNull() {
         val points = listOf(tp(0, 0.0, 100.0))
         val demand = computeCourseDemand(points, emptyList())
 
         assertEquals(0.0, demand.totalDistanceM, 0.001)
+        assertNull(demand.elevationGainM)
+        assertNull(demand.elevationLossM)
+        assertNull(demand.totalVerticalM)
         assertNull(demand.mountainIndex)
         assertNull(demand.kmEffort)
     }

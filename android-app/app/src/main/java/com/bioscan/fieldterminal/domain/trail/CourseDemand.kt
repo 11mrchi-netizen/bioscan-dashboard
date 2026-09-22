@@ -10,10 +10,13 @@ const val COURSE_DEMAND_MODEL_VERSION = "1"
 
 data class CourseDemand(
     val totalDistanceM: Double,
-    val elevationGainM: Double,
-    val elevationLossM: Double,
+    // Null when there's no real route (< 2 trackpoints) to sum, never a
+    // fabricated 0.0 -- totalElevationGainM/LossM's own sum-of-empty-list
+    // would otherwise silently read the same as "a real, flat course."
+    val elevationGainM: Double?,
+    val elevationLossM: Double?,
     // "Total vertical" -- the full vertical relief covered, up and down.
-    val totalVerticalM: Double,
+    val totalVerticalM: Double?,
     // m/km. Also known as "vertical density" (doc 03's registry aliases it
     // rather than treating it as a second metric) -- null when there's no
     // real distance to divide by, never a fabricated 0.
@@ -25,16 +28,17 @@ data class CourseDemand(
 
 fun computeCourseDemand(points: List<Trackpoint>, segments: List<TerrainSegment>): CourseDemand {
     val totalDistanceM = points.lastOrNull()?.cumulativeDistanceM ?: 0.0
-    val gain = totalElevationGainM(segments)
-    val loss = totalElevationLossM(segments)
+    val hasRoute = points.size >= 2
+    val gain = if (hasRoute) totalElevationGainM(segments) else null
+    val loss = if (hasRoute) totalElevationLossM(segments) else null
     val distanceKm = totalDistanceM / 1000.0
 
     return CourseDemand(
         totalDistanceM = totalDistanceM,
         elevationGainM = gain,
         elevationLossM = loss,
-        totalVerticalM = gain + loss,
-        mountainIndex = if (distanceKm > 0) gain / distanceKm else null,
-        kmEffort = if (distanceKm > 0) distanceKm + gain / 100.0 else null,
+        totalVerticalM = if (gain != null && loss != null) gain + loss else null,
+        mountainIndex = if (distanceKm > 0 && gain != null) gain / distanceKm else null,
+        kmEffort = if (distanceKm > 0 && gain != null) distanceKm + gain / 100.0 else null,
     )
 }

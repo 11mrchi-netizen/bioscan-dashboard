@@ -61,6 +61,12 @@ fun computeUphillPaceDegradationPercent(
 fun computeHrDecouplingPercent(heartRate: List<TimePoint>, speedKmh: List<TimePoint>): Double? {
     if (heartRate.isEmpty() || speedKmh.isEmpty()) return null
     val maxOffset = maxOf(heartRate.maxOf { it.offsetSeconds }, speedKmh.maxOf { it.offsetSeconds })
+    // A time span too short to hold two real, distinct halves (reusing the
+    // same minimum this file's segment-eligibility rule uses) would let the
+    // first/second-half windows collapse onto the same point(s), producing a
+    // false "0% decoupling" instead of a real null -- caught live while
+    // testing this function's own degenerate single-instant edge case.
+    if (maxOffset < MIN_PERFORMANCE_SEGMENT_DURATION_S) return null
     val midpoint = maxOffset / 2
 
     fun averageIn(series: List<TimePoint>, range: LongRange) =

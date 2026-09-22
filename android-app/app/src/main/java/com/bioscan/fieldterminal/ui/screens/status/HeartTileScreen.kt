@@ -31,7 +31,12 @@ import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
+import com.bioscan.fieldterminal.domain.DisplayValue
+import com.bioscan.fieldterminal.domain.EvalState
+import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.OstrcEvaluation
+import com.bioscan.fieldterminal.domain.PersonalRange
+import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.SriEvaluation
@@ -47,15 +52,20 @@ import com.bioscan.fieldterminal.domain.evaluateSri
 import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.expValue
-import com.bioscan.fieldterminal.ui.components.Card
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
-import com.bioscan.fieldterminal.ui.components.StateRow
+import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTMetricValue
+import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
+import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.HeartTab
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -140,10 +150,21 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     SriCard(evaluateSri(nights))
                 }
                 HeartTab.Wellbeing -> {
-                    SubjectiveCard("ENERGY", wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } })
-                    SubjectiveCard("MOOD", wb.mapNotNull { row -> row.mood?.let { LocalDate.parse(row.date) to it.toDouble() } })
-                    SubjectiveCard("STRESS", wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } })
-                    SubjectiveCard("SORENESS", wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } })
+                    // DAV-101: small multiples, not one collapsed score --
+                    // a 2-column grid of compact cards reads as "comparable
+                    // daily dimensions" more literally than four full-width
+                    // stacked cards did.
+                    val dimensions = listOf(
+                        "ENERGY" to wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } },
+                        "MOOD" to wb.mapNotNull { row -> row.mood?.let { LocalDate.parse(row.date) to it.toDouble() } },
+                        "STRESS" to wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } },
+                        "SORENESS" to wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } },
+                    )
+                    dimensions.chunked(2).forEach { row ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            row.forEach { (title, points) -> SubjectiveCard(title, points, modifier = Modifier.weight(1f)) }
+                        }
+                    }
                     ArousalHistory(ar)
                 }
                 HeartTab.Injury -> {
@@ -174,25 +195,25 @@ fun HeartTileScreen(onBack: () -> Unit) {
 @Composable
 private fun ArousalHistory(rows: List<LogArousalRow>) {
     if (rows.isEmpty()) {
-        Text("No arousal entries logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+        Text("No arousal entries logged yet.", style = FieldTextStyles.placeholderBody, color = FT.TextSecondary)
         return
     }
-    Card(title = "RECENT ENTRIES") {
+    FTCard(title = "RECENT ENTRIES") {
         Text(
             "No Analysis Layer evaluation exists for arousal yet -- real recent log history only.",
-            style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
-            color = FieldColors.InkMuted,
+            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            color = FT.TextMuted,
         )
         rows.forEach { row ->
             Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(row.date, style = TextStyle(fontFamily = JetBrainsMono, fontSize = 13.sp), color = FieldColors.InkMuted)
+                Text(row.date, style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp), color = FT.TextSecondary)
                 Text(
                     listOfNotNull(
                         row.morningErectionQuality?.let { "Morning wood $it/10" },
                         row.arousalLevel?.let { "Arousal $it/10" },
                     ).joinToString(" · "),
-                    style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                    color = FieldColors.Ink,
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    color = FT.TextPrimary,
                 )
             }
         }
@@ -201,22 +222,47 @@ private fun ArousalHistory(rows: List<LogArousalRow>) {
 
 private fun SwcEvaluation.toExpSpace(): SwcEvaluation = copy(baseline7d = expValue(baseline7d), mean60d = expValue(mean60d))
 
-// DAV-75: baseline/mean/CV were plain numbers with no sense of the real
-// day-to-day shape behind them -- the raw series each call site already
-// computes (to feed evaluateHrv/evaluateRhr/evaluateSleepDuration) gets
-// plotted here too, capped to the same 90-day window WeightCard/VO2max
-// already established, rather than every day this account has ever logged.
+// DAV-101: legacy 6-state EvalState maps onto FT's MetricState so
+// FTStatePill can render it -- Stable/ShiftUp-Down/Unstable keep the exact
+// same color relationship the legacy StateRow already established
+// (green/amber/red), just expressed through the shared FT vocabulary.
+private fun EvalState.toMetricState(): MetricState = when (this) {
+    EvalState.NoData -> MetricState.Unavailable
+    EvalState.Building -> MetricState.Building
+    EvalState.Stable -> MetricState.Optimal
+    EvalState.ShiftUp, EvalState.ShiftDown -> MetricState.Warning
+    EvalState.Unstable -> MetricState.Critical
+}
+
+// DAV-75/101: baseline/mean/CV were plain numbers with no sense of the real
+// day-to-day shape behind them, and no personal-range context -- the raw
+// series each call site already computes (to feed evaluateHrv/evaluateRhr/
+// evaluateSleepDuration) gets plotted here too (capped to the same 90-day
+// window WeightCard/VO2max already established), and the 60-day mean +/-
+// SWC band becomes a real FTRangeIndicator personal baseline rather than
+// two disconnected StatLine rows.
 @Composable
-private fun EvalCard(title: String, eval: SwcEvaluation, unit: String, points: List<Pair<LocalDate, Double>>? = null) {
-    Card(title = title) {
-        StateRow(eval.state)
+private fun EvalCard(title: String, eval: SwcEvaluation, unit: String, points: List<Pair<LocalDate, Double>>? = null, modifier: Modifier = Modifier) {
+    FTCard(title = title, modifier = modifier) {
+        FTStatePill(eval.state.toMetricState())
         StatLine("Confidence", eval.confidence.label)
-        eval.baseline7d?.let { StatLine("7-day baseline", "%.1f %s".format(it, unit)) }
-        eval.mean60d?.let { StatLine("60-day mean", "%.1f %s".format(it, unit)) }
-        eval.swcPct?.let { StatLine("SWC band", "±%.1f%%".format(it)) }
+        if (eval.mean60d != null && eval.swcPct != null) {
+            val band = eval.mean60d * (eval.swcPct / 100.0)
+            FTRangeIndicator(
+                PersonalRange(
+                    kind = RangeKind.PersonalBaseline,
+                    lower = eval.mean60d - band,
+                    upper = eval.mean60d + band,
+                    baseline = eval.mean60d,
+                    current = eval.baseline7d,
+                    label = "60-DAY BASELINE ± SWC ($unit)",
+                    sufficientHistory = true,
+                ),
+            )
+        }
         eval.cv7d?.let { StatLine("7-day CV", "%.1f%%".format(it)) }
         points?.let { recentTrendWindow(it) }?.let { recent ->
-            DateTrendLine(points = recent, color = FieldColors.Amber, modifier = Modifier.padding(top = 8.dp))
+            DateTrendLine(points = recent, color = FT.Emerald, modifier = Modifier.padding(top = 8.dp))
         }
     }
 }
@@ -232,15 +278,15 @@ private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<
 
 @Composable
 private fun SriCard(eval: SriEvaluation) {
-    Card(title = "SLEEP REGULARITY (SRI)") {
+    FTCard(title = "SLEEP REGULARITY (SRI)") {
         StatLine("Confidence", eval.confidence.label)
         if (eval.value != null) {
-            StatLine("SRI", "%.0f / 100".format(eval.value))
+            FTMetricValue(DisplayValue(primary = "%.0f".format(eval.value), unit = "/ 100"))
         } else {
             Text(
                 "Not enough consecutive nights yet (gaps over 2 nights reset the count).",
-                style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                color = FT.TextSecondary,
             )
         }
     }
@@ -248,7 +294,7 @@ private fun SriCard(eval: SriEvaluation) {
 
 @Composable
 private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation) {
-    Card(title = "RESPIRATORY RATE") {
+    FTCard(title = "RESPIRATORY RATE") {
         StatLine("Confidence", eval.confidence.label)
         eval.baseline?.let { StatLine("14-night baseline", "%.1f breaths/min".format(it)) }
         Text(
@@ -257,46 +303,46 @@ private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation) {
             } else {
                 "No anomaly flagged."
             },
-            style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-            color = if (eval.flagged) FieldColors.Alert else FieldColors.InkMuted,
+            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            color = if (eval.flagged) FT.Critical else FT.TextSecondary,
         )
     }
 }
 
 @Composable
 private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int, sorenessMedian: Double?) {
-    Card(title = "OSTRC-H2 · ${eval.bodyArea.uppercase()}") {
+    FTCard(title = "OSTRC-H2 · ${eval.bodyArea.uppercase()}") {
         StatLine("Confidence", eval.confidence.label)
         eval.latestSeverityScore?.let { StatLine("Latest severity", "$it / 100") }
         eval.latestCheckDate?.let { StatLine("Last check-in", it.toString()) }
         Text(
             "LOAD CONTEXT (shown adjacent, never combined into one score)",
             style = FieldTextStyles.subTabLabel,
-            color = FieldColors.InkMuted,
+            color = FT.TextMuted,
         )
         tsb?.let { StatLine("TSB (form)", "%+.1f".format(it)) }
         StatLine("Days without rest", "$daysWithoutRest")
         sorenessMedian?.let { StatLine("7-day soreness median", "%.1f".format(it)) }
         Text(
             "No injury risk score — single-factor screening doesn't predict injury. You do the synthesis; this doesn't.",
-            style = TextStyle(fontFamily = Saira, fontSize = 12.sp),
-            color = FieldColors.InkMuted,
+            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            color = FT.TextMuted,
         )
     }
 }
 
 @Composable
-private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>) {
+private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>, modifier: Modifier = Modifier) {
     val eval = evaluateSubjective(points)
-    Card(title = title) {
-        StateRow(eval.state)
+    FTCard(title = title, modifier = modifier) {
+        FTStatePill(eval.state.toMetricState())
         StatLine("Confidence", eval.confidence.label)
         eval.median7d?.let { StatLine("7-day median", "%.1f".format(it)) }
         eval.medianBaseline30d?.let { StatLine("30-day baseline", "%.1f".format(it)) }
         eval.iqr7d?.let { StatLine("7-day IQR", "%.1f".format(it)) }
         eval.trendDirection?.let { StatLine("14-day trend", if (it > 0) "↑ rising (p<0.05)" else "↓ falling (p<0.05)") }
         recentTrendWindow(points)?.let { recent ->
-            DateTrendLine(points = recent, color = FieldColors.Azure, modifier = Modifier.padding(top = 8.dp))
+            DateTrendLine(points = recent, color = FT.Info, modifier = Modifier.padding(top = 8.dp))
         }
     }
 }
@@ -304,7 +350,7 @@ private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>)
 @Composable
 private fun StatLine(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
-        Text(value, style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp), color = FieldColors.Ink)
+        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+        Text(value, style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp), color = FT.TextPrimary)
     }
 }

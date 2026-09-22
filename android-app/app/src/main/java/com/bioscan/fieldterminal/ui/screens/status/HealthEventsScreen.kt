@@ -38,7 +38,10 @@ import com.bioscan.fieldterminal.domain.daysSince
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.bioscan.fieldterminal.ui.theme.Saira
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -73,7 +76,7 @@ fun HealthEventsScreen() {
         overview!!.open.isEmpty() && overview!!.resolved.isEmpty() -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
             AddInjuryButton(onClick = { showAddSheet = true })
             Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                Text("No injuries or illnesses logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+                Text("No injuries or illnesses logged yet.", style = FieldTextStyles.placeholderBody, color = FT.TextSecondary)
             }
         }
         else -> HealthEventsContent(overview!!, onAddClick = { showAddSheet = true }, onResolved = { reloadKey++ })
@@ -105,19 +108,19 @@ private fun HealthEventsContent(overview: HealthEventsOverview, onAddClick: () -
         Text(
             text = "${overview.open.size} OPEN · ${overview.resolved.size} RESOLVED",
             style = FieldTextStyles.headerContext,
-            color = if (overview.open.isNotEmpty()) FieldColors.Alert else FieldColors.InkMuted,
+            color = if (overview.open.isNotEmpty()) FT.Critical else FT.TextSecondary,
         )
 
         if (overview.open.isNotEmpty()) {
-            SectionLabel("OPEN", FieldColors.Alert)
+            SectionLabel("OPEN", FT.Critical)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 overview.open.forEach { OpenEventCard(it, today, onResolved = onResolved) }
             }
         }
 
         if (overview.resolved.isNotEmpty()) {
-            SectionLabel("RESOLVED", FieldColors.InkMuted)
-            Column(modifier = Modifier.fillMaxWidth().background(FieldColors.RaisedSurface).alpha(0.55f)) {
+            SectionLabel("RESOLVED", FT.TextSecondary)
+            Column(modifier = Modifier.fillMaxWidth().background(FT.GlassFill).alpha(0.7f)) {
                 overview.resolved.forEachIndexed { i, event ->
                     ResolvedRow(event, today, showDivider = i < overview.resolved.lastIndex)
                 }
@@ -130,22 +133,24 @@ private fun HealthEventsContent(overview: HealthEventsOverview, onAddClick: () -
 private fun SectionLabel(text: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(text, style = FieldTextStyles.subTabLabel, color = color)
-        Box(Modifier.weight(1f).height(1.dp).background(FieldColors.Hairline))
+        Box(Modifier.weight(1f).height(1.dp).background(FT.GlassBorder))
     }
 }
 
 @Composable
 private fun KindBadge(kind: HealthEventKind) {
-    val color = if (kind == HealthEventKind.Injury) FieldColors.Amber else FieldColors.Cyan
+    val color = if (kind == HealthEventKind.Injury) FT.Warning else FT.Info
     Box(modifier = Modifier.background(color).padding(horizontal = 6.dp, vertical = 2.dp)) {
         Text(
             kind.name.uppercase(),
-            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 10.5.sp),
-            color = FieldColors.Ground,
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 10.5.sp),
+            color = FT.Base,
         )
     }
 }
 
+// DAV-101: injury states use explicit semantic (Critical/red) treatment,
+// not a domain accent -- open vs. resolved is a state, not an identity.
 @Composable
 private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -> Unit) {
     val days = daysSince(event.startDate, today) + 1 // "day 1" on the day it was reported, matching the mockup's own inclusive counting
@@ -156,8 +161,8 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, FieldColors.Alert.copy(alpha = 0.45f))
-            .background(FieldColors.Alert.copy(alpha = 0.1f)),
+            .border(1.dp, FT.Critical.copy(alpha = 0.45f))
+            .background(FT.Critical.copy(alpha = 0.1f)),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 9.dp),
@@ -165,19 +170,19 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 KindBadge(event.kind)
-                Text(event.status.uppercase(), style = FieldTextStyles.tabBarLabel, color = FieldColors.Alert)
+                Text(event.status.uppercase(), style = FieldTextStyles.tabBarLabel, color = FT.Critical)
             }
-            Text("DAY $days", style = FieldTextStyles.tabBarLabel, color = FieldColors.InkMuted)
+            Text("DAY $days", style = FieldTextStyles.tabBarLabel, color = FT.TextSecondary)
         }
         Column(modifier = Modifier.padding(14.dp)) {
-            Text(event.title, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 17.5.sp), color = FieldColors.Ink)
+            Text(event.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.5.sp), color = FT.TextPrimary)
             event.detail?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = TextStyle(fontFamily = Saira, fontSize = 14.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(top = 5.dp))
+                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 5.dp))
             }
             Text(
                 "Reported ${event.startDate}",
-                style = TextStyle(fontFamily = JetBrainsMono, fontSize = 12.sp),
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+                color = FT.TextSecondary,
                 modifier = Modifier.padding(top = 10.dp),
             )
             // DAV-88: illnesses aren't in this ticket's scope -- resolveInjury()
@@ -187,7 +192,7 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
                 Text(
                     if (resolving) "RESOLVING..." else "RESOLVE",
                     style = FieldTextStyles.tabBarLabel,
-                    color = FieldColors.Amber,
+                    color = FT.Emerald,
                     modifier = Modifier
                         .padding(top = 12.dp)
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
@@ -207,7 +212,7 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
                         },
                 )
                 resolveError?.let {
-                    Text(it, style = TextStyle(fontFamily = Saira, fontSize = 12.sp), color = FieldColors.Alert, modifier = Modifier.padding(top = 4.dp))
+                    Text(it, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.Critical, modifier = Modifier.padding(top = 4.dp))
                 }
             }
         }
@@ -224,21 +229,21 @@ private fun ResolvedRow(event: HealthEvent, today: LocalDate, showDivider: Boole
             Column(modifier = Modifier.weight(1f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     KindBadge(event.kind)
-                    Text(event.title, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 16.sp), color = FieldColors.InkMuted)
+                    Text(event.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp), color = FT.TextSecondary)
                 }
                 Text(
                     "Cleared ${event.endDate ?: "—"}",
-                    style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    color = FT.TextSecondary,
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
             event.endDate?.let { end ->
-                Text("${daysSince(end, today)} D AGO", style = FieldTextStyles.tabBarLabel, color = FieldColors.InkMuted)
+                Text("${daysSince(end, today)} D AGO", style = FieldTextStyles.tabBarLabel, color = FT.TextSecondary)
             }
         }
         if (showDivider) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(FieldColors.Hairline))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder))
         }
     }
 }

@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
@@ -78,10 +80,9 @@ import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FieldTextField
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
-import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
+import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.util.createCameraCaptureUri
 import com.bioscan.fieldterminal.util.readAndCompressImage
 import kotlinx.coroutines.delay
@@ -90,6 +91,12 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+// Shared text styles for this sheet's own chrome (sheet titles, action/
+// confirm labels) -- DAV-108 follow-up migration off FieldTextStyles'
+// legacy JetBrainsMono onto the FT contract's Inter/Roboto Mono split.
+private val sheetHeaderTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
+private val sheetActionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
 
 // Step 12 (Phase D) + the 2026-09-15 follow-up pass: the "+" add-entry flow.
 // Type picker first, then a minimal per-type form that writes straight to
@@ -110,8 +117,8 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RectangleShape,
-        containerColor = FieldColors.Panel,
-        contentColor = FieldColors.Ink,
+        containerColor = FT.Surface,
+        contentColor = FT.TextPrimary,
     ) {
         Column(
             modifier = Modifier
@@ -121,7 +128,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
         ) {
             val type = selectedType
             if (type == null) {
-                Text("LOG NEW ENTRY", style = FieldTextStyles.headerTitle, color = FieldColors.Amber)
+                Text("LOG NEW ENTRY", style = sheetHeaderTitleStyle, color = FT.DomainLog)
                 Spacer(Modifier.height(16.dp))
                 TypePickerGrid(onSelect = { selectedType = it })
             } else {
@@ -184,11 +191,11 @@ fun EntryActionSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RectangleShape,
-        containerColor = FieldColors.Panel,
-        contentColor = FieldColors.Ink,
+        containerColor = FT.Surface,
+        contentColor = FT.TextPrimary,
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(entry.headline, style = FieldTextStyles.headerTitle, color = FieldColors.Amber)
+            Text(entry.headline, style = sheetHeaderTitleStyle, color = FT.DomainLog)
 
             if (!confirmingDelete) {
                 if (onViewDetail != null) {
@@ -200,34 +207,34 @@ fun EntryActionSheet(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, FieldColors.Alert)
+                        .border(FT.BorderWidth, FT.Critical, RoundedCornerShape(FT.RadiusSmall))
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { confirmingDelete = true }
                         .padding(vertical = 14.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("DELETE", style = FieldTextStyles.subTabLabel, color = FieldColors.Alert)
+                    Text("DELETE", style = sheetActionLabelStyle, color = FT.Critical)
                 }
             } else {
                 Text(
                     "Delete this entry? This can't be undone.",
-                    style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp),
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp),
+                    color = FT.TextSecondary,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .border(1.dp, FieldColors.Hairline)
+                            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { confirmingDelete = false }
                             .padding(vertical = 14.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("CANCEL", style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
+                        Text("CANCEL", style = sheetActionLabelStyle, color = FT.TextSecondary)
                     }
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .background(FieldColors.Alert)
+                            .background(FT.Critical, RoundedCornerShape(FT.RadiusSmall))
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                 if (!deleting) {
                                     deleting = true
@@ -241,7 +248,7 @@ fun EntryActionSheet(
                             .padding(vertical = 14.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(if (deleting) "DELETING..." else "CONFIRM", style = FieldTextStyles.subTabLabel, color = FieldColors.Ground)
+                        Text(if (deleting) "DELETING..." else "CONFIRM", style = sheetActionLabelStyle, color = FT.Base)
                     }
                 }
             }
@@ -283,8 +290,8 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RectangleShape,
-        containerColor = FieldColors.Panel,
-        contentColor = FieldColors.Ink,
+        containerColor = FT.Surface,
+        contentColor = FT.TextPrimary,
     ) {
         Column(
             modifier = Modifier
@@ -307,7 +314,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
 
             if (row == null) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FieldColors.Amber)
+                    CircularProgressIndicator(color = FT.DomainLog)
                 }
             } else when (row) {
                 is LogMealRow -> FoodForm(
@@ -432,8 +439,8 @@ fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RectangleShape,
-        containerColor = FieldColors.Panel,
-        contentColor = FieldColors.Ink,
+        containerColor = FT.Surface,
+        contentColor = FT.TextPrimary,
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
             SheetBackHeader(label = "SLEEP DETAIL", onBack = onDismiss)
@@ -441,7 +448,7 @@ fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
             val r = row
             if (r == null) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FieldColors.Amber)
+                    CircularProgressIndicator(color = FT.DomainLog)
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -464,11 +471,11 @@ fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
 @Composable
 private fun SleepDetailLine(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
+        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
         Text(
             value,
-            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp),
-            color = FieldColors.Ink,
+            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
+            color = FT.TextPrimary,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f).padding(start = 8.dp),
         )
@@ -517,11 +524,11 @@ private fun SheetBackHeader(label: String, onBack: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             "BACK",
-            style = FieldTextStyles.subTabLabel,
-            color = FieldColors.InkMuted,
+            style = sheetActionLabelStyle,
+            color = FT.TextSecondary,
             modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onBack),
         )
-        Text(label, style = FieldTextStyles.headerTitle, color = FieldColors.Amber)
+        Text(label, style = sheetHeaderTitleStyle, color = FT.DomainLog)
     }
 }
 
@@ -534,7 +541,7 @@ private fun TypePickerGrid(onSelect: (AddEntryType) -> Unit) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .border(1.dp, FieldColors.Hairline)
+                            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
@@ -542,7 +549,7 @@ private fun TypePickerGrid(onSelect: (AddEntryType) -> Unit) {
                             .padding(vertical = 18.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(type.label, style = FieldTextStyles.subTabLabel, color = FieldColors.Ink)
+                        Text(type.label, style = sheetActionLabelStyle, color = FT.TextPrimary)
                     }
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
@@ -555,8 +562,8 @@ private fun TypePickerGrid(onSelect: (AddEntryType) -> Unit) {
 private fun FormLabel(text: String) {
     Text(
         text,
-        style = FieldTextStyles.subTabLabel,
-        color = FieldColors.InkMuted,
+        style = sheetActionLabelStyle,
+        color = FT.TextSecondary,
         modifier = Modifier.padding(bottom = 6.dp),
     )
 }
@@ -582,13 +589,13 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .border(1.dp, if (isSelected) FieldColors.Amber else FieldColors.Hairline)
-                        .background(if (isSelected) FieldColors.Amber.copy(alpha = 0.14f) else Color.Transparent)
+                        .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                        .background(if (isSelected) FT.DomainLog.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { subType = sub }
                         .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(sub.label, style = FieldTextStyles.subTabLabel, color = if (isSelected) FieldColors.Amber else FieldColors.InkMuted)
+                    Text(sub.label, style = sheetActionLabelStyle, color = if (isSelected) FT.DomainLog else FT.TextSecondary)
                 }
             }
         }
@@ -710,8 +717,8 @@ private fun FoodForm(
         if (apiKey == null) {
             Text(
                 "Set a Gemini API key in Setup to enable AI estimation.",
-                style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                color = FT.TextSecondary,
             )
         } else {
             Column {
@@ -740,12 +747,12 @@ private fun FoodForm(
                 ) { runEstimateFromDescription() }
                 if (estimating) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
-                        CircularProgressIndicator(color = FieldColors.Amber, modifier = Modifier.size(14.dp))
-                        Text("Estimating...", style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.InkMuted)
+                        CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.size(14.dp))
+                        Text("Estimating...", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary)
                     }
                 }
                 estimationError?.let {
-                    Text(it, style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.Alert, modifier = Modifier.padding(top = 10.dp))
+                    Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.Critical, modifier = Modifier.padding(top = 10.dp))
                 }
             }
         }
@@ -830,12 +837,12 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
         DateTimeField("WHEN", dateTime, { dateTime = it })
         when {
             supplements == null -> Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FieldColors.Amber)
+                CircularProgressIndicator(color = FT.DomainLog)
             }
             list.isEmpty() -> Text(
                 "No active supplements to log.",
-                style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                color = FT.TextSecondary,
             )
             else -> {
                 listOf("morning", "afternoon", "night").forEach { timeOfDay ->
@@ -893,7 +900,7 @@ private fun SupplementEditForm(
     var doseUnit by remember { mutableStateOf(initialDoseUnit) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(supplementName, style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp), color = FieldColors.Ink)
+        Text(supplementName, style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp), color = FT.TextPrimary)
         DateTimeField("WHEN", dateTime, { dateTime = it })
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) { FormLabel("DOSE (OPTIONAL)"); FieldTextField(doseValue, { doseValue = it }, "e.g. 500", keyboardType = KeyboardType.Number) }
@@ -910,8 +917,8 @@ private fun BundleToggleRow(label: String, itemNames: String, checked: Boolean, 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, if (checked) FieldColors.Green else FieldColors.Hairline)
-            .background(if (checked) FieldColors.Green.copy(alpha = 0.12f) else Color.Transparent)
+            .border(FT.BorderWidth, if (checked) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
+            .background(if (checked) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(FT.RadiusModule))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggle)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -919,8 +926,8 @@ private fun BundleToggleRow(label: String, itemNames: String, checked: Boolean, 
     ) {
         CheckboxGlyph(checked)
         Column {
-            Text(label, style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 12.5.sp), color = FieldColors.Ink)
-            Text(itemNames, style = TextStyle(fontFamily = Saira, fontSize = 13.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(top = 2.dp))
+            Text(label, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 12.5.sp), color = FT.TextPrimary)
+            Text(itemNames, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
@@ -930,15 +937,15 @@ private fun CheckToggleRow(label: String, checked: Boolean, onToggle: () -> Unit
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, if (checked) FieldColors.Green else FieldColors.Hairline)
-            .background(if (checked) FieldColors.Green.copy(alpha = 0.12f) else Color.Transparent)
+            .border(FT.BorderWidth, if (checked) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
+            .background(if (checked) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(FT.RadiusModule))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggle)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         CheckboxGlyph(checked)
-        Text(label, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.Medium, fontSize = 15.sp), color = FieldColors.Ink)
+        Text(label, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp), color = FT.TextPrimary)
     }
 }
 
@@ -947,27 +954,27 @@ private fun CheckboxGlyph(checked: Boolean) {
     Box(
         modifier = Modifier
             .size(18.dp)
-            .border(1.dp, if (checked) FieldColors.Green else FieldColors.Hairline)
-            .background(if (checked) FieldColors.Green else Color.Transparent),
+            .border(1.dp, if (checked) FT.Emerald else FT.GlassBorder)
+            .background(if (checked) FT.Emerald else Color.Transparent),
         contentAlignment = Alignment.Center,
     ) {
         if (checked) {
-            Text("✓", style = TextStyle(fontSize = 12.sp), color = FieldColors.Ground)
+            Text("✓", style = TextStyle(fontSize = 12.sp), color = FT.Base)
         }
     }
 }
 
 @Composable
 private fun PhotoActionButton(label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
-    val color = if (enabled) FieldColors.Amber else FieldColors.Hairline
+    val color = if (enabled) FT.DomainLog else FT.GlassBorder
     Box(
         modifier = modifier
-            .border(1.dp, color)
+            .border(FT.BorderWidth, color, RoundedCornerShape(FT.RadiusSmall))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = enabled, onClick = onClick)
             .padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = FieldTextStyles.subTabLabel, color = color)
+        Text(label, style = sheetActionLabelStyle, color = color)
     }
 }
 
@@ -1065,8 +1072,8 @@ private fun IntChipRow(range: IntRange, selected: Int?, onSelect: (Int) -> Unit)
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .border(1.dp, if (isSelected) FieldColors.Amber else FieldColors.Hairline)
-                    .background(if (isSelected) FieldColors.Amber.copy(alpha = 0.18f) else FieldColors.RaisedSurface)
+                    .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                    .background(if (isSelected) FT.DomainLog.copy(alpha = 0.18f) else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -1076,8 +1083,8 @@ private fun IntChipRow(range: IntRange, selected: Int?, onSelect: (Int) -> Unit)
             ) {
                 Text(
                     "$n",
-                    style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp),
-                    color = if (isSelected) FieldColors.Amber else FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
+                    color = if (isSelected) FT.DomainLog else FT.TextSecondary,
                 )
             }
         }
@@ -1249,8 +1256,8 @@ private fun ExerciseDetailsForm(
         Text(
             "Health Connect supplies the time, distance, and heart rate for this $type session — " +
                 "everything below is entered by hand.",
-            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-            color = FieldColors.InkMuted,
+            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            color = FT.TextSecondary,
         )
 
         if (type == "run") {
@@ -1264,8 +1271,8 @@ private fun ExerciseDetailsForm(
                 exercises.forEachIndexed { i, exercise -> ExerciseEditor(exercise, canRemove = exercises.size > 1) { exercises.removeAt(i) } }
                 Text(
                     "+ ADD EXERCISE",
-                    style = TextStyle(fontFamily = JetBrainsMono, fontSize = 12.sp),
-                    color = FieldColors.Amber,
+                    style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+                    color = FT.DomainLog,
                     modifier = Modifier.clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -1301,8 +1308,8 @@ private fun TextChipRow(options: List<String>, selected: String?, perRow: Int = 
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .border(1.dp, if (isSelected) FieldColors.Amber else FieldColors.Hairline)
-                            .background(if (isSelected) FieldColors.Amber.copy(alpha = 0.18f) else FieldColors.RaisedSurface)
+                            .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                            .background(if (isSelected) FT.DomainLog.copy(alpha = 0.18f) else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
@@ -1312,8 +1319,8 @@ private fun TextChipRow(options: List<String>, selected: String?, perRow: Int = 
                     ) {
                         Text(
                             option.uppercase(),
-                            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp),
-                            color = if (isSelected) FieldColors.Amber else FieldColors.InkMuted,
+                            style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                            color = if (isSelected) FT.DomainLog else FT.TextSecondary,
                         )
                     }
                 }
@@ -1387,7 +1394,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth().border(1.dp, FieldColors.Hairline).padding(12.dp),
+        modifier = Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1395,8 +1402,8 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
             if (canRemove) {
                 Text(
                     "REMOVE",
-                    style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp),
-                    color = FieldColors.Alert,
+                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                    color = FT.Critical,
                     modifier = Modifier.clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -1407,14 +1414,14 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
 
         if (suggestions.isNotEmpty()) {
             Column(
-                modifier = Modifier.fillMaxWidth().border(1.dp, FieldColors.Hairline),
+                modifier = Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall)),
                 verticalArrangement = Arrangement.spacedBy(1.dp),
             ) {
                 suggestions.forEach { match ->
                     Text(
                         match.name,
-                        style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                        color = FieldColors.InkMuted,
+                        style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                        color = FT.TextSecondary,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable(
@@ -1443,8 +1450,8 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                     if (exercise.sets.size > 1) {
                         Text(
                             "REMOVE",
-                            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp),
-                            color = FieldColors.Alert,
+                            style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                            color = FT.Critical,
                             modifier = Modifier.clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
@@ -1457,8 +1464,8 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
 
         Text(
             "+ ADD SET",
-            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 12.sp),
-            color = FieldColors.Amber,
+            style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+            color = FT.DomainLog,
             modifier = Modifier.clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

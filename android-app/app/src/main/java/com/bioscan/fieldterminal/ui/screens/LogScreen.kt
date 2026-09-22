@@ -38,9 +38,9 @@ import com.bioscan.fieldterminal.domain.LogEntryKind
 import com.bioscan.fieldterminal.domain.LogSource
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
-import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -75,7 +75,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground)) {
+        Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
             val entries = allEntries
             ScreenHeader(
                 title = "LOG",
@@ -84,10 +84,10 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
 
             when {
                 entries == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FieldColors.Amber)
+                    CircularProgressIndicator(color = FT.DomainLog)
                 }
                 entries.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Nothing logged yet.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+                    Text("Nothing logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
                 }
                 else -> {
                     val visible = entries.take(visibleCount)
@@ -170,15 +170,15 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
 private fun AddEntryFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .background(FieldColors.Amber)
+            .background(FT.DomainLog)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             "+",
-            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
-            color = FieldColors.Ground,
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
+            color = FT.Base,
         )
     }
 }
@@ -194,15 +194,15 @@ private fun DayHeader(date: LocalDate) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(FieldColors.Hairline.copy(alpha = 0.4f))
+            .background(FT.GlassFill)
             .padding(horizontal = 22.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
+        Text(label, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14.em), color = FT.TextSecondary)
         Text(
             date.format(DateTimeFormatter.ofPattern("dd MMM")).uppercase(),
-            style = FieldTextStyles.subTabLabel,
-            color = FieldColors.InkMuted,
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14.em),
+            color = FT.TextSecondary,
         )
     }
 }
@@ -218,17 +218,17 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
     ) {
         Text(
             entry.timestamp.format(DateTimeFormatter.ofPattern("HH:mm")),
-            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 13.sp),
-            color = FieldColors.InkMuted,
+            style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp),
+            color = FT.TextSecondary,
             modifier = Modifier.width(42.dp).padding(top = 2.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TypeChip(entry.kind)
-                Text(entry.headline, style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FieldColors.Ink)
+                Text(entry.headline, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FT.TextPrimary)
             }
             entry.detail?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = TextStyle(fontFamily = Saira, fontSize = 14.sp), color = FieldColors.InkMuted, modifier = Modifier.padding(top = 4.dp))
+                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }
@@ -237,9 +237,13 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
 // Category colors per direct user request (2026-09-15): deep blue for
 // sleep, orange for activity (runs, strength, ...), green for food/drink/
 // supplements, sand for stool, azure for wellness, red for encounter and
-// arousal. Note has no assigned category -- stays neutral InkMuted. OSTRC
-// (added later, Category 8) shares stool's sand -- both are the Evaluation
-// Method Spec's own "digestive & injury tracking" category.
+// arousal. Note has no assigned category -- stays neutral. OSTRC (added
+// later, Category 8) shares stool's sand -- both are the Evaluation Method
+// Spec's own "digestive & injury tracking" category. DAV-107 explicitly
+// preserves these exact hues ("keep... category colors") even though the
+// FT contract's own domain-accent table doesn't define per-entry-type
+// colors (only per-section) -- only the font/text-color-for-"filled"
+// chips migrated to FT tokens.
 @Composable
 private fun TypeChip(kind: LogEntryKind) {
     val color = when (kind) {
@@ -247,7 +251,7 @@ private fun TypeChip(kind: LogEntryKind) {
         LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> FieldColors.Green
         LogEntryKind.Sleep -> FieldColors.DeepBlue
         LogEntryKind.Arousal, LogEntryKind.Encounter, LogEntryKind.Masturbation -> FieldColors.Red
-        LogEntryKind.Note -> FieldColors.InkMuted
+        LogEntryKind.Note -> FT.TextSecondary
         LogEntryKind.Stool, LogEntryKind.Ostrc -> FieldColors.Sand
         LogEntryKind.Wellness -> FieldColors.Azure
     }
@@ -260,8 +264,8 @@ private fun TypeChip(kind: LogEntryKind) {
     ) {
         Text(
             kind.label,
-            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, letterSpacing = 0.14f.em),
-            color = if (filled) FieldColors.Ground else color,
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, letterSpacing = 0.14f.em),
+            color = if (filled) FT.Base else color,
         )
     }
 }
@@ -271,11 +275,11 @@ private fun LoadOlderButton(onClick: () -> Unit) {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
         Box(
             modifier = Modifier
-                .border(1.dp, FieldColors.Hairline)
+                .border(1.dp, FT.GlassBorder)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
-            Text("LOAD OLDER", style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
+            Text("LOAD OLDER", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = FT.TextSecondary)
         }
     }
 }

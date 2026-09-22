@@ -23,7 +23,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -39,8 +43,8 @@ import com.bioscan.fieldterminal.ui.screens.status.HeartTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.LabsTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.StatusScreen
 import com.bioscan.fieldterminal.ui.screens.status.TrainingTileScreen
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 @Composable
 fun FieldTerminalNavHost() {
@@ -48,7 +52,7 @@ fun FieldTerminalNavHost() {
     val scope = rememberCoroutineScope()
 
     Scaffold(
-        containerColor = FieldColors.Ground,
+        containerColor = FT.Base,
         bottomBar = {
             val backStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = backStackEntry?.destination?.route
@@ -122,20 +126,23 @@ fun FieldTerminalNavHost() {
 
 // Custom bottom bar rather than Material3's NavigationBar/NavigationBarItem --
 // their built-in selected-state treatment (a rounded pill indicator) doesn't
-// match design/README.md's exact spec (a top border + background tint per
-// cell, square corners throughout), so this recreates the mockup's PipNavA
-// component directly instead of fighting the default component's styling.
+// match this shape (a top border + background tint per cell, square corners
+// throughout), so this recreates that layout directly instead of fighting
+// the default component's styling. DAV-108 follow-up: retinted to the
+// Futuristic Material contract -- solid Level-1 surface, emerald as the
+// primary selected-state signal (not a domain accent; this is the global
+// shell, not a Log-specific surface), Roboto Mono for the compact labels.
 @Composable
 private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(78.dp)
-            .background(FieldColors.Panel)
+            .background(FT.Surface)
             .drawBehind {
                 val strokeWidth = 2.dp.toPx()
                 drawLine(
-                    color = FieldColors.Hairline,
+                    color = FT.GlassBorder,
                     start = Offset(0f, strokeWidth / 2),
                     end = Offset(size.width, strokeWidth / 2),
                     strokeWidth = strokeWidth,
@@ -151,6 +158,7 @@ private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -
         // reach.
         for (tab in TopLevelTab.entries) {
             val selected = currentRoute == tab.route
+            val accent = tab.domainAccent
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -160,10 +168,10 @@ private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -
                             Modifier
                                 .padding(top = 1.dp) // net -2dp margin vs the 3dp top border below
                                 .drawBehind {
-                                    drawRect(color = FieldColors.Amber.copy(alpha = 0.08f))
+                                    drawRect(color = accent.copy(alpha = 0.08f))
                                     val strokeWidth = 3.dp.toPx()
                                     drawLine(
-                                        color = FieldColors.Amber,
+                                        color = accent,
                                         start = Offset(0f, strokeWidth / 2),
                                         end = Offset(size.width, strokeWidth / 2),
                                         strokeWidth = strokeWidth,
@@ -180,7 +188,7 @@ private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                val tint = if (selected) FieldColors.Amber else FieldColors.InkMuted
+                val tint = if (selected) accent else FT.TextSecondary
                 Icon(
                     painter = painterResource(tab.iconRes),
                     contentDescription = tab.label,
@@ -189,7 +197,7 @@ private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -
                 )
                 Text(
                     text = tab.label,
-                    style = FieldTextStyles.tabBarLabel,
+                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.14.em),
                     color = tint,
                     modifier = Modifier.padding(top = 5.dp),
                 )
@@ -204,4 +212,15 @@ private val TopLevelTab.iconRes
         TopLevelTab.Map -> R.drawable.ic_tab_map
         TopLevelTab.Log -> R.drawable.ic_tab_log
         TopLevelTab.Setup -> R.drawable.ic_tab_setup
+    }
+
+// Map and Log have documented domain accents (contract section 4); Status
+// and Setup aren't "domains" with their own accent in that table, so they
+// default to Emerald, the contract's own primary/default signal.
+private val TopLevelTab.domainAccent
+    get() = when (this) {
+        TopLevelTab.Status -> FT.Emerald
+        TopLevelTab.Map -> FT.DomainMap
+        TopLevelTab.Log -> FT.DomainLog
+        TopLevelTab.Setup -> FT.Emerald
     }

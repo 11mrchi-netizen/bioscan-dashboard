@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -19,8 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -75,14 +76,14 @@ private fun PickerBox(label: String, valueText: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, FieldColors.Hairline)
-            .background(FieldColors.RaisedSurface)
+            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = TextStyle(fontFamily = JetBrainsMono, fontSize = 11.sp), color = FieldColors.InkMuted)
-        Text(valueText, style = TextStyle(fontFamily = JetBrainsMono, fontSize = 13.sp), color = FieldColors.Ink)
+        Text(label, style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
+        Text(valueText, style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp), color = FT.TextPrimary)
     }
 }

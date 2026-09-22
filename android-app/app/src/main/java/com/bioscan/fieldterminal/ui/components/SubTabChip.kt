@@ -12,15 +12,20 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // Extracted from StatusScreen.kt's own sub-tab rail (design/README.md's
 // square chip, not Material3's default rounded FilterChip) -- First feedback
@@ -45,17 +50,18 @@ fun <T> SubTabRow(items: List<T>, selected: T, label: (T) -> String, onSelect: (
 @Composable
 fun SubTabChip(label: String, selected: Boolean, onClick: () -> Unit) {
     val (textColor, borderColor, background) = if (selected) {
-        Triple(FieldColors.Amber, FieldColors.Amber, FieldColors.Amber.copy(alpha = 0.1f))
+        Triple(FT.Emerald, FT.Emerald, FT.Emerald.copy(alpha = 0.1f))
     } else {
-        Triple(FieldColors.InkMuted, FieldColors.Hairline, Color.Transparent)
+        Triple(FT.TextSecondary, FT.GlassBorder, Color.Transparent)
     }
+    val shape = RoundedCornerShape(FT.RadiusSmall)
 
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .defaultMinSize(minHeight = 48.dp) // under Android's 48dp minimum touch target
-            .border(1.dp, borderColor)
-            .background(background)
+            .border(FT.BorderWidth, borderColor, shape)
+            .background(background, shape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -63,6 +69,6 @@ fun SubTabChip(label: String, selected: Boolean, onClick: () -> Unit) {
             )
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
-        Text(text = label, style = FieldTextStyles.subTabLabel, color = textColor)
+        Text(text = label, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = textColor)
     }
 }

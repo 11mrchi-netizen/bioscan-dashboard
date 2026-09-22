@@ -24,6 +24,19 @@ object FuturisticMaterialTokens {
     val Critical = Color(0xFFF87171)
     val Analysis = Color(0xFFA78BFA)
 
+    // Domain accents -- identify a section or nav destination, never a
+    // health/warning/error state (state colors above are a separate,
+    // non-interchangeable set even where a hex value happens to coincide,
+    // e.g. DomainLog == Warning's hex but means something different).
+    // Contract section 4's exact table; DomainTraining reuses Emerald
+    // itself, since Training's own domain accent IS the primary signal.
+    val DomainTraining = Emerald
+    val DomainFuel = Color(0xFF22D3EE)
+    val DomainHeart = Color(0xFFF43F5E)
+    val DomainLabs = Color(0xFFA78BFA)
+    val DomainMap = Color(0xFF60A5FA)
+    val DomainLog = Color(0xFFF59E0B)
+
     val GlassFill = Color(0x14FFFFFF)
     val GlassStrongFill = Color(0x1FFFFFFF)
     val GlassBorder = Color(0x1FFFFFFF)

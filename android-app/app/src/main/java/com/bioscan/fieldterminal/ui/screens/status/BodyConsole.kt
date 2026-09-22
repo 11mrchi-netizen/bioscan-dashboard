@@ -59,6 +59,7 @@ import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.bioscan.fieldterminal.ui.theme.SairaCondensed
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import java.time.ZonedDateTime
@@ -89,13 +90,16 @@ fun BodyConsole(overview: StatusOverview?, isLoading: Boolean, onOpenMap: (Strin
     }
 }
 
-private data class SystemTileSpec(val route: TileRoute, val label: String, val icon: ImageVector)
+private data class SystemTileSpec(val route: TileRoute, val label: String, val icon: ImageVector, val accent: androidx.compose.ui.graphics.Color)
 
+// Each tile's icon uses its own domain accent (contract section 4) instead
+// of one uniform color -- domain accents exist specifically to identify
+// sections/navigation, and these four tiles are exactly that.
 private val SYSTEM_TILES = listOf(
-    SystemTileSpec(TileRoute.Training, "TRAINING", Icons.Filled.FitnessCenter),
-    SystemTileSpec(TileRoute.Fuel, "FUEL", Icons.Filled.Restaurant),
-    SystemTileSpec(TileRoute.Heart, "HEART", Icons.Filled.Favorite),
-    SystemTileSpec(TileRoute.Labs, "LABS", Icons.Filled.Science),
+    SystemTileSpec(TileRoute.Training, "TRAINING", Icons.Filled.FitnessCenter, FT.DomainTraining),
+    SystemTileSpec(TileRoute.Fuel, "FUEL", Icons.Filled.Restaurant, FT.DomainFuel),
+    SystemTileSpec(TileRoute.Heart, "HEART", Icons.Filled.Favorite, FT.DomainHeart),
+    SystemTileSpec(TileRoute.Labs, "LABS", Icons.Filled.Science, FT.DomainLabs),
 )
 
 // Compact state/metric preview per DAV-95's acceptance criteria -- real data
@@ -141,7 +145,7 @@ private fun SystemTile(tile: SystemTileSpec, preview: String, modifier: Modifier
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(tile.icon, contentDescription = tile.label, tint = FT.Emerald, modifier = Modifier.height(22.dp))
+        Icon(tile.icon, contentDescription = tile.label, tint = tile.accent, modifier = Modifier.height(22.dp))
         Text(tile.label, style = tileLabelStyle, color = FT.TextPrimary)
         Text(preview, style = tilePreviewStyle, color = FT.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -350,7 +354,7 @@ private fun NextUpSection(onOpenMap: (String) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(FieldColors.RaisedSurface)
+            .background(FT.Surface)
             .then(
                 if (found != null) {
                     Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
@@ -362,7 +366,7 @@ private fun NextUpSection(onOpenMap: (String) -> Unit) {
             )
             .padding(horizontal = 18.dp, vertical = 14.dp),
     ) {
-        Text(nextUpLabel(state), style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
+        Text(nextUpLabel(state), style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14.em), color = FT.TextSecondary)
     }
 }
 

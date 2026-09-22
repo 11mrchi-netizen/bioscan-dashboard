@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.contracts.ExerciseRouteRequestContract
@@ -37,15 +38,17 @@ import com.bioscan.fieldterminal.data.toRoutePoints
 import com.bioscan.fieldterminal.domain.RouteAvailability
 import com.bioscan.fieldterminal.domain.RoutePoint
 import com.bioscan.fieldterminal.domain.SessionDetail
+import com.bioscan.fieldterminal.domain.SessionSplit
 import com.bioscan.fieldterminal.domain.TimePoint
+import com.bioscan.fieldterminal.domain.computeKmSplits
 import com.bioscan.fieldterminal.ui.components.AmberButton
-import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.LineChart
 import com.bioscan.fieldterminal.ui.components.RouteMiniMap
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
-import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.ui.components.SubTabRow
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -59,6 +62,14 @@ import java.time.format.DateTimeFormatter
 // 14's GPX route). Route/elevation (Phase G5) load separately from the other
 // series since a route needs its own per-session Health Connect consent --
 // see routeLauncher below and domain/SessionRoute.kt.
+//
+// DAV-106: recomposed around decision-useful information -- summary, then
+// the route as the spatial view, then one switchable performance signal
+// instead of four permanently-stacked charts, then real per-km splits --
+// and migrated to the Futuristic Material contract (DAV-105's shared
+// FTCard). The chip-row selector reuses SubTabRow verbatim, the same
+// "shared compact selector treatment" Fuel/Heart/Labs already use for their
+// own sub-tabs, rather than a new selector component.
 @Composable
 fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
     val context = LocalContext.current
@@ -134,7 +145,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -142,23 +153,23 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
         ) {
             Text(
                 "BACK",
-                style = FieldTextStyles.subTabLabel,
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                color = FT.TextMuted,
                 modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onBack),
             )
             Text(
                 header?.type?.replaceFirstChar { it.uppercase() } ?: "SESSION",
-                style = FieldTextStyles.headerTitle,
-                color = FieldColors.Amber,
+                style = TextStyle(fontFamily = Inter, fontSize = 20.sp, fontWeight = FontWeight.Bold),
+                color = FT.TextPrimary,
             )
         }
 
         when {
             loadingHeader -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FieldColors.Amber)
+                CircularProgressIndicator(color = FT.Emerald)
             }
             header == null -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
-                Text(headerError ?: "Session not found.", style = FieldTextStyles.placeholderBody, color = FieldColors.InkMuted)
+                Text(headerError ?: "Session not found.", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary)
             }
             else -> {
                 val h = header!!
@@ -169,67 +180,57 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                 ) {
                     SummaryCard(h)
 
-                    when {
-                        h.healthConnectRecordId == null -> Text(
-                            "No time-series available for sessions logged before Health Connect.",
-                            style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                            color = FieldColors.InkMuted,
-                        )
-                        loadingDetail -> Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = FieldColors.Amber)
-                        }
-                        detailError != null -> Text(
-                            "Couldn't load time-series detail (${detailError}).",
-                            style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                            color = FieldColors.InkMuted,
-                        )
-                        d != null -> {
-                            SeriesSummaryCard("HEART RATE", d.heartRate, "bpm", FieldColors.Red)
-                            SeriesSummaryCard("SPEED", d.speedKmh, "km/h", FieldColors.Azure)
-                            SeriesSummaryCard("POWER", d.powerW, "W", FieldColors.Amber)
-                            if (d.caloriesKcal.isNotEmpty()) {
-                                SeriesSummaryCard("CALORIES (CUMULATIVE)", d.caloriesKcal, "kcal", FieldColors.Green, filled = true)
-                            }
-                        }
-                    }
-
                     val recordId = h.healthConnectRecordId
                     if (recordId != null) {
                         val pts = routePoints
                         when {
-                            pts != null && pts.size >= 2 -> {
-                                val elevation = pts.mapNotNull { p -> p.elevationM?.let { TimePoint(p.offsetSeconds, it) } }
-                                if (elevation.size >= 2) {
-                                    SeriesSummaryCard("ELEVATION", elevation, "m", FieldColors.Sand, filled = true)
-                                }
-                                Card(title = "ROUTE MAP") {
-                                    if (cartoKey != null) {
-                                        RouteMiniMap(points = pts, cartoKey = cartoKey)
-                                    } else {
-                                        Text(
-                                            "Add a CARTO API key in Settings to see the route map.",
-                                            style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                                            color = FieldColors.InkMuted,
-                                        )
-                                    }
+                            pts != null && pts.size >= 2 -> FTCard(title = "ROUTE") {
+                                if (cartoKey != null) {
+                                    RouteMiniMap(points = pts, cartoKey = cartoKey)
+                                } else {
+                                    Text(
+                                        "Add a CARTO API key in Settings to see the route map.",
+                                        style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                        color = FT.TextSecondary,
+                                    )
                                 }
                             }
                             loadingRoute -> Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = FieldColors.Amber)
+                                CircularProgressIndicator(color = FT.Emerald)
                             }
-                            routeAvailability is RouteAvailability.ConsentRequired -> Card(title = "ROUTE") {
+                            routeAvailability is RouteAvailability.ConsentRequired -> FTCard(title = "ROUTE") {
                                 Text(
                                     "This session has a recorded route. Health Connect requires a one-time, per-session permission to view it.",
-                                    style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                                    color = FieldColors.InkMuted,
+                                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                    color = FT.TextSecondary,
                                 )
                                 AmberButton(label = "VIEW ROUTE") { routeLauncher.launch(recordId) }
                             }
                             routeError != null -> Text(
                                 "Couldn't check for a recorded route (${routeError}).",
-                                style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                                color = FieldColors.InkMuted,
+                                style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                color = FT.TextSecondary,
                             )
+                        }
+                    }
+
+                    when {
+                        h.healthConnectRecordId == null -> Text(
+                            "No time-series available for sessions logged before Health Connect.",
+                            style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                            color = FT.TextSecondary,
+                        )
+                        loadingDetail -> Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = FT.Emerald)
+                        }
+                        detailError != null -> Text(
+                            "Couldn't load time-series detail (${detailError}).",
+                            style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                            color = FT.TextSecondary,
+                        )
+                        d != null -> {
+                            PerformanceChartCard(d)
+                            SplitsCard(computeKmSplits(d.distanceKm, d.heartRate))
                         }
                     }
 
@@ -238,6 +239,66 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
             }
         }
     }
+}
+
+private enum class PerfSignal(val label: String, val unit: String, val color: Color) {
+    HR("HR", "bpm", FT.Critical),
+    PACE("PACE", "min/km", FT.Emerald),
+    POWER("POWER", "W", FT.Warning),
+    CAL("CAL", "kcal", FT.Info),
+}
+
+// One chart, switchable rather than four stacked ones -- only signals this
+// session actually recorded appear as options. PACE is derived from the
+// same speed samples SPEED used to plot directly (min/km = 60/kmh), matching
+// this app's existing averagePaceMinPerKmSince convention (domain/
+// Training.kt) rather than showing raw km/h, since the ticket calls for PACE.
+@Composable
+private fun PerformanceChartCard(d: SessionDetail) {
+    val pace = remember(d.speedKmh) { d.speedKmh.mapNotNull { p -> if (p.value > 0) TimePoint(p.offsetSeconds, 60.0 / p.value) else null } }
+    val seriesBySignal = mapOf(
+        PerfSignal.HR to d.heartRate,
+        PerfSignal.PACE to pace,
+        PerfSignal.POWER to d.powerW,
+        PerfSignal.CAL to d.caloriesKcal,
+    )
+    val available = PerfSignal.entries.filter { seriesBySignal[it]?.isNotEmpty() == true }
+    if (available.isEmpty()) return
+    var selected by remember(d) { mutableStateOf(available.first()) }
+    if (selected !in available) selected = available.first()
+
+    FTCard(title = "PERFORMANCE") {
+        SubTabRow(items = available, selected = selected, label = { it.label }, onSelect = { selected = it })
+        val points = seriesBySignal.getValue(selected)
+        val values = points.map { it.value }
+        StatLine("Samples", "${points.size}")
+        StatLine("Average", "%.1f %s".format(values.average(), selected.unit))
+        StatLine("Min / Max", "%.1f / %.1f %s".format(values.min(), values.max(), selected.unit))
+        LineChart(points = points, color = selected.color, filled = selected == PerfSignal.CAL, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+@Composable
+private fun SplitsCard(splits: List<SessionSplit>) {
+    if (splits.isEmpty()) return
+    FTCard(title = "SPLITS") {
+        splits.forEach { split ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("KM ${split.km}", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary)
+                Text(
+                    formatSplitPace(split.durationSec) + (split.avgHr?.let { "  ·  %.0f bpm".format(it) } ?: ""),
+                    style = TextStyle(fontFamily = RobotoMono, fontSize = 14.sp),
+                    color = FT.TextPrimary,
+                )
+            }
+        }
+    }
+}
+
+private fun formatSplitPace(durationSec: Long): String {
+    val mins = durationSec / 60
+    val secs = durationSec % 60
+    return "%d:%02d /km".format(mins, secs)
 }
 
 @Composable
@@ -249,7 +310,7 @@ private fun SummaryCard(header: ExerciseSessionDetailRow) {
         header.startTime
     }
 
-    Card(title = "SUMMARY") {
+    FTCard(title = "SUMMARY") {
         StatLine("When", start)
         header.durationMin?.let { StatLine("Duration", formatDuration(it)) }
         header.distanceKm?.let { StatLine("Distance", "%.2f km".format(it)) }
@@ -262,25 +323,7 @@ private fun SummaryCard(header: ExerciseSessionDetailRow) {
         header.caloriesTotal?.let { StatLine("Total calories", "${it.toInt()} kcal") }
         header.rpe?.let { StatLine("RPE", "$it/10") }
         header.notes?.takeIf { it.isNotBlank() }?.let {
-            Text(it, style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp), color = FieldColors.InkMuted)
-        }
-    }
-}
-
-// Phase G5: the LineChart beneath the stats is real now -- G4 deliberately
-// left this raw/unstyled to prove the on-demand read worked with real
-// numbers first.
-@Composable
-private fun SeriesSummaryCard(title: String, points: List<TimePoint>, unit: String, color: Color, filled: Boolean = false) {
-    Card(title = title) {
-        if (points.isEmpty()) {
-            Text("No samples in this session's time window.", style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp), color = FieldColors.InkMuted)
-        } else {
-            val values = points.map { it.value }
-            StatLine("Samples", "${points.size}")
-            StatLine("Average", "%.1f %s".format(values.average(), unit))
-            StatLine("Min / Max", "%.1f / %.1f %s".format(values.min(), values.max(), unit))
-            LineChart(points = points, color = color, filled = filled, modifier = Modifier.padding(top = 4.dp))
+            Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp), color = FT.TextSecondary)
         }
     }
 }
@@ -288,8 +331,8 @@ private fun SeriesSummaryCard(title: String, points: List<TimePoint>, unit: Stri
 @Composable
 private fun StatLine(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
-        Text(value, style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp), color = FieldColors.Ink)
+        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+        Text(value, style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp), color = FT.TextPrimary)
     }
 }
 

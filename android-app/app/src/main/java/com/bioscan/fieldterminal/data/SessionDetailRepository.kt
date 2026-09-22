@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.data
 
 import android.content.Context
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseRoute
 import androidx.health.connect.client.records.ExerciseRouteResult
 import androidx.health.connect.client.records.ExerciseSessionRecord
@@ -76,7 +77,16 @@ class SessionDetailRepository(
                 TimePoint(Duration.between(startTime, it.endTime).seconds, runningKcal)
             }
 
-        return SessionDetail(heartRate, speed, power, calories)
+        var runningKm = 0.0
+        val distance = listOf(TimePoint(0, 0.0)) +
+            client.readAllRecords(DistanceRecord::class, startTime, endTime)
+                .sortedBy { it.startTime }
+                .map {
+                    runningKm += it.distance.inKilometers
+                    TimePoint(Duration.between(startTime, it.endTime).seconds, runningKm)
+                }
+
+        return SessionDetail(heartRate, speed, power, calories, distance)
     }
 
     // Phase G5. A session's exercise route isn't covered by this app's bulk

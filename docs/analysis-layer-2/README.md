@@ -29,6 +29,7 @@ it's filed as a separate follow-up issue (linked inline) rather than solved here
 | [15-barcode-and-gemini-logging.md](15-barcode-and-gemini-logging.md) | [DAV-165](https://linear.app/biodashboard/issue/DAV-165) · [DAV-166](https://linear.app/biodashboard/issue/DAV-166) · [DAV-167](https://linear.app/biodashboard/issue/DAV-167) | The server-side barcode lookup and Gemini candidate-extraction Edge Functions |
 | [16-nutrition-review-sheet.md](16-nutrition-review-sheet.md) | [DAV-168](https://linear.app/biodashboard/issue/DAV-168) | The review/correction UX connecting all three candidate sources to real meal_items, and three real decode bugs live testing caught |
 | [17-health-connect-nutrition-writeback.md](17-health-connect-nutrition-writeback.md) | [DAV-170](https://linear.app/biodashboard/issue/DAV-170) | Extending the existing Health Connect write-back to carry fiber/sugar/sodium/caffeine/beverage hydration, verified against the real platform |
+| [18-nutrition-daily-state-publisher.md](18-nutrition-daily-state-publisher.md) | [DAV-180](https://linear.app/biodashboard/issue/DAV-180) | The first real `DailyStateObject` implementation: publishing nutrition's daily dimensions through the shared Analysis Layer 2 output contract |
 
 Milestone 1 ("Data & model contract") is fully closed as of docs 01-04. Docs 05-06 pull forward two
 contract-defining tickets filed under milestones 3-4, ahead of the implementation work (DAV-56

@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
@@ -68,14 +70,12 @@ import com.bioscan.fieldterminal.domain.routeElevationGainM
 import com.bioscan.fieldterminal.domain.weatherCodeLabel
 import com.bioscan.fieldterminal.domain.weatherCodeSymbol
 import com.bioscan.fieldterminal.ui.components.AmberButton
-import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
-import com.bioscan.fieldterminal.ui.theme.Saira
-import com.bioscan.fieldterminal.ui.theme.SairaCondensed
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -91,6 +91,12 @@ import org.osmdroid.views.overlay.Polyline
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+
+// Shared text styles for this screen's own chrome (sheet titles, compact
+// action/status labels) -- DAV-108 follow-up migration off FieldTextStyles'
+// legacy JetBrainsMono onto the FT contract's Inter/Roboto Mono split.
+private val sheetHeaderTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
+private val sheetActionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
 
 // Phase M1/M2 (Map tab rework, see ROADMAP.md). Replaces Step 14's single
 // "next training session" view with a real multi-pin map of every calendar
@@ -177,7 +183,7 @@ fun MapScreen(focusEventId: String? = null) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         val readyState = state as? MapState.Ready
         ScreenHeader(
             title = "MAP",
@@ -187,14 +193,14 @@ fun MapScreen(focusEventId: String? = null) {
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (val s = state) {
                 is MapState.CheckingAccess -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FieldColors.Amber)
+                    CircularProgressIndicator(color = FT.DomainMap)
                 }
                 is MapState.NeedsConsent -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(
                             "Grant Calendar and Drive access to see your upcoming events on the map.",
-                            style = FieldTextStyles.placeholderBody,
-                            color = FieldColors.InkMuted,
+                            style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp),
+                            color = FT.TextSecondary,
                         )
                         AmberButton(label = "GRANT ACCESS") {
                             consentLauncher.launch(IntentSenderRequest.Builder(s.pendingIntent.intentSender).build())
@@ -202,7 +208,7 @@ fun MapScreen(focusEventId: String? = null) {
                     }
                 }
                 is MapState.Error -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
-                    Text(s.message, style = FieldTextStyles.placeholderBody, color = FieldColors.Alert)
+                    Text(s.message, style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.Critical)
                 }
                 is MapState.Ready -> MapReadyContent(s, focusEventId)
             }
@@ -220,8 +226,8 @@ private fun MapReadyContent(state: MapState.Ready, focusEventId: String? = null)
                 } else {
                     "No calendar events in the next 24 hours."
                 },
-                style = FieldTextStyles.placeholderBody,
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp),
+                color = FT.TextSecondary,
             )
         }
         return
@@ -269,8 +275,8 @@ private fun MapReadyContent(state: MapState.Ready, focusEventId: String? = null)
             Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
                 Text(
                     "Add a free CARTO API key in Settings to show the map background (carto.com/basemaps/apikey — no billing).",
-                    style = FieldTextStyles.placeholderBody,
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp),
+                    color = FT.TextSecondary,
                 )
             }
         } else {
@@ -297,11 +303,11 @@ private fun MapReadyContent(state: MapState.Ready, focusEventId: String? = null)
                     banners.forEach { message ->
                         Box(
                             modifier = Modifier
-                                .background(FieldColors.Panel.copy(alpha = 0.92f))
-                                .border(1.dp, FieldColors.Hairline)
+                                .background(FT.Surface.copy(alpha = 0.92f), RoundedCornerShape(FT.RadiusSmall))
+                                .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                         ) {
-                            Text(message, style = TextStyle(fontFamily = Saira, fontSize = 12.sp), color = FieldColors.InkMuted)
+                            Text(message, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.TextSecondary)
                         }
                     }
                 }
@@ -375,10 +381,17 @@ private fun MultiPinMapView(
 
                 pins.forEach { pin ->
                     val category = classifyMapEvent(pin.event.colorId, pin.event.title)
+                    // Training pins use Training's own domain accent (Emerald) --
+                    // the same color that section's own screens/nav-tab use, not
+                    // an arbitrary map-only hue. Encounter/Social reuse the same
+                    // red the Log feed's own TypeChip already uses for that
+                    // category, so the two screens read as the same category
+                    // consistently. Other/uncategorized defaults to Map's own
+                    // domain accent (Blue) -- a generic pin belongs to Map itself.
                     val color = when (category) {
-                        MapEventCategory.Training -> FieldColors.Cyan.toArgb()
-                        MapEventCategory.Encounter, MapEventCategory.Social -> FieldColors.Red.toArgb()
-                        MapEventCategory.Other -> FieldColors.Amber.toArgb()
+                        MapEventCategory.Training -> FT.DomainTraining.toArgb()
+                        MapEventCategory.Encounter, MapEventCategory.Social -> FT.Critical.toArgb()
+                        MapEventCategory.Other -> FT.DomainMap.toArgb()
                     }
                     overlays.add(pinMarker(this, GeoPoint(pin.lat, pin.lon), color) { onPinClick(pin) })
                 }
@@ -401,7 +414,7 @@ private fun MultiPinMapView(
                 mapView.overlays.add(
                     Polyline(mapView).apply {
                         setPoints(routePoints.map { GeoPoint(it.lat, it.lon) })
-                        outlinePaint.color = FieldColors.Cyan.toArgb()
+                        outlinePaint.color = FT.DomainTraining.toArgb() // matches the Training pin's own color above
                         outlinePaint.strokeWidth = 9f
                     },
                 )
@@ -444,8 +457,8 @@ private fun PinDetailSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RectangleShape,
-        containerColor = FieldColors.Panel,
-        contentColor = FieldColors.Ink,
+        containerColor = FT.Surface,
+        contentColor = FT.TextPrimary,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -458,26 +471,26 @@ private fun PinDetailSheet(
                     MapEventCategory.Social -> "SOCIAL EVENT"
                     MapEventCategory.Other -> "EVENT"
                 },
-                style = FieldTextStyles.headerTitle,
-                color = FieldColors.Amber,
+                style = sheetHeaderTitleStyle,
+                color = FT.DomainMap,
             )
             Text(
                 text = event.title.trim().ifBlank { "Untitled event" },
-                style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 18.sp),
-                color = FieldColors.Ink,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 18.sp),
+                color = FT.TextPrimary,
             )
             event.description.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp), color = FieldColors.InkMuted)
+                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp), color = FT.TextSecondary)
             }
             Text(
                 text = formatEventMeta(event),
-                style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                color = FT.TextSecondary,
             )
             Text(
                 text = if (pin.isHomeFallback) "Pinned at home — this event has no location." else (event.location ?: ""),
-                style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                color = FT.TextSecondary,
             )
 
             when (category) {
@@ -485,18 +498,18 @@ private fun PinDetailSheet(
                     when {
                         routeError != null -> Text(
                             "Couldn't load the route (${routeError}).",
-                            style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                            color = FieldColors.InkMuted,
+                            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                            color = FT.TextSecondary,
                         )
                         routePoints != null -> Text(
                             routeSummary(routePoints),
-                            style = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
-                            color = FieldColors.Cyan,
+                            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                            color = FT.DomainTraining,
                         )
                         event.gpxLink == null -> Text(
                             "No route file linked to this session.",
-                            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-                            color = FieldColors.InkMuted,
+                            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                            color = FT.TextSecondary,
                         )
                     }
                     WeatherRow(weatherState, onClick = onRequestWeather)
@@ -558,38 +571,38 @@ private fun PartnerSection(event: MapEvent) {
         }
     }
 
-    Card(title = "PARTNER") {
+    FTCard(title = "PARTNER") {
         when (val s = state) {
             PartnerUiState.Loading -> Text(
                 "Checking this event's title for a partner match…",
-                style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                color = FT.TextSecondary,
             )
             is PartnerUiState.Matched -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     s.person.name,
-                    style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
-                    color = FieldColors.Ink,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+                    color = FT.TextPrimary,
                 )
                 EncounterLogRow(event = event, personId = s.person.id)
             }
             is PartnerUiState.Error -> Text(
                 "Couldn't check for a matching partner (${s.message}).",
-                style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                color = FT.TextSecondary,
             )
             PartnerUiState.NoMatch -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     "No partner matched in this event's title.",
-                    style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    color = FT.TextSecondary,
                 )
                 FieldTextField(value = query, onValueChange = { query = it }, placeholder = "Search partners…")
                 searchResults.forEach { person ->
                     Text(
                         person.name,
-                        style = TextStyle(fontFamily = Saira, fontSize = 14.sp),
-                        color = FieldColors.Amber,
+                        style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                        color = FT.DomainMap,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
@@ -636,18 +649,18 @@ private fun EncounterLogRow(event: MapEvent, personId: Long) {
     if (saved) {
         Text(
             "Encounter logged.",
-            style = TextStyle(fontFamily = Saira, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
-            color = FieldColors.Green,
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
+            color = FT.Emerald,
         )
         return
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("LOG ENCOUNTER", style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
+        Text("LOG ENCOUNTER", style = sheetActionLabelStyle, color = FT.TextSecondary)
         FieldTextField(value = type, onValueChange = { type = it }, placeholder = "Type (optional) — e.g. date, call, hangout")
         FieldTextField(value = notes, onValueChange = { notes = it }, placeholder = "Notes (optional)", singleLine = false)
         error?.let {
-            Text("Couldn't log this encounter (${it}).", style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp), color = FieldColors.InkMuted)
+            Text("Couldn't log this encounter (${it}).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextSecondary)
         }
         AmberButton(label = if (saving) "SAVING…" else "LOG ENCOUNTER") {
             if (!saving) {
@@ -680,21 +693,21 @@ private fun WeatherRow(state: WeatherUiState, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, FieldColors.Hairline)
+            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("WEATHER AT SESSION TIME", style = FieldTextStyles.subTabLabel, color = FieldColors.InkMuted)
+        Text("WEATHER AT SESSION TIME", style = sheetActionLabelStyle, color = FT.TextSecondary)
         when (state) {
             is WeatherUiState.Loaded -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(weatherCodeSymbol(state.weather.code), fontSize = 16.sp)
-                Text("%.0f°".format(state.weather.temperatureC), style = FieldTextStyles.syncLabel, color = FieldColors.Ink)
+                Text("%.0f°".format(state.weather.temperatureC), style = sheetActionLabelStyle, color = FT.TextPrimary)
             }
-            WeatherUiState.Loading -> Text("···", style = FieldTextStyles.syncLabel, color = FieldColors.InkMuted)
-            is WeatherUiState.Failed -> Text("⚠", style = FieldTextStyles.syncLabel, color = FieldColors.Alert)
-            WeatherUiState.Idle -> Text("VIEW", style = FieldTextStyles.syncLabel, color = FieldColors.Amber)
+            WeatherUiState.Loading -> Text("···", style = sheetActionLabelStyle, color = FT.TextSecondary)
+            is WeatherUiState.Failed -> Text("⚠", style = sheetActionLabelStyle, color = FT.Critical)
+            WeatherUiState.Idle -> Text("VIEW", style = sheetActionLabelStyle, color = FT.DomainMap)
         }
     }
 }
@@ -707,11 +720,11 @@ private fun WeatherSheet(state: WeatherUiState, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RectangleShape,
-        containerColor = FieldColors.Panel,
-        contentColor = FieldColors.Ink,
+        containerColor = FT.Surface,
+        contentColor = FT.TextPrimary,
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("FORECAST AT SESSION TIME", style = FieldTextStyles.headerTitle, color = FieldColors.Amber)
+            Text("FORECAST AT SESSION TIME", style = sheetHeaderTitleStyle, color = FT.DomainMap)
             when (state) {
                 is WeatherUiState.Loaded -> {
                     val w = state.weather
@@ -720,32 +733,32 @@ private fun WeatherSheet(state: WeatherUiState, onDismiss: () -> Unit) {
                         Column {
                             Text(
                                 text = "%.0f°C".format(w.temperatureC),
-                                style = TextStyle(fontFamily = SairaCondensed, fontWeight = FontWeight.Bold, fontSize = 26.sp),
-                                color = FieldColors.Ink,
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 26.sp),
+                                color = FT.TextPrimary,
                             )
-                            Text(weatherCodeLabel(w.code), style = TextStyle(fontFamily = Saira, fontSize = 14.sp), color = FieldColors.InkMuted)
+                            Text(weatherCodeLabel(w.code), style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary)
                         }
                     }
                     Text(
                         text = "Wind %.0f km/h · Precip %.1f mm".format(w.windSpeedKmh, w.precipitationMm),
-                        style = TextStyle(fontFamily = JetBrainsMono, fontSize = 13.sp),
-                        color = FieldColors.InkMuted,
+                        style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp),
+                        color = FT.TextSecondary,
                     )
                 }
                 WeatherUiState.Loading -> Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FieldColors.Amber)
+                    CircularProgressIndicator(color = FT.DomainMap)
                 }
                 is WeatherUiState.Failed -> Text(
                     "Couldn't load the forecast (${state.message}).",
-                    style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    color = FT.TextSecondary,
                 )
-                WeatherUiState.Idle -> Text("—", style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp), color = FieldColors.InkMuted)
+                WeatherUiState.Idle -> Text("—", style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp), color = FT.TextSecondary)
             }
             Text(
                 "Forecast, not a guarantee — Open-Meteo, no personal weather station.",
-                style = TextStyle(fontFamily = Saira, fontSize = 11.5.sp),
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp),
+                color = FT.TextSecondary,
             )
             Spacer(Modifier.height(12.dp))
         }

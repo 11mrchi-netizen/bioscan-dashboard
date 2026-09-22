@@ -91,7 +91,7 @@ class LogRepository(private val supabase: SupabaseClient) {
             }.decodeList<LogWellbeingRow>()
 
         val supplementsTaken = supabase.postgrest.from("supplement_log")
-            .select(columns = Columns.list("id,supplement_name,taken_at")) {
+            .select(columns = Columns.list("id,supplement_name,taken_at,dose_value,dose_unit")) {
                 order("taken_at", Order.DESCENDING)
                 limit(FETCH_LIMIT_PER_SOURCE)
             }.decodeList<LogSupplementTakenRow>()

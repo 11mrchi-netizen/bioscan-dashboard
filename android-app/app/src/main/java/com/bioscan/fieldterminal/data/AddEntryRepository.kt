@@ -21,9 +21,11 @@ import com.bioscan.fieldterminal.data.model.NewMasturbationRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
 import com.bioscan.fieldterminal.data.model.NewNoteRow
 import com.bioscan.fieldterminal.data.model.NewOstrcRow
+import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.NewStoolRow
 import com.bioscan.fieldterminal.data.model.NewSupplementLogRow
 import com.bioscan.fieldterminal.data.model.NewWellbeingRow
+import com.bioscan.fieldterminal.data.model.SupplementLogEditRow
 import com.bioscan.fieldterminal.domain.LogSource
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -162,12 +164,22 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // One row per supplement taken (not one combined row per session) --
     // this is what makes "add or remove single items" free: each is just a
     // normal Log entry, deletable with the same generic deleteEntry() every
-    // other source already uses. `items` is (supplement id, name) pairs from
-    // whichever bundle(s)/individual as-needed toggles were checked.
-    suspend fun addSupplementsTaken(takenAt: String, items: List<Pair<Long, String>>) {
+    // other source already uses. `items` is (supplement id, name, roster
+    // dose string) triples from whichever bundle(s)/individual as-needed
+    // toggles were checked -- each gets its own parsed dose default (DAV-156).
+    suspend fun addSupplementsTaken(takenAt: String, items: List<Triple<Long, String, String>>) {
         if (items.isEmpty()) return
-        val rows = items.map { (id, name) -> NewSupplementLogRow(supplementId = id, supplementName = name, takenAt = takenAt) }
+        val rows = items.map { (id, name, dose) ->
+            val (value, unit) = parseDose(dose)
+            NewSupplementLogRow(supplementId = id, supplementName = name, takenAt = takenAt, doseValue = value, doseUnit = unit)
+        }
         supabase.postgrest.from("supplement_log").insert(rows)
+    }
+
+    suspend fun updateSupplementTaken(id: Long, takenAt: String, doseValue: Double?, doseUnit: String?) {
+        supabase.postgrest.from("supplement_log").update(
+            SupplementLogEditRow(takenAt = takenAt, doseValue = doseValue, doseUnit = doseUnit)
+        ) { filter { eq("id", id) } }
     }
 
     // Edits below reuse the same New*Row payload classes as the add*
@@ -325,10 +337,26 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     suspend fun fetchExerciseSession(id: Long) = fetchById<FullExerciseSessionRow>("exercise_sessions", "id,type,rpe,notes,details", id)
     suspend fun fetchOstrc(id: Long) = fetchById<LogOstrcRow>("ostrc_checkins", "id,check_date,body_area,q1,q2,q3,q4,notes", id)
     suspend fun fetchMasturbation(id: Long) = fetchById<LogMasturbationRow>("masturbation_log", "id,occurred_at,watched_porn,load_size,orgasm_intensity,notes", id)
+    suspend fun fetchSupplementTaken(id: Long) = fetchById<LogSupplementTakenRow>("supplement_log", "id,supplement_name,taken_at,dose_value,dose_unit", id)
 
     private suspend inline fun <reified T : Any> fetchById(table: String, columns: String, id: Long): T =
         supabase.postgrest.from(table)
             .select(columns = Columns.list(columns)) { filter { eq("id", id) } }
             .decodeList<T>()
             .first()
+}
+
+// DAV-156. The roster's `dose` column is free text (e.g. "500 mg", "36 mg,
+// 3x/week", "1 pill") -- splits off a leading numeric value and keeps
+// whatever follows as the unit, rather than trying to validate/normalize
+// real-world dose formatting. A dose string with no leading number (none
+// currently, but real going forward -- e.g. "as needed") keeps the whole
+// string as the unit with a null value, so nothing is silently dropped.
+private val LEADING_NUMBER = Regex("""^([0-9.]+)\s*(.*)$""")
+
+internal fun parseDose(dose: String): Pair<Double?, String?> {
+    val trimmed = dose.trim()
+    val match = LEADING_NUMBER.find(trimmed) ?: return null to trimmed.ifBlank { null }
+    val value = match.groupValues[1].toDoubleOrNull() ?: return null to trimmed.ifBlank { null }
+    return value to match.groupValues[2].trim().ifBlank { null }
 }

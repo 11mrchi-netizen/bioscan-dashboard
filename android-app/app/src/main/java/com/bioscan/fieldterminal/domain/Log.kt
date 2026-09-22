@@ -212,7 +212,7 @@ fun buildLogEntries(
             kind = LogEntryKind.Supplement,
             timestamp = parseTimestamp(s.takenAt),
             headline = s.supplementName,
-            detail = null,
+            detail = formatDose(s.doseValue, s.doseUnit),
         )
     }
 
@@ -244,6 +244,15 @@ fun buildLogEntries(
     }
 
     return entries.sortedByDescending { it.timestamp }
+}
+
+// DAV-156. Whole-number doses print without a trailing ".0" (Double's own
+// toString() always shows one); a dose with no parsed value but a real unit
+// string (e.g. "as needed") still shows that unit rather than nothing.
+private fun formatDose(value: Double?, unit: String?): String? = when {
+    value != null && value == Math.floor(value) -> "${value.toInt()}${unit?.let { " $it" } ?: ""}"
+    value != null -> "$value${unit?.let { " $it" } ?: ""}"
+    else -> unit
 }
 
 private fun parseTimestamp(iso: String): LocalDateTime =

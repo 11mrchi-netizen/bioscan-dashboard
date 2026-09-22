@@ -124,4 +124,6 @@ data class LogSupplementTakenRow(
     val id: Long,
     @SerialName("supplement_name") val supplementName: String,
     @SerialName("taken_at") val takenAt: String,
+    @SerialName("dose_value") val doseValue: Double? = null,
+    @SerialName("dose_unit") val doseUnit: String? = null,
 )

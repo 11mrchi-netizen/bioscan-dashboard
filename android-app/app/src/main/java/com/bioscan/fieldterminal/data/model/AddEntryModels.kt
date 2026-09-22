@@ -97,11 +97,29 @@ data class NewWellbeingRow(
     val soreness: Int? = null,
 )
 
+// DAV-156. doseValue/doseUnit default from the roster's own free-text dose
+// string (see parseDose() in AddEntryRepository.kt), populated at insert
+// time so every log carries a real dose without the add flow needing its
+// own dose-entry UI -- SupplementEditForm (AddEntrySheet.kt) is where the
+// default gets corrected, per "defaults are populated but never lock the
+// user into the default."
 @Serializable
 data class NewSupplementLogRow(
     @SerialName("supplement_id") val supplementId: Long,
     @SerialName("supplement_name") val supplementName: String,
     @SerialName("taken_at") val takenAt: String,
+    @SerialName("dose_value") val doseValue: Double? = null,
+    @SerialName("dose_unit") val doseUnit: String? = null,
+)
+
+// Update-only counterpart -- a taken supplement's name/supplement_id are
+// never editable (picking a different supplement is "delete and re-log",
+// not "edit"), so this deliberately omits them.
+@Serializable
+data class SupplementLogEditRow(
+    @SerialName("taken_at") val takenAt: String,
+    @SerialName("dose_value") val doseValue: Double? = null,
+    @SerialName("dose_unit") val doseUnit: String? = null,
 )
 
 // Phase A4 (Category 8). severity_score is a stored generated column

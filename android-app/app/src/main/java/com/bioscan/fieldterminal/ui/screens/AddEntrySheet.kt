@@ -65,6 +65,7 @@ import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogMasturbationRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
+import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.AddEntryType
 import com.bioscan.fieldterminal.domain.FoodEstimate
@@ -154,11 +155,12 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
 
 // Tapping a Log entry opens this first -- EDIT (when the source has a
 // corresponding form) and DELETE, with an inline confirm step rather than a
-// second popup. Sleep and Supplement have no add-entry form at all (a taken
-// supplement is add-or-remove, not field-editable), so those two are
-// delete-only. Exercise (Phase G3) IS editable -- not its Health-Connect-
-// sourced fields, just rpe/notes via ExerciseDetailsForm. Phase G4 adds a
-// DETAIL action for Exercise entries, pushing SessionDetailScreen.
+// second popup. Sleep has no add-entry form and no editable fields, so it
+// stays delete-only. Supplement (DAV-156) is editable now -- dose is a real
+// field, even though which supplement was taken still isn't (that's "delete
+// and re-log," not "edit"). Exercise (Phase G3) IS editable -- not its
+// Health-Connect-sourced fields, just rpe/notes via ExerciseDetailsForm.
+// Phase G4 adds a DETAIL action for Exercise entries, pushing SessionDetailScreen.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EntryActionSheet(
@@ -173,7 +175,7 @@ fun EntryActionSheet(
     val scope = rememberCoroutineScope()
     var confirmingDelete by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
-    val editable = entry.source !in setOf(LogSource.Sleep, LogSource.Supplement)
+    val editable = entry.source != LogSource.Sleep
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -269,7 +271,8 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Exercise -> repo.fetchExerciseSession(entry.id)
             LogSource.Ostrc -> repo.fetchOstrc(entry.id)
             LogSource.Masturbation -> repo.fetchMasturbation(entry.id)
-            LogSource.Sleep, LogSource.Supplement -> null // no edit form; EntryActionSheet never offers EDIT for these
+            LogSource.Supplement -> repo.fetchSupplementTaken(entry.id)
+            LogSource.Sleep -> null // no edit form; EntryActionSheet never offers EDIT for this
         }
     }
 
@@ -384,6 +387,14 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialQ4 = row.q4,
                     initialNotes = row.notes ?: "",
                     onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.updateOstrc(row.id, date, ba, q1, q2, q3, q4, n) } },
+                )
+                is LogSupplementTakenRow -> SupplementEditForm(
+                    saving,
+                    supplementName = row.supplementName,
+                    initialDateTime = parseIsoToLocalDateTime(row.takenAt),
+                    initialDoseValue = row.doseValue,
+                    initialDoseUnit = row.doseUnit ?: "",
+                    onSave = { takenAt, doseValue, doseUnit -> onSubmit { it.updateSupplementTaken(row.id, takenAt, doseValue, doseUnit) } },
                 )
                 is FullExerciseSessionRow -> ExerciseDetailsForm(
                     saving,
@@ -712,7 +723,7 @@ private fun DrinkForm(saving: Boolean, initialDate: LocalDate = LocalDate.now(),
 // from the Log feed like any other entry -- no separate "batch" concept
 // needed for "add or remove single items."
 @Composable
-private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Pair<Long, String>>) -> Unit) {
+private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Triple<Long, String, String>>) -> Unit) {
     var dateTime by remember { mutableStateOf(initialDateTime) }
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
     var checkedBundles by remember { mutableStateOf(setOf<String>()) }
@@ -725,9 +736,13 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
     val list = supplements ?: emptyList()
     val groups = list.filter { it.timeOfDay != "as-needed" }.groupBy { it.timeOfDay }
     val asNeeded = list.filter { it.timeOfDay == "as-needed" }
+    // DAV-156: each selected item carries its roster dose string along so
+    // addSupplementsTaken can parse a real per-supplement dose default --
+    // Creatine's "5 g" and Boron's "10 mg" are different doses, so this has
+    // to travel per-item, not as one shared field for the whole save.
     val selectedItems = buildList {
-        checkedBundles.forEach { tod -> groups[tod]?.forEach { add(it.id to it.name) } }
-        asNeeded.filter { it.id in checkedAsNeeded }.forEach { add(it.id to it.name) }
+        checkedBundles.forEach { tod -> groups[tod]?.forEach { add(Triple(it.id, it.name, it.dose)) } }
+        asNeeded.filter { it.id in checkedAsNeeded }.forEach { add(Triple(it.id, it.name, it.dose)) }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -773,6 +788,38 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
         }
         SaveButton(saving, selectedItems.isNotEmpty()) {
             onSave(dateTime.toIsoWithOffset(), selectedItems)
+        }
+    }
+}
+
+// DAV-156. The first edit form Supplement has ever had -- previously
+// delete-only, since a taken supplement was "add or remove as a whole," but
+// dose being a real editable field makes it field-editable now too. Name
+// isn't editable here (picking a different supplement is "delete and
+// re-log," not "edit"), but WHEN is, matching every other manual log type
+// per DAV-157.
+@Composable
+private fun SupplementEditForm(
+    saving: Boolean,
+    supplementName: String,
+    initialDateTime: LocalDateTime = LocalDateTime.now(),
+    initialDoseValue: Double? = null,
+    initialDoseUnit: String = "",
+    onSave: (takenAt: String, doseValue: Double?, doseUnit: String?) -> Unit,
+) {
+    var dateTime by remember { mutableStateOf(initialDateTime) }
+    var doseValue by remember { mutableStateOf(initialDoseValue?.let { if (it == Math.floor(it)) it.toInt().toString() else it.toString() } ?: "") }
+    var doseUnit by remember { mutableStateOf(initialDoseUnit) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(supplementName, style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp), color = FieldColors.Ink)
+        DateTimeField("WHEN", dateTime, { dateTime = it })
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f)) { FormLabel("DOSE (OPTIONAL)"); FieldTextField(doseValue, { doseValue = it }, "e.g. 500", keyboardType = KeyboardType.Number) }
+            Column(Modifier.weight(1f)) { FormLabel("UNIT (OPTIONAL)"); FieldTextField(doseUnit, { doseUnit = it }, "e.g. mg") }
+        }
+        SaveButton(saving, true) {
+            onSave(dateTime.toIsoWithOffset(), doseValue.toDoubleOrNull(), doseUnit.trim().ifBlank { null })
         }
     }
 }

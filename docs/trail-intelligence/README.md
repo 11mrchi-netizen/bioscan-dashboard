@@ -16,6 +16,7 @@ doc 01 for why those are two separate data paths rather than one shared GPX pipe
 | [06-trail-metric-validation.md](06-trail-metric-validation.md) | [DAV-143](https://linear.app/biodashboard/issue/DAV-143) | The 40-case hand-verified fixture suite, and the real device backtest identified but pending emulator access |
 | [07-planned-route-data-model.md](07-planned-route-data-model.md) | [DAV-147](https://linear.app/biodashboard/issue/DAV-147) | The `planned_routes` table (absorbs DAV-132) — Calendar/Drive identity, cache/versioning, course-demand-only metrics |
 | [08-calendar-drive-sync.md](08-calendar-drive-sync.md) | [DAV-145](https://linear.app/biodashboard/issue/DAV-145) · [DAV-146](https://linear.app/biodashboard/issue/DAV-146) | Real Calendar incremental sync (syncToken, token-expiry recovery, dedup) and the Drive attachment-first GPX resolution priority |
+| [09-planned-route-pipeline.md](09-planned-route-pipeline.md) | [DAV-148](https://linear.app/biodashboard/issue/DAV-148) | The one-call end-to-end pipeline wiring DAV-145/146/147 and Phase 1's shared engine together |
 
 ## Prior art this builds on
 

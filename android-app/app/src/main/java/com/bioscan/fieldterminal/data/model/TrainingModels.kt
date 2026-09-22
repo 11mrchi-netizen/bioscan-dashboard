@@ -19,6 +19,10 @@ data class ExerciseSessionRow(
     @SerialName("avg_hr") val avgHr: Double? = null,
     @SerialName("avg_speed_kmh") val avgSpeedKmh: Double? = null,
     val source: String? = null,
+    // DAV-144. Only route_type is read (trail-run weekly rollup); details'
+    // other fields (run_type, exercises) aren't needed here.
+    @SerialName("elevation_gain_m") val elevationGainM: Double? = null,
+    val details: ExerciseSessionDetails = ExerciseSessionDetails(),
 )
 
 @Serializable

@@ -113,6 +113,17 @@ private fun TrainingContent(overview: TrainingOverview) {
                     StatLine("Longest run (all-time)", "%.2f km".format(longest))
                 }
                 StatLine("4-week avg", "%.1f km/wk".format(overview.fourWeekAvgKmPerWeek))
+
+                // DAV-144. No per-session list exists on this tab (see
+                // docs/trail-intelligence/05-trail-metrics-ui-presentation.md)
+                // -- this is the weekly-rollup shape every other figure here
+                // already uses, only shown when a real trail run happened.
+                if (overview.thisWeekTrailRunCount > 0) {
+                    StatLine("Trail runs", "${overview.thisWeekTrailRunCount}")
+                    overview.thisWeekTrailElevationGainM?.let { gain ->
+                        StatLine("Elevation gained", "${gain.toInt()} m")
+                    }
+                }
             }
 
             DistanceTotalsCard(overview)

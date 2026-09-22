@@ -45,7 +45,7 @@ class SessionDetailRepository(
                 columns = Columns.list(
                     "id,type,start_time,end_time,duration_min,distance_km,calories_active," +
                         "calories_total,avg_hr,max_hr,elevation_gain_m,avg_power_w,avg_speed_kmh," +
-                        "rpe,notes,health_connect_record_id",
+                        "rpe,notes,health_connect_record_id,details",
                 ),
             ) { filter { eq("id", id) } }
             .decodeList<ExerciseSessionDetailRow>()

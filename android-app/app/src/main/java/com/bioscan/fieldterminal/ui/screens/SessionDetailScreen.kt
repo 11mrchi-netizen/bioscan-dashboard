@@ -36,14 +36,22 @@ import com.bioscan.fieldterminal.data.SessionDetailRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetailRow
 import com.bioscan.fieldterminal.data.toRoutePoints
+import com.bioscan.fieldterminal.domain.DisplayValue
+import com.bioscan.fieldterminal.domain.EvalState
+import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.RouteAvailability
 import com.bioscan.fieldterminal.domain.RoutePoint
 import com.bioscan.fieldterminal.domain.SessionDetail
 import com.bioscan.fieldterminal.domain.SessionSplit
 import com.bioscan.fieldterminal.domain.TimePoint
+import com.bioscan.fieldterminal.domain.analysis.SessionStateObject
+import com.bioscan.fieldterminal.domain.analysis.StateDimension
 import com.bioscan.fieldterminal.domain.computeKmSplits
+import com.bioscan.fieldterminal.domain.trail.computeTrailSessionState
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTMetricValue
+import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.LineChart
 import com.bioscan.fieldterminal.ui.components.RouteMiniMap
 import com.bioscan.fieldterminal.ui.components.SubTabRow
@@ -51,6 +59,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.Instant
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -215,6 +224,30 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                         }
                     }
 
+                    // DAV-144. Gated the same way as the ROUTE card above:
+                    // real route + real time series both need to be in hand
+                    // before the trail engine has anything to compute.
+                    if (h.type == "run" && h.details.routeType == "trail") {
+                        val pts = routePoints
+                        if (pts != null && pts.size >= 2 && d != null) {
+                            val trailState = remember(h.id, pts, d) {
+                                computeTrailSessionState(
+                                    sessionId = h.id,
+                                    date = try {
+                                        OffsetDateTime.parse(h.startTime).toLocalDate()
+                                    } catch (e: Exception) {
+                                        LocalDate.now()
+                                    },
+                                    routePoints = pts,
+                                    heartRate = d.heartRate,
+                                    powerW = d.powerW,
+                                    speedKmh = d.speedKmh,
+                                )
+                            }
+                            TrailCard(trailState)
+                        }
+                    }
+
                     when {
                         h.healthConnectRecordId == null -> Text(
                             "No time-series available for sessions logged before Health Connect.",
@@ -293,6 +326,50 @@ private fun SplitsCard(splits: List<SessionSplit>) {
                 )
             }
         }
+    }
+}
+
+// Same mapping already duplicated per-screen-file in FuelTileScreen.kt/
+// HeartTileScreen.kt/TrainingTileScreen.kt -- trail's DimensionState reuses
+// the same EvalState, so no new logic is needed, just the established
+// private per-file copy.
+private fun EvalState.toMetricState(): MetricState = when (this) {
+    EvalState.NoData -> MetricState.Unavailable
+    EvalState.Building -> MetricState.Building
+    EvalState.Stable -> MetricState.Optimal
+    EvalState.ShiftUp, EvalState.ShiftDown -> MetricState.Warning
+    EvalState.Unstable -> MetricState.Critical
+}
+
+// DAV-144, per docs/trail-intelligence/05-trail-metrics-ui-presentation.md.
+// Mountain Index leads as the card's headline figure; every other dimension
+// renders only when it has a real value -- a NoData dimension (too few
+// climbs to compare, no HR data for efficiency) is silently omitted rather
+// than shown as a forced N/A, matching this file's own SummaryCard
+// convention for optional stats.
+@Composable
+private fun TrailCard(state: SessionStateObject) {
+    val mountainIndex = state.dimensions.getValue(StateDimension.MOUNTAIN_INDEX)
+
+    FTCard(title = "TRAIL") {
+        if (mountainIndex.value != null) {
+            FTMetricValue(DisplayValue(primary = "%.0f".format(mountainIndex.value), unit = "M/KM", secondary = "Mountain Index"))
+        } else {
+            FTStatePill(mountainIndex.evalState.toMetricState())
+        }
+
+        state.dimensions.getValue(StateDimension.KM_EFFORT).value?.let { StatLine("KM-effort", "%.1f".format(it)) }
+        state.dimensions.getValue(StateDimension.ELEVATION_GAIN_M).value?.let { StatLine("Elevation gain", "${it.toInt()} m") }
+        state.dimensions.getValue(StateDimension.ELEVATION_LOSS_M).value?.let { StatLine("Elevation loss", "${it.toInt()} m") }
+        state.dimensions.getValue(StateDimension.AVERAGE_VAM).value?.let { StatLine("Avg VAM", "${it.toInt()} m/h") }
+        state.dimensions.getValue(StateDimension.UPHILL_RUN_PERCENT).value?.let { StatLine("Uphill run", "%.0f%%".format(it)) }
+        state.dimensions.getValue(StateDimension.UPHILL_EFFICIENCY).value?.let { StatLine("Uphill efficiency", "%.2f m/h per bpm".format(it)) }
+        state.dimensions.getValue(StateDimension.DOWNHILL_EFFICIENCY).value?.let { StatLine("Downhill efficiency", "%.2f m/h per bpm".format(it)) }
+        state.dimensions.getValue(StateDimension.CLIMB_CONSISTENCY).value?.let { StatLine("Climb consistency (CV)", "%.2f".format(it)) }
+        state.dimensions.getValue(StateDimension.DESCENT_CONSISTENCY).value?.let { StatLine("Descent consistency (CV)", "%.2f".format(it)) }
+        state.dimensions.getValue(StateDimension.PACE_DEGRADATION).value?.let { StatLine("Pace degradation", "%+.1f%%".format(it)) }
+        state.dimensions.getValue(StateDimension.VAM_DEGRADATION).value?.let { StatLine("VAM degradation", "%+.1f%%".format(it)) }
+        state.dimensions.getValue(StateDimension.HR_DECOUPLING).value?.let { StatLine("HR decoupling", "%+.1f%%".format(it)) }
     }
 }
 

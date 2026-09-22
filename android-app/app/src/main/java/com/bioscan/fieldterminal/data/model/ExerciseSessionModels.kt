@@ -99,4 +99,6 @@ data class ExerciseSessionDetailRow(
     val rpe: Int? = null,
     val notes: String? = null,
     @SerialName("health_connect_record_id") val healthConnectRecordId: String? = null,
+    // DAV-144. Only route_type is read (gates the TRAIL card).
+    val details: ExerciseSessionDetails = ExerciseSessionDetails(),
 )

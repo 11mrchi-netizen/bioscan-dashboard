@@ -52,6 +52,11 @@ data class TrainingOverview(
     val hasAnyStrength: Boolean,
     val strengthSessionsThisWeek: Int,
     val strengthMinutesThisWeek: Int,
+    // DAV-144. No session list exists on this tab (see docs/trail-intelligence/
+    // 05-trail-metrics-ui-presentation.md) -- "trail metrics per run" here
+    // means the same weekly-rollup shape every other figure on this card uses.
+    val thisWeekTrailRunCount: Int,
+    val thisWeekTrailElevationGainM: Double?,
 )
 
 class TrainingRepository(private val supabase: SupabaseClient) {
@@ -61,7 +66,7 @@ class TrainingRepository(private val supabase: SupabaseClient) {
         // -- same "bounded, not unbounded" tradeoff this query already made
         // when it only covered runs.
         val sessions = supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("type,start_time,duration_min,distance_km,avg_hr,avg_speed_kmh,source")) {
+            .select(columns = Columns.list("type,start_time,duration_min,distance_km,avg_hr,avg_speed_kmh,source,elevation_gain_m,details")) {
                 order("start_time", Order.DESCENDING)
                 limit(200)
             }
@@ -87,6 +92,9 @@ class TrainingRepository(private val supabase: SupabaseClient) {
         val strengthThisWeek = strength.filter {
             ChronoUnit.DAYS.between(OffsetDateTime.parse(it.startTime).toLocalDate(), today) < 7
         }
+        val trailRunsThisWeek = running.filter {
+            it.details.routeType == "trail" && ChronoUnit.DAYS.between(OffsetDateTime.parse(it.startTime).toLocalDate(), today) < 7
+        }
 
         return TrainingOverview(
             thisWeekDistanceKm = sumDistanceKmSince(running, today, 7),
@@ -100,6 +108,8 @@ class TrainingRepository(private val supabase: SupabaseClient) {
             hasAnyStrength = strength.isNotEmpty(),
             strengthSessionsThisWeek = strengthThisWeek.size,
             strengthMinutesThisWeek = strengthThisWeek.sumOf { it.durationMin ?: 0.0 }.toInt(),
+            thisWeekTrailRunCount = trailRunsThisWeek.size,
+            thisWeekTrailElevationGainM = trailRunsThisWeek.mapNotNull { it.elevationGainM }.takeIf { it.isNotEmpty() }?.sum(),
         )
     }
 }

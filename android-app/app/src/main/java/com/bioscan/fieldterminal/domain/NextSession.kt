@@ -9,11 +9,6 @@ import java.time.ZonedDateTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import javax.xml.parsers.DocumentBuilderFactory
-import kotlin.math.asin
-import kotlin.math.cos
-import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 // Step 14 (Map tab), generalized in Phase M1 from the single-event
 // NextSession (removed -- see domain/MapEvent.kt) to any MapEvent. Real data
@@ -99,12 +94,7 @@ fun routeElevationGainM(points: List<GpxPoint>): Double? {
     return gain
 }
 
-private fun haversineKm(a: GpxPoint, b: GpxPoint): Double {
-    val earthRadiusKm = 6371.0
-    val dLat = Math.toRadians(b.lat - a.lat)
-    val dLon = Math.toRadians(b.lon - a.lon)
-    val lat1 = Math.toRadians(a.lat)
-    val lat2 = Math.toRadians(b.lat)
-    val h = sin(dLat / 2).pow(2) + cos(lat1) * cos(lat2) * sin(dLon / 2).pow(2)
-    return 2 * earthRadiusKm * asin(sqrt(h))
-}
+// DAV-133: delegates to the shared formula domain/trail/Trackpoint.kt's
+// Health-Connect adapter also uses, instead of a second copy.
+private fun haversineKm(a: GpxPoint, b: GpxPoint): Double =
+    com.bioscan.fieldterminal.domain.trail.haversineMeters(a.lat, a.lon, b.lat, b.lon) / 1000.0

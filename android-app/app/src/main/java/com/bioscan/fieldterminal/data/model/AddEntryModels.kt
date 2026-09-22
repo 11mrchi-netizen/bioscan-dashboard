@@ -24,15 +24,38 @@ data class NewHydrationRow(val date: String, val ml: Int)
 
 // personId/calendarEventTitle (Phase M3) are only ever set by the Map tab's
 // "LOG ENCOUNTER" action (see ui/screens/MapScreen.kt) -- the Log tab's own
-// EncounterForm still only collects date/encounter_type/notes, so those two
-// fields stay null on every write that goes through it.
+// EncounterForm collects the rest (occurredAt onward, DAV-158/159) but never
+// these two, so they stay null on every Log-tab write.
 @Serializable
 data class NewEncounterRow(
     val date: String,
+    @SerialName("occurred_at") val occurredAt: String? = null,
     @SerialName("encounter_type") val encounterType: String? = null,
+    @SerialName("location_type") val locationType: String? = null,
+    @SerialName("duration_min") val durationMin: Int? = null,
+    val activities: List<String>? = null,
+    @SerialName("my_rating") val myRating: Int? = null,
     val notes: String? = null,
     @SerialName("person_id") val personId: Long? = null,
     @SerialName("calendar_event_title") val calendarEventTitle: String? = null,
+)
+
+// DAV-158/159. Update-only counterpart to NewEncounterRow that deliberately
+// omits personId/calendarEventTitle -- a real bug found live: reusing
+// NewEncounterRow (with those two defaulted to null) as the UPDATE payload
+// silently nulled out an already-linked encounter's person_id/calendar_event_title
+// on every edit, since Postgrest writes every field the DTO carries. This
+// type structurally can't touch those two columns.
+@Serializable
+data class EncounterEditRow(
+    val date: String,
+    @SerialName("occurred_at") val occurredAt: String? = null,
+    @SerialName("encounter_type") val encounterType: String? = null,
+    @SerialName("location_type") val locationType: String? = null,
+    @SerialName("duration_min") val durationMin: Int? = null,
+    val activities: List<String>? = null,
+    @SerialName("my_rating") val myRating: Int? = null,
+    val notes: String? = null,
 )
 
 @Serializable

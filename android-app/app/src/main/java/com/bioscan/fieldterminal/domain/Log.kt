@@ -53,6 +53,10 @@ data class LogEntry(
 // give same-day entries a stable sort position, not a claim about when the
 // real thing happened. Meals, stool, notes, supplement_log and (since
 // Phase G3) exercise_sessions all have real timestamps and use them as-is.
+// Encounter (DAV-158) moved from this fake-time group to the real-timestamp
+// group: `occurred_at` is now a real, user-editable column, so this nominal
+// constant only remains as a fallback for encounters logged before that
+// column existed (occurredAt == null).
 private val SLEEP_NOMINAL_TIME = LocalTime.of(7, 30)
 private val AROUSAL_NOMINAL_TIME = LocalTime.of(7, 15)
 private val ENCOUNTER_NOMINAL_TIME = LocalTime.of(21, 0)
@@ -153,9 +157,9 @@ fun buildLogEntries(
             id = e.id,
             source = LogSource.Encounter,
             kind = LogEntryKind.Encounter,
-            timestamp = LocalDateTime.of(LocalDate.parse(e.date), ENCOUNTER_NOMINAL_TIME),
+            timestamp = e.occurredAt?.let { parseTimestamp(it) } ?: LocalDateTime.of(LocalDate.parse(e.date), ENCOUNTER_NOMINAL_TIME),
             headline = e.calendarEventTitle?.takeIf { it.isNotBlank() } ?: e.status.replaceFirstChar { it.uppercase() },
-            detail = null,
+            detail = e.myRating?.let { "Rating $it/5" },
         )
     }
 

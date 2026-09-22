@@ -67,7 +67,7 @@ class LogRepository(private val supabase: SupabaseClient) {
             }.decodeList<LogStoolRow>()
 
         val encounters = supabase.postgrest.from("encounters")
-            .select(columns = Columns.list("id,date,status,encounter_type,notes,calendar_event_title")) {
+            .select(columns = Columns.list("id,date,status,occurred_at,encounter_type,notes,calendar_event_title,my_rating")) {
                 order("date", Order.DESCENDING)
                 limit(FETCH_LIMIT_PER_SOURCE)
             }.decodeList<LogEncounterRow>()

@@ -133,7 +133,12 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 }
                 when (type) {
                     AddEntryType.Fuel -> FuelForm(saving, onSubmit)
-                    AddEntryType.Encounter -> EncounterForm(saving, onSave = { date, et, n -> onSubmit { it.addEncounter(date, et, n) } })
+                    AddEntryType.Encounter -> EncounterForm(
+                        saving,
+                        onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
+                            onSubmit { it.addEncounter(date = date, encounterType = et, notes = n, occurredAt = occurredAt, locationType = loc, durationMin = dur, activities = acts, myRating = rating) }
+                        },
+                    )
                     AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d -> onSubmit { it.addStool(occurredAt, bt, d) } })
                     AddEntryType.Arousal -> ArousalForm(saving, onSave = { date, mw, al -> onSubmit { it.addArousal(date, mw, al) } })
                     AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so -> onSubmit { it.addWellbeing(date, e, m, s, so) } })
@@ -320,10 +325,16 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                 )
                 is LogEncounterRow -> EncounterForm(
                     saving,
-                    initialDate = LocalDate.parse(row.date),
+                    initialDateTime = row.occurredAt?.let { parseIsoToLocalDateTime(it) } ?: LocalDateTime.of(LocalDate.parse(row.date), java.time.LocalTime.of(21, 0)),
                     initialType = row.encounterType ?: "",
+                    initialLocationType = row.locationType ?: "",
+                    initialDurationMin = row.durationMin,
+                    initialActivities = row.activities?.joinToString(", ") ?: "",
+                    initialMyRating = row.myRating,
                     initialNotes = row.notes ?: "",
-                    onSave = { date, et, n -> onSubmit { it.updateEncounter(row.id, date, et, n) } },
+                    onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
+                        onSubmit { it.updateEncounter(row.id, date, occurredAt, et, loc, dur, acts, rating, n) }
+                    },
                 )
                 is LogStoolRow -> StoolForm(
                     saving,
@@ -832,24 +843,63 @@ private fun PhotoActionButton(label: String, modifier: Modifier = Modifier, enab
     }
 }
 
+// DAV-158: DateTimeField instead of the old date-only DateField -- encounters
+// previously had no time-of-day in storage at all (see the fake
+// ENCOUNTER_NOMINAL_TIME fallback in domain/Log.kt), just a bare DATE column.
+// DAV-159: location/duration/activities/rating restore real columns
+// (`encounters.location_type`/`duration_min`/`activities`/`my_rating`) that
+// already existed in the schema but had no UI anywhere. Of the schema's three
+// separate rating columns (my_rating/physical_rating/connection_rating,
+// confirmed unused in every real row), only my_rating is surfaced here --
+// "exactly one rating system" per this ticket's acceptance criterion.
 @Composable
 private fun EncounterForm(
     saving: Boolean,
-    initialDate: LocalDate = LocalDate.now(),
+    initialDateTime: LocalDateTime = LocalDateTime.now(),
     initialType: String = "",
+    initialLocationType: String = "",
+    initialDurationMin: Int? = null,
+    initialActivities: String = "",
+    initialMyRating: Int? = null,
     initialNotes: String = "",
-    onSave: (date: String, encounterType: String?, notes: String?) -> Unit,
+    onSave: (
+        date: String,
+        occurredAt: String,
+        encounterType: String?,
+        locationType: String?,
+        durationMin: Int?,
+        activities: List<String>?,
+        myRating: Int?,
+        notes: String?,
+    ) -> Unit,
 ) {
-    var date by remember { mutableStateOf(initialDate) }
+    var dateTime by remember { mutableStateOf(initialDateTime) }
     var encounterType by remember { mutableStateOf(initialType) }
+    var locationType by remember { mutableStateOf(initialLocationType) }
+    var durationMin by remember { mutableStateOf(initialDurationMin?.toString() ?: "") }
+    var activities by remember { mutableStateOf(initialActivities) }
+    var myRating by remember { mutableStateOf(initialMyRating) }
     var notes by remember { mutableStateOf(initialNotes) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateField("DATE", date, { date = it })
+        DateTimeField("WHEN", dateTime, { dateTime = it })
         Column { FormLabel("TYPE (OPTIONAL)"); FieldTextField(encounterType, { encounterType = it }, "e.g. date, call, hangout") }
+        Column { FormLabel("LOCATION (OPTIONAL)"); FieldTextField(locationType, { locationType = it }, "e.g. their place, restaurant") }
+        Column { FormLabel("DURATION MIN (OPTIONAL)"); FieldTextField(durationMin, { durationMin = it }, "e.g. 90", keyboardType = KeyboardType.Number) }
+        Column { FormLabel("ACTIVITIES (OPTIONAL)"); FieldTextField(activities, { activities = it }, "comma-separated, e.g. dinner, movie") }
+        Column { FormLabel("RATING 1-5 (OPTIONAL)"); IntChipRow(1..5, myRating) { myRating = it } }
         Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Notes...", singleLine = false) }
         SaveButton(saving, true) {
-            onSave(date.toString(), encounterType.trim().ifBlank { null }, notes.trim().ifBlank { null })
+            onSave(
+                dateTime.toLocalDate().toString(),
+                dateTime.toIsoWithOffset(),
+                encounterType.trim().ifBlank { null },
+                locationType.trim().ifBlank { null },
+                durationMin.toIntOrNull(),
+                activities.split(",").map { it.trim() }.filter { it.isNotBlank() }.ifEmpty { null },
+                myRating,
+                notes.trim().ifBlank { null },
+            )
         }
     }
 }
@@ -868,35 +918,40 @@ private fun StoolForm(
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateTimeField("WHEN", dateTime, { dateTime = it })
-        Column {
-            FormLabel("BRISTOL TYPE (1-7)")
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (n in 1..7) {
-                    val selected = bristolType == n
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .border(1.dp, if (selected) FieldColors.Amber else FieldColors.Hairline)
-                            .background(if (selected) FieldColors.Amber.copy(alpha = 0.18f) else FieldColors.RaisedSurface)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { bristolType = n }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            "$n",
-                            style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp),
-                            color = if (selected) FieldColors.Amber else FieldColors.InkMuted,
-                        )
-                    }
-                }
-            }
-        }
+        Column { FormLabel("BRISTOL TYPE (1-7)"); IntChipRow(1..7, bristolType) { bristolType = it } }
         Column { FormLabel("DISCOMFORT 0-10 (OPTIONAL)"); FieldTextField(discomfort, { discomfort = it }, "e.g. 2", keyboardType = KeyboardType.Number) }
         SaveButton(saving, bristolType != null) {
             onSave(dateTime.toIsoWithOffset(), bristolType!!, discomfort.toIntOrNull())
+        }
+    }
+}
+
+// Extracted from StoolForm's own Bristol-scale chip row -- a small bounded
+// integer scale is also exactly what Encounter's 1-5 rating needs, so this
+// is shared rather than a second copy of the same 20 lines.
+@Composable
+private fun IntChipRow(range: IntRange, selected: Int?, onSelect: (Int) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (n in range) {
+            val isSelected = selected == n
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .border(1.dp, if (isSelected) FieldColors.Amber else FieldColors.Hairline)
+                    .background(if (isSelected) FieldColors.Amber.copy(alpha = 0.18f) else FieldColors.RaisedSurface)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { onSelect(n) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "$n",
+                    style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp),
+                    color = if (isSelected) FieldColors.Amber else FieldColors.InkMuted,
+                )
+            }
         }
     }
 }

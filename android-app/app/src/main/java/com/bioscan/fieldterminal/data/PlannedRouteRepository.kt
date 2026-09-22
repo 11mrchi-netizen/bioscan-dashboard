@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.data
 import com.bioscan.fieldterminal.data.model.CalendarEventRow
 import com.bioscan.fieldterminal.data.model.NewPlannedRouteRow
 import com.bioscan.fieldterminal.data.model.PlannedRouteFailureUpdate
+import com.bioscan.fieldterminal.data.model.PlannedRouteRow
 import com.bioscan.fieldterminal.domain.trail.SEGMENTATION_MODEL_VERSION
 import com.bioscan.fieldterminal.domain.trail.TRACKPOINT_MODEL_VERSION
 import com.bioscan.fieldterminal.domain.trail.computePlannedRoutePreview
@@ -88,6 +89,20 @@ class PlannedRouteRepository(
             PlannedRoutePreviewResult.Failure(e.message ?: "Preview generation failed")
         }
     }
+
+    // DAV-149. Read-only, no Drive/Calendar call needed -- lets the Map tab's
+    // existing per-event sheet (MapScreen.kt) show a cached preview the
+    // pipeline already computed, without ever recomputing from the UI.
+    suspend fun loadPreview(calendarEventId: String, calendarId: String = "primary"): PlannedRouteRow? =
+        supabase.postgrest.from("planned_routes")
+            .select {
+                filter {
+                    eq("calendar_id", calendarId)
+                    eq("calendar_event_id", calendarEventId)
+                }
+            }
+            .decodeList<PlannedRouteRow>()
+            .firstOrNull()
 
     // The pipeline's other half: which real, upcoming, non-cancelled events
     // (DAV-145's sync already keeps this current) are candidates for a

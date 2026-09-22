@@ -53,9 +53,11 @@ import com.bioscan.fieldterminal.data.GeocodingRepository
 import com.bioscan.fieldterminal.data.MapRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.PeopleRepository
+import com.bioscan.fieldterminal.data.PlannedRouteRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.WeatherRepository
 import com.bioscan.fieldterminal.data.model.PersonRow
+import com.bioscan.fieldterminal.data.model.PlannedRouteRow
 import com.bioscan.fieldterminal.domain.GpxPoint
 import com.bioscan.fieldterminal.domain.MapEvent
 import com.bioscan.fieldterminal.domain.MapEventCategory
@@ -236,6 +238,10 @@ private fun MapReadyContent(state: MapState.Ready, focusEventId: String? = null)
     val context = LocalContext.current
     val cartoKey = remember { MapSettingsStore.getCartoKey(context) }
     val repo = remember(state.accessToken) { MapRepository(state.accessToken) }
+    // DAV-149. Read-only lookup of whatever DAV-148's pipeline already
+    // computed for this event, if anything -- this screen never triggers a
+    // download/recompute itself.
+    val plannedRouteRepo = remember(state.accessToken) { PlannedRouteRepository(state.accessToken, SupabaseClientProvider.client) }
     // DAV-69: Status's NEXT UP band passes the tapped event's real Calendar
     // event ID here (via FieldTerminalNavHost's SavedStateHandle relay) so
     // Map can open straight to that event's detail sheet. This fetch's own
@@ -251,6 +257,7 @@ private fun MapReadyContent(state: MapState.Ready, focusEventId: String? = null)
     val focusNotFound = remember { focusEventId != null && state.pins.none { it.event.id == focusEventId } }
     var routePoints by remember { mutableStateOf<List<GpxPoint>?>(null) }
     var routeError by remember { mutableStateOf<String?>(null) }
+    var plannedPreview by remember { mutableStateOf<PlannedRouteRow?>(null) }
     var showWeather by remember { mutableStateOf(false) }
     var weatherState by remember { mutableStateOf<WeatherUiState>(WeatherUiState.Idle) }
     val scope = rememberCoroutineScope()
@@ -258,14 +265,25 @@ private fun MapReadyContent(state: MapState.Ready, focusEventId: String? = null)
     LaunchedEffect(selectedPin) {
         routePoints = null
         routeError = null
+        plannedPreview = null
         weatherState = WeatherUiState.Idle
         val pin = selectedPin
         val gpxLink = pin?.event?.gpxLink
-        if (pin != null && pin.event.colorId == TRAINING_COLOR_ID && gpxLink != null) {
-            try {
-                routePoints = repo.fetchGpxPoints(gpxLink)
-            } catch (e: Exception) {
-                routeError = e.message
+        if (pin != null && pin.event.colorId == TRAINING_COLOR_ID) {
+            val eventId = pin.event.id
+            if (eventId != null) {
+                plannedPreview = try {
+                    plannedRouteRepo.loadPreview(eventId)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            if (gpxLink != null) {
+                try {
+                    routePoints = repo.fetchGpxPoints(gpxLink)
+                } catch (e: Exception) {
+                    routeError = e.message
+                }
             }
         }
     }
@@ -320,6 +338,7 @@ private fun MapReadyContent(state: MapState.Ready, focusEventId: String? = null)
             pin = pin,
             routePoints = routePoints,
             routeError = routeError,
+            plannedPreview = plannedPreview,
             weatherState = weatherState,
             onRequestWeather = {
                 showWeather = true
@@ -443,6 +462,7 @@ private fun PinDetailSheet(
     pin: MapPin,
     routePoints: List<GpxPoint>?,
     routeError: String?,
+    plannedPreview: PlannedRouteRow?,
     weatherState: WeatherUiState,
     onRequestWeather: () -> Unit,
     onDismiss: () -> Unit,
@@ -495,7 +515,29 @@ private fun PinDetailSheet(
 
             when (category) {
                 MapEventCategory.Training -> {
+                    // DAV-149: a cached DAV-148 preview (real Mountain Index/
+                    // KM-effort/grade-band terrain analysis) takes priority
+                    // over the live naive GPX summary below when one exists
+                    // for this event -- the live fetch stays as the fallback
+                    // for an event the pipeline hasn't reached yet, per this
+                    // ticket's own "design so future metrics can be added
+                    // without changing the route-preview contract."
                     when {
+                        plannedPreview != null -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                plannedRouteSummary(plannedPreview),
+                                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                                color = FT.DomainTraining,
+                            )
+                            plannedPreview.confidenceTier?.let { tier ->
+                                val staleSuffix = if (plannedPreview.isStale) " · MAY BE STALE" else ""
+                                Text(
+                                    "CONFIDENCE: ${tier.uppercase()}$staleSuffix",
+                                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                                    color = if (plannedPreview.isStale) FT.Warning else FT.TextSecondary,
+                                )
+                            }
+                        }
                         routeError != null -> Text(
                             "Couldn't load the route (${routeError}).",
                             style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
@@ -802,4 +844,17 @@ private fun routeSummary(points: List<GpxPoint>): String {
     val distanceKm = routeDistanceKm(points)
     val gainM = routeElevationGainM(points)
     return "%.1f KM".format(distanceKm) + (gainM?.let { " · %.0f M GAIN".format(it) } ?: "")
+}
+
+// DAV-149. The richer cached preview -- doc 03/04's real terrain engine,
+// not this file's own naive haversine/elevation-delta math above. Only
+// non-null figures render; a preview with just distance (no real elevation
+// data in the GPX) still shows something real rather than nothing.
+private fun plannedRouteSummary(preview: PlannedRouteRow): String {
+    val parts = mutableListOf<String>()
+    preview.distanceM?.let { parts += "%.1f KM".format(it / 1000.0) }
+    preview.elevationGainM?.let { parts += "%.0f M GAIN".format(it) }
+    preview.mountainIndex?.let { parts += "MI %.0f".format(it) }
+    preview.kmEffort?.let { parts += "KE %.1f".format(it) }
+    return parts.joinToString(" · ").ifBlank { "Preview available, no course-demand figures yet." }
 }

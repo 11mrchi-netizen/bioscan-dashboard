@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +26,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.health.connect.client.PermissionController
@@ -40,11 +43,12 @@ import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
 import com.bioscan.fieldterminal.healthconnect.OneOffBackfillStatus
 import com.bioscan.fieldterminal.healthconnect.runNutritionHydrationBackfill
 import com.bioscan.fieldterminal.ui.components.AmberButton
-import com.bioscan.fieldterminal.ui.components.Card
+import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
@@ -81,18 +85,18 @@ fun SettingsScreen(scope: CoroutineScope) {
         hcChecked = true
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(FieldColors.Ground)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         ScreenHeader(title = "SETUP", context = "PLACEHOLDER")
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Card(title = "AI NUTRITION ESTIMATION") {
+            FTCard(title = "AI NUTRITION ESTIMATION") {
                 Text(
                     "Gemini API key for photo-based calorie/macro estimation on the Food entry form. " +
                         "Stored on this device only (Android Keystore-encrypted) — never synced to Supabase.",
-                    style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    color = FT.TextSecondary,
                 )
                 FieldTextField(
                     value = apiKeyInput,
@@ -116,17 +120,17 @@ fun SettingsScreen(scope: CoroutineScope) {
                 }
                 Text(
                     if (keySaved) "AI estimation is available on the Food entry form." else "No key set — AI estimation is hidden on the Food entry form until one is saved.",
-                    style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    color = FT.TextSecondary,
                 )
             }
 
-            Card(title = "MAP") {
+            FTCard(title = "MAP") {
                 Text(
                     "Free CARTO API key for the Map tab's dark basemap tiles (no billing — " +
                         "get one at carto.com/basemaps/apikey). Stored on this device only.",
-                    style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    color = FT.TextSecondary,
                 )
                 FieldTextField(
                     value = cartoKeyInput,
@@ -152,8 +156,8 @@ fun SettingsScreen(scope: CoroutineScope) {
                 Text(
                     "Home location — the starting point for the Map tab's \"DIRECTIONS\" link. " +
                         "Never synced anywhere; used only to build a Google Maps link on this device.",
-                    style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    color = FT.TextSecondary,
                     modifier = Modifier.padding(top = 4.dp),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -192,17 +196,17 @@ fun SettingsScreen(scope: CoroutineScope) {
                 }
                 Text(
                     savedHome.value?.let { "Home set: %.4f, %.4f".format(it.first, it.second) } ?: "No home location set — the DIRECTIONS link is hidden until one is saved.",
-                    style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    color = FT.TextSecondary,
                 )
             }
 
-            Card(title = "HEALTH CONNECT") {
+            FTCard(title = "HEALTH CONNECT") {
                 Text(
                     "Reads activity, body, sleep, and vitals data on every app open. " +
                         "Grants are managed by the OS, not re-requested every screen load.",
-                    style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                    color = FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    color = FT.TextSecondary,
                 )
                 Text(
                     text = when {
@@ -211,8 +215,8 @@ fun SettingsScreen(scope: CoroutineScope) {
                         hcGranted -> "Connected — all requested permissions granted."
                         else -> "Not connected yet."
                     },
-                    style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp),
-                    color = if (hcGranted) FieldColors.Green else FieldColors.InkMuted,
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    color = if (hcGranted) FT.Emerald else FT.TextSecondary,
                 )
                 if (hcAvailable && hcChecked && !hcGranted) {
                     AmberButton(label = "CONNECT HEALTH CONNECT") {
@@ -233,8 +237,8 @@ fun SettingsScreen(scope: CoroutineScope) {
                             HealthConnectSyncResult.NotGranted -> "Sync skipped — permissions not granted."
                             HealthConnectSyncResult.Unavailable -> "Sync skipped — Health Connect unavailable."
                         },
-                        style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-                        color = FieldColors.InkMuted,
+                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        color = FT.TextSecondary,
                     )
                     HealthConnectSyncStatus.lastWriteBackResult?.let { wbResult ->
                         val wbAt = HealthConnectSyncStatus.lastWriteBackAt
@@ -252,8 +256,8 @@ fun SettingsScreen(scope: CoroutineScope) {
                         }
                         Text(
                             text = wbText,
-                            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-                            color = if (wbResult is com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Success) FieldColors.InkMuted else FieldColors.Orange,
+                            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                            color = if (wbResult is com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Success) FT.TextSecondary else FT.Warning,
                         )
                     }
                 }
@@ -266,13 +270,13 @@ fun SettingsScreen(scope: CoroutineScope) {
             // since this app has only ever read from Health Connect, never
             // written to it.
             if (hcAvailable) {
-                Card(title = "ONE-OFF: BACKFILL HISTORY") {
+                FTCard(title = "ONE-OFF: BACKFILL HISTORY") {
                     Text(
                         "Writes this account's existing meal and hydration history into Health Connect " +
                             "(it has none today). Safe to run more than once — matching entries are updated, " +
                             "not duplicated. Temporary utility, removed in a future update.",
-                        style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                        color = FieldColors.InkMuted,
+                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                        color = FT.TextSecondary,
                     )
                     if (hcGranted) {
                         AmberButton(label = if (backfillRunning) "BACKFILLING…" else "BACKFILL NUTRITION + HYDRATION") {
@@ -288,8 +292,8 @@ fun SettingsScreen(scope: CoroutineScope) {
                     } else {
                         Text(
                             "Connect Health Connect above first.",
-                            style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                            color = FieldColors.InkMuted,
+                            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                            color = FT.TextSecondary,
                         )
                     }
                     OneOffBackfillStatus.lastResult?.let { result ->
@@ -300,8 +304,8 @@ fun SettingsScreen(scope: CoroutineScope) {
                                 BackfillResult.NotGranted -> "Backfill skipped — permissions not granted."
                                 BackfillResult.Unavailable -> "Backfill skipped — Health Connect unavailable."
                             },
-                            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-                            color = if (result is BackfillResult.Success) FieldColors.Green else FieldColors.InkMuted,
+                            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                            color = if (result is BackfillResult.Success) FT.Emerald else FT.TextSecondary,
                         )
                     }
                 }
@@ -321,11 +325,11 @@ fun SettingsScreen(scope: CoroutineScope) {
 private fun ClearChip(onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .border(1.dp, FieldColors.Hairline)
+            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text("CLEAR", style = TextStyle(fontFamily = Saira, fontSize = 13.5.sp), color = FieldColors.InkMuted)
+        Text("CLEAR", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = FT.TextSecondary)
     }
 }

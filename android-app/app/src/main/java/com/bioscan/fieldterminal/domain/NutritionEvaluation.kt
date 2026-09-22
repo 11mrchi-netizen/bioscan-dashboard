@@ -25,6 +25,7 @@ data class NutritionEvaluation(
     val confidence: Confidence,
     val completeDaysInLast14: Int,
     val energyTrend14d: Double?,
+    val energySd14d: Double?, // DAV-104: real day-to-day logging variability over the same 14 days energyTrend14d averages -- TDEE's credible-range width, not a fabricated +/- percentage
     val energyCv28d: Double?,
     val proteinAdherence14d: Double?,
 )
@@ -73,7 +74,7 @@ fun evaluateNutrition(dailyTotals: List<DailyNutrition>, asOf: LocalDate = Local
         .filter { !it.first.isAfter(asOf) }
         .sortedBy { it.first }
 
-    if (parsed.isEmpty()) return NutritionEvaluation(EvalState.NoData, Confidence(0, MIN_COMPLETE_IN_14), 0, null, null, null)
+    if (parsed.isEmpty()) return NutritionEvaluation(EvalState.NoData, Confidence(0, MIN_COMPLETE_IN_14), 0, null, null, null, null)
 
     val classifications = mutableMapOf<LocalDate, NutritionDayClass>()
     for ((date, day) in parsed) {
@@ -86,7 +87,7 @@ fun evaluateNutrition(dailyTotals: List<DailyNutrition>, asOf: LocalDate = Local
     val completeInLast14 = last14Dates.count { classifications[it] == NutritionDayClass.Complete }
 
     if (completeInLast14 < MIN_COMPLETE_IN_14) {
-        return NutritionEvaluation(EvalState.Building, Confidence(completeInLast14, MIN_COMPLETE_IN_14), completeInLast14, null, null, null)
+        return NutritionEvaluation(EvalState.Building, Confidence(completeInLast14, MIN_COMPLETE_IN_14), completeInLast14, null, null, null, null)
     }
 
     val completeDays = parsed.filter { classifications[it.first] == NutritionDayClass.Complete }
@@ -94,6 +95,7 @@ fun evaluateNutrition(dailyTotals: List<DailyNutrition>, asOf: LocalDate = Local
     val last28Complete = completeDays.filter { ChronoUnit.DAYS.between(it.first, asOf) < ENERGY_CV_DAYS }
 
     val energyTrend14d = last14Complete.takeIf { it.isNotEmpty() }?.let { mean(it.map { d -> d.second.calories }) }
+    val energySd14d = last14Complete.takeIf { it.size >= 2 }?.let { populationStdDev(it.map { d -> d.second.calories }) }
 
     val energyCv28d = last28Complete.takeIf { it.size >= 2 }?.let {
         val kcalValues = it.map { d -> d.second.calories }
@@ -115,6 +117,7 @@ fun evaluateNutrition(dailyTotals: List<DailyNutrition>, asOf: LocalDate = Local
         confidence = Confidence(completeInLast14, MIN_COMPLETE_IN_14),
         completeDaysInLast14 = completeInLast14,
         energyTrend14d = energyTrend14d,
+        energySd14d = energySd14d,
         energyCv28d = energyCv28d,
         proteinAdherence14d = proteinAdherence14d,
     )

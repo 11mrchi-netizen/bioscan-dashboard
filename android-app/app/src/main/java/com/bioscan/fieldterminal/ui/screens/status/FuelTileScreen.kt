@@ -33,20 +33,26 @@ import com.bioscan.fieldterminal.domain.BodyFatEvaluation
 import com.bioscan.fieldterminal.domain.BristolEvaluation
 import com.bioscan.fieldterminal.domain.BristolPattern
 import com.bioscan.fieldterminal.domain.DailyNutrition
+import com.bioscan.fieldterminal.domain.DisplayValue
+import com.bioscan.fieldterminal.domain.EvalState
+import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.NutritionEvaluation
 import com.bioscan.fieldterminal.domain.PROTEIN_PCT_HIGH
 import com.bioscan.fieldterminal.domain.PROTEIN_PCT_LOW
+import com.bioscan.fieldterminal.domain.TdeeEvaluation
 import com.bioscan.fieldterminal.domain.WeightEvaluation
 import com.bioscan.fieldterminal.domain.evaluateBodyFat
 import com.bioscan.fieldterminal.domain.evaluateBristol
 import com.bioscan.fieldterminal.domain.evaluateNutrition
+import com.bioscan.fieldterminal.domain.evaluateTdee
 import com.bioscan.fieldterminal.domain.evaluateWeightTrend
 import com.bioscan.fieldterminal.domain.proteinPercentSeries
 import java.time.OffsetDateTime
-import com.bioscan.fieldterminal.ui.components.Card
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.StateRow
+import com.bioscan.fieldterminal.ui.components.FTDataState
+import com.bioscan.fieldterminal.ui.components.FTMetricValue
+import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.FuelTab
@@ -54,11 +60,10 @@ import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import com.bioscan.fieldterminal.ui.theme.Saira
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import kotlin.math.roundToInt
 
 // DAV-72 (First feedback fixes): Fuel tile page, tabs Nutrition/Hydration/
 // Supplements/Weight-TDEE. Nutrition+Hydration migrated from the old
@@ -151,8 +156,9 @@ private fun bristolPatternLabel(p: BristolPattern): String = when (p) {
     BristolPattern.Typical -> "TYPICAL PATTERN"
 }
 
-// DAV-96: renamed from WeightTdeeTab to match the Body tab it now lives
-// under -- same real weight/body-fat trend content, not rebuilt.
+// DAV-96/103: renamed from WeightTdeeTab to match the Body tab it now lives
+// under -- weight/body-fat trend content is unchanged; DAV-104's real TDEE
+// estimate replaces the old "not built yet" placeholder.
 @Composable
 private fun BodyTab(allDays: List<DailyNutrition>) {
     var bodyMetrics by remember { mutableStateOf<List<BodyMetricsAnalysisRow>?>(null) }
@@ -174,7 +180,8 @@ private fun BodyTab(allDays: List<DailyNutrition>) {
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         val weightPoints = b.mapNotNull { row -> row.weightKg?.let { LocalDate.parse(row.date) to it } }
-        WeightCard(evaluateWeightTrend(weightPoints))
+        val weightEval = evaluateWeightTrend(weightPoints)
+        WeightCard(weightEval)
 
         // DAV-76: read alongside weight rather than as a disconnected number
         // -- no numeric calorie/macro goal exists anywhere in this project
@@ -187,46 +194,56 @@ private fun BodyTab(allDays: List<DailyNutrition>) {
         val bodyFatPoints = b.mapNotNull { row -> row.bodyFatPct?.let { LocalDate.parse(row.date) to it } }
         BodyFatCard(evaluateBodyFat(bodyFatPoints))
 
-        Text(
-            "TDEE estimation isn't built yet — needs a real activity-level model this project doesn't have (see Category 10).",
-            style = TextStyle(fontFamily = Saira, fontSize = 12.5.sp),
-            color = FieldColors.InkMuted,
-        )
+        // DAV-104: real post-fact TDEE, gated on both this evaluation's own
+        // weight-EMA state above and Category 4's nutrition-completeness
+        // gate -- reuses both verbatim rather than a third data pipeline.
+        TdeeCard(evaluateTdee(evaluateNutrition(allDays), weightEval))
     }
 }
 
 private const val TREND_WINDOW_DAYS = 90L
 
+// DAV-101/103's toMetricState() equivalent for this file -- kept local
+// rather than shared since only this screen's cards use the legacy 6-state
+// EvalState vocabulary now that Nutrition/Hydration/Digestion moved to
+// MetricPresentation-native states in DAV-100.
+private fun EvalState.toMetricState(): MetricState = when (this) {
+    EvalState.NoData -> MetricState.Unavailable
+    EvalState.Building -> MetricState.Building
+    EvalState.Stable -> MetricState.Optimal
+    EvalState.ShiftUp, EvalState.ShiftDown -> MetricState.Warning
+    EvalState.Unstable -> MetricState.Critical
+}
+
 @Composable
 private fun WeightCard(eval: WeightEvaluation) {
-    Card(title = "WEIGHT TREND") {
-        StateRow(eval.state)
+    FTCard(title = "WEIGHT TREND") {
+        FTStatePill(eval.state.toMetricState())
         StatLine("Confidence", eval.confidence.label)
         eval.emaToday?.let { StatLine("EMA (today)", "%.1f kg".format(it)) }
         eval.rateKgPerWeek?.let { StatLine("Rate", "%+.2f kg/week".format(it)) }
         val today = LocalDate.now()
         val recentSeries = eval.emaSeries.filter { ChronoUnit.DAYS.between(it.first, today) <= TREND_WINDOW_DAYS }
-        DateTrendLine(points = recentSeries, color = FieldColors.Amber, modifier = Modifier.padding(top = 6.dp))
+        DateTrendLine(points = recentSeries, color = FT.Emerald, modifier = Modifier.padding(top = 6.dp))
     }
 }
 
-// DAV-76. Amber (weight, directly above) and green (on-target here) so the
-// two trends read as a matched pair without needing a shared legend --
-// green already means "in range" everywhere else in this app (BLOODWORK
-// STABLE, 0 FLAGS), not a color picked fresh for this card.
+// DAV-76. Green ("on-target here") already means "in range" everywhere else
+// in this app (BLOODWORK STABLE, 0 FLAGS), not a color picked fresh for
+// this card.
 @Composable
 private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) {
-    Card(title = "PROTEIN ON-TARGET (AMDR 10–35%)") {
+    FTCard(title = "PROTEIN ON-TARGET (AMDR 10–35%)") {
         if (proteinSeries.size < 2) {
             Text(
                 "Not enough complete-day nutrition logs yet to chart a trend.",
-                style = TextStyle(fontFamily = Saira, fontSize = 13.sp),
-                color = FieldColors.InkMuted,
+                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                color = FT.TextSecondary,
             )
         } else {
             DateTrendLine(
                 points = proteinSeries,
-                color = FieldColors.Green,
+                color = FT.Emerald,
                 refLow = PROTEIN_PCT_LOW * 100,
                 refHigh = PROTEIN_PCT_HIGH * 100,
             )
@@ -240,8 +257,8 @@ private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) 
 // not because nothing moves but because there's no rule to judge it by.
 @Composable
 private fun NutritionCard(eval: NutritionEvaluation) {
-    Card(title = "NUTRITION (ANALYSIS)") {
-        StateRow(eval.state)
+    FTCard(title = "NUTRITION (ANALYSIS)") {
+        FTStatePill(eval.state.toMetricState())
         StatLine("Confidence", eval.confidence.label)
         eval.energyTrend14d?.let { StatLine("14-day energy trend", "%.0f kcal".format(it)) }
         eval.energyCv28d?.let { StatLine("28-day energy CV", "%.1f%%".format(it)) }
@@ -251,8 +268,8 @@ private fun NutritionCard(eval: NutritionEvaluation) {
 
 @Composable
 private fun BodyFatCard(eval: BodyFatEvaluation) {
-    Card(title = "BODY FAT %") {
-        StateRow(eval.state)
+    FTCard(title = "BODY FAT %") {
+        FTStatePill(eval.state.toMetricState())
         StatLine("Confidence", eval.confidence.label)
         eval.latest?.let { StatLine("Latest", "%.1f%%".format(it)) }
         eval.previous?.let { StatLine("Previous (≥30d prior)", "%.1f%%".format(it)) }
@@ -260,10 +277,41 @@ private fun BodyFatCard(eval: BodyFatEvaluation) {
     }
 }
 
+// DAV-104: post-fact adaptive TDEE. Building state is the honest, expected
+// default while either input gate is unmet -- FTDataState (not a fabricated
+// number or a decorative placeholder) makes that explicit, per the ticket's
+// own "must not use glow, color, or large typography to imply precision
+// the data gate does not support."
+@Composable
+private fun TdeeCard(eval: TdeeEvaluation) {
+    FTCard(title = "ENERGY BALANCE (TDEE ESTIMATE)") {
+        StatLine("Confidence", eval.confidence.label)
+        if (eval.state == EvalState.Stable && eval.tdeeKcal != null && eval.rangeLowKcal != null && eval.rangeHighKcal != null) {
+            FTMetricValue(
+                DisplayValue(
+                    primary = eval.tdeeKcal.roundToInt().toString(),
+                    unit = "KCAL/DAY",
+                    secondary = "likely ${eval.rangeLowKcal.roundToInt()}–${eval.rangeHighKcal.roundToInt()} kcal/day",
+                ),
+            )
+        } else {
+            FTDataState(
+                com.bioscan.fieldterminal.domain.DataAvailability.Building,
+                "Needs 10+ complete-logged days in the last 14 and an established weight trend (10+ weigh-ins across 14+ days) before an estimate is trustworthy.",
+            )
+        }
+        Text(
+            "Post-fact estimate from your own logged intake and real weight trend — not a predictive formula, and not a target to hit.",
+            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            color = FT.TextMuted,
+        )
+    }
+}
+
 @Composable
 private fun StatLine(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = TextStyle(fontFamily = Saira, fontSize = 14.5.sp), color = FieldColors.InkMuted)
-        Text(value, style = TextStyle(fontFamily = JetBrainsMono, fontSize = 14.5.sp), color = FieldColors.Ink)
+        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+        Text(value, style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp), color = FT.TextPrimary)
     }
 }

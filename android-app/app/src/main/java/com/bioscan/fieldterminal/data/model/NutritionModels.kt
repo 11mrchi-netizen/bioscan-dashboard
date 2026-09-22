@@ -47,6 +47,19 @@ data class FoodRow(
     val subcategory: String? = null,
     val preparation: String? = null,
     @SerialName("is_composite") val isComposite: Boolean = false,
+    @SerialName("beverage_class") val beverageClass: String? = null,
+    @SerialName("beverage_subtype") val beverageSubtype: String? = null,
+)
+
+// DAV-181. Versioned beverage-class -> effective-hydration retention factor
+// lookup -- kept out of app code so factors can be revised without a release.
+@Serializable
+data class HydrationFactorModelRow(
+    val id: Long? = null,
+    @SerialName("model_version") val modelVersion: String,
+    @SerialName("beverage_class") val beverageClass: String,
+    @SerialName("retention_factor") val retentionFactor: Double,
+    val notes: String? = null,
 )
 
 @Serializable
@@ -93,6 +106,13 @@ data class MealItemRow(
     @SerialName("is_estimated") val isEstimated: Boolean = false,
     val confidence: Double? = null,
     val source: String = "manual",
+    @SerialName("is_beverage") val isBeverage: Boolean = false,
+    @SerialName("water_ml") val waterMl: Double? = null,
+    @SerialName("caffeine_mg") val caffeineMg: Double? = null,
+    @SerialName("alcohol_g") val alcoholG: Double? = null,
+    @SerialName("effective_hydration_ml") val effectiveHydrationMl: Double? = null,
+    @SerialName("hydration_model_version") val hydrationModelVersion: String? = null,
+    @SerialName("hydration_confidence") val hydrationConfidence: Double? = null,
 )
 
 @Serializable

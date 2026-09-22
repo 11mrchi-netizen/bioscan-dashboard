@@ -17,6 +17,17 @@ const val NOISE_THRESHOLD_M = 10.0
 const val STOPPED_SPEED_MPS = 0.3
 const val SEGMENTATION_MODEL_VERSION = "1"
 
+// doc 04's two-tier bar: every hysteresis-closed segment counts structurally
+// (DAV-136), but only a segment clearing both of these is stable enough for
+// a per-segment performance number (VAM, GAP, efficiency -- DAV-138/139/141)
+// or a durability comparison (DAV-142).
+const val MIN_PERFORMANCE_SEGMENT_DISTANCE_M = 100.0
+const val MIN_PERFORMANCE_SEGMENT_DURATION_S = 60L
+
+fun TerrainSegment.isPerformanceEligible(): Boolean =
+    (endDistanceM - startDistanceM) >= MIN_PERFORMANCE_SEGMENT_DISTANCE_M &&
+        movingDurationSeconds >= MIN_PERFORMANCE_SEGMENT_DURATION_S
+
 // 5-point moving average (doc 04). A point with no raw elevation gets no
 // smoothed value either -- never filled in from a neighbor.
 fun smoothElevation(points: List<Trackpoint>, windowSize: Int = ELEVATION_SMOOTHING_WINDOW): List<SmoothedPoint> {

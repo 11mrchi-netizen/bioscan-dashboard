@@ -13,6 +13,7 @@ doc 01 for why those are two separate data paths rather than one shared GPX pipe
 | [03-trail-metric-registry.md](03-trail-metric-registry.md) | [DAV-128](https://linear.app/biodashboard/issue/DAV-128) | The canonical name/unit/formula/provenance contract every trail metric maps into |
 | [04-terrain-segmentation-rules.md](04-terrain-segmentation-rules.md) | [DAV-130](https://linear.app/biodashboard/issue/DAV-130) | Smoothing, noise threshold, grade bands, stop handling, and climb/descent comparability rules |
 | [05-trail-metrics-ui-presentation.md](05-trail-metrics-ui-presentation.md) | (folds into DAV-144) | Where trail metrics render (Session Detail's new TRAIL card, Training tab's weekly rollup) and how they map onto the existing Futuristic Material components |
+| [06-trail-metric-validation.md](06-trail-metric-validation.md) | [DAV-143](https://linear.app/biodashboard/issue/DAV-143) | The 40-case hand-verified fixture suite, and the real device backtest identified but pending emulator access |
 
 ## Prior art this builds on
 

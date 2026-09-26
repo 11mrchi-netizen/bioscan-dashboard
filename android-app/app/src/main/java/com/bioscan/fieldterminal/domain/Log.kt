@@ -260,15 +260,16 @@ internal fun dedupeLogExerciseSessions(sessions: List<LogExerciseRow>): List<Log
         val sessionStart = OffsetDateTime.parse(session.startTime)
         val sessionDuration = session.durationMin ?: 0.0
         val matchingCluster = clusters.find { cluster ->
-            val rep = cluster.first()
-            val repStart = OffsetDateTime.parse(rep.startTime)
-            val repDuration = rep.durationMin ?: 0.0
-            val sameDay = repStart.toLocalDate() == sessionStart.toLocalDate()
-            val sameType = rep.type == session.type
-            val startDiffMin = kotlin.math.abs(Duration.between(repStart, sessionStart).toMinutes())
-            val durationDiffMin = kotlin.math.abs(repDuration - sessionDuration)
-            val durationTolerance = maxOf(SAME_RUN_DURATION_TOLERANCE_MIN, minOf(repDuration, sessionDuration) * 0.2)
-            sameDay && sameType && startDiffMin <= SAME_RUN_START_TOLERANCE_MIN && durationDiffMin <= durationTolerance
+            cluster.any { rep ->
+                val repStart = OffsetDateTime.parse(rep.startTime)
+                val repDuration = rep.durationMin ?: 0.0
+                val sameDay = repStart.toLocalDate() == sessionStart.toLocalDate()
+                val sameType = rep.type == session.type
+                val startDiffMin = kotlin.math.abs(Duration.between(repStart, sessionStart).toMinutes())
+                val durationDiffMin = kotlin.math.abs(repDuration - sessionDuration)
+                val durationTolerance = maxOf(SAME_RUN_DURATION_TOLERANCE_MIN, minOf(repDuration, sessionDuration) * 0.2)
+                sameDay && sameType && startDiffMin <= SAME_RUN_START_TOLERANCE_MIN && durationDiffMin <= durationTolerance
+            }
         }
         if (matchingCluster != null) matchingCluster.add(session) else clusters.add(mutableListOf(session))
     }
@@ -294,8 +295,12 @@ private fun formatDose(value: Double?, unit: String?): String? = when {
 private fun parseTimestamp(iso: String): LocalDateTime =
     try {
         OffsetDateTime.parse(iso).toLocalDateTime()
-    } catch (e: Exception) {
-        LocalDateTime.parse(iso)
+    } catch (_: Exception) {
+        try {
+            LocalDateTime.parse(iso)
+        } catch (_: Exception) {
+            LocalDateTime.MIN
+        }
     }
 
 private fun formatDuration(totalMinutes: Double): String {

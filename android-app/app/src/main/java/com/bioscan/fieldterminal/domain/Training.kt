@@ -144,16 +144,15 @@ fun dedupeRunSessions(sessions: List<ExerciseSessionRow>): List<ExerciseSessionR
         val sessionDuration = session.durationMin ?: 0.0
 
         val matchingCluster = clusters.find { cluster ->
-            val rep = cluster.first()
-            val repStart = OffsetDateTime.parse(rep.startTime)
-            val repDuration = rep.durationMin ?: 0.0
-
-            val sameDay = repStart.toLocalDate() == sessionStart.toLocalDate()
-            val startDiffMin = kotlin.math.abs(java.time.Duration.between(repStart, sessionStart).toMinutes())
-            val durationDiffMin = kotlin.math.abs(repDuration - sessionDuration)
-            val durationTolerance = maxOf(SAME_RUN_DURATION_TOLERANCE_MIN, minOf(repDuration, sessionDuration) * 0.2)
-
-            sameDay && startDiffMin <= SAME_RUN_START_TOLERANCE_MIN && durationDiffMin <= durationTolerance
+            cluster.any { rep ->
+                val repStart = OffsetDateTime.parse(rep.startTime)
+                val repDuration = rep.durationMin ?: 0.0
+                val sameDay = repStart.toLocalDate() == sessionStart.toLocalDate()
+                val startDiffMin = kotlin.math.abs(java.time.Duration.between(repStart, sessionStart).toMinutes())
+                val durationDiffMin = kotlin.math.abs(repDuration - sessionDuration)
+                val durationTolerance = maxOf(SAME_RUN_DURATION_TOLERANCE_MIN, minOf(repDuration, sessionDuration) * 0.2)
+                sameDay && startDiffMin <= SAME_RUN_START_TOLERANCE_MIN && durationDiffMin <= durationTolerance
+            }
         }
 
         if (matchingCluster != null) {

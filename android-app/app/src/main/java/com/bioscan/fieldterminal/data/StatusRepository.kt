@@ -26,14 +26,16 @@ data class StatusOverview(
 class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClient) {
 
     suspend fun loadOverview(): StatusOverview {
-        // 10 most recent days, most-recent-first from Postgrest, then
+        // 60 most recent days, most-recent-first from Postgrest, then
         // reversed to chronological order -- computeHrvReadinessSeries()
         // needs index i-1 to mean "the day before index i", matching how
-        // index.html's own wearable.hrv array is built.
+        // index.html's own wearable.hrv array is built. 10 was too few:
+        // readiness returned Unknown when only 3 of 10 days had valid HRV,
+        // even with 60+ valid days in the DB.
         val wearable = supabase.postgrest.from("wearable_daily")
             .select(columns = Columns.list("date,rhr,hrv")) {
                 order("date", Order.DESCENDING)
-                limit(10)
+                limit(60)
             }
             .decodeList<WearableDailyRow>()
             .reversed()

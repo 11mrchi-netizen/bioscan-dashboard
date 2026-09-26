@@ -54,7 +54,8 @@ fun resolveConsumedBaseAmount(
     servingCount: Double?,
 ): Double {
     if (serving != null && servingCount != null) {
-        return servingCount * (serving.grams ?: serving.ml ?: 0.0)
+        val gramsOrMl = serving.grams ?: serving.ml
+        return if (gramsOrMl != null) servingCount * gramsOrMl else servingCount
     }
     return quantity
 }

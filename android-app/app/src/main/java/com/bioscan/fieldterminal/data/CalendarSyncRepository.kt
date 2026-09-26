@@ -37,7 +37,7 @@ class CalendarSyncRepository(
     private val accessToken: String,
     private val supabase: SupabaseClient,
 ) {
-    private val client = HttpClient(Android)
+    companion object { private val client = HttpClient(Android) }
 
     suspend fun sync(calendarId: String = "primary"): CalendarSyncResult = try {
         runSync(calendarId, useStoredToken = true)

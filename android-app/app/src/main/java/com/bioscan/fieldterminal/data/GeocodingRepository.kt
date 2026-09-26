@@ -16,7 +16,7 @@ import kotlinx.serialization.json.Json
 // to light, non-bulk use -- both true here (a handful of calendar events'
 // addresses per screen load, on demand, nothing cached/scheduled).
 class GeocodingRepository {
-    private val client = HttpClient(Android)
+    companion object { private val client = HttpClient(Android) }
     private val json = Json { ignoreUnknownKeys = true }
 
     // Null on no match or any failure, deliberately not a thrown exception --

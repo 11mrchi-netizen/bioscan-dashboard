@@ -29,7 +29,7 @@ private val json = Json { ignoreUnknownKeys = true }
 class SupplementImpactException(message: String) : Exception(message)
 
 class SupplementImpactRepository(private val apiKey: String) {
-    private val client = HttpClient(Android)
+    companion object { private val client = HttpClient(Android) }
 
     suspend fun describeImpact(name: String, dose: String): String {
         val requestBody = buildJsonObject {

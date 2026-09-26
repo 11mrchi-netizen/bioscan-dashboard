@@ -28,6 +28,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 
 sealed interface HealthConnectWriteBackResult {
     data object Unavailable : HealthConnectWriteBackResult
@@ -82,8 +83,8 @@ class HealthConnectWriteBackRepository(
             val zone = ZoneId.systemDefault()
             Log.d(TAG, "Starting write-back from $startDate to $endDate")
 
-            val startIso = startDate.atStartOfDay().toString()
-            val endIso = endDate.atStartOfDay().toString()
+            val startIso = startDate.atStartOfDay().atOffset(ZoneOffset.UTC).toString()
+            val endIso = endDate.atStartOfDay().atOffset(ZoneOffset.UTC).toString()
 
             val meals = supabase.postgrest.from("meals")
                 .select(columns = Columns.list("id,logged_at,description,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg")) {

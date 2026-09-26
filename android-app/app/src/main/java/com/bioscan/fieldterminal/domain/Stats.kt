@@ -12,15 +12,17 @@ import kotlin.math.sqrt
 // minimal (population SD, matching that existing function's own convention
 // of dividing by n rather than n-1, for consistency with it) rather than a
 // general statistics library.
-fun mean(values: List<Double>): Double = values.sum() / values.size
+fun mean(values: List<Double>): Double = if (values.isEmpty()) 0.0 else values.sum() / values.size
 
 fun populationStdDev(values: List<Double>): Double {
+    if (values.isEmpty()) return 0.0
     val m = mean(values)
     val variance = values.sumOf { (it - m) * (it - m) } / values.size
     return sqrt(variance)
 }
 
 fun median(values: List<Double>): Double {
+    if (values.isEmpty()) return 0.0
     val sorted = values.sorted()
     val mid = sorted.size / 2
     return if (sorted.size % 2 == 0) (sorted[mid - 1] + sorted[mid]) / 2.0 else sorted[mid]
@@ -31,6 +33,7 @@ fun median(values: List<Double>): Double {
 // for being the simplest to state and verify by hand, matching this file's
 // own "kept minimal" precedent rather than a general statistics library.
 fun interquartileRange(values: List<Double>): Double {
+    if (values.size < 2) return 0.0
     val sorted = values.sorted()
     val n = sorted.size
     val mid = n / 2
@@ -95,8 +98,14 @@ fun mannKendall(orderedValues: List<Double>): MannKendallResult {
 fun dualEwma(dailyValues: Map<LocalDate, Double>, earliest: LocalDate, asOf: LocalDate, fatigueTauDays: Double, adaptationTauDays: Double): Pair<Double, Double> {
     val alphaFatigue = 2.0 / (fatigueTauDays + 1.0)
     val alphaAdaptation = 2.0 / (adaptationTauDays + 1.0)
-    var fatigue = 0.0
-    var adaptation = 0.0
+    // Seed with the first observed value so the EMA doesn't ramp up from 0
+    // through an artificial "dead" period at the start of the history.
+    val firstObserved = generateSequence(earliest) { it.plusDays(1) }
+        .takeWhile { !it.isAfter(asOf) }
+        .mapNotNull { dailyValues[it] }
+        .firstOrNull() ?: 0.0
+    var fatigue = firstObserved
+    var adaptation = firstObserved
     var date = earliest
     while (!date.isAfter(asOf)) {
         val value = dailyValues[date] ?: 0.0

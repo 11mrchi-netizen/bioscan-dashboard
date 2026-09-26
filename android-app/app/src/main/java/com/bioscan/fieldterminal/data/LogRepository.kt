@@ -18,6 +18,8 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 // Pagination decision for Step 11's flagged open question: fetch a generous
 // window from every source table up front (60 rows each, well past this
@@ -35,82 +37,95 @@ const val LOG_PAGE_SIZE = 20
 
 class LogRepository(private val supabase: SupabaseClient) {
 
-    suspend fun loadAllEntries(): List<LogEntry> {
-        val meals = supabase.postgrest.from("meals")
-            .select(columns = Columns.list("id,logged_at,description,calories,protein_g,carbs_g,fat_g")) {
-                order("logged_at", Order.DESCENDING)
-                limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogMealRow>()
-
-        val exerciseSessions = supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("id,type,start_time,distance_km,duration_min,avg_hr")) {
-                order("start_time", Order.DESCENDING)
-                limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogExerciseRow>()
-
-        val sleep = supabase.postgrest.from("sleep_daily")
-            .select(columns = Columns.list("id,date,hours,score")) {
-                order("date", Order.DESCENDING)
-                limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogSleepRow>()
-
-        val arousal = supabase.postgrest.from("arousal_daily")
-            .select(columns = Columns.list("id,date,morning_erection_quality,arousal_level")) {
-                order("date", Order.DESCENDING)
-                limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogArousalRow>()
-
-        val stool = supabase.postgrest.from("stool_log")
-            .select(columns = Columns.list("id,occurred_at,bristol_type,discomfort")) {
-                order("occurred_at", Order.DESCENDING)
-                limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogStoolRow>()
-
-        val encounters = supabase.postgrest.from("encounters")
-            .select(columns = Columns.list("id,date,status,occurred_at,encounter_type,notes,calendar_event_title,my_rating")) {
-                order("date", Order.DESCENDING)
-                limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogEncounterRow>()
-
-        val notes = supabase.postgrest.from("notes")
-            .select(columns = Columns.list("id,occurred_at,text")) {
-                order("occurred_at", Order.DESCENDING)
-                limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogNoteRow>()
-
-        val hydration = supabase.postgrest.from("hydration_daily")
-            .select(columns = Columns.list("id,date,ml")) {
-                order("date", Order.DESCENDING)
-                limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogHydrationRow>()
-
-        val wellbeing = supabase.postgrest.from("wellbeing_daily")
-            .select(columns = Columns.list("id,date,energy,mood,stress,soreness")) {
-                order("date", Order.DESCENDING)
-                limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogWellbeingRow>()
-
-        val supplementsTaken = supabase.postgrest.from("supplement_log")
-            .select(columns = Columns.list("id,supplement_name,taken_at,dose_value,dose_unit")) {
-                order("taken_at", Order.DESCENDING)
-                limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogSupplementTakenRow>()
-
-        val ostrc = supabase.postgrest.from("ostrc_checkins")
-            .select(columns = Columns.list("id,check_date,body_area,q1,q2,q3,q4,notes")) {
-                order("check_date", Order.DESCENDING)
-                limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogOstrcRow>()
-
-        val masturbation = supabase.postgrest.from("masturbation_log")
-            .select(columns = Columns.list("id,occurred_at,watched_porn,load_size,orgasm_intensity,notes")) {
-                order("occurred_at", Order.DESCENDING)
-                limit(FETCH_LIMIT_PER_SOURCE)
-            }.decodeList<LogMasturbationRow>()
-
-        return buildLogEntries(
-            meals, exerciseSessions, sleep, arousal, stool, encounters, notes,
-            hydration, wellbeing, supplementsTaken, ostrc, masturbation,
+    suspend fun loadAllEntries(): List<LogEntry> = coroutineScope {
+        val meals = async {
+            supabase.postgrest.from("meals")
+                .select(columns = Columns.list("id,logged_at,description,calories,protein_g,carbs_g,fat_g")) {
+                    order("logged_at", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogMealRow>()
+        }
+        val exerciseSessions = async {
+            supabase.postgrest.from("exercise_sessions")
+                .select(columns = Columns.list("id,type,start_time,distance_km,duration_min,avg_hr,source")) {
+                    order("start_time", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogExerciseRow>()
+        }
+        val sleep = async {
+            supabase.postgrest.from("sleep_daily")
+                .select(columns = Columns.list("id,date,hours,score")) {
+                    order("date", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogSleepRow>()
+        }
+        val arousal = async {
+            supabase.postgrest.from("arousal_daily")
+                .select(columns = Columns.list("id,date,morning_erection_quality,arousal_level")) {
+                    order("date", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogArousalRow>()
+        }
+        val stool = async {
+            supabase.postgrest.from("stool_log")
+                .select(columns = Columns.list("id,occurred_at,bristol_type,discomfort")) {
+                    order("occurred_at", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogStoolRow>()
+        }
+        val encounters = async {
+            supabase.postgrest.from("encounters")
+                .select(columns = Columns.list("id,date,status,occurred_at,encounter_type,notes,calendar_event_title,my_rating")) {
+                    order("date", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogEncounterRow>()
+        }
+        val notes = async {
+            supabase.postgrest.from("notes")
+                .select(columns = Columns.list("id,occurred_at,text")) {
+                    order("occurred_at", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogNoteRow>()
+        }
+        val hydration = async {
+            supabase.postgrest.from("hydration_daily")
+                .select(columns = Columns.list("id,date,ml")) {
+                    order("date", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogHydrationRow>()
+        }
+        val wellbeing = async {
+            supabase.postgrest.from("wellbeing_daily")
+                .select(columns = Columns.list("id,date,energy,mood,stress,soreness")) {
+                    order("date", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogWellbeingRow>()
+        }
+        val supplementsTaken = async {
+            supabase.postgrest.from("supplement_log")
+                .select(columns = Columns.list("id,supplement_name,taken_at,dose_value,dose_unit")) {
+                    order("taken_at", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogSupplementTakenRow>()
+        }
+        val ostrc = async {
+            supabase.postgrest.from("ostrc_checkins")
+                .select(columns = Columns.list("id,check_date,body_area,q1,q2,q3,q4,notes")) {
+                    order("check_date", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogOstrcRow>()
+        }
+        val masturbation = async {
+            supabase.postgrest.from("masturbation_log")
+                .select(columns = Columns.list("id,occurred_at,watched_porn,load_size,orgasm_intensity,notes")) {
+                    order("occurred_at", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogMasturbationRow>()
+        }
+        buildLogEntries(
+            meals.await(), exerciseSessions.await(), sleep.await(), arousal.await(),
+            stool.await(), encounters.await(), notes.await(), hydration.await(),
+            wellbeing.await(), supplementsTaken.await(), ostrc.await(), masturbation.await(),
         )
     }
 }

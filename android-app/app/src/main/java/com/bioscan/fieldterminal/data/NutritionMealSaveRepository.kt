@@ -76,56 +76,63 @@ class NutritionMealSaveRepository(
             .decodeSingle<MealIdRow>()
             .id
 
-        resolved.forEachIndexed { index, (item, result) ->
-            val mealItemRow = supabase.postgrest.from("meal_items")
-                .insert(
-                    MealItemRow(
-                        mealId = mealId,
-                        foodId = item.foodId,
-                        sortOrder = index,
-                        description = item.description,
-                        quantity = item.quantity,
-                        quantityUnit = item.quantityUnit,
-                        quantityLow = item.quantityLow,
-                        quantityHigh = item.quantityHigh,
-                        servingId = item.servingId,
-                        servingCount = item.servingCount,
-                        preparation = item.preparation,
-                        calories = result.nutrients.calories,
-                        proteinG = result.nutrients.proteinG,
-                        fatG = result.nutrients.fatG,
-                        carbsG = result.nutrients.carbsG,
-                        fiberG = result.nutrients.fiberG,
-                        sugarG = result.nutrients.sugarG,
-                        sodiumMg = result.nutrients.sodiumMg,
-                        isEstimated = item.isEstimated,
-                        confidence = item.confidence,
-                        source = item.source.value,
-                        isBeverage = result.nutrients.waterMl != null && result.hydration != null,
-                        waterMl = result.nutrients.waterMl,
-                        caffeineMg = result.nutrients.caffeineMg,
-                        alcoholG = result.nutrients.alcoholG,
-                        effectiveHydrationMl = result.hydration?.effectiveHydrationMl,
-                        hydrationModelVersion = result.hydration?.modelVersion,
-                    ),
-                ) { select(Columns.list("id")) }
-                .decodeSingle<MealIdRow>()
+        try {
+            resolved.forEachIndexed { index, (item, result) ->
+                val mealItemRow = supabase.postgrest.from("meal_items")
+                    .insert(
+                        MealItemRow(
+                            mealId = mealId,
+                            foodId = item.foodId,
+                            sortOrder = index,
+                            description = item.description,
+                            quantity = item.quantity,
+                            quantityUnit = item.quantityUnit,
+                            quantityLow = item.quantityLow,
+                            quantityHigh = item.quantityHigh,
+                            servingId = item.servingId,
+                            servingCount = item.servingCount,
+                            preparation = item.preparation,
+                            calories = result.nutrients.calories,
+                            proteinG = result.nutrients.proteinG,
+                            fatG = result.nutrients.fatG,
+                            carbsG = result.nutrients.carbsG,
+                            fiberG = result.nutrients.fiberG,
+                            sugarG = result.nutrients.sugarG,
+                            sodiumMg = result.nutrients.sodiumMg,
+                            isEstimated = item.isEstimated,
+                            confidence = item.confidence,
+                            source = item.source.value,
+                            isBeverage = result.nutrients.waterMl != null && result.hydration != null,
+                            waterMl = result.nutrients.waterMl,
+                            caffeineMg = result.nutrients.caffeineMg,
+                            alcoholG = result.nutrients.alcoholG,
+                            effectiveHydrationMl = result.hydration?.effectiveHydrationMl,
+                            hydrationModelVersion = result.hydration?.modelVersion,
+                        ),
+                    ) { select(Columns.list("id")) }
+                    .decodeSingle<MealIdRow>()
 
-            // Links the audit-trail row back to what was actually saved,
-            // without ever touching ai_estimates.parsed_output -- the
-            // difference between that original field and this meal_items
-            // row IS the correction, per DAV-168's own "stored separately"
-            // requirement. A raw mapOf(...) here fails at runtime
-            // ("Serializer for class 'Any' is not found") since kotlinx.
-            // serialization can't serialize a heterogeneously-typed Map
-            // without a registered polymorphic serializer -- caught live,
-            // fixed with a real @Serializable payload instead.
-            if (item.aiEstimateId != null) {
-                supabase.postgrest.from("ai_estimates")
-                    .update(AiEstimateLinkUpdate(mealId = mealId, mealItemId = mealItemRow.id, accepted = true)) {
-                        filter { eq("id", item.aiEstimateId) }
-                    }
+                // Links the audit-trail row back to what was actually saved,
+                // without ever touching ai_estimates.parsed_output -- the
+                // difference between that original field and this meal_items
+                // row IS the correction, per DAV-168's own "stored separately"
+                // requirement. A raw mapOf(...) here fails at runtime
+                // ("Serializer for class 'Any' is not found") since kotlinx.
+                // serialization can't serialize a heterogeneously-typed Map
+                // without a registered polymorphic serializer -- caught live,
+                // fixed with a real @Serializable payload instead.
+                if (item.aiEstimateId != null) {
+                    supabase.postgrest.from("ai_estimates")
+                        .update(AiEstimateLinkUpdate(mealId = mealId, mealItemId = mealItemRow.id, accepted = true)) {
+                            filter { eq("id", item.aiEstimateId) }
+                        }
+                }
             }
+        } catch (e: Exception) {
+            // Roll back the orphaned meal header so it doesn't appear in the log
+            // with wrong totals and no items.
+            supabase.postgrest.from("meals").delete { filter { eq("id", mealId) } }
+            throw e
         }
 
         return mealId

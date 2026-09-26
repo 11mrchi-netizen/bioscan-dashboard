@@ -104,11 +104,14 @@ class HealthConnectExerciseSyncRepository(
             .maxOfOrNull { (_, records) -> records.sumOf { it.distance.inMeters } }
             ?.div(1000.0) ?: 0.0
         val elevationM = client.readAllRecords(ElevationGainedRecord::class, start, end)
-            .sumOf { it.elevation.inMeters }
+            .groupBy { it.metadata.dataOrigin.packageName }
+            .maxOfOrNull { (_, records) -> records.sumOf { it.elevation.inMeters } } ?: 0.0
         val caloriesActive = client.readAllRecords(ActiveCaloriesBurnedRecord::class, start, end)
-            .sumOf { it.energy.inKilocalories }
+            .groupBy { it.metadata.dataOrigin.packageName }
+            .maxOfOrNull { (_, records) -> records.sumOf { it.energy.inKilocalories } } ?: 0.0
         val caloriesTotal = client.readAllRecords(TotalCaloriesBurnedRecord::class, start, end)
-            .sumOf { it.energy.inKilocalories }
+            .groupBy { it.metadata.dataOrigin.packageName }
+            .maxOfOrNull { (_, records) -> records.sumOf { it.energy.inKilocalories } } ?: 0.0
 
         val heartRateSamples = client.readAllRecords(HeartRateRecord::class, start, end).flatMap { it.samples }
         val avgHr = heartRateSamples.map { it.beatsPerMinute.toDouble() }.average().takeIf { heartRateSamples.isNotEmpty() }

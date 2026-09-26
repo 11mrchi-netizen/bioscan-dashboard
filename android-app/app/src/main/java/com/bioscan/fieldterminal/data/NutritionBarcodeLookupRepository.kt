@@ -50,7 +50,7 @@ private data class BarcodeLookupResponse(
 )
 
 class NutritionBarcodeLookupRepository(private val supabase: SupabaseClient) {
-    private val client = HttpClient(Android)
+    companion object { private val client = HttpClient(Android) }
     private val json = Json { ignoreUnknownKeys = true }
 
     // Returns null when the barcode is genuinely unrecognized by Open Food

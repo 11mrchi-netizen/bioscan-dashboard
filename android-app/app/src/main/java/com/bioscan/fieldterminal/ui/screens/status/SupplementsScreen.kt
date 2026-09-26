@@ -57,15 +57,25 @@ fun SupplementsScreen() {
     var editing by remember { mutableStateOf<SupplementRow?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
 
+    var error by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(reloadKey) {
         isLoading = true
-        overview = SupplementsRepository(SupabaseClientProvider.client).loadOverview()
+        error = null
+        try {
+            overview = SupplementsRepository(SupabaseClientProvider.client).loadOverview()
+        } catch (e: Exception) {
+            error = e.message ?: "Unknown error"
+        }
         isLoading = false
     }
 
     when {
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FT.Emerald)
+        }
+        error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
         }
         else -> SupplementsContent(
             overview = overview!!,

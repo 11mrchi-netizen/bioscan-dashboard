@@ -62,9 +62,16 @@ fun HealthEventsScreen() {
     var reloadKey by remember { mutableIntStateOf(0) }
     var showAddSheet by remember { mutableStateOf(false) }
 
+    var error by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(reloadKey) {
         isLoading = true
-        overview = HealthEventsRepository(SupabaseClientProvider.client).loadOverview()
+        error = null
+        try {
+            overview = HealthEventsRepository(SupabaseClientProvider.client).loadOverview()
+        } catch (e: Exception) {
+            error = e.message ?: "Unknown error"
+        }
         isLoading = false
     }
 
@@ -72,7 +79,10 @@ fun HealthEventsScreen() {
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FT.DomainHeart)
         }
-        overview!!.open.isEmpty() && overview!!.resolved.isEmpty() -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
+        error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
+        }
+        overview == null || (overview!!.open.isEmpty() && overview!!.resolved.isEmpty()) -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
             AddInjuryButton(onClick = { showAddSheet = true })
             Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
                 Text("No injuries or illnesses logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)

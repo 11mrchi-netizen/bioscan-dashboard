@@ -43,7 +43,7 @@ class LogRepository(private val supabase: SupabaseClient) {
             }.decodeList<LogMealRow>()
 
         val exerciseSessions = supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("id,type,start_time,distance_km,duration_min,avg_hr")) {
+            .select(columns = Columns.list("id,type,start_time,distance_km,duration_min,avg_hr,source")) {
                 order("start_time", Order.DESCENDING)
                 limit(FETCH_LIMIT_PER_SOURCE)
             }.decodeList<LogExerciseRow>()

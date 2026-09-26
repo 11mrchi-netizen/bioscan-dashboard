@@ -12,6 +12,7 @@ import com.bioscan.fieldterminal.data.model.LogSleepRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -96,7 +97,7 @@ fun buildLogEntries(
         )
     }
 
-    exerciseSessions.forEach { e ->
+    dedupeLogExerciseSessions(exerciseSessions).forEach { e ->
         val headline = listOfNotNull(
             e.type.replaceFirstChar { it.uppercase() },
             e.distanceKm?.let { "%.1f km".format(it) },
@@ -244,6 +245,41 @@ fun buildLogEntries(
     }
 
     return entries.sortedByDescending { it.timestamp }
+}
+
+// Mirrors dedupeRunSessions from Training.kt but operates on LogExerciseRow
+// and applies to all exercise types (with a same-type guard so a run and a
+// hike at the same hour aren't merged). Same tolerances and winner-selection
+// priority, so the Log feed keeps one entry per real workout and picks the
+// same representative the Training tab would show.
+internal fun dedupeLogExerciseSessions(sessions: List<LogExerciseRow>): List<LogExerciseRow> {
+    if (sessions.isEmpty()) return emptyList()
+    val sorted = sessions.sortedBy { OffsetDateTime.parse(it.startTime).toInstant() }
+    val clusters = mutableListOf<MutableList<LogExerciseRow>>()
+    for (session in sorted) {
+        val sessionStart = OffsetDateTime.parse(session.startTime)
+        val sessionDuration = session.durationMin ?: 0.0
+        val matchingCluster = clusters.find { cluster ->
+            val rep = cluster.first()
+            val repStart = OffsetDateTime.parse(rep.startTime)
+            val repDuration = rep.durationMin ?: 0.0
+            val sameDay = repStart.toLocalDate() == sessionStart.toLocalDate()
+            val sameType = rep.type == session.type
+            val startDiffMin = kotlin.math.abs(Duration.between(repStart, sessionStart).toMinutes())
+            val durationDiffMin = kotlin.math.abs(repDuration - sessionDuration)
+            val durationTolerance = maxOf(SAME_RUN_DURATION_TOLERANCE_MIN, minOf(repDuration, sessionDuration) * 0.2)
+            sameDay && sameType && startDiffMin <= SAME_RUN_START_TOLERANCE_MIN && durationDiffMin <= durationTolerance
+        }
+        if (matchingCluster != null) matchingCluster.add(session) else clusters.add(mutableListOf(session))
+    }
+    return clusters.map { cluster ->
+        cluster.maxWith(
+            compareBy<LogExerciseRow> { it.source == "manual" }
+                .thenBy { it.avgHr != null }
+                .thenBy { it.distanceKm ?: 0.0 }
+                .thenBy { it.durationMin ?: 0.0 }
+        )
+    }
 }
 
 // DAV-156. Whole-number doses print without a trailing ".0" (Double's own

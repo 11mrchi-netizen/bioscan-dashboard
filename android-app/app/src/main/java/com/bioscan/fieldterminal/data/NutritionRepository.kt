@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.data.model.BeverageItemRow
 import com.bioscan.fieldterminal.data.model.HydrationDailyRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.domain.DailyNutrition
@@ -25,6 +26,9 @@ data class NutritionOverview(
     val todaysMeals: List<MealRow>, // DAV-100: real logged-meal list, newest first
     val todayHydrationMl: Int?,
     val lastHydrationLoggedDate: String?,
+    // DAV-181: beverage meal_items logged today via the food/AI path, each
+    // carrying its own effective_hydration_ml and optional caffeine_mg.
+    val todayBeverageItems: List<BeverageItemRow> = emptyList(),
 )
 
 class NutritionRepository(private val supabase: SupabaseClient) {
@@ -52,6 +56,22 @@ class NutritionRepository(private val supabase: SupabaseClient) {
             .firstOrNull()
 
         val today = LocalDate.now().toString()
+        val todayMealIds = meals.filter { it.loggedAt.take(10) == today }.mapNotNull { it.id }
+        val todayBeverageItems = if (todayMealIds.isNotEmpty()) {
+            try {
+                supabase.postgrest.from("meal_items")
+                    .select(columns = Columns.list("description,water_ml,caffeine_mg,effective_hydration_ml")) {
+                        filter {
+                            isIn("meal_id", todayMealIds)
+                            eq("is_beverage", true)
+                        }
+                    }
+                    .decodeList<BeverageItemRow>()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        } else emptyList()
+
         return NutritionOverview(
             today = dailyTotals.lastOrNull { it.date == today },
             last7Days = last7,
@@ -59,6 +79,7 @@ class NutritionRepository(private val supabase: SupabaseClient) {
             todaysMeals = meals.filter { it.loggedAt.take(10) == today },
             todayHydrationMl = hydration?.takeIf { it.date == today }?.ml,
             lastHydrationLoggedDate = hydration?.date,
+            todayBeverageItems = todayBeverageItems,
         )
     }
 

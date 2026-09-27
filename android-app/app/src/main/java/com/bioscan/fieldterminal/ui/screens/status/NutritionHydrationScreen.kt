@@ -167,24 +167,57 @@ private fun referenceRange(label: String, current: Double, lower: Double, upper:
     sufficientHistory = true,
 )
 
-// DAV-100: liters headline + the existing segmented target/actual
-// visualization, migrated onto FT tokens/typography.
+// DAV-100 / DAV-181: liters headline combining hydration_daily (plain water)
+// + effective_hydration_ml from beverage meal_items. Each source is shown
+// in a breakdown so the user can see where the total comes from.
 @Composable
 fun HydrationTabContent(overview: NutritionOverview) {
+    val waterMl = overview.todayHydrationMl?.toDouble() ?: 0.0
+    val beverageMl = overview.todayBeverageItems.mapNotNull { it.effectiveHydrationMl }.sum()
+    val totalMl = waterMl + beverageMl
+    val hasAnyHydration = overview.todayHydrationMl != null || overview.todayBeverageItems.isNotEmpty()
+    val todayCaffeineMg = overview.todayBeverageItems.mapNotNull { it.caffeineMg }.takeIf { it.isNotEmpty() }?.sum()
+
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         FTCard(title = "HYDRATION") {
-            val ml = overview.todayHydrationMl
-            if (ml == null) {
+            if (!hasAnyHydration) {
                 Text("No hydration logged yet today.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
             } else {
-                FTMetricValue(DisplayValue(primary = "%.1f".format(ml / 1000.0), unit = "L"))
-                HydrationSegments(ml)
+                FTMetricValue(DisplayValue(primary = "%.1f".format(totalMl / 1000.0), unit = "L"))
+                HydrationSegments(totalMl.toInt())
+
+                // Breakdown by source when there are beverage entries alongside
+                // plain water, so the user can see each contribution.
+                if (overview.todayBeverageItems.isNotEmpty()) {
+                    Column(modifier = Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        overview.todayHydrationMl?.let { ml ->
+                            StatLine("Water", "${ml} ml")
+                        }
+                        overview.todayBeverageItems.forEach { item ->
+                            val hydStr = item.effectiveHydrationMl?.let { "%.0f ml (est.)".format(it) } ?: "—"
+                            StatLine(item.description ?: "Beverage", hydStr)
+                        }
+                    }
+                }
+
                 Text(
-                    "4.0 L reference — no personal hydration target is stored anywhere in this project yet.",
+                    "4.0 L reference — no personal hydration target is stored anywhere in this project yet." +
+                        if (overview.todayBeverageItems.isNotEmpty()) " Beverage effective-hydration values are modelled estimates." else "",
                     style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                    color = FT.TextMuted,
+                )
+            }
+        }
+
+        if (todayCaffeineMg != null) {
+            FTCard(title = "CAFFEINE TODAY") {
+                FTMetricValue(DisplayValue(primary = "%.0f".format(todayCaffeineMg), unit = "MG"))
+                Text(
+                    "Total from logged beverages",
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
                     color = FT.TextMuted,
                 )
             }

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.data.model.HydrationFactorModelRow
 import com.bioscan.fieldterminal.data.model.MealItemRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
 import io.github.jan.supabase.SupabaseClient
@@ -182,6 +183,63 @@ class NutritionMealSaveRepository(
 
         return newMealId
     }
+
+    // DAV-181. Quick beverage log path: creates a meals + meal_items row
+    // directly from a beverage class and volume, without needing a food_id.
+    // water_ml = volumeMl (conservative: nominal volume ≈ water content for
+    // most beverages); effective_hydration_ml = volumeMl × the v1 retention
+    // factor for that class. caffeine_mg stays null unless a food match is
+    // provided (use saveMeal for that richer path).
+    suspend fun saveBeverageDrink(loggedAt: String, beverageClass: String, volumeMl: Double): Long {
+        val factors = supabase.postgrest.from("hydration_factor_models")
+            .select(columns = Columns.list("model_version,beverage_class,retention_factor")) {
+                filter { eq("model_version", "v1") }
+            }
+            .decodeList<HydrationFactorModelRow>()
+        val retentionFactor = factors.firstOrNull { it.beverageClass == beverageClass }?.retentionFactor ?: 1.0
+        val effectiveHydrationMl = volumeMl * retentionFactor
+        val description = beverageClassDisplayName(beverageClass)
+
+        val mealId = supabase.postgrest.from("meals")
+            .insert(NewMealRow(loggedAt = loggedAt, description = description)) {
+                select(Columns.list("id"))
+            }
+            .decodeSingle<MealIdRow>()
+            .id
+
+        try {
+            supabase.postgrest.from("meal_items").insert(
+                MealItemRow(
+                    mealId = mealId,
+                    sortOrder = 0,
+                    description = description,
+                    quantity = volumeMl,
+                    quantityUnit = "ml",
+                    source = "manual",
+                    isBeverage = true,
+                    waterMl = volumeMl,
+                    effectiveHydrationMl = effectiveHydrationMl,
+                    hydrationModelVersion = "v1",
+                ),
+            )
+        } catch (e: Exception) {
+            supabase.postgrest.from("meals").delete { filter { eq("id", mealId) } }
+            throw e
+        }
+        return mealId
+    }
+}
+
+private fun beverageClassDisplayName(beverageClass: String): String = when (beverageClass) {
+    "coffee" -> "Coffee"
+    "tea" -> "Tea"
+    "juice" -> "Juice"
+    "soda" -> "Soda"
+    "milk" -> "Milk"
+    "plant_milk" -> "Plant milk"
+    "electrolyte" -> "Electrolyte drink"
+    "alcohol" -> "Alcohol"
+    else -> beverageClass.replaceFirstChar { it.uppercase() }
 }
 
 private inline fun <T> List<Pair<T, ResolvedMealItem>>.sumNullable(

@@ -87,6 +87,8 @@ dependencies {
     implementation(platform("io.github.jan-tennert.supabase:bom:3.8.0"))
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:auth-kt")
+    // Zepp integration plan: first client-side Edge Function call site (zepp-extract).
+    implementation("io.github.jan-tennert.supabase:functions-kt")
     implementation("io.ktor:ktor-client-android:3.5.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 

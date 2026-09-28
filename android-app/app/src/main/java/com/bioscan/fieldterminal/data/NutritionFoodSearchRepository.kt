@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.FoodRow
 import com.bioscan.fieldterminal.data.model.FoodServingRow
+import com.bioscan.fieldterminal.domain.foodSearchTokens
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -11,17 +12,23 @@ import io.github.jan.supabase.postgrest.query.Columns
 // foods.name, matching this codebase's existing search convention
 // (PeopleRepository.kt), not a new full-text-search API surface -- DAV-161's
 // GIN index on name still makes this fast at this catalog's real size.
+//
+// Live check: matching the whole query as one substring (the original
+// behavior) never matched an AI estimate's natural-language description
+// against foods.name's short, standardized names -- see
+// domain/FoodSearch.kt's foodSearchTokens() for the real root cause and fix.
 class NutritionFoodSearchRepository(private val supabase: SupabaseClient) {
 
     suspend fun search(query: String, limit: Int = 20): List<FoodRow> {
-        if (query.isBlank()) return emptyList()
+        val tokens = foodSearchTokens(query)
+        if (tokens.isEmpty()) return emptyList()
         return supabase.postgrest.from("foods")
             .select(
                 columns = Columns.list(
                     "id,food_source_id,source_food_id,name,name_zh,brand,barcode,category,subcategory,preparation,is_composite,beverage_class,beverage_subtype",
                 ),
             ) {
-                filter { ilike("name", "%${query.trim()}%") }
+                filter { tokens.forEach { token -> ilike("name", "%$token%") } }
                 limit(limit.toLong())
             }
             .decodeList<FoodRow>()

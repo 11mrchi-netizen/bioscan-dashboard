@@ -33,12 +33,14 @@ enum class TileRoute(val route: String) {
 // design/FIELD_TERMINAL_IA_CONTRACT.md section 6); Weight renamed to Body
 // per the same doc rather than rebuilt (WeightTdeeTab's real trend content
 // carries over unchanged).
+// DAV-207/208/209 (24/9 fixes): Hydration folded into Nutrition and Body
+// folded into Digestion -- both were thin single-metric subtabs cluttering
+// the tab row rather than earning a separate destination. Supplements moved
+// out entirely to LabsTab (see below); Fuel is now just the two tabs whose
+// content is genuinely different in kind.
 enum class FuelTab(val label: String) {
     Nutrition("NUTRITION"),
-    Hydration("HYDRATION"),
-    Supplements("SUPPLEMENTS"),
     Digestion("DIGESTION"),
-    Body("BODY"),
 }
 
 // DAV-97: 7 tabs collapsed to 4 per design/FIELD_TERMINAL_IA_CONTRACT.md
@@ -46,9 +48,26 @@ enum class FuelTab(val label: String) {
 // into Wellbeing, Sleep renames to Recovery, Injuries renames to Injury.
 // Stool moves out entirely to Fuel/Digestion (FuelTab above), not collapsed
 // into any of these four.
+// DAV-216 (24/9 fixes): Injury moved out to TrainingTab -- it's a training-
+// context concern (load/rest-cadence context cards render alongside it
+// already), not a cardio/recovery/wellbeing one.
 enum class HeartTab(val label: String) {
     Cardio("CARDIO"),
     Recovery("RECOVERY"),
     Wellbeing("WELLBEING"),
+}
+
+// DAV-209 (24/9 fixes): Labs had no subtab structure; Supplements moves here
+// from Fuel since it's a substance-tracking concern closer to bloodwork than
+// to nutrition/hydration.
+enum class LabsTab(val label: String) {
+    Bloodwork("BLOODWORK"),
+    Supplements("SUPPLEMENTS"),
+}
+
+// DAV-216 (24/9 fixes): Training had no subtab structure; Injury moves here
+// from Heart (see HeartTab above).
+enum class TrainingTab(val label: String) {
+    Load("LOAD"),
     Injury("INJURY"),
 }

@@ -32,7 +32,9 @@ import com.bioscan.fieldterminal.domain.BloodworkTrendState
 import com.bioscan.fieldterminal.domain.evaluateBloodworkMarker
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.DotPlot
+import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.nav.LabsTab
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -45,12 +47,23 @@ import java.time.LocalDate
 // below it -- satisfies DAV-87 ("fold bloodwork analysis into Labs, each
 // chart in the right place") without removing the simpler table anyone
 // opening Labs sees first.
+// DAV-209 (24/9 fixes): Supplements moved in from Fuel as a second subtab --
+// SupplementsScreen() itself is reused unchanged.
 @Composable
 fun LabsTileScreen(onBack: () -> Unit) {
+    var tab by remember { mutableStateOf(LabsTab.Bloodwork) }
+
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
-        TileHeader(title = "LABS", context = "BLOODWORK", onBack = onBack)
-        LabsScreen()
-        BloodworkAnalysisSection()
+        TileHeader(onBack = onBack)
+        SubTabRow(items = LabsTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
+
+        when (tab) {
+            LabsTab.Bloodwork -> {
+                LabsScreen()
+                BloodworkAnalysisSection()
+            }
+            LabsTab.Supplements -> SupplementsScreen()
+        }
     }
 }
 

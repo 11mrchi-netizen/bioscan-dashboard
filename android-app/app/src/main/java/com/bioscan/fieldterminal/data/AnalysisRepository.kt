@@ -3,6 +3,8 @@ package com.bioscan.fieldterminal.data
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow
 import com.bioscan.fieldterminal.data.model.LabResultAnalysisRow
+import com.bioscan.fieldterminal.data.model.LogArousalRow
+import com.bioscan.fieldterminal.data.model.LogMasturbationRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
@@ -11,11 +13,15 @@ import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DailyNutrition
+import com.bioscan.fieldterminal.domain.EnduranceSessionInput
 import com.bioscan.fieldterminal.domain.aggregateMealsByDay
+import com.bioscan.fieldterminal.domain.trimp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import java.time.LocalDate
+import java.time.OffsetDateTime
 
 // Phase A2 (Analysis Layer). Backs the Status tab's new ANALYSIS sub-tab --
 // separate from StatusRepository, which caps at limit(10)/limit(1) for the
@@ -32,7 +38,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadWearableDaily(): List<WearableAnalysisRow> =
         supabase.postgrest.from("wearable_daily")
-            .select(columns = Columns.list("date,hrv,rhr")) {
+            .select(columns = Columns.list("date,hrv,rhr,steps")) {
                 order("date", Order.DESCENDING)
                 limit(200)
             }
@@ -41,7 +47,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadSleepDaily(): List<SleepAnalysisRow> =
         supabase.postgrest.from("sleep_daily")
-            .select(columns = Columns.list("date,hours,bedtime,wake_time,respiratory_rate")) {
+            .select(columns = Columns.list("date,hours,bedtime,wake_time,respiratory_rate,deep_min,rem_min,light_min")) {
                 order("date", Order.DESCENDING)
                 limit(200)
             }
@@ -64,9 +70,14 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // layer's date filtering decide" convention.
     suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> =
         supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("start_time,duration_min,rpe")) {
+            .select(columns = Columns.list("start_time,duration_min,rpe,avg_hr,max_hr")) {
+                // 25/9 rework: the Load tab charts up to 1Y of CTL/ATL/TSB, and a
+                // 200-row cap (newest first) only reached ~7 weeks once Health
+                // Connect noise landed (913 rows/400 days). A date window keeps
+                // the EWMA's warm-up intact (400d = 1Y + ~35d of warm-up).
+                filter { gte("start_time", java.time.LocalDate.now().minusDays(400).toString()) }
                 order("start_time", Order.DESCENDING)
-                limit(200)
+                limit(3000)
             }
             .decodeList<TrainingLoadSessionRow>()
             .reversed()
@@ -107,6 +118,29 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<StoolAnalysisRow>()
             .reversed()
 
+    // DAV-215 (24/9 fixes): previously an inline raw query in
+    // HeartTileScreen.kt -- moved here so arousal history goes through the
+    // same repository as every other Heart data source.
+    suspend fun loadArousalDaily(): List<LogArousalRow> =
+        supabase.postgrest.from("arousal_daily")
+            .select(columns = Columns.list("id,date,morning_erection_quality,arousal_level")) {
+                order("date", Order.DESCENDING)
+                limit(200)
+            }
+            .decodeList<LogArousalRow>()
+            .reversed()
+
+    // DAV-215 (24/9 fixes): masturbation entries fold into the same Arousal
+    // history timeline (see HeartTileScreen.kt's ArousalHistory).
+    suspend fun loadMasturbationLog(): List<LogMasturbationRow> =
+        supabase.postgrest.from("masturbation_log")
+            .select(columns = Columns.list("id,occurred_at,watched_porn,load_size,orgasm_intensity,notes")) {
+                order("occurred_at", Order.DESCENDING)
+                limit(200)
+            }
+            .decodeList<LogMasturbationRow>()
+            .reversed()
+
     // Phase A4 (Category 8, OSTRC-H2 half).
     suspend fun loadOstrcCheckins(): List<OstrcAnalysisRow> =
         supabase.postgrest.from("ostrc_checkins")
@@ -136,3 +170,24 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             }
             .decodeList<LabResultAnalysisRow>()
 }
+
+// DAV-205 (24/9 fixes): shared by StatusRepository (figure's leg zone) and
+// TrainingTileScreen (Load tab + Injury tab's OSTRC context) so all three
+// always agree on the same session_load numbers instead of drifting apart
+// like the toMetricState() mapping did before DAV-210. RPE-based load takes
+// priority when a session has one (a direct subjective-effort number);
+// TRIMP (domain/EnduranceLoad.kt, already implemented, never wired in
+// before this) is the fallback for the near-total majority of sessions with
+// real HR data but no RPE.
+// ponytail: one current resting-HR value applied to every session, not a
+// per-session-date lookup -- resting HR doesn't swing enough day-to-day for
+// that gap to matter here; revisit if it ever does.
+fun buildTrainingSessionLoads(sessions: List<TrainingLoadSessionRow>, latestRestingHr: Double?): List<Pair<LocalDate, Double>> =
+    sessions.mapNotNull { row ->
+        val duration = row.durationMin ?: return@mapNotNull null
+        val date = OffsetDateTime.parse(row.startTime).toLocalDateTime().toLocalDate()
+        val load = row.rpe?.let { duration * it }
+            ?: trimp(EnduranceSessionInput(duration, null, row.avgHr, row.maxHr, null, null, null), latestRestingHr)
+            ?: return@mapNotNull null
+        date to load
+    }

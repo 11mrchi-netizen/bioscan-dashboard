@@ -60,35 +60,58 @@ fun vo2MaxRollingAverage(series: List<Pair<LocalDate, Double>>, windowDays: Long
         date to inWindow.average()
     }
 
-// DAV-152: Timeframe selector for VO2max chart. 2 months is the standard/default timeframe.
-enum class Vo2MaxTimeframe(val label: String, val months: Long?) {
-    TwoMonths("2M", 2),
+// Shared timeframe selector for the PERFORMANCE card's two switchable
+// metrics (VO2max and lactate threshold) -- both are slow-moving fitness
+// estimates, not day-to-day figures, so a 7-day option doesn't belong here
+// (contrast RunningPeriod below, which does want one).
+enum class PerformanceTimeframe(val label: String, val months: Long) {
+    OneMonth("1M", 1),
+    ThreeMonths("3M", 3),
     SixMonths("6M", 6),
-    All("ALL", null),
+    OneYear("1Y", 12),
 }
 
-data class Vo2MaxTrendData(
+data class PerformanceTrendData(
     val raw: List<Pair<LocalDate, Double>>,
     val avg7d: List<Pair<LocalDate, Double>>,
     val avg28d: List<Pair<LocalDate, Double>>,
 )
 
-fun prepareVo2MaxTrendData(
+// Generic over any (date, value) series -- used for both VO2max and lactate
+// threshold pace, since the rolling-average/cutoff logic never actually
+// cared which metric it was smoothing.
+fun preparePerformanceTrendData(
     series: List<Pair<LocalDate, Double>>,
-    timeframe: Vo2MaxTimeframe = Vo2MaxTimeframe.TwoMonths,
+    timeframe: PerformanceTimeframe = PerformanceTimeframe.OneMonth,
     today: LocalDate = LocalDate.now(),
-): Vo2MaxTrendData {
-    val cutoff = timeframe.months?.let { today.minusMonths(it) }
+): PerformanceTrendData {
+    val cutoff = today.minusMonths(timeframe.months)
     val avg7 = vo2MaxRollingAverage(series, 7)
     val avg28 = vo2MaxRollingAverage(series, 28)
-    fun filter(points: List<Pair<LocalDate, Double>>) =
-        if (cutoff != null) points.filter { it.first >= cutoff } else points
+    fun filter(points: List<Pair<LocalDate, Double>>) = points.filter { it.first >= cutoff }
 
-    return Vo2MaxTrendData(
+    return PerformanceTrendData(
         raw = filter(series),
         avg7d = filter(avg7),
         avg28d = filter(avg28),
     )
+}
+
+// DAV-115: lactate threshold's pace field arrives from Zepp as seconds/km
+// (docs/zepp-integration/03-workout-detail-field-decode.md); minutes/km
+// matches every other pace figure this app already shows.
+fun lactateThresholdPaceMinPerKmSeries(rows: List<Pair<LocalDate, Double>>): List<Pair<LocalDate, Double>> =
+    rows.map { (date, secPerKm) -> date to secPerKm / 60.0 }
+
+// RUNNING card's timeframe -- separate from TotalsPeriod (shared with the
+// Nutrition tab's own 1D/7D/30D/90D totals, which this rework doesn't touch)
+// since 6M/1Y only make sense for a running-distance trend, not a nutrition one.
+enum class RunningPeriod(val label: String, val days: Long) {
+    Week("7D", 7),
+    Month("1M", 30),
+    Quarter("3M", 90),
+    HalfYear("6M", 180),
+    Year("1Y", 365),
 }
 
 // DAV-153 follow-up: real 2026-09-20 case found live on-device -- a single
@@ -132,7 +155,25 @@ fun hasPlausiblePace(distanceKm: Double?, durationMin: Double?): Boolean {
     return distance / durationHours <= MAX_FOOT_SPEED_KMH
 }
 
-fun dedupeRunSessions(sessions: List<ExerciseSessionRow>): List<ExerciseSessionRow> {
+// `preferred` picks the winner within a same-run cluster. Defaults to
+// trusting a manual entry's distance over Health Connect's (this account's
+// own pre-fix ground truth for 2026-08-14..09-15 -- see TrainingRepository's
+// own comment). Live check found the default wrong for one purpose: a list
+// meant to be tapped into Session Detail needs the row that actually has a
+// health_connect_record_id, since only that one has any route/time-series
+// data to show -- picking the manual row there is a dead end, not a fix.
+// Callers building a tappable list pass a preference for source ==
+// "health_connect" instead.
+val PREFER_MANUAL_DISTANCE: Comparator<ExerciseSessionRow> =
+    compareBy<ExerciseSessionRow> { it.source == "manual" }
+        .thenBy { it.avgHr != null }
+        .thenBy { it.distanceKm ?: 0.0 }
+        .thenBy { it.durationMin ?: 0.0 }
+
+fun dedupeRunSessions(
+    sessions: List<ExerciseSessionRow>,
+    preferred: Comparator<ExerciseSessionRow> = PREFER_MANUAL_DISTANCE,
+): List<ExerciseSessionRow> {
     if (sessions.isEmpty()) return emptyList()
 
     val validSessions = sessions.filter { hasPlausiblePace(it.distanceKm, it.durationMin) }
@@ -163,12 +204,7 @@ fun dedupeRunSessions(sessions: List<ExerciseSessionRow>): List<ExerciseSessionR
     }
 
     return clusters.map { cluster ->
-        val winner = cluster.maxWith(
-            compareBy<ExerciseSessionRow> { it.source == "manual" }
-                .thenBy { it.avgHr != null }
-                .thenBy { it.distanceKm ?: 0.0 }
-                .thenBy { it.durationMin ?: 0.0 }
-        )
+        val winner = cluster.maxWith(preferred)
         // Within a confirmed duplicate cluster the winner's distance may still be
         // inflated by multi-source HC summing. The trail-run concern that blocked
         // auto-reconciliation at ingest time doesn't apply here: the cluster already
@@ -181,3 +217,35 @@ fun dedupeRunSessions(sessions: List<ExerciseSessionRow>): List<ExerciseSessionR
     }
 }
 
+
+// 25/9 rework: Health Connect carries no trail signal, so a trail run often sits
+// in the log as an untagged "run". Flag (never auto-change) an untagged run as a
+// suspected trail run when Zepp itself called it one (sport code 7) or it climbs
+// like one. Explicit road/mixed/track tags are the user's word and stay alone.
+const val TRAIL_CLIMB_M_PER_KM = 40.0
+const val ZEPP_SPORT_TRAIL_RUN = "7"
+
+// Null = not suspected; otherwise the short reason shown next to the run.
+fun suspectedTrailReason(row: ExerciseSessionRow, zeppSportType: String?): String? {
+    if (row.type != "run" || row.details.routeType != null) return null
+    if (zeppSportType == ZEPP_SPORT_TRAIL_RUN) return "ZEPP TRAIL RUN"
+    val distance = row.distanceKm
+    val climb = row.elevationGainM
+    if (distance != null && distance > 0 && climb != null && climb / distance >= TRAIL_CLIMB_M_PER_KM) {
+        return "%.0f M/KM CLIMB".format(climb / distance)
+    }
+    return null
+}
+
+// DAV-272: Efficiency Factor is noisy run to run, so the trend shown is a 28-day
+// rolling median, and only once enough aerobic runs exist to mean something
+// (DAV-40's gate). Returns one point per run date that has >= EF_MIN_RUNS_28D
+// runs in its trailing 28 days.
+const val EF_MIN_RUNS_28D = 6
+
+fun efficiencyRollingMedian28(series: List<Pair<LocalDate, Double>>): List<Pair<LocalDate, Double>> =
+    series.sortedBy { it.first }.mapNotNull { (date, _) ->
+        val window = series.filter { !it.first.isAfter(date) && it.first.isAfter(date.minusDays(28)) }.map { it.second }.sorted()
+        if (window.size < EF_MIN_RUNS_28D) null
+        else date to (if (window.size % 2 == 1) window[window.size / 2] else (window[window.size / 2 - 1] + window[window.size / 2]) / 2)
+    }

@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
@@ -164,11 +165,19 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
 // FuturisticMaterialTokens.kt's own "legacy tokens stay intact" precedent).
 @Composable
 fun FTCard(title: String, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(FT.RadiusCard)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusCard))
-            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusCard)),
+            // background()/border() only draw within this shape, they don't
+            // clip -- invisible for text/stat-line content (nothing ever
+            // drew in the corners anyway), but a rectangular child that
+            // fills the full card (RouteMiniMap's map, DAV-186's elevation
+            // chart) visibly squared off past the rounded corners without
+            // this. clip() is what actually confines any child to the shape.
+            .clip(shape)
+            .border(FT.BorderWidth, FT.GlassBorder, shape)
+            .background(FT.GlassFill, shape),
     ) {
         Text(
             text = title.uppercase(),

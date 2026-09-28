@@ -25,7 +25,31 @@ data class SessionDetail(
     val powerW: List<TimePoint>,
     val caloriesKcal: List<TimePoint>,
     val distanceKm: List<TimePoint>,
+    // DAV-115/123: real per-second cadence, decoded from Zepp's detail.json
+    // (docs/zepp-integration/03-workout-detail-field-decode.md) -- Health
+    // Connect has no equivalent source for this, so it's always empty unless
+    // a matched Zepp workout exists. Defaulted so the one positional-args
+    // call site (SessionDetailRepository.loadTimeSeries) doesn't need touching.
+    val cadenceSpm: List<TimePoint> = emptyList(),
 )
+
+// DAV-115/123: prefer Zepp's real per-second series (heartRate/speedKmh/
+// distanceKm) over Health Connect's when a matched Zepp workout exists --
+// real recorded data over Health Connect's own reconstruction/estimate,
+// per-series rather than all-or-nothing since Zepp's decode doesn't cover
+// power or calories at all. Falls back to Health Connect's own series
+// wherever Zepp has none (e.g. an indoor session with no GPS/pace/speed).
+fun mergePreferZepp(zepp: SessionDetail?, healthConnect: SessionDetail): SessionDetail {
+    if (zepp == null) return healthConnect
+    return SessionDetail(
+        heartRate = zepp.heartRate.ifEmpty { healthConnect.heartRate },
+        speedKmh = zepp.speedKmh.ifEmpty { healthConnect.speedKmh },
+        powerW = healthConnect.powerW,
+        caloriesKcal = healthConnect.caloriesKcal,
+        distanceKm = zepp.distanceKm.ifEmpty { healthConnect.distanceKm },
+        cadenceSpm = zepp.cadenceSpm,
+    )
+}
 
 // DAV-106. One completed km per split -- the current, not-yet-finished km is
 // deliberately left off rather than shown as a fake short "split", the same

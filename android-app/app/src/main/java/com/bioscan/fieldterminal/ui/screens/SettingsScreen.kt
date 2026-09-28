@@ -36,6 +36,9 @@ import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HealthConnectSyncResult
 import com.bioscan.fieldterminal.data.MapSettingsStore
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.ZeppRepository
+import com.bioscan.fieldterminal.data.ZeppSyncStateRow
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
 import com.bioscan.fieldterminal.ui.components.AmberButton
@@ -80,6 +83,16 @@ fun SettingsScreen(scope: CoroutineScope) {
     LaunchedEffect(Unit) {
         if (hcAvailable) hcGranted = HealthConnectManager.hasAllPermissions(context)
         hcChecked = true
+    }
+
+    val zeppRepository = remember { ZeppRepository(SupabaseClientProvider.client) }
+    var zeppStatus by remember { mutableStateOf<ZeppSyncStateRow?>(null) }
+    var zeppStatusLoaded by remember { mutableStateOf(false) }
+    var zeppSyncing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        zeppStatus = zeppRepository.getSyncStatus()
+        zeppStatusLoaded = true
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
@@ -266,6 +279,45 @@ fun SettingsScreen(scope: CoroutineScope) {
                             style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
                             color = if (wbResult is com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Success) FT.TextSecondary else FT.Warning,
                         )
+                    }
+                }
+            }
+
+            FTCard(title = "ZEPP") {
+                Text(
+                    "Pulls workout detail (real per-point pace/power/route) and Zepp-native " +
+                        "metrics directly from Zepp's cloud, reconciled against Health Connect " +
+                        "sessions rather than duplicating them. Runs automatically on app open.",
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    color = FT.TextSecondary,
+                )
+                Text(
+                    text = when {
+                        !zeppStatusLoaded -> "Checking status…"
+                        zeppStatus?.lastError != null -> "Needs re-authentication: ${zeppStatus?.lastError}"
+                        zeppStatus?.lastSyncedAt != null -> "Last synced ${zeppStatus?.lastSyncedAt}"
+                        else -> "Not synced yet."
+                    },
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    color = if (zeppStatus?.lastError != null) FT.Warning else FT.TextSecondary,
+                )
+                if (zeppStatus?.lastError != null) {
+                    Text(
+                        "Re-capture: log into watchface.zepp.com in a browser, read apptoken/userid " +
+                            "from cookies, and update the ZEPP_APP_TOKEN/ZEPP_USER_ID Edge Function " +
+                            "secrets (docs/zepp-integration/02-token-capture-and-data-extraction.md).",
+                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        color = FT.TextSecondary,
+                    )
+                }
+                AmberButton(label = if (zeppSyncing) "SYNCING…" else "SYNC NOW") {
+                    if (!zeppSyncing) {
+                        scope.launch {
+                            zeppSyncing = true
+                            zeppRepository.sync(daysBack = 30)
+                            zeppStatus = zeppRepository.getSyncStatus()
+                            zeppSyncing = false
+                        }
                     }
                 }
             }

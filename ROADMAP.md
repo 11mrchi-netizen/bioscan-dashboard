@@ -1993,6 +1993,10 @@ exists as Health Connect's per-point `ExerciseRoute`, fetched on demand for one 
 screen (`data/SessionDetailRepository.kt`) and never persisted back into daily training-load data.
 Recorded in the code and shown in the app's own UI, not silently dropped.
 
+*Update (DAV-272, 25/9):* now built for Zepp-synced runs — per-second altitude/distance/HR are persisted in
+`zepp_workout_detail.decoded`, and GAP/EF/decoupling are computed server-side. See
+`docs/trail-intelligence/11-gap-efficiency-factor.md`. Health-Connect-only runs still get neither.
+
 **Real data-quality finding, surfaced not silently worked around**: this account's real
 `exercise_sessions` table has two exact-duplicate rows (ids 1 and 17 — identical timestamp,
 duration, distance, heart rate, and RPE). The daily-load aggregation correctly sums whatever

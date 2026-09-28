@@ -29,8 +29,11 @@ function json(body: unknown, status: number) {
   });
 }
 
-const MODEL = "gemini-3.8-flash";
-const FALLBACK_MODEL = "gemini-3.5-flash-lite";
+// DAV-220: moved off gemini-3.8-flash's scarce 20/day free-tier quota onto
+// the two flash-lite tiers (500/day each), same reasoning as
+// nutrition-estimate-text -- see that function's own comment.
+const MODEL = "gemini-3.5-flash-lite";
+const FALLBACK_MODEL = "gemini-3.1-flash-lite";
 const MODEL_VERSION = "1";
 
 // Explicitly tells Gemini what a photo cannot reveal (DAV-167's own
@@ -84,7 +87,7 @@ const RESPONSE_SCHEMA = {
   required: ["items"],
 };
 
-async function callGemini(apiKey: string, imageBase64: string, mimeType: string): Promise<{ status: number; body: string }> {
+async function callGemini(apiKey: string, imageBase64: string, mimeType: string): Promise<{ status: number; body: string; model: string }> {
   const requestBody = JSON.stringify({
     contents: [
       {
@@ -102,16 +105,22 @@ async function callGemini(apiKey: string, imageBase64: string, mimeType: string)
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       { method: "POST", headers: { "Content-Type": "application/json" }, body: requestBody },
     );
-    return { status: res.status, body: await res.text() };
+    return { status: res.status, body: await res.text(), model };
   }
 
   let result = await attempt(MODEL);
+
+  // DAV-220: 429 means MODEL's daily quota is exhausted -- go straight to
+  // FALLBACK_MODEL's separate quota instead of retry-delaying a request
+  // that can't succeed again until tomorrow.
+  if (result.status === 429) return await attempt(FALLBACK_MODEL);
+
   for (const delayMs of [1000, 2000]) {
     if (result.status !== 503) return result;
     await new Promise((r) => setTimeout(r, delayMs));
     result = await attempt(MODEL);
   }
-  if (result.status === 503) result = await attempt(FALLBACK_MODEL);
+  if (result.status === 503 || result.status === 429) result = await attempt(FALLBACK_MODEL);
   return result;
 }
 
@@ -149,7 +158,7 @@ Deno.serve(async (req: Request) => {
     if (!imageBase64) return json({ error: "missing_image" }, 400);
 
     const startedAt = Date.now();
-    const { status, body: geminiBodyText } = await callGemini(apiKey, imageBase64, mimeType);
+    const { status, body: geminiBodyText, model: servedByModel } = await callGemini(apiKey, imageBase64, mimeType);
     const latencyMs = Date.now() - startedAt;
 
     const db = createClient(
@@ -162,7 +171,7 @@ Deno.serve(async (req: Request) => {
     if (status < 200 || status >= 300) {
       await db.from("ai_estimates").insert({
         user_id: user.id,
-        model: MODEL,
+        model: servedByModel,
         model_version: MODEL_VERSION,
         prompt_text: "[image estimate]",
         raw_response: safeParseJson(geminiBodyText),
@@ -180,7 +189,7 @@ Deno.serve(async (req: Request) => {
       .from("ai_estimates")
       .insert({
         user_id: user.id,
-        model: MODEL,
+        model: servedByModel,
         model_version: MODEL_VERSION,
         prompt_text: "[image estimate]",
         raw_response: geminiResponse,

@@ -17,17 +17,11 @@ import java.time.temporal.ChronoUnit
 // data. A session with no logged RPE contributes nothing to that day's
 // load -- never impute, same convention every other category already uses.
 //
-// GAP (Grade Adjusted Pace) and Efficiency Factor are NOT built in this
-// pass, and not because of a null check that happened to fail: real GAP
-// needs a continuous elevation-vs-distance profile to grade-adjust each
-// segment (the Minetti polynomial), and this app stores only a session's
-// total elevation_gain_m (itself unpopulated on every real row today) --
-// even fully populated, a single total-ascent number can't reconstruct a
-// per-point gradient. That data only exists as Health Connect's per-point
-// ExerciseRoute, fetched on demand for one session's own detail screen
-// (see data/SessionDetailRepository.kt) and never persisted back into daily
-// training-load data. Flagged here as a real, structural gap -- not solved
-// by approximating from a number that doesn't tell you what it needs to.
+// GAP (Grade Adjusted Pace) and Efficiency Factor are not computed here
+// (this file only does load). For Zepp-synced runs they are computed in the
+// zepp-extract decoder from the persisted per-second altitude/speed/HR and
+// stored on zepp_workout_detail.decoded.summary (DAV-272). Health-Connect-only
+// runs still have no per-point elevation persisted, so they get neither.
 data class TrainingLoadEvaluation(
     val state: EvalState,
     val confidence: Confidence,
@@ -75,9 +69,9 @@ fun evaluateTrainingLoad(sessionLoads: List<Pair<LocalDate, Double>>, asOf: Loca
     val (ctlYesterday, atlYesterday) = dualEwma(dailyLoad, earliest, asOf.minusDays(1), ATL_TAU_DAYS, CTL_TAU_DAYS)
     val tsb = ctlYesterday - atlYesterday
     val state = when {
-        tsb < -30 -> EvalState.Unstable // "heavily loaded" -- the spec's own flagged band
-        tsb < -10 -> EvalState.ShiftDown // loaded
-        tsb <= 5 -> EvalState.Stable // neutral
+        tsb < TSB_HEAVILY_LOADED_BELOW -> EvalState.Unstable // "heavily loaded" -- the spec's own flagged band
+        tsb < TSB_LOADED_BELOW -> EvalState.ShiftDown // loaded
+        tsb <= TSB_FRESHENED_FROM -> EvalState.Stable // neutral
         else -> EvalState.ShiftUp // freshened or detrained/very fresh -- both "more rested than built-up"
     }
 
@@ -87,9 +81,42 @@ fun evaluateTrainingLoad(sessionLoads: List<Pair<LocalDate, Double>>, asOf: Loca
 // TrainingPeaks' published conventions, framed descriptively per the spec --
 // not norms, not medical thresholds.
 private fun tsbBandLabel(tsb: Double): String = when {
-    tsb > 25 -> "Detrained / very fresh"
-    tsb >= 5 -> "Freshened"
-    tsb >= -10 -> "Neutral"
-    tsb >= -30 -> "Loaded"
+    tsb > TSB_DETRAINED_ABOVE -> "Detrained / very fresh"
+    tsb >= TSB_FRESHENED_FROM -> "Freshened"
+    tsb >= TSB_LOADED_BELOW -> "Neutral"
+    tsb >= TSB_HEAVILY_LOADED_BELOW -> "Loaded"
     else -> "Heavily loaded"
+}
+
+// Shared by tsbBandLabel(), the state mapping above and the Training tab's
+// banded gauge, so the gauge's colored bands can't drift from the label.
+const val TSB_HEAVILY_LOADED_BELOW = -30.0
+const val TSB_LOADED_BELOW = -10.0
+const val TSB_FRESHENED_FROM = 5.0
+const val TSB_DETRAINED_ABOVE = 25.0
+
+data class TrainingLoadPoint(val date: LocalDate, val ctl: Double, val atl: Double, val tsb: Double)
+
+// One daily point per day from the first session to asOf, for the Load tab's
+// history charts. Same EWMA as dualEwma() but recording every day instead of
+// only the final pair; TSB(d) = CTL(d-1) - ATL(d-1) keeps evaluateTrainingLoad's
+// "yesterday" convention, so the last point's tsb equals its tsb.
+fun trainingLoadSeries(sessionLoads: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): List<TrainingLoadPoint> {
+    if (sessionLoads.isEmpty()) return emptyList()
+    val dailyLoad = dailySessionLoadMap(sessionLoads)
+    val alphaAtl = 2.0 / (ATL_TAU_DAYS + 1.0)
+    val alphaCtl = 2.0 / (CTL_TAU_DAYS + 1.0)
+    var ctl = 0.0
+    var atl = 0.0
+    var date = sessionLoads.minOf { it.first }
+    val out = mutableListOf<TrainingLoadPoint>()
+    while (!date.isAfter(asOf)) {
+        val tsb = ctl - atl // still yesterday's values here
+        val load = dailyLoad[date] ?: 0.0
+        atl += alphaAtl * (load - atl)
+        ctl += alphaCtl * (load - ctl)
+        out += TrainingLoadPoint(date, ctl, atl, tsb)
+        date = date.plusDays(1)
+    }
+    return out
 }

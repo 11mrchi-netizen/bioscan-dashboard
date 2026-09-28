@@ -38,25 +38,37 @@ import com.bioscan.fieldterminal.ui.theme.RobotoMono
 // (no animation) background tint on press instead -- mechanical, not bouncy,
 // but still visible. defaultMinSize also brings this up to Android's 48dp
 // minimum touch target, which the original padding-only sizing fell short of.
+//
+// `enabled` (default true, so every existing call site is unaffected): found
+// live that NutritionCandidateReviewSheet's SAVE gated its onClick on
+// `allResolved` without this param existing at all, so a save blocked on an
+// unconfirmed item looked pixel-identical to a working button -- the exact
+// "tap registers but nothing visibly happens" failure this file's own top
+// comment already once fixed for the *pressed* state, recurring here for the
+// *disabled* state instead. Dimming the border/text and dropping the
+// clickable modifier when false makes a blocked action visibly blocked.
 @Composable
-fun AmberButton(label: String, onClick: () -> Unit) {
+fun AmberButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val shape = RoundedCornerShape(FT.RadiusSmall)
+    val tint = if (enabled) FT.Emerald else FT.TextMuted
 
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-            .border(FT.BorderWidth, FT.Emerald, shape)
+            .border(FT.BorderWidth, tint, shape)
             .background(FT.Emerald.copy(alpha = if (isPressed) 0.18f else 0f), shape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-            )
+            .let {
+                if (enabled) {
+                    it.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+                } else {
+                    it
+                }
+            }
             .padding(horizontal = 20.dp, vertical = 12.dp),
     ) {
-        Text(text = label, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = FT.Emerald)
+        Text(text = label, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = tint)
     }
 }

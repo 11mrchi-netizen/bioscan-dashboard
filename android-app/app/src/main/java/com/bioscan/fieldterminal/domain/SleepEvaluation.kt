@@ -46,12 +46,14 @@ fun evaluateSri(nights: List<SleepNight>, zone: ZoneId = ZoneId.systemDefault(),
     val recent = nights.filter { !it.date.isAfter(asOf) }.sortedBy { it.date }
     if (recent.size < SRI_MIN_NIGHTS) return SriEvaluation(null, Confidence(recent.size, SRI_MIN_NIGHTS))
 
-    val windowed = recent.filter { ChronoUnit.DAYS.between(it.date, asOf) < 60 } // generous cap, not a hard requirement
-    for (i in 1 until windowed.size) {
-        if (ChronoUnit.DAYS.between(windowed[i - 1].date, windowed[i].date) > SRI_MAX_GAP_DAYS) {
-            return SriEvaluation(null, Confidence(windowed.size, SRI_MIN_NIGHTS))
-        }
-    }
+    val candidates = recent.filter { ChronoUnit.DAYS.between(it.date, asOf) < 60 } // generous cap, not a hard requirement
+
+    // DAV-213: see TODO(human) in findBestQualifyingRun() below. The old code
+    // aborted the WHOLE 60-day window on a single gap >2 days between
+    // consecutive nights, even when a real qualifying run of 14+ gap-free
+    // nights existed on either side of that gap (confirmed against live
+    // data: a 2026-07-27->07-30 gap blocked an otherwise-computable window).
+    val windowed = findBestQualifyingRun(candidates, SRI_MIN_NIGHTS, SRI_MAX_GAP_DAYS)
     if (windowed.size < SRI_MIN_NIGHTS) return SriEvaluation(null, Confidence(windowed.size, SRI_MIN_NIGHTS))
 
     fun isAsleep(instant: Instant): Boolean = windowed.any { instant >= it.bedtime && instant < it.wakeTime }
@@ -75,6 +77,25 @@ fun evaluateSri(nights: List<SleepNight>, zone: ZoneId = ZoneId.systemDefault(),
 
     val sri = -100.0 + (200.0 / (SRI_BINS_PER_DAY * (n - 1))) * matchSum
     return SriEvaluation(sri, Confidence(windowed.size, SRI_MIN_NIGHTS))
+}
+
+// DAV-213: `nights` is sorted ascending by date and already capped to the
+// last 60 days. Splits into maximal gap-free runs, then prefers the most
+// recent qualifying run over a longer-but-older one -- SRI is meant to
+// reflect current regularity, matching how this app's other evaluators
+// (SWC bands) already weight recency over raw sample count.
+private fun findBestQualifyingRun(nights: List<SleepNight>, minNights: Int, maxGapDays: Long): List<SleepNight> {
+    if (nights.isEmpty()) return emptyList()
+    val runs = mutableListOf<List<SleepNight>>()
+    var runStart = 0
+    for (i in 1..nights.size) {
+        val brokeRun = i == nights.size || ChronoUnit.DAYS.between(nights[i - 1].date, nights[i].date) > maxGapDays
+        if (brokeRun) {
+            runs += nights.subList(runStart, i)
+            runStart = i
+        }
+    }
+    return runs.filter { it.size >= minNights }.maxByOrNull { it.last().date }.orEmpty()
 }
 
 private const val RR_WINDOW_DAYS = 14

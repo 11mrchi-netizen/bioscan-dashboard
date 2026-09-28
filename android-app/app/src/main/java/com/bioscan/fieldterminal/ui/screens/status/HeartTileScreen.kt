@@ -5,9 +5,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -21,40 +24,41 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.LogArousalRow
-import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
+import com.bioscan.fieldterminal.data.model.LogMasturbationRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
-import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.OstrcEvaluation
+import com.bioscan.fieldterminal.domain.toMetricState
 import com.bioscan.fieldterminal.domain.PersonalRange
 import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
+import com.bioscan.fieldterminal.data.BenchmarkArtifactRepository
+import com.bioscan.fieldterminal.domain.analysis.ComparisonResult
+import com.bioscan.fieldterminal.domain.comparison.BenchmarkArtifact
+import com.bioscan.fieldterminal.domain.comparison.PopulationContext
+import com.bioscan.fieldterminal.domain.comparison.comparePersonal
+import com.bioscan.fieldterminal.domain.comparison.comparePopulation
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.SriEvaluation
 import com.bioscan.fieldterminal.domain.SubjectiveEvaluation
 import com.bioscan.fieldterminal.domain.SwcEvaluation
 import com.bioscan.fieldterminal.domain.evaluateHrv
-import com.bioscan.fieldterminal.domain.evaluateOstrc
 import com.bioscan.fieldterminal.domain.evaluateRespiratoryAnomaly
-import com.bioscan.fieldterminal.domain.evaluateRestCadence
 import com.bioscan.fieldterminal.domain.evaluateRhr
 import com.bioscan.fieldterminal.domain.evaluateSleepDuration
 import com.bioscan.fieldterminal.domain.evaluateSri
 import com.bioscan.fieldterminal.domain.evaluateSubjective
-import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.expValue
+import com.bioscan.fieldterminal.ui.components.ComparisonStrip
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
@@ -66,9 +70,6 @@ import com.bioscan.fieldterminal.ui.nav.HeartTab
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Columns
-import io.github.jan.supabase.postgrest.query.Order
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -82,6 +83,8 @@ import java.time.temporal.ChronoUnit
 // tab (DAV-96) -- no longer loaded or rendered here at all. One shared load
 // for the whole page so switching tabs is instant, matching the Fuel/
 // Training tile pattern.
+// DAV-216 (24/9 fixes): Injury moved out to TrainingTab -- down to 3 tabs
+// (Cardio/Recovery/Wellbeing) now.
 @Composable
 fun HeartTileScreen(onBack: () -> Unit) {
     var tab by remember { mutableStateOf(HeartTab.Cardio) }
@@ -89,36 +92,34 @@ fun HeartTileScreen(onBack: () -> Unit) {
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
-    var ostrc by remember { mutableStateOf<List<OstrcAnalysisRow>?>(null) }
-    var trainingSessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
     var arousal by remember { mutableStateOf<List<LogArousalRow>?>(null) }
+    var masturbation by remember { mutableStateOf<List<LogMasturbationRow>?>(null) }
+    var stepsBenchmark by remember { mutableStateOf<List<BenchmarkArtifact>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         val repo = AnalysisRepository(SupabaseClientProvider.client)
         wearable = repo.loadWearableDaily()
         sleep = repo.loadSleepDaily()
         wellbeing = repo.loadWellbeingDaily()
-        ostrc = repo.loadOstrcCheckins()
-        trainingSessions = repo.loadExerciseSessionsForTrainingLoad()
-        arousal = SupabaseClientProvider.client.postgrest.from("arousal_daily")
-            .select(columns = Columns.list("id,date,morning_erection_quality,arousal_level")) {
-                order("date", Order.DESCENDING)
-                limit(30)
-            }
-            .decodeList()
+        // DAV-215 (24/9 fixes): both now routed through AnalysisRepository
+        // like every other Heart data source, instead of an inline raw query.
+        arousal = repo.loadArousalDaily()
+        masturbation = repo.loadMasturbationLog()
+        // DAV-196: first real population artifact (Tudor-Locke & Bassett's
+        // steps/day categories) -- see docs/analysis-layer-2/25-population-benchmark-engine.md.
+        stepsBenchmark = BenchmarkArtifactRepository(SupabaseClientProvider.client).loadArtifacts("steps")
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
-        TileHeader(title = "HEART", context = "CARDIO · RECOVERY · WELLBEING · INJURY", onBack = onBack)
+        TileHeader(onBack = onBack)
         SubTabRow(items = HeartTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
 
         val w = wearable
         val s = sleep
         val wb = wellbeing
-        val os = ostrc
-        val t = trainingSessions
         val ar = arousal
-        if (w == null || s == null || wb == null || os == null || t == null || ar == null) {
+        val m = masturbation
+        if (w == null || s == null || wb == null || ar == null || m == null) {
             Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = FT.DomainHeart)
             }
@@ -132,11 +133,27 @@ fun HeartTileScreen(onBack: () -> Unit) {
             when (tab) {
                 HeartTab.Cardio -> {
                     val hrvPoints = w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }
-                    EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", points = hrvPoints)
+                    // DAV-200: first live wiring of the new comparison layer --
+                    // real ms values (not the SWC evaluation's own log-space
+                    // baseline), the latest reading compared against every
+                    // earlier one.
+                    val hrvComparison = hrvPoints.maxByOrNull { it.first }?.let { latest ->
+                        comparePersonal(
+                            metric = "hrv",
+                            current = latest.second,
+                            history = hrvPoints.filter { it.first != latest.first },
+                            presentSources = setOf("wearable_daily"),
+                            idealSources = setOf("wearable_daily"),
+                            origin = "health_connect",
+                        )
+                    }
+                    EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", points = hrvPoints, comparison = hrvComparison)
                     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
                     EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm", points = rhrPoints)
                     val rrPoints = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
                     RespiratoryCard(evaluateRespiratoryAnomaly(rrPoints))
+                    val stepsPoints = w.mapNotNull { row -> row.steps?.let { LocalDate.parse(row.date) to it } }
+                    StepsCard(stepsPoints, stepsBenchmark)
                 }
                 HeartTab.Recovery -> {
                     val hoursPoints = s.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } }
@@ -147,53 +164,57 @@ fun HeartTileScreen(onBack: () -> Unit) {
                         if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
                     }
                     SriCard(evaluateSri(nights))
+                    SleepPhasesCard(s)
                 }
                 HeartTab.Wellbeing -> {
-                    // DAV-101: small multiples, not one collapsed score --
-                    // a 2-column grid of compact cards reads as "comparable
-                    // daily dimensions" more literally than four full-width
-                    // stacked cards did.
+                    // DAV-101: small multiples, not one collapsed score.
+                    // DAV-214 (24/9 fixes): was a 2-column grid of compact
+                    // cards -- switched to 4 full-width stacked bands so each
+                    // card's existing DateTrendLine (SubjectiveCard already
+                    // rendered one) gets the full width instead of being
+                    // squeezed to half-screen.
                     val dimensions = listOf(
                         "ENERGY" to wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } },
                         "MOOD" to wb.mapNotNull { row -> row.mood?.let { LocalDate.parse(row.date) to it.toDouble() } },
                         "STRESS" to wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } },
                         "SORENESS" to wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } },
                     )
-                    dimensions.chunked(2).forEach { row ->
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            row.forEach { (title, points) -> SubjectiveCard(title, points, modifier = Modifier.weight(1f)) }
-                        }
-                    }
-                    ArousalHistory(ar)
-                }
-                HeartTab.Injury -> {
-                    HealthEventsScreen()
-                    val sessionLoads = t.mapNotNull { row ->
-                        val duration = row.durationMin
-                        val rpe = row.rpe
-                        if (duration != null && rpe != null) OffsetDateTime.parse(row.startTime).toLocalDateTime().toLocalDate() to duration * rpe else null
-                    }
-                    val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
-                    val restCadenceEval = evaluateRestCadence(sessionLoads, trainingLoadEval.tsb, trainingLoadEval.confidence.met)
-                    val sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } })
-                    val ostrcByBodyArea = os.mapNotNull { row -> row.severityScore?.let { row.bodyArea to (LocalDate.parse(row.checkDate) to it) } }
-                        .groupBy({ it.first }, { it.second })
-                    if (ostrcByBodyArea.isEmpty()) {
-                        OstrcCard(evaluateOstrc("—", emptyList()), trainingLoadEval.tsb, restCadenceEval.consecutiveDaysWithoutRest, sorenessEval.median7d)
-                    } else {
-                        ostrcByBodyArea.forEach { (bodyArea, entries) ->
-                            OstrcCard(evaluateOstrc(bodyArea, entries), trainingLoadEval.tsb, restCadenceEval.consecutiveDaysWithoutRest, sorenessEval.median7d)
-                        }
-                    }
+                    dimensions.forEach { (title, points) -> SubjectiveCard(title, points, modifier = Modifier.fillMaxWidth()) }
+                    ArousalHistory(ar, m)
                 }
             }
         }
     }
 }
 
+// DAV-215 (24/9 fixes): merges masturbation_log entries into the same
+// timeline instead of only ever showing arousal_daily rows. Encounter
+// entries stay out of scope until copulation tracking itself is built.
+private data class ArousalHistoryEntry(val date: LocalDate, val dateLabel: String, val text: String)
+
 @Composable
-private fun ArousalHistory(rows: List<LogArousalRow>) {
-    if (rows.isEmpty()) {
+private fun ArousalHistory(rows: List<LogArousalRow>, masturbation: List<LogMasturbationRow>) {
+    val arousalEntries = rows.map { row ->
+        ArousalHistoryEntry(
+            date = LocalDate.parse(row.date),
+            dateLabel = row.date,
+            text = listOfNotNull(
+                row.morningErectionQuality?.let { "Morning wood $it/10" },
+                row.arousalLevel?.let { "Arousal $it/10" },
+            ).joinToString(" · "),
+        )
+    }
+    val masturbationEntries = masturbation.mapNotNull { row ->
+        val at = runCatching { OffsetDateTime.parse(row.occurredAt) }.getOrNull() ?: return@mapNotNull null
+        ArousalHistoryEntry(
+            date = at.toLocalDate(),
+            dateLabel = at.toLocalDate().toString(),
+            text = "Masturbation" + (row.orgasmIntensity?.let { " · intensity $it/10" } ?: ""),
+        )
+    }
+    val combined = (arousalEntries + masturbationEntries).sortedByDescending { it.date }
+
+    if (combined.isEmpty()) {
         Text("No arousal entries logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
         return
     }
@@ -203,35 +224,16 @@ private fun ArousalHistory(rows: List<LogArousalRow>) {
             style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
             color = FT.TextMuted,
         )
-        rows.forEach { row ->
+        combined.forEach { entry ->
             Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(row.date, style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp), color = FT.TextSecondary)
-                Text(
-                    listOfNotNull(
-                        row.morningErectionQuality?.let { "Morning wood $it/10" },
-                        row.arousalLevel?.let { "Arousal $it/10" },
-                    ).joinToString(" · "),
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
-                    color = FT.TextPrimary,
-                )
+                Text(entry.dateLabel, style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp), color = FT.TextSecondary)
+                Text(entry.text, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextPrimary)
             }
         }
     }
 }
 
 private fun SwcEvaluation.toExpSpace(): SwcEvaluation = copy(baseline7d = expValue(baseline7d), mean60d = expValue(mean60d))
-
-// DAV-101: legacy 6-state EvalState maps onto FT's MetricState so
-// FTStatePill can render it -- Stable/ShiftUp-Down/Unstable keep the exact
-// same color relationship the legacy StateRow already established
-// (green/amber/red), just expressed through the shared FT vocabulary.
-private fun EvalState.toMetricState(): MetricState = when (this) {
-    EvalState.NoData -> MetricState.Unavailable
-    EvalState.Building -> MetricState.Building
-    EvalState.Stable -> MetricState.Optimal
-    EvalState.ShiftUp, EvalState.ShiftDown -> MetricState.Warning
-    EvalState.Unstable -> MetricState.Critical
-}
 
 // DAV-75/101: baseline/mean/CV were plain numbers with no sense of the real
 // day-to-day shape behind them, and no personal-range context -- the raw
@@ -241,10 +243,18 @@ private fun EvalState.toMetricState(): MetricState = when (this) {
 // SWC band becomes a real FTRangeIndicator personal baseline rather than
 // two disconnected StatLine rows.
 @Composable
-private fun EvalCard(title: String, eval: SwcEvaluation, unit: String, points: List<Pair<LocalDate, Double>>? = null, modifier: Modifier = Modifier) {
+private fun EvalCard(
+    title: String,
+    eval: SwcEvaluation,
+    unit: String,
+    points: List<Pair<LocalDate, Double>>? = null,
+    comparison: ComparisonResult? = null,
+    modifier: Modifier = Modifier,
+) {
     FTCard(title = title, modifier = modifier) {
         FTStatePill(eval.state.toMetricState())
         StatLine("Confidence", eval.confidence.label)
+        comparison?.let { ComparisonStrip(it) }
         if (eval.mean60d != null && eval.swcPct != null) {
             val band = eval.mean60d * (eval.swcPct / 100.0)
             FTRangeIndicator(
@@ -266,7 +276,10 @@ private fun EvalCard(title: String, eval: SwcEvaluation, unit: String, points: L
     }
 }
 
-private const val TREND_WINDOW_DAYS = 90L
+// Live check: 90 days diluted the visible trend with old history and made
+// the recent, actually-relevant month hard to read -- narrowed to 30,
+// shared by every EvalCard on both the Cardio and Recovery tabs.
+private const val TREND_WINDOW_DAYS = 30L
 
 private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<LocalDate, Double>>? {
     if (points.size < 2) return null
@@ -291,6 +304,93 @@ private fun SriCard(eval: SriEvaluation) {
     }
 }
 
+// Live check: HealthConnectDailySyncRepository.syncSleep() already computes
+// real per-night deep/rem/light minutes from SleepSessionRecord.stages and
+// syncs them to sleep_daily -- nothing in the app ever displayed them. Shows
+// the last 14 real nights' average as a proportion bar rather than one more
+// day-by-day trend line (this is a composition question -- "where does sleep
+// time go" -- not a day-to-day trend one).
+private const val SLEEP_PHASE_WINDOW_DAYS = 14L
+
+@Composable
+private fun SleepPhasesCard(nights: List<SleepAnalysisRow>) {
+    val today = LocalDate.now()
+    val recent = nights.filter {
+        it.deepMin != null && it.remMin != null && it.lightMin != null &&
+            ChronoUnit.DAYS.between(LocalDate.parse(it.date), today) <= SLEEP_PHASE_WINDOW_DAYS
+    }
+    if (recent.isEmpty()) return
+
+    val avgDeep = recent.map { it.deepMin!! }.average()
+    val avgRem = recent.map { it.remMin!! }.average()
+    val avgLight = recent.map { it.lightMin!! }.average()
+    val avgTotal = (avgDeep + avgRem + avgLight).takeIf { it > 0 } ?: 1.0
+
+    FTCard(title = "SLEEP PHASES") {
+        Row(modifier = Modifier.fillMaxWidth().height(10.dp)) {
+            Box(Modifier.weight((avgDeep / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Info))
+            Box(Modifier.weight((avgRem / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Emerald))
+            Box(Modifier.weight((avgLight / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.TextMuted))
+        }
+        PhaseStatLine("Deep", avgDeep, avgTotal, FT.Info)
+        PhaseStatLine("REM", avgRem, avgTotal, FT.Emerald)
+        PhaseStatLine("Light", avgLight, avgTotal, FT.TextMuted)
+        StatLine("Nights averaged", "${recent.size}")
+    }
+}
+
+@Composable
+private fun PhaseStatLine(label: String, minutes: Double, totalMinutes: Double, dotColor: androidx.compose.ui.graphics.Color) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.width(8.dp).height(8.dp).background(dotColor))
+            Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+        }
+        Text(
+            "${minutes.toInt()} min  ·  %.0f%%".format(minutes / totalMinutes * 100),
+            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
+            color = FT.TextPrimary,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f).padding(start = 8.dp),
+        )
+    }
+}
+
+// Live check: wearable_daily.steps has 1,000+ real synced days, never read
+// anywhere. No evaluate*() function exists for steps (no baseline/SWC
+// concept defined for it, unlike HRV/RHR) -- a plain daily count and trend,
+// not a full EvalCard, is the honest treatment.
+private const val STEPS_WINDOW_DAYS = 15L
+
+@Composable
+private fun StepsCard(points: List<Pair<LocalDate, Double>>, benchmarkArtifacts: List<BenchmarkArtifact>) {
+    val today = LocalDate.now()
+    val recent = points.filter { ChronoUnit.DAYS.between(it.first, today) <= STEPS_WINDOW_DAYS }
+    if (recent.size < 2) return
+    val avg = recent.map { it.second }.average()
+
+    // DAV-211: this used to compare today's single (often still-partial) day
+    // against the Tudor-Locke bands while the card displayed the 15-day
+    // average right above it -- e.g. "17k+ AVG/DAY" next to a "sedentary"
+    // badge that was actually describing an unrelated, much lower, in-progress
+    // today. Comparing the same `avg` the card shows keeps the two numbers honest.
+    val comparison = comparePopulation(
+        metric = "steps",
+        current = avg,
+        context = PopulationContext(ageYears = null, sex = null, geography = null),
+        artifacts = benchmarkArtifacts,
+    )
+
+    FTCard(title = "STEPS") {
+        FTMetricValue(DisplayValue(primary = "${avg.toInt()}", unit = "AVG/DAY", secondary = "last 15 days"))
+        // DAV-196: first real population artifact (Tudor-Locke & Bassett's
+        // steps/day categories) -- no personal-history comparison wired for
+        // steps yet.
+        ComparisonStrip(population = comparison)
+        DateTrendLine(points = recent, color = FT.DomainHeart)
+    }
+}
+
 @Composable
 private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation) {
     FTCard(title = "RESPIRATORY RATE") {
@@ -304,28 +404,6 @@ private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation) {
             },
             style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
             color = if (eval.flagged) FT.Critical else FT.TextSecondary,
-        )
-    }
-}
-
-@Composable
-private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int, sorenessMedian: Double?) {
-    FTCard(title = "OSTRC-H2 · ${eval.bodyArea.uppercase()}") {
-        StatLine("Confidence", eval.confidence.label)
-        eval.latestSeverityScore?.let { StatLine("Latest severity", "$it / 100") }
-        eval.latestCheckDate?.let { StatLine("Last check-in", it.toString()) }
-        Text(
-            "LOAD CONTEXT (shown adjacent, never combined into one score)",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
-            color = FT.TextMuted,
-        )
-        tsb?.let { StatLine("TSB (form)", "%+.1f".format(it)) }
-        StatLine("Days without rest", "$daysWithoutRest")
-        sorenessMedian?.let { StatLine("7-day soreness median", "%.1f".format(it)) }
-        Text(
-            "No injury risk score — single-factor screening doesn't predict injury. You do the synthesis; this doesn't.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-            color = FT.TextMuted,
         )
     }
 }

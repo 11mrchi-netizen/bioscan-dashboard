@@ -24,6 +24,27 @@ enum class LogEntryKind(val label: String) {
     Wellness("WELL"), Supplement("SUPP"), Ostrc("OSTRC"), Masturbation("MASTURBATION"),
 }
 
+// DAV-219 (24/9 fixes): a few named groups the Log page clusters same-day
+// entries into (see LogScreen.kt) -- food/hydration/supplements especially
+// used to clutter the flat per-day feed as a long run of same-kind rows.
+// Order below is the display order (a deliberate reading order, not
+// alphabetical): what you put in, what you did, what your body did, then
+// free-text notes.
+enum class LogCategory(val label: String) {
+    Intake("INTAKE"),
+    Activity("ACTIVITY"),
+    Body("BODY"),
+    Notes("NOTES"),
+}
+
+val LogEntryKind.category: LogCategory
+    get() = when (this) {
+        LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> LogCategory.Intake
+        LogEntryKind.Exercise, LogEntryKind.Ostrc -> LogCategory.Activity
+        LogEntryKind.Sleep, LogEntryKind.Wellness, LogEntryKind.Stool, LogEntryKind.Arousal, LogEntryKind.Masturbation -> LogCategory.Body
+        LogEntryKind.Note, LogEntryKind.Encounter -> LogCategory.Notes
+    }
+
 // Which table (and which AddEntryRepository calls) an entry came from --
 // needed for Log tab edit/delete, added alongside that flow. Phase G3:
 // Exercise (was Run) points at the generic `exercise_sessions` table and,

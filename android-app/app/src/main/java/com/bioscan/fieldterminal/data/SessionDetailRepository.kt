@@ -19,8 +19,63 @@ import com.bioscan.fieldterminal.healthconnect.readAllRecords
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import java.time.Duration
 import java.time.Instant
+
+// DAV-115/123: detail.json's decoded per-second series (see
+// docs/zepp-integration/03-workout-detail-field-decode.md), stored server-side
+// by zepp-extract in the same {offsetSeconds, value} shape TimePoint already
+// uses -- no client-side decoding needed, just a straight field-name match.
+@Serializable
+data class ZeppDecodedPoint(@SerialName("offsetSeconds") val offsetSeconds: Long, val value: Double)
+
+// Workout-level averages (not a per-second series) -- lives in Zepp's own
+// workout summary, not detail.json, so it can't be plotted against
+// offsetSeconds like the fields above. lactateThreshold* is Zepp's own
+// rolling estimate, recomputed per qualifying run -- "as of this workout",
+// not tied to one dedicated test.
+@Serializable
+data class ZeppWorkoutSummary(
+    val avgCadenceSpm: Double? = null,
+    val maxCadenceSpm: Double? = null,
+    val avgStrideLengthCm: Double? = null,
+    val avgGroundContactMs: Double? = null,
+    val avgVerticalStrideRatioPct: Double? = null,
+    val lactateThresholdHrBpm: Double? = null,
+    val lactateThresholdPaceSecPerKm: Double? = null,
+    // DAV-272, computed server-side (zepp-extract effort.ts). EF only exists
+    // for aerobic runs >= 20 min; decoupling only alongside it.
+    val gapMinPerKm: Double? = null,
+    val efficiencyFactor: Double? = null,
+    val hrDecouplingPct: Double? = null,
+    val smoothedAscentM: Double? = null,
+)
+
+@Serializable
+data class ZeppDecodedSeries(
+    val heartRate: List<ZeppDecodedPoint> = emptyList(),
+    val speedKmh: List<ZeppDecodedPoint> = emptyList(),
+    val altitudeM: List<ZeppDecodedPoint> = emptyList(),
+    val distanceKm: List<ZeppDecodedPoint> = emptyList(),
+    val cadenceSpm: List<ZeppDecodedPoint> = emptyList(),
+    val verticalStrideRatioPct: List<ZeppDecodedPoint> = emptyList(),
+    val summary: ZeppWorkoutSummary? = null,
+)
+
+@Serializable
+data class ZeppWorkoutDetailRow(val decoded: ZeppDecodedSeries? = null)
+
+// start_time + only decoded->summary (aliased) -- used by TrainingRepository
+// for the lactate-threshold and efficiency trend series (one point per synced
+// Zepp workout). Selecting the summary alone avoids pulling every workout's
+// per-second series just to read a few scalars.
+@Serializable
+data class ZeppWorkoutDetailSummaryRow(
+    @SerialName("start_time") val startTime: String,
+    val summary: ZeppWorkoutSummary? = null,
+)
 
 // Phase G4/G5. loadHeader() reads the session's real aggregates from Supabase
 // (same source Training/Log already use); loadTimeSeries() reads fresh from
@@ -60,13 +115,19 @@ class SessionDetailRepository(
             .sortedBy { it.offsetSeconds }
 
         val speed = client.readAllRecords(SpeedRecord::class, startTime, endTime)
-            .flatMap { it.samples }
-            .map { TimePoint(Duration.between(startTime, it.time).seconds, it.speed.inKilometersPerHour) }
+            .sortedBy { it.startTime }
+            .flatMap { record ->
+                retimedOffsets(startTime, record.startTime, record.endTime, record.samples) { it.time }
+                    .zip(record.samples) { offset, sample -> TimePoint(offset, sample.speed.inKilometersPerHour) }
+            }
             .sortedBy { it.offsetSeconds }
 
         val power = client.readAllRecords(PowerRecord::class, startTime, endTime)
-            .flatMap { it.samples }
-            .map { TimePoint(Duration.between(startTime, it.time).seconds, it.power.inWatts) }
+            .sortedBy { it.startTime }
+            .flatMap { record ->
+                retimedOffsets(startTime, record.startTime, record.endTime, record.samples) { it.time }
+                    .zip(record.samples) { offset, sample -> TimePoint(offset, sample.power.inWatts) }
+            }
             .sortedBy { it.offsetSeconds }
 
         var runningKcal = 0.0
@@ -77,9 +138,17 @@ class SessionDetailRepository(
                 TimePoint(Duration.between(startTime, it.endTime).seconds, runningKcal)
             }
 
+        // Same multi-source overcount HealthConnectExerciseSyncRepository.buildRow() already
+        // found and fixed for the stored distance_km aggregate (see that file's own comment):
+        // summing every DistanceRecord in the window double/triple-counts a run when more than
+        // one app/device reports distance for it. Group by source and build the cumulative curve
+        // from only the single largest-total source, matching that fix exactly.
         var runningKm = 0.0
+        val distanceRecords = client.readAllRecords(DistanceRecord::class, startTime, endTime)
+        val bySource = distanceRecords.groupBy { it.metadata.dataOrigin.packageName }
+        val chosenSource = bySource.maxByOrNull { (_, records) -> records.sumOf { it.distance.inKilometers } }
         val distance = listOf(TimePoint(0, 0.0)) +
-            client.readAllRecords(DistanceRecord::class, startTime, endTime)
+            chosenSource?.value.orEmpty()
                 .sortedBy { it.startTime }
                 .map {
                     runningKm += it.distance.inKilometers
@@ -87,6 +156,38 @@ class SessionDetailRepository(
                 }
 
         return SessionDetail(heartRate, speed, power, calories, distance)
+    }
+
+    // DAV-115/123: real per-second data from Zepp's own detail.json, already
+    // decoded server-side -- returns null when this session has no matched
+    // Zepp workout (the common case today) or that workout's raw payload
+    // hasn't been decoded yet. speedKmh/distanceKm/heartRate here are the
+    // real recorded series, not a Health-Connect reconstruction.
+    suspend fun loadZeppDetail(sessionId: Long): SessionDetail? {
+        val row = supabase.postgrest.from("zepp_workout_detail")
+            .select(columns = Columns.list("decoded")) { filter { eq("exercise_session_id", sessionId) } }
+            .decodeSingleOrNull<ZeppWorkoutDetailRow>() ?: return null
+        val decoded = row.decoded ?: return null
+
+        fun toPoints(points: List<ZeppDecodedPoint>) = points.map { TimePoint(it.offsetSeconds, it.value) }
+        return SessionDetail(
+            heartRate = toPoints(decoded.heartRate),
+            speedKmh = toPoints(decoded.speedKmh),
+            powerW = emptyList(),
+            caloriesKcal = emptyList(),
+            distanceKm = toPoints(decoded.distanceKm),
+            cadenceSpm = toPoints(decoded.cadenceSpm),
+        )
+    }
+
+    // Workout-level averages (cadence, ground contact, stride length,
+    // vertical ratio, lactate threshold) -- not a TimePoint series, so kept
+    // separate from loadZeppDetail rather than force-fitting scalars into it.
+    suspend fun loadZeppSummary(sessionId: Long): ZeppWorkoutSummary? {
+        val row = supabase.postgrest.from("zepp_workout_detail")
+            .select(columns = Columns.list("decoded")) { filter { eq("exercise_session_id", sessionId) } }
+            .decodeSingleOrNull<ZeppWorkoutDetailRow>() ?: return null
+        return row.decoded?.summary
     }
 
     // Phase G5. A session's exercise route isn't covered by this app's bulk
@@ -103,6 +204,37 @@ class SessionDetailRepository(
             is ExerciseRouteResult.ConsentRequired -> RouteAvailability.ConsentRequired
             else -> RouteAvailability.NoRoute
         }
+    }
+}
+
+// DAV-201: confirmed against real device data (Huami/Amazfit-sourced
+// SpeedRecord/PowerRecord) -- the RECORD's own startTime/endTime correctly
+// spans the whole session, but every internal sample's own `time` is bugged,
+// crammed into roughly the record's final 1% (34s of a 2974s run, confirmed
+// live). Rather than trust that per-sample time, redistribute the samples
+// evenly across the record's real interval whenever their own reported span
+// is suspiciously narrow relative to it -- real, well-behaved sources whose
+// samples already span close to the record's full duration are left as-is.
+private const val DEGENERATE_SPAN_FRACTION = 5L // reported span < 1/5 of the record's real duration
+
+private fun <T> retimedOffsets(
+    sessionStart: Instant,
+    recordStart: Instant,
+    recordEnd: Instant,
+    samples: List<T>,
+    sampleTime: (T) -> Instant,
+): List<Long> {
+    if (samples.size < 2) return samples.map { Duration.between(sessionStart, sampleTime(it)).seconds }
+
+    val recordStartOffset = Duration.between(sessionStart, recordStart).seconds
+    val recordDurationSec = Duration.between(recordStart, recordEnd).seconds
+    val reportedSpanSec = Duration.between(sampleTime(samples.first()), sampleTime(samples.last())).seconds
+    val degenerate = recordDurationSec > 0 && reportedSpanSec < recordDurationSec / DEGENERATE_SPAN_FRACTION
+
+    return if (degenerate) {
+        samples.indices.map { i -> recordStartOffset + (i.toLong() * recordDurationSec) / (samples.size - 1) }
+    } else {
+        samples.map { Duration.between(sessionStart, sampleTime(it)).seconds }
     }
 }
 

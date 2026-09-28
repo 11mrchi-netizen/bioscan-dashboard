@@ -9,25 +9,28 @@ import java.time.LocalDate
 class TrainingTest {
 
     @Test
-    fun testVo2MaxTimeframeFiltering() {
+    fun testPerformanceTimeframeFiltering() {
         val today = LocalDate.of(2026, 9, 21)
         val series = listOf(
             LocalDate.of(2026, 5, 1) to 48.0, // ~4.5 months ago
             LocalDate.of(2026, 7, 1) to 49.0, // ~2.5 months ago
-            LocalDate.of(2026, 8, 1) to 50.0, // ~1.5 months ago (inside 2M)
-            LocalDate.of(2026, 9, 15) to 51.0, // ~6 days ago (inside 2M)
+            LocalDate.of(2026, 8, 1) to 50.0, // ~1.5 months ago
+            LocalDate.of(2026, 9, 15) to 51.0, // ~6 days ago (inside 1M)
         )
 
-        val data2M = prepareVo2MaxTrendData(series, Vo2MaxTimeframe.TwoMonths, today)
-        assertEquals(2, data2M.raw.size)
-        assertEquals(LocalDate.of(2026, 8, 1), data2M.raw[0].first)
-        assertEquals(LocalDate.of(2026, 9, 15), data2M.raw[1].first)
+        val data1M = preparePerformanceTrendData(series, PerformanceTimeframe.OneMonth, today)
+        assertEquals(1, data1M.raw.size)
+        assertEquals(LocalDate.of(2026, 9, 15), data1M.raw[0].first)
 
-        val data6M = prepareVo2MaxTrendData(series, Vo2MaxTimeframe.SixMonths, today)
+        val data3M = preparePerformanceTrendData(series, PerformanceTimeframe.ThreeMonths, today)
+        assertEquals(3, data3M.raw.size)
+        assertEquals(LocalDate.of(2026, 7, 1), data3M.raw[0].first)
+
+        val data6M = preparePerformanceTrendData(series, PerformanceTimeframe.SixMonths, today)
         assertEquals(4, data6M.raw.size)
 
-        val dataAll = prepareVo2MaxTrendData(series, Vo2MaxTimeframe.All, today)
-        assertEquals(4, dataAll.raw.size)
+        val data1Y = preparePerformanceTrendData(series, PerformanceTimeframe.OneYear, today)
+        assertEquals(4, data1Y.raw.size)
     }
 
     @Test
@@ -175,5 +178,28 @@ class TrainingTest {
 
         val deduped = dedupeRunSessions(listOf(impossiblePaceRun))
         assertTrue(deduped.isEmpty())
+    }
+
+    @Test
+    fun testSuspectedTrailReason() {
+        fun run(routeType: String? = null, km: Double = 10.0, climb: Double? = null) = ExerciseSessionRow(
+            type = "run", startTime = "2026-09-12T08:00:00Z", distanceKm = km, elevationGainM = climb,
+            details = com.bioscan.fieldterminal.data.model.ExerciseSessionDetails(routeType = routeType),
+        )
+        assertEquals("ZEPP TRAIL RUN", suspectedTrailReason(run(), "7"))
+        assertEquals("64 M/KM CLIMB", suspectedTrailReason(run(km = 10.0, climb = 640.0), null))
+        assertEquals(null, suspectedTrailReason(run(km = 10.0, climb = 340.0), "1")) // 34 m/km, road
+        assertEquals(null, suspectedTrailReason(run(routeType = "road", climb = 900.0), "7")) // explicit tag wins
+        assertEquals(null, suspectedTrailReason(run(routeType = "trail", climb = 900.0), "7")) // already trail
+    }
+
+    @Test
+    fun testEfficiencyRollingMedianNeedsSixRunsIn28Days() {
+        val start = LocalDate.of(2026, 9, 1)
+        val runs = listOf(1.0, 1.2, 1.1, 1.3, 1.15, 1.25).mapIndexed { i, ef -> start.plusDays(i * 3L) to ef }
+        val rolling = efficiencyRollingMedian28(runs)
+        assertEquals(1, rolling.size) // only the 6th run has 6 in its window
+        assertEquals(1.175, rolling.first().second, 1e-9) // median of the six
+        assertEquals(0, efficiencyRollingMedian28(runs.take(5)).size)
     }
 }

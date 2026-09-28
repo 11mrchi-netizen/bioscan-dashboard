@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -40,8 +42,6 @@ import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import com.bioscan.fieldterminal.ui.theme.Inter
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -129,7 +129,8 @@ private fun HealthEventsContent(overview: HealthEventsOverview, onAddClick: () -
 
         if (overview.resolved.isNotEmpty()) {
             SectionLabel("RESOLVED", FT.TextSecondary)
-            Column(modifier = Modifier.fillMaxWidth().background(FT.GlassFill).alpha(0.7f)) {
+            val shape = RoundedCornerShape(FT.RadiusCard)
+            Column(modifier = Modifier.fillMaxWidth().clip(shape).background(FT.GlassFill, shape).alpha(0.7f)) {
                 overview.resolved.forEachIndexed { i, event ->
                     ResolvedRow(event, today, showDivider = i < overview.resolved.lastIndex)
                 }
@@ -167,11 +168,17 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
     val scope = rememberCoroutineScope()
     var resolving by remember { mutableStateOf(false) }
     var resolveError by remember { mutableStateOf<String?>(null) }
+    // DAV-217: same rounded-corner glass-panel shape FTCard uses elsewhere,
+    // applied directly rather than through FTCard itself -- this card's
+    // custom badge/status/day-counter header doesn't fit FTCard's
+    // single-title-string slot.
+    val shape = RoundedCornerShape(FT.RadiusCard)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, FT.Critical.copy(alpha = 0.45f))
-            .background(FT.Critical.copy(alpha = 0.1f)),
+            .clip(shape)
+            .border(FT.BorderWidth, FT.Critical.copy(alpha = 0.45f), shape)
+            .background(FT.Critical.copy(alpha = 0.1f), shape),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 9.dp),

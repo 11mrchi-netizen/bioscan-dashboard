@@ -98,7 +98,12 @@ fun FieldTerminalNavHost() {
             // NavHost entry -- keeps their own back stack entries so
             // Android's system back button behaves the same as everywhere
             // else in this app.
-            composable(TileRoute.Training.route) { TrainingTileScreen(onBack = { navController.popBackStack() }) }
+            composable(TileRoute.Training.route) {
+                TrainingTileScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") },
+                )
+            }
             composable(TileRoute.Fuel.route) { FuelTileScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Heart.route) { HeartTileScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Labs.route) { LabsTileScreen(onBack = { navController.popBackStack() }) }

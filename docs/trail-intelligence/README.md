@@ -19,6 +19,7 @@ doc 01 for why those are two separate data paths rather than one shared GPX pipe
 | [09-planned-route-pipeline.md](09-planned-route-pipeline.md) | [DAV-148](https://linear.app/biodashboard/issue/DAV-148) | The one-call end-to-end pipeline wiring DAV-145/146/147 and Phase 1's shared engine together |
 | [10-route-preview-ui.md](10-route-preview-ui.md) | [DAV-149](https://linear.app/biodashboard/issue/DAV-149) | Surfacing the cached preview in the Map tab's existing per-event sheet, live GPX summary kept as fallback |
 | [11-route-preview-caching.md](11-route-preview-caching.md) | [DAV-151](https://linear.app/biodashboard/issue/DAV-151) | Metadata-checksum skip-recompute, freshness confirmation, and the row-cleanup cutoff |
+| [12-live-verification-fixes.md](12-live-verification-fixes.md) | [DAV-184](https://linear.app/biodashboard/issue/DAV-184) · [DAV-185](https://linear.app/biodashboard/issue/DAV-185) · [DAV-186](https://linear.app/biodashboard/issue/DAV-186) · [DAV-187](https://linear.app/biodashboard/issue/DAV-187) | What the first real on-phone check of Phase 1 found: a distance-overcount bug, a silent TRAIL card, a missing elevation chart, and a missing training session list |
 
 ## Prior art this builds on
 

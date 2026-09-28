@@ -31,6 +31,8 @@ import com.bioscan.fieldterminal.domain.LogSource
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 // Step 12 (Phase D) + the 2026-09-15 follow-up pass: the "+" add-entry
 // flow's writes. Every add*/update* now takes its date/timestamp as an
@@ -307,6 +309,17 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
+    // Narrow tag write for the "suspected trail runs" flow: reads the row's
+    // current details JSON and merges only route_type, unlike
+    // updateExerciseDetails() above which overwrites details/rpe/notes whole.
+    suspend fun updateRouteType(id: Long, routeType: String) {
+        val current = supabase.postgrest.from("exercise_sessions")
+            .select(columns = Columns.list("details")) { filter { eq("id", id) } }
+            .decodeSingle<DetailsJsonRow>()
+        val merged = JsonObject(current.details + ("route_type" to JsonPrimitive(routeType)))
+        supabase.postgrest.from("exercise_sessions").update(DetailsJsonRow(merged)) { filter { eq("id", id) } }
+    }
+
     // Generic delete, usable on every source including Sleep and Supplement
     // (neither has a corresponding add/update form) -- delete is still a
     // valid "undo" for a bad wearable-synced row or a mistakenly-checked
@@ -370,3 +383,6 @@ internal fun parseDose(dose: String): Pair<Double?, String?> {
     val value = match.groupValues[1].toDoubleOrNull() ?: return null to trimmed.ifBlank { null }
     return value to match.groupValues[2].trim().ifBlank { null }
 }
+
+@kotlinx.serialization.Serializable
+private data class DetailsJsonRow(val details: JsonObject = JsonObject(emptyMap()))

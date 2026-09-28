@@ -74,7 +74,6 @@ import com.bioscan.fieldterminal.domain.weatherCodeSymbol
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
-import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -186,12 +185,6 @@ fun MapScreen(focusEventId: String? = null) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        val readyState = state as? MapState.Ready
-        ScreenHeader(
-            title = "MAP",
-            context = readyState?.let { "${it.pins.size} EVENT" + (if (it.pins.size == 1) "" else "S") + " · NEXT 24H" } ?: "—",
-        )
-
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (val s = state) {
                 is MapState.CheckingAccess -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

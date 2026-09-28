@@ -55,6 +55,15 @@ import java.time.LocalDate
 // supplement is a separate, single-tap action here rather than a 4th field,
 // since it's a status transition, not part of "what/how much/when."
 private val TIME_OF_DAY_OPTIONS = listOf("morning", "afternoon", "night", "as-needed")
+
+// null = daily (no restriction). Values match the every_n_days column.
+private val EVERY_N_DAYS_OPTIONS: List<Pair<Int?, String>> = listOf(
+    null to "DAILY",
+    2 to "2 DAYS",
+    3 to "3 DAYS",
+    4 to "4 DAYS",
+    7 to "WEEKLY",
+)
 private val sheetHeaderTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
 private val sheetActionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
 
@@ -69,6 +78,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
     var name by remember { mutableStateOf(existing?.name ?: "") }
     var dose by remember { mutableStateOf(existing?.dose ?: "") }
     var timeOfDay by remember { mutableStateOf(existing?.timeOfDay ?: "morning") }
+    var everyNDays by remember { mutableStateOf(existing?.everyNDays) }
     var saving by remember { mutableStateOf(false) }
     var ending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -117,6 +127,30 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                 }
             }
 
+            Column {
+                FormFieldLabel("FREQUENCY")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EVERY_N_DAYS_OPTIONS.forEach { (days, label) ->
+                        val selected = days == everyNDays
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                                .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
+                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { everyNDays = days }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                label,
+                                style = TextStyle(fontFamily = RobotoMono, fontSize = 10.sp),
+                                color = if (selected) FT.Emerald else FT.TextSecondary,
+                            )
+                        }
+                    }
+                }
+            }
+
             error?.let {
                 Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical)
             }
@@ -142,9 +176,9 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                                         null
                                     }
                                 }
-                                repo.addSupplement(name.trim(), dose.trim(), timeOfDay, LocalDate.now(), aiNote)
+                                repo.addSupplement(name.trim(), dose.trim(), timeOfDay, LocalDate.now(), aiNote, everyNDays)
                             } else {
-                                repo.updateSupplement(existing.id, name.trim(), dose.trim(), timeOfDay)
+                                repo.updateSupplement(existing.id, name.trim(), dose.trim(), timeOfDay, everyNDays)
                             }
                             onSaved()
                         } catch (e: Exception) {

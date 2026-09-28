@@ -78,6 +78,8 @@ import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.AddEntryType
+import com.bioscan.fieldterminal.domain.isSupplementDueToday
+import com.bioscan.fieldterminal.domain.supplementNextDueDate
 import com.bioscan.fieldterminal.domain.FuelSubType
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogSource
@@ -1023,14 +1025,29 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
     var checkedBundles by remember { mutableStateOf(setOf<String>()) }
     var checkedAsNeeded by remember { mutableStateOf(setOf<Long>()) }
+    var recentLastTaken by remember { mutableStateOf<Map<Long, LocalDate>>(emptyMap()) }
 
     LaunchedEffect(Unit) {
-        supplements = SupplementsRepository(SupabaseClientProvider.client).loadOverview().active
+        val repo = SupplementsRepository(SupabaseClientProvider.client)
+        val active = repo.loadOverview().active
+        supplements = active
+        if (active.any { it.everyNDays != null }) {
+            recentLastTaken = repo.loadRecentTakenDates(active.map { it.id })
+        }
     }
 
+    val today = LocalDate.now()
     val list = supplements ?: emptyList()
-    val groups = list.filter { it.timeOfDay != "as-needed" }.groupBy { it.timeOfDay }
-    val asNeeded = list.filter { it.timeOfDay == "as-needed" }
+
+    // Supplements with an interval that haven't reached their next due date
+    // are removed from the pickable groups so the bundle toggle doesn't log
+    // them too early. They appear in a "NOT DUE TODAY" section instead.
+    val dueList = list.filter { isSupplementDueToday(it.everyNDays, recentLastTaken[it.id], today) }
+    val notDueList = list.filter { !isSupplementDueToday(it.everyNDays, recentLastTaken[it.id], today) }
+
+    val groups = dueList.filter { it.timeOfDay != "as-needed" }.groupBy { it.timeOfDay }
+    val asNeeded = dueList.filter { it.timeOfDay == "as-needed" }
+
     // DAV-156: each selected item carries its roster dose string along so
     // addSupplementsTaken can parse a real per-supplement dose default --
     // Creatine's "5 g" and Boron's "10 mg" are different doses, so this has
@@ -1076,6 +1093,29 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
                                     checkedAsNeeded = if (supp.id in checkedAsNeeded) checkedAsNeeded - supp.id else checkedAsNeeded + supp.id
                                 },
                             )
+                        }
+                    }
+                }
+                if (notDueList.isNotEmpty()) {
+                    FormLabel("NOT DUE TODAY")
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        notDueList.forEach { supp ->
+                            val nextDate = supp.everyNDays?.let { n ->
+                                recentLastTaken[supp.id]?.let { supplementNextDueDate(n, it) }
+                            }
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    supp.name,
+                                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                    color = FT.TextMuted,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    if (nextDate != null) "Next: $nextDate" else "every ${supp.everyNDays}d",
+                                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                                    color = FT.TextMuted,
+                                )
+                            }
                         }
                     }
                 }

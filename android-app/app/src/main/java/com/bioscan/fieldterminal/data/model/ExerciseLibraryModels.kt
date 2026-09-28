@@ -31,6 +31,9 @@ data class ExerciseLibraryRow(
     val category: String? = null,
     val force: String? = null,
     val mechanic: String? = null,
+    // 28/9: real column, just not previously selected -- for the session
+    // detail per-exercise subtitle (SessionDetailScreen.kt's StrengthCard).
+    val equipment: String? = null,
     @SerialName("primary_muscles") val primaryMuscles: List<String> = emptyList(),
     @SerialName("secondary_muscles") val secondaryMuscles: List<String> = emptyList(),
 )

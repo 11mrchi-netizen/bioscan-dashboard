@@ -22,7 +22,9 @@ function json(body: unknown, status: number) {
   });
 }
 
-const EXTRACTOR_VERSION = "5"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples
+const EXTRACTOR_VERSION = "6"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
+// 6: write Zepp's own decoded distance back onto exercise_sessions.distance_km, and merge
+// orphaned zepp-sourced placeholder rows created by the Zepp/Health-Connect sync race (DAV-274)
 
 
 // DAV-115/123: decode detail.json's per-second fields into plain TimePoint-
@@ -630,6 +632,16 @@ Deno.serve(async (req: Request) => {
         exerciseSessionId = inserted?.id ?? null;
       }
 
+      const decoded = decodeWorkoutDetail(detailRawBody, {
+        avgCadenceSpm: ref.avgCadenceSpm,
+        maxCadenceSpm: ref.maxCadenceSpm,
+        avgStrideLengthCm: ref.avgStrideLengthCm,
+        avgGroundContactMs: ref.avgGroundContactMs,
+        avgVerticalStrideRatioPct: ref.avgVerticalStrideRatioPct,
+        lactateThresholdHrBpm: ref.lactateThresholdHrBpm,
+        lactateThresholdPaceSecPerKm: ref.lactateThresholdPaceSecPerKm,
+      }, ref.sportType);
+
       const { error: detailUpsertError } = await supabase.from("zepp_workout_detail").upsert(
         {
           user_id: user.id,
@@ -640,23 +652,91 @@ Deno.serve(async (req: Request) => {
           end_time: ref.endTimeIso,
           sport_type: ref.sportType,
           raw: detailRawBody,
-          decoded: decodeWorkoutDetail(detailRawBody, {
-            avgCadenceSpm: ref.avgCadenceSpm,
-            maxCadenceSpm: ref.maxCadenceSpm,
-            avgStrideLengthCm: ref.avgStrideLengthCm,
-            avgGroundContactMs: ref.avgGroundContactMs,
-            avgVerticalStrideRatioPct: ref.avgVerticalStrideRatioPct,
-            lactateThresholdHrBpm: ref.lactateThresholdHrBpm,
-            lactateThresholdPaceSecPerKm: ref.lactateThresholdPaceSecPerKm,
-          }, ref.sportType),
+          decoded,
           fetched_at: new Date().toISOString(),
         },
         { onConflict: "user_id,zepp_track_id" },
       );
       if (detailUpsertError) throw new Error(`zepp_workout_detail upsert failed: ${detailUpsertError.message}`);
 
+      // DAV-274 real bug: exercise_sessions.distance_km (Health Connect's own
+      // multi-source-summed figure, sometimes wrong by 2-3x -- see
+      // domain/Training.kt's reconcileDistanceWithSpeed on the Android side)
+      // is never corrected once a real Zepp GPS track exists for the same
+      // session, matched or not. Zepp's decoded per-second distance is real
+      // GPS ground truth (repeatedly cross-checked this session) -- write it
+      // back outright, same "Zepp wins when present" principle
+      // mergePreferZepp() already applies to the per-second series client-side.
+      const zeppDistanceKm = decoded?.distanceKm?.at(-1)?.value;
+      if (exerciseSessionId !== null && zeppDistanceKm && zeppDistanceKm > 0) {
+        const { error: distanceUpdateError } = await supabase
+          .from("exercise_sessions")
+          .update({ distance_km: zeppDistanceKm })
+          .eq("id", exerciseSessionId);
+        if (distanceUpdateError) throw new Error(`exercise_sessions distance update failed: ${distanceUpdateError.message}`);
+      }
+
       const n = Number(ref.trackId);
       if (Number.isFinite(n) && n > maxTrackIdSeen) maxTrackIdSeen = n;
+    }
+
+    // DAV-274: the Zepp sync and the Health Connect sync both run on app open
+    // and can race -- if Zepp's reconcile query above runs before Health
+    // Connect's own sync has inserted its row for the same real session, the
+    // match finds nothing and a second source='zepp' placeholder gets
+    // inserted (confirmed against real created_at timestamps 12s apart for
+    // the account's 2026-09-26 run). zepp_workout_detail then stays linked to
+    // that orphan forever, so neither the corrected distance above nor the
+    // real per-second series (splits, charts) ever reaches the row the app
+    // actually displays. Self-heals here: by the *next* sync, Health Connect
+    // has normally caught up, so re-run the same match this time and merge.
+    async function mergeOrphanedZeppSessions(): Promise<number> {
+      const { data: orphans } = await supabase
+        .from("exercise_sessions")
+        .select("id,start_time")
+        .eq("user_id", user.id)
+        .eq("source", "zepp");
+      if (!orphans || orphans.length === 0) return 0;
+
+      let merged = 0;
+      for (const orphan of orphans) {
+        const orphanMs = new Date(orphan.start_time).getTime();
+        const { data: matches } = await supabase
+          .from("exercise_sessions")
+          .select("id")
+          .eq("user_id", user.id)
+          .neq("id", orphan.id)
+          .neq("source", "zepp")
+          .gte("start_time", new Date(orphanMs - RECONCILE_TOLERANCE_MS).toISOString())
+          .lte("start_time", new Date(orphanMs + RECONCILE_TOLERANCE_MS).toISOString())
+          .limit(1);
+        const realId = matches?.[0]?.id;
+        if (realId === undefined) continue;
+
+        // Repoint both real FKs to exercise_sessions before deleting the orphan.
+        const { error: repointDetailError } = await supabase
+          .from("zepp_workout_detail")
+          .update({ exercise_session_id: realId })
+          .eq("exercise_session_id", orphan.id);
+        if (repointDetailError) throw new Error(`zepp_workout_detail repoint failed: ${repointDetailError.message}`);
+        const { error: repointRouteError } = await supabase
+          .from("planned_routes")
+          .update({ exercise_session_id: realId })
+          .eq("exercise_session_id", orphan.id);
+        if (repointRouteError) throw new Error(`planned_routes repoint failed: ${repointRouteError.message}`);
+
+        const { error: deleteError } = await supabase.from("exercise_sessions").delete().eq("id", orphan.id);
+        if (deleteError) throw new Error(`orphaned exercise_sessions delete failed: ${deleteError.message}`);
+        merged++;
+      }
+      return merged;
+    }
+
+    try {
+      const merged = await mergeOrphanedZeppSessions();
+      if (merged > 0) results.push({ metric: "zepp_orphan_merge", date: "", status: 200, stored: true, error: `merged ${merged}` });
+    } catch (e) {
+      results.push({ metric: "zepp_orphan_merge", date: "", status: 0, stored: false, error: String(e) });
     }
 
     for (const date of dates) {

@@ -111,26 +111,11 @@ private fun TrainingContent(overview: TrainingOverview, timeframe: PerformanceTi
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        // PERFORMANCE -- a wearable/Zepp-derived trend independent of whether
-        // any running session has been logged, so it doesn't sit gated behind
-        // hasAnyRunning below (a real display bug this reorder originally
-        // fixed: VO2max previously never showed at all for a no-running-history
-        // account, despite coming from wearable_daily, not exercise_sessions).
-        // DAV-115/123: lactate threshold folded in as a second switchable
-        // metric on the same card rather than its own -- both are slow-moving
-        // fitness estimates on the same 1M/3M/6M/1Y timeframe, not per-session
-        // figures, so they share one card's chart/timeframe machinery instead
-        // of duplicating it.
-        PerformanceCard(overview, timeframe)
-
-        RunEfficiencyCard(overview, timeframe)
-
-        // SESSIONS
-        if (!overview.hasAnyRunning) {
-            Text("No running sessions logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
-        } else {
-            RunningCard(overview, onMarkTrail)
-        }
+        // 28/9: PERFORMANCE and RUN EFFICIENCY folded into one RUNNING card
+        // (previously three separate top-level cards) per direct user
+        // request -- both are running-related, and neither is per-session so
+        // they read fine as sub-sections rather than their own cards.
+        RunningCard(overview, timeframe, onMarkTrail)
 
         FTCard(title = "STRENGTH") {
             if (overview.hasAnyStrength) {
@@ -215,42 +200,64 @@ private fun SessionRow(session: ExerciseSessionRow, onClick: () -> Unit) {
 // 32km ceiling means nothing once the period can be a year, so it's shown
 // only there rather than picking an arbitrary scaled ceiling for the rest.
 @Composable
-private fun RunningCard(overview: TrainingOverview, onMarkTrail: (List<Long>) -> Unit) {
+private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimeframe, onMarkTrail: (List<Long>) -> Unit) {
     var period by remember { mutableStateOf(RunningPeriod.Week) }
     val today = LocalDate.now()
-    val totalKm = sumDistanceKmSince(overview.runningSessions, today, period.days)
-    val avgPace = averagePaceMinPerKmSince(overview.runningSessions, today, period.days)
-    val trailRuns = overview.runningSessions.filter {
-        it.details.routeType == "trail" &&
-            ChronoUnit.DAYS.between(OffsetDateTime.parse(it.startTime).toLocalDate(), today) < period.days
-    }
 
     FTCard(title = "RUNNING") {
-        SegmentedToggle(options = RunningPeriod.entries, selected = period, labelOf = { it.label }, onSelect = { period = it })
-        FTMetricValue(DisplayValue(primary = "%.1f".format(totalKm), unit = "KM"))
-        if (period == RunningPeriod.Week) {
-            RangeBar(value = totalKm, max = 32.0, watchBelow = null, color = FT.Emerald)
-        }
-
-        avgPace?.let { StatLine("Avg pace", formatPace(it)) }
-        overview.longestRunKm?.let { longest ->
-            StatLine("Longest run (all-time)", "%.2f km".format(longest))
-        }
-
-        // DAV-144. No per-session list exists on this tab (see
-        // docs/trail-intelligence/05-trail-metrics-ui-presentation.md) --
-        // this is the same rollup shape every other figure here uses, only
-        // shown when a real trail run happened in the selected period.
-        if (trailRuns.isNotEmpty()) {
-            StatLine("Trail runs", "${trailRuns.size}")
-            trailRuns.mapNotNull { it.elevationGainM }.takeIf { it.isNotEmpty() }?.sum()?.let { gain ->
-                StatLine("Elevation gained", "${gain.toInt()} m")
+        if (!overview.hasAnyRunning) {
+            Text("No running sessions logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
+        } else {
+            val totalKm = sumDistanceKmSince(overview.runningSessions, today, period.days)
+            val avgPace = averagePaceMinPerKmSince(overview.runningSessions, today, period.days)
+            val trailRuns = overview.runningSessions.filter {
+                it.details.routeType == "trail" &&
+                    ChronoUnit.DAYS.between(OffsetDateTime.parse(it.startTime).toLocalDate(), today) < period.days
             }
+
+            SegmentedToggle(options = RunningPeriod.entries, selected = period, labelOf = { it.label }, onSelect = { period = it })
+            FTMetricValue(DisplayValue(primary = "%.1f".format(totalKm), unit = "KM"))
+            if (period == RunningPeriod.Week) {
+                RangeBar(value = totalKm, max = 32.0, watchBelow = null, color = FT.Emerald)
+            }
+
+            avgPace?.let { StatLine("Avg pace", formatPace(it)) }
+            overview.longestRunKm?.let { longest ->
+                StatLine("Longest run (all-time)", "%.2f km".format(longest))
+            }
+
+            // DAV-144. No per-session list exists on this tab (see
+            // docs/trail-intelligence/05-trail-metrics-ui-presentation.md) --
+            // this is the same rollup shape every other figure here uses, only
+            // shown when a real trail run happened in the selected period.
+            if (trailRuns.isNotEmpty()) {
+                StatLine("Trail runs", "${trailRuns.size}")
+                trailRuns.mapNotNull { it.elevationGainM }.takeIf { it.isNotEmpty() }?.sum()?.let { gain ->
+                    StatLine("Elevation gained", "${gain.toInt()} m")
+                }
+            }
+
+            SuspectedTrailRuns(overview.suspectedTrailRuns, onMarkTrail)
         }
 
-        SuspectedTrailRuns(overview.suspectedTrailRuns, onMarkTrail)
+        // 28/9: folded in from the old standalone PERFORMANCE/RUN EFFICIENCY
+        // cards -- a wearable/Zepp-derived trend independent of whether any
+        // running session has been logged, so each self-hides on no data
+        // rather than being gated behind hasAnyRunning above (a real display
+        // bug this reorder originally fixed: VO2max previously never showed
+        // at all for a no-running-history account, despite coming from
+        // wearable_daily, not exercise_sessions).
+        PerformanceSection(overview, timeframe)
+        RunEfficiencySection(overview, timeframe)
     }
 }
+
+@Composable
+private fun SectionDivider() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder))
+}
+
+private val sectionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
 
 // Untagged runs that look like trail runs (Zepp said trail, or a steep
 // climb/km) -- collapsed by default, one tap to confirm each or all.
@@ -311,44 +318,44 @@ private fun TrailMarkButton(label: String, modifier: Modifier = Modifier, onClic
 // 28-day rolling median once enough runs exist; a single run's EF swings too
 // much with heat, sleep and terrain to read on its own.
 @Composable
-private fun RunEfficiencyCard(overview: TrainingOverview, timeframe: PerformanceTimeframe) {
+private fun RunEfficiencySection(overview: TrainingOverview, timeframe: PerformanceTimeframe) {
     if (overview.efficiencyPoints.isEmpty() && overview.latestGapMinPerKm == null) return
     val today = LocalDate.now()
     val rolling = efficiencyRollingMedian28(overview.efficiencyPoints)
     val cutoff = today.minusMonths(timeframe.months)
 
-    FTCard(title = "RUN EFFICIENCY") {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Efficiency factor", style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
-            InfoHelpButton("Efficiency factor", EF_HELP)
-        }
-        val median = rolling.lastOrNull()?.second
-        if (median != null) {
-            FTMetricValue(DisplayValue(primary = "%.2f".format(median), unit = "EF", secondary = "28-day median"))
-        } else {
-            val n = overview.efficiencyPoints.count { it.first.isAfter(today.minusDays(28)) }
-            Text(
-                "Building — needs $EF_MIN_RUNS_28D aerobic runs of 20+ min in 28 days ($n so far).",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
-                color = FT.TextSecondary,
-            )
-        }
-        overview.latestGapMinPerKm?.let { StatLine("Latest grade-adjusted pace", formatPace(it)) }
-        overview.latestHrDecouplingPct?.let { StatLine("Latest HR decoupling", "%+.1f%%".format(it)) }
+    SectionDivider()
+    Text("RUN EFFICIENCY", style = sectionLabelStyle, color = FT.TextMuted)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Efficiency factor", style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+        InfoHelpButton("Efficiency factor", EF_HELP)
+    }
+    val median = rolling.lastOrNull()?.second
+    if (median != null) {
+        FTMetricValue(DisplayValue(primary = "%.2f".format(median), unit = "EF", secondary = "28-day median"))
+    } else {
+        val n = overview.efficiencyPoints.count { it.first.isAfter(today.minusDays(28)) }
+        Text(
+            "Building — needs $EF_MIN_RUNS_28D aerobic runs of 20+ min in 28 days ($n so far).",
+            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            color = FT.TextSecondary,
+        )
+    }
+    overview.latestGapMinPerKm?.let { StatLine("Latest grade-adjusted pace", formatPace(it)) }
+    overview.latestHrDecouplingPct?.let { StatLine("Latest HR decoupling", "%+.1f%%".format(it)) }
 
-        val raw = overview.efficiencyPoints.filter { it.first >= cutoff }
-        if (raw.size >= 2) {
-            DateTrendLine(
-                series = listOf(
-                    TrendSeries(raw, FT.TextMuted, "RUN"),
-                    TrendSeries(rolling.filter { it.first >= cutoff }, FT.Emerald, "28D MEDIAN"),
-                ),
-                valueFormat = { "%.2f".format(it) },
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                LegendItem("PER RUN", FT.TextMuted)
-                LegendItem("28D MEDIAN", FT.Emerald)
-            }
+    val raw = overview.efficiencyPoints.filter { it.first >= cutoff }
+    if (raw.size >= 2) {
+        DateTrendLine(
+            series = listOf(
+                TrendSeries(raw, FT.TextMuted, "RUN"),
+                TrendSeries(rolling.filter { it.first >= cutoff }, FT.Emerald, "28D MEDIAN"),
+            ),
+            valueFormat = { "%.2f".format(it) },
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            LegendItem("PER RUN", FT.TextMuted)
+            LegendItem("28D MEDIAN", FT.Emerald)
         }
     }
 }
@@ -371,7 +378,7 @@ private enum class PerformanceMetric(val label: String) {
 // getting their own copy of it. Card is hidden entirely only when neither
 // metric has ever had a real reading.
 @Composable
-private fun PerformanceCard(overview: TrainingOverview, timeframe: PerformanceTimeframe) {
+private fun PerformanceSection(overview: TrainingOverview, timeframe: PerformanceTimeframe) {
     val available = listOfNotNull(
         PerformanceMetric.VO2MAX.takeIf { overview.latestVo2Max != null },
         PerformanceMetric.LACTATE_THRESHOLD.takeIf { overview.latestLactateThresholdPaceMinPerKm != null },
@@ -380,40 +387,40 @@ private fun PerformanceCard(overview: TrainingOverview, timeframe: PerformanceTi
 
     var selected by remember(available) { mutableStateOf(available.first()) }
 
-    FTCard(title = "PERFORMANCE") {
-        if (available.size > 1) {
-            SegmentedToggle(options = available, selected = selected, labelOf = { it.label }, onSelect = { selected = it })
-        }
-        when (selected) {
-            PerformanceMetric.VO2MAX -> {
-                FTMetricValue(DisplayValue(primary = "%.1f".format(overview.latestVo2Max)))
-                Text(
-                    "Wearable-estimated, not lab-confirmed.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
-                    color = FT.TextSecondary,
-                )
-            }
-            PerformanceMetric.LACTATE_THRESHOLD -> {
-                FTMetricValue(DisplayValue(primary = formatPace(overview.latestLactateThresholdPaceMinPerKm!!)))
-                Text(
-                    "Zepp's own estimate, recomputed per qualifying run.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
-                    color = FT.TextSecondary,
-                )
-            }
-        }
-        PerformanceTrendChart(
-            series = when (selected) {
-                PerformanceMetric.VO2MAX -> overview.vo2MaxSeries
-                PerformanceMetric.LACTATE_THRESHOLD -> overview.lactateThresholdPaceSeries
-            },
-            timeframe = timeframe,
-            valueFormat = when (selected) {
-                PerformanceMetric.VO2MAX -> { v -> "%.1f".format(v) }
-                PerformanceMetric.LACTATE_THRESHOLD -> ::formatPace
-            },
-        )
+    SectionDivider()
+    Text("PERFORMANCE", style = sectionLabelStyle, color = FT.TextMuted)
+    if (available.size > 1) {
+        SegmentedToggle(options = available, selected = selected, labelOf = { it.label }, onSelect = { selected = it })
     }
+    when (selected) {
+        PerformanceMetric.VO2MAX -> {
+            FTMetricValue(DisplayValue(primary = "%.1f".format(overview.latestVo2Max)))
+            Text(
+                "Wearable-estimated, not lab-confirmed.",
+                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                color = FT.TextSecondary,
+            )
+        }
+        PerformanceMetric.LACTATE_THRESHOLD -> {
+            FTMetricValue(DisplayValue(primary = formatPace(overview.latestLactateThresholdPaceMinPerKm!!)))
+            Text(
+                "Zepp's own estimate, recomputed per qualifying run.",
+                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                color = FT.TextSecondary,
+            )
+        }
+    }
+    PerformanceTrendChart(
+        series = when (selected) {
+            PerformanceMetric.VO2MAX -> overview.vo2MaxSeries
+            PerformanceMetric.LACTATE_THRESHOLD -> overview.lactateThresholdPaceSeries
+        },
+        timeframe = timeframe,
+        valueFormat = when (selected) {
+            PerformanceMetric.VO2MAX -> { v -> "%.1f".format(v) }
+            PerformanceMetric.LACTATE_THRESHOLD -> ::formatPace
+        },
+    )
 }
 
 // DAV-80 / DAV-152 / DAV-115. Raw readings are the noisiest series so they

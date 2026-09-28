@@ -144,16 +144,15 @@ fun dedupeRunSessions(sessions: List<ExerciseSessionRow>): List<ExerciseSessionR
         val sessionDuration = session.durationMin ?: 0.0
 
         val matchingCluster = clusters.find { cluster ->
-            val rep = cluster.first()
-            val repStart = OffsetDateTime.parse(rep.startTime)
-            val repDuration = rep.durationMin ?: 0.0
-
-            val sameDay = repStart.toLocalDate() == sessionStart.toLocalDate()
-            val startDiffMin = kotlin.math.abs(java.time.Duration.between(repStart, sessionStart).toMinutes())
-            val durationDiffMin = kotlin.math.abs(repDuration - sessionDuration)
-            val durationTolerance = maxOf(SAME_RUN_DURATION_TOLERANCE_MIN, minOf(repDuration, sessionDuration) * 0.2)
-
-            sameDay && startDiffMin <= SAME_RUN_START_TOLERANCE_MIN && durationDiffMin <= durationTolerance
+            cluster.any { rep ->
+                val repStart = OffsetDateTime.parse(rep.startTime)
+                val repDuration = rep.durationMin ?: 0.0
+                val sameDay = repStart.toLocalDate() == sessionStart.toLocalDate()
+                val startDiffMin = kotlin.math.abs(java.time.Duration.between(repStart, sessionStart).toMinutes())
+                val durationDiffMin = kotlin.math.abs(repDuration - sessionDuration)
+                val durationTolerance = maxOf(SAME_RUN_DURATION_TOLERANCE_MIN, minOf(repDuration, sessionDuration) * 0.2)
+                sameDay && startDiffMin <= SAME_RUN_START_TOLERANCE_MIN && durationDiffMin <= durationTolerance
+            }
         }
 
         if (matchingCluster != null) {
@@ -164,12 +163,21 @@ fun dedupeRunSessions(sessions: List<ExerciseSessionRow>): List<ExerciseSessionR
     }
 
     return clusters.map { cluster ->
-        cluster.maxWith(
+        val winner = cluster.maxWith(
             compareBy<ExerciseSessionRow> { it.source == "manual" }
                 .thenBy { it.avgHr != null }
                 .thenBy { it.distanceKm ?: 0.0 }
                 .thenBy { it.durationMin ?: 0.0 }
         )
+        // Within a confirmed duplicate cluster the winner's distance may still be
+        // inflated by multi-source HC summing. The trail-run concern that blocked
+        // auto-reconciliation at ingest time doesn't apply here: the cluster already
+        // proves a duplicate exists, so distance/speed disagreement more plausibly
+        // reflects double-counting than a legitimately slow trail effort.
+        if (cluster.size > 1 && winner.distanceKm != null) {
+            val reconciled = reconcileDistanceWithSpeed(winner.distanceKm, winner.durationMin ?: 0.0, winner.avgSpeedKmh)
+            winner.copy(distanceKm = reconciled)
+        } else winner
     }
 }
 

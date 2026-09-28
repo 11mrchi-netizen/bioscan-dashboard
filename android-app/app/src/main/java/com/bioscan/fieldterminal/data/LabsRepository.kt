@@ -99,14 +99,13 @@ class LabsRepository(private val supabase: SupabaseClient) {
     }
 
     private suspend fun findOrCreateDraw(date: LocalDate, source: String): Long {
-        val existing = supabase.postgrest.from("lab_draws")
-            .select(columns = Columns.list("id")) { filter { eq("draw_date", date.toString()) } }
-            .decodeList<LabDrawIdRow>()
-            .firstOrNull()
-        if (existing != null) return existing.id
-
+        // Upsert with ignoreDuplicates=true: if a row for this draw_date already
+        // exists the insert is a no-op, avoiding a TOCTOU race between the
+        // old select-then-insert pattern. A separate select always reads the id.
+        supabase.postgrest.from("lab_draws")
+            .upsert(NewLabDrawRow(drawDate = date.toString(), labName = source), onConflict = "draw_date", ignoreDuplicates = true)
         return supabase.postgrest.from("lab_draws")
-            .insert(NewLabDrawRow(drawDate = date.toString(), labName = source)) { select(Columns.list("id")) }
+            .select(columns = Columns.list("id")) { filter { eq("draw_date", date.toString()) } }
             .decodeSingle<LabDrawIdRow>()
             .id
     }

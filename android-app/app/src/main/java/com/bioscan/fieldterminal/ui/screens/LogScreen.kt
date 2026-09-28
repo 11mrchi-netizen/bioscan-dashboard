@@ -64,9 +64,15 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     var actionEntry by remember { mutableStateOf<LogEntry?>(null) }
     var editingEntry by remember { mutableStateOf<LogEntry?>(null) }
     var sleepDetailEntryId by remember { mutableStateOf<Long?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(reloadKey) {
-        allEntries = LogRepository(SupabaseClientProvider.client).loadAllEntries()
+        error = null
+        try {
+            allEntries = LogRepository(SupabaseClientProvider.client).loadAllEntries()
+        } catch (e: Exception) {
+            error = e.message ?: "Unknown error"
+        }
     }
 
     fun refresh() {
@@ -79,10 +85,17 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
             val entries = allEntries
             ScreenHeader(
                 title = "LOG",
-                context = if (entries != null) "${entries.size} ENTRIES" else "LOADING",
+                context = when {
+                    error != null -> "ERROR"
+                    entries != null -> "${entries.size} ENTRIES"
+                    else -> "LOADING"
+                },
             )
 
             when {
+                error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
+                }
                 entries == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = FT.DomainLog)
                 }

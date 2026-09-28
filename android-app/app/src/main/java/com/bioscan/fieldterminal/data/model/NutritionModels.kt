@@ -126,6 +126,17 @@ data class MealInputRow(
     @SerialName("barcode_format") val barcodeFormat: String? = null,
 )
 
+// DAV-181. Lightweight projection of a beverage meal_items row — used to
+// show effective hydration and caffeine contributions in HydrationTabContent
+// without loading the full MealItemRow schema.
+@Serializable
+data class BeverageItemRow(
+    val description: String? = null,
+    @SerialName("water_ml") val waterMl: Double? = null,
+    @SerialName("caffeine_mg") val caffeineMg: Double? = null,
+    @SerialName("effective_hydration_ml") val effectiveHydrationMl: Double? = null,
+)
+
 @Serializable
 data class AiEstimateRow(
     val id: Long? = null,

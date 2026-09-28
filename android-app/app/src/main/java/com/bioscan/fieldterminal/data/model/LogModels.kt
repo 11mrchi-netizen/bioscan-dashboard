@@ -30,6 +30,7 @@ data class LogExerciseRow(
     @SerialName("distance_km") val distanceKm: Double? = null,
     @SerialName("duration_min") val durationMin: Double? = null,
     @SerialName("avg_hr") val avgHr: Double? = null,
+    val source: String? = null,
 )
 
 @Serializable

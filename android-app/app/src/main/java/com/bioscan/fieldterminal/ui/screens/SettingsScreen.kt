@@ -36,12 +36,8 @@ import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HealthConnectSyncResult
 import com.bioscan.fieldterminal.data.MapSettingsStore
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.healthconnect.BackfillResult
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
-import com.bioscan.fieldterminal.healthconnect.OneOffBackfillStatus
-import com.bioscan.fieldterminal.healthconnect.runNutritionHydrationBackfill
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
@@ -72,10 +68,11 @@ fun SettingsScreen(scope: CoroutineScope) {
     var homeLatInput by remember { mutableStateOf(savedHome.value?.first?.toString() ?: "") }
     var homeLonInput by remember { mutableStateOf(savedHome.value?.second?.toString() ?: "") }
 
+    var homeInputError by remember { mutableStateOf(false) }
+
     val hcAvailable = remember { HealthConnectManager.isAvailable(context) }
     var hcChecked by remember { mutableStateOf(false) }
     var hcGranted by remember { mutableStateOf(false) }
-    var backfillRunning by remember { mutableStateOf(false) }
     val hcPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract(),
     ) { granted -> hcGranted = granted.containsAll(HealthConnectManager.PERMISSIONS) }
@@ -86,7 +83,7 @@ fun SettingsScreen(scope: CoroutineScope) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        ScreenHeader(title = "SETUP", context = "PLACEHOLDER")
+        ScreenHeader(title = "SETUP", context = "APP CONFIG")
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -180,9 +177,12 @@ fun SettingsScreen(scope: CoroutineScope) {
                     AmberButton(label = "SAVE HOME") {
                         val lat = homeLatInput.toDoubleOrNull()
                         val lon = homeLonInput.toDoubleOrNull()
-                        if (lat != null && lon != null) {
+                        if (lat != null && lon != null && lat in -90.0..90.0 && lon in -180.0..180.0) {
                             MapSettingsStore.saveHome(context, lat, lon)
                             savedHome.value = lat to lon
+                            homeInputError = false
+                        } else {
+                            homeInputError = true
                         }
                     }
                     if (savedHome.value != null) {
@@ -193,6 +193,13 @@ fun SettingsScreen(scope: CoroutineScope) {
                             homeLonInput = ""
                         }
                     }
+                }
+                if (homeInputError) {
+                    Text(
+                        "Enter valid decimal coordinates (lat −90 to 90, lon −180 to 180).",
+                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        color = FT.Critical,
+                    )
                 }
                 Text(
                     savedHome.value?.let { "Home set: %.4f, %.4f".format(it.first, it.second) } ?: "No home location set — the DIRECTIONS link is hidden until one is saved.",
@@ -258,54 +265,6 @@ fun SettingsScreen(scope: CoroutineScope) {
                             text = wbText,
                             style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
                             color = if (wbResult is com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Success) FT.TextSecondary else FT.Warning,
-                        )
-                    }
-                }
-            }
-
-            // TEMPORARY -- delete this card (and
-            // healthconnect/OneOffNutritionHydrationBackfill.kt) before the
-            // next real release. Exists only to backfill this account's real
-            // historical meals/hydration_daily rows into Health Connect once,
-            // since this app has only ever read from Health Connect, never
-            // written to it.
-            if (hcAvailable) {
-                FTCard(title = "ONE-OFF: BACKFILL HISTORY") {
-                    Text(
-                        "Writes this account's existing meal and hydration history into Health Connect " +
-                            "(it has none today). Safe to run more than once — matching entries are updated, " +
-                            "not duplicated. Temporary utility, removed in a future update.",
-                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
-                        color = FT.TextSecondary,
-                    )
-                    if (hcGranted) {
-                        AmberButton(label = if (backfillRunning) "BACKFILLING…" else "BACKFILL NUTRITION + HYDRATION") {
-                            if (!backfillRunning) {
-                                backfillRunning = true
-                                scope.launch {
-                                    val result = runNutritionHydrationBackfill(context, SupabaseClientProvider.client)
-                                    OneOffBackfillStatus.record(result)
-                                    backfillRunning = false
-                                }
-                            }
-                        }
-                    } else {
-                        Text(
-                            "Connect Health Connect above first.",
-                            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
-                            color = FT.TextSecondary,
-                        )
-                    }
-                    OneOffBackfillStatus.lastResult?.let { result ->
-                        Text(
-                            text = when (result) {
-                                is BackfillResult.Success -> "Backfilled ${result.mealsWritten} meals, ${result.hydrationDaysWritten} hydration days."
-                                is BackfillResult.Failed -> "Backfill failed: ${result.message}"
-                                BackfillResult.NotGranted -> "Backfill skipped — permissions not granted."
-                                BackfillResult.Unavailable -> "Backfill skipped — Health Connect unavailable."
-                            },
-                            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
-                            color = if (result is BackfillResult.Success) FT.Emerald else FT.TextSecondary,
                         )
                     }
                 }

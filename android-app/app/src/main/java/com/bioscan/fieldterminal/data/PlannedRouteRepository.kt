@@ -43,7 +43,7 @@ class PlannedRouteRepository(
     private val accessToken: String,
     private val supabase: SupabaseClient,
 ) {
-    private val client = HttpClient(Android)
+    companion object { private val client = HttpClient(Android) }
 
     // A failed download/parse never blocks the caller from moving on to the
     // next event (DAV-148's own acceptance criteria) -- every real failure

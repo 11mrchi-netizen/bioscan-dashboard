@@ -349,11 +349,11 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         id,
     )
 
-    private suspend inline fun <reified T : Any> fetchById(table: String, columns: String, id: Long): T =
+    private suspend inline fun <reified T : Any> fetchById(table: String, columns: String, id: Long): T? =
         supabase.postgrest.from(table)
             .select(columns = Columns.list(columns)) { filter { eq("id", id) } }
             .decodeList<T>()
-            .first()
+            .firstOrNull()
 }
 
 // DAV-156. The roster's `dose` column is free text (e.g. "500 mg", "36 mg,

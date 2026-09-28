@@ -22,7 +22,7 @@ class WeatherFetchException(message: String) : Exception(message)
 // entry closest to the session's own start time, rather than only "now",
 // since this is a forecast for a session that may be up to a week out.
 class WeatherRepository {
-    private val client = HttpClient(Android)
+    companion object { private val client = HttpClient(Android) }
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun fetchAt(lat: Double, lon: Double, at: ZonedDateTime): SessionWeather {

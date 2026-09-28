@@ -61,15 +61,23 @@ import java.time.LocalDate
 fun TrainingScreen() {
     var overview by remember { mutableStateOf<TrainingOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        overview = TrainingRepository(SupabaseClientProvider.client).loadOverview()
+        try {
+            overview = TrainingRepository(SupabaseClientProvider.client).loadOverview()
+        } catch (e: Exception) {
+            error = e.message ?: "Unknown error"
+        }
         isLoading = false
     }
 
     when {
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FT.DomainTraining)
+        }
+        error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
         }
         else -> TrainingContent(overview!!)
     }

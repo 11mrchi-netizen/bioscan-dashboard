@@ -55,6 +55,7 @@ import com.bioscan.fieldterminal.data.NutritionImageEstimateRepository
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.NutritionTextEstimateRepository
+import java.time.LocalTime
 import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsRepository
@@ -77,6 +78,8 @@ import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.AddEntryType
+import com.bioscan.fieldterminal.domain.isSupplementDueToday
+import com.bioscan.fieldterminal.domain.supplementNextDueDate
 import com.bioscan.fieldterminal.domain.FuelSubType
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogSource
@@ -609,7 +612,7 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
                 onSave = { dt, desc, cal, p, c, f, fi, su, so -> onSubmit { it.addFood(dt, desc, cal, p, c, f, fi, su, so) } },
                 onCanonicalSaved = onCanonicalSaved,
             )
-            FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } })
+            FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
             FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items -> onSubmit { it.addSupplementsTaken(takenAt, items) } })
         }
     }
@@ -938,17 +941,72 @@ private fun FoodForm(
     }
 }
 
+// Beverage classes from DAV-181's hydration_factor_models vocabulary that
+// go through the meal_items path (non-water). Water stays on the simple
+// hydration_daily path for backward compatibility.
+private val BEVERAGE_CLASSES = listOf("coffee", "tea", "juice", "soda", "milk", "electrolyte", "alcohol")
+private val BEVERAGE_CLASS_LABELS = mapOf(
+    "coffee" to "COFFEE", "tea" to "TEA", "juice" to "JUICE",
+    "soda" to "SODA", "milk" to "MILK", "electrolyte" to "ELECTROLYTE", "alcohol" to "ALCOHOL",
+)
+
 @Composable
-private fun DrinkForm(saving: Boolean, initialDate: LocalDate = LocalDate.now(), initialMl: Int? = null, onSave: (date: String, ml: Int) -> Unit) {
+private fun DrinkForm(
+    saving: Boolean,
+    initialDate: LocalDate = LocalDate.now(),
+    initialMl: Int? = null,
+    onSave: (date: String, ml: Int) -> Unit,
+    // DAV-181: non-water beverage path bypasses hydration_daily entirely and
+    // writes a meal_items row with effective hydration via the retention model.
+    // Same "whole sheet is done" signal as FoodForm.onCanonicalSaved.
+    onCanonicalSaved: () -> Unit = {},
+) {
+    val scope = rememberCoroutineScope()
     var date by remember { mutableStateOf(initialDate) }
     var ml by remember { mutableStateOf(initialMl?.toString() ?: "") }
+    var beverageClass by remember { mutableStateOf<String?>(null) }
+    var beverageSaving by remember { mutableStateOf(false) }
+    var beverageError by remember { mutableStateOf<String?>(null) }
     val mlValue = ml.toIntOrNull()
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateField("DATE", date, { date = it })
         Column { FormLabel("AMOUNT (ML)"); FieldTextField(ml, { ml = it }, "e.g. 500", keyboardType = KeyboardType.Number) }
-        SaveButton(saving, mlValue != null && mlValue > 0) {
-            onSave(date.toString(), mlValue!!)
+
+        // Unselected = water → simple hydration_daily path. Any other class
+        // creates a meal_items beverage row with the DAV-181 retention factor.
+        Column {
+            FormLabel("TYPE (WATER IF UNSELECTED)")
+            TextChipRow(BEVERAGE_CLASSES, beverageClass, perRow = 4) { beverageClass = it }
+        }
+
+        beverageError?.let {
+            Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.Critical)
+        }
+
+        if (beverageClass == null) {
+            SaveButton(saving, mlValue != null && mlValue > 0) {
+                onSave(date.toString(), mlValue!!)
+            }
+        } else {
+            val label = BEVERAGE_CLASS_LABELS[beverageClass] ?: beverageClass!!.uppercase()
+            AmberButton(label = if (beverageSaving) "SAVING..." else "LOG $label") {
+                val vol = mlValue ?: return@AmberButton
+                if (vol <= 0 || beverageSaving) return@AmberButton
+                beverageSaving = true
+                beverageError = null
+                scope.launch {
+                    try {
+                        val loggedAt = date.atTime(LocalTime.now()).toIsoWithOffset()
+                        NutritionMealSaveRepository(SupabaseClientProvider.client)
+                            .saveBeverageDrink(loggedAt, beverageClass!!, vol.toDouble())
+                        onCanonicalSaved()
+                    } catch (e: Exception) {
+                        beverageError = e.message ?: "Could not save beverage"
+                        beverageSaving = false
+                    }
+                }
+            }
         }
     }
 }
@@ -967,14 +1025,29 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
     var checkedBundles by remember { mutableStateOf(setOf<String>()) }
     var checkedAsNeeded by remember { mutableStateOf(setOf<Long>()) }
+    var recentLastTaken by remember { mutableStateOf<Map<Long, LocalDate>>(emptyMap()) }
 
     LaunchedEffect(Unit) {
-        supplements = SupplementsRepository(SupabaseClientProvider.client).loadOverview().active
+        val repo = SupplementsRepository(SupabaseClientProvider.client)
+        val active = repo.loadOverview().active
+        supplements = active
+        if (active.any { it.everyNDays != null }) {
+            recentLastTaken = repo.loadRecentTakenDates(active.map { it.id })
+        }
     }
 
+    val today = LocalDate.now()
     val list = supplements ?: emptyList()
-    val groups = list.filter { it.timeOfDay != "as-needed" }.groupBy { it.timeOfDay }
-    val asNeeded = list.filter { it.timeOfDay == "as-needed" }
+
+    // Supplements with an interval that haven't reached their next due date
+    // are removed from the pickable groups so the bundle toggle doesn't log
+    // them too early. They appear in a "NOT DUE TODAY" section instead.
+    val dueList = list.filter { isSupplementDueToday(it.everyNDays, recentLastTaken[it.id], today) }
+    val notDueList = list.filter { !isSupplementDueToday(it.everyNDays, recentLastTaken[it.id], today) }
+
+    val groups = dueList.filter { it.timeOfDay != "as-needed" }.groupBy { it.timeOfDay }
+    val asNeeded = dueList.filter { it.timeOfDay == "as-needed" }
+
     // DAV-156: each selected item carries its roster dose string along so
     // addSupplementsTaken can parse a real per-supplement dose default --
     // Creatine's "5 g" and Boron's "10 mg" are different doses, so this has
@@ -1020,6 +1093,29 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
                                     checkedAsNeeded = if (supp.id in checkedAsNeeded) checkedAsNeeded - supp.id else checkedAsNeeded + supp.id
                                 },
                             )
+                        }
+                    }
+                }
+                if (notDueList.isNotEmpty()) {
+                    FormLabel("NOT DUE TODAY")
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        notDueList.forEach { supp ->
+                            val nextDate = supp.everyNDays?.let { n ->
+                                recentLastTaken[supp.id]?.let { supplementNextDueDate(n, it) }
+                            }
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    supp.name,
+                                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                    color = FT.TextMuted,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    if (nextDate != null) "Next: $nextDate" else "every ${supp.everyNDays}d",
+                                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                                    color = FT.TextMuted,
+                                )
+                            }
                         }
                     }
                 }

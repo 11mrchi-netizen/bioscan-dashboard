@@ -88,6 +88,36 @@ class TrainingTest {
     }
 
     @Test
+    fun testDuplicateClusterReconcilesinflatedDistance() {
+        // Winner by HR-priority has an inflated distance from multi-source HC
+        // summing. Speed data on the same session implies the correct distance,
+        // so reconcileDistanceWithSpeed should correct it within the cluster.
+        val sessions = listOf(
+            ExerciseSessionRow(
+                type = "run",
+                startTime = "2026-09-26T07:00:00Z",
+                durationMin = 60.0,
+                distanceKm = 18.5,   // ~2x real via double-counted DistanceRecords
+                avgHr = 152.0,
+                avgSpeedKmh = 9.1,   // speed samples from a single source, accurate
+                source = "health_connect",
+            ),
+            ExerciseSessionRow(
+                type = "run",
+                startTime = "2026-09-26T07:00:30Z",
+                durationMin = 60.0,
+                distanceKm = 9.1,
+                avgHr = null,
+                source = "health_connect",
+            ),
+        )
+        val deduped = dedupeRunSessions(sessions)
+        assertEquals(1, deduped.size)
+        // reconcileDistanceWithSpeed: 18.5 / (9.1 * 1.0h) = 2.03 > 1.5 → corrected to 9.1
+        assertEquals(9.1, deduped.first().distanceKm ?: 0.0, 0.1)
+    }
+
+    @Test
     fun testTwoLegitimateRunsOnSameDayPreserved() {
         val today = LocalDate.of(2026, 9, 21)
         val sessions = listOf(

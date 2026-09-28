@@ -103,7 +103,10 @@ class LabsRepository(private val supabase: SupabaseClient) {
         // exists the insert is a no-op, avoiding a TOCTOU race between the
         // old select-then-insert pattern. A separate select always reads the id.
         supabase.postgrest.from("lab_draws")
-            .upsert(NewLabDrawRow(drawDate = date.toString(), labName = source), onConflict = "draw_date", ignoreDuplicates = true)
+            .upsert(NewLabDrawRow(drawDate = date.toString(), labName = source)) {
+                onConflict = "draw_date"
+                ignoreDuplicates = true
+            }
         return supabase.postgrest.from("lab_draws")
             .select(columns = Columns.list("id")) { filter { eq("draw_date", date.toString()) } }
             .decodeSingle<LabDrawIdRow>()

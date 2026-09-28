@@ -106,9 +106,13 @@ fun trainingLoadSeries(sessionLoads: List<Pair<LocalDate, Double>>, asOf: LocalD
     val dailyLoad = dailySessionLoadMap(sessionLoads)
     val alphaAtl = 2.0 / (ATL_TAU_DAYS + 1.0)
     val alphaCtl = 2.0 / (CTL_TAU_DAYS + 1.0)
-    var ctl = 0.0
-    var atl = 0.0
-    var date = sessionLoads.minOf { it.first }
+    val earliest = sessionLoads.minOf { it.first }
+    // Same seeding as dualEwma() (domain/Stats.kt): start from the first
+    // observed load, not 0, so this walk doesn't drift from evaluateTrainingLoad's.
+    val firstObserved = dailyLoad[earliest] ?: 0.0
+    var ctl = firstObserved
+    var atl = firstObserved
+    var date = earliest
     val out = mutableListOf<TrainingLoadPoint>()
     while (!date.isAfter(asOf)) {
         val tsb = ctl - atl // still yesterday's values here

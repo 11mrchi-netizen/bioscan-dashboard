@@ -19,25 +19,32 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.data.NutritionGoals
+import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.domain.DailyNutrition
+import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.PersonalRange
+import com.bioscan.fieldterminal.domain.RangeComparison
 import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.TotalsPeriod
 import com.bioscan.fieldterminal.domain.sumNutritionSince
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
+import com.bioscan.fieldterminal.ui.components.MacroDonutChart
 import com.bioscan.fieldterminal.ui.components.PeriodToggle
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -115,7 +122,8 @@ fun NutritionTabContent(overview: NutritionOverview) {
             }
         }
 
-        MacroTotalsCard(overview.allDays)
+        NutritionAveragesCard(overview.allDays)
+        NutritionGoalAdherenceCard(overview.allDays)
 
         // 7-day trend -- relative to the week's own max, not a fixed target
         // (matches the "TRAIN tile" histogram motif already used in the
@@ -225,30 +233,88 @@ fun HydrationTabContent(overview: NutritionOverview) {
     }
 }
 
-// Calories + macros summed over a selectable window -- computed client-side
-// from the same day-aggregated meals data the rest of this screen already
-// fetched, using the existing sumNutritionSince(). No new query per period
-// switch.
+// DAV-287: daily averages, not period totals -- summed over a selectable
+// window via the existing sumNutritionSince(), then divided by dayCount
+// (already tracked) so the headline reads as "per day" regardless of window
+// length. Raw totals stay available inside NutritionTotals for anything that
+// still wants a sum; this card just doesn't show them anymore.
 @Composable
-private fun MacroTotalsCard(allDays: List<DailyNutrition>) {
+private fun NutritionAveragesCard(allDays: List<DailyNutrition>) {
     var period by remember { mutableStateOf(TotalsPeriod.Week) }
     val totals = sumNutritionSince(allDays, LocalDate.now(), period.days)
+    val days = totals.dayCount.coerceAtLeast(1)
 
-    FTCard(title = "NUTRITION TOTALS") {
+    FTCard(title = "NUTRITION AVERAGES") {
         PeriodToggle(selected = period, onSelect = { period = it })
-        FTMetricValue(DisplayValue(primary = totals.calories.roundToInt().toString(), unit = "KCAL"))
-        StatLine("Protein", "${totals.proteinG.roundToInt()} g")
-        StatLine("Carbs", "${totals.carbsG.roundToInt()} g")
-        StatLine("Fat", "${totals.fatG.roundToInt()} g")
-        StatLine("Fiber", "${totals.fiberG.roundToInt()} g")
-        StatLine("Sugar", "${totals.sugarG.roundToInt()} g")
-        StatLine("Sodium", "${totals.sodiumMg.roundToInt()} mg")
+        FTMetricValue(DisplayValue(primary = (totals.calories / days).roundToInt().toString(), unit = "KCAL/DAY"))
+        StatLine("Protein", "${(totals.proteinG / days).roundToInt()} g/day")
+        StatLine("Carbs", "${(totals.carbsG / days).roundToInt()} g/day")
+        StatLine("Fat", "${(totals.fatG / days).roundToInt()} g/day")
+        StatLine("Fiber", "${(totals.fiberG / days).roundToInt()} g/day")
+        StatLine("Sugar", "${(totals.sugarG / days).roundToInt()} g/day")
+        StatLine("Sodium", "${(totals.sodiumMg / days).roundToInt()} mg/day")
+        MacroDonutChart(
+            carbsG = totals.carbsG / days,
+            proteinG = totals.proteinG / days,
+            fatG = totals.fatG / days,
+            modifier = Modifier.padding(top = 6.dp),
+        )
         Text(
-            "over the last ${period.label.lowercase()} — ${totals.dayCount} day${if (totals.dayCount == 1) "" else "s"} with logged meals",
+            "daily average over the last ${period.label.lowercase()} — ${totals.dayCount} day${if (totals.dayCount == 1) "" else "s"} with logged meals",
             style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
             color = FT.TextMuted,
         )
     }
+}
+
+// DAV-288: adherence against the goals saved in Settings (NutritionGoalsStore)
+// -- reuses FTRangeIndicator/PersonalRange exactly as the reference-range bars
+// above do, just with RangeKind.TargetRange instead of ReferenceRange (an
+// enum case that existed but nothing used yet). Same 7-day window as the
+// averages card's default so "today's adherence" reads as a real week, not a
+// single noisy day.
+@Composable
+private fun NutritionGoalAdherenceCard(allDays: List<DailyNutrition>) {
+    val context = LocalContext.current
+    val goals = remember { NutritionGoalsStore.getGoals(context) }
+    if (!goals.isSet) {
+        FTCard(title = "GOAL ADHERENCE") {
+            FTDataState(DataAvailability.Unavailable, "No nutrition goals set yet — add them in Setup to see adherence here.")
+        }
+        return
+    }
+
+    val totals = sumNutritionSince(allDays, LocalDate.now(), TotalsPeriod.Week.days)
+    val days = totals.dayCount.coerceAtLeast(1)
+
+    FTCard(title = "GOAL ADHERENCE") {
+        goals.caloriesKcal?.let { FTRangeIndicator(targetRange("CALORIES (KCAL/DAY)", totals.calories / days, it)) }
+        goals.proteinG?.let { FTRangeIndicator(targetRange("PROTEIN (G/DAY)", totals.proteinG / days, it)) }
+        goals.carbsG?.let { FTRangeIndicator(targetRange("CARBS (G/DAY)", totals.carbsG / days, it)) }
+        goals.fatG?.let { FTRangeIndicator(targetRange("FAT (G/DAY)", totals.fatG / days, it)) }
+        Text(
+            "7-day daily average vs. your saved targets",
+            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            color = FT.TextMuted,
+        )
+    }
+}
+
+private fun targetRange(label: String, current: Double, target: Double): PersonalRange {
+    val comparison = when {
+        current < target * 0.9 -> RangeComparison.Below
+        current > target * 1.1 -> RangeComparison.Above
+        else -> RangeComparison.Within
+    }
+    return PersonalRange(
+        kind = RangeKind.TargetRange,
+        lower = 0.0,
+        upper = target,
+        current = current,
+        label = label,
+        comparison = comparison,
+        sufficientHistory = true,
+    )
 }
 
 @Composable

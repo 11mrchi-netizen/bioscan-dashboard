@@ -35,9 +35,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.bioscan.fieldterminal.R
 import com.bioscan.fieldterminal.ui.screens.LogScreen
-import com.bioscan.fieldterminal.ui.screens.MapScreen
 import com.bioscan.fieldterminal.ui.screens.SessionDetailScreen
 import com.bioscan.fieldterminal.ui.screens.SettingsScreen
+import com.bioscan.fieldterminal.ui.screens.UserProfileScreen
 import com.bioscan.fieldterminal.ui.screens.status.FuelTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.HeartTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.LabsTileScreen
@@ -72,26 +72,7 @@ fun FieldTerminalNavHost() {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(TopLevelTab.Status.route) {
-                StatusScreen(
-                    onOpenTile = { tile -> navController.navigate(tile.route) },
-                    // DAV-69: routed through the Map back stack entry's own
-                    // SavedStateHandle rather than a nav-route argument, so
-                    // TopLevelTab.Map.route stays a plain "map" -- FieldBottomBar's
-                    // currentRoute == tab.route check below would otherwise stop
-                    // recognizing Map as selected whenever it carries an argument.
-                    onOpenMap = { eventId ->
-                        // Set AFTER navigate(), not before -- currentBackStackEntry
-                        // is still Status's own entry until navigate() actually moves
-                        // the back stack, so setting it first stamps the value onto
-                        // the wrong entry and Map's composable below never sees it.
-                        navController.navigate(TopLevelTab.Map.route) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                        navController.currentBackStackEntry?.savedStateHandle?.set("focusEventId", eventId)
-                    },
-                )
+                StatusScreen(onOpenTile = { tile -> navController.navigate(tile.route) })
             }
             // DAV-70 (First feedback fixes): the 4 tile pages, pushed routes
             // like session_detail rather than nested inside Status's own
@@ -107,10 +88,7 @@ fun FieldTerminalNavHost() {
             composable(TileRoute.Fuel.route) { FuelTileScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Heart.route) { HeartTileScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Labs.route) { LabsTileScreen(onBack = { navController.popBackStack() }) }
-            composable(TopLevelTab.Map.route) { backStackEntry ->
-                val focusEventId = remember(backStackEntry) { backStackEntry.savedStateHandle.remove<String>("focusEventId") }
-                MapScreen(focusEventId = focusEventId)
-            }
+            composable(TopLevelTab.User.route) { UserProfileScreen() }
             composable(TopLevelTab.Log.route) {
                 LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") })
             }
@@ -214,18 +192,18 @@ private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -
 private val TopLevelTab.iconRes
     get() = when (this) {
         TopLevelTab.Status -> R.drawable.ic_tab_status
-        TopLevelTab.Map -> R.drawable.ic_tab_map
+        TopLevelTab.User -> R.drawable.ic_tab_user
         TopLevelTab.Log -> R.drawable.ic_tab_log
         TopLevelTab.Setup -> R.drawable.ic_tab_setup
     }
 
-// Map and Log have documented domain accents (contract section 4); Status
+// User and Log have documented domain accents (contract section 4); Status
 // and Setup aren't "domains" with their own accent in that table, so they
 // default to Emerald, the contract's own primary/default signal.
 private val TopLevelTab.domainAccent
     get() = when (this) {
         TopLevelTab.Status -> FT.Emerald
-        TopLevelTab.Map -> FT.DomainMap
+        TopLevelTab.User -> FT.DomainUser
         TopLevelTab.Log -> FT.DomainLog
         TopLevelTab.Setup -> FT.Emerald
     }

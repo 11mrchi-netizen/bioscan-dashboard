@@ -28,8 +28,18 @@ fun longestRunKm(sessions: List<ExerciseSessionRow>): Double? = sessions.mapNotN
 // Health Connect gives distance + duration, not a stored pace -- derived
 // here the same way the old `runs.pace_min_per_km` column was presumably
 // computed in the first place, rather than carrying a redundant column.
+//
+// DAV-283: trail runs (confirmed via SportType, i.e. details.routeType ==
+// "trail") are excluded -- their pace reflects terrain/climbing, not road
+// effort, and would drag a "road" average pace in a way that misrepresents
+// fitness. An untagged run merely *suspected* of being a trail run (see
+// suspectedTrailReason) is NOT excluded here -- same detection-only stance
+// as everywhere else in this codebase until a person confirms it via MARK AS
+// TRAIL. Unknown/other types never reach this function (callers already
+// filter to running sessions).
 fun averagePaceMinPerKmSince(sessions: List<ExerciseSessionRow>, today: LocalDate, days: Long): Double? {
     val paces = sessions.filter { s -> ChronoUnit.DAYS.between(localDateOf(s.startTime), today) < days }
+        .filter { s -> SportType.from(s) != SportType.TRAIL_RUN }
         .mapNotNull { s ->
             val distance = s.distanceKm
             val duration = s.durationMin

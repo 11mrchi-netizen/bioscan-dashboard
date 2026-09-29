@@ -82,14 +82,14 @@ import java.time.temporal.ChronoUnit
 // explicitly slated for a richer anatomical redraw later) -- only the new
 // tile row adopts the Futuristic Material tokens.
 @Composable
-fun BodyConsole(overview: StatusOverview?, isLoading: Boolean, onOpenMap: (String) -> Unit, onOpenTile: (TileRoute) -> Unit) {
+fun BodyConsole(overview: StatusOverview?, isLoading: Boolean, onOpenTile: (TileRoute) -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         // 25/9 rework: figure absorbs all leftover height; Next Up band and the
         // tile row sit at the bottom, resting on the Scaffold's bottom menu.
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             ConditionFigureField(overview, isLoading)
         }
-        NextUpSection(onOpenMap)
+        NextUpSection()
         SystemTileRow(overview, onOpenTile)
     }
 }
@@ -364,7 +364,7 @@ private sealed interface NextUpState {
 }
 
 @Composable
-private fun NextUpSection(onOpenMap: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun NextUpSection(modifier: Modifier = Modifier) {
     val activity = LocalContext.current as Activity
     var state by remember { mutableStateOf<NextUpState>(NextUpState.Loading) }
 
@@ -385,20 +385,14 @@ private fun NextUpSection(onOpenMap: (String) -> Unit, modifier: Modifier = Modi
 
     // 25/9 rework: back to a single-line band; the figure above now absorbs
     // the leftover height and the tile row sits below this band.
-    val found = state as? NextUpState.Found
+    // DAV-296: this used to tap through to the Map tab, focused on the
+    // found event -- dropped along with the tab (see
+    // docs/user-profile-milestone/01-canonical-contracts-audit.md section 10).
+    // Still shows the next calendar event as information; just not tappable.
     Box(
         modifier = modifier
             .fillMaxWidth()
             .background(FT.Surface)
-            .then(
-                if (found != null) {
-                    Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                        found.event.id?.let(onOpenMap)
-                    }
-                } else {
-                    Modifier
-                },
-            )
             .padding(horizontal = 18.dp, vertical = 14.dp),
     ) {
         Text(nextUpLabel(state), style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14.em), color = FT.TextSecondary)

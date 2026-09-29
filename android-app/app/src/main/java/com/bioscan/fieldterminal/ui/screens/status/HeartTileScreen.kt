@@ -51,6 +51,7 @@ import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.SriEvaluation
 import com.bioscan.fieldterminal.domain.SubjectiveEvaluation
 import com.bioscan.fieldterminal.domain.SwcEvaluation
+import com.bioscan.fieldterminal.domain.VitalsTimeframe
 import com.bioscan.fieldterminal.domain.evaluateHrv
 import com.bioscan.fieldterminal.domain.evaluateRespiratoryAnomaly
 import com.bioscan.fieldterminal.domain.evaluateRhr
@@ -58,12 +59,14 @@ import com.bioscan.fieldterminal.domain.evaluateSleepDuration
 import com.bioscan.fieldterminal.domain.evaluateSri
 import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.expValue
+import com.bioscan.fieldterminal.domain.vitalsTrendSeries
 import com.bioscan.fieldterminal.ui.components.ComparisonStrip
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.HeartTab
@@ -132,6 +135,13 @@ fun HeartTileScreen(onBack: () -> Unit) {
         ) {
             when (tab) {
                 HeartTab.Cardio -> {
+                    // DAV-285: one shared timeframe for both HRV and RHR's trend
+                    // charts -- they're the same kind of daily wearable stream, so
+                    // a person comparing them wants the same window on both, not
+                    // two independent toggles.
+                    var vitalsTimeframe by remember { mutableStateOf(VitalsTimeframe.Month) }
+                    SegmentedToggle(options = VitalsTimeframe.entries, selected = vitalsTimeframe, labelOf = { it.label }, onSelect = { vitalsTimeframe = it })
+
                     val hrvPoints = w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }
                     // DAV-200: first live wiring of the new comparison layer --
                     // real ms values (not the SWC evaluation's own log-space
@@ -147,9 +157,9 @@ fun HeartTileScreen(onBack: () -> Unit) {
                             origin = "health_connect",
                         )
                     }
-                    EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", points = hrvPoints, comparison = hrvComparison)
+                    EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", points = hrvPoints, comparison = hrvComparison, timeframe = vitalsTimeframe)
                     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
-                    EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm", points = rhrPoints)
+                    EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm", points = rhrPoints, timeframe = vitalsTimeframe)
                     val rrPoints = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
                     RespiratoryCard(evaluateRespiratoryAnomaly(rrPoints))
                     val stepsPoints = w.mapNotNull { row -> row.steps?.let { LocalDate.parse(row.date) to it } }
@@ -249,6 +259,11 @@ private fun EvalCard(
     unit: String,
     points: List<Pair<LocalDate, Double>>? = null,
     comparison: ComparisonResult? = null,
+    // DAV-285: HRV/RHR pass a real VitalsTimeframe selection (7D shows raw
+    // daily points, longer windows a weekly-mean rollup -- vitalsTrendSeries).
+    // Every other EvalCard caller (Sleep Duration, etc.) leaves this null and
+    // keeps the original fixed 30-day window unchanged.
+    timeframe: VitalsTimeframe? = null,
     modifier: Modifier = Modifier,
 ) {
     FTCard(title = title, modifier = modifier) {
@@ -270,9 +285,11 @@ private fun EvalCard(
             )
         }
         eval.cv7d?.let { StatLine("7-day CV", "%.1f%%".format(it)) }
-        points?.let { recentTrendWindow(it) }?.let { recent ->
-            DateTrendLine(points = recent, color = FT.Emerald, modifier = Modifier.padding(top = 8.dp))
+        val series = points?.let { pts ->
+            if (timeframe != null) vitalsTrendSeries(pts, timeframe).takeIf { it.size >= 2 }
+            else recentTrendWindow(pts)
         }
+        series?.let { DateTrendLine(points = it, color = FT.Emerald, modifier = Modifier.padding(top = 8.dp)) }
     }
 }
 

@@ -1,0 +1,305 @@
+package com.bioscan.fieldterminal.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.domain.Confidence
+import com.bioscan.fieldterminal.domain.DataAvailability
+import com.bioscan.fieldterminal.domain.DisplayValue
+import com.bioscan.fieldterminal.domain.FocusEntry
+import com.bioscan.fieldterminal.domain.FocusQuality
+import com.bioscan.fieldterminal.domain.FocusRole
+import com.bioscan.fieldterminal.domain.PersonalRange
+import com.bioscan.fieldterminal.domain.RangeComparison
+import com.bioscan.fieldterminal.domain.RangeKind
+import com.bioscan.fieldterminal.domain.TrainingCycle
+import com.bioscan.fieldterminal.domain.achievement.Achievement
+import com.bioscan.fieldterminal.domain.achievement.AchievementDomain
+import com.bioscan.fieldterminal.domain.analysis.ComparisonResult
+import com.bioscan.fieldterminal.domain.analysis.ComparisonState
+import com.bioscan.fieldterminal.domain.analysis.ComparisonType
+import com.bioscan.fieldterminal.domain.analysis.Directionality
+import com.bioscan.fieldterminal.domain.analysis.InputCompleteness
+import com.bioscan.fieldterminal.domain.analysis.Provenance
+import com.bioscan.fieldterminal.domain.levels.DomainLevel
+import com.bioscan.fieldterminal.domain.levels.conditioningLevel
+import com.bioscan.fieldterminal.domain.levels.mountainLevel
+import com.bioscan.fieldterminal.domain.levels.runningLevel
+import com.bioscan.fieldterminal.domain.levels.strengthLevel
+import com.bioscan.fieldterminal.domain.progressFraction
+import com.bioscan.fieldterminal.ui.components.ComparisonStrip
+import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTDataState
+import com.bioscan.fieldterminal.ui.components.FTMetricValue
+import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
+import com.bioscan.fieldterminal.ui.components.ScreenHeader
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
+import java.time.LocalDate
+import java.time.OffsetDateTime
+
+// DAV-289 + DAV-296 (combined design/build pass, see
+// docs/user-profile-milestone/01-canonical-contracts-audit.md decision 1):
+// the User page replacing the former Map tab. Renders entirely from the
+// canonical shapes Phase 5 defined (DomainLevel, Achievement, TrainingCycle)
+// so the later archive milestone only has to replace mockUserProfileData()
+// with a real repository call -- no UI rewrite. `data` defaults to the mock
+// builder for exactly that reason: a future caller passes real data through
+// this same parameter without touching anything below it.
+data class UserProfileData(
+    val domainLevels: Map<AchievementDomain, DomainLevel>,
+    val achievements: Map<AchievementDomain, List<Achievement>>,
+    val activeCycle: TrainingCycle?,
+    val activeCycleCurrentValue: Double?,
+    val cycleHistory: List<TrainingCycle>,
+)
+
+@Composable
+fun UserProfileScreen(data: UserProfileData? = null) {
+    val profile = data ?: remember { mockUserProfileData() }
+
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+        ScreenHeader(title = "USER", context = "LEVELS · ACHIEVEMENTS · TRAINING BLOCK")
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Text(
+                "Sample data — real achievements and training blocks arrive once the historical " +
+                    "archive import lands. Levels and progress shown here follow the exact shapes that data will use.",
+                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                color = FT.TextMuted,
+            )
+
+            FTCard(title = "DOMAIN LEVELS") {
+                AchievementDomain.entries.forEach { domain ->
+                    DomainLevelRow(domain, profile.domainLevels[domain])
+                }
+            }
+
+            AchievementDomain.entries.forEach { domain ->
+                AchievementSection(domain, profile.achievements[domain].orEmpty())
+            }
+
+            TrainingBlockCard(profile.activeCycle, profile.activeCycleCurrentValue)
+            TrainingBlockHistoryCard(profile.cycleHistory)
+        }
+    }
+}
+
+@Composable
+private fun DomainLevelRow(domain: AchievementDomain, level: DomainLevel?) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(domain.label(), style = TextStyle(fontFamily = RobotoMono, fontSize = 12.5.sp), color = FT.TextSecondary)
+            Text(
+                level?.label ?: "Not enough data yet",
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+                color = if (level?.band != null) FT.TextPrimary else FT.TextMuted,
+                textAlign = TextAlign.End,
+            )
+        }
+        level?.evidence?.let { ComparisonStrip(population = it) }
+    }
+}
+
+@Composable
+private fun AchievementSection(domain: AchievementDomain, achievements: List<Achievement>) {
+    FTCard(title = "${domain.label()} ACHIEVEMENTS") {
+        if (achievements.isEmpty()) {
+            FTDataState(DataAvailability.Unavailable, "No ${domain.label().lowercase()} achievements yet.")
+            return@FTCard
+        }
+        achievements.forEach { achievement ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text(achievement.metricLabel(), style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary)
+                    achievement.comparisonContext?.let {
+                        Text(it, style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp), color = FT.TextMuted)
+                    }
+                }
+                Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                    Text(
+                        "${formatAchievementValue(achievement)} ${achievement.unit}",
+                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.sp),
+                        color = FT.TextPrimary,
+                    )
+                    Text(
+                        achievement.occurredAt.toLocalDate().toString(),
+                        style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                        color = FT.TextMuted,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?) {
+    FTCard(title = "CURRENT TRAINING BLOCK") {
+        if (cycle == null) {
+            FTDataState(DataAvailability.Unavailable, "No active training block set.")
+            return@FTCard
+        }
+        Text(
+            cycle.focus.joinToString(" + ") { it.quality.label() },
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+            color = FT.TextPrimary,
+        )
+        Text(
+            "${cycle.startDate} — ${cycle.endDate ?: "ongoing"}",
+            style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+            color = FT.TextMuted,
+        )
+        if (cycle.goalMetric != null && cycle.startingValue != null && cycle.targetValue != null) {
+            FTMetricValue(
+                DisplayValue(
+                    primary = currentValue?.let { "%.0f".format(it) } ?: "—",
+                    unit = cycle.goalMetric,
+                    secondary = "target %.0f (from %.0f)".format(cycle.targetValue, cycle.startingValue),
+                ),
+            )
+            val fraction = progressFraction(cycle.startingValue, cycle.targetValue, currentValue)
+            if (fraction != null && currentValue != null) {
+                FTRangeIndicator(
+                    PersonalRange(
+                        kind = RangeKind.TargetRange,
+                        lower = minOf(cycle.startingValue, cycle.targetValue),
+                        upper = maxOf(cycle.startingValue, cycle.targetValue),
+                        current = currentValue,
+                        label = "PROGRESS — ${(fraction * 100).toInt()}%",
+                        comparison = RangeComparison.Within,
+                        sufficientHistory = true,
+                    ),
+                )
+            }
+        } else {
+            Text(
+                "No numeric goal set for this block.",
+                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                color = FT.TextSecondary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrainingBlockHistoryCard(history: List<TrainingCycle>) {
+    FTCard(title = "TRAINING BLOCK HISTORY") {
+        if (history.isEmpty()) {
+            FTDataState(DataAvailability.Unavailable, "No past training blocks yet.")
+            return@FTCard
+        }
+        history.forEach { cycle ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    cycle.focus.joinToString(" + ") { it.quality.label() },
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    color = FT.TextSecondary,
+                )
+                Text(
+                    "${cycle.startDate} — ${cycle.endDate}",
+                    style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+                    color = FT.TextMuted,
+                    textAlign = TextAlign.End,
+                )
+            }
+        }
+    }
+}
+
+private fun AchievementDomain.label(): String = when (this) {
+    AchievementDomain.RUNNING -> "Running"
+    AchievementDomain.STRENGTH -> "Strength"
+    AchievementDomain.CONDITIONING -> "Conditioning"
+    AchievementDomain.MOUNTAIN -> "Mountain"
+}
+
+private fun FocusQuality.label(): String = name.replace(Regex("(?<=.)(?=\\p{Upper})"), " ")
+
+// e.g. "fastest_1km" -> "Fastest 1km".
+private fun Achievement.metricLabel(): String = metric.replace('_', ' ').replaceFirstChar { it.uppercase() }
+
+private fun formatAchievementValue(achievement: Achievement): String =
+    if (achievement.value == achievement.value.toLong().toDouble()) achievement.value.toLong().toString()
+    else "%.1f".format(achievement.value)
+
+// ---- Mock data (DAV-296): plausible, clearly-labeled example values in the
+// exact shapes Phase 5 defined -- no lorem, no invented UI-only fields. ----
+
+private fun mockUserProfileData(): UserProfileData {
+    fun comparison(metric: String, percentile: Double, have: Int) = ComparisonResult(
+        metric = metric, comparisonType = ComparisonType.POPULATION, state = ComparisonState.OK,
+        rawValue = null, normalizedValue = null, referenceValue = null, delta = null, standardizedDelta = null,
+        percentile = percentile, rank = null, rankDenominator = null, directionality = Directionality.HIGHER_BETTER,
+        referenceIdentity = "population_v1", referenceVersion = "1", confidence = Confidence(have, 14),
+        breadth = InputCompleteness(emptySet(), emptySet()), provenance = Provenance("wearable", "population_comparison", "1"),
+    )
+
+    val levels = mapOf(
+        AchievementDomain.RUNNING to runningLevel(listOf(comparison("vo2max", 78.0, 18))),
+        AchievementDomain.STRENGTH to strengthLevel(listOf(comparison("estimated_1rm_deadlift", 92.0, 20))),
+        AchievementDomain.CONDITIONING to conditioningLevel(emptyList()),
+        AchievementDomain.MOUNTAIN to mountainLevel(listOf(comparison("km_effort", 55.0, 9))),
+    )
+
+    fun achievement(domain: AchievementDomain, metric: String, value: Double, unit: String, daysAgo: Long, context: String? = null) = Achievement(
+        domain = domain, metric = metric, activityRef = null, value = value, unit = unit,
+        occurredAt = OffsetDateTime.now().minusDays(daysAgo),
+        provenance = Provenance("zepp", null, null), comparisonContext = context,
+    )
+
+    val achievements = mapOf(
+        AchievementDomain.RUNNING to listOf(
+            achievement(AchievementDomain.RUNNING, "fastest_1km", 232.0, "sec", 14, "Top 10% of last 90 days"),
+            achievement(AchievementDomain.RUNNING, "longest_run_km", 32.4, "km", 40),
+        ),
+        AchievementDomain.STRENGTH to listOf(
+            achievement(AchievementDomain.STRENGTH, "heaviest_squat_kg", 100.0, "kg", 21),
+            achievement(AchievementDomain.STRENGTH, "best_estimated_1rm_deadlift_kg", 140.0, "kg", 7, "Epley estimate"),
+        ),
+        AchievementDomain.MOUNTAIN to listOf(
+            achievement(AchievementDomain.MOUNTAIN, "highest_single_run_gain_m", 1850.0, "m", 60),
+        ),
+    )
+
+    val activeCycle = TrainingCycle(
+        startDate = LocalDate.now().minusWeeks(4),
+        endDate = LocalDate.now().plusWeeks(4),
+        focus = listOf(FocusEntry(FocusQuality.RaceSpecificEndurance, 1.0, FocusRole.Primary)),
+        goalMetric = "5k_time_sec",
+        startingValue = 1500.0,
+        targetValue = 1320.0,
+    )
+    val activeCycleCurrentValue = 1410.0
+
+    val history = listOf(
+        TrainingCycle(
+            startDate = LocalDate.now().minusMonths(4), endDate = LocalDate.now().minusWeeks(4),
+            focus = listOf(FocusEntry(FocusQuality.AerobicBase, 1.0, FocusRole.Primary)),
+        ),
+        TrainingCycle(
+            startDate = LocalDate.now().minusMonths(7), endDate = LocalDate.now().minusMonths(4),
+            focus = listOf(FocusEntry(FocusQuality.Hypertrophy, 0.7, FocusRole.Primary), FocusEntry(FocusQuality.AerobicBase, 0.3, FocusRole.Maintained)),
+        ),
+    )
+
+    return UserProfileData(levels, achievements, activeCycle, activeCycleCurrentValue, history)
+}

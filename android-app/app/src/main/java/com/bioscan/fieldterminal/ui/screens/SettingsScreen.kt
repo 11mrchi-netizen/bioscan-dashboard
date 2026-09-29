@@ -36,6 +36,8 @@ import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HealthConnectSyncResult
 import com.bioscan.fieldterminal.data.MapSettingsStore
+import com.bioscan.fieldterminal.data.NutritionGoals
+import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.ZeppRepository
 import com.bioscan.fieldterminal.data.ZeppSyncStateRow
@@ -72,6 +74,13 @@ fun SettingsScreen(scope: CoroutineScope) {
     var homeLonInput by remember { mutableStateOf(savedHome.value?.second?.toString() ?: "") }
 
     var homeInputError by remember { mutableStateOf(false) }
+
+    val savedGoals = remember { mutableStateOf(NutritionGoalsStore.getGoals(context)) }
+    var caloriesInput by remember { mutableStateOf(savedGoals.value.caloriesKcal?.toString() ?: "") }
+    var proteinInput by remember { mutableStateOf(savedGoals.value.proteinG?.toString() ?: "") }
+    var carbsInput by remember { mutableStateOf(savedGoals.value.carbsG?.toString() ?: "") }
+    var fatInput by remember { mutableStateOf(savedGoals.value.fatG?.toString() ?: "") }
+    var goalsInputError by remember { mutableStateOf(false) }
 
     val hcAvailable = remember { HealthConnectManager.isAvailable(context) }
     var hcChecked by remember { mutableStateOf(false) }
@@ -133,6 +142,58 @@ fun SettingsScreen(scope: CoroutineScope) {
                     style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
                     color = FT.TextSecondary,
                 )
+            }
+
+            FTCard(title = "NUTRITION GOALS") {
+                Text(
+                    "Daily calorie and macro targets, used by Nutrition Analysis's goal-adherence view. " +
+                        "Leave a field blank to clear just that target — stored on this device only.",
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    color = FT.TextSecondary,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FieldTextField(caloriesInput, { caloriesInput = it }, "Calories (kcal)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+                    FieldTextField(proteinInput, { proteinInput = it }, "Protein (g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FieldTextField(carbsInput, { carbsInput = it }, "Carbs (g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+                    FieldTextField(fatInput, { fatInput = it }, "Fat (g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AmberButton(label = "SAVE GOALS") {
+                        // Blank clears that one field; anything entered must be a positive number.
+                        fun parse(input: String): Double? = input.trim().takeIf { it.isNotEmpty() }?.toDoubleOrNull()
+                        val calories = parse(caloriesInput)
+                        val protein = parse(proteinInput)
+                        val carbs = parse(carbsInput)
+                        val fat = parse(fatInput)
+                        val enteredButInvalid = listOf(caloriesInput to calories, proteinInput to protein, carbsInput to carbs, fatInput to fat)
+                            .any { (input, parsed) -> input.isNotBlank() && (parsed == null || parsed <= 0) }
+                        if (enteredButInvalid) {
+                            goalsInputError = true
+                        } else {
+                            val goals = NutritionGoals(calories, protein, carbs, fat)
+                            NutritionGoalsStore.saveGoals(context, goals)
+                            savedGoals.value = goals
+                            goalsInputError = false
+                        }
+                    }
+                    if (savedGoals.value.isSet) {
+                        ClearChip {
+                            NutritionGoalsStore.clearGoals(context)
+                            savedGoals.value = NutritionGoals()
+                            caloriesInput = ""; proteinInput = ""; carbsInput = ""; fatInput = ""
+                            goalsInputError = false
+                        }
+                    }
+                }
+                if (goalsInputError) {
+                    Text(
+                        "Enter a positive number for each target you set (or leave it blank).",
+                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        color = FT.Critical,
+                    )
+                }
             }
 
             FTCard(title = "MAP") {

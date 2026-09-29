@@ -17,4 +17,10 @@ data class TrainingCycleRow(
     @SerialName("start_date") val startDate: String,
     @SerialName("end_date") val endDate: String? = null,
     val focus: List<FocusEntryDto> = emptyList(),
+    // DAV-291: extends this existing mesocycle row rather than a parallel
+    // training-block table (see docs/user-profile-milestone/01-canonical-contracts-audit.md).
+    // All three null together means "no stated numeric goal for this cycle."
+    @SerialName("goal_metric") val goalMetric: String? = null,
+    @SerialName("starting_value") val startingValue: Double? = null,
+    @SerialName("target_value") val targetValue: Double? = null,
 )

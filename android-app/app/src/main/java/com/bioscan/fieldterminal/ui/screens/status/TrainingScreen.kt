@@ -402,7 +402,15 @@ private fun PerformanceSection(overview: TrainingOverview, timeframe: Performanc
             )
         }
         PerformanceMetric.LACTATE_THRESHOLD -> {
-            FTMetricValue(DisplayValue(primary = formatPace(overview.latestLactateThresholdPaceMinPerKm!!)))
+            FTMetricValue(
+                DisplayValue(
+                    primary = formatPace(overview.latestLactateThresholdPaceMinPerKm!!),
+                    // DAV-284: HR is a second measurement of the same threshold, not a
+                    // separate metric -- shown paired, never fabricated when Zepp's
+                    // estimate for a given run didn't include it.
+                    secondary = overview.latestLactateThresholdHrBpm?.let { "%.0f bpm".format(it) } ?: "HR unavailable",
+                ),
+            )
             Text(
                 "Zepp's own estimate, recomputed per qualifying run.",
                 style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),

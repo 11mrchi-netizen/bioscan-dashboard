@@ -194,6 +194,28 @@ class TrainingTest {
     }
 
     @Test
+    fun testAveragePaceExcludesTrailRuns() {
+        // DAV-283: a mixed road+trail week should average pace over the road
+        // run only -- the trail run's climb-slowed pace would misrepresent
+        // road fitness if it dragged the average down.
+        val today = LocalDate.of(2026, 9, 21)
+        val sessions = listOf(
+            ExerciseSessionRow(
+                type = "run", startTime = "2026-09-19T08:00:00Z",
+                durationMin = 50.0, distanceKm = 10.0, // 5:00/km
+                details = com.bioscan.fieldterminal.data.model.ExerciseSessionDetails(routeType = "road"),
+            ),
+            ExerciseSessionRow(
+                type = "run", startTime = "2026-09-20T08:00:00Z",
+                durationMin = 90.0, distanceKm = 10.0, // 9:00/km, climbing
+                details = com.bioscan.fieldterminal.data.model.ExerciseSessionDetails(routeType = "trail"),
+            ),
+        )
+
+        assertEquals(5.0, averagePaceMinPerKmSince(sessions, today, 7)!!, 0.001)
+    }
+
+    @Test
     fun testEfficiencyRollingMedianNeedsSixRunsIn28Days() {
         val start = LocalDate.of(2026, 9, 1)
         val runs = listOf(1.0, 1.2, 1.1, 1.3, 1.15, 1.25).mapIndexed { i, ef -> start.plusDays(i * 3L) to ef }

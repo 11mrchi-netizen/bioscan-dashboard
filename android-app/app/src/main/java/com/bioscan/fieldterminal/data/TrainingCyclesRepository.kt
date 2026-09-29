@@ -22,7 +22,7 @@ class TrainingCyclesRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadActiveCycle(asOf: LocalDate = LocalDate.now()): TrainingCycle? {
         val rows = supabase.postgrest.from("training_cycles")
-            .select(columns = Columns.list("start_date,end_date,focus")) {
+            .select(columns = Columns.list("start_date,end_date,focus,goal_metric,starting_value,target_value")) {
                 order("start_date", Order.DESCENDING)
                 limit(50)
             }
@@ -44,5 +44,5 @@ private fun TrainingCycleRow.toDomain(): TrainingCycle? {
         }
         FocusEntry(quality, dto.weight, role)
     }
-    return TrainingCycle(start, end, entries)
+    return TrainingCycle(start, end, entries, goalMetric, startingValue, targetValue)
 }

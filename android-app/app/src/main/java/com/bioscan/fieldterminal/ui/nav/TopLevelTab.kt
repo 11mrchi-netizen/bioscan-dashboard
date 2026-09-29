@@ -8,9 +8,15 @@ package com.bioscan.fieldterminal.ui.nav
 // visual design (see design/README.md's Fidelity section), so it wins here.
 // Flagged, not silently picked -- correct this if scoping.md's order was
 // actually intentional.
+//
+// DAV-296: the User tab replaces Map in this position (same slot, per the
+// milestone's own "the former Map page becomes the User page"). MapScreen.kt
+// and its route stay in the codebase, just unreferenced from
+// FieldTerminalNavHost's routing -- see
+// docs/user-profile-milestone/01-canonical-contracts-audit.md section 10.
 enum class TopLevelTab(val route: String, val label: String) {
     Status("status", "STATUS"),
-    Map("map", "MAP"),
+    User("user", "USER"),
     Log("log", "LOG"),
     Setup("setup", "SETUP"),
 }

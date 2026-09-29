@@ -91,8 +91,12 @@ State colors must not be used interchangeably with domain accents.
 | Labs | Violet `#A78BFA` |
 | Map | Blue `#60A5FA` |
 | Log | Amber `#F59E0B` |
+| User | Indigo `#818CF8` |
 
 Domain accents identify sections or navigation; they do not encode health/warning/error.
+
+DAV-296: the User tab replaces Map in the bottom bar. Map's accent and screen stay in the
+codebase (unmounted from navigation, not deleted) for possible reuse elsewhere later.
 
 ### Glass / overlay system
 

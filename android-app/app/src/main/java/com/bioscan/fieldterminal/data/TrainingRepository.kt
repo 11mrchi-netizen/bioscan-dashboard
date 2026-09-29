@@ -55,6 +55,12 @@ data class TrainingOverview(
     // pace figure on this tab uses.
     val latestLactateThresholdPaceMinPerKm: Double?,
     val lactateThresholdPaceSeries: List<Pair<LocalDate, Double>>,
+    // DAV-284: the same Zepp summary already carries an HR estimate alongside
+    // pace (Session Detail's RunDynamicsCard shows both per-run) -- this tab's
+    // trend only ever forwarded pace. Null when a given run's estimate didn't
+    // include HR; never fabricated.
+    val latestLactateThresholdHrBpm: Double?,
+    val lactateThresholdHrSeries: List<Pair<LocalDate, Double>>,
     val hasAnyRunning: Boolean,
     val runningSessions: List<ExerciseSessionRow>, // raw rows, kept for the 1D/7D/30D/90D distance-totals widget
     val hasAnyStrength: Boolean,
@@ -128,6 +134,9 @@ class TrainingRepository(private val supabase: SupabaseClient) {
             }
         }
         val lactateThresholdPaceSeries = lactateThresholdPaceMinPerKmSeries(lactateThresholdPaceSecPerKmSeries)
+        val lactateThresholdHrSeries = lactateRows.mapNotNull { row ->
+            row.summary?.lactateThresholdHrBpm?.let { hr -> OffsetDateTime.parse(row.startTime).toLocalDate() to hr }
+        }
         val efficiencyRuns = lactateRows.mapNotNull { row ->
             row.summary?.efficiencyFactor?.let { OffsetDateTime.parse(row.startTime).toLocalDate() to it }
         }
@@ -160,6 +169,8 @@ class TrainingRepository(private val supabase: SupabaseClient) {
             vo2MaxSeries = vo2MaxSeries(vo2Rows),
             latestLactateThresholdPaceMinPerKm = lactateThresholdPaceSeries.lastOrNull()?.second,
             lactateThresholdPaceSeries = lactateThresholdPaceSeries,
+            latestLactateThresholdHrBpm = lactateThresholdHrSeries.lastOrNull()?.second,
+            lactateThresholdHrSeries = lactateThresholdHrSeries,
             hasAnyRunning = running.isNotEmpty(),
             runningSessions = running,
             hasAnyStrength = strength.isNotEmpty(),

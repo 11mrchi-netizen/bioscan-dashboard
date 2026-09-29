@@ -1,6 +1,8 @@
 package com.bioscan.fieldterminal.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,15 +11,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.data.AgingProfileOverview
+import com.bioscan.fieldterminal.data.AgingProfileRepository
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.DisplayValue
@@ -71,8 +81,17 @@ data class UserProfileData(
 )
 
 @Composable
-fun UserProfileScreen(data: UserProfileData? = null) {
+fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {}) {
     val profile = data ?: remember { mockUserProfileData() }
+
+    // 09A Aging Profile, Phase 1: real data (not mock) -- the rest of this
+    // page stays mock until the historical archive milestone lands, but
+    // Aging Profile has real inputs (lab_results, user_profile, VO2max)
+    // today, so it's wired straight to AgingProfileRepository.
+    var agingOverview by remember { mutableStateOf<AgingProfileOverview?>(null) }
+    LaunchedEffect(Unit) {
+        agingOverview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview()
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         ScreenHeader(title = "USER", context = "LEVELS · ACHIEVEMENTS · TRAINING BLOCK")
@@ -80,8 +99,10 @@ fun UserProfileScreen(data: UserProfileData? = null) {
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
+            AgingCard(agingOverview, onOpenAging)
+
             Text(
-                "Sample data — real achievements and training blocks arrive once the historical " +
+                "Sample data below — real achievements and training blocks arrive once the historical " +
                     "archive import lands. Levels and progress shown here follow the exact shapes that data will use.",
                 style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
                 color = FT.TextMuted,
@@ -100,6 +121,39 @@ fun UserProfileScreen(data: UserProfileData? = null) {
             TrainingBlockCard(profile.activeCycle, profile.activeCycleCurrentValue)
             TrainingBlockHistoryCard(profile.cycleHistory)
         }
+    }
+}
+
+// DAV-226/232 (09A Aging Profile, Phase 1): compact summary, same
+// DomainLevelRow-style treatment as the card below it -- taps through to
+// AgingProfileScreen for the full Overview/Dimensions/History/Explainability
+// breakdown rather than crowding all of it onto this page.
+@Composable
+private fun AgingCard(overview: AgingProfileOverview?, onOpen: () -> Unit) {
+    FTCard(
+        title = "AGING",
+        modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen),
+    ) {
+        when {
+            overview == null -> CircularProgressIndicator(color = FT.Emerald)
+            overview.chronologicalAgeYears == null -> FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile to see this.")
+            else -> {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    AgingHeadline("Chronological", overview.chronologicalAgeYears.toString())
+                    overview.phenoAge?.let { AgingHeadline("PhenoAge", it.biologicalAge?.let { v -> "%.0f".format(v) } ?: "—") }
+                    overview.cardioAge?.let { AgingHeadline("Cardio Age", it.biologicalAge?.let { v -> "%.0f".format(v) } ?: "—") }
+                }
+                Text("Tap for the full breakdown", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.TextMuted)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AgingHeadline(label: String, value: String) {
+    Column {
+        Text(label.uppercase(), style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextMuted)
+        Text(value, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 20.sp), color = FT.TextPrimary)
     }
 }
 

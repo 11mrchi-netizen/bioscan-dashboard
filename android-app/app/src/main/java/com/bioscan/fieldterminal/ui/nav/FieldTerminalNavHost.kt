@@ -34,6 +34,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.bioscan.fieldterminal.R
+import com.bioscan.fieldterminal.ui.screens.AgingProfileScreen
 import com.bioscan.fieldterminal.ui.screens.LogScreen
 import com.bioscan.fieldterminal.ui.screens.SessionDetailScreen
 import com.bioscan.fieldterminal.ui.screens.SettingsScreen
@@ -88,7 +89,10 @@ fun FieldTerminalNavHost() {
             composable(TileRoute.Fuel.route) { FuelTileScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Heart.route) { HeartTileScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Labs.route) { LabsTileScreen(onBack = { navController.popBackStack() }) }
-            composable(TopLevelTab.User.route) { UserProfileScreen() }
+            composable(TopLevelTab.User.route) {
+                UserProfileScreen(onOpenAging = { navController.navigate("aging_profile") })
+            }
+            composable("aging_profile") { AgingProfileScreen(onBack = { navController.popBackStack() }) }
             composable(TopLevelTab.Log.route) {
                 LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") })
             }

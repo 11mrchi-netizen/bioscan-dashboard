@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +40,7 @@ import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.NutritionGoals
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.UserProfileRepository
 import com.bioscan.fieldterminal.data.ZeppRepository
 import com.bioscan.fieldterminal.data.ZeppSyncStateRow
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
@@ -82,6 +84,21 @@ fun SettingsScreen(scope: CoroutineScope) {
     var fatInput by remember { mutableStateOf(savedGoals.value.fatG?.toString() ?: "") }
     var goalsInputError by remember { mutableStateOf(false) }
 
+    val userProfileRepository = remember { UserProfileRepository(SupabaseClientProvider.client) }
+    var dobInput by remember { mutableStateOf("") }
+    var selectedSex by remember { mutableStateOf<String?>(null) }
+    var profileLoaded by remember { mutableStateOf(false) }
+    var profileSaving by remember { mutableStateOf(false) }
+    var profileError by remember { mutableStateOf(false) }
+    var profileSavedAt by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        val profile = userProfileRepository.loadProfile()
+        dobInput = profile?.dateOfBirth ?: ""
+        selectedSex = profile?.sex
+        profileLoaded = true
+    }
+
     val hcAvailable = remember { HealthConnectManager.isAvailable(context) }
     var hcChecked by remember { mutableStateOf(false) }
     var hcGranted by remember { mutableStateOf(false) }
@@ -110,6 +127,56 @@ fun SettingsScreen(scope: CoroutineScope) {
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
+            FTCard(title = "PROFILE") {
+                Text(
+                    "Date of birth and sex, used by the Aging Profile (User tab) and by population " +
+                        "comparisons elsewhere. Stored with your account, not on this device only.",
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    color = FT.TextSecondary,
+                )
+                FieldTextField(
+                    value = dobInput,
+                    onValueChange = { dobInput = it },
+                    placeholder = "Date of birth (YYYY-MM-DD)",
+                )
+                Column {
+                    Text(
+                        "SEX",
+                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+                        color = FT.TextSecondary,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        SexChip("Male", selectedSex == "male") { selectedSex = if (selectedSex == "male") null else "male" }
+                        SexChip("Female", selectedSex == "female") { selectedSex = if (selectedSex == "female") null else "female" }
+                    }
+                }
+                AmberButton(label = if (profileSaving) "SAVING…" else "SAVE PROFILE") {
+                    val dob = dobInput.trim().ifBlank { null }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+                    if (dobInput.isNotBlank() && dob == null) {
+                        profileError = true
+                    } else {
+                        profileError = false
+                        scope.launch {
+                            profileSaving = true
+                            userProfileRepository.saveProfile(dob, selectedSex)
+                            profileSaving = false
+                            profileSavedAt = java.time.LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                        }
+                    }
+                }
+                if (profileError) {
+                    Text(
+                        "Enter the date as YYYY-MM-DD (e.g. 1990-05-14).",
+                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        color = FT.Critical,
+                    )
+                }
+                profileSavedAt?.let {
+                    Text("Saved $it", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextSecondary)
+                }
+            }
+
             FTCard(title = "AI NUTRITION ESTIMATION") {
                 Text(
                     "Gemini API key for photo-based calorie/macro estimation on the Food entry form. " +
@@ -403,5 +470,26 @@ private fun ClearChip(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Text("CLEAR", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = FT.TextSecondary)
+    }
+}
+
+// Tap-to-select chip, same shape as ClearChip -- tapping the already-selected
+// chip clears it back to null (matches AddEntrySheet.kt's TextChipRow, an
+// optional field, not a forced either/or).
+@Composable
+private fun SexChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+            .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label.uppercase(),
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+            color = if (selected) FT.Emerald else FT.TextSecondary,
+        )
     }
 }

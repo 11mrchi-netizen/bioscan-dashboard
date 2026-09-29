@@ -22,9 +22,10 @@ function json(body: unknown, status: number) {
   });
 }
 
-const EXTRACTOR_VERSION = "6"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
+const EXTRACTOR_VERSION = "7"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
 // 6: write Zepp's own decoded distance back onto exercise_sessions.distance_km, and merge
 // orphaned zepp-sourced placeholder rows created by the Zepp/Health-Connect sync race (DAV-274)
+// 7: fix the "stress" metric's endpoint (was 404ing every attempt -- see METRIC_DEFS) (DAV-246)
 
 
 // DAV-115/123: decode detail.json's per-second fields into plain TimePoint-
@@ -378,9 +379,20 @@ const METRIC_DEFS: MetricDef[] = [
       `/v2/data/band_data.json?query_type=summary&device_type=0&userid=${uid}&date=${date}&data_type=spo2`,
   },
   {
+    // 05.1 Stress Rhythm: the guessed band_data.json?data_type=stress shape
+    // above (still used by heart_rate/hrv/sleep/spo2, all also 404ing the
+    // same way -- a separate, not-yet-fixed bug) 404'd on every real attempt.
+    // Real shape confirmed by reading zepp-health-cli's actual source
+    // (github.com/m4ary/zepp-health-cli) -- a user-events timeline, not a
+    // band_data summary. `from`/`to` are epoch-ms bounds; this metric's
+    // fetchAndStore call already runs once per requested day (the loop
+    // below), so each call's window is just that one UTC day.
     metric: "stress",
-    endpoint: (uid, date) =>
-      `/v2/data/band_data.json?query_type=summary&device_type=0&userid=${uid}&date=${date}&data_type=stress`,
+    endpoint: (uid, date) => {
+      const startMs = new Date(`${date}T00:00:00Z`).getTime();
+      const endMs = startMs + 86400000 - 1;
+      return `/users/${uid}/events?eventType=all_day_stress&from=${startMs}&to=${endMs}&limit=2000&reverse=0&userId=${uid}`;
+    },
   },
   {
     metric: "training_load",

@@ -101,6 +101,11 @@ fun evaluateHrv(hrvDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = Local
 fun evaluateRhr(rhrDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): SwcEvaluation =
     evaluateSwcStream(rhrDaily, asOf)
 
+// Same SWC treatment as RHR (untransformed -- SpO2 is already a bounded
+// percentage, no log-space reason to transform it).
+fun evaluateSpo2(spo2Daily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): SwcEvaluation =
+    evaluateSwcStream(spo2Daily, asOf)
+
 // HRV's baseline7d/mean60d are in ln-space (see evaluateHrv) -- callers
 // exponentiate back to real ms for display. RHR needs no such conversion.
 fun expValue(value: Double?): Double? = value?.let { exp(it) }

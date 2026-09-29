@@ -16,6 +16,10 @@ data class WearableAnalysisRow(
     // Live check: synced daily for 1,000+ real days, never read anywhere --
     // added for the Cardio tab's STEPS card.
     val steps: Double? = null,
+    // Already synced daily by HealthConnectDailySyncRepository.syncVitals()
+    // (OxygenSaturationRecord), same as hrv/rhr -- just never read anywhere,
+    // added for the Cardio tab's SPO2 card.
+    @SerialName("spo2_avg") val spo2: Double? = null,
 )
 
 @Serializable

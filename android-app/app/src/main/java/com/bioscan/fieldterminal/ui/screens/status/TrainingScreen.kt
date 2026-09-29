@@ -41,8 +41,13 @@ import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.PerformanceTimeframe
 import com.bioscan.fieldterminal.domain.RunningPeriod
 import com.bioscan.fieldterminal.domain.averagePaceMinPerKmSince
+import com.bioscan.fieldterminal.domain.hasPlausiblePace
+import com.bioscan.fieldterminal.domain.comparison.comparableSet
+import com.bioscan.fieldterminal.domain.comparison.comparePersonal
+import com.bioscan.fieldterminal.domain.comparison.isComparableSessionDistance
 import com.bioscan.fieldterminal.domain.preparePerformanceTrendData
 import com.bioscan.fieldterminal.domain.sumDistanceKmSince
+import com.bioscan.fieldterminal.ui.components.ComparisonStrip
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
@@ -222,6 +227,38 @@ private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimefr
             }
 
             avgPace?.let { StatLine("Avg pace", formatPace(it)) }
+
+            // DAV-198: pace is genuinely session-shaped (unlike HRV/RHR's
+            // daily wearable readings, which have no context to filter on --
+            // see ComparableSet.kt's own header comment) -- a 5K and a
+            // marathon aren't comparable regardless of fitness, so history is
+            // restricted to similar-distance runs before comparePersonal ever
+            // sees it.
+            val comparableRuns = overview.runningSessions.filter {
+                it.details.routeType != "trail" && hasPlausiblePace(it.distanceKm, it.durationMin)
+            }
+            val latestRun = comparableRuns.maxByOrNull { OffsetDateTime.parse(it.startTime) }
+            val latestDistance = latestRun?.distanceKm
+            val latestDuration = latestRun?.durationMin
+            if (latestRun != null && latestDistance != null && latestDistance > 0 && latestDuration != null) {
+                val paceHistory = comparableSet(comparableRuns.filter { it.id != latestRun.id }) { s ->
+                    s.distanceKm?.let { isComparableSessionDistance(latestDistance, it) } == true
+                }.comparable.mapNotNull { s ->
+                    val d = s.distanceKm ?: return@mapNotNull null
+                    val dur = s.durationMin ?: return@mapNotNull null
+                    OffsetDateTime.parse(s.startTime).toLocalDate() to (dur / d)
+                }
+                val paceComparison = comparePersonal(
+                    metric = "pace",
+                    current = latestDuration / latestDistance,
+                    history = paceHistory,
+                    presentSources = setOf("exercise_sessions"),
+                    idealSources = setOf("exercise_sessions"),
+                    origin = "exercise_sessions",
+                )
+                ComparisonStrip(personal = paceComparison)
+            }
+
             overview.longestRunKm?.let { longest ->
                 StatLine("Longest run (all-time)", "%.2f km".format(longest))
             }

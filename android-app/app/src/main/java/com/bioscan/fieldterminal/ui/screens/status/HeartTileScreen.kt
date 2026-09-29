@@ -55,6 +55,7 @@ import com.bioscan.fieldterminal.domain.VitalsTimeframe
 import com.bioscan.fieldterminal.domain.evaluateHrv
 import com.bioscan.fieldterminal.domain.evaluateRespiratoryAnomaly
 import com.bioscan.fieldterminal.domain.evaluateRhr
+import com.bioscan.fieldterminal.domain.evaluateSpo2
 import com.bioscan.fieldterminal.domain.evaluateSleepDuration
 import com.bioscan.fieldterminal.domain.evaluateSri
 import com.bioscan.fieldterminal.domain.evaluateSubjective
@@ -159,7 +160,22 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     }
                     EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", points = hrvPoints, comparison = hrvComparison, timeframe = vitalsTimeframe)
                     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
-                    EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm", points = rhrPoints, timeframe = vitalsTimeframe)
+                    // Same live comparison wiring as HRV above (DAV-200) --
+                    // "resting_heart_rate" is the canonical registry name
+                    // (docs/analysis-layer-2/02-metric-registry.md), not "rhr".
+                    val rhrComparison = rhrPoints.maxByOrNull { it.first }?.let { latest ->
+                        comparePersonal(
+                            metric = "resting_heart_rate",
+                            current = latest.second,
+                            history = rhrPoints.filter { it.first != latest.first },
+                            presentSources = setOf("wearable_daily"),
+                            idealSources = setOf("wearable_daily"),
+                            origin = "health_connect",
+                        )
+                    }
+                    EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm", points = rhrPoints, comparison = rhrComparison, timeframe = vitalsTimeframe)
+                    val spo2Points = w.mapNotNull { row -> row.spo2?.let { LocalDate.parse(row.date) to it } }
+                    EvalCard("SPO2", evaluateSpo2(spo2Points), "%", points = spo2Points, timeframe = vitalsTimeframe)
                     val rrPoints = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
                     RespiratoryCard(evaluateRespiratoryAnomaly(rrPoints))
                     val stepsPoints = w.mapNotNull { row -> row.steps?.let { LocalDate.parse(row.date) to it } }

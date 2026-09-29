@@ -24,15 +24,21 @@ private val VO2MAX_MEDIAN_WOMEN = listOf(24.5 to 37.6, 34.5 to 30.2, 44.5 to 26.
 // Inverts the (age -> median VO2max) table via linear interpolation: given a
 // measured VO2max, finds the age whose tabulated median VO2max matches it.
 // Both axes are monotonic (VO2max falls with age), so this is a well-defined
-// piecewise-linear inversion. Null outside the table's own measured range
-// (fitter than the youngest bracket's median, or below the oldest bracket's)
-// -- extrapolating past what the reference population actually measured
-// would be exactly the fabrication DAV-226 rules out, not a defensible
-// age-equivalent.
-private fun interpolateAgeForVo2Max(vo2max: Double, table: List<Pair<Double, Double>>): Double? {
+// piecewise-linear inversion. Clamped, not null, outside the table's own
+// measured range -- same convention PopulationComparison.kt's
+// interpolatePercentile() already commits to ("a value at or below the
+// lowest published point reads as that lowest percentile, not below it").
+// A VO2max fitter than the youngest bracket's median (48.0 ml/kg/min for
+// men, 20-29) is common for trained runners/cyclists in their 20s-30s, not
+// just elite outliers -- returning null there made the model unavailable
+// for a large share of active users, not a rare edge case. Clamping to the
+// youngest tabulated age is an honest floor ("at least this young"), not
+// extrapolation past what the reference population measured.
+private fun interpolateAgeForVo2Max(vo2max: Double, table: List<Pair<Double, Double>>): Double {
     val youngest = table.first()
     val oldest = table.last()
-    if (vo2max > youngest.second || vo2max < oldest.second) return null
+    if (vo2max >= youngest.second) return youngest.first
+    if (vo2max <= oldest.second) return oldest.first
 
     for (i in 0 until table.size - 1) {
         val (ageA, vo2A) = table[i]
@@ -42,7 +48,7 @@ private fun interpolateAgeForVo2Max(vo2max: Double, table: List<Pair<Double, Dou
             return ageA + fraction * (ageB - ageA)
         }
     }
-    return null
+    error("unreachable: $vo2max is within [oldest.second, youngest.second] but matched no table segment")
 }
 
 fun cardioFunctionalAge(vo2max: Double, sex: String?, chronologicalAgeYears: Double, observedAt: LocalDate, provenance: Provenance): BiologicalAgeResult {
@@ -56,7 +62,6 @@ fun cardioFunctionalAge(vo2max: Double, sex: String?, chronologicalAgeYears: Dou
     }
 
     val cardioAge = interpolateAgeForVo2Max(vo2max, table)
-        ?: return unavailable(chronologicalAgeYears, observedAt, provenance, "VO2max %.1f is outside the reference population's measured range".format(vo2max))
 
     return BiologicalAgeResult(
         model = AgingModel.FUNCTIONAL_CARDIO,

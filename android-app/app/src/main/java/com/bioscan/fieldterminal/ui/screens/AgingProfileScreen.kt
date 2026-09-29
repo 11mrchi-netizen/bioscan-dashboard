@@ -214,7 +214,7 @@ private const val CARDIO_AGE_HELP =
     "Cardio Age compares your measured VO2max against FRIEND registry / Cooper Institute norms " +
         "(as tabulated in ACSM's Guidelines for Exercise Testing and Prescription) for your sex, " +
         "interpolated between published age-decade medians. A functional, not clinical, age-equivalent — " +
-        "unavailable if your VO2max falls outside the reference population's own measured range, rather " +
-        "than extrapolated.\n\n" +
+        "clamped, not extrapolated, past either end of the table: fitter than the youngest bracket's " +
+        "median reads as that bracket's age (e.g. 24.5), not a fabricated age below 20.\n\n" +
         "Reference table applies to US adults aged 20-79; needs your sex set in Setup › Profile. " +
         "Recalculates automatically from your latest synced VO2max reading every time you open this page."

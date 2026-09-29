@@ -22,10 +22,18 @@ function json(body: unknown, status: number) {
   });
 }
 
-const EXTRACTOR_VERSION = "7"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
+const EXTRACTOR_VERSION = "8"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
 // 6: write Zepp's own decoded distance back onto exercise_sessions.distance_km, and merge
 // orphaned zepp-sourced placeholder rows created by the Zepp/Health-Connect sync race (DAV-274)
 // 7: fix the "stress" metric's endpoint (was 404ing every attempt -- see METRIC_DEFS) (DAV-246)
+// 8: the v7 endpoint fix moved stress from 404 to a real Huami-side 500
+// ("code":-50000, "Failed to process the request") -- fetchAndStore was only
+// ever sending `apptoken`, never the app-identity headers Huami's newer
+// /users/{id}/events endpoint family validates (legacy /v1//v2/ endpoints
+// tolerate their absence, this one doesn't). Real values confirmed against
+// zepp-health-cli's own _headers() (github.com/m4ary/zepp-health-cli,
+// literal defaults baked into the library, not placeholders) -- same
+// reverse-engineering source that found the endpoint shape itself.
 
 
 // DAV-115/123: decode detail.json's per-second fields into plain TimePoint-
@@ -553,13 +561,29 @@ Deno.serve(async (req: Request) => {
       date: string,
       trackId: string,
     ): Promise<{ statusCode: number; rawBody: unknown; stored: boolean; error?: string }> {
-      const fetchUrl = `https://${zeppHost}${endpoint}`;
+      // v8: append the same "r" cache-buster every zepp-health-cli request
+      // carries (a random UUID, not a validated value -- just present).
+      const sep = endpoint.includes("?") ? "&" : "?";
+      const fetchUrl = `https://${zeppHost}${endpoint}${sep}r=${crypto.randomUUID().toUpperCase()}`;
       let statusCode: number;
       let rawBody: unknown = null;
 
       try {
         const res = await fetch(fetchUrl, {
-          headers: { apptoken: zeppToken!, "Content-Type": "application/json" },
+          headers: {
+            apptoken: zeppToken!,
+            "Content-Type": "application/json",
+            appname: "com.huami.midong",
+            appplatform: "ios_phone",
+            v: "2.0",
+            vn: "10.2.5",
+            cv: "1722_10.2.5",
+            vb: "202604132257",
+            "user-agent": "Zepp/10.2.5 (iPhone; iOS 26.3.1; Scale/3.00)",
+            lang: "en",
+            country: "",
+            timezone: "UTC",
+          },
         });
         statusCode = res.status;
         const text = await res.text();

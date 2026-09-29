@@ -31,16 +31,19 @@ class FunctionalAgeTest {
     }
 
     @Test
-    fun fitterThanYoungestBracketIsUnavailableNotExtrapolated() {
+    fun fitterThanYoungestBracketClampsNotExtrapolates() {
+        // 59.1 ml/kg/min is a real account's own measured VO2max -- well
+        // above the men's 20-29 median (48.0), but far from a fabricated
+        // "unavailable" case (a lot of trained runners/cyclists in their
+        // 20s-30s land here). Clamps to the youngest tabulated age, 24.5.
         val result = cardioFunctionalAge(vo2max = 60.0, sex = "male", chronologicalAgeYears = 25.0, observedAt = observedAt, provenance = provenance)
-        assertNull(result.biologicalAge)
-        assertTrue(result.unavailableReason!!.contains("outside"))
+        assertEquals(24.5, result.biologicalAge!!, 0.01)
     }
 
     @Test
-    fun belowOldestBracketIsUnavailableNotExtrapolated() {
+    fun belowOldestBracketClampsNotExtrapolates() {
         val result = cardioFunctionalAge(vo2max = 10.0, sex = "female", chronologicalAgeYears = 80.0, observedAt = observedAt, provenance = provenance)
-        assertNull(result.biologicalAge)
+        assertEquals(74.5, result.biologicalAge!!, 0.01)
     }
 
     @Test

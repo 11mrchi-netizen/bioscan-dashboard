@@ -205,11 +205,16 @@ private const val PHENOAGE_HELP =
         "plus your age into a single age-equivalent, via a mortality-risk model. Computed from your " +
         "most recent lab draw that has all 9 markers together — not necessarily your latest draw. " +
         "A negative acceleration (younger than your real age) reflects a lower modeled mortality risk " +
-        "for this marker profile, not a guarantee about your own future health."
+        "for this marker profile, not a guarantee about your own future health.\n\n" +
+        "Trained on a general US adult population (NHANES III), not specific to any age band or sex. " +
+        "Recalculates automatically from your latest complete lab draw every time you open this page — " +
+        "there's nothing to trigger manually, and nothing is cached from an older draw."
 
 private const val CARDIO_AGE_HELP =
     "Cardio Age compares your measured VO2max against FRIEND registry / Cooper Institute norms " +
         "(as tabulated in ACSM's Guidelines for Exercise Testing and Prescription) for your sex, " +
         "interpolated between published age-decade medians. A functional, not clinical, age-equivalent — " +
         "unavailable if your VO2max falls outside the reference population's own measured range, rather " +
-        "than extrapolated."
+        "than extrapolated.\n\n" +
+        "Reference table applies to US adults aged 20-79; needs your sex set in Setup › Profile. " +
+        "Recalculates automatically from your latest synced VO2max reading every time you open this page."

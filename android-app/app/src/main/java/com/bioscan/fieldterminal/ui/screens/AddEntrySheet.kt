@@ -52,6 +52,7 @@ import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
 import com.bioscan.fieldterminal.data.NutritionBarcodeLookupRepository
 import com.bioscan.fieldterminal.data.NutritionImageEstimateRepository
+import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.NutritionTextEstimateRepository
@@ -664,6 +665,14 @@ private fun FoodForm(
     var estimationError by remember { mutableStateOf<String?>(null) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
 
+    // User request (2026-09-30): one or more photos of the same meal queue up
+    // here before a single ESTIMATE tap -- was "first photo taken/picked
+    // auto-runs estimate," now a real batch since the whole point is letting
+    // Gemini see everything on the plate at once.
+    var pendingPhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var mealEstimate by remember { mutableStateOf<NutritionMealEstimate?>(null) }
+    var mealEstimateId by remember { mutableStateOf<Long?>(null) }
+
     // DAV-168: candidates from any of the three sources funnel into the
     // same review sheet before ever touching meal_items.
     var reviewSeedItems by remember { mutableStateOf<List<ReviewSeedItem>?>(null) }
@@ -674,27 +683,17 @@ private fun FoodForm(
     var recentMeals by remember { mutableStateOf<List<MealRow>?>(null) }
     var cloning by remember { mutableStateOf(false) }
 
-    fun runImageEstimate(uri: Uri) {
+    fun runImageEstimate(uris: List<Uri>) {
+        if (uris.isEmpty()) return
         estimating = true
         estimationError = null
         scope.launch {
             try {
-                val bytes = readAndCompressImage(context, uri)
-                val result = NutritionImageEstimateRepository(SupabaseClientProvider.client).estimate(bytes)
-                reviewSeedItems = result.candidates.map { c ->
-                    ReviewSeedItem(
-                        description = c.description,
-                        quantityLow = c.quantityLow,
-                        quantityHigh = c.quantityHigh,
-                        quantityUnit = c.quantityUnit,
-                        isBeverage = c.isBeverage,
-                        foodConfidence = c.foodConfidence,
-                        portionConfidence = c.portionConfidence,
-                        ambiguous = c.ambiguous,
-                        source = MealItemSource.AiImage,
-                        aiEstimateId = result.estimateId,
-                    )
-                }
+                val images = uris.map { readAndCompressImage(context, it) }
+                val result = NutritionImageEstimateRepository(SupabaseClientProvider.client).estimate(images)
+                mealEstimateId = result.estimateId
+                mealEstimate = result.estimate
+                pendingPhotos = emptyList()
             } catch (e: Exception) {
                 estimationError = e.message ?: "Estimation failed"
             } finally {
@@ -775,7 +774,7 @@ private fun FoodForm(
     }
 
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success) pendingCameraUri?.let { runImageEstimate(it) }
+        if (success) pendingCameraUri?.let { pendingPhotos = pendingPhotos + it }
     }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
@@ -786,8 +785,8 @@ private fun FoodForm(
             estimationError = "Camera permission denied"
         }
     }
-    val pickPhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) runImageEstimate(uri)
+    val pickPhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+        if (uris.isNotEmpty()) pendingPhotos = pendingPhotos + uris
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -812,9 +811,35 @@ private fun FoodForm(
                         cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                     }
                 }
-                PhotoActionButton(label = "CHOOSE PHOTO", modifier = Modifier.weight(1f)) {
+                PhotoActionButton(label = "CHOOSE PHOTOS", modifier = Modifier.weight(1f)) {
                     pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }
+            }
+            if (pendingPhotos.isNotEmpty()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(top = 10.dp),
+                ) {
+                    Text(
+                        "${pendingPhotos.size} photo${if (pendingPhotos.size == 1) "" else "s"} ready",
+                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                        color = FT.TextSecondary,
+                    )
+                    Text(
+                        "CLEAR",
+                        style = sheetActionLabelStyle,
+                        color = FT.Critical,
+                        modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            pendingPhotos = emptyList()
+                        },
+                    )
+                }
+                PhotoActionButton(
+                    label = if (estimating) "ESTIMATING..." else "ESTIMATE MEAL",
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    enabled = !estimating,
+                ) { runImageEstimate(pendingPhotos) }
             }
             PhotoActionButton(
                 label = "FROM DESCRIPTION",
@@ -935,6 +960,20 @@ private fun FoodForm(
             onDismiss = { reviewSeedItems = null },
             onSaved = {
                 reviewSeedItems = null
+                onCanonicalSaved()
+            },
+        )
+    }
+
+    mealEstimate?.let { estimate ->
+        NutritionEstimateConfirmSheet(
+            estimate = estimate,
+            mealDateTime = dateTime,
+            aiEstimateId = mealEstimateId,
+            onDismiss = { mealEstimate = null; mealEstimateId = null },
+            onSaved = {
+                mealEstimate = null
+                mealEstimateId = null
                 onCanonicalSaved()
             },
         )

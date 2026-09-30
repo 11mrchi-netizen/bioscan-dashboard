@@ -15,56 +15,55 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-// DAV-167. Calls the nutrition-estimate-image Edge Function -- same
-// candidates-only contract as NutritionTextEstimateRepository (DAV-166), a
-// vision prompt in place of a text one. The image is sent inline as base64
+// DAV-167, reworked 2026-09-30 (user request): one or more photos of the
+// same meal in, one approximate but directly usable whole-meal estimate out
+// -- no per-item database-matching step. Images are sent inline as base64
 // and never written anywhere by this repository or the function it calls;
-// it exists only for the duration of the one request, per this ticket's
-// "original images are temporary/not retained permanently by default" rule.
+// they exist only for the duration of the one request.
 private const val FUNCTIONS_BASE_URL = "https://ugfrglbcoivkprjqvjzz.supabase.co/functions/v1"
 
 class NutritionImageEstimateException(message: String) : Exception(message)
 
 @Serializable
-data class NutritionImageCandidate(
+data class NutritionMealEstimate(
     val description: String,
-    @SerialName("quantity_low") val quantityLow: Double? = null,
-    @SerialName("quantity_high") val quantityHigh: Double? = null,
-    @SerialName("quantity_unit") val quantityUnit: String? = null,
-    val preparation: String? = null,
-    @SerialName("is_beverage") val isBeverage: Boolean = false,
-    @SerialName("beverage_class") val beverageClass: String? = null,
-    @SerialName("food_confidence") val foodConfidence: Double,
-    @SerialName("portion_confidence") val portionConfidence: Double,
-    val ambiguous: Boolean = false,
+    val calories: Double,
+    @SerialName("protein_g") val proteinG: Double,
+    @SerialName("carbs_g") val carbsG: Double,
+    @SerialName("fat_g") val fatG: Double,
+    @SerialName("fiber_g") val fiberG: Double? = null,
+    @SerialName("sugar_g") val sugarG: Double? = null,
+    @SerialName("sodium_mg") val sodiumMg: Double? = null,
+    val confidence: Double,
 )
 
 @Serializable
 private data class ImageEstimateRequest(
-    val imageBase64: String,
+    val images: List<String>,
     val mimeType: String,
 )
 
 @Serializable
 private data class ImageEstimateResponse(
     val estimateId: Long? = null,
-    val items: List<NutritionImageCandidate>? = null,
+    val estimate: NutritionMealEstimate? = null,
     val error: String? = null,
     val message: String? = null,
 )
 
-data class NutritionImageEstimateResult(val estimateId: Long, val candidates: List<NutritionImageCandidate>)
+data class NutritionImageEstimateResult(val estimateId: Long, val estimate: NutritionMealEstimate)
 
 class NutritionImageEstimateRepository(private val supabase: SupabaseClient) {
     companion object { private val client = HttpClient(Android) }
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun estimate(imageBytes: ByteArray, mimeType: String = "image/jpeg"): NutritionImageEstimateResult {
+    suspend fun estimate(images: List<ByteArray>, mimeType: String = "image/jpeg"): NutritionImageEstimateResult {
+        require(images.isNotEmpty()) { "At least one photo is required" }
         val token = supabase.auth.currentAccessTokenOrNull()
             ?: throw NutritionImageEstimateException("Not signed in")
 
         val requestBody = ImageEstimateRequest(
-            imageBase64 = Base64.encodeToString(imageBytes, Base64.NO_WRAP),
+            images = images.map { Base64.encodeToString(it, Base64.NO_WRAP) },
             mimeType = mimeType,
         )
         val response = client.post("$FUNCTIONS_BASE_URL/nutrition-estimate-image") {
@@ -76,6 +75,7 @@ class NutritionImageEstimateRepository(private val supabase: SupabaseClient) {
         val parsed = json.decodeFromString<ImageEstimateResponse>(response.bodyAsText())
         if (parsed.error != null) throw NutritionImageEstimateException(parsed.message ?: parsed.error)
         val estimateId = parsed.estimateId ?: throw NutritionImageEstimateException("Gemini returned no estimate id")
-        return NutritionImageEstimateResult(estimateId, parsed.items ?: emptyList())
+        val estimate = parsed.estimate ?: throw NutritionImageEstimateException("Gemini returned no usable estimate")
+        return NutritionImageEstimateResult(estimateId, estimate)
     }
 }

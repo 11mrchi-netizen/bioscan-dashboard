@@ -139,6 +139,65 @@ class NutritionMealSaveRepository(
         return mealId
     }
 
+    // User request (2026-09-30): the photo-estimation path no longer matches
+    // each item against `foods` -- one Gemini call now returns one
+    // already-usable whole-meal approximation, written straight through with
+    // no resolver call, same "no food_id, write directly" shape
+    // saveBeverageDrink() below already established for quick beverage
+    // logging. Exactly one meal_items row per call, by design (DAV-291's
+    // "one usable line for the whole process").
+    suspend fun saveEstimatedMeal(loggedAt: String, estimate: NutritionMealEstimate, aiEstimateId: Long?): Long {
+        val mealId = supabase.postgrest.from("meals")
+            .insert(
+                NewMealRow(
+                    loggedAt = loggedAt,
+                    description = estimate.description,
+                    calories = estimate.calories,
+                    proteinG = estimate.proteinG,
+                    carbsG = estimate.carbsG,
+                    fatG = estimate.fatG,
+                    fiberG = estimate.fiberG,
+                    sugarG = estimate.sugarG,
+                    sodiumMg = estimate.sodiumMg,
+                ),
+            ) { select(Columns.list("id")) }
+            .decodeSingle<MealIdRow>()
+            .id
+
+        try {
+            val mealItemRow = supabase.postgrest.from("meal_items")
+                .insert(
+                    MealItemRow(
+                        mealId = mealId,
+                        sortOrder = 0,
+                        description = estimate.description,
+                        calories = estimate.calories,
+                        proteinG = estimate.proteinG,
+                        fatG = estimate.fatG,
+                        carbsG = estimate.carbsG,
+                        fiberG = estimate.fiberG,
+                        sugarG = estimate.sugarG,
+                        sodiumMg = estimate.sodiumMg,
+                        isEstimated = true,
+                        confidence = estimate.confidence,
+                        source = MealItemSource.AiImage.value,
+                    ),
+                ) { select(Columns.list("id")) }
+                .decodeSingle<MealIdRow>()
+
+            if (aiEstimateId != null) {
+                supabase.postgrest.from("ai_estimates")
+                    .update(AiEstimateLinkUpdate(mealId = mealId, mealItemId = mealItemRow.id, accepted = true)) {
+                        filter { eq("id", aiEstimateId) }
+                    }
+            }
+        } catch (e: Exception) {
+            supabase.postgrest.from("meals").delete { filter { eq("id", mealId) } }
+            throw e
+        }
+        return mealId
+    }
+
     // Duplicates a previous meal's items under a new meal at newLoggedAt --
     // same food_id/quantity/servings, fresh row ids. No new foods rows, no
     // re-resolution: this is a straight copy of already-correct data.

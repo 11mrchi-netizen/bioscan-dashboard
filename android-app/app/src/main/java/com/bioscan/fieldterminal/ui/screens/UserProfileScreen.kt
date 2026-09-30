@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
@@ -28,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.AgingProfileRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.DisplayValue
@@ -61,6 +63,7 @@ import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
@@ -93,6 +96,26 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
         agingOverview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview()
     }
 
+    // User request: the training block slice also went real once
+    // training_cycles started getting real rows (manual entry + a separate
+    // Notion historical import) -- same "wire this one real input in
+    // independently of the mock profile" precedent as Aging Profile above.
+    // activeCycleCurrentValue stays null: no generic "look up this cycle's
+    // goal_metric's live value" resolver exists yet, and goal_metric is a
+    // free-text field with no fixed vocabulary today -- a real gap, not
+    // silently faked, same as any other missing signal in this app.
+    var cycles by remember { mutableStateOf<List<TrainingCycle>?>(null) }
+    val cyclesRepo = remember { TrainingCyclesRepository(SupabaseClientProvider.client) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { cycles = cyclesRepo.loadCycles() }
+    val activeCycle = cycles?.firstOrNull { it.isActiveOn(LocalDate.now()) }
+    val cycleHistory = cycles.orEmpty().filter { it.id != activeCycle?.id }
+
+    // null = sheet hidden; Unit-ish "editing null cycle" is ambiguous with
+    // "hidden," so two flags instead of one nullable TrainingCycle?.
+    var editingCycle by remember { mutableStateOf<TrainingCycle?>(null) }
+    var addingCycle by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         ScreenHeader(title = "USER", context = "LEVELS · ACHIEVEMENTS · TRAINING BLOCK")
         Column(
@@ -102,8 +125,8 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
             AgingCard(agingOverview, onOpenAging)
 
             Text(
-                "Sample data below — real achievements and training blocks arrive once the historical " +
-                    "archive import lands. Levels and progress shown here follow the exact shapes that data will use.",
+                "Domain levels and achievements below are sample data — real ones arrive once the historical " +
+                    "archive import lands. The training block below is already real.",
                 style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
                 color = FT.TextMuted,
             )
@@ -118,9 +141,26 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
                 AchievementSection(domain, profile.achievements[domain].orEmpty())
             }
 
-            TrainingBlockCard(profile.activeCycle, profile.activeCycleCurrentValue)
-            TrainingBlockHistoryCard(profile.cycleHistory)
+            TrainingBlockCard(
+                cycle = activeCycle,
+                currentValue = null,
+                onEdit = { editingCycle = activeCycle },
+                onAdd = { addingCycle = true },
+            )
+            TrainingBlockHistoryCard(cycleHistory)
         }
+    }
+
+    if (addingCycle || editingCycle != null) {
+        TrainingBlockFormSheet(
+            cycle = editingCycle,
+            onDismiss = { addingCycle = false; editingCycle = null },
+            onSaved = {
+                addingCycle = false
+                editingCycle = null
+                scope.launch { cycles = cyclesRepo.loadCycles() }
+            },
+        )
     }
 }
 
@@ -190,7 +230,7 @@ private fun AchievementSection(domain: AchievementDomain, achievements: List<Ach
                 }
                 Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
                     Text(
-                        "${formatAchievementValue(achievement)} ${achievement.unit}",
+                        achievement.displayValue(),
                         style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.sp),
                         color = FT.TextPrimary,
                     )
@@ -206,17 +246,21 @@ private fun AchievementSection(domain: AchievementDomain, achievements: List<Ach
 }
 
 @Composable
-private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?) {
+private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEdit: () -> Unit, onAdd: () -> Unit) {
     FTCard(title = "CURRENT TRAINING BLOCK") {
         if (cycle == null) {
             FTDataState(DataAvailability.Unavailable, "No active training block set.")
+            EditLink("+ ADD TRAINING BLOCK", onAdd)
             return@FTCard
         }
-        Text(
-            cycle.focus.joinToString(" + ") { it.quality.label() },
-            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
-            color = FT.TextPrimary,
-        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                cycle.focus.joinToString(" + ") { it.quality.label() }.ifBlank { "No stated focus" },
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                color = FT.TextPrimary,
+            )
+            EditLink("EDIT", onEdit)
+        }
         Text(
             "${cycle.startDate} — ${cycle.endDate ?: "ongoing"}",
             style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
@@ -291,9 +335,28 @@ private fun FocusQuality.label(): String = name.replace(Regex("(?<=.)(?=\\p{Uppe
 // e.g. "fastest_1km" -> "Fastest 1km".
 private fun Achievement.metricLabel(): String = metric.replace('_', ' ').replaceFirstChar { it.uppercase() }
 
+@Composable
+private fun EditLink(label: String, onClick: () -> Unit) {
+    Text(
+        label,
+        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp),
+        color = FT.Emerald,
+        modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+    )
+}
+
 private fun formatAchievementValue(achievement: Achievement): String =
     if (achievement.value == achievement.value.toLong().toDouble()) achievement.value.toLong().toString()
     else "%.1f".format(achievement.value)
+
+// "sec" achievements (e.g. fastest_1km = 232.0) read as raw seconds ("232 sec")
+// otherwise -- a real time deserves m:ss, same divmod TrainingScreen.kt's own
+// formatPace() uses for pace, just keyed off whole seconds instead of a
+// minutes-per-km double.
+private fun Achievement.displayValue(): String = when (unit) {
+    "sec" -> value.toLong().let { "%d:%02d".format(it / 60, it % 60) }
+    else -> "${formatAchievementValue(this)} $unit"
+}
 
 // ---- Mock data (DAV-296): plausible, clearly-labeled example values in the
 // exact shapes Phase 5 defined -- no lorem, no invented UI-only fields. ----

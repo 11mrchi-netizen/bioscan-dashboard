@@ -14,12 +14,28 @@ data class FocusEntryDto(val quality: String, val weight: Double, val role: Stri
 
 @Serializable
 data class TrainingCycleRow(
+    val id: Long = 0,
     @SerialName("start_date") val startDate: String,
     @SerialName("end_date") val endDate: String? = null,
     val focus: List<FocusEntryDto> = emptyList(),
     // DAV-291: extends this existing mesocycle row rather than a parallel
     // training-block table (see docs/user-profile-milestone/01-canonical-contracts-audit.md).
     // All three null together means "no stated numeric goal for this cycle."
+    @SerialName("goal_metric") val goalMetric: String? = null,
+    @SerialName("starting_value") val startingValue: Double? = null,
+    @SerialName("target_value") val targetValue: Double? = null,
+)
+
+// Separate from TrainingCycleRow (which carries `id`) for the same reason
+// NewInjuryRow is separate from the read DTO elsewhere in this app: an
+// insert/update body must never serialize an `id` field -- writing 0 into a
+// bigint primary key column would be a real, silent data-corrupting bug, not
+// a cosmetic one.
+@Serializable
+data class NewTrainingCycleRow(
+    @SerialName("start_date") val startDate: String,
+    @SerialName("end_date") val endDate: String? = null,
+    val focus: List<FocusEntryDto> = emptyList(),
     @SerialName("goal_metric") val goalMetric: String? = null,
     @SerialName("starting_value") val startingValue: Double? = null,
     @SerialName("target_value") val targetValue: Double? = null,

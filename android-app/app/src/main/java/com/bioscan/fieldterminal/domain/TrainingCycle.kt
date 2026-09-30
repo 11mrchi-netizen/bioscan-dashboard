@@ -24,7 +24,29 @@ enum class FocusQuality {
             "maintenance" -> Maintenance
             else -> null
         }
+
+        // Matches the training-block edit form's free-text FOCUS field against
+        // this enum's own display label ("Aerobic Base", case/spacing-insensitive)
+        // -- no dropdown component exists anywhere in this app yet, so a typed
+        // field matched against the label is the smallest correct thing rather
+        // than building a new picker widget for one form.
+        fun fromLabel(text: String): FocusQuality? {
+            val normalized = text.trim().lowercase().replace(" ", "")
+            return entries.firstOrNull { it.name.lowercase() == normalized }
+        }
     }
+}
+
+fun FocusQuality.toDb(): String = when (this) {
+    FocusQuality.Hypertrophy -> "hypertrophy"
+    FocusQuality.Strength -> "strength"
+    FocusQuality.Power -> "power"
+    FocusQuality.AerobicBase -> "aerobic_base"
+    FocusQuality.RaceSpecificEndurance -> "race_specific_endurance"
+    FocusQuality.PeakingRealization -> "peaking_realization"
+    FocusQuality.SportSkill -> "sport_skill"
+    FocusQuality.RecoveryDeload -> "recovery_deload"
+    FocusQuality.Maintenance -> "maintenance"
 }
 
 enum class FocusRole { Primary, Maintained }
@@ -50,6 +72,11 @@ data class TrainingCycle(
     val goalMetric: String? = null,
     val startingValue: Double? = null,
     val targetValue: Double? = null,
+    // DAV-291/user request: needed to edit/correct a specific row once
+    // training_cycles has real data. Trailing + defaulted so existing mock
+    // constructions (UserProfileScreen.kt) don't need updating. 0 = not a
+    // real row (mock data only -- every real row's id is a real bigint > 0).
+    val id: Long = 0,
 ) {
     fun isActiveOn(date: LocalDate): Boolean =
         !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate))

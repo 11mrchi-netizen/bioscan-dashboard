@@ -58,6 +58,10 @@ import com.bioscan.fieldterminal.domain.MovementIndexResult
 import com.bioscan.fieldterminal.domain.computeMovementIndex
 import com.bioscan.fieldterminal.domain.CircadianAlignmentResult
 import com.bioscan.fieldterminal.domain.computeCircadianAlignment
+import com.bioscan.fieldterminal.data.ZeppStressRepository
+import com.bioscan.fieldterminal.domain.stress.StressDay
+import com.bioscan.fieldterminal.domain.stress.StressRhythmResult
+import com.bioscan.fieldterminal.domain.stress.analyzeStressDay
 import com.bioscan.fieldterminal.domain.SubjectiveEvaluation
 import com.bioscan.fieldterminal.domain.SwcEvaluation
 import com.bioscan.fieldterminal.domain.VitalsTimeframe
@@ -110,6 +114,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
     var stepsBenchmark by remember { mutableStateOf<List<BenchmarkArtifact>>(emptyList()) }
     var exerciseSessions by remember { mutableStateOf<List<TrainingLoadSessionRow>>(emptyList()) }
     var recentMealsForTiming by remember { mutableStateOf<List<MealRow>>(emptyList()) }
+    var stressDays by remember { mutableStateOf<List<StressDay>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         val repo = AnalysisRepository(SupabaseClientProvider.client)
@@ -132,6 +137,10 @@ fun HeartTileScreen(onBack: () -> Unit) {
         // 10-row default loadRecentMeals() ships with for its usual
         // "repeat a recent meal" caller.
         recentMealsForTiming = NutritionRepository(SupabaseClientProvider.client).loadRecentMeals(limit = 200)
+        // 05.1 Stress Rhythm: real payload confirmed 2026-09-30 (extractor
+        // v8) -- decoded client-side from zepp_raw_extracts, see
+        // ZeppStressRepository's own header comment for why no new table.
+        stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays()
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
@@ -242,6 +251,17 @@ fun HeartTileScreen(onBack: () -> Unit) {
                         "SORENESS" to wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } },
                     )
                     dimensions.forEach { (title, points) -> SubjectiveCard(title, points, modifier = Modifier.fillMaxWidth()) }
+                    // 05.1 Stress Rhythm: labeled distinctly from the
+                    // subjective STRESS card above so the two are never
+                    // conflated (DAV-246's own explicit requirement).
+                    val exerciseWindows = exerciseSessions.mapNotNull { session ->
+                        val start = runCatching { OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
+                        val durationMin = session.durationMin ?: return@mapNotNull null
+                        start to start.plusSeconds((durationMin * 60).toLong())
+                    }
+                    stressDays.firstOrNull()?.let { today ->
+                        PhysiologicalStressCard(analyzeStressDay(today, stressDays.drop(1), exerciseWindows), today)
+                    }
                     ArousalHistory(ar, m)
                 }
             }
@@ -394,6 +414,46 @@ private fun CircadianAlignmentCard(result: CircadianAlignmentResult) {
             Text(
                 "Not enough sleep/meal/exercise timing history yet.",
                 style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                color = FT.TextSecondary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay) {
+    // "PHYSIOLOGICAL STRESS" not "STRESS" -- never visually conflated with
+    // the subjective SubjectiveCard("STRESS") above it (DAV-246's own rule).
+    FTCard(title = "PHYSIOLOGICAL STRESS") {
+        StatLine("Confidence", result.confidence.label)
+        val summary = today.summary
+        if (summary.avg != null) {
+            FTMetricValue(DisplayValue(primary = "${summary.avg}", unit = "/ 100 avg today"))
+        }
+        val relax = summary.relaxProportion
+        val normal = summary.normalProportion
+        val medium = summary.mediumProportion
+        val high = summary.highProportion
+        if (relax != null && normal != null && medium != null && high != null) {
+            val total = (relax + normal + medium + high).takeIf { it > 0 } ?: 1
+            Row(modifier = Modifier.fillMaxWidth().height(10.dp)) {
+                Box(Modifier.weight((relax.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Emerald))
+                Box(Modifier.weight((normal.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Info))
+                Box(Modifier.weight((medium.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Warning))
+                Box(Modifier.weight((high.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Critical))
+            }
+            StatLine("Relax / Normal / Medium / High", "$relax% / $normal% / $medium% / $high%")
+        }
+        if (result.peakMagnitude != null) {
+            StatLine("Today's baseline", "%.0f".format(result.baseline))
+            StatLine("Peak above baseline", "+${result.peakMagnitude}")
+            result.peakDurationMinutes?.let { StatLine("Peak duration", "${it} min") }
+            result.eveningDownRegulationPct?.let { StatLine("Evening wind-down", "%.0f%%".format(it)) }
+            result.deviationFromPersonalPattern?.let { StatLine("Vs. your own recent average", "%+.0f".format(it)) }
+        } else {
+            Text(
+                "Not enough intraday samples yet for the diurnal pattern -- daily summary above is still real.",
+                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
                 color = FT.TextSecondary,
             )
         }

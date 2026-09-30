@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext'
 import { Shell } from './components/layout/Shell'
 import { Login } from './workspaces/Login'
 import { Overview } from './workspaces/Overview'
+import { Timeline } from './workspaces/Timeline'
 import { WorkspaceStub } from './workspaces/WorkspaceStub'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -26,7 +27,7 @@ export default function App() {
       >
         <Route index element={<Navigate to="overview" replace />} />
         <Route path="overview"      element={<Overview />} />
-        <Route path="timeline"      element={<WorkspaceStub name="Timeline" />} />
+        <Route path="timeline"      element={<Timeline />} />
         <Route path="training"      element={<WorkspaceStub name="Training" />} />
         <Route path="recovery"      element={<WorkspaceStub name="Recovery / Body" />} />
         <Route path="nutrition"     element={<WorkspaceStub name="Nutrition" />} />

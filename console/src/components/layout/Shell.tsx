@@ -1,8 +1,10 @@
 // Three-zone shell: left rail · central canvas · right inspector
-// IA.md §3.2
+// IA.md §3.2 — inspector visibility driven by AnalysisContext.inspectionTarget
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useAnalysis } from '../../context/AnalysisContext'
+import { Inspector } from '../shared/Inspector'
 import { DateRangeControl } from './DateRangeControl'
 import './Shell.css'
 
@@ -19,12 +21,13 @@ const NAV = [
 
 export function Shell() {
   const { user, signOut } = useAuth()
+  const { ctx, clearInspection } = useAnalysis()
   const [railCollapsed, setRailCollapsed] = useState(false)
-  const [inspectorOpen, setInspectorOpen] = useState(false)
+
+  const inspectorOpen = ctx.inspectionTarget !== null
 
   return (
     <div className={`shell ${railCollapsed ? 'rail-collapsed' : ''} ${inspectorOpen ? 'inspector-open' : ''}`}>
-      {/* HEADER */}
       <header className="shell-header">
         <button className="rail-toggle mono" onClick={() => setRailCollapsed(v => !v)} aria-label="Toggle navigation">
           {railCollapsed ? '›' : '‹'}
@@ -38,7 +41,6 @@ export function Shell() {
       </header>
 
       <div className="shell-body">
-        {/* LEFT RAIL */}
         <nav className="shell-rail" aria-label="Workspace navigation">
           {NAV.map(({ to, label }) => (
             <NavLink key={to} to={to} className={({ isActive }) => `rail-item mono ${isActive ? 'active' : ''}`}>
@@ -47,16 +49,13 @@ export function Shell() {
           ))}
         </nav>
 
-        {/* CENTRAL CANVAS */}
         <main className="shell-canvas">
-          <Outlet context={{ setInspectorOpen }} />
+          <Outlet />
         </main>
 
-        {/* RIGHT INSPECTOR */}
         {inspectorOpen && (
           <aside className="shell-inspector">
-            <button className="inspector-close mono" onClick={() => setInspectorOpen(false)}>✕</button>
-            <div id="inspector-portal-root" />
+            <Inspector onClose={clearInspection} />
           </aside>
         )}
       </div>

@@ -28,7 +28,32 @@ export interface QualityWarning {
   domains: Domain[]
 }
 
+// What the Inspector is currently showing.
+export type InspectionKind = 'metric_point' | 'event' | 'metric_series'
+
+export interface MetricPointInspection {
+  kind: 'metric_point'
+  metricId: string
+  date: string
+  value: number | null
+  unit: string | null
+  source: string | null
+  confidence: string | null
+  provenance: string | null
+  aggregation: string
+  timezone: string
+}
+
+export interface EventInspection {
+  kind: 'event'
+  eventRef: EventRef
+  // Raw record loaded on demand by Inspector
+}
+
+export type InspectionTarget = MetricPointInspection | EventInspection | null
+
 export interface AnalysisContext {
+  inspectionTarget: InspectionTarget
   primaryRange: DateRange
   comparisonRange: DateRange | null
   selectedDate: string | null        // YYYY-MM-DD
@@ -55,6 +80,7 @@ export function defaultContext(): AnalysisContext {
       start: start.toISOString().slice(0, 10),
       end: end.toISOString().slice(0, 10),
     },
+    inspectionTarget: null,
     comparisonRange: null,
     selectedDate: null,
     selectedEvent: null,

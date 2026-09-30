@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react'
 import * as echarts from 'echarts'
 import type { ChartSpec } from '../../lib/chartSpec'
-import type { MetricResult } from '../../lib/metricAdapter'
+import type { MetricResult, MetricPoint } from '../../lib/metricAdapter'
 import { useAnalysis } from '../../context/AnalysisContext'
 import './FTChart.css'
 
@@ -29,7 +29,7 @@ interface Props {
 export function FTChart({ spec, result, height = 200, onDateSelect }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const chartRef = useRef<echarts.EChartsType | null>(null)
-  const { ctx } = useAnalysis()
+  const { ctx, setSelectedDate, inspect } = useAnalysis()
 
   // Initialize
   useEffect(() => {
@@ -97,10 +97,27 @@ export function FTChart({ spec, result, height = 200, onDateSelect }: Props) {
 
     chart.setOption(option, true)
 
-    // Emit date selection on click
+    // Click: emit date + open Inspector
     chart.off('click')
-    chart.on('click', (params: { name: string }) => {
-      onDateSelect?.(params.name)
+    chart.on('click', (params: { name: string; dataIndex: number }) => {
+      const date = params.name
+      setSelectedDate(date)
+      onDateSelect?.(date)
+      const point: MetricPoint = result.points[params.dataIndex]
+      if (point) {
+        inspect({
+          kind: 'metric_point',
+          metricId: spec.metricId,
+          date,
+          value: point.value,
+          unit: spec.unit,
+          source: point.source,
+          confidence: point.confidence,
+          provenance: point.provenance,
+          aggregation: 'daily_avg',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        })
+      }
     })
   }, [result, spec, onDateSelect])
 

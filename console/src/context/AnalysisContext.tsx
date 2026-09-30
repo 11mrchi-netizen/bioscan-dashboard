@@ -1,6 +1,6 @@
 // DAV-308: Shared AnalysisContext — one source of truth for all analytical surfaces.
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
-import { defaultContext, type AnalysisContext, type DateRange, type EventRef, type MetricId } from '../types/analysis'
+import { defaultContext, type AnalysisContext, type DateRange, type EventRef, type InspectionTarget, type MetricId } from '../types/analysis'
 
 interface AnalysisContextValue {
   ctx: AnalysisContext
@@ -9,6 +9,8 @@ interface AnalysisContextValue {
   setSelectedDate: (date: string | null) => void
   setSelectedEvent: (event: EventRef | null) => void
   toggleMetric: (id: MetricId) => void
+  inspect: (target: InspectionTarget) => void
+  clearInspection: () => void
   update: (patch: Partial<AnalysisContext>) => void
 }
 
@@ -31,8 +33,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       return { ...prev, selectedMetrics: has ? prev.selectedMetrics.filter(m => m !== id) : [...prev.selectedMetrics, id] }
     }), [])
 
+  const inspect = useCallback((target: InspectionTarget) => update({ inspectionTarget: target }), [update])
+  const clearInspection = useCallback(() => update({ inspectionTarget: null }), [update])
+
   return (
-    <Ctx.Provider value={{ ctx, setRange, setComparisonRange, setSelectedDate, setSelectedEvent, toggleMetric, update }}>
+    <Ctx.Provider value={{ ctx, setRange, setComparisonRange, setSelectedDate, setSelectedEvent, toggleMetric, inspect, clearInspection, update }}>
       {children}
     </Ctx.Provider>
   )

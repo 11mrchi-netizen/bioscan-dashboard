@@ -18,7 +18,7 @@ const OVERVIEW_METRICS = [
 ] as const
 
 export function Overview() {
-  const { ctx, setSelectedDate } = useAnalysis()
+  const { ctx, setSelectedDate, clearInspection } = useAnalysis()
   const [results, setResults] = useState<Record<string, MetricResult>>({})
   const [loading, setLoading] = useState(true)
 
@@ -44,7 +44,7 @@ export function Overview() {
         {ctx.selectedDate && (
           <div className="overview-cursor mono">
             CURSOR: {ctx.selectedDate}
-            <button className="overview-cursor-clear mono" onClick={() => setSelectedDate(null)}>✕</button>
+            <button className="overview-cursor-clear mono" onClick={() => { setSelectedDate(null); clearInspection() }}>✕</button>
           </div>
         )}
       </div>
@@ -61,7 +61,6 @@ export function Overview() {
                 spec={spec}
                 result={result}
                 height={160}
-                onDateSelect={setSelectedDate}
               />
             </div>
           )

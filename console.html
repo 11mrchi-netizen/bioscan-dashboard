@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAVIDE // BIOSCAN — Analysis Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<style>
+:root{
+  --bg:#0a0a14; --panel:#12101e; --panel2:#1a1830; --line:#2e2850; --line-bright:#4a3f7a;
+  --cyan:#4cf1ff; --magenta:#ff4cd6; --text:#eef0fb; --muted:#6e6a94; --muted2:#9d97c4;
+  --green:#22c55e; --amber:#f59e0b; --red:#ef4444; --purple:#a855f7;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;font-weight:500;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+
+/* SHELL */
+#shell{display:flex;height:100vh;overflow:hidden;}
+#sidebar{
+  width:200px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;overflow-y:auto;
+}
+#sidebar-head{
+  padding:18px 16px 14px;border-bottom:1px solid var(--line);
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;color:var(--cyan);
+  text-shadow:0 0 8px rgba(76,241,255,.4);
+}
+#sidebar-head .sub{color:var(--muted);font-size:10px;margin-top:3px;letter-spacing:.05em;}
+.nav-item{
+  display:flex;align-items:center;gap:8px;padding:10px 16px;
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:var(--muted2);
+  cursor:pointer;border-left:3px solid transparent;transition:all .15s;user-select:none;
+}
+.nav-item:hover{color:var(--text);background:rgba(76,241,255,.04);}
+.nav-item.active{color:var(--cyan);border-left-color:var(--cyan);background:rgba(76,241,255,.07);}
+.nav-item .badge{font-size:9px;color:var(--muted);margin-left:auto;}
+.nav-sep{height:1px;background:var(--line);margin:6px 0;}
+#sidebar-foot{margin-top:auto;padding:14px 16px;border-top:1px solid var(--line);}
+#sidebar-foot .user{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.so-btn{
+  width:100%;padding:7px;background:transparent;border:1px solid var(--line-bright);
+  border-radius:6px;color:var(--muted2);font-family:'IBM Plex Mono',monospace;font-size:10px;
+  letter-spacing:.06em;cursor:pointer;transition:all .15s;
+}
+.so-btn:hover{border-color:var(--magenta);color:var(--magenta);}
+
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#topbar{
+  padding:12px 20px;border-bottom:1px solid var(--line);background:var(--panel);
+  display:flex;align-items:center;gap:16px;flex-shrink:0;
+}
+#topbar .title{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--text);}
+#topbar .range-controls{display:flex;align-items:center;gap:8px;margin-left:auto;}
+.range-btn{
+  padding:5px 10px;background:transparent;border:1px solid var(--line);border-radius:4px;
+  color:var(--muted2);font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;
+  cursor:pointer;transition:all .15s;
+}
+.range-btn:hover,.range-btn.active{border-color:var(--cyan);color:var(--cyan);}
+.range-input{
+  padding:4px 8px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;
+  color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;
+}
+#content{flex:1;overflow-y:auto;padding:20px;}
+
+/* WORKSPACE */
+.workspace{display:none;}
+.workspace.active{display:block;}
+.ws-title{font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.1em;color:var(--cyan);margin-bottom:16px;}
+
+/* GRID HELPERS */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+@media(max-width:900px){.grid-4,.grid-3{grid-template-columns:repeat(2,1fr);}.grid-2{grid-template-columns:1fr;}}
+
+/* CARDS */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;}
+.card-title{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;color:var(--muted);margin-bottom:8px;}
+.kpi-val{font-family:'IBM Plex Mono',monospace;font-size:22px;color:var(--text);}
+.kpi-unit{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);margin-left:4px;}
+.kpi-sub{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted2);margin-top:4px;}
+.chart-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px;}
+.chart-title{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;color:var(--muted);margin-bottom:10px;}
+
+/* TABLES */
+.tbl-wrap{overflow-x:auto;margin-top:10px;}
+table{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:11px;}
+thead th{padding:7px 10px;text-align:left;color:var(--muted);font-weight:400;border-bottom:1px solid var(--line);white-space:nowrap;}
+tbody td{padding:7px 10px;border-bottom:1px solid rgba(46,40,80,.4);color:var(--muted2);}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:rgba(76,241,255,.03);color:var(--text);}
+
+/* TIMELINE */
+.tl-day{margin-bottom:14px;}
+.tl-day-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;color:var(--muted);margin-bottom:6px;}
+.tl-event{
+  display:flex;align-items:center;gap:10px;padding:8px 12px;
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;margin-bottom:4px;
+}
+.tl-badge{
+  font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.06em;
+  padding:2px 6px;border-radius:3px;flex-shrink:0;
+}
+.tl-badge.run{background:rgba(76,241,255,.15);color:var(--cyan);}
+.tl-badge.sleep{background:rgba(168,85,247,.15);color:var(--purple);}
+.tl-badge.injury{background:rgba(239,68,68,.15);color:var(--red);}
+.tl-badge.illness{background:rgba(245,158,11,.15);color:var(--amber);}
+.tl-badge.rest{background:rgba(100,116,139,.15);color:#94a3b8;}
+.tl-text{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted2);}
+
+/* STATES */
+.loading{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);padding:20px 0;}
+.empty{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);padding:12px 0;}
+
+/* SELECTORS */
+.select-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.select-label{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);}
+.sel,.inp{
+  padding:5px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;
+  color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;
+}
+.sel:focus,.inp:focus{outline:none;border-color:var(--cyan);}
+
+/* CAVEAT BANNER */
+.caveat{
+  font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);
+  padding:7px 10px;background:rgba(46,40,80,.3);border-radius:4px;margin-bottom:12px;
+}
+</style>
+</head>
+<body>
+
+<div id="shell">
+
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div id="sidebar-head">
+      ANALYSIS<br><span class="sub">BIOSCAN CONSOLE</span>
+    </div>
+    <div class="nav-item active" data-ws="overview">OVERVIEW</div>
+    <div class="nav-sep"></div>
+    <div class="nav-item" data-ws="timeline">TIMELINE</div>
+    <div class="nav-item" data-ws="training">TRAINING</div>
+    <div class="nav-item" data-ws="recovery">RECOVERY</div>
+    <div class="nav-item" data-ws="nutrition">NUTRITION</div>
+    <div class="nav-sep"></div>
+    <div class="nav-item" data-ws="comparison">COMPARISON</div>
+    <div class="nav-item" data-ws="relationship">RELATIONSHIP LAB</div>
+    <div class="nav-sep"></div>
+    <div class="nav-item" data-ws="explorer">DATA EXPLORER</div>
+    <div id="sidebar-foot">
+      <div class="user mono" id="user-email">—</div>
+      <button class="so-btn" id="signout-btn">SIGN OUT</button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div id="main">
+    <div id="topbar">
+      <span class="title mono">DAVIDE // BIOSCAN — ANALYSIS CONSOLE</span>
+      <div class="range-controls">
+        <span class="select-label">RANGE</span>
+        <button class="range-btn" data-days="30">30D</button>
+        <button class="range-btn active" data-days="90">90D</button>
+        <button class="range-btn" data-days="180">180D</button>
+        <button class="range-btn" data-days="365">1Y</button>
+      </div>
+    </div>
+
+    <div id="content">
+
+      <!-- OVERVIEW -->
+      <div class="workspace active" id="ws-overview">
+        <div class="ws-title">OVERVIEW</div>
+        <div class="grid-4" id="ov-kpis" style="margin-bottom:14px;">
+          <div class="loading mono">LOADING…</div>
+        </div>
+        <div class="grid-2">
+          <div class="chart-card">
+            <div class="chart-title">HRV (RMSSD) · ms</div>
+            <div id="ov-hrv-chart" style="height:160px;"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">RESTING HR · bpm</div>
+            <div id="ov-rhr-chart" style="height:160px;"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">SLEEP · hours</div>
+            <div id="ov-sleep-chart" style="height:160px;"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">ENERGY &amp; MOOD · /10</div>
+            <div id="ov-mood-chart" style="height:160px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIMELINE -->
+      <div class="workspace" id="ws-timeline">
+        <div class="ws-title">TIMELINE</div>
+        <div id="tl-content"><div class="loading mono">LOADING…</div></div>
+      </div>
+
+      <!-- TRAINING -->
+      <div class="workspace" id="ws-training">
+        <div class="ws-title">TRAINING LOAD</div>
+        <div class="chart-card" style="margin-bottom:14px;">
+          <div class="chart-title">CTL / ATL / TSB (Fitness · Fatigue · Form)</div>
+          <div id="tr-load-chart" style="height:220px;"></div>
+        </div>
+        <div class="chart-card" style="margin-bottom:14px;">
+          <div class="chart-title">WEEKLY VOLUME · km</div>
+          <div id="tr-vol-chart" style="height:160px;"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">SESSIONS</div>
+          <div class="tbl-wrap" id="tr-table"><div class="loading mono">LOADING…</div></div>
+        </div>
+      </div>
+
+      <!-- RECOVERY -->
+      <div class="workspace" id="ws-recovery">
+        <div class="ws-title">RECOVERY</div>
+        <div class="grid-2">
+          <div class="chart-card">
+            <div class="chart-title">HRV (RMSSD) · ms</div>
+            <div id="rc-hrv-chart" style="height:180px;"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">RESTING HR · bpm</div>
+            <div id="rc-rhr-chart" style="height:180px;"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">SLEEP · hours</div>
+            <div id="rc-sleep-chart" style="height:180px;"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">BODY WEIGHT · kg</div>
+            <div id="rc-weight-chart" style="height:180px;"></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:14px;">
+          <div class="card-title">INJURY LOG</div>
+          <div class="tbl-wrap" id="rc-injuries"><div class="loading mono">LOADING…</div></div>
+        </div>
+      </div>
+
+      <!-- NUTRITION -->
+      <div class="workspace" id="ws-nutrition">
+        <div class="ws-title">NUTRITION</div>
+        <div class="chart-card" style="margin-bottom:14px;">
+          <div class="chart-title">DAILY CALORIES</div>
+          <div id="nu-cal-chart" style="height:180px;"></div>
+        </div>
+        <div class="chart-card" style="margin-bottom:14px;">
+          <div class="chart-title">MACROS · g/day (protein · carbs · fat)</div>
+          <div id="nu-macro-chart" style="height:180px;"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">RECENT MEALS</div>
+          <div class="tbl-wrap" id="nu-table"><div class="loading mono">LOADING…</div></div>
+        </div>
+      </div>
+
+      <!-- COMPARISON -->
+      <div class="workspace" id="ws-comparison">
+        <div class="ws-title">COMPARISON</div>
+        <div class="select-row">
+          <span class="select-label">METRIC A</span>
+          <select class="sel" id="cmp-a">
+            <option value="wearable_daily.hrv">HRV (ms)</option>
+            <option value="wearable_daily.rhr">Resting HR (bpm)</option>
+            <option value="wearable_daily.steps">Steps</option>
+            <option value="sleep_daily.hours">Sleep (h)</option>
+            <option value="wellbeing_daily.energy">Energy (/10)</option>
+            <option value="wellbeing_daily.mood">Mood (/10)</option>
+            <option value="body_metrics.weight_kg">Weight (kg)</option>
+          </select>
+          <span class="select-label">vs</span>
+          <select class="sel" id="cmp-b">
+            <option value="wearable_daily.rhr">Resting HR (bpm)</option>
+            <option value="wearable_daily.hrv">HRV (ms)</option>
+            <option value="wearable_daily.steps">Steps</option>
+            <option value="sleep_daily.hours">Sleep (h)</option>
+            <option value="wellbeing_daily.energy">Energy (/10)</option>
+            <option value="wellbeing_daily.mood">Mood (/10)</option>
+            <option value="body_metrics.weight_kg">Weight (kg)</option>
+          </select>
+          <button class="range-btn" id="cmp-load-btn">LOAD</button>
+        </div>
+        <div class="chart-card">
+          <div id="cmp-chart" style="height:280px;"></div>
+        </div>
+        <div class="grid-4" id="cmp-stats" style="margin-top:14px;"></div>
+      </div>
+
+      <!-- RELATIONSHIP LAB -->
+      <div class="workspace" id="ws-relationship">
+        <div class="ws-title">RELATIONSHIP LAB</div>
+        <div class="select-row">
+          <span class="select-label">X</span>
+          <select class="sel" id="rel-x">
+            <option value="sleep_daily.hours">Sleep (h)</option>
+            <option value="wearable_daily.hrv">HRV (ms)</option>
+            <option value="wearable_daily.rhr">Resting HR (bpm)</option>
+            <option value="wearable_daily.steps">Steps</option>
+            <option value="wellbeing_daily.energy">Energy (/10)</option>
+            <option value="wellbeing_daily.mood">Mood (/10)</option>
+          </select>
+          <span class="select-label">Y</span>
+          <select class="sel" id="rel-y">
+            <option value="wearable_daily.hrv">HRV (ms)</option>
+            <option value="sleep_daily.hours">Sleep (h)</option>
+            <option value="wearable_daily.rhr">Resting HR (bpm)</option>
+            <option value="wearable_daily.steps">Steps</option>
+            <option value="wellbeing_daily.energy">Energy (/10)</option>
+            <option value="wellbeing_daily.mood">Mood (/10)</option>
+          </select>
+          <span class="select-label">LAG</span>
+          <input class="inp" id="rel-lag" type="number" min="-14" max="14" value="0" style="width:60px;">
+          <span class="select-label">days</span>
+          <button class="range-btn" id="rel-load-btn">LOAD</button>
+        </div>
+        <div class="caveat" id="rel-caveat">—</div>
+        <div class="grid-2">
+          <div class="chart-card">
+            <div class="chart-title" id="rel-scatter-title">SCATTER</div>
+            <div id="rel-scatter" style="height:260px;"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">LAG CORRELATION −14d to +14d</div>
+            <div id="rel-lag-chart" style="height:260px;"></div>
+          </div>
+        </div>
+        <div class="caveat" style="margin-top:8px;">Pearson r · observational data · correlation ≠ causation</div>
+      </div>
+
+      <!-- DATA EXPLORER -->
+      <div class="workspace" id="ws-explorer">
+        <div class="ws-title">DATA EXPLORER</div>
+        <div class="select-row">
+          <span class="select-label">TABLE</span>
+          <select class="sel" id="ex-table">
+            <option value="runs">runs</option>
+            <option value="wearable_daily">wearable_daily</option>
+            <option value="sleep_daily">sleep_daily</option>
+            <option value="wellbeing_daily">wellbeing_daily</option>
+            <option value="body_metrics">body_metrics</option>
+            <option value="meals">meals</option>
+            <option value="injuries">injuries</option>
+            <option value="illnesses">illnesses</option>
+            <option value="rest_days">rest_days</option>
+            <option value="lab_draws">lab_draws</option>
+          </select>
+          <span class="select-label">DATE FROM</span>
+          <input class="inp" type="date" id="ex-from">
+          <span class="select-label">TO</span>
+          <input class="inp" type="date" id="ex-to">
+          <button class="range-btn" id="ex-load-btn">QUERY</button>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap" id="ex-content"><div class="empty mono">Select a table and click QUERY.</div></div>
+        </div>
+      </div>
+
+    </div><!-- /#content -->
+  </div><!-- /#main -->
+</div><!-- /#shell -->
+
+<script>
+const SUPABASE_URL = 'https://ugfrglbcoivkprjqvjzz.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_GyandyvuVbF0RxZLnugz4A_GlNIstPc';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+const today = () => new Date().toISOString().slice(0,10);
+const daysAgo = n => { const d = new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); };
+const avg = arr => { const v = arr.filter(x=>x!=null); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
+const fmt1 = v => v == null ? '—' : v.toFixed(1);
+const fmtInt = v => v == null ? '—' : Math.round(v).toString();
+
+const C = {
+  cyan:'#4cf1ff', magenta:'#ff4cd6', green:'#22c55e', amber:'#f59e0b',
+  red:'#ef4444', purple:'#a855f7', text:'#eef0fb', muted:'#6e6a94', border:'rgba(46,40,80,.6)'
+};
+
+function chartBase(){ return { backgroundColor:'transparent', animation:false }; }
+function axisStyle(){ return {
+  axisLabel:{ color:C.muted, fontSize:10, fontFamily:'IBM Plex Mono' },
+  splitLine:{ lineStyle:{ color:C.border } },
+  axisLine:{ show:false }, axisTick:{ show:false }
+};}
+function tooltipStyle(){ return {
+  backgroundColor:'#12101e', borderColor:C.border,
+  textStyle:{ color:C.text, fontFamily:'IBM Plex Mono', fontSize:11 }
+};}
+
+let charts = {};
+function initChart(id){
+  if(charts[id]) charts[id].dispose();
+  const el = document.getElementById(id);
+  if(!el) return null;
+  const c = echarts.init(el, null, { renderer:'canvas' });
+  charts[id] = c;
+  new ResizeObserver(()=>c.resize()).observe(el);
+  return c;
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+let currentRange = 90;
+let loadedWs = new Set();
+
+async function init(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){ window.location.href = './login.html'; return; }
+  document.getElementById('user-email').textContent = session.user.email || '';
+  document.getElementById('signout-btn').addEventListener('click', async () => {
+    await sb.auth.signOut(); window.location.href = './login.html';
+  });
+  setupNav();
+  setupRangeBtns();
+  await loadWorkspace('overview');
+}
+
+function setupNav(){
+  document.querySelectorAll('.nav-item[data-ws]').forEach(el => {
+    el.addEventListener('click', () => loadWorkspace(el.dataset.ws));
+  });
+}
+
+function setupRangeBtns(){
+  document.querySelectorAll('.range-btn[data-days]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentRange = parseInt(btn.dataset.days);
+      document.querySelectorAll('.range-btn[data-days]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadedWs.clear();
+      const active = document.querySelector('.workspace.active');
+      if(active) loadWorkspace(active.id.replace('ws-',''));
+    });
+  });
+}
+
+async function loadWorkspace(id){
+  document.querySelectorAll('.workspace').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.ws === id));
+  const ws = document.getElementById('ws-'+id);
+  if(ws) ws.classList.add('active');
+  document.getElementById('topbar').querySelector('.title').textContent =
+    'DAVIDE // BIOSCAN — ' + id.toUpperCase().replace('-',' ');
+
+  if(!loadedWs.has(id)){
+    loadedWs.add(id);
+    await wsLoaders[id]?.();
+  }
+}
+
+// ─── DATE RANGE ───────────────────────────────────────────────────────────────
+const rangeFrom = () => daysAgo(currentRange);
+const rangeTo   = () => today();
+
+// ─── FETCH HELPERS ────────────────────────────────────────────────────────────
+async function fetchRange(table, dateCol, extra){
+  const { data, error } = await sb.from(table).select(extra || '*')
+    .gte(dateCol, rangeFrom()).lte(dateCol, rangeTo()).order(dateCol);
+  if(error) console.warn(table, error.message);
+  return data || [];
+}
+
+// ─── OVERVIEW ─────────────────────────────────────────────────────────────────
+async function loadOverview(){
+  const [wear, sleep, well, runs] = await Promise.all([
+    fetchRange('wearable_daily','date'),
+    fetchRange('sleep_daily','date'),
+    fetchRange('wellbeing_daily','date'),
+    fetchRange('runs','date'),
+  ]);
+
+  const kpis = [
+    { label:'AVG HRV', val: fmtInt(avg(wear.map(r=>r.hrv))), unit:'ms' },
+    { label:'AVG RHR',  val: fmtInt(avg(wear.map(r=>r.rhr))), unit:'bpm' },
+    { label:'AVG SLEEP', val: fmt1(avg(sleep.map(r=>r.hours))), unit:'h' },
+    { label:'AVG ENERGY', val: fmt1(avg(well.map(r=>r.energy))), unit:'/10' },
+    { label:'AVG MOOD',   val: fmt1(avg(well.map(r=>r.mood))), unit:'/10' },
+    { label:'AVG STEPS',  val: fmtInt(avg(wear.map(r=>r.steps))), unit:'' },
+    { label:'RUNS', val: runs.length.toString(), unit:' sessions' },
+    { label:'TOTAL KM', val: fmt1(runs.reduce((s,r)=>s+(r.distance_km||0),0)), unit:'km' },
+  ];
+  document.getElementById('ov-kpis').innerHTML = kpis.map(k =>
+    `<div class="card"><div class="card-title">${k.label}</div><span class="kpi-val">${k.val}</span><span class="kpi-unit mono">${k.unit}</span></div>`
+  ).join('');
+
+  drawLine('ov-hrv-chart',  wear.map(r=>r.date), [{ data: wear.map(r=>r.hrv||null), color: C.cyan }]);
+  drawLine('ov-rhr-chart',  wear.map(r=>r.date), [{ data: wear.map(r=>r.rhr||null), color: C.magenta }]);
+  drawLine('ov-sleep-chart', sleep.map(r=>r.date), [{ data: sleep.map(r=>r.hours||null), color: C.purple }]);
+  drawLine('ov-mood-chart',  well.map(r=>r.date), [
+    { data: well.map(r=>r.energy||null), color: C.amber, name:'Energy' },
+    { data: well.map(r=>r.mood||null),   color: C.green, name:'Mood' },
+  ]);
+}
+
+function drawLine(id, dates, series){
+  const c = initChart(id);
+  if(!c) return;
+  c.setOption({ ...chartBase(),
+    grid:{ top:8, right:8, bottom:28, left:36 },
+    xAxis:{ type:'category', data:dates, ...axisStyle() },
+    yAxis:{ type:'value', ...axisStyle() },
+    tooltip:{ trigger:'axis', ...tooltipStyle() },
+    legend: series.length > 1 ? { textStyle:{ color:C.muted, fontSize:10, fontFamily:'IBM Plex Mono' } } : { show:false },
+    series: series.map(s => ({
+      type:'line', data: s.data, smooth:true, name: s.name || '',
+      lineStyle:{ color:s.color, width:2 },
+      itemStyle:{ color:s.color },
+      symbol:'none', connectNulls:false,
+      areaStyle:{ color:{ type:'linear', x:0,y:0,x2:0,y2:1,
+        colorStops:[{offset:0,color:s.color+'33'},{offset:1,color:s.color+'00'}] } }
+    }))
+  });
+}
+
+// ─── TIMELINE ─────────────────────────────────────────────────────────────────
+async function loadTimeline(){
+  const el = document.getElementById('tl-content');
+  const [runs, sleep, injuries, illnesses, rest] = await Promise.all([
+    fetchRange('runs','date','date,distance_km,duration_min,activity_type'),
+    fetchRange('sleep_daily','date','date,hours,score'),
+    fetchRange('injuries','start_date','start_date,end_date,location,note'),
+    fetchRange('illnesses','start_date','start_date,end_date,type,note'),
+    fetchRange('rest_days','date','date,reason'),
+  ]);
+
+  const events = [];
+  runs.forEach(r => events.push({ date:r.date, kind:'run',
+    text:`${r.activity_type||'run'} · ${fmt1(r.distance_km)}km · ${r.duration_min||'—'}min` }));
+  sleep.forEach(r => events.push({ date:r.date, kind:'sleep',
+    text:`sleep · ${fmt1(r.hours)}h${r.score ? ` · score ${r.score}` : ''}` }));
+  injuries.forEach(r => events.push({ date:r.start_date, kind:'injury',
+    text:`injury · ${r.location||'—'}${r.note ? ` · ${r.note}` : ''}` }));
+  illnesses.forEach(r => events.push({ date:r.start_date, kind:'illness',
+    text:`illness · ${r.type||'—'}${r.note ? ` · ${r.note}` : ''}` }));
+  rest.forEach(r => events.push({ date:r.date, kind:'rest',
+    text:`rest day${r.reason ? ` · ${r.reason}` : ''}` }));
+
+  events.sort((a,b) => b.date.localeCompare(a.date));
+
+  if(!events.length){ el.innerHTML = '<div class="empty mono">No events in range.</div>'; return; }
+
+  const byDate = {};
+  events.forEach(e => { if(!byDate[e.date]) byDate[e.date] = []; byDate[e.date].push(e); });
+
+  el.innerHTML = Object.keys(byDate).sort((a,b)=>b.localeCompare(a)).map(date =>
+    `<div class="tl-day">
+      <div class="tl-day-label">${date}</div>
+      ${byDate[date].map(e => `
+        <div class="tl-event">
+          <span class="tl-badge ${e.kind}">${e.kind.toUpperCase()}</span>
+          <span class="tl-text">${e.text}</span>
+        </div>`).join('')}
+    </div>`
+  ).join('');
+}
+
+// ─── TRAINING ─────────────────────────────────────────────────────────────────
+async function loadTraining(){
+  // Need 180 days for CTL
+  const fromDate = daysAgo(180);
+  const { data:runs } = await sb.from('runs').select('*').gte('date', fromDate).lte('date', rangeTo()).order('date');
+  const allRuns = runs || [];
+
+  // Daily TSS proxy
+  const tssMap = {};
+  allRuns.forEach(r => {
+    const factor = { interval:1.3, race:1.5, easy:0.7 }[r.activity_type] || 1.0;
+    tssMap[r.date] = (tssMap[r.date]||0) + ((r.duration_min||0) * factor);
+  });
+
+  // Build date range from 180 days ago to today
+  const allDates = [];
+  const d = new Date(fromDate);
+  while(d.toISOString().slice(0,10) <= rangeTo()){
+    allDates.push(d.toISOString().slice(0,10));
+    d.setDate(d.getDate()+1);
+  }
+
+  // EMA
+  let ctl=0, atl=0;
+  const ctlArr=[], atlArr=[], tsbArr=[], chartDates=[];
+  allDates.forEach(date => {
+    const tss = tssMap[date] || 0;
+    ctl = ctl + (tss - ctl) * (1 - Math.exp(-1/42));
+    atl = atl + (tss - atl) * (1 - Math.exp(-1/7));
+    if(date >= rangeFrom()){
+      ctlArr.push(Math.round(ctl*10)/10);
+      atlArr.push(Math.round(atl*10)/10);
+      tsbArr.push(Math.round((ctl-atl)*10)/10);
+      chartDates.push(date);
+    }
+  });
+
+  // CTL/ATL/TSB chart
+  const c = initChart('tr-load-chart');
+  if(c){ c.setOption({ ...chartBase(),
+    grid:{top:16,right:16,bottom:30,left:44},
+    xAxis:{ type:'category', data:chartDates, ...axisStyle() },
+    yAxis:{ type:'value', ...axisStyle() },
+    tooltip:{ trigger:'axis', ...tooltipStyle() },
+    legend:{ textStyle:{ color:C.muted, fontSize:10, fontFamily:'IBM Plex Mono' } },
+    series:[
+      { name:'CTL', type:'line', data:ctlArr, smooth:true, symbol:'none', lineStyle:{color:C.cyan,width:2}, itemStyle:{color:C.cyan} },
+      { name:'ATL', type:'line', data:atlArr, smooth:true, symbol:'none', lineStyle:{color:C.red,width:2}, itemStyle:{color:C.red} },
+      { name:'TSB', type:'line', data:tsbArr, smooth:true, symbol:'none', lineStyle:{color:C.amber,width:1.5,type:'dashed'}, itemStyle:{color:C.amber},
+        areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:C.amber+'44'},{offset:1,color:C.amber+'00'}]}} }
+    ]
+  });}
+
+  // Weekly volume
+  const weekMap = {};
+  allRuns.filter(r=>r.date>=rangeFrom()).forEach(r => {
+    const d2 = new Date(r.date); d2.setDate(d2.getDate() - d2.getDay());
+    const wk = d2.toISOString().slice(0,10);
+    weekMap[wk] = (weekMap[wk]||0) + (r.distance_km||0);
+  });
+  const weeks = Object.keys(weekMap).sort();
+  const vc = initChart('tr-vol-chart');
+  if(vc){ vc.setOption({ ...chartBase(),
+    grid:{top:8,right:8,bottom:30,left:44},
+    xAxis:{ type:'category', data:weeks, ...axisStyle() },
+    yAxis:{ type:'value', ...axisStyle() },
+    tooltip:{ trigger:'axis', ...tooltipStyle() },
+    series:[{ type:'bar', data:weeks.map(w=>Math.round(weekMap[w]*10)/10),
+      itemStyle:{ color:C.cyan, opacity:.8 } }]
+  });}
+
+  // Runs table
+  const displayRuns = allRuns.filter(r=>r.date>=rangeFrom()).reverse();
+  document.getElementById('tr-table').innerHTML = displayRuns.length ?
+    `<table><thead><tr><th>DATE</th><th>TYPE</th><th>KM</th><th>MIN</th><th>PACE</th></tr></thead><tbody>
+      ${displayRuns.map(r => `<tr>
+        <td>${r.date}</td><td>${r.activity_type||'—'}</td>
+        <td>${fmt1(r.distance_km)}</td><td>${r.duration_min||'—'}</td>
+        <td>${r.pace_min_per_km ? fmt1(r.pace_min_per_km)+' /km' : '—'}</td>
+      </tr>`).join('')}
+    </tbody></table>` : '<div class="empty mono">No runs in range.</div>';
+}
+
+// ─── RECOVERY ─────────────────────────────────────────────────────────────────
+async function loadRecovery(){
+  const [wear, sleep, weight, injuries] = await Promise.all([
+    fetchRange('wearable_daily','date','date,hrv,rhr'),
+    fetchRange('sleep_daily','date','date,hours'),
+    fetchRange('body_metrics','date','date,weight_kg'),
+    sb.from('injuries').select('start_date,end_date,location,note').order('start_date',{ascending:false}).then(r=>r.data||[]),
+  ]);
+
+  drawLine('rc-hrv-chart',  wear.map(r=>r.date), [{ data:wear.map(r=>r.hrv||null),  color:C.cyan }]);
+  drawLine('rc-rhr-chart',  wear.map(r=>r.date), [{ data:wear.map(r=>r.rhr||null),  color:C.magenta }]);
+  drawLine('rc-sleep-chart', sleep.map(r=>r.date), [{ data:sleep.map(r=>r.hours||null), color:C.purple }]);
+  drawLine('rc-weight-chart', weight.map(r=>r.date), [{ data:weight.map(r=>r.weight_kg||null), color:C.amber }]);
+
+  document.getElementById('rc-injuries').innerHTML = injuries.length ?
+    `<table><thead><tr><th>START</th><th>END</th><th>LOCATION</th><th>NOTE</th></tr></thead><tbody>
+      ${injuries.map(i => `<tr>
+        <td>${i.start_date||'—'}</td><td>${i.end_date||'ongoing'}</td>
+        <td>${i.location||'—'}</td><td>${i.note||'—'}</td>
+      </tr>`).join('')}
+    </tbody></table>` : '<div class="empty mono">No injuries on record.</div>';
+}
+
+// ─── NUTRITION ─────────────────────────────────────────────────────────────────
+async function loadNutrition(){
+  const meals = await fetchRange('meals','logged_at','logged_at,name,calories,protein_g,carbs_g,fat_g');
+
+  // Aggregate by date
+  const byDate = {};
+  meals.forEach(m => {
+    const date = (m.logged_at||'').slice(0,10);
+    if(!date) return;
+    if(!byDate[date]) byDate[date] = { cal:0, pro:0, carbs:0, fat:0 };
+    byDate[date].cal   += m.calories   || 0;
+    byDate[date].pro   += m.protein_g  || 0;
+    byDate[date].carbs += m.carbs_g    || 0;
+    byDate[date].fat   += m.fat_g      || 0;
+  });
+  const dates = Object.keys(byDate).sort();
+
+  const cc = initChart('nu-cal-chart');
+  if(cc){ cc.setOption({ ...chartBase(),
+    grid:{top:8,right:8,bottom:30,left:44},
+    xAxis:{ type:'category', data:dates, ...axisStyle() },
+    yAxis:{ type:'value', ...axisStyle() },
+    tooltip:{ trigger:'axis', ...tooltipStyle() },
+    series:[{ type:'bar', data:dates.map(d=>Math.round(byDate[d].cal)),
+      itemStyle:{ color:C.amber, opacity:.8 } }]
+  });}
+
+  const mc = initChart('nu-macro-chart');
+  if(mc){ mc.setOption({ ...chartBase(),
+    grid:{top:8,right:8,bottom:30,left:44},
+    xAxis:{ type:'category', data:dates, ...axisStyle() },
+    yAxis:{ type:'value', ...axisStyle() },
+    tooltip:{ trigger:'axis', ...tooltipStyle() },
+    legend:{ textStyle:{ color:C.muted, fontSize:10, fontFamily:'IBM Plex Mono' } },
+    series:[
+      { name:'Protein', type:'bar', stack:'m', data:dates.map(d=>Math.round(byDate[d].pro)), itemStyle:{color:C.cyan} },
+      { name:'Carbs',   type:'bar', stack:'m', data:dates.map(d=>Math.round(byDate[d].carbs)), itemStyle:{color:C.green} },
+      { name:'Fat',     type:'bar', stack:'m', data:dates.map(d=>Math.round(byDate[d].fat)), itemStyle:{color:C.amber} },
+    ]
+  });}
+
+  const recent = [...meals].reverse().slice(0,50);
+  document.getElementById('nu-table').innerHTML = recent.length ?
+    `<table><thead><tr><th>DATE</th><th>NAME</th><th>KCAL</th><th>PROT</th><th>CARBS</th><th>FAT</th></tr></thead><tbody>
+      ${recent.map(m => `<tr>
+        <td>${(m.logged_at||'').slice(0,10)}</td>
+        <td>${m.name||'—'}</td>
+        <td>${fmtInt(m.calories)}</td><td>${fmtInt(m.protein_g)}g</td>
+        <td>${fmtInt(m.carbs_g)}g</td><td>${fmtInt(m.fat_g)}g</td>
+      </tr>`).join('')}
+    </tbody></table>` : '<div class="empty mono">No meals in range.</div>';
+}
+
+// ─── COMPARISON ───────────────────────────────────────────────────────────────
+async function loadComparison(){
+  const a = document.getElementById('cmp-a').value;
+  const b = document.getElementById('cmp-b').value;
+  const [ta, ca] = a.split('.');
+  const [tb, cb] = b.split('.');
+  const dateColA = ta === 'meals' ? 'logged_at' : 'date';
+  const dateColB = tb === 'meals' ? 'logged_at' : 'date';
+
+  const [ra, rb] = await Promise.all([
+    fetchRange(ta, dateColA, `${dateColA},${ca}`),
+    fetchRange(tb, dateColB, `${dateColB},${cb}`),
+  ]);
+
+  const mapA = new Map(ra.map(r => [r[dateColA]?.slice(0,10), r[ca]]));
+  const mapB = new Map(rb.map(r => [r[dateColB]?.slice(0,10), r[cb]]));
+
+  const allDates = [...new Set([...mapA.keys(), ...mapB.keys()])].sort();
+  const valA = allDates.map(d => mapA.get(d) ?? null);
+  const valB = allDates.map(d => mapB.get(d) ?? null);
+
+  const sameUnit = ca.includes('energy') && cb.includes('mood') || ca.includes('mood') && cb.includes('energy');
+  const labelA = document.getElementById('cmp-a').selectedOptions[0].text;
+  const labelB = document.getElementById('cmp-b').selectedOptions[0].text;
+
+  const c = initChart('cmp-chart');
+  if(c){ c.setOption({ ...chartBase(),
+    grid:{top:16,right:56,bottom:30,left:56},
+    xAxis:{ type:'category', data:allDates, ...axisStyle() },
+    yAxis:[
+      { type:'value', name:labelA.split('(')[1]?.replace(')',''), ...axisStyle() },
+      { type:'value', name:labelB.split('(')[1]?.replace(')',''), ...axisStyle(), splitLine:{show:false} },
+    ],
+    tooltip:{ trigger:'axis', ...tooltipStyle() },
+    legend:{ textStyle:{ color:C.muted, fontSize:10, fontFamily:'IBM Plex Mono' } },
+    series:[
+      { name:labelA, type:'line', yAxisIndex:0, data:valA, smooth:true, symbol:'none',
+        lineStyle:{color:C.cyan,width:2}, itemStyle:{color:C.cyan} },
+      { name:labelB, type:'line', yAxisIndex:sameUnit?0:1, data:valB, smooth:true, symbol:'none',
+        lineStyle:{color:C.magenta,width:2}, itemStyle:{color:C.magenta} },
+    ]
+  });}
+
+  const vA = valA.filter(x=>x!=null), vB = valB.filter(x=>x!=null);
+  const statCard = (label,val) => `<div class="card"><div class="card-title">${label}</div><span class="kpi-val">${val}</span></div>`;
+  document.getElementById('cmp-stats').innerHTML = [
+    statCard('AVG '+labelA.split(' ')[0], fmt1(avg(vA))),
+    statCard('AVG '+labelB.split(' ')[0], fmt1(avg(vB))),
+    statCard('N (A)', vA.length.toString()),
+    statCard('N (B)', vB.length.toString()),
+  ].join('');
+}
+
+document.getElementById('cmp-load-btn').addEventListener('click', () => {
+  loadedWs.delete('comparison'); loadWorkspace('comparison');
+});
+
+// ─── RELATIONSHIP LAB ─────────────────────────────────────────────────────────
+function pearson(xs, ys){
+  const n = xs.length; if(n<2) return NaN;
+  const mx = xs.reduce((a,b)=>a+b,0)/n, my = ys.reduce((a,b)=>a+b,0)/n;
+  let num=0, sdX=0, sdY=0;
+  for(let i=0;i<n;i++){ num+=(xs[i]-mx)*(ys[i]-my); sdX+=(xs[i]-mx)**2; sdY+=(ys[i]-my)**2; }
+  return num/Math.sqrt(sdX*sdY);
+}
+
+function buildPairs(mapX, mapY, lag){
+  const xs=[], ys=[];
+  for(const [date, vx] of mapX){
+    if(vx==null) continue;
+    const d2 = new Date(date); d2.setDate(d2.getDate()+lag);
+    const vy = mapY.get(d2.toISOString().slice(0,10));
+    if(vy==null) continue;
+    xs.push(vx); ys.push(vy);
+  }
+  return {xs,ys};
+}
+
+async function loadRelationship(){
+  const xSel = document.getElementById('rel-x').value;
+  const ySel = document.getElementById('rel-y').value;
+  const lag  = parseInt(document.getElementById('rel-lag').value)||0;
+  const [tx,cx] = xSel.split('.');
+  const [ty,cy] = ySel.split('.');
+
+  const [rx, ry] = await Promise.all([
+    fetchRange(tx,'date',`date,${cx}`),
+    fetchRange(ty,'date',`date,${cy}`),
+  ]);
+  const mapX = new Map(rx.map(r=>[r.date, r[cx]??null]));
+  const mapY = new Map(ry.map(r=>[r.date, r[cy]??null]));
+
+  const {xs, ys} = buildPairs(mapX, mapY, lag);
+  const r = pearson(xs,ys);
+  const lxLabel = document.getElementById('rel-x').selectedOptions[0].text;
+  const lyLabel = document.getElementById('rel-y').selectedOptions[0].text;
+
+  document.getElementById('rel-caveat').textContent =
+    `n=${xs.length}  ·  lag=${lag}d  ·  r=${isNaN(r)?'—':r.toFixed(3)}`;
+  document.getElementById('rel-scatter-title').textContent =
+    `SCATTER  ${lxLabel} → ${lyLabel}`;
+
+  const sc = initChart('rel-scatter');
+  if(sc){ sc.setOption({ ...chartBase(),
+    grid:{top:16,right:16,bottom:36,left:52},
+    xAxis:{ type:'value', name:lxLabel.split('(')[1]?.replace(')',''), ...axisStyle(), nameTextStyle:{color:C.muted,fontSize:10} },
+    yAxis:{ type:'value', name:lyLabel.split('(')[1]?.replace(')',''), ...axisStyle(), nameTextStyle:{color:C.muted,fontSize:10} },
+    tooltip:{ trigger:'item', ...tooltipStyle() },
+    series:[{ type:'scatter', data:xs.map((x,i)=>[x,ys[i]]), symbolSize:6,
+      itemStyle:{color:C.cyan,opacity:.7} }]
+  });}
+
+  // Lag correlation -14..+14
+  const lags = Array.from({length:29},(_,i)=>i-14);
+  const corrs = lags.map(l => { const {xs:lx,ys:ly} = buildPairs(mapX,mapY,l); return pearson(lx,ly); });
+
+  const lc = initChart('rel-lag-chart');
+  if(lc){ lc.setOption({ ...chartBase(),
+    grid:{top:16,right:16,bottom:36,left:52},
+    xAxis:{ type:'category', data:lags.map(String), name:'Lag (days)', nameTextStyle:{color:C.muted,fontSize:10}, ...axisStyle() },
+    yAxis:{ type:'value', name:'r', min:-1, max:1, ...axisStyle() },
+    tooltip:{ trigger:'axis', ...tooltipStyle(),
+      formatter: p => `Lag ${p[0]?.axisValue}d · r=${(p[0]?.data??'—').toFixed?.(3)??'—'}` },
+    series:[{ type:'bar', data:corrs.map(r=>isNaN(r)?null:Math.round(r*1000)/1000),
+      itemStyle:{ color: p => p.data >= 0 ? C.cyan : C.red, opacity:.85 } }]
+  });}
+}
+
+document.getElementById('rel-load-btn').addEventListener('click', () => {
+  loadedWs.delete('relationship'); loadWorkspace('relationship');
+});
+
+// ─── DATA EXPLORER ────────────────────────────────────────────────────────────
+function setupExplorer(){
+  document.getElementById('ex-from').value = daysAgo(currentRange);
+  document.getElementById('ex-to').value   = today();
+  document.getElementById('ex-load-btn').addEventListener('click', runExplorer);
+}
+
+async function runExplorer(){
+  const tbl   = document.getElementById('ex-table').value;
+  const from  = document.getElementById('ex-from').value;
+  const to    = document.getElementById('ex-to').value;
+  const el    = document.getElementById('ex-content');
+  el.innerHTML = '<div class="loading mono">QUERYING…</div>';
+
+  const DATE_COLS = { meals:'logged_at', lab_results:'draw_date', lab_draws:'draw_date' };
+  const dateCol = DATE_COLS[tbl] || 'date';
+
+  let q = sb.from(tbl).select('*').order(dateCol,{ascending:false}).limit(500);
+  if(from) q = q.gte(dateCol, from);
+  if(to)   q = q.lte(dateCol, to);
+  const { data, error } = await q;
+  if(error){ el.innerHTML = `<div class="empty mono">Error: ${error.message}</div>`; return; }
+  if(!data?.length){ el.innerHTML = '<div class="empty mono">No rows.</div>'; return; }
+
+  const cols = Object.keys(data[0]);
+  el.innerHTML = `<table><thead><tr>${cols.map(c=>`<th>${c.toUpperCase()}</th>`).join('')}</tr></thead><tbody>
+    ${data.map(row=>`<tr>${cols.map(c=>`<td>${row[c]??'—'}</td>`).join('')}</tr>`).join('')}
+  </tbody></table>`;
+}
+
+const wsLoaders = {
+  overview:     loadOverview,
+  timeline:     loadTimeline,
+  training:     loadTraining,
+  recovery:     loadRecovery,
+  nutrition:    loadNutrition,
+  comparison:   loadComparison,
+  relationship: loadRelationship,
+  explorer:     () => {}, // explorer is on-demand
+};
+
+setupExplorer();
+init();
+</script>
+</body>
+</html>

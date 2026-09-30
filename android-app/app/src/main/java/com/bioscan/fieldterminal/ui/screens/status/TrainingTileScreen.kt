@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -42,6 +44,8 @@ import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.domain.TrainingLoadEvaluation
 import com.bioscan.fieldterminal.domain.evaluateOstrc
 import com.bioscan.fieldterminal.domain.evaluateRestCadence
+import com.bioscan.fieldterminal.domain.WeeklyRestCadencePoint
+import com.bioscan.fieldterminal.domain.weeklyRestCadenceHistory
 import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.resolveTier
@@ -153,11 +157,14 @@ private fun InjuryTab() {
         val sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } })
         val ostrcByBodyArea = os.mapNotNull { row -> row.severityScore?.let { row.bodyArea to (LocalDate.parse(row.checkDate) to it) } }
             .groupBy({ it.first }, { it.second })
+        // DAV-51: 8-week rest-cadence strip, same weekly load/deload data
+        // evaluateRestCadence's own weeksSinceDeload search already uses.
+        val weeklyRestCadence = weeklyRestCadenceHistory(sessionLoads, weeks = 8)
         if (ostrcByBodyArea.isEmpty()) {
-            OstrcCard(evaluateOstrc("—", emptyList()), trainingLoadEval.tsb, restCadenceEval.consecutiveDaysWithoutRest, sorenessEval.median7d)
+            OstrcCard(evaluateOstrc("—", emptyList()), trainingLoadEval.tsb, restCadenceEval.consecutiveDaysWithoutRest, sorenessEval.median7d, weeklyRestCadence)
         } else {
             ostrcByBodyArea.forEach { (bodyArea, entries) ->
-                OstrcCard(evaluateOstrc(bodyArea, entries), trainingLoadEval.tsb, restCadenceEval.consecutiveDaysWithoutRest, sorenessEval.median7d)
+                OstrcCard(evaluateOstrc(bodyArea, entries), trainingLoadEval.tsb, restCadenceEval.consecutiveDaysWithoutRest, sorenessEval.median7d, weeklyRestCadence)
             }
         }
     }
@@ -165,7 +172,7 @@ private fun InjuryTab() {
 
 // DAV-216 (24/9 fixes): moved verbatim from HeartTileScreen.kt.
 @Composable
-private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int, sorenessMedian: Double?) {
+private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int, sorenessMedian: Double?, weeklyRestCadence: List<WeeklyRestCadencePoint>) {
     FTCard(title = "OSTRC-H2 · ${eval.bodyArea.uppercase()}") {
         StatLine("Confidence", eval.confidence.label)
         eval.latestSeverityScore?.let { StatLine("Latest severity", "$it / 100") }
@@ -178,11 +185,43 @@ private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int,
         tsb?.let { StatLine("TSB (form)", "%+.1f".format(it)) }
         StatLine("Days without rest", "$daysWithoutRest")
         sorenessMedian?.let { StatLine("7-day soreness median", "%.1f".format(it)) }
+        RestCadenceStrip(weeklyRestCadence)
         Text(
             "No injury risk score — single-factor screening doesn't predict injury. You do the synthesis; this doesn't.",
             style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
             color = FT.TextMuted,
         )
+    }
+}
+
+// DAV-51 (Category 7's "rest-cadence 8-week strip"): one bar per week, sized
+// by that week's session load, deload weeks (same rule
+// evaluateRestCadence()'s own weeksSinceDeload search uses) picked out in
+// Emerald -- oldest week on the left, matching every other chart's
+// left-to-right time convention.
+@Composable
+private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
+    if (history.isEmpty()) return
+    val maxLoad = history.maxOf { it.load }.coerceAtLeast(1.0)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            "8-WEEK LOAD (deload weeks marked)",
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+            color = FT.TextMuted,
+        )
+        Row(modifier = Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            history.sortedByDescending { it.weekIndex }.forEach { week ->
+                val fraction = (week.load / maxLoad).toFloat().coerceIn(0f, 1f).coerceAtLeast(0.04f)
+                Box(modifier = Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(fraction)
+                            .background(if (week.isDeload) FT.Emerald else FT.GlassFill),
+                    )
+                }
+            }
+        }
     }
 }
 

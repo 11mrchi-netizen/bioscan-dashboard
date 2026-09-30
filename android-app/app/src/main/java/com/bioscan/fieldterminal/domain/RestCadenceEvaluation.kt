@@ -33,6 +33,30 @@ data class RestCadenceEvaluation(
 
 enum class DeloadCadenceFlag { InsufficientHistory, None, Soft, Firm }
 
+// DAV-51's rest-cadence 8-week strip: one point per week, marking which
+// weeks the same deload rule below (DELOAD_LOAD_THRESHOLD_PCT vs. the
+// trailing 4-week average) actually flagged -- weekIndex 0 = the 7 days
+// ending `asOf`, ascending into the past, matching evaluateRestCadence's own
+// convention. Kept as the single source of per-week load/deload truth so the
+// "weeks since last deload" search below and the UI strip never derive
+// deload independently.
+data class WeeklyRestCadencePoint(val weekIndex: Int, val weekEndDate: LocalDate, val load: Double, val isDeload: Boolean)
+
+fun weeklyRestCadenceHistory(sessionLoads: List<Pair<LocalDate, Double>>, weeks: Int, asOf: LocalDate = LocalDate.now()): List<WeeklyRestCadencePoint> {
+    val dailyLoad = dailySessionLoadMap(sessionLoads)
+    fun weeklyLoad(weekIndex: Int): Double {
+        val end = asOf.minusDays((weekIndex * 7).toLong())
+        val start = end.minusDays(6)
+        return dailyLoad.entries.filter { !it.key.isBefore(start) && !it.key.isAfter(end) }.sumOf { it.value }
+    }
+    return (0 until weeks).map { weekIndex ->
+        val trailing4WeekAvg = (1..4).map { weeklyLoad(weekIndex + it) }.average()
+        val load = weeklyLoad(weekIndex)
+        val isDeload = trailing4WeekAvg > 0 && load <= DELOAD_LOAD_THRESHOLD_PCT * trailing4WeekAvg
+        WeeklyRestCadencePoint(weekIndex, asOf.minusDays((weekIndex * 7).toLong()), load, isDeload)
+    }
+}
+
 private const val SIGNAL_A_CONSECUTIVE_DAYS = 9
 private const val SIGNAL_A_TSB_THRESHOLD = -20.0
 private const val DELOAD_LOAD_THRESHOLD_PCT = 0.6
@@ -62,16 +86,6 @@ fun evaluateRestCadence(
     val weeksOfHistory = earliestLoad?.let { (ChronoUnit.DAYS.between(it, asOf) / 7) + 1 } ?: 0L
     val gateBMet = weeksOfHistory >= SIGNAL_B_GATE_WEEKS
 
-    // Rolling 7-day-ending-at-date grid (week 0 = the 7 days ending asOf,
-    // week 1 = the 7 days before that, ...) -- this project has no ISO-week
-    // concept anywhere else, so a fixed calendar-week boundary would be a new
-    // convention introduced just for this one signal.
-    fun weeklyLoad(weekIndex: Int): Double {
-        val end = asOf.minusDays((weekIndex * 7).toLong())
-        val start = end.minusDays(6)
-        return dailyLoad.entries.filter { !it.key.isBefore(start) && !it.key.isAfter(end) }.sumOf { it.value }
-    }
-
     var weeksSinceDeload: Int? = null
     var deloadFlag = DeloadCadenceFlag.InsufficientHistory
 
@@ -81,14 +95,7 @@ fun evaluateRestCadence(
         // weekIndex needs weeklyLoad(weekIndex+1..weekIndex+4), so the
         // furthest searchable week is weeksOfHistory-4.
         val maxWeekIndex = (weeksOfHistory - 4).toInt().coerceAtLeast(0)
-        var found: Int? = null
-        for (weekIndex in 0 until maxWeekIndex) {
-            val trailing4WeekAvg = (1..4).map { weeklyLoad(weekIndex + it) }.average()
-            if (trailing4WeekAvg > 0 && weeklyLoad(weekIndex) <= DELOAD_LOAD_THRESHOLD_PCT * trailing4WeekAvg) {
-                found = weekIndex
-                break
-            }
-        }
+        val found = weeklyRestCadenceHistory(sessionLoads, maxWeekIndex, asOf).firstOrNull { it.isDeload }?.weekIndex
         // No qualifying week found anywhere in the searchable history is a
         // real, distinct finding from "not enough history to search" (that
         // case never reaches this branch) -- report it as "at least

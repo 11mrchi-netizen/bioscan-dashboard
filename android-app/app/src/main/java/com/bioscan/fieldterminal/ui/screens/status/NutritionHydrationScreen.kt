@@ -34,6 +34,9 @@ import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.AnalysisRepository
+import com.bioscan.fieldterminal.domain.computeHydrationIntelligence
+import com.bioscan.fieldterminal.domain.HydrationIntelligenceResult
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.DataAvailability
@@ -214,6 +217,23 @@ fun HydrationTabContent(overview: NutritionOverview) {
     val hasAnyHydration = overview.todayHydrationMl != null || overview.todayBeverageItems.isNotEmpty()
     val todayCaffeineMg = overview.todayBeverageItems.mapNotNull { it.caffeineMg }.takeIf { it.isNotEmpty() }?.sum()
 
+    // 09.5 Hydration Intelligence: this tab's own small independent load
+    // (today's exercise duration only), same "each subtab loads its own
+    // data" convention TrainingTileScreen.kt's InjuryTab already follows.
+    var todayExerciseMinutes by remember { mutableStateOf(0.0) }
+    LaunchedEffect(Unit) {
+        val today = java.time.LocalDate.now()
+        todayExerciseMinutes = AnalysisRepository(SupabaseClientProvider.client)
+            .loadExerciseSessionsForTrainingLoad()
+            .filter { runCatching { java.time.OffsetDateTime.parse(it.startTime).toLocalDate() == today }.getOrDefault(false) }
+            .sumOf { it.durationMin ?: 0.0 }
+    }
+    val hydrationIntelligence = computeHydrationIntelligence(
+        measuredIntakeMl = overview.todayHydrationMl?.toDouble(),
+        effectiveHydrationMl = overview.todayBeverageItems.mapNotNull { it.effectiveHydrationMl }.sum().takeIf { overview.todayBeverageItems.isNotEmpty() },
+        exerciseDurationMinutesToday = todayExerciseMinutes,
+    )
+
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -247,6 +267,8 @@ fun HydrationTabContent(overview: NutritionOverview) {
                 )
             }
         }
+
+        HydrationIntelligenceCard(hydrationIntelligence)
 
         if (todayCaffeineMg != null) {
             FTCard(title = "CAFFEINE TODAY") {
@@ -360,6 +382,31 @@ private fun StatLine(label: String, value: String) {
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f).padding(start = 8.dp),
         )
+    }
+}
+
+@Composable
+private fun HydrationIntelligenceCard(result: HydrationIntelligenceResult) {
+    FTCard(title = "HYDRATION INTELLIGENCE") {
+        StatLine("Confidence", result.confidence.label)
+        result.measuredIntakeMl?.let { StatLine("Measured intake", "%.0f ml".format(it)) }
+        result.effectiveHydrationMl?.let { StatLine("Effective hydration (modeled)", "%.0f ml".format(it)) }
+        if (result.inferredDemandMl != null) {
+            StatLine("Inferred demand from today's exercise", "%.0f ml".format(result.inferredDemandMl))
+        } else {
+            Text(
+                "No exercise logged today -- no additional demand inferred.",
+                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                color = FT.TextMuted,
+            )
+        }
+        if (!result.environmentalContextAvailable) {
+            Text(
+                "Environmental context (temperature/humidity) isn't available yet -- demand estimate is exercise-only.",
+                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                color = FT.TextMuted,
+            )
+        }
     }
 }
 

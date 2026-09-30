@@ -7,7 +7,9 @@ import { Timeline } from './workspaces/Timeline'
 import { Training } from './workspaces/Training'
 import { Recovery } from './workspaces/Recovery'
 import { Nutrition } from './workspaces/Nutrition'
-import { WorkspaceStub } from './workspaces/WorkspaceStub'
+import { DataExplorer } from './workspaces/DataExplorer'
+import { Comparison } from './workspaces/Comparison'
+import { RelationshipLab } from './workspaces/RelationshipLab'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth()
@@ -34,9 +36,9 @@ export default function App() {
         <Route path="training"      element={<Training />} />
         <Route path="recovery"      element={<Recovery />} />
         <Route path="nutrition"     element={<Nutrition />} />
-        <Route path="comparison"    element={<WorkspaceStub name="Comparison" />} />
-        <Route path="data-explorer" element={<WorkspaceStub name="Data Explorer" />} />
-        <Route path="relationship"  element={<WorkspaceStub name="Relationship Lab" />} />
+        <Route path="comparison"    element={<Comparison />} />
+        <Route path="data-explorer" element={<DataExplorer />} />
+        <Route path="relationship"  element={<RelationshipLab />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

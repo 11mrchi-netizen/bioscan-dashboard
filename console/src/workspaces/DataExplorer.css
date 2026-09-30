@@ -1,0 +1,124 @@
+.de {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.de-toolbar {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.de-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.de-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.de-select,
+.de-input {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  padding: 4px 10px;
+  outline: none;
+  height: 30px;
+}
+
+.de-select:focus,
+.de-input:focus {
+  border-color: var(--color-emerald);
+}
+
+.de-btn {
+  background: var(--color-emerald);
+  border: none;
+  border-radius: 6px;
+  color: #000;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 4px 12px;
+  height: 30px;
+  cursor: pointer;
+}
+
+.de-btn-ghost {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 4px 12px;
+  height: 30px;
+  cursor: pointer;
+}
+
+.de-meta {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.de-table-wrap {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+.de-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.de-th {
+  position: sticky;
+  top: 0;
+  background: var(--color-base);
+  padding: 6px 12px;
+  font-size: 10px;
+  letter-spacing: 0.10em;
+  color: var(--color-text-muted);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.de-th:hover { color: var(--color-text-primary); }
+
+.de-tr:hover .de-td { background: var(--color-surface); }
+
+.de-td {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  white-space: nowrap;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.de-null { color: var(--color-text-muted); }

@@ -49,6 +49,8 @@ import com.bioscan.fieldterminal.domain.comparison.comparePersonal
 import com.bioscan.fieldterminal.domain.comparison.comparePopulation
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.SriEvaluation
+import com.bioscan.fieldterminal.domain.SleepIndexResult
+import com.bioscan.fieldterminal.domain.computeSleepIndex
 import com.bioscan.fieldterminal.domain.SubjectiveEvaluation
 import com.bioscan.fieldterminal.domain.SwcEvaluation
 import com.bioscan.fieldterminal.domain.VitalsTimeframe
@@ -183,12 +185,18 @@ fun HeartTileScreen(onBack: () -> Unit) {
                 }
                 HeartTab.Recovery -> {
                     val hoursPoints = s.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } }
-                    EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints), "h", points = hoursPoints)
                     val nights = s.mapNotNull { row ->
                         val bedtime = row.bedtime?.let { runCatching { Instant.parse(it) }.getOrNull() }
                         val wake = row.wakeTime?.let { runCatching { Instant.parse(it) }.getOrNull() }
                         if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
                     }
+                    // 09.1 Sleep Index: a headline aggregate above the same
+                    // component cards below it -- an aggregation layer, never
+                    // a replacement (DAV-235's own rule).
+                    val deepPoints = s.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } }
+                    val respiratoryForIndex = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
+                    SleepIndexCard(computeSleepIndex(hoursPoints, deepPoints, respiratoryForIndex, nights))
+                    EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints), "h", points = hoursPoints)
                     SriCard(evaluateSri(nights))
                     SleepPhasesCard(s)
                 }
@@ -319,6 +327,25 @@ private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<
     val today = LocalDate.now()
     val recent = points.filter { ChronoUnit.DAYS.between(it.first, today) <= TREND_WINDOW_DAYS }
     return recent.takeIf { it.size >= 2 }
+}
+
+@Composable
+private fun SleepIndexCard(result: SleepIndexResult) {
+    FTCard(title = "SLEEP INDEX") {
+        StatLine("Confidence", result.confidence.label)
+        if (result.score != null) {
+            FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
+            result.components.forEach { (component, componentScore) ->
+                StatLine(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, "%.0f".format(componentScore.score))
+            }
+        } else {
+            Text(
+                "Not enough components yet -- needs at least 2 of duration/regularity/respiratory/stage-composition.",
+                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                color = FT.TextSecondary,
+            )
+        }
+    }
 }
 
 @Composable

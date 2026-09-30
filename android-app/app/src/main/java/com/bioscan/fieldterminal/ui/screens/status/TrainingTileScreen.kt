@@ -56,6 +56,19 @@ import com.bioscan.fieldterminal.domain.TSB_HEAVILY_LOADED_BELOW
 import com.bioscan.fieldterminal.domain.TSB_LOADED_BELOW
 import com.bioscan.fieldterminal.domain.TrainingLoadPoint
 import com.bioscan.fieldterminal.domain.trainingLoadSeries
+import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
+import com.bioscan.fieldterminal.data.ZeppStressRepository
+import com.bioscan.fieldterminal.domain.SleepNight
+import com.bioscan.fieldterminal.domain.computeSleepIndex
+import com.bioscan.fieldterminal.domain.evaluateHrv
+import com.bioscan.fieldterminal.domain.evaluateRhr
+import com.bioscan.fieldterminal.domain.computeDynamicRecovery
+import com.bioscan.fieldterminal.domain.computeTrainingReadiness
+import com.bioscan.fieldterminal.domain.TrainingReadinessResult
+import com.bioscan.fieldterminal.domain.TrainingDemandTier
+import com.bioscan.fieldterminal.domain.stress.StressDay
+import com.bioscan.fieldterminal.domain.stress.analyzeStressDay
+import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.ui.components.BandedGauge
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
@@ -226,11 +239,41 @@ private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
 }
 
 @Composable
+private fun TrainingReadinessCard(result: TrainingReadinessResult) {
+    FTCard(title = "TODAY'S READINESS") {
+        FTStatePill(result.generalState.toMetricState())
+        StatLine("Confidence", result.confidence.label)
+        result.demandRelative.forEach { (tier, state) ->
+            val label = when (tier) {
+                TrainingDemandTier.EASY_AEROBIC -> "Easy aerobic"
+                TrainingDemandTier.THRESHOLD -> "Threshold"
+                TrainingDemandTier.LONG_HIGH_LOAD -> "Long / high-load"
+                TrainingDemandTier.STRENGTH -> "Strength"
+            }
+            val symbol = when (state) {
+                EvalState.ShiftUp -> "Ready"
+                EvalState.Stable -> "Matched"
+                EvalState.ShiftDown -> "Caution"
+                else -> "Building"
+            }
+            StatLine(label, symbol)
+        }
+    }
+}
+
+@Composable
 private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
     var sessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
     var cycleLoaded by remember { mutableStateOf(false) }
+    // 09.4 Training Readiness needs Dynamic Recovery's full contributor set
+    // -- each subtab in this file already loads its own data independently
+    // (see InjuryTab()'s own comment), so this follows the same convention
+    // rather than sharing state with HeartTileScreen.kt.
+    var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
+    var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
+    var stressDays by remember { mutableStateOf<List<StressDay>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         val repo = AnalysisRepository(SupabaseClientProvider.client)
@@ -238,11 +281,16 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
         wearable = repo.loadWearableDaily()
         activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle()
         cycleLoaded = true
+        sleep = repo.loadSleepDaily()
+        wellbeing = repo.loadWellbeingDaily()
+        stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays()
     }
 
     val s = sessions
     val w = wearable
-    if (s == null || w == null || !cycleLoaded) {
+    val sl = sleep
+    val wb = wellbeing
+    if (s == null || w == null || !cycleLoaded || sl == null || wb == null) {
         Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FT.DomainTraining)
         }
@@ -257,6 +305,39 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
         // see AnalysisRepository.buildTrainingSessionLoads()'s own comment.
         val sessionLoads = buildTrainingSessionLoads(s, w.lastOrNull()?.rhr)
         val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
+
+        // 09.4 Training Readiness: consumes Dynamic Recovery (09.2) directly,
+        // never recomputes CTL/ATL/TSB itself (DAV-250's own rule) -- the
+        // same trainingLoadEval the card below already renders.
+        val nights = sl.mapNotNull { row ->
+            val bedtime = row.bedtime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+            val wake = row.wakeTime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+            if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
+        }
+        val sleepIndexResult = computeSleepIndex(
+            sl.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } },
+            sl.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } },
+            sl.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } },
+            nights,
+        )
+        val exerciseWindows = s.mapNotNull { session ->
+            val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
+            val durationMin = session.durationMin ?: return@mapNotNull null
+            start to start.plusSeconds((durationMin * 60).toLong())
+        }
+        val physiologicalStress = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindows) }
+        val recovery = computeDynamicRecovery(
+            sleepIndex = sleepIndexResult,
+            hrvEval = evaluateHrv(w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }),
+            rhrEval = evaluateRhr(w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }),
+            trainingLoadEval = trainingLoadEval,
+            energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            physiologicalStress = physiologicalStress,
+        )
+        TrainingReadinessCard(computeTrainingReadiness(recovery))
+
         TrainingLoadCard(trainingLoadEval, resolveTier(MetricCategory.TrainingLoad, activeCycle), trainingLoadSeries(sessionLoads), timeframe)
     }
 }

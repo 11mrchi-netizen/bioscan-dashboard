@@ -4,6 +4,9 @@ import { Shell } from './components/layout/Shell'
 import { Login } from './workspaces/Login'
 import { Overview } from './workspaces/Overview'
 import { Timeline } from './workspaces/Timeline'
+import { Training } from './workspaces/Training'
+import { Recovery } from './workspaces/Recovery'
+import { Nutrition } from './workspaces/Nutrition'
 import { WorkspaceStub } from './workspaces/WorkspaceStub'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -28,9 +31,9 @@ export default function App() {
         <Route index element={<Navigate to="overview" replace />} />
         <Route path="overview"      element={<Overview />} />
         <Route path="timeline"      element={<Timeline />} />
-        <Route path="training"      element={<WorkspaceStub name="Training" />} />
-        <Route path="recovery"      element={<WorkspaceStub name="Recovery / Body" />} />
-        <Route path="nutrition"     element={<WorkspaceStub name="Nutrition" />} />
+        <Route path="training"      element={<Training />} />
+        <Route path="recovery"      element={<Recovery />} />
+        <Route path="nutrition"     element={<Nutrition />} />
         <Route path="comparison"    element={<WorkspaceStub name="Comparison" />} />
         <Route path="data-explorer" element={<WorkspaceStub name="Data Explorer" />} />
         <Route path="relationship"  element={<WorkspaceStub name="Relationship Lab" />} />

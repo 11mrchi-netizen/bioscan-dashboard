@@ -1,0 +1,84 @@
+.training {
+  padding: var(--sp-4);
+  max-width: 960px;
+}
+
+.training-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--sp-5);
+}
+
+.training-section {
+  margin-bottom: var(--sp-6);
+}
+
+.training-section-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--color-text-muted);
+  margin-bottom: var(--sp-3);
+}
+
+.training-stress-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+}
+
+.training-chart-card {}
+
+.training-chart-wide {
+  grid-column: 1 / -1;
+}
+
+.training-footnote {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin: var(--sp-2) 0 0;
+  letter-spacing: 0.04em;
+}
+
+.training-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.training-session-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: var(--sp-2) var(--sp-3);
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms, border-color 100ms;
+}
+
+.training-session-row:hover {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+.training-session-date {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.training-session-type {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  flex: 1;
+}
+
+.training-session-stat {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}

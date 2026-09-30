@@ -60,4 +60,8 @@ export const CHART_SPECS: Record<string, ChartSpec> = {
     specVersion: 1, kind: 'area', metricId: 'wellbeing_daily.energy_level',
     title: 'Energy Level', unit: '/10', smooth: true,
   },
+  'wellbeing_daily.mood': {
+    specVersion: 1, kind: 'line', metricId: 'wellbeing_daily.mood',
+    title: 'Mood', unit: '/10', smooth: true,
+  },
 }

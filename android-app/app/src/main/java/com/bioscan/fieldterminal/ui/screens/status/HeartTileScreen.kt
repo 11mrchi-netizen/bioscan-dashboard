@@ -32,6 +32,7 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogMasturbationRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
+import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DisplayValue
@@ -51,6 +52,8 @@ import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.SriEvaluation
 import com.bioscan.fieldterminal.domain.SleepIndexResult
 import com.bioscan.fieldterminal.domain.computeSleepIndex
+import com.bioscan.fieldterminal.domain.MovementIndexResult
+import com.bioscan.fieldterminal.domain.computeMovementIndex
 import com.bioscan.fieldterminal.domain.SubjectiveEvaluation
 import com.bioscan.fieldterminal.domain.SwcEvaluation
 import com.bioscan.fieldterminal.domain.VitalsTimeframe
@@ -101,6 +104,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
     var arousal by remember { mutableStateOf<List<LogArousalRow>?>(null) }
     var masturbation by remember { mutableStateOf<List<LogMasturbationRow>?>(null) }
     var stepsBenchmark by remember { mutableStateOf<List<BenchmarkArtifact>>(emptyList()) }
+    var exerciseSessions by remember { mutableStateOf<List<TrainingLoadSessionRow>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         val repo = AnalysisRepository(SupabaseClientProvider.client)
@@ -114,6 +118,10 @@ fun HeartTileScreen(onBack: () -> Unit) {
         // DAV-196: first real population artifact (Tudor-Locke & Bassett's
         // steps/day categories) -- see docs/analysis-layer-2/25-population-benchmark-engine.md.
         stepsBenchmark = BenchmarkArtifactRepository(SupabaseClientProvider.client).loadArtifacts("steps")
+        // 09.3 Movement Index: reuses the exact same session query the Load
+        // tab's own CTL/ATL/TSB already uses -- no second exercise-session
+        // read path.
+        exerciseSessions = repo.loadExerciseSessionsForTrainingLoad()
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
@@ -182,6 +190,8 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     RespiratoryCard(evaluateRespiratoryAnomaly(rrPoints))
                     val stepsPoints = w.mapNotNull { row -> row.steps?.let { LocalDate.parse(row.date) to it } }
                     StepsCard(stepsPoints, stepsBenchmark)
+                    val sessionStarts = exerciseSessions.mapNotNull { runCatching { OffsetDateTime.parse(it.startTime) }.getOrNull() }
+                    MovementIndexCard(computeMovementIndex(stepsPoints, sessionStarts))
                 }
                 HeartTab.Recovery -> {
                     val hoursPoints = s.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } }
@@ -421,6 +431,32 @@ private fun PhaseStatLine(label: String, minutes: Double, totalMinutes: Double, 
 // concept defined for it, unlike HRV/RHR) -- a plain daily count and trend,
 // not a full EvalCard, is the honest treatment.
 private const val STEPS_WINDOW_DAYS = 15L
+
+@Composable
+private fun MovementIndexCard(result: MovementIndexResult) {
+    FTCard(title = "MOVEMENT INDEX") {
+        StatLine("Confidence", result.confidence.label)
+        if (result.score != null) {
+            FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100"))
+            result.components.forEach { (component, componentScore) ->
+                StatLine(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, "%.0f".format(componentScore.score))
+            }
+            if (result.unavailableComponents.isNotEmpty()) {
+                Text(
+                    "Active calories and zone minutes stay unavailable -- too little of this account's data has them yet.",
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                    color = FT.TextMuted,
+                )
+            }
+        } else {
+            Text(
+                "Not enough step or session history yet.",
+                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                color = FT.TextSecondary,
+            )
+        }
+    }
+}
 
 @Composable
 private fun StepsCard(points: List<Pair<LocalDate, Double>>, benchmarkArtifacts: List<BenchmarkArtifact>) {

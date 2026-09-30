@@ -33,6 +33,8 @@ import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogMasturbationRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
+import com.bioscan.fieldterminal.data.model.MealRow
+import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DisplayValue
@@ -54,6 +56,8 @@ import com.bioscan.fieldterminal.domain.SleepIndexResult
 import com.bioscan.fieldterminal.domain.computeSleepIndex
 import com.bioscan.fieldterminal.domain.MovementIndexResult
 import com.bioscan.fieldterminal.domain.computeMovementIndex
+import com.bioscan.fieldterminal.domain.CircadianAlignmentResult
+import com.bioscan.fieldterminal.domain.computeCircadianAlignment
 import com.bioscan.fieldterminal.domain.SubjectiveEvaluation
 import com.bioscan.fieldterminal.domain.SwcEvaluation
 import com.bioscan.fieldterminal.domain.VitalsTimeframe
@@ -105,6 +109,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
     var masturbation by remember { mutableStateOf<List<LogMasturbationRow>?>(null) }
     var stepsBenchmark by remember { mutableStateOf<List<BenchmarkArtifact>>(emptyList()) }
     var exerciseSessions by remember { mutableStateOf<List<TrainingLoadSessionRow>>(emptyList()) }
+    var recentMealsForTiming by remember { mutableStateOf<List<MealRow>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         val repo = AnalysisRepository(SupabaseClientProvider.client)
@@ -122,6 +127,11 @@ fun HeartTileScreen(onBack: () -> Unit) {
         // tab's own CTL/ATL/TSB already uses -- no second exercise-session
         // read path.
         exerciseSessions = repo.loadExerciseSessionsForTrainingLoad()
+        // 09.6 Circadian Alignment: same "generous margin" limit convention
+        // this app's other 60-90 day lookbacks already use, not the
+        // 10-row default loadRecentMeals() ships with for its usual
+        // "repeat a recent meal" caller.
+        recentMealsForTiming = NutritionRepository(SupabaseClientProvider.client).loadRecentMeals(limit = 200)
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
@@ -207,8 +217,16 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     val respiratoryForIndex = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
                     SleepIndexCard(computeSleepIndex(hoursPoints, deepPoints, respiratoryForIndex, nights))
                     EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints), "h", points = hoursPoints)
-                    SriCard(evaluateSri(nights))
+                    val sriEval = evaluateSri(nights)
+                    SriCard(sriEval)
                     SleepPhasesCard(s)
+                    // 09.6 Circadian Alignment: sleep timing reuses the same
+                    // SriEvaluation above (no second algorithm); meal/exercise
+                    // timing reuse the meals/exercise-session data already
+                    // loaded for logging and Movement Index respectively.
+                    val mealTimestamps = recentMealsForTiming.mapNotNull { runCatching { OffsetDateTime.parse(it.loggedAt) }.getOrNull() }
+                    val exerciseTimestamps = exerciseSessions.mapNotNull { runCatching { OffsetDateTime.parse(it.startTime) }.getOrNull() }
+                    CircadianAlignmentCard(computeCircadianAlignment(sriEval, mealTimestamps, exerciseTimestamps))
                 }
                 HeartTab.Wellbeing -> {
                     // DAV-101: small multiples, not one collapsed score.
@@ -351,6 +369,30 @@ private fun SleepIndexCard(result: SleepIndexResult) {
         } else {
             Text(
                 "Not enough components yet -- needs at least 2 of duration/regularity/respiratory/stage-composition.",
+                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                color = FT.TextSecondary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CircadianAlignmentCard(result: CircadianAlignmentResult) {
+    FTCard(title = "CIRCADIAN ALIGNMENT") {
+        Text(
+            "A behavioral regularity proxy, not a measured circadian phase.",
+            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            color = FT.TextMuted,
+        )
+        StatLine("Confidence", result.confidence.label)
+        if (result.score != null) {
+            FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
+            result.components.forEach { (component, componentScore) ->
+                StatLine(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, "%.0f".format(componentScore.score))
+            }
+        } else {
+            Text(
+                "Not enough sleep/meal/exercise timing history yet.",
                 style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
                 color = FT.TextSecondary,
             )

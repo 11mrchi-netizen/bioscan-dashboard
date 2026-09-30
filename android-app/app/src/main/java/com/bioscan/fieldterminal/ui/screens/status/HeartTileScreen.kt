@@ -35,6 +35,7 @@ import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.NutritionRepository
+import com.bioscan.fieldterminal.data.buildTrainingSessionLoads
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DisplayValue
@@ -62,6 +63,10 @@ import com.bioscan.fieldterminal.data.ZeppStressRepository
 import com.bioscan.fieldterminal.domain.stress.StressDay
 import com.bioscan.fieldterminal.domain.stress.StressRhythmResult
 import com.bioscan.fieldterminal.domain.stress.analyzeStressDay
+import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
+import com.bioscan.fieldterminal.domain.TrainingLoadEvaluation
+import com.bioscan.fieldterminal.domain.DynamicRecoveryResult
+import com.bioscan.fieldterminal.domain.computeDynamicRecovery
 import com.bioscan.fieldterminal.domain.SubjectiveEvaluation
 import com.bioscan.fieldterminal.domain.SwcEvaluation
 import com.bioscan.fieldterminal.domain.VitalsTimeframe
@@ -219,12 +224,38 @@ fun HeartTileScreen(onBack: () -> Unit) {
                         val wake = row.wakeTime?.let { runCatching { Instant.parse(it) }.getOrNull() }
                         if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
                     }
+                    val deepPoints = s.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } }
+                    val respiratoryForIndex = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
+                    val sleepIndexResult = computeSleepIndex(hoursPoints, deepPoints, respiratoryForIndex, nights)
+
+                    // 09.2 Dynamic Recovery: a hero card above everything else
+                    // in this tab, same placement pattern AgingCard already
+                    // uses atop UserProfileScreen.kt -- reuses every
+                    // contributor's existing evaluation, recomputes nothing.
+                    val exerciseWindowsForRecovery = exerciseSessions.mapNotNull { session ->
+                        val start = runCatching { OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
+                        val durationMin = session.durationMin ?: return@mapNotNull null
+                        start to start.plusSeconds((durationMin * 60).toLong())
+                    }
+                    val physiologicalStressForRecovery = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindowsForRecovery) }
+                    val sessionLoadsForRecovery = buildTrainingSessionLoads(exerciseSessions, w.lastOrNull()?.rhr)
+                    DynamicRecoveryCard(
+                        computeDynamicRecovery(
+                            sleepIndex = sleepIndexResult,
+                            hrvEval = evaluateHrv(w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }),
+                            rhrEval = evaluateRhr(w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }),
+                            trainingLoadEval = evaluateTrainingLoad(sessionLoadsForRecovery),
+                            energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+                            stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+                            sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+                            physiologicalStress = physiologicalStressForRecovery,
+                        ),
+                    )
+
                     // 09.1 Sleep Index: a headline aggregate above the same
                     // component cards below it -- an aggregation layer, never
                     // a replacement (DAV-235's own rule).
-                    val deepPoints = s.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } }
-                    val respiratoryForIndex = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
-                    SleepIndexCard(computeSleepIndex(hoursPoints, deepPoints, respiratoryForIndex, nights))
+                    SleepIndexCard(sleepIndexResult)
                     EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints), "h", points = hoursPoints)
                     val sriEval = evaluateSri(nights)
                     SriCard(sriEval)
@@ -375,6 +406,31 @@ private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<
     val today = LocalDate.now()
     val recent = points.filter { ChronoUnit.DAYS.between(it.first, today) <= TREND_WINDOW_DAYS }
     return recent.takeIf { it.size >= 2 }
+}
+
+@Composable
+private fun DynamicRecoveryCard(result: DynamicRecoveryResult) {
+    FTCard(title = "TODAY'S RECOVERY") {
+        FTStatePill(result.state.toMetricState())
+        StatLine("Confidence", result.confidence.label)
+        if (result.contributors.isEmpty()) {
+            Text(
+                "Not enough contributors yet -- needs at least 2 of sleep/HRV/RHR/training load/subjective state.",
+                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                color = FT.TextSecondary,
+            )
+        } else {
+            result.contributors.forEach { contributor ->
+                val arrow = when (contributor.direction) {
+                    1 -> "↑"
+                    -1 -> "↓"
+                    0 -> "="
+                    else -> "?"
+                }
+                StatLine(contributor.dimension.replace('_', ' ').replaceFirstChar { it.uppercase() }, "$arrow (${contributor.confidence.label})")
+            }
+        }
+    }
 }
 
 @Composable

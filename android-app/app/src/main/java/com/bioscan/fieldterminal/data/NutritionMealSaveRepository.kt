@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.data
 import com.bioscan.fieldterminal.data.model.HydrationFactorModelRow
 import com.bioscan.fieldterminal.data.model.MealItemRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
+import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -211,6 +212,23 @@ class NutritionMealSaveRepository(
                     .update(AiEstimateLinkUpdate(mealId = mealId, mealItemId = mealItemRow.id, accepted = true)) {
                         filter { eq("id", aiEstimateId) }
                     }
+            }
+
+            if (enrichment != null && enrichment.nutrientUnits.isNotEmpty()) {
+                val nutrientRows = enrichment.allNutrients.mapNotNull { (nutrient, amount) ->
+                    val unit = enrichment.nutrientUnits[nutrient] ?: return@mapNotNull null
+                    NutrientIntakeRow(
+                        loggedAt = loggedAt,
+                        nutrient = nutrient,
+                        amount = amount,
+                        unit = unit,
+                        sourceType = "meal_item",
+                        sourceId = mealItemRow.id,
+                    )
+                }
+                if (nutrientRows.isNotEmpty()) {
+                    supabase.postgrest.from("nutrient_intake").insert(nutrientRows)
+                }
             }
         } catch (e: Exception) {
             supabase.postgrest.from("meals").delete { filter { eq("id", mealId) } }

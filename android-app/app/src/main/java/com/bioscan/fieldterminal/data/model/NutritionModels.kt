@@ -155,3 +155,23 @@ data class AiEstimateRow(
     @SerialName("latency_ms") val latencyMs: Int? = null,
     val accepted: Boolean? = null,
 )
+
+@Serializable
+data class NutrientIntakeRow(
+    val id: Long? = null,
+    @SerialName("logged_at") val loggedAt: String,
+    val nutrient: String,
+    val amount: Double,
+    val unit: String,
+    @SerialName("source_type") val sourceType: String,
+    @SerialName("source_id") val sourceId: Long,
+)
+
+@Serializable
+data class SupplementNutrientRow(
+    val id: Long? = null,
+    @SerialName("supplement_id") val supplementId: Long,
+    val nutrient: String,
+    @SerialName("amount_per_dose") val amountPerDose: Double,
+    val unit: String,
+)

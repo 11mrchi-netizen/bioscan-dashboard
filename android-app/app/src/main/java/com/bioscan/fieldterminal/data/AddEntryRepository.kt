@@ -26,11 +26,14 @@ import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.NewStoolRow
 import com.bioscan.fieldterminal.data.model.NewSupplementLogRow
 import com.bioscan.fieldterminal.data.model.NewWellbeingRow
+import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
 import com.bioscan.fieldterminal.data.model.SupplementLogEditRow
+import com.bioscan.fieldterminal.data.model.SupplementNutrientRow
 import com.bioscan.fieldterminal.domain.LogSource
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -176,7 +179,70 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
             val (value, unit) = parseDose(dose)
             NewSupplementLogRow(supplementId = id, supplementName = name, takenAt = takenAt, doseValue = value, doseUnit = unit)
         }
-        supabase.postgrest.from("supplement_log").insert(rows)
+        val insertedRows = supabase.postgrest.from("supplement_log")
+            .insert(rows) { select(Columns.list("id,supplement_id")) }
+            .decodeList<SupplementLogIdRow>()
+
+        try {
+            writeSupplementNutrientIntake(takenAt, insertedRows, items)
+        } catch (_: Exception) {
+            // Best-effort: supplement_log row is the primary record
+        }
+    }
+
+    private suspend fun writeSupplementNutrientIntake(
+        takenAt: String,
+        logRows: List<SupplementLogIdRow>,
+        items: List<Triple<Long, String, String>>,
+    ) {
+        if (logRows.isEmpty()) return
+        val supplementIds = logRows.map { it.supplementId }
+
+        val profiles = supabase.postgrest.from("supplement_nutrients")
+            .select { filter { isIn("supplement_id", supplementIds) } }
+            .decodeList<SupplementNutrientRow>()
+        val profilesBySupp = profiles.groupBy { it.supplementId }
+
+        val nutrientRows = mutableListOf<NutrientIntakeRow>()
+        for (logRow in logRows) {
+            val suppProfile = profilesBySupp[logRow.supplementId]
+            if (suppProfile != null) {
+                for (sn in suppProfile) {
+                    nutrientRows.add(
+                        NutrientIntakeRow(
+                            loggedAt = takenAt,
+                            nutrient = sn.nutrient,
+                            amount = sn.amountPerDose,
+                            unit = sn.unit,
+                            sourceType = "supplement",
+                            sourceId = logRow.id,
+                        ),
+                    )
+                }
+            } else {
+                val item = items.firstOrNull { it.first == logRow.supplementId }
+                if (item != null) {
+                    val (doseValue, doseUnit) = parseDose(item.third)
+                    val inferredNutrient = inferNutrientFromName(item.second)
+                    if (inferredNutrient != null && doseValue != null && doseUnit != null) {
+                        nutrientRows.add(
+                            NutrientIntakeRow(
+                                loggedAt = takenAt,
+                                nutrient = inferredNutrient,
+                                amount = doseValue,
+                                unit = doseUnit,
+                                sourceType = "supplement",
+                                sourceId = logRow.id,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+
+        if (nutrientRows.isNotEmpty()) {
+            supabase.postgrest.from("nutrient_intake").insert(nutrientRows)
+        }
     }
 
     suspend fun updateSupplementTaken(id: Long, takenAt: String, doseValue: Double?, doseUnit: String?) {
@@ -385,4 +451,52 @@ internal fun parseDose(dose: String): Pair<Double?, String?> {
 }
 
 @kotlinx.serialization.Serializable
+private data class SupplementLogIdRow(
+    val id: Long,
+    @SerialName("supplement_id") val supplementId: Long,
+)
+
+@kotlinx.serialization.Serializable
 private data class DetailsJsonRow(val details: JsonObject = JsonObject(emptyMap()))
+
+private fun inferNutrientFromName(name: String): String? {
+    val n = name.lowercase()
+    return when {
+        n.contains("vitamin d") || n.contains(" d3") -> "vitamin_d"
+        n.contains("vitamin c") -> "vitamin_c"
+        n.contains("vitamin b12") || n.contains(" b12") -> "vitamin_b12"
+        n.contains("vitamin b6") || n.contains(" b6") -> "vitamin_b6"
+        n.contains("vitamin a") -> "vitamin_a"
+        n.contains("vitamin e") -> "vitamin_e"
+        n.contains("vitamin k") -> "vitamin_k"
+        n.contains("folate") || n.contains("folic") -> "folate_b9"
+        n.contains("thiamin") || (n.contains(" b1") && !n.contains("b12")) -> "thiamin_b1"
+        n.contains("riboflavin") -> "riboflavin_b2"
+        n.contains("niacin") -> "niacin_b3"
+        n.contains("biotin") -> "biotin"
+        n.contains("magnesium") -> "magnesium"
+        n.contains("zinc") -> "zinc"
+        n.contains("iron") -> "iron"
+        n.contains("calcium") -> "calcium"
+        n.contains("selenium") -> "selenium"
+        n.contains("potassium") -> "potassium"
+        n.contains("copper") -> "copper"
+        n.contains("manganese") -> "manganese"
+        n.contains("chromium") -> "chromium"
+        n.contains("iodine") -> "iodine"
+        n.contains("fish oil") || n.contains("omega-3") || n.contains("omega 3") -> "omega_3"
+        n.contains("dha") -> "dha"
+        n.contains("epa") -> "epa"
+        n.contains("creatine") -> "creatine"
+        n.contains("collagen") -> "collagen"
+        n.contains("choline") -> "choline"
+        n.contains("melatonin") -> "melatonin"
+        n.contains("caffeine") -> "caffeine"
+        n.contains("ashwagandha") -> "ashwagandha"
+        n.contains("coq10") || n.contains("coenzyme q10") -> "coq10"
+        n.contains("glucosamine") -> "glucosamine"
+        n.contains("curcumin") || n.contains("turmeric") -> "curcumin"
+        n.contains("probiotics") || n.contains("probiotic") -> "probiotics"
+        else -> null
+    }
+}

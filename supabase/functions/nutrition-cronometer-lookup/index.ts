@@ -165,17 +165,28 @@ async function cronoGetFood(session: CronoSession, foodId: number): Promise<Cron
 
 // Cronometer nutrient IDs → canonical names matching our food_nutrients table
 const NUTRIENT_MAP: Record<number, { name: string; unit: string }> = {
+  // Macros
   208: { name: "calories", unit: "kcal" },
   203: { name: "protein", unit: "g" },
   204: { name: "fat", unit: "g" },
   205: { name: "carbs", unit: "g" },
   291: { name: "fiber", unit: "g" },
   269: { name: "sugar", unit: "g" },
+  209: { name: "starch", unit: "g" },
   307: { name: "sodium", unit: "mg" },
+  255: { name: "water", unit: "g" },
   221: { name: "alcohol", unit: "g" },
+  // Detailed fats
   606: { name: "saturated_fat", unit: "g" },
-  601: { name: "cholesterol", unit: "mg" },
+  645: { name: "monounsaturated_fat", unit: "g" },
+  646: { name: "polyunsaturated_fat", unit: "g" },
   605: { name: "trans_fat", unit: "g" },
+  601: { name: "cholesterol", unit: "mg" },
+  10001: { name: "omega_3", unit: "g" },
+  10002: { name: "omega_6", unit: "g" },
+  621: { name: "dha", unit: "g" },
+  629: { name: "epa", unit: "g" },
+  851: { name: "ala", unit: "g" },
   // Vitamins
   318: { name: "vitamin_a", unit: "IU" },
   401: { name: "vitamin_c", unit: "mg" },
@@ -189,6 +200,7 @@ const NUTRIENT_MAP: Record<number, { name: string; unit: string }> = {
   415: { name: "vitamin_b6", unit: "mg" },
   417: { name: "folate_b9", unit: "mcg" },
   418: { name: "vitamin_b12", unit: "mcg" },
+  421: { name: "choline", unit: "mg" },
   // Minerals
   301: { name: "calcium", unit: "mg" },
   303: { name: "iron", unit: "mg" },
@@ -199,10 +211,26 @@ const NUTRIENT_MAP: Record<number, { name: string; unit: string }> = {
   312: { name: "copper", unit: "mg" },
   315: { name: "manganese", unit: "mg" },
   317: { name: "selenium", unit: "mcg" },
-  // Fatty acids
-  10001: { name: "omega_3", unit: "g" },
-  10002: { name: "omega_6", unit: "g" },
-  // Caffeine
+  // Amino acids
+  501: { name: "tryptophan", unit: "g" },
+  502: { name: "threonine", unit: "g" },
+  503: { name: "isoleucine", unit: "g" },
+  504: { name: "leucine", unit: "g" },
+  505: { name: "lysine", unit: "g" },
+  506: { name: "methionine", unit: "g" },
+  507: { name: "cystine", unit: "g" },
+  508: { name: "phenylalanine", unit: "g" },
+  509: { name: "tyrosine", unit: "g" },
+  510: { name: "valine", unit: "g" },
+  511: { name: "arginine", unit: "g" },
+  512: { name: "histidine", unit: "g" },
+  513: { name: "alanine", unit: "g" },
+  514: { name: "aspartic_acid", unit: "g" },
+  515: { name: "glutamic_acid", unit: "g" },
+  516: { name: "glycine", unit: "g" },
+  517: { name: "proline", unit: "g" },
+  518: { name: "serine", unit: "g" },
+  // Other
   262: { name: "caffeine", unit: "mg" },
 };
 
@@ -595,8 +623,8 @@ Deno.serve(async (req: Request) => {
         results.push(await lookupItem(session, item.description, item.quantity_g));
       }
 
-      const { totals, included, skipped } = sumNutrients(results);
-      return json({ mode: "direct", results, totals, items_included: included, items_skipped: skipped }, 200);
+      const { totals, nutrient_units, included, skipped } = sumNutrients(results);
+      return json({ mode: "direct", results, totals, nutrient_units, items_included: included, items_skipped: skipped }, 200);
     }
 
     // Mode 2: decompose an aggregate description, then look up each item
@@ -618,13 +646,14 @@ Deno.serve(async (req: Request) => {
         results.push(await lookupItem(session, item.description, item.quantity_g));
       }
 
-      const { totals, included, skipped } = sumNutrients(results);
+      const { totals, nutrient_units, included, skipped } = sumNutrients(results);
       return json({
         mode: "decompose",
         original_description: body.description,
         decomposed,
         results,
         totals,
+        nutrient_units,
         items_included: included,
         items_skipped: skipped,
       }, 200);
@@ -638,12 +667,18 @@ Deno.serve(async (req: Request) => {
 
 function sumNutrients(results: ResolvedItem[]): {
   totals: Record<string, number>;
+  nutrient_units: Record<string, string>;
   included: number;
   skipped: string[];
 } {
   const totals: Record<string, number> = {};
   const skipped: string[] = [];
   let included = 0;
+
+  const unitLookup: Record<string, string> = {};
+  for (const entry of Object.values(NUTRIENT_MAP)) {
+    unitLookup[entry.name] = entry.unit;
+  }
 
   for (const r of results) {
     // Only include exact/good matches in totals — weak/none pollute accuracy
@@ -659,5 +694,11 @@ function sumNutrients(results: ResolvedItem[]): {
   for (const key of Object.keys(totals)) {
     totals[key] = Math.round(totals[key] * 100) / 100;
   }
-  return { totals, included, skipped };
+
+  const nutrient_units: Record<string, string> = {};
+  for (const key of Object.keys(totals)) {
+    if (unitLookup[key]) nutrient_units[key] = unitLookup[key];
+  }
+
+  return { totals, nutrient_units, included, skipped };
 }

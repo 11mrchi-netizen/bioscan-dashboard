@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class MealRow(
@@ -113,6 +114,8 @@ data class MealItemRow(
     @SerialName("effective_hydration_ml") val effectiveHydrationMl: Double? = null,
     @SerialName("hydration_model_version") val hydrationModelVersion: String? = null,
     @SerialName("hydration_confidence") val hydrationConfidence: Double? = null,
+    @SerialName("cronometer_nutrients") val cronometerNutrients: JsonObject? = null,
+    @SerialName("cronometer_source") val cronometerSource: String? = null,
 )
 
 @Serializable

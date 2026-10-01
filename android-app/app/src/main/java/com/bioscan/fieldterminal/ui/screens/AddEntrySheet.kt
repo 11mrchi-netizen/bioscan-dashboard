@@ -50,7 +50,9 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
+import com.bioscan.fieldterminal.data.CronometerEnrichment
 import com.bioscan.fieldterminal.data.NutritionBarcodeLookupRepository
+import com.bioscan.fieldterminal.data.NutritionCronometerLookupRepository
 import com.bioscan.fieldterminal.data.NutritionImageEstimateRepository
 import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
@@ -672,6 +674,8 @@ private fun FoodForm(
     var pendingPhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var mealEstimate by remember { mutableStateOf<NutritionMealEstimate?>(null) }
     var mealEstimateId by remember { mutableStateOf<Long?>(null) }
+    var cronometerEnrichment by remember { mutableStateOf<CronometerEnrichment?>(null) }
+    var enriching by remember { mutableStateOf(false) }
 
     // DAV-168: candidates from any of the three sources funnel into the
     // same review sheet before ever touching meal_items.
@@ -687,6 +691,7 @@ private fun FoodForm(
         if (uris.isEmpty()) return
         estimating = true
         estimationError = null
+        cronometerEnrichment = null
         scope.launch {
             try {
                 val images = uris.map { readAndCompressImage(context, it) }
@@ -694,6 +699,16 @@ private fun FoodForm(
                 mealEstimateId = result.estimateId
                 mealEstimate = result.estimate
                 pendingPhotos = emptyList()
+
+                enriching = true
+                try {
+                    cronometerEnrichment = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
+                        .enrich(result.estimate.description)
+                } catch (_: Exception) {
+                    // Enrichment is best-effort; Gemini estimate stands if Cronometer fails
+                } finally {
+                    enriching = false
+                }
             } catch (e: Exception) {
                 estimationError = e.message ?: "Estimation failed"
             } finally {
@@ -970,10 +985,13 @@ private fun FoodForm(
             estimate = estimate,
             mealDateTime = dateTime,
             aiEstimateId = mealEstimateId,
-            onDismiss = { mealEstimate = null; mealEstimateId = null },
+            enrichment = cronometerEnrichment,
+            enriching = enriching,
+            onDismiss = { mealEstimate = null; mealEstimateId = null; cronometerEnrichment = null },
             onSaved = {
                 mealEstimate = null
                 mealEstimateId = null
+                cronometerEnrichment = null
                 onCanonicalSaved()
             },
         )

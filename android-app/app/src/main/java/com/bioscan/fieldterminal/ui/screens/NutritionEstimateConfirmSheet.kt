@@ -27,6 +27,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.data.CronometerEnrichment
 import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -49,20 +50,30 @@ fun NutritionEstimateConfirmSheet(
     estimate: NutritionMealEstimate,
     mealDateTime: LocalDateTime,
     aiEstimateId: Long?,
+    enrichment: CronometerEnrichment? = null,
+    enriching: Boolean = false,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
+    val effectiveCal = enrichment?.calories ?: estimate.calories
+    val effectivePro = enrichment?.proteinG ?: estimate.proteinG
+    val effectiveCarb = enrichment?.carbsG ?: estimate.carbsG
+    val effectiveFat = enrichment?.fatG ?: estimate.fatG
+    val effectiveFib = enrichment?.fiberG ?: estimate.fiberG
+    val effectiveSug = enrichment?.sugarG ?: estimate.sugarG
+    val effectiveSod = enrichment?.sodiumMg ?: estimate.sodiumMg
+
     var description by remember { mutableStateOf(estimate.description) }
-    var calories by remember { mutableStateOf(estimate.calories.toString()) }
-    var protein by remember { mutableStateOf(estimate.proteinG.toString()) }
-    var carbs by remember { mutableStateOf(estimate.carbsG.toString()) }
-    var fat by remember { mutableStateOf(estimate.fatG.toString()) }
-    var fiber by remember { mutableStateOf(estimate.fiberG?.toString() ?: "") }
-    var sugar by remember { mutableStateOf(estimate.sugarG?.toString() ?: "") }
-    var sodium by remember { mutableStateOf(estimate.sodiumMg?.toString() ?: "") }
+    var calories by remember(effectiveCal) { mutableStateOf(effectiveCal.toString()) }
+    var protein by remember(effectivePro) { mutableStateOf(effectivePro.toString()) }
+    var carbs by remember(effectiveCarb) { mutableStateOf(effectiveCarb.toString()) }
+    var fat by remember(effectiveFat) { mutableStateOf(effectiveFat.toString()) }
+    var fiber by remember(effectiveFib) { mutableStateOf(effectiveFib?.toString() ?: "") }
+    var sugar by remember(effectiveSug) { mutableStateOf(effectiveSug?.toString() ?: "") }
+    var sodium by remember(effectiveSod) { mutableStateOf(effectiveSod?.toString() ?: "") }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -78,11 +89,35 @@ fun NutritionEstimateConfirmSheet(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text("MEAL ESTIMATE", style = sheetHeaderTitleStyle, color = FT.Emerald)
-            Text(
-                "Approximate whole-meal estimate (confidence ${(estimate.confidence * 100).toInt()}%) -- edit anything that looks off before saving.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
-                color = FT.TextMuted,
-            )
+            if (enrichment != null) {
+                Text(
+                    "ENRICHED WITH CRONOMETER",
+                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp, letterSpacing = 0.14f.em),
+                    color = FT.Emerald,
+                )
+                Text(
+                    "Database-backed nutrition from ${enrichment.primarySource ?: "Cronometer"} (${enrichment.itemsIncluded} items matched). Edit anything that looks off.",
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    color = FT.TextMuted,
+                )
+            } else if (enriching) {
+                Text(
+                    "ENRICHING WITH CRONOMETER...",
+                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp, letterSpacing = 0.14f.em),
+                    color = FT.TextSecondary,
+                )
+                Text(
+                    "Looking up foods in database for more accurate nutrition. Gemini estimate shown below.",
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    color = FT.TextMuted,
+                )
+            } else {
+                Text(
+                    "Approximate whole-meal estimate (confidence ${(estimate.confidence * 100).toInt()}%) -- edit anything that looks off before saving.",
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    color = FT.TextMuted,
+                )
+            }
 
             Column { FormFieldLabel("DESCRIPTION"); FieldTextField(description, { description = it }, "Meal description") }
             Column { FormFieldLabel("CALORIES"); FieldTextField(calories, { calories = it }, "0", keyboardType = KeyboardType.Number) }
@@ -125,7 +160,7 @@ fun NutritionEstimateConfirmSheet(
                                 confidence = estimate.confidence,
                             )
                             NutritionMealSaveRepository(SupabaseClientProvider.client)
-                                .saveEstimatedMeal(mealDateTime.toIsoWithOffset(), finalEstimate, aiEstimateId)
+                                .saveEstimatedMeal(mealDateTime.toIsoWithOffset(), finalEstimate, aiEstimateId, enrichment)
                             onSaved()
                         } catch (e: Exception) {
                             error = e.message ?: "Unknown error"

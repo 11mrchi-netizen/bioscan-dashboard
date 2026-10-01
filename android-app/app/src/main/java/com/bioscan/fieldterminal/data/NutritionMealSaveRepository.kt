@@ -3,11 +3,14 @@ package com.bioscan.fieldterminal.data
 import com.bioscan.fieldterminal.data.model.HydrationFactorModelRow
 import com.bioscan.fieldterminal.data.model.MealItemRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
+import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 // DAV-168. Turns a review sheet's confirmed line items into a real meal +
 // meal_items, via DAV-164's resolver -- this file never computes a nutrient
@@ -146,23 +149,40 @@ class NutritionMealSaveRepository(
     // saveBeverageDrink() below already established for quick beverage
     // logging. Exactly one meal_items row per call, by design (DAV-291's
     // "one usable line for the whole process").
-    suspend fun saveEstimatedMeal(loggedAt: String, estimate: NutritionMealEstimate, aiEstimateId: Long?): Long {
+    suspend fun saveEstimatedMeal(
+        loggedAt: String,
+        estimate: NutritionMealEstimate,
+        aiEstimateId: Long?,
+        enrichment: CronometerEnrichment? = null,
+    ): Long {
+        val cal = enrichment?.calories ?: estimate.calories
+        val pro = enrichment?.proteinG ?: estimate.proteinG
+        val carb = enrichment?.carbsG ?: estimate.carbsG
+        val fat = enrichment?.fatG ?: estimate.fatG
+        val fib = enrichment?.fiberG ?: estimate.fiberG
+        val sug = enrichment?.sugarG ?: estimate.sugarG
+        val sod = enrichment?.sodiumMg ?: estimate.sodiumMg
+
         val mealId = supabase.postgrest.from("meals")
             .insert(
                 NewMealRow(
                     loggedAt = loggedAt,
                     description = estimate.description,
-                    calories = estimate.calories,
-                    proteinG = estimate.proteinG,
-                    carbsG = estimate.carbsG,
-                    fatG = estimate.fatG,
-                    fiberG = estimate.fiberG,
-                    sugarG = estimate.sugarG,
-                    sodiumMg = estimate.sodiumMg,
+                    calories = cal,
+                    proteinG = pro,
+                    carbsG = carb,
+                    fatG = fat,
+                    fiberG = fib,
+                    sugarG = sug,
+                    sodiumMg = sod,
                 ),
             ) { select(Columns.list("id")) }
             .decodeSingle<MealIdRow>()
             .id
+
+        val cronometerNutrientsJson = enrichment?.allNutrients?.let { nutrients ->
+            JsonObject(nutrients.mapValues { (_, v) -> JsonPrimitive(v) })
+        }
 
         try {
             val mealItemRow = supabase.postgrest.from("meal_items")
@@ -171,16 +191,18 @@ class NutritionMealSaveRepository(
                         mealId = mealId,
                         sortOrder = 0,
                         description = estimate.description,
-                        calories = estimate.calories,
-                        proteinG = estimate.proteinG,
-                        fatG = estimate.fatG,
-                        carbsG = estimate.carbsG,
-                        fiberG = estimate.fiberG,
-                        sugarG = estimate.sugarG,
-                        sodiumMg = estimate.sodiumMg,
+                        calories = cal,
+                        proteinG = pro,
+                        fatG = fat,
+                        carbsG = carb,
+                        fiberG = fib,
+                        sugarG = sug,
+                        sodiumMg = sod,
                         isEstimated = true,
                         confidence = estimate.confidence,
-                        source = MealItemSource.AiImage.value,
+                        source = if (enrichment != null) "ai_image_enriched" else MealItemSource.AiImage.value,
+                        cronometerNutrients = cronometerNutrientsJson,
+                        cronometerSource = enrichment?.primarySource,
                     ),
                 ) { select(Columns.list("id")) }
                 .decodeSingle<MealIdRow>()
@@ -190,6 +212,23 @@ class NutritionMealSaveRepository(
                     .update(AiEstimateLinkUpdate(mealId = mealId, mealItemId = mealItemRow.id, accepted = true)) {
                         filter { eq("id", aiEstimateId) }
                     }
+            }
+
+            if (enrichment != null && enrichment.nutrientUnits.isNotEmpty()) {
+                val nutrientRows = enrichment.allNutrients.mapNotNull { (nutrient, amount) ->
+                    val unit = enrichment.nutrientUnits[nutrient] ?: return@mapNotNull null
+                    NutrientIntakeRow(
+                        loggedAt = loggedAt,
+                        nutrient = nutrient,
+                        amount = amount,
+                        unit = unit,
+                        sourceType = "meal_item",
+                        sourceId = mealItemRow.id,
+                    )
+                }
+                if (nutrientRows.isNotEmpty()) {
+                    supabase.postgrest.from("nutrient_intake").insert(nutrientRows)
+                }
             }
         } catch (e: Exception) {
             supabase.postgrest.from("meals").delete { filter { eq("id", mealId) } }

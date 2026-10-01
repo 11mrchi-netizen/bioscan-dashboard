@@ -41,6 +41,7 @@ import com.bioscan.fieldterminal.ui.screens.SettingsScreen
 import com.bioscan.fieldterminal.ui.screens.UserProfileScreen
 import com.bioscan.fieldterminal.ui.screens.status.FuelTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.HeartTileScreen
+import com.bioscan.fieldterminal.ui.screens.status.NutrientBreakdownScreen
 import com.bioscan.fieldterminal.ui.screens.status.LabsTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.StatusScreen
 import com.bioscan.fieldterminal.ui.screens.status.TrainingTileScreen
@@ -86,7 +87,13 @@ fun FieldTerminalNavHost() {
                     onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") },
                 )
             }
-            composable(TileRoute.Fuel.route) { FuelTileScreen(onBack = { navController.popBackStack() }) }
+            composable(TileRoute.Fuel.route) {
+                FuelTileScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenNutrientBreakdown = { navController.navigate("nutrient_breakdown") },
+                )
+            }
+            composable("nutrient_breakdown") { NutrientBreakdownScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Heart.route) { HeartTileScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Labs.route) { LabsTileScreen(onBack = { navController.popBackStack() }) }
             composable(TopLevelTab.User.route) {

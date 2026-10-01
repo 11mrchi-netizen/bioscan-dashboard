@@ -75,7 +75,7 @@ import kotlin.math.roundToInt
 // backlog per ROADMAP.md) -- this tab shows the real weight/body-fat trend
 // data that does exist rather than fabricate a TDEE number.
 @Composable
-fun FuelTileScreen(onBack: () -> Unit) {
+fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {}) {
     var tab by remember { mutableStateOf(FuelTab.Nutrition) }
     var overview by remember { mutableStateOf<NutritionOverview?>(null) }
     var stool by remember { mutableStateOf<List<StoolAnalysisRow>?>(null) }
@@ -101,7 +101,7 @@ fun FuelTileScreen(onBack: () -> Unit) {
                 // composables already render their own full-width padded
                 // Column, so they stack cleanly as-is.
                 FuelTab.Nutrition -> overview?.let {
-                    NutritionTabContent(it)
+                    NutritionTabContent(it, onOpenNutrientBreakdown = onOpenNutrientBreakdown)
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp)) {
                         NutritionCard(evaluateNutrition(it.allDays))
                     }

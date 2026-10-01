@@ -297,6 +297,31 @@ function assessMatchQuality(query: string, foodName: string, score?: number): "e
   return "none";
 }
 
+// Generic USDA/government sources have richer nutrient profiles than branded entries
+const PREFERRED_SOURCES = new Set(["USDAsr", "NCCDB", "CFCD", "USDAleg"]);
+
+function sourceRank(source: string): number {
+  // Check if source starts with a preferred prefix (e.g. "NCCDB:8535")
+  const prefix = source.split(":")[0];
+  if (PREFERRED_SOURCES.has(prefix)) return 2;
+  // FDC:Branded is least preferred
+  if (source.startsWith("FDC:Branded")) return 0;
+  return 1;
+}
+
+function isBetterMatch(
+  candidate: { quality: "exact" | "good" | "weak" | "none"; source: string; nutrientCount: number },
+  current: { quality: "exact" | "good" | "weak" | "none"; source: string; nutrientCount: number },
+): boolean {
+  const qDiff = qualityRank(candidate.quality) - qualityRank(current.quality);
+  if (qDiff !== 0) return qDiff > 0;
+  // Same match quality — prefer generic USDA sources over branded
+  const sDiff = sourceRank(candidate.source) - sourceRank(current.source);
+  if (sDiff !== 0) return sDiff > 0;
+  // Same source tier — prefer the entry with more nutrients populated
+  return candidate.nutrientCount > current.nutrientCount;
+}
+
 async function tryLookup(
   session: CronoSession,
   query: string,
@@ -305,18 +330,32 @@ async function tryLookup(
   const searchResults = await cronoFindFood(session, query);
   if (searchResults.length === 0) return null;
 
-  // Check top 3 results for best match quality
+  // Check top 5 results for best match, preferring USDA sources over branded
   let bestMatch: { food: CronoFoodDetail; searchResult: CronoFoodSearchResult; quality: "exact" | "good" | "weak" | "none" } | null = null;
 
-  for (const candidate of searchResults.slice(0, 3)) {
+  for (const candidate of searchResults.slice(0, 5)) {
     const quality = assessMatchQuality(query, candidate.name, candidate.score ?? undefined);
     if (quality === "none") continue;
-    if (!bestMatch || qualityRank(quality) > qualityRank(bestMatch.quality)) {
-      const food = await cronoGetFood(session, candidate.id);
-      if (food) {
-        bestMatch = { food, searchResult: candidate, quality };
-        if (quality === "exact") break;
-      }
+
+    const candidateSource = candidate.source;
+    if (bestMatch) {
+      const dominated = isBetterMatch(
+        { quality, source: candidateSource, nutrientCount: 0 },
+        { quality: bestMatch.quality, source: bestMatch.searchResult.source, nutrientCount: bestMatch.food.nutrients.length },
+      );
+      // If same quality and current is already a preferred source, skip fetching details
+      if (!dominated && qualityRank(quality) <= qualityRank(bestMatch.quality)) continue;
+    }
+
+    const food = await cronoGetFood(session, candidate.id);
+    if (!food) continue;
+
+    const nutrientCount = food.nutrients.filter((n) => n.amount > 0).length;
+    if (!bestMatch || isBetterMatch(
+      { quality, source: candidateSource, nutrientCount },
+      { quality: bestMatch.quality, source: bestMatch.searchResult.source, nutrientCount: bestMatch.food.nutrients.filter((n) => n.amount > 0).length },
+    )) {
+      bestMatch = { food, searchResult: candidate, quality };
     }
   }
 
@@ -415,19 +454,33 @@ const DECOMPOSE_MODEL = "gemini-3.5-flash-lite";
 const DECOMPOSE_PROMPT = `You are given a description of a meal (possibly from a photo). Break it down into individual food items with estimated gram weights.
 
 For each item, provide:
-- description: a short, clear name suitable for searching the USDA/NCCDB food database. Use standard American English food names — not regional names, brand names, or dish names. Think "what is this made of?" not "what is it called on the menu."
+- description: a USDA-standard ingredient name that would appear in the USDA FoodData Central or NCCDB databases. Always include the preparation state (raw, cooked, boiled, etc.).
 - quantity_g: your best estimate of the gram weight for a typical single-person portion of this item as described
 - notes: any relevant preparation detail (optional)
 
-IMPORTANT for search quality:
-- Use generic ingredient names: "beef steak" not "bistecca", "spinach" not "water spinach"
-- For composite dishes (omelets, stir-fries, noodle soups), decompose into base ingredients:
-  - "oyster omelet" → eggs (~120g) + oysters (~80g) + starch batter (~30g) + cooking oil (~15g)
-  - "oyster noodles" → wheat noodles (~200g) + oysters (~60g) + broth (~100g)
-  - "stir-fried water spinach" → "spinach, cooked" (~100g) + cooking oil (~10g)
-- For fried foods, include the oil/batter separately:
-  - "deep-fried oysters" → oysters (~100g) + flour batter (~40g) + cooking oil absorbed (~20g)
-- Keep names under 4 words when possible
+NAMING RULES — use these exact patterns:
+- Proteins: "chicken breast, cooked" / "beef steak, cooked" / "pork, ground, cooked" / "oysters, raw" / "shrimp, cooked" / "eggs, scrambled"
+- Grains: "rice, white, cooked" / "rice, brown, cooked" / "spaghetti, cooked" / "noodles, egg, cooked" / "bread, white"
+- Vegetables: "spinach, cooked" / "broccoli, cooked" / "cabbage, raw" / "carrots, cooked" / "onions, cooked"
+- Fats/oils: "vegetable oil" / "olive oil" / "butter" (never "cooking oil")
+- Starches: "cornstarch" / "all-purpose flour" / "tapioca starch" (never "flour batter" or "starch batter")
+- Sauces: "soy sauce" / "sweet chili sauce" / "ketchup" / "fish sauce"
+- Dairy: "whole milk" / "cheddar cheese" / "yogurt, plain"
+
+DECOMPOSITION RULES:
+- Always decompose composite dishes into base ingredients — never search for a dish name
+- For fried foods, list the food + coating flour/starch + absorbed oil separately
+- For soups/noodle dishes, list noodles + protein + broth + vegetables separately
+- Specify "raw" for uncooked seafood/meat in dishes where it gets cooked during assembly (omelets, stir-fries)
+- Specify "cooked" for pre-cooked proteins or items served ready to eat
+
+Examples:
+  "oyster omelet with sauce" →
+    eggs, scrambled (~120g) + oysters, raw (~80g) + tapioca starch (~30g) + vegetable oil (~15g) + sweet chili sauce (~25g)
+  "beef noodle soup" →
+    egg noodles, cooked (~200g) + beef chuck, cooked (~150g) + beef broth (~200g) + bok choy, cooked (~50g)
+  "stir-fried morning glory" →
+    spinach, cooked (~100g) + vegetable oil (~10g) + garlic, raw (~5g)
 
 Description: """`;
 

@@ -2,6 +2,8 @@ package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -86,7 +89,7 @@ import kotlin.math.roundToInt
 // long-standing note above); ReferenceRange is the one range kind whose
 // contract doesn't imply a personal history gate or an achieved goal.
 @Composable
-fun NutritionTabContent(overview: NutritionOverview) {
+fun NutritionTabContent(overview: NutritionOverview, onOpenNutrientBreakdown: () -> Unit = {}) {
     val today = overview.today
     if (today == null) {
         Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
@@ -114,6 +117,7 @@ fun NutritionTabContent(overview: NutritionOverview) {
             FTRangeIndicator(referenceRange("PROTEIN (g)", today.proteinG, 0.0, 220.0))
             FTRangeIndicator(referenceRange("CARBS (g)", today.carbsG, 0.0, 450.0))
             FTRangeIndicator(referenceRange("FAT (g)", today.fatG, 0.0, 180.0))
+            NutrientBreakdownButton(onClick = onOpenNutrientBreakdown)
         }
 
         if (overview.todaysMeals.isNotEmpty()) {
@@ -163,6 +167,30 @@ private fun MealRowItem(meal: MealRow) {
                 color = FT.TextSecondary,
             )
         }
+    }
+}
+
+@Composable
+private fun NutrientBreakdownButton(onClick: () -> Unit) {
+    val shape = RoundedCornerShape(FT.RadiusSmall)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(FT.BorderWidth, FT.DomainFuel.copy(alpha = 0.5f), shape)
+            .background(FT.DomainFuel.copy(alpha = 0.08f), shape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            "VIEW DETAILED NUTRIENT BREAKDOWN",
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+            color = FT.DomainFuel,
+        )
     }
 }
 

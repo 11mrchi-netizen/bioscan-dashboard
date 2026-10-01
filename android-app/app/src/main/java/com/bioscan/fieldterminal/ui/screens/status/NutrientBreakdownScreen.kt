@@ -1,0 +1,310 @@
+package com.bioscan.fieldterminal.ui.screens.status
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.data.NutrientBreakdownData
+import com.bioscan.fieldterminal.data.NutrientBreakdownRepository
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.domain.NUTRIENT_REFERENCE
+import com.bioscan.fieldterminal.domain.NutrientCategory
+import com.bioscan.fieldterminal.domain.NutrientInfo
+import com.bioscan.fieldterminal.domain.nutrientDisplayName
+import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.ui.theme.RobotoMono
+import kotlin.math.roundToInt
+
+private enum class TimeRange(val label: String, val days: Int) {
+    Today("TODAY", 1),
+    Week("7 DAYS", 7),
+    Month("28 DAYS", 28),
+    Quarter("90 DAYS", 90),
+}
+
+private enum class ValueMode(val label: String) {
+    Total("TOTAL"),
+    Average("AVG/DAY"),
+}
+
+@Composable
+fun NutrientBreakdownScreen(onBack: () -> Unit) {
+    var timeRange by remember { mutableStateOf(TimeRange.Today) }
+    var valueMode by remember { mutableStateOf(ValueMode.Total) }
+    var data by remember { mutableStateOf<NutrientBreakdownData?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(timeRange) {
+        isLoading = true
+        data = NutrientBreakdownRepository(SupabaseClientProvider.client).loadNutrients(timeRange.days)
+        isLoading = false
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
+        TileHeader(onBack = onBack)
+
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp)) {
+            Text(
+                "NUTRIENT BREAKDOWN",
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp),
+                color = FT.TextPrimary,
+            )
+            Spacer(Modifier.height(12.dp))
+
+            SegmentedToggle(
+                items = TimeRange.entries,
+                selected = timeRange,
+                label = { it.label },
+                onSelect = { timeRange = it },
+            )
+            Spacer(Modifier.height(8.dp))
+            SegmentedToggle(
+                items = ValueMode.entries,
+                selected = valueMode,
+                label = { it.label },
+                onSelect = { valueMode = it },
+            )
+        }
+
+        when {
+            isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = FT.DomainFuel)
+            }
+            data != null -> {
+                val d = data!!
+                val divisor = if (valueMode == ValueMode.Average) d.daysCovered.toDouble() else 1.0
+
+                if (d.nutrients.isEmpty()) {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+                        Text(
+                            "No nutrient data logged for this period.",
+                            style = TextStyle(fontFamily = Inter, fontSize = 15.sp),
+                            color = FT.TextSecondary,
+                        )
+                    }
+                } else {
+                    val periodNote = when (timeRange) {
+                        TimeRange.Today -> "today"
+                        else -> "last ${timeRange.days} days (${d.daysCovered} day${if (d.daysCovered != 1) "s" else ""} with data)"
+                    }
+                    val modeNote = if (valueMode == ValueMode.Average) "daily average" else "accumulated total"
+                    Text(
+                        "$modeNote — $periodNote",
+                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        color = FT.TextMuted,
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
+                    )
+
+                    NutrientCategory.entries.forEach { category ->
+                        val nutrients = nutrientsForCategory(category, d.nutrients)
+                        if (nutrients.isNotEmpty()) {
+                            NutrientCategoryCard(
+                                category = category,
+                                nutrients = nutrients,
+                                divisor = divisor,
+                            )
+                        }
+                    }
+
+                    Text(
+                        "RDA values shown are adult male reference intakes (NASEM DRI). " +
+                            "They are general guides, not personal targets.",
+                        style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                        color = FT.TextMuted,
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NutrientCategoryCard(
+    category: NutrientCategory,
+    nutrients: List<Pair<NutrientInfo, Double>>,
+    divisor: Double,
+) {
+    FTCard(
+        title = category.label,
+        modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
+    ) {
+        nutrients.forEach { (info, rawAmount) ->
+            val amount = rawAmount / divisor
+            NutrientRow(info = info, amount = amount)
+        }
+    }
+}
+
+@Composable
+private fun NutrientRow(info: NutrientInfo, amount: Double) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                info.displayName,
+                style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                color = FT.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                formatAmount(amount, info.unit),
+                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                color = FT.TextPrimary,
+                textAlign = TextAlign.End,
+            )
+        }
+
+        if (info.rda != null || info.upperLimit != null) {
+            NutrientBar(amount = amount, rda = info.rda, upperLimit = info.upperLimit)
+            val parts = mutableListOf<String>()
+            info.rda?.let { parts.add("RDA ${formatAmount(it, info.unit)} (${(amount / it * 100).roundToInt()}%)") }
+            info.upperLimit?.let { parts.add("UL ${formatAmount(it, info.unit)}") }
+            Text(
+                parts.joinToString(" · "),
+                style = TextStyle(fontFamily = RobotoMono, fontSize = 10.sp),
+                color = FT.TextMuted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NutrientBar(amount: Double, rda: Double?, upperLimit: Double?) {
+    val maxRef = listOfNotNull(rda, upperLimit, amount).max() * 1.2
+    if (maxRef <= 0) return
+
+    Canvas(modifier = Modifier.fillMaxWidth().height(14.dp).padding(vertical = 3.dp)) {
+        val y = size.height / 2f
+        drawLine(FT.GlassTrack, Offset(0f, y), Offset(size.width, y), strokeWidth = 8f)
+
+        val barFraction = (amount / maxRef).toFloat().coerceIn(0f, 1f)
+        val barColor = when {
+            upperLimit != null && amount > upperLimit -> FT.Warning
+            rda != null && amount >= rda -> FT.Emerald
+            rda != null && amount >= rda * 0.7 -> FT.Emerald.copy(alpha = 0.7f)
+            else -> FT.DomainFuel
+        }
+        drawLine(barColor, Offset(0f, y), Offset(barFraction * size.width, y), strokeWidth = 8f)
+
+        rda?.let {
+            val x = (it / maxRef).toFloat().coerceIn(0f, 1f) * size.width
+            drawLine(FT.TextSecondary, Offset(x, 0f), Offset(x, size.height), strokeWidth = 2f)
+        }
+        upperLimit?.let {
+            val x = (it / maxRef).toFloat().coerceIn(0f, 1f) * size.width
+            drawLine(FT.Warning.copy(alpha = 0.6f), Offset(x, 0f), Offset(x, size.height), strokeWidth = 2f)
+        }
+    }
+}
+
+private fun nutrientsForCategory(
+    category: NutrientCategory,
+    data: Map<String, Double>,
+): List<Pair<NutrientInfo, Double>> {
+    val known = NUTRIENT_REFERENCE.values
+        .filter { it.category == category }
+        .mapNotNull { info -> data[info.key]?.let { info to it } }
+
+    val unknown = data
+        .filter { (key, _) -> key !in NUTRIENT_REFERENCE && guessCategoryForUnknown(key) == category }
+        .map { (key, amount) ->
+            NutrientInfo(key, nutrientDisplayName(key), "", null, null, category) to amount
+        }
+
+    return known + unknown
+}
+
+private fun guessCategoryForUnknown(key: String): NutrientCategory = NutrientCategory.Other
+
+@Composable
+private fun <T> SegmentedToggle(
+    items: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+) {
+    val shape = RoundedCornerShape(FT.RadiusSmall)
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items.forEach { item ->
+            val isSelected = item == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .border(FT.BorderWidth, if (isSelected) FT.Emerald else FT.GlassBorder, shape)
+                    .background(if (isSelected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, shape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { onSelect(item) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label(item),
+                    style = TextStyle(
+                        fontFamily = RobotoMono,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp,
+                        letterSpacing = 0.14f.em,
+                    ),
+                    color = if (isSelected) FT.Emerald else FT.TextSecondary,
+                )
+            }
+        }
+    }
+}
+
+private fun formatAmount(value: Double, unit: String): String {
+    val formatted = when {
+        value >= 100 -> value.roundToInt().toString()
+        value >= 10 -> "%.1f".format(value)
+        value >= 1 -> "%.1f".format(value)
+        value >= 0.01 -> "%.2f".format(value)
+        value > 0 -> "%.3f".format(value)
+        else -> "0"
+    }
+    return if (unit.isNotEmpty()) "$formatted $unit" else formatted
+}

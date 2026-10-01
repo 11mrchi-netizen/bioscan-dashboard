@@ -245,32 +245,91 @@ function estimateGramsFromDescription(description: string, measure?: CronoMeasur
   return 100;
 }
 
+// Words that describe cooking/preparation but not the food itself.
+const MODIFIER_WORDS = new Set([
+  "cooked", "raw", "fresh", "frozen", "dried", "dry", "canned",
+  "grilled", "baked", "fried", "deep-fried", "pan-fried", "stir-fried",
+  "roasted", "steamed", "boiled", "poached", "smoked", "braised",
+  "sauteed", "sautéed", "blanched", "seared", "pan-seared",
+  "sliced", "chopped", "diced", "minced", "ground", "whole", "mashed",
+  "with", "and", "in", "on", "of", "the", "a", "an",
+  "salted", "unsalted", "seasoned", "plain", "flavored",
+  "lean", "boneless", "skinless",
+]);
+
+function extractFoodNouns(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[,()]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 1 && !MODIFIER_WORDS.has(w));
+}
+
 function assessMatchQuality(query: string, foodName: string, score?: number): "exact" | "good" | "weak" | "none" {
   const q = query.toLowerCase().trim();
   const n = foodName.toLowerCase().trim();
+
+  // Exact substring match
   if (q === n || n.includes(q)) return "exact";
-  const qWords = q.split(/\s+/);
-  const matchedWords = qWords.filter((w) => n.includes(w));
-  if (matchedWords.length >= qWords.length * 0.7) return "good";
-  if (matchedWords.length >= 1) return "weak";
+
+  const queryNouns = extractFoodNouns(q);
+  const nameNouns = extractFoodNouns(n);
+
+  if (queryNouns.length === 0) return "none";
+
+  // Count how many core food nouns from the query appear in the food name
+  const matchedNouns = queryNouns.filter((w) =>
+    nameNouns.some((nw) => nw === w || nw.includes(w) || w.includes(nw))
+  );
+  const nounMatchRatio = matchedNouns.length / queryNouns.length;
+
+  // Also check: does the food name contain nouns NOT in the query that
+  // signal a completely different food? (e.g. "cheese" when query is "oysters")
+  const extraNouns = nameNouns.filter((nw) =>
+    !queryNouns.some((qw) => nw === qw || nw.includes(qw) || qw.includes(nw))
+  );
+
+  if (nounMatchRatio >= 0.8) return "good";
+  if (nounMatchRatio >= 0.5 && extraNouns.length <= 2) return "good";
+  if (nounMatchRatio >= 0.3 && extraNouns.length <= 1) return "weak";
+
+  // If core nouns don't match, it's a bad result no matter what
   return "none";
 }
 
-async function lookupItem(
+async function tryLookup(
   session: CronoSession,
-  description: string,
-  quantityG?: number,
-): Promise<ResolvedItem> {
-  const searchResults = await cronoFindFood(session, description);
+  query: string,
+  quantityG: number,
+): Promise<ResolvedItem | null> {
+  const searchResults = await cronoFindFood(session, query);
+  if (searchResults.length === 0) return null;
 
-  if (searchResults.length === 0) {
+  // Check top 3 results for best match quality
+  let bestMatch: { food: CronoFoodDetail; searchResult: CronoFoodSearchResult; quality: "exact" | "good" | "weak" | "none" } | null = null;
+
+  for (const candidate of searchResults.slice(0, 3)) {
+    const quality = assessMatchQuality(query, candidate.name, candidate.score ?? undefined);
+    if (quality === "none") continue;
+    if (!bestMatch || qualityRank(quality) > qualityRank(bestMatch.quality)) {
+      const food = await cronoGetFood(session, candidate.id);
+      if (food) {
+        bestMatch = { food, searchResult: candidate, quality };
+        if (quality === "exact") break;
+      }
+    }
+  }
+
+  if (!bestMatch) {
+    // All top results were "none" quality — return a none result with the top hit for transparency
+    const top = searchResults[0];
     return {
-      query: description,
-      cronometer_food_id: null,
-      cronometer_food_name: null,
-      cronometer_source: null,
-      search_score: null,
-      quantity_g: quantityG ?? 100,
+      query,
+      cronometer_food_id: top.id,
+      cronometer_food_name: top.name,
+      cronometer_source: top.source,
+      search_score: top.score ?? null,
+      quantity_g: quantityG,
       serving_used: null,
       nutrients_per_100g: {},
       nutrients_for_portion: {},
@@ -279,41 +338,71 @@ async function lookupItem(
     };
   }
 
-  const best = searchResults[0];
-  const food = await cronoGetFood(session, best.id);
-
-  if (!food) {
-    return {
-      query: description,
-      cronometer_food_id: best.id,
-      cronometer_food_name: best.name,
-      cronometer_source: best.source,
-      search_score: best.score ?? null,
-      quantity_g: quantityG ?? 100,
-      serving_used: null,
-      nutrients_per_100g: {},
-      nutrients_for_portion: {},
-      all_measures: [],
-      match_quality: assessMatchQuality(description, best.name, best.score ?? undefined),
-    };
-  }
-
+  const { food, searchResult, quality } = bestMatch;
   const defaultMeasure = food.measures.find((m) => m.id === food.defaultMeasureId);
-  const effectiveG = quantityG ?? estimateGramsFromDescription(description, defaultMeasure);
-  const { per100g, forPortion } = resolveNutrients(food, effectiveG);
+  const { per100g, forPortion } = resolveNutrients(food, quantityG);
 
   return {
-    query: description,
+    query,
     cronometer_food_id: food.id,
     cronometer_food_name: food.name,
     cronometer_source: food.source,
-    search_score: best.score ?? null,
-    quantity_g: effectiveG,
+    search_score: searchResult.score ?? null,
+    quantity_g: quantityG,
     serving_used: defaultMeasure?.name ?? "100g",
     nutrients_per_100g: per100g,
     nutrients_for_portion: forPortion,
     all_measures: food.measures.map((m) => ({ name: m.name, grams: m.value })),
-    match_quality: assessMatchQuality(description, food.name, best.score ?? undefined),
+    match_quality: quality,
+  };
+}
+
+function qualityRank(q: "exact" | "good" | "weak" | "none"): number {
+  return { exact: 3, good: 2, weak: 1, none: 0 }[q];
+}
+
+// Simplify a query by stripping cooking modifiers to get a more generic search
+function simplifyQuery(query: string): string | null {
+  const nouns = extractFoodNouns(query);
+  if (nouns.length === 0) return null;
+  const simplified = nouns.join(" ");
+  return simplified !== query.toLowerCase().trim() ? simplified : null;
+}
+
+async function lookupItem(
+  session: CronoSession,
+  description: string,
+  quantityG?: number,
+): Promise<ResolvedItem> {
+  const effectiveG = quantityG ?? 100;
+
+  // First attempt: full query
+  let result = await tryLookup(session, description, effectiveG);
+
+  // If no good match, try simplified query (strip modifiers)
+  if (!result || result.match_quality === "none") {
+    const simplified = simplifyQuery(description);
+    if (simplified) {
+      const retry = await tryLookup(session, simplified, effectiveG);
+      if (retry && qualityRank(retry.match_quality) > qualityRank(result?.match_quality ?? "none")) {
+        retry.query = description; // keep original query for context
+        result = retry;
+      }
+    }
+  }
+
+  return result ?? {
+    query: description,
+    cronometer_food_id: null,
+    cronometer_food_name: null,
+    cronometer_source: null,
+    search_score: null,
+    quantity_g: effectiveG,
+    serving_used: null,
+    nutrients_per_100g: {},
+    nutrients_for_portion: {},
+    all_measures: [],
+    match_quality: "none",
   };
 }
 
@@ -326,14 +415,19 @@ const DECOMPOSE_MODEL = "gemini-3.5-flash-lite";
 const DECOMPOSE_PROMPT = `You are given a description of a meal (possibly from a photo). Break it down into individual food items with estimated gram weights.
 
 For each item, provide:
-- description: a short, clear name suitable for searching a food database (e.g. "brown rice, cooked" not "a bed of rice")
+- description: a short, clear name suitable for searching the USDA/NCCDB food database. Use standard American English food names — not regional names, brand names, or dish names. Think "what is this made of?" not "what is it called on the menu."
 - quantity_g: your best estimate of the gram weight for a typical single-person portion of this item as described
 - notes: any relevant preparation detail (optional)
 
-Be specific and practical:
-- "Pan-seared steak" → "beef steak" ~200g
-- "brown rice" → "brown rice, cooked" ~200g
-- "Chinese water spinach" → "water spinach, cooked" ~100g
+IMPORTANT for search quality:
+- Use generic ingredient names: "beef steak" not "bistecca", "spinach" not "water spinach"
+- For composite dishes (omelets, stir-fries, noodle soups), decompose into base ingredients:
+  - "oyster omelet" → eggs (~120g) + oysters (~80g) + starch batter (~30g) + cooking oil (~15g)
+  - "oyster noodles" → wheat noodles (~200g) + oysters (~60g) + broth (~100g)
+  - "stir-fried water spinach" → "spinach, cooked" (~100g) + cooking oil (~10g)
+- For fried foods, include the oil/batter separately:
+  - "deep-fried oysters" → oysters (~100g) + flour batter (~40g) + cooking oil absorbed (~20g)
+- Keep names under 4 words when possible
 
 Description: """`;
 
@@ -448,8 +542,8 @@ Deno.serve(async (req: Request) => {
         results.push(await lookupItem(session, item.description, item.quantity_g));
       }
 
-      const totals = sumNutrients(results);
-      return json({ mode: "direct", results, totals }, 200);
+      const { totals, included, skipped } = sumNutrients(results);
+      return json({ mode: "direct", results, totals, items_included: included, items_skipped: skipped }, 200);
     }
 
     // Mode 2: decompose an aggregate description, then look up each item
@@ -471,13 +565,15 @@ Deno.serve(async (req: Request) => {
         results.push(await lookupItem(session, item.description, item.quantity_g));
       }
 
-      const totals = sumNutrients(results);
+      const { totals, included, skipped } = sumNutrients(results);
       return json({
         mode: "decompose",
         original_description: body.description,
         decomposed,
         results,
         totals,
+        items_included: included,
+        items_skipped: skipped,
       }, 200);
     }
 
@@ -487,16 +583,28 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-function sumNutrients(results: ResolvedItem[]): Record<string, number> {
+function sumNutrients(results: ResolvedItem[]): {
+  totals: Record<string, number>;
+  included: number;
+  skipped: string[];
+} {
   const totals: Record<string, number> = {};
+  const skipped: string[] = [];
+  let included = 0;
+
   for (const r of results) {
+    // Only include exact/good matches in totals — weak/none pollute accuracy
+    if (r.match_quality === "none" || r.match_quality === "weak") {
+      skipped.push(r.query);
+      continue;
+    }
+    included++;
     for (const [key, val] of Object.entries(r.nutrients_for_portion)) {
       totals[key] = (totals[key] ?? 0) + val;
     }
   }
-  // Round totals
   for (const key of Object.keys(totals)) {
     totals[key] = Math.round(totals[key] * 100) / 100;
   }
-  return totals;
+  return { totals, included, skipped };
 }

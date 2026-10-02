@@ -123,37 +123,48 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         ScreenHeader(title = "USER", context = "LEVELS · ACHIEVEMENTS · TRAINING BLOCK")
         Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         ) {
+            // -- Aging --
             AgingCard(agingOverview, onOpenAging)
 
-            Text(
-                if (realAchievements == null)
-                    "Loading achievements from your training history…"
-                else
-                    "Domain levels require population benchmarks and are not yet live.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
-                color = FT.TextMuted,
-            )
+            Spacer(Modifier.height(24.dp))
 
+            // -- Domain Levels --
             FTCard(title = "DOMAIN LEVELS") {
                 AchievementDomain.entries.forEach { domain ->
                     DomainLevelRow(domain, profile.domainLevels[domain])
                 }
+                Text(
+                    if (realAchievements == null)
+                        "Loading achievements from your training history…"
+                    else
+                        "Domain levels require population benchmarks and are not yet live.",
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                    color = FT.TextMuted,
+                )
             }
 
+            Spacer(Modifier.height(24.dp))
+
+            // -- Achievements (only domains that have data) --
             val achievements = realAchievements ?: profile.achievements
-            AchievementDomain.entries.forEach { domain ->
+            val populatedDomains = AchievementDomain.entries.filter { achievements[it].orEmpty().isNotEmpty() }
+            populatedDomains.forEachIndexed { i, domain ->
                 AchievementSection(domain, achievements[domain].orEmpty())
+                if (i < populatedDomains.lastIndex) Spacer(Modifier.height(12.dp))
             }
 
+            Spacer(Modifier.height(24.dp))
+
+            // -- Training --
             TrainingBlockCard(
                 cycle = activeCycle,
                 currentValue = null,
                 onEdit = { editingCycle = activeCycle },
                 onAdd = { addingCycle = true },
             )
+            Spacer(Modifier.height(12.dp))
             TrainingBlockHistoryCard(cycleHistory)
         }
     }
@@ -237,7 +248,7 @@ private fun BioAgeRow(label: String, result: BiologicalAgeResult) {
 
 @Composable
 private fun DomainLevelRow(domain: AchievementDomain, level: DomainLevel?) {
-    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+    Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -428,28 +439,28 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
 
 @Composable
 private fun TrainingBlockHistoryCard(history: List<TrainingCycle>) {
+    var expanded by remember { mutableStateOf(false) }
+    val visible = if (expanded || history.size <= 3) history else history.take(3)
+
     FTCard(title = "TRAINING BLOCK HISTORY") {
         if (history.isEmpty()) {
             FTDataState(DataAvailability.Unavailable, "No past training blocks yet.")
             return@FTCard
         }
-        val maxDuration = history.mapNotNull { cycle ->
-            cycle.endDate?.let { ChronoUnit.DAYS.between(cycle.startDate, it).toDouble() }
-        }.maxOrNull() ?: 1.0
 
-        history.forEach { cycle ->
+        visible.forEach { cycle ->
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     cycle.focus.joinToString(" + ") { it.quality.label() },
                     style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
-                    color = FT.TextSecondary,
+                    color = FT.TextPrimary,
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        "${cycle.startDate} — ${cycle.endDate}",
+                        "${cycle.startDate} — ${cycle.endDate ?: "ongoing"}",
                         style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
                         color = FT.TextMuted,
                     )
@@ -458,25 +469,10 @@ private fun TrainingBlockHistoryCard(history: List<TrainingCycle>) {
                         Text(
                             "${weeks}w",
                             style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
-                            color = FT.TextPrimary,
+                            color = FT.TextSecondary,
                         )
                     }
                 }
-
-                // Proportional duration bar
-                cycle.endDate?.let { end ->
-                    val duration = ChronoUnit.DAYS.between(cycle.startDate, end).toDouble()
-                    RangeBar(
-                        value = duration,
-                        max = maxDuration,
-                        watchBelow = null,
-                        color = FT.DomainTraining,
-                        height = 5.dp,
-                        topPadding = 4.dp,
-                    )
-                }
-
-                // Goal summary when available
                 if (cycle.goalMetric != null && cycle.startingValue != null && cycle.targetValue != null) {
                     Text(
                         "Goal: ${cycle.goalMetric} — %.0f → %.0f".format(cycle.startingValue, cycle.targetValue),
@@ -484,6 +480,12 @@ private fun TrainingBlockHistoryCard(history: List<TrainingCycle>) {
                         color = FT.TextMuted,
                     )
                 }
+            }
+        }
+
+        if (history.size > 3) {
+            EditLink(if (expanded) "SHOW LESS" else "SHOW ALL ${history.size} BLOCKS") {
+                expanded = !expanded
             }
         }
     }

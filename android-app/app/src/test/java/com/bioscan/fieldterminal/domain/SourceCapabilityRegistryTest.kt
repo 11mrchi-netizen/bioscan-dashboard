@@ -31,4 +31,29 @@ class SourceCapabilityRegistryTest {
         // source should be reported live for it.
         assertNull(liveSourceFor("training_load"))
     }
+
+    @Test
+    fun sleepScoreResolvesToZepp() {
+        // sleep_score is Zepp-only (Health Connect has no equivalent).
+        val resolved = liveSourceFor("sleep_score")
+        assertEquals(DataSource.ZEPP, resolved?.source)
+        assertEquals("sleep_daily.score", resolved?.supabaseColumn)
+    }
+
+    @Test
+    fun sleepDurationResolvesToHealthConnect() {
+        // Both Zepp and Health Connect are now LIVE for sleep_duration;
+        // liveSourceFor returns the first match, which is Health Connect.
+        val resolved = liveSourceFor("sleep_duration")
+        assertEquals(DataSource.HEALTH_CONNECT, resolved?.source)
+    }
+
+    @Test
+    fun zeppHeartRateRhrIsLive() {
+        // Zepp's daily heart_rate (resting HR from band_data) is now LIVE.
+        // liveSourceFor("heart_rate") is not in Health Connect's list (it
+        // uses "resting_heart_rate"), so Zepp is the only match.
+        val resolved = liveSourceFor("heart_rate")
+        assertEquals(DataSource.ZEPP, resolved?.source)
+    }
 }

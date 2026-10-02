@@ -22,7 +22,7 @@ function json(body: unknown, status: number) {
   });
 }
 
-const EXTRACTOR_VERSION = "9"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
+const EXTRACTOR_VERSION = "10"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
 // 6: write Zepp's own decoded distance back onto exercise_sessions.distance_km, and merge
 // orphaned zepp-sourced placeholder rows created by the Zepp/Health-Connect sync race (DAV-274)
 // 7: fix the "stress" metric's endpoint (was 404ing every attempt -- see METRIC_DEFS) (DAV-246)
@@ -39,6 +39,10 @@ const EXTRACTOR_VERSION = "9"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is
 // data_type filter -- none of which match the real mobile API. Corrected to
 // match ZeppBridge's working approach: /v1/ path, query_type=detail,
 // from_date/to_date range params, byteLength=8, no data_type filter.
+// 10: parse band_data response -- decode the base64 summary JSON to extract
+// sleep stages, resting HR, sleep score, and steps, then upsert into
+// sleep_daily and wearable_daily. Stage mode mapping confirmed against a
+// real response: 4=light, 5=deep, 7=awake, 8=REM.
 
 
 // DAV-115/123: decode detail.json's per-second fields into plain TimePoint-
@@ -419,6 +423,91 @@ const METRIC_DEFS: MetricDef[] = [
   },
 ];
 
+// v10: sleep stage modes from the Zepp band_data summary.
+// Confirmed against a real 2026-10-01 response and ZeppBridge's conventions:
+// 4=light, 5=deep, 7=awake, 8=REM. Only AWAKE is used in the decoder
+// (to subtract awake time from total time-in-bed); the summary's own
+// dp/lt/dt fields give deep/light/REM minutes pre-aggregated.
+const SLEEP_MODE_AWAKE = 7;
+
+interface BandDataDecoded {
+  sleepHours: number | null;
+  sleepScore: number | null;
+  bedtimeIso: string | null;
+  wakeTimeIso: string | null;
+  deepMin: number | null;
+  remMin: number | null;
+  lightMin: number | null;
+  rhr: number | null;
+  steps: number | null;
+}
+
+function decodeBandDataSummary(rawBody: unknown): BandDataDecoded | null {
+  if (!rawBody || typeof rawBody !== "object") return null;
+  const body = rawBody as Record<string, unknown>;
+  if (body.code !== 1) return null;
+  const dataArr = body.data;
+  if (!Array.isArray(dataArr) || dataArr.length === 0) return null;
+  const entry = dataArr[0] as Record<string, unknown>;
+  const summaryB64 = entry.summary;
+  if (typeof summaryB64 !== "string" || !summaryB64) return null;
+
+  let summary: Record<string, unknown>;
+  try {
+    const decoded = atob(summaryB64);
+    summary = JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+
+  const slp = summary.slp as Record<string, unknown> | undefined;
+  let sleepHours: number | null = null;
+  let sleepScore: number | null = null;
+  let bedtimeIso: string | null = null;
+  let wakeTimeIso: string | null = null;
+  let deepMin: number | null = null;
+  let remMin: number | null = null;
+  let lightMin: number | null = null;
+
+  if (slp) {
+    const st = Number(slp.st);
+    const ed = Number(slp.ed);
+    if (Number.isFinite(st) && Number.isFinite(ed) && ed > st) {
+      const totalSeconds = ed - st;
+      // Subtract awake stage minutes from total time-in-bed, matching
+      // HealthConnectDailySyncRepository's own awake subtraction.
+      const stages = slp.stage as Array<{ start: number; stop: number; mode: number }> | undefined;
+      let awakeMin = 0;
+      if (Array.isArray(stages)) {
+        for (const s of stages) {
+          if (s.mode === SLEEP_MODE_AWAKE) awakeMin += s.stop - s.start;
+        }
+      }
+      sleepHours = (totalSeconds / 3600) - (awakeMin / 60);
+      if (sleepHours < 0) sleepHours = 0;
+      bedtimeIso = new Date(st * 1000).toISOString();
+      wakeTimeIso = new Date(ed * 1000).toISOString();
+    }
+    const dp = Number(slp.dp);
+    if (Number.isFinite(dp) && dp >= 0) deepMin = dp;
+    const dt = Number(slp.dt);
+    if (Number.isFinite(dt) && dt >= 0) remMin = dt;
+    const lt = Number(slp.lt);
+    if (Number.isFinite(lt) && lt >= 0) lightMin = lt;
+    const ss = Number(slp.ss);
+    if (Number.isFinite(ss) && ss > 0) sleepScore = ss;
+  }
+
+  const rhrVal = Number(summary.slp && (summary.slp as Record<string, unknown>).rhr);
+  const rhr = Number.isFinite(rhrVal) && rhrVal > 0 ? rhrVal : null;
+
+  const stp = summary.stp as Record<string, unknown> | undefined;
+  const stepsVal = stp ? Number(stp.ttl) : NaN;
+  const steps = Number.isFinite(stepsVal) && stepsVal >= 0 ? stepsVal : null;
+
+  return { sleepHours, sleepScore, bedtimeIso, wakeTimeIso, deepMin, remMin, lightMin, rhr, steps };
+}
+
 function parseDateRange(
   from: string,
   to: string,
@@ -781,6 +870,43 @@ Deno.serve(async (req: Request) => {
         const endpoint = def.endpoint(zeppUserId, date);
         const { statusCode, rawBody, stored, error } = await fetchAndStore(endpoint, def.metric, date, "");
         results.push({ metric: def.metric, date, status: statusCode, stored, ...(error ? { error } : {}) });
+
+        // v10: decode band_data and upsert sleep/wearable daily rows.
+        if (def.metric === "band_data" && statusCode >= 200 && statusCode < 300) {
+          try {
+            const decoded = decodeBandDataSummary(rawBody);
+            if (decoded) {
+              if (decoded.sleepHours !== null && decoded.bedtimeIso && decoded.wakeTimeIso) {
+                const sleepRow: Record<string, unknown> = {
+                  user_id: user.id,
+                  date,
+                  hours: decoded.sleepHours,
+                  bedtime: decoded.bedtimeIso,
+                  wake_time: decoded.wakeTimeIso,
+                };
+                if (decoded.sleepScore !== null) sleepRow.score = decoded.sleepScore;
+                if (decoded.deepMin !== null) sleepRow.deep_min = decoded.deepMin;
+                if (decoded.remMin !== null) sleepRow.rem_min = decoded.remMin;
+                if (decoded.lightMin !== null) sleepRow.light_min = decoded.lightMin;
+                const { error: sleepErr } = await supabase.from("sleep_daily")
+                  .upsert(sleepRow, { onConflict: "user_id,date" });
+                if (sleepErr) throw new Error(`sleep_daily upsert: ${sleepErr.message}`);
+              }
+              const wearableUpdates: Record<string, unknown> = { user_id: user.id, date };
+              let hasWearable = false;
+              if (decoded.rhr !== null) { wearableUpdates.rhr = decoded.rhr; hasWearable = true; }
+              if (decoded.steps !== null) { wearableUpdates.steps = decoded.steps; hasWearable = true; }
+              if (hasWearable) {
+                const { error: wearErr } = await supabase.from("wearable_daily")
+                  .upsert(wearableUpdates, { onConflict: "user_id,date" });
+                if (wearErr) throw new Error(`wearable_daily upsert: ${wearErr.message}`);
+              }
+              results.push({ metric: "band_data_decode", date, status: 200, stored: true });
+            }
+          } catch (e) {
+            results.push({ metric: "band_data_decode", date, status: 0, stored: false, error: String(e) });
+          }
+        }
 
         // DAV-112/123: sport_history is the list; follow up with the real
         // per-point detail payload for each workout it references.

@@ -4,7 +4,8 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { useAnalysis } from '../context/AnalysisContext'
+import { useRange, useInspect } from '../lib/analysisStore'
+import { tss, vo2maxFromPace, ema } from '../lib/training'
 import { FTChart } from '../components/shared/FTChart'
 import type { MetricResult } from '../lib/metricAdapter'
 import type { ChartSpec } from '../lib/chartSpec'
@@ -18,33 +19,6 @@ interface RunRow {
   activity_type: string | null
   avg_hr: number | null
   source: string | null
-}
-
-// Simple TSS proxy: (duration_hours × rpe_factor) × 100
-// rpe_factor from activity_type: run=1.0, interval/track=1.3, race=1.5, easy=0.7
-function tss(run: RunRow): number {
-  const hours = (run.duration_minutes ?? 0) / 60
-  const factorMap: Record<string, number> = {
-    interval: 1.3, track: 1.3, race: 1.5, tempo: 1.2, easy: 0.7
-  }
-  const type = (run.activity_type ?? '').toLowerCase()
-  const factor = Object.entries(factorMap).find(([k]) => type.includes(k))?.[1] ?? 1.0
-  return hours * factor * 100
-}
-
-// Daniels VDOT VO2max estimate from pace (km/h)
-function vo2maxFromPace(distKm: number, durMin: number): number | null {
-  if (!distKm || !durMin) return null
-  const velKmh = distKm / (durMin / 60)
-  // Simplified: VO2max ≈ -4.60 + 0.182258*v + 0.000104*v^2  (Daniels)
-  return Math.round((-4.60 + 0.182258 * velKmh + 0.000104 * velKmh * velKmh) * 10) / 10
-}
-
-// Exponential moving average
-function ema(values: number[], halfLifeDays: number): number[] {
-  const k = 1 - Math.exp(-Math.LN2 / halfLifeDays)
-  let acc = 0
-  return values.map(v => { acc = acc + k * (v - acc); return Math.round(acc * 10) / 10 })
 }
 
 interface TrainingData {
@@ -129,8 +103,9 @@ function toMetricResult(dates: string[], values: (number | null)[], metricId: st
 }
 
 export function Training() {
-  const { ctx, inspect } = useAnalysis()
-  const { data, loading } = useTrainingData(ctx.primaryRange.start, ctx.primaryRange.end)
+  const range = useRange()
+  const inspect = useInspect()
+  const { data, loading } = useTrainingData(range.start, range.end)
 
   const ctlSpec = useMemo(() => makeStressSpec('training.ctl', 'CTL', 'AU', 'area'), [])
   const atlSpec = useMemo(() => makeStressSpec('training.atl', 'ATL', 'AU', 'line'), [])
@@ -205,3 +180,5 @@ export function Training() {
     </div>
   )
 }
+
+export default Training

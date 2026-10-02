@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { useAnalysis } from '../context/AnalysisContext'
+import { useRange, useInspect } from '../lib/analysisStore'
 import { fetchMetric } from '../lib/metricAdapter'
 import { FTChart } from '../components/shared/FTChart'
 import type { MetricResult } from '../lib/metricAdapter'
@@ -43,8 +43,15 @@ function makeSpec(id: string, title: string, unit: string, kind: ChartSpec['kind
   return { specVersion: 1, metricId: id, title, unit, kind, smooth: false }
 }
 
+const calSpec  = makeSpec('nutrition.calories',  'Calories', 'kcal', 'bar')
+const protSpec = makeSpec('nutrition.protein',   'Protein',  'g',    'bar')
+const carbSpec = makeSpec('nutrition.carbs',     'Carbs',    'g',    'bar')
+const fatSpec  = makeSpec('nutrition.fat',       'Fat',      'g',    'bar')
+const wtSpec: ChartSpec = { specVersion: 1, metricId: 'body_metrics.weight_kg', title: 'Weight', unit: 'kg', kind: 'line', smooth: true }
+
 export function Nutrition() {
-  const { ctx, inspect } = useAnalysis()
+  const range = useRange()
+  const inspect = useInspect()
   const [macros, setMacros] = useState<MacroDay[]>([])
   const [meals, setMeals] = useState<MealRow[]>([])
   const [weightResult, setWeightResult] = useState<MetricResult | null>(null)
@@ -52,7 +59,7 @@ export function Nutrition() {
 
   useEffect(() => {
     setLoading(true)
-    const { start, end } = ctx.primaryRange
+    const { start, end } = range
     Promise.all([
       // Daily macro summary from meals table
       supabase.from('meals')
@@ -80,22 +87,16 @@ export function Nutrition() {
         .limit(50)
         .then(({ data }) => (data ?? []) as MealRow[]),
       // Weight for overlay
-      fetchMetric({ table: 'body_metrics', column: 'weight_kg', range: ctx.primaryRange, aggregation: 'daily_avg' }),
+      fetchMetric({ table: 'body_metrics', column: 'weight_kg', range, aggregation: 'daily_avg' }),
     ]).then(([macroData, mealData, wt]) => {
       setMacros(macroData)
       setMeals(mealData)
       setWeightResult(wt)
       setLoading(false)
     })
-  }, [ctx.primaryRange])
+  }, [range])
 
   if (loading) return <div className="state-loading mono">LOADING NUTRITION…</div>
-
-  const calSpec  = makeSpec('nutrition.calories',  'Calories', 'kcal', 'bar')
-  const protSpec = makeSpec('nutrition.protein',   'Protein',  'g',    'bar')
-  const carbSpec = makeSpec('nutrition.carbs',     'Carbs',    'g',    'bar')
-  const fatSpec  = makeSpec('nutrition.fat',       'Fat',      'g',    'bar')
-  const wtSpec: ChartSpec = { specVersion: 1, metricId: 'body_metrics.weight_kg', title: 'Weight', unit: 'kg', kind: 'line', smooth: true }
 
   const calResult  = toResult(macros, 'calories',  'nutrition.calories')
   const protResult = toResult(macros, 'protein_g', 'nutrition.protein')
@@ -155,3 +156,5 @@ export function Nutrition() {
     </div>
   )
 }
+
+export default Nutrition

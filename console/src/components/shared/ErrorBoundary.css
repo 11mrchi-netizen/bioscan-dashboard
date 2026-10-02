@@ -1,0 +1,54 @@
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+}
+
+.error-boundary--app {
+  min-height: 100vh;
+}
+
+.error-boundary--workspace {
+  min-height: 200px;
+}
+
+.error-boundary-content {
+  text-align: center;
+  padding: 24px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.06);
+  max-width: 480px;
+}
+
+.error-boundary-label {
+  color: #EF4444;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.error-boundary-message {
+  color: #A4AFBA;
+  font-size: 12px;
+  margin-bottom: 16px;
+  word-break: break-word;
+}
+
+.error-boundary-retry {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #A4AFBA;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 6px 16px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: border-color 0.15s;
+}
+
+.error-boundary-retry:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}

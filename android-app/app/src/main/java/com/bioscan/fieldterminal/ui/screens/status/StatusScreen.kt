@@ -24,7 +24,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // in ui/nav/TopLevelTab.kt) -- this is a compositional change, not a new
 // navigation destination.
 @Composable
-fun StatusScreen(onOpenTile: (TileRoute) -> Unit) {
+fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenDailyReadiness: () -> Unit) {
     var overview by remember { mutableStateOf<StatusOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -42,6 +42,6 @@ fun StatusScreen(onOpenTile: (TileRoute) -> Unit) {
     // ponytail: no scroll fallback if this page's content ever grows past
     // one screen (e.g. very large system font) -- revisit if that happens.
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        BodyConsole(overview = overview, isLoading = isLoading, onOpenTile = onOpenTile)
+        BodyConsole(overview = overview, isLoading = isLoading, onOpenTile = onOpenTile, onOpenDailyReadiness = onOpenDailyReadiness)
     }
 }

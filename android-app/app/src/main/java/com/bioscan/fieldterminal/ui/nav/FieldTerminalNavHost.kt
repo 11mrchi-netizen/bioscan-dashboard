@@ -39,6 +39,7 @@ import com.bioscan.fieldterminal.ui.screens.LogScreen
 import com.bioscan.fieldterminal.ui.screens.SessionDetailScreen
 import com.bioscan.fieldterminal.ui.screens.SettingsScreen
 import com.bioscan.fieldterminal.ui.screens.UserProfileScreen
+import com.bioscan.fieldterminal.ui.screens.status.DailyReadinessScreen
 import com.bioscan.fieldterminal.ui.screens.status.FuelTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.HeartTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.NutrientBreakdownScreen
@@ -74,8 +75,12 @@ fun FieldTerminalNavHost() {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(TopLevelTab.Status.route) {
-                StatusScreen(onOpenTile = { tile -> navController.navigate(tile.route) })
+                StatusScreen(
+                    onOpenTile = { tile -> navController.navigate(tile.route) },
+                    onOpenDailyReadiness = { navController.navigate("daily_readiness") },
+                )
             }
+            composable("daily_readiness") { DailyReadinessScreen(onBack = { navController.popBackStack() }) }
             // DAV-70 (First feedback fixes): the 4 tile pages, pushed routes
             // like session_detail rather than nested inside Status's own
             // NavHost entry -- keeps their own back stack entries so

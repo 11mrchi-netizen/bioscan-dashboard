@@ -43,7 +43,7 @@ private const val MIN_CONTRIBUTORS_FOR_STATE = 2
 // is applied (RHR is LOWER_BETTER, so a ShiftUp there is bad for recovery,
 // the opposite of HRV's ShiftUp) -- reuses METRIC_DIRECTIONALITY rather than
 // hand-coding the flip per caller.
-private fun directionFromShift(state: EvalState, directionality: Directionality): Int? = when (state) {
+internal fun directionFromShift(state: EvalState, directionality: Directionality): Int? = when (state) {
     EvalState.ShiftUp -> if (directionality == Directionality.LOWER_BETTER) -1 else 1
     EvalState.ShiftDown -> if (directionality == Directionality.LOWER_BETTER) 1 else -1
     EvalState.Stable -> 0
@@ -72,6 +72,12 @@ fun computeDynamicRecovery(
     stressEval: SubjectiveEvaluation,
     sorenessEval: SubjectiveEvaluation,
     physiologicalStress: StressRhythmResult? = null,
+    // Arousal fold-in: morning-wood/arousal are new, optional wellbeing_daily
+    // contributors -- treated the same polarity as energy (not inverted like
+    // stress/soreness). No real literature backs this app's own direction
+    // choice here; it's a plain stated assumption, not a hidden claim.
+    morningWoodEval: SubjectiveEvaluation? = null,
+    arousalEval: SubjectiveEvaluation? = null,
 ): DynamicRecoveryResult {
     val contributors = mutableListOf<RecoveryContributor>()
 
@@ -111,6 +117,12 @@ fun computeDynamicRecovery(
     }
     if (sorenessEval.confidence.met) {
         contributors += RecoveryContributor("soreness", sorenessEval.trendDirection?.let { -it }, sorenessEval.median7d, sorenessEval.confidence, Provenance("wellbeing_daily", "evaluateSubjective", null))
+    }
+    if (morningWoodEval != null && morningWoodEval.confidence.met) {
+        contributors += RecoveryContributor("morning_wood", morningWoodEval.trendDirection, morningWoodEval.median7d, morningWoodEval.confidence, Provenance("wellbeing_daily", "evaluateSubjective", null))
+    }
+    if (arousalEval != null && arousalEval.confidence.met) {
+        contributors += RecoveryContributor("arousal", arousalEval.trendDirection, arousalEval.median7d, arousalEval.confidence, Provenance("wellbeing_daily", "evaluateSubjective", null))
     }
 
     // Optional: only added when a real Stress Rhythm result exists (DAV-238's

@@ -5,20 +5,19 @@ import com.bioscan.fieldterminal.data.model.ExerciseDetailsUpdateRow
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetails
 import com.bioscan.fieldterminal.data.model.ExistingHydrationRow
 import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
-import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
-import com.bioscan.fieldterminal.data.model.LogMasturbationRow
+import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
-import com.bioscan.fieldterminal.data.model.NewArousalRow
 import com.bioscan.fieldterminal.data.model.NewEncounterRow
 import com.bioscan.fieldterminal.data.model.NewHydrationRow
-import com.bioscan.fieldterminal.data.model.NewMasturbationRow
+import com.bioscan.fieldterminal.data.model.NewSexualActivityRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
+import com.bioscan.fieldterminal.data.model.SexualActivityInstance
 import com.bioscan.fieldterminal.data.model.NewNoteRow
 import com.bioscan.fieldterminal.data.model.NewOstrcRow
 import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
@@ -30,6 +29,7 @@ import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
 import com.bioscan.fieldterminal.data.model.SupplementLogEditRow
 import com.bioscan.fieldterminal.data.model.SupplementNutrientRow
 import com.bioscan.fieldterminal.domain.LogSource
+import com.bioscan.fieldterminal.domain.nutrientContribution
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -136,25 +136,19 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         )
     }
 
-    suspend fun addMasturbation(occurredAt: String, watchedPorn: Boolean, loadSize: Int?, orgasmIntensity: Int?, notes: String?) {
-        supabase.postgrest.from("masturbation_log").insert(
-            NewMasturbationRow(occurredAt = occurredAt, watchedPorn = watchedPorn, loadSize = loadSize, orgasmIntensity = orgasmIntensity, notes = notes)
-        )
-    }
-
-    suspend fun addArousal(date: String, morningErectionQuality: Int, arousalLevel: Int) {
-        supabase.postgrest.from("arousal_daily").upsert(
-            NewArousalRow(date = date, morningErectionQuality = morningErectionQuality, arousalLevel = arousalLevel)
-        ) { onConflict = "user_id,date" }
+    suspend fun addSexualActivity(date: String, activityType: String, instances: List<SexualActivityInstance>, notes: String?) {
+        supabase.postgrest.from("sexual_activity_daily").upsert(
+            NewSexualActivityRow(date = date, activityType = activityType, instances = instances, notes = notes)
+        ) { onConflict = "user_id,date,activity_type" }
     }
 
     suspend fun addNote(occurredAt: String, text: String) {
         supabase.postgrest.from("notes").insert(NewNoteRow(occurredAt = occurredAt, text = text))
     }
 
-    suspend fun addWellbeing(date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?) {
+    suspend fun addWellbeing(date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?, morningErectionQuality: Int? = null, arousalLevel: Int? = null) {
         supabase.postgrest.from("wellbeing_daily").upsert(
-            NewWellbeingRow(date = date, energy = energy, mood = mood, stress = stress, soreness = soreness)
+            NewWellbeingRow(date = date, energy = energy, mood = mood, stress = stress, soreness = soreness, morningErectionQuality = morningErectionQuality, arousalLevel = arousalLevel)
         ) { onConflict = "user_id,date" }
     }
 
@@ -190,6 +184,15 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         }
     }
 
+    // Supplement Intelligence Phase 1 (DAV-328): a roster item linked to a
+    // real supplement_products row (supplements.product_id) gets its
+    // nutrient_intake rows from that product's real ingredient composition
+    // (domain/SupplementComposition.kt's nutrientContribution(), elemental
+    // amount preferred, compound amount as an honest fallback -- never a
+    // name guess). Anything not yet linked keeps the pre-existing
+    // supplement_nutrients-profile-then-name-inference fallback unchanged --
+    // zero regression for roster items that haven't been given real
+    // ingredient data yet.
     private suspend fun writeSupplementNutrientIntake(
         takenAt: String,
         logRows: List<SupplementLogIdRow>,
@@ -198,15 +201,37 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         if (logRows.isEmpty()) return
         val supplementIds = logRows.map { it.supplementId }
 
+        val roster = supabase.postgrest.from("supplements")
+            .select(columns = Columns.list("id,product_id")) { filter { isIn("id", supplementIds) } }
+            .decodeList<SupplementProductLinkRow>()
+        val productIdBySupp = roster.filter { it.productId != null }.associate { it.id to it.productId!! }
+
         val profiles = supabase.postgrest.from("supplement_nutrients")
             .select { filter { isIn("supplement_id", supplementIds) } }
             .decodeList<SupplementNutrientRow>()
         val profilesBySupp = profiles.groupBy { it.supplementId }
 
+        val suppRepo = SupplementsRepository(supabase)
         val nutrientRows = mutableListOf<NutrientIntakeRow>()
         for (logRow in logRows) {
+            val productId = productIdBySupp[logRow.supplementId]
             val suppProfile = profilesBySupp[logRow.supplementId]
-            if (suppProfile != null) {
+            if (productId != null) {
+                val composition = suppRepo.loadProductComposition(productId)
+                for (productIngredient in composition) {
+                    val contribution = nutrientContribution(productIngredient, servingCount = 1.0) ?: continue
+                    nutrientRows.add(
+                        NutrientIntakeRow(
+                            loggedAt = takenAt,
+                            nutrient = contribution.nutrientKey,
+                            amount = contribution.amount,
+                            unit = contribution.unit,
+                            sourceType = "supplement",
+                            sourceId = logRow.id,
+                        ),
+                    )
+                }
+            } else if (suppProfile != null) {
                 for (sn in suppProfile) {
                     nutrientRows.add(
                         NutrientIntakeRow(
@@ -332,15 +357,9 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
-    suspend fun updateMasturbation(id: Long, occurredAt: String, watchedPorn: Boolean, loadSize: Int?, orgasmIntensity: Int?, notes: String?) {
-        supabase.postgrest.from("masturbation_log").update(
-            NewMasturbationRow(occurredAt = occurredAt, watchedPorn = watchedPorn, loadSize = loadSize, orgasmIntensity = orgasmIntensity, notes = notes)
-        ) { filter { eq("id", id) } }
-    }
-
-    suspend fun updateArousal(id: Long, date: String, morningErectionQuality: Int, arousalLevel: Int) {
-        supabase.postgrest.from("arousal_daily").update(
-            NewArousalRow(date = date, morningErectionQuality = morningErectionQuality, arousalLevel = arousalLevel)
+    suspend fun updateSexualActivity(id: Long, date: String, activityType: String, instances: List<SexualActivityInstance>, notes: String?) {
+        supabase.postgrest.from("sexual_activity_daily").update(
+            NewSexualActivityRow(date = date, activityType = activityType, instances = instances, notes = notes)
         ) { filter { eq("id", id) } }
     }
 
@@ -350,9 +369,9 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
-    suspend fun updateWellbeing(id: Long, date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?) {
+    suspend fun updateWellbeing(id: Long, date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?, morningErectionQuality: Int? = null, arousalLevel: Int? = null) {
         supabase.postgrest.from("wellbeing_daily").update(
-            NewWellbeingRow(date = date, energy = energy, mood = mood, stress = stress, soreness = soreness)
+            NewWellbeingRow(date = date, energy = energy, mood = mood, stress = stress, soreness = soreness, morningErectionQuality = morningErectionQuality, arousalLevel = arousalLevel)
         ) { filter { eq("id", id) } }
     }
 
@@ -411,12 +430,11 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         id,
     )
     suspend fun fetchStool(id: Long) = fetchById<LogStoolRow>("stool_log", "id,occurred_at,bristol_type,discomfort", id)
-    suspend fun fetchArousal(id: Long) = fetchById<LogArousalRow>("arousal_daily", "id,date,morning_erection_quality,arousal_level", id)
     suspend fun fetchNote(id: Long) = fetchById<LogNoteRow>("notes", "id,occurred_at,text", id)
-    suspend fun fetchWellbeing(id: Long) = fetchById<LogWellbeingRow>("wellbeing_daily", "id,date,energy,mood,stress,soreness", id)
+    suspend fun fetchWellbeing(id: Long) = fetchById<LogWellbeingRow>("wellbeing_daily", "id,date,energy,mood,stress,soreness,morning_erection_quality,arousal_level", id)
     suspend fun fetchExerciseSession(id: Long) = fetchById<FullExerciseSessionRow>("exercise_sessions", "id,type,rpe,notes,details", id)
     suspend fun fetchOstrc(id: Long) = fetchById<LogOstrcRow>("ostrc_checkins", "id,check_date,body_area,q1,q2,q3,q4,notes", id)
-    suspend fun fetchMasturbation(id: Long) = fetchById<LogMasturbationRow>("masturbation_log", "id,occurred_at,watched_porn,load_size,orgasm_intensity,notes", id)
+    suspend fun fetchSexualActivity(id: Long) = fetchById<LogSexualActivityRow>("sexual_activity_daily", "id,date,activity_type,instances,notes", id)
     suspend fun fetchSupplementTaken(id: Long) = fetchById<LogSupplementTakenRow>("supplement_log", "id,supplement_name,taken_at,dose_value,dose_unit", id)
 
     // DAV-160. Read-only -- Sleep has no edit form (see LogSource's own doc
@@ -454,6 +472,12 @@ internal fun parseDose(dose: String): Pair<Double?, String?> {
 private data class SupplementLogIdRow(
     val id: Long,
     @SerialName("supplement_id") val supplementId: Long,
+)
+
+@kotlinx.serialization.Serializable
+private data class SupplementProductLinkRow(
+    val id: Long,
+    @SerialName("product_id") val productId: Long? = null,
 )
 
 @kotlinx.serialization.Serializable

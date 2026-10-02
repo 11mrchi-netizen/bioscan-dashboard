@@ -3,8 +3,8 @@ package com.bioscan.fieldterminal.data
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow
 import com.bioscan.fieldterminal.data.model.LabResultAnalysisRow
-import com.bioscan.fieldterminal.data.model.LogArousalRow
-import com.bioscan.fieldterminal.data.model.LogMasturbationRow
+import com.bioscan.fieldterminal.data.model.MaxHrRow
+import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
@@ -68,6 +68,25 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // (19 real rows) than the other tables, but this stays consistent with
     // this repository's own "don't special-case the query, let the domain
     // layer's date filtering decide" convention.
+    // Session detail's HR zone breakdown (domain/HeartRateZones.kt): this
+    // account's own highest-ever recorded max_hr across every session, not
+    // limited to the 400-day Training Load window above -- a real measured
+    // ceiling, not an age-formula guess.
+    suspend fun loadPersonalMaxHr(): Double? =
+        supabase.postgrest.from("exercise_sessions")
+            .select(columns = Columns.list("max_hr")) {
+                // gt(0) rather than an is-not-null filter -- excludes nulls the
+                // same way, using a filter already proven in this file, and
+                // Postgres sorts nulls first on DESC order anyway so a bare
+                // order+limit(1) would otherwise return a null row.
+                filter { gt("max_hr", 0) }
+                order("max_hr", Order.DESCENDING)
+                limit(1)
+            }
+            .decodeList<MaxHrRow>()
+            .firstOrNull()
+            ?.maxHr
+
     suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> =
         supabase.postgrest.from("exercise_sessions")
             .select(columns = Columns.list("start_time,duration_min,rpe,avg_hr,max_hr")) {
@@ -86,7 +105,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // everything else here.
     suspend fun loadWellbeingDaily(): List<WellbeingAnalysisRow> =
         supabase.postgrest.from("wellbeing_daily")
-            .select(columns = Columns.list("date,energy,mood,stress,soreness")) {
+            .select(columns = Columns.list("date,energy,mood,stress,soreness,morning_erection_quality,arousal_level")) {
                 order("date", Order.DESCENDING)
                 limit(200)
             }
@@ -118,27 +137,15 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<StoolAnalysisRow>()
             .reversed()
 
-    // DAV-215 (24/9 fixes): previously an inline raw query in
-    // HeartTileScreen.kt -- moved here so arousal history goes through the
-    // same repository as every other Heart data source.
-    suspend fun loadArousalDaily(): List<LogArousalRow> =
-        supabase.postgrest.from("arousal_daily")
-            .select(columns = Columns.list("id,date,morning_erection_quality,arousal_level")) {
+    // Arousal folded into wellbeing_daily -- see loadWellbeingDaily() above;
+    // morning-wood/arousal history now reads from the same wellbeing rows.
+    suspend fun loadSexualActivityDaily(): List<LogSexualActivityRow> =
+        supabase.postgrest.from("sexual_activity_daily")
+            .select(columns = Columns.list("id,date,activity_type,instances,notes")) {
                 order("date", Order.DESCENDING)
                 limit(200)
             }
-            .decodeList<LogArousalRow>()
-            .reversed()
-
-    // DAV-215 (24/9 fixes): masturbation entries fold into the same Arousal
-    // history timeline (see HeartTileScreen.kt's ArousalHistory).
-    suspend fun loadMasturbationLog(): List<LogMasturbationRow> =
-        supabase.postgrest.from("masturbation_log")
-            .select(columns = Columns.list("id,occurred_at,watched_porn,load_size,orgasm_intensity,notes")) {
-                order("occurred_at", Order.DESCENDING)
-                limit(200)
-            }
-            .decodeList<LogMasturbationRow>()
+            .decodeList<LogSexualActivityRow>()
             .reversed()
 
     // Phase A4 (Category 8, OSTRC-H2 half).

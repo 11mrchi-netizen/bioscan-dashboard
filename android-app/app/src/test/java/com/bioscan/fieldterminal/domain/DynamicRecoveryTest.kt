@@ -92,4 +92,37 @@ class DynamicRecoveryTest {
 
         assertTrue(result.contributors.none { it.dimension == "physiological_stress" })
     }
+
+    @Test
+    fun morningWoodAndArousalAreOmittedWhenNotProvided() {
+        val result = computeDynamicRecovery(
+            sleepIndex = goodSleep,
+            hrvEval = swc(EvalState.ShiftUp),
+            rhrEval = swc(EvalState.ShiftDown),
+            trainingLoadEval = trainingLoad(EvalState.ShiftUp),
+            energyEval = subjective(1),
+            stressEval = subjective(-1),
+            sorenessEval = subjective(-1),
+        )
+
+        assertTrue(result.contributors.none { it.dimension == "morning_wood" || it.dimension == "arousal" })
+    }
+
+    @Test
+    fun morningWoodAndArousalContributeTheSamePolarityAsEnergy() {
+        val result = computeDynamicRecovery(
+            sleepIndex = goodSleep,
+            hrvEval = swc(EvalState.ShiftUp),
+            rhrEval = swc(EvalState.ShiftDown),
+            trainingLoadEval = trainingLoad(EvalState.ShiftUp),
+            energyEval = subjective(1),
+            stressEval = subjective(-1),
+            sorenessEval = subjective(-1),
+            morningWoodEval = subjective(1),
+            arousalEval = subjective(-1),
+        )
+
+        assertEquals(1, result.contributors.first { it.dimension == "morning_wood" }.direction)
+        assertEquals(-1, result.contributors.first { it.dimension == "arousal" }.direction)
+    }
 }

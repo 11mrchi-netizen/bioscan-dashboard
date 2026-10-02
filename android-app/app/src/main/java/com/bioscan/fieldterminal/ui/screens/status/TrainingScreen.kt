@@ -423,6 +423,16 @@ private fun PerformanceSection(overview: TrainingOverview, timeframe: Performanc
     if (available.isEmpty()) return
 
     var selected by remember(available) { mutableStateOf(available.first()) }
+    val vo2maxPersonal = overview.latestVo2Max?.let { latest ->
+        comparePersonal(
+            metric = "vo2max",
+            current = latest,
+            history = overview.vo2MaxSeries,
+            presentSources = setOf("wearable_daily"),
+            idealSources = setOf("wearable_daily"),
+            origin = "wearable_daily",
+        )
+    }
 
     SectionDivider()
     Text("PERFORMANCE", style = sectionLabelStyle, color = FT.TextMuted)
@@ -437,6 +447,7 @@ private fun PerformanceSection(overview: TrainingOverview, timeframe: Performanc
                 style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
                 color = FT.TextSecondary,
             )
+            vo2maxPersonal?.let { ComparisonStrip(personal = it) }
         }
         PerformanceMetric.LACTATE_THRESHOLD -> {
             FTMetricValue(

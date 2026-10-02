@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.data.AchievementsRepository
 import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.AgingProfileRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -108,6 +109,18 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
     val cyclesRepo = remember { TrainingCyclesRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { cycles = cyclesRepo.loadCycles() }
+
+    var realAchievements by remember { mutableStateOf<Map<AchievementDomain, List<Achievement>>?>(null) }
+    val achievementsRepo = remember { AchievementsRepository(SupabaseClientProvider.client) }
+    LaunchedEffect(Unit) {
+        val (strength, running) = achievementsRepo.loadAchievements()
+        realAchievements = mapOf(
+            AchievementDomain.STRENGTH to strength,
+            AchievementDomain.RUNNING to running,
+            AchievementDomain.CONDITIONING to emptyList(),
+            AchievementDomain.MOUNTAIN to emptyList(),
+        )
+    }
     val activeCycle = cycles?.firstOrNull { it.isActiveOn(LocalDate.now()) }
     val cycleHistory = cycles.orEmpty().filter { it.id != activeCycle?.id }
 
@@ -125,8 +138,10 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
             AgingCard(agingOverview, onOpenAging)
 
             Text(
-                "Domain levels and achievements below are sample data — real ones arrive once the historical " +
-                    "archive import lands. The training block below is already real.",
+                if (realAchievements == null)
+                    "Loading achievements from your training history…"
+                else
+                    "Domain levels require population benchmarks and are not yet live.",
                 style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
                 color = FT.TextMuted,
             )
@@ -137,8 +152,9 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
                 }
             }
 
+            val achievements = realAchievements ?: profile.achievements
             AchievementDomain.entries.forEach { domain ->
-                AchievementSection(domain, profile.achievements[domain].orEmpty())
+                AchievementSection(domain, achievements[domain].orEmpty())
             }
 
             TrainingBlockCard(

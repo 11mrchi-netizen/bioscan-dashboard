@@ -57,6 +57,11 @@ fun LineChart(
     filled: Boolean = false,
     xRange: Pair<Long, Long>? = null,
     valueFormat: (Double) -> String = { if (kotlin.math.abs(it) >= 100) "%.0f".format(it) else "%.1f".format(it) },
+    // Session detail's HR zone toggle: when set, each segment between
+    // consecutive points is drawn in segmentColor(startValue) instead of one
+    // solid `color` -- every other caller leaves this null and gets today's
+    // unchanged single-color line.
+    segmentColor: ((Double) -> Color)? = null,
 ) {
     if (points.size < 2) return
 
@@ -105,7 +110,19 @@ fun LineChart(
                 drawPath(fill, color = color.copy(alpha = 0.16f))
             }
 
-            drawPath(line, color = color, style = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            if (segmentColor != null) {
+                points.zipWithNext().forEach { (a, b) ->
+                    drawLine(
+                        color = segmentColor(a.value),
+                        start = Offset(xFor(a.offsetSeconds.toFloat(), size.width), yFor(a.value.toFloat(), size.height)),
+                        end = Offset(xFor(b.offsetSeconds.toFloat(), size.width), yFor(b.value.toFloat(), size.height)),
+                        strokeWidth = 4f,
+                        cap = StrokeCap.Round,
+                    )
+                }
+            } else {
+                drawPath(line, color = color, style = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
 
             active?.let { i ->
                 val p = points[i]

@@ -282,9 +282,9 @@ private fun formatRangeValue(value: Double?): String {
     return if (value == Math.floor(value)) value.toInt().toString() else "%.1f".format(value)
 }
 
-private data class StateTreatment(val label: String, val symbol: String, val color: Color)
+internal data class StateTreatment(val label: String, val symbol: String, val color: Color)
 
-private fun stateTreatment(state: MetricState) = when (state) {
+internal fun stateTreatment(state: MetricState) = when (state) {
     MetricState.Optimal -> StateTreatment("OPTIMAL", "●", FT.Emerald)
     MetricState.Neutral -> StateTreatment("CURRENT", "●", FT.TextSecondary)
     MetricState.Warning -> StateTreatment("ATTENTION", "!", FT.Warning)

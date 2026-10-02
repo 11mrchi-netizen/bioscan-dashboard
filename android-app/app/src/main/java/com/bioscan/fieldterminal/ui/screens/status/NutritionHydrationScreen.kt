@@ -35,8 +35,11 @@ import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.AnalysisRepository
+import com.bioscan.fieldterminal.domain.CaffeineEvent
+import com.bioscan.fieldterminal.domain.computeCaffeineWindow
 import com.bioscan.fieldterminal.domain.computeHydrationIntelligence
 import com.bioscan.fieldterminal.domain.HydrationIntelligenceResult
+import java.time.LocalDateTime
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.DataAvailability
@@ -216,6 +219,18 @@ fun HydrationTabContent(overview: NutritionOverview) {
     val totalMl = waterMl + beverageMl
     val hasAnyHydration = overview.todayHydrationMl != null || overview.todayBeverageItems.isNotEmpty()
     val todayCaffeineMg = overview.todayBeverageItems.mapNotNull { it.caffeineMg }.takeIf { it.isNotEmpty() }?.sum()
+    val caffeineWindow = run {
+        val mealTimestamps = overview.todaysMeals.associate { it.id to it.loggedAt }
+        val events = overview.todayBeverageItems.mapNotNull { item ->
+            val caffeineMg = item.caffeineMg ?: return@mapNotNull null
+            val loggedAtStr = mealTimestamps[item.mealId] ?: return@mapNotNull null
+            val dt = runCatching {
+                OffsetDateTime.parse(loggedAtStr).toLocalDateTime()
+            }.getOrNull() ?: return@mapNotNull null
+            CaffeineEvent(dt, caffeineMg, false)
+        }
+        if (events.isNotEmpty()) computeCaffeineWindow(events) else null
+    }
 
     // 09.5 Hydration Intelligence: this tab's own small independent load
     // (today's exercise duration only), same "each subtab loads its own
@@ -271,13 +286,32 @@ fun HydrationTabContent(overview: NutritionOverview) {
         HydrationIntelligenceCard(hydrationIntelligence)
 
         if (todayCaffeineMg != null) {
-            FTCard(title = "CAFFEINE TODAY") {
-                FTMetricValue(DisplayValue(primary = "%.0f".format(todayCaffeineMg), unit = "MG"))
-                Text(
-                    "Total from logged beverages",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
-                    color = FT.TextMuted,
-                )
+            FTCard(title = "CAFFEINE WINDOW") {
+                FTMetricValue(DisplayValue(primary = "%.0f".format(todayCaffeineMg), unit = "MG TODAY"))
+                if (caffeineWindow != null) {
+                    Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        StatLine("Residual now", "~%.0f mg".format(caffeineWindow.residualNowMg))
+                        caffeineWindow.residualAtBedtimeMg?.let { r ->
+                            StatLine("At 11pm", "~%.0f mg".format(r))
+                        }
+                        caffeineWindow.cutoffHour?.let { h ->
+                            val label = if (h == 0) "Threshold already met" else "Last dose by %02d:00".format(h)
+                            StatLine("Cutoff", label)
+                        }
+                    }
+                    Text(
+                        "Half-life 5h model · 200 mg reference dose · not personalized yet",
+                        style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                        color = FT.TextMuted,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                } else {
+                    Text(
+                        "Total from logged beverages",
+                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        color = FT.TextMuted,
+                    )
+                }
             }
         }
     }

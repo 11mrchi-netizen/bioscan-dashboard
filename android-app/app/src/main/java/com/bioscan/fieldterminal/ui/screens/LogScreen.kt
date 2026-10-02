@@ -275,7 +275,7 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
 // Category colors per direct user request (2026-09-15): deep blue for
 // sleep, orange for activity (runs, strength, ...), green for food/drink/
 // supplements, sand for stool, azure for wellness, red for encounter and
-// arousal. Note has no assigned category -- stays neutral. OSTRC (added
+// masturbation/intercourse. Note has no assigned category -- stays neutral. OSTRC (added
 // later, Category 8) shares stool's sand -- both are the Evaluation Method
 // Spec's own "digestive & injury tracking" category. DAV-107 explicitly
 // preserves these exact hues ("keep... category colors") even though the
@@ -288,7 +288,7 @@ private fun TypeChip(kind: LogEntryKind) {
         LogEntryKind.Exercise -> FieldColors.Orange
         LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> FieldColors.Green
         LogEntryKind.Sleep -> FieldColors.DeepBlue
-        LogEntryKind.Arousal, LogEntryKind.Encounter, LogEntryKind.Masturbation -> FieldColors.Red
+        LogEntryKind.Encounter, LogEntryKind.Masturbation, LogEntryKind.Intercourse -> FieldColors.Red
         LogEntryKind.Note -> FT.TextSecondary
         LogEntryKind.Stool, LogEntryKind.Ostrc -> FieldColors.Sand
         LogEntryKind.Wellness -> FieldColors.Azure

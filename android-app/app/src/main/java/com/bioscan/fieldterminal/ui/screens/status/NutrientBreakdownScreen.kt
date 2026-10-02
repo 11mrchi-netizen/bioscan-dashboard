@@ -28,7 +28,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -109,6 +111,7 @@ fun NutrientBreakdownScreen(onBack: () -> Unit) {
             data != null -> {
                 val d = data!!
                 val divisor = if (valueMode == ValueMode.Average) d.daysCovered.toDouble() else 1.0
+                val rdaMultiplier = if (valueMode == ValueMode.Total) d.daysCovered else 1
 
                 if (d.nutrients.isEmpty()) {
                     Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
@@ -138,6 +141,7 @@ fun NutrientBreakdownScreen(onBack: () -> Unit) {
                                 category = category,
                                 nutrients = nutrients,
                                 divisor = divisor,
+                                rdaMultiplier = rdaMultiplier,
                             )
                         }
                     }
@@ -160,6 +164,7 @@ private fun NutrientCategoryCard(
     category: NutrientCategory,
     nutrients: List<Pair<NutrientInfo, Double>>,
     divisor: Double,
+    rdaMultiplier: Int,
 ) {
     FTCard(
         title = category.label,
@@ -167,14 +172,17 @@ private fun NutrientCategoryCard(
     ) {
         nutrients.forEach { (info, rawAmount) ->
             val amount = rawAmount / divisor
-            NutrientRow(info = info, amount = amount)
+            NutrientRow(info = info, amount = amount, rdaMultiplier = rdaMultiplier)
         }
     }
 }
 
 @Composable
-private fun NutrientRow(info: NutrientInfo, amount: Double) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+private fun NutrientRow(info: NutrientInfo, amount: Double, rdaMultiplier: Int) {
+    val effectiveRda = info.rda?.times(rdaMultiplier)
+    val effectiveUL = info.upperLimit?.times(rdaMultiplier)
+
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -191,22 +199,28 @@ private fun NutrientRow(info: NutrientInfo, amount: Double) {
             Spacer(Modifier.width(8.dp))
             Text(
                 formatAmount(amount, info.unit),
-                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 14.sp),
                 color = FT.TextPrimary,
                 textAlign = TextAlign.End,
             )
         }
 
-        if (info.rda != null || info.upperLimit != null) {
-            NutrientBar(amount = amount, rda = info.rda, upperLimit = info.upperLimit)
-            val parts = mutableListOf<String>()
-            info.rda?.let { parts.add("RDA ${formatAmount(it, info.unit)} (${(amount / it * 100).roundToInt()}%)") }
-            info.upperLimit?.let { parts.add("UL ${formatAmount(it, info.unit)}") }
+        if (effectiveRda != null || effectiveUL != null) {
+            val rangeLabel = when {
+                effectiveRda != null && effectiveUL != null ->
+                    "Range: ${formatAmount(effectiveRda, info.unit)} – ${formatAmount(effectiveUL, info.unit)}"
+                effectiveRda != null ->
+                    "Range: ≥ ${formatAmount(effectiveRda, info.unit)}"
+                else ->
+                    "Range: < ${formatAmount(effectiveUL!!, info.unit)}"
+            }
             Text(
-                parts.joinToString(" · "),
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 10.sp),
+                rangeLabel,
+                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
                 color = FT.TextMuted,
             )
+            Spacer(Modifier.height(4.dp))
+            NutrientBar(amount = amount, rda = effectiveRda, upperLimit = effectiveUL)
         }
     }
 }
@@ -216,26 +230,47 @@ private fun NutrientBar(amount: Double, rda: Double?, upperLimit: Double?) {
     val maxRef = listOfNotNull(rda, upperLimit, amount).max() * 1.2
     if (maxRef <= 0) return
 
-    Canvas(modifier = Modifier.fillMaxWidth().height(14.dp).padding(vertical = 3.dp)) {
-        val y = size.height / 2f
-        drawLine(FT.GlassTrack, Offset(0f, y), Offset(size.width, y), strokeWidth = 8f)
+    val barColor = when {
+        upperLimit != null && amount > upperLimit -> FT.Warning
+        rda != null && amount >= rda -> FT.Emerald
+        rda != null && amount >= rda * 0.7 -> FT.Emerald.copy(alpha = 0.7f)
+        else -> FT.DomainFuel
+    }
 
-        val barFraction = (amount / maxRef).toFloat().coerceIn(0f, 1f)
-        val barColor = when {
-            upperLimit != null && amount > upperLimit -> FT.Warning
-            rda != null && amount >= rda -> FT.Emerald
-            rda != null && amount >= rda * 0.7 -> FT.Emerald.copy(alpha = 0.7f)
-            else -> FT.DomainFuel
+    Canvas(modifier = Modifier.fillMaxWidth().height(30.dp)) {
+        val barH = 14.dp.toPx()
+        val cy = size.height / 2f
+        val cr = barH / 2f
+
+        drawRoundRect(
+            color = FT.GlassTrack,
+            topLeft = Offset(0f, cy - barH / 2f),
+            size = Size(size.width, barH),
+            cornerRadius = CornerRadius(cr),
+        )
+
+        val fraction = (amount / maxRef).toFloat().coerceIn(0f, 1f)
+        val fillW = fraction * size.width
+        if (fillW > 0f) {
+            drawRoundRect(
+                color = barColor,
+                topLeft = Offset(0f, cy - barH / 2f),
+                size = Size(fillW.coerceAtLeast(barH), barH),
+                cornerRadius = CornerRadius(cr),
+            )
         }
-        drawLine(barColor, Offset(0f, y), Offset(barFraction * size.width, y), strokeWidth = 8f)
+
+        val markerR = 10.dp.toPx()
+        val markerX = fillW.coerceIn(markerR, size.width - markerR)
+        drawCircle(color = barColor, radius = markerR, center = Offset(markerX, cy))
 
         rda?.let {
             val x = (it / maxRef).toFloat().coerceIn(0f, 1f) * size.width
-            drawLine(FT.TextSecondary, Offset(x, 0f), Offset(x, size.height), strokeWidth = 2f)
+            drawLine(FT.TextSecondary, Offset(x, cy - barH * 0.7f), Offset(x, cy + barH * 0.7f), strokeWidth = 2.5f)
         }
         upperLimit?.let {
             val x = (it / maxRef).toFloat().coerceIn(0f, 1f) * size.width
-            drawLine(FT.Warning.copy(alpha = 0.6f), Offset(x, 0f), Offset(x, size.height), strokeWidth = 2f)
+            drawLine(FT.Warning.copy(alpha = 0.6f), Offset(x, cy - barH * 0.7f), Offset(x, cy + barH * 0.7f), strokeWidth = 2.5f)
         }
     }
 }

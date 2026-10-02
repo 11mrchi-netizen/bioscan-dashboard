@@ -6,9 +6,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,7 +23,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -32,23 +37,27 @@ import com.bioscan.fieldterminal.data.AgingProfileRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.domain.Confidence
+import com.bioscan.fieldterminal.domain.ConfidenceLevel
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.FocusEntry
 import com.bioscan.fieldterminal.domain.FocusQuality
 import com.bioscan.fieldterminal.domain.FocusRole
+import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.PersonalRange
 import com.bioscan.fieldterminal.domain.RangeComparison
 import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.domain.achievement.Achievement
 import com.bioscan.fieldterminal.domain.achievement.AchievementDomain
+import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
 import com.bioscan.fieldterminal.domain.analysis.ComparisonResult
 import com.bioscan.fieldterminal.domain.analysis.ComparisonState
 import com.bioscan.fieldterminal.domain.analysis.ComparisonType
 import com.bioscan.fieldterminal.domain.analysis.Directionality
 import com.bioscan.fieldterminal.domain.analysis.InputCompleteness
 import com.bioscan.fieldterminal.domain.analysis.Provenance
+import com.bioscan.fieldterminal.domain.comparison.PercentileBand
 import com.bioscan.fieldterminal.domain.levels.DomainLevel
 import com.bioscan.fieldterminal.domain.levels.conditioningLevel
 import com.bioscan.fieldterminal.domain.levels.mountainLevel
@@ -57,25 +66,21 @@ import com.bioscan.fieldterminal.domain.levels.strengthLevel
 import com.bioscan.fieldterminal.domain.progressFraction
 import com.bioscan.fieldterminal.ui.components.ComparisonStrip
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
+import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.launch
 
-// DAV-289 + DAV-296 (combined design/build pass, see
-// docs/user-profile-milestone/01-canonical-contracts-audit.md decision 1):
-// the User page replacing the former Map tab. Renders entirely from the
-// canonical shapes Phase 5 defined (DomainLevel, Achievement, TrainingCycle)
-// so the later archive milestone only has to replace mockUserProfileData()
-// with a real repository call -- no UI rewrite. `data` defaults to the mock
-// builder for exactly that reason: a future caller passes real data through
-// this same parameter without touching anything below it.
 data class UserProfileData(
     val domainLevels: Map<AchievementDomain, DomainLevel>,
     val achievements: Map<AchievementDomain, List<Achievement>>,
@@ -88,23 +93,11 @@ data class UserProfileData(
 fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {}) {
     val profile = data ?: remember { mockUserProfileData() }
 
-    // 09A Aging Profile, Phase 1: real data (not mock) -- the rest of this
-    // page stays mock until the historical archive milestone lands, but
-    // Aging Profile has real inputs (lab_results, user_profile, VO2max)
-    // today, so it's wired straight to AgingProfileRepository.
     var agingOverview by remember { mutableStateOf<AgingProfileOverview?>(null) }
     LaunchedEffect(Unit) {
         agingOverview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview()
     }
 
-    // User request: the training block slice also went real once
-    // training_cycles started getting real rows (manual entry + a separate
-    // Notion historical import) -- same "wire this one real input in
-    // independently of the mock profile" precedent as Aging Profile above.
-    // activeCycleCurrentValue stays null: no generic "look up this cycle's
-    // goal_metric's live value" resolver exists yet, and goal_metric is a
-    // free-text field with no fixed vocabulary today -- a real gap, not
-    // silently faked, same as any other missing signal in this app.
     var cycles by remember { mutableStateOf<List<TrainingCycle>?>(null) }
     val cyclesRepo = remember { TrainingCyclesRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
@@ -124,8 +117,6 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
     val activeCycle = cycles?.firstOrNull { it.isActiveOn(LocalDate.now()) }
     val cycleHistory = cycles.orEmpty().filter { it.id != activeCycle?.id }
 
-    // null = sheet hidden; Unit-ish "editing null cycle" is ambiguous with
-    // "hidden," so two flags instead of one nullable TrainingCycle?.
     var editingCycle by remember { mutableStateOf<TrainingCycle?>(null) }
     var addingCycle by remember { mutableStateOf(false) }
 
@@ -180,10 +171,8 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
     }
 }
 
-// DAV-226/232 (09A Aging Profile, Phase 1): compact summary, same
-// DomainLevelRow-style treatment as the card below it -- taps through to
-// AgingProfileScreen for the full Overview/Dimensions/History/Explainability
-// breakdown rather than crowding all of it onto this page.
+// ---- Section 1: Aging Card ----
+
 @Composable
 private fun AgingCard(overview: AgingProfileOverview?, onOpen: () -> Unit) {
     FTCard(
@@ -194,11 +183,17 @@ private fun AgingCard(overview: AgingProfileOverview?, onOpen: () -> Unit) {
             overview == null -> CircularProgressIndicator(color = FT.Emerald)
             overview.chronologicalAgeYears == null -> FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile to see this.")
             else -> {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    AgingHeadline("Chronological", overview.chronologicalAgeYears.toString())
-                    overview.phenoAge?.let { AgingHeadline("PhenoAge", it.biologicalAge?.let { v -> "%.0f".format(v) } ?: "—") }
-                    overview.cardioAge?.let { AgingHeadline("Cardio Age", it.biologicalAge?.let { v -> "%.0f".format(v) } ?: "—") }
-                }
+                FTMetricValue(
+                    DisplayValue(
+                        primary = overview.chronologicalAgeYears.toString(),
+                        unit = "years",
+                        secondary = "CHRONOLOGICAL AGE",
+                    ),
+                )
+                Spacer(Modifier.height(8.dp))
+                overview.phenoAge?.let { BioAgeRow("PhenoAge", it) }
+                overview.cardioAge?.let { BioAgeRow("Cardio Age", it) }
+                Spacer(Modifier.height(4.dp))
                 Text("Tap for the full breakdown", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.TextMuted)
             }
         }
@@ -206,28 +201,77 @@ private fun AgingCard(overview: AgingProfileOverview?, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun AgingHeadline(label: String, value: String) {
-    Column {
-        Text(label.uppercase(), style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextMuted)
-        Text(value, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 20.sp), color = FT.TextPrimary)
+private fun BioAgeRow(label: String, result: BiologicalAgeResult) {
+    val bioAge = result.biologicalAge
+    val accel = result.ageAcceleration
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label.uppercase(), style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextMuted)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    bioAge?.let { "%.0f".format(it) } ?: "—",
+                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                    color = FT.TextPrimary,
+                )
+                if (accel != null) {
+                    Spacer(Modifier.width(8.dp))
+                    val deltaText = if (accel <= 0) "%.1f yrs".format(accel) else "+%.1f yrs".format(accel)
+                    val deltaColor = if (accel <= 0) FT.Emerald else FT.Warning
+                    Text(
+                        deltaText,
+                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+                        color = deltaColor,
+                    )
+                }
+            }
+        }
+        FTStatePill(ageAccelerationToState(accel))
     }
 }
+
+// ---- Section 2: Domain Levels ----
 
 @Composable
 private fun DomainLevelRow(domain: AchievementDomain, level: DomainLevel?) {
     Column(modifier = Modifier.padding(vertical = 6.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(domain.label(), style = TextStyle(fontFamily = RobotoMono, fontSize = 12.5.sp), color = FT.TextSecondary)
-            Text(
-                level?.label ?: "Not enough data yet",
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
-                color = if (level?.band != null) FT.TextPrimary else FT.TextMuted,
-                textAlign = TextAlign.End,
-            )
+            if (level?.band != null) {
+                FTStatePill(bandToMetricState(level.band))
+            } else {
+                Text(
+                    "Not enough data yet",
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+                    color = FT.TextMuted,
+                    textAlign = TextAlign.End,
+                )
+            }
         }
-        level?.evidence?.let { ComparisonStrip(population = it) }
+
+        level?.evidence?.let { evidence ->
+            evidence.percentile?.let { percentile ->
+                RangeBar(
+                    value = percentile,
+                    max = 100.0,
+                    watchBelow = 25.0,
+                    color = bandToColor(level.band),
+                )
+            }
+            ComparisonStrip(population = evidence)
+            FTConfidenceChip(confidenceToLevel(evidence.confidence))
+        }
     }
 }
+
+// ---- Section 3: Achievements ----
 
 @Composable
 private fun AchievementSection(domain: AchievementDomain, achievements: List<Achievement>) {
@@ -237,29 +281,38 @@ private fun AchievementSection(domain: AchievementDomain, achievements: List<Ach
             return@FTCard
         }
         achievements.forEach { achievement ->
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Text(achievement.metricLabel(), style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary)
-                    achievement.comparisonContext?.let {
-                        Text(it, style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp), color = FT.TextMuted)
-                    }
-                }
-                Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    achievement.metricLabel(),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    color = FT.TextSecondary,
+                )
+                Spacer(Modifier.height(4.dp))
+                FTMetricValue(achievement.toDisplayValue())
+
+                achievement.comparisonContext?.let {
                     Text(
-                        achievement.displayValue(),
-                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.sp),
-                        color = FT.TextPrimary,
+                        it,
+                        style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                        color = FT.Emerald,
                     )
-                    Text(
-                        achievement.occurredAt.toLocalDate().toString(),
-                        style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
-                        color = FT.TextMuted,
+                }
+                achievement.confidence?.let { conf ->
+                    Spacer(Modifier.height(4.dp))
+                    FTConfidenceChip(
+                        when {
+                            conf >= 0.8 -> ConfidenceLevel.High
+                            conf >= 0.5 -> ConfidenceLevel.Medium
+                            else -> ConfidenceLevel.Low
+                        },
                     )
                 }
             }
         }
     }
 }
+
+// ---- Section 4: Current Training Block ----
 
 @Composable
 private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEdit: () -> Unit, onAdd: () -> Unit) {
@@ -282,6 +335,63 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
             style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
             color = FT.TextMuted,
         )
+
+        // Temporal progress bar
+        cycle.endDate?.let { end ->
+            val totalDays = ChronoUnit.DAYS.between(cycle.startDate, end).toDouble()
+            val elapsedDays = ChronoUnit.DAYS.between(cycle.startDate, LocalDate.now()).toDouble().coerceIn(0.0, totalDays)
+            if (totalDays > 0) {
+                RangeBar(
+                    value = elapsedDays,
+                    max = totalDays,
+                    watchBelow = null,
+                    color = FT.Emerald,
+                )
+                val weeksElapsed = (elapsedDays / 7).toInt() + 1
+                val totalWeeks = (totalDays / 7).toInt()
+                val remaining = (totalDays - elapsedDays).toInt()
+                Text(
+                    "Week $weeksElapsed of $totalWeeks — $remaining days remaining",
+                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                    color = FT.TextMuted,
+                )
+            }
+        }
+
+        // Multi-focus weight visualization
+        if (cycle.focus.size > 1) {
+            Spacer(Modifier.height(4.dp))
+            cycle.focus.forEach { entry ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        entry.quality.label(),
+                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                        color = FT.TextSecondary,
+                        modifier = Modifier.weight(0.45f),
+                    )
+                    Text(
+                        "${(entry.weight * 100).toInt()}%",
+                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                        color = FT.TextPrimary,
+                        modifier = Modifier.width(40.dp),
+                        textAlign = TextAlign.End,
+                    )
+                }
+                RangeBar(
+                    value = entry.weight,
+                    max = 1.0,
+                    watchBelow = null,
+                    color = if (entry.role == FocusRole.Primary) FT.Emerald else FT.Info,
+                    height = 6.dp,
+                    topPadding = 2.dp,
+                )
+            }
+        }
+
         if (cycle.goalMetric != null && cycle.startingValue != null && cycle.targetValue != null) {
             FTMetricValue(
                 DisplayValue(
@@ -314,6 +424,8 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
     }
 }
 
+// ---- Section 5: Training Block History ----
+
 @Composable
 private fun TrainingBlockHistoryCard(history: List<TrainingCycle>) {
     FTCard(title = "TRAINING BLOCK HISTORY") {
@@ -321,22 +433,108 @@ private fun TrainingBlockHistoryCard(history: List<TrainingCycle>) {
             FTDataState(DataAvailability.Unavailable, "No past training blocks yet.")
             return@FTCard
         }
+        val maxDuration = history.mapNotNull { cycle ->
+            cycle.endDate?.let { ChronoUnit.DAYS.between(cycle.startDate, it).toDouble() }
+        }.maxOrNull() ?: 1.0
+
         history.forEach { cycle ->
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     cycle.focus.joinToString(" + ") { it.quality.label() },
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
                     color = FT.TextSecondary,
                 )
-                Text(
-                    "${cycle.startDate} — ${cycle.endDate}",
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
-                    color = FT.TextMuted,
-                    textAlign = TextAlign.End,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        "${cycle.startDate} — ${cycle.endDate}",
+                        style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+                        color = FT.TextMuted,
+                    )
+                    cycle.endDate?.let { end ->
+                        val weeks = ChronoUnit.WEEKS.between(cycle.startDate, end)
+                        Text(
+                            "${weeks}w",
+                            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                            color = FT.TextPrimary,
+                        )
+                    }
+                }
+
+                // Proportional duration bar
+                cycle.endDate?.let { end ->
+                    val duration = ChronoUnit.DAYS.between(cycle.startDate, end).toDouble()
+                    RangeBar(
+                        value = duration,
+                        max = maxDuration,
+                        watchBelow = null,
+                        color = FT.DomainTraining,
+                        height = 5.dp,
+                        topPadding = 4.dp,
+                    )
+                }
+
+                // Goal summary when available
+                if (cycle.goalMetric != null && cycle.startingValue != null && cycle.targetValue != null) {
+                    Text(
+                        "Goal: ${cycle.goalMetric} — %.0f → %.0f".format(cycle.startingValue, cycle.targetValue),
+                        style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                        color = FT.TextMuted,
+                    )
+                }
             }
         }
     }
+}
+
+// ---- Helper functions ----
+
+private fun bandToMetricState(band: PercentileBand?): MetricState = when (band) {
+    PercentileBand.TOP_DECILE -> MetricState.Optimal
+    PercentileBand.ABOVE_AVERAGE -> MetricState.Neutral
+    PercentileBand.AVERAGE -> MetricState.Neutral
+    PercentileBand.BELOW_AVERAGE -> MetricState.Warning
+    PercentileBand.BOTTOM_DECILE -> MetricState.Building
+    null -> MetricState.Unavailable
+}
+
+private fun bandToColor(band: PercentileBand?): Color = when (band) {
+    PercentileBand.TOP_DECILE -> FT.Emerald
+    PercentileBand.ABOVE_AVERAGE -> FT.Emerald
+    PercentileBand.AVERAGE -> FT.Info
+    PercentileBand.BELOW_AVERAGE -> FT.Warning
+    PercentileBand.BOTTOM_DECILE -> FT.Analysis
+    null -> FT.TextMuted
+}
+
+private fun ageAccelerationToState(accel: Double?): MetricState = when {
+    accel == null -> MetricState.Unavailable
+    accel <= -2.0 -> MetricState.Optimal
+    accel <= 2.0 -> MetricState.Neutral
+    else -> MetricState.Warning
+}
+
+private fun confidenceToLevel(c: Confidence): ConfidenceLevel {
+    val ratio = if (c.need > 0) c.have.toDouble() / c.need else 0.0
+    return when {
+        ratio >= 0.8 -> ConfidenceLevel.High
+        ratio >= 0.5 -> ConfidenceLevel.Medium
+        else -> ConfidenceLevel.Low
+    }
+}
+
+private fun Achievement.toDisplayValue(): DisplayValue {
+    val (primary, unit) = when (this.unit) {
+        "sec" -> value.toLong().let { "%d:%02d".format(it / 60, it % 60) } to null
+        else -> formatAchievementValue(this) to this.unit
+    }
+    return DisplayValue(
+        primary = primary,
+        unit = unit,
+        secondary = occurredAt.toLocalDate().toString(),
+    )
 }
 
 private fun AchievementDomain.label(): String = when (this) {
@@ -348,7 +546,6 @@ private fun AchievementDomain.label(): String = when (this) {
 
 private fun FocusQuality.label(): String = name.replace(Regex("(?<=.)(?=\\p{Upper})"), " ")
 
-// e.g. "fastest_1km" -> "Fastest 1km".
 private fun Achievement.metricLabel(): String = metric.replace('_', ' ').replaceFirstChar { it.uppercase() }
 
 @Composable
@@ -365,17 +562,12 @@ private fun formatAchievementValue(achievement: Achievement): String =
     if (achievement.value == achievement.value.toLong().toDouble()) achievement.value.toLong().toString()
     else "%.1f".format(achievement.value)
 
-// "sec" achievements (e.g. fastest_1km = 232.0) read as raw seconds ("232 sec")
-// otherwise -- a real time deserves m:ss, same divmod TrainingScreen.kt's own
-// formatPace() uses for pace, just keyed off whole seconds instead of a
-// minutes-per-km double.
 private fun Achievement.displayValue(): String = when (unit) {
     "sec" -> value.toLong().let { "%d:%02d".format(it / 60, it % 60) }
     else -> "${formatAchievementValue(this)} $unit"
 }
 
-// ---- Mock data (DAV-296): plausible, clearly-labeled example values in the
-// exact shapes Phase 5 defined -- no lorem, no invented UI-only fields. ----
+// ---- Mock data ----
 
 private fun mockUserProfileData(): UserProfileData {
     fun comparison(metric: String, percentile: Double, have: Int) = ComparisonResult(
@@ -393,10 +585,10 @@ private fun mockUserProfileData(): UserProfileData {
         AchievementDomain.MOUNTAIN to mountainLevel(listOf(comparison("km_effort", 55.0, 9))),
     )
 
-    fun achievement(domain: AchievementDomain, metric: String, value: Double, unit: String, daysAgo: Long, context: String? = null) = Achievement(
+    fun achievement(domain: AchievementDomain, metric: String, value: Double, unit: String, daysAgo: Long, context: String? = null, confidence: Double? = null) = Achievement(
         domain = domain, metric = metric, activityRef = null, value = value, unit = unit,
         occurredAt = OffsetDateTime.now().minusDays(daysAgo),
-        provenance = Provenance("zepp", null, null), comparisonContext = context,
+        provenance = Provenance("zepp", null, null), comparisonContext = context, confidence = confidence,
     )
 
     val achievements = mapOf(
@@ -406,7 +598,7 @@ private fun mockUserProfileData(): UserProfileData {
         ),
         AchievementDomain.STRENGTH to listOf(
             achievement(AchievementDomain.STRENGTH, "heaviest_squat_kg", 100.0, "kg", 21),
-            achievement(AchievementDomain.STRENGTH, "best_estimated_1rm_deadlift_kg", 140.0, "kg", 7, "Epley estimate"),
+            achievement(AchievementDomain.STRENGTH, "best_estimated_1rm_deadlift_kg", 140.0, "kg", 7, "Epley estimate", confidence = 0.75),
         ),
         AchievementDomain.MOUNTAIN to listOf(
             achievement(AchievementDomain.MOUNTAIN, "highest_single_run_gain_m", 1850.0, "m", 60),

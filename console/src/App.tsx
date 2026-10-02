@@ -1,15 +1,17 @@
+import { lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import { Shell } from './components/layout/Shell'
 import { Login } from './workspaces/Login'
-import { Overview } from './workspaces/Overview'
-import { Timeline } from './workspaces/Timeline'
-import { Training } from './workspaces/Training'
-import { Recovery } from './workspaces/Recovery'
-import { Nutrition } from './workspaces/Nutrition'
-import { DataExplorer } from './workspaces/DataExplorer'
-import { Comparison } from './workspaces/Comparison'
-import { RelationshipLab } from './workspaces/RelationshipLab'
+
+const Overview        = lazy(() => import('./workspaces/Overview'))
+const Timeline        = lazy(() => import('./workspaces/Timeline'))
+const Training        = lazy(() => import('./workspaces/Training'))
+const Recovery        = lazy(() => import('./workspaces/Recovery'))
+const Nutrition       = lazy(() => import('./workspaces/Nutrition'))
+const DataExplorer    = lazy(() => import('./workspaces/DataExplorer'))
+const Comparison      = lazy(() => import('./workspaces/Comparison'))
+const RelationshipLab = lazy(() => import('./workspaces/RelationshipLab'))
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth()

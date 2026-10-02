@@ -1,5 +1,5 @@
 // Header date-range picker — broadcasts to AnalysisContext
-import { useAnalysis } from '../../context/AnalysisContext'
+import { useRange, useSetRange } from '../../lib/analysisStore'
 import './DateRangeControl.css'
 
 const PRESETS = [
@@ -18,13 +18,14 @@ function daysAgo(n: number): string {
 const today = () => new Date().toISOString().slice(0, 10)
 
 export function DateRangeControl() {
-  const { ctx, setRange } = useAnalysis()
+  const range = useRange()
+  const setRange = useSetRange()
 
   return (
     <div className="date-range-control">
       {PRESETS.map(p => {
         const start = daysAgo(p.days)
-        const active = ctx.primaryRange.start === start && ctx.primaryRange.end === today()
+        const active = range.start === start && range.end === today()
         return (
           <button
             key={p.label}
@@ -38,18 +39,18 @@ export function DateRangeControl() {
       <input
         type="date"
         className="range-input mono"
-        value={ctx.primaryRange.start}
-        max={ctx.primaryRange.end}
-        onChange={e => setRange({ ...ctx.primaryRange, start: e.target.value })}
+        value={range.start}
+        max={range.end}
+        onChange={e => setRange({ ...range, start: e.target.value })}
         aria-label="Range start"
       />
       <span className="mono range-sep">→</span>
       <input
         type="date"
         className="range-input mono"
-        value={ctx.primaryRange.end}
-        min={ctx.primaryRange.start}
-        onChange={e => setRange({ ...ctx.primaryRange, end: e.target.value })}
+        value={range.end}
+        min={range.start}
+        onChange={e => setRange({ ...range, end: e.target.value })}
         aria-label="Range end"
       />
     </div>

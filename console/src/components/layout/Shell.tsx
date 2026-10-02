@@ -1,9 +1,10 @@
 // Three-zone shell: left rail · central canvas · right inspector
 // IA.md §3.2 — inspector visibility driven by AnalysisContext.inspectionTarget
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { useAnalysis } from '../../context/AnalysisContext'
+import { useInspection, useClearInspection } from '../../lib/analysisStore'
+import { ErrorBoundary } from '../shared/ErrorBoundary'
 import { Inspector } from '../shared/Inspector'
 import { DateRangeControl } from './DateRangeControl'
 import './Shell.css'
@@ -21,10 +22,11 @@ const NAV = [
 
 export function Shell() {
   const { user, signOut } = useAuth()
-  const { ctx, clearInspection } = useAnalysis()
+  const inspectionTarget = useInspection()
+  const clearInspection = useClearInspection()
   const [railCollapsed, setRailCollapsed] = useState(false)
 
-  const inspectorOpen = ctx.inspectionTarget !== null
+  const inspectorOpen = inspectionTarget !== null
 
   return (
     <div className={`shell ${railCollapsed ? 'rail-collapsed' : ''} ${inspectorOpen ? 'inspector-open' : ''}`}>
@@ -50,7 +52,11 @@ export function Shell() {
         </nav>
 
         <main className="shell-canvas">
-          <Outlet />
+          <ErrorBoundary level="workspace">
+            <Suspense fallback={<div className="state-loading mono">LOADING…</div>}>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
         </main>
 
         {inspectorOpen && (

@@ -669,6 +669,7 @@ private fun FoodForm(
     var mealEstimateId by remember { mutableStateOf<Long?>(null) }
     var cronometerEnrichment by remember { mutableStateOf<CronometerEnrichment?>(null) }
     var enriching by remember { mutableStateOf(false) }
+    var mealEstimateSource by remember { mutableStateOf(MealItemSource.AiImage) }
 
     // DAV-168: candidates from any of the three sources funnel into the
     // same review sheet before ever touching meal_items.
@@ -685,6 +686,7 @@ private fun FoodForm(
         estimating = true
         estimationError = null
         cronometerEnrichment = null
+        mealEstimateSource = MealItemSource.AiImage
         scope.launch {
             try {
                 val images = uris.map { readAndCompressImage(context, it) }
@@ -710,34 +712,34 @@ private fun FoodForm(
         }
     }
 
-    // DAV-90/DAV-166: same idea, no photo required -- estimate straight
-    // from whatever's typed in DESCRIPTION, now via the server-side
-    // candidates-only Gemini path instead of NutritionEstimationRepository.
     fun runTextEstimate() {
         if (description.isBlank()) return
         estimating = true
         estimationError = null
+        cronometerEnrichment = null
+        mealEstimateSource = MealItemSource.AiText
         scope.launch {
             try {
-                val result = NutritionTextEstimateRepository(SupabaseClientProvider.client).estimate(description)
-                reviewSeedItems = result.candidates.map { c ->
-                    ReviewSeedItem(
-                        description = c.description,
-                        quantityValue = c.quantityValue,
-                        quantityUnit = c.quantityUnit,
-                        quantityLow = c.quantityLow,
-                        quantityHigh = c.quantityHigh,
-                        isBeverage = c.isBeverage,
-                        foodConfidence = c.foodConfidence,
-                        portionConfidence = c.portionConfidence,
-                        ambiguous = c.ambiguous,
-                        source = MealItemSource.AiText,
-                        aiEstimateId = result.estimateId,
-                    )
-                }
+                enriching = true
+                val enrichResult = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
+                    .enrich(description)
+                cronometerEnrichment = enrichResult
+                mealEstimate = NutritionMealEstimate(
+                    description = description.trim(),
+                    calories = enrichResult.calories ?: 0.0,
+                    proteinG = enrichResult.proteinG ?: 0.0,
+                    carbsG = enrichResult.carbsG ?: 0.0,
+                    fatG = enrichResult.fatG ?: 0.0,
+                    fiberG = enrichResult.fiberG,
+                    sugarG = enrichResult.sugarG,
+                    sodiumMg = enrichResult.sodiumMg,
+                    confidence = 0.85,
+                )
+                mealEstimateId = null
             } catch (e: Exception) {
                 estimationError = e.message ?: "Estimation failed"
             } finally {
+                enriching = false
                 estimating = false
             }
         }
@@ -748,30 +750,54 @@ private fun FoodForm(
         if (barcode.isBlank()) return
         barcodeLooking = true
         barcodeError = null
+        cronometerEnrichment = null
+        mealEstimateSource = MealItemSource.Barcode
         scope.launch {
             try {
                 val food = NutritionBarcodeLookupRepository(SupabaseClientProvider.client).lookup(barcode)
                 if (food == null) {
                     barcodeError = "Barcode not recognized -- try search instead."
                 } else {
-                    reviewSeedItems = listOf(
-                        ReviewSeedItem(
-                            description = food.name,
-                            isBeverage = food.beverageClass != null,
-                            foodConfidence = 1.0,
-                            source = MealItemSource.Barcode,
-                            preMatchedFood = com.bioscan.fieldterminal.data.model.FoodRow(
-                                id = food.id,
-                                foodSourceId = 0,
-                                name = food.name,
-                                brand = food.brand,
-                                barcode = food.barcode,
-                                category = food.category,
-                                beverageClass = food.beverageClass,
-                                beverageSubtype = food.beverageSubtype,
+                    val foodDesc = if (food.brand != null) "${food.name} (${food.brand})" else food.name
+                    enriching = true
+                    try {
+                        val enrichResult = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
+                            .enrich(foodDesc)
+                        cronometerEnrichment = enrichResult
+                        mealEstimate = NutritionMealEstimate(
+                            description = foodDesc,
+                            calories = enrichResult.calories ?: 0.0,
+                            proteinG = enrichResult.proteinG ?: 0.0,
+                            carbsG = enrichResult.carbsG ?: 0.0,
+                            fatG = enrichResult.fatG ?: 0.0,
+                            fiberG = enrichResult.fiberG,
+                            sugarG = enrichResult.sugarG,
+                            sodiumMg = enrichResult.sodiumMg,
+                            confidence = 0.9,
+                        )
+                        mealEstimateId = null
+                    } catch (_: Exception) {
+                        reviewSeedItems = listOf(
+                            ReviewSeedItem(
+                                description = food.name,
+                                isBeverage = food.beverageClass != null,
+                                foodConfidence = 1.0,
+                                source = MealItemSource.Barcode,
+                                preMatchedFood = com.bioscan.fieldterminal.data.model.FoodRow(
+                                    id = food.id,
+                                    foodSourceId = 0,
+                                    name = food.name,
+                                    brand = food.brand,
+                                    barcode = food.barcode,
+                                    category = food.category,
+                                    beverageClass = food.beverageClass,
+                                    beverageSubtype = food.beverageSubtype,
+                                ),
                             ),
-                        ),
-                    )
+                        )
+                    } finally {
+                        enriching = false
+                    }
                 }
             } catch (e: Exception) {
                 barcodeError = e.message ?: "Lookup failed"
@@ -980,6 +1006,7 @@ private fun FoodForm(
             aiEstimateId = mealEstimateId,
             enrichment = cronometerEnrichment,
             enriching = enriching,
+            source = mealEstimateSource,
             onDismiss = { mealEstimate = null; mealEstimateId = null; cronometerEnrichment = null },
             onSaved = {
                 mealEstimate = null

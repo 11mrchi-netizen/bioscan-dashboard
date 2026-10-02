@@ -154,6 +154,7 @@ class NutritionMealSaveRepository(
         estimate: NutritionMealEstimate,
         aiEstimateId: Long?,
         enrichment: CronometerEnrichment? = null,
+        source: MealItemSource = MealItemSource.AiImage,
     ): Long {
         val cal = enrichment?.calories ?: estimate.calories
         val pro = enrichment?.proteinG ?: estimate.proteinG
@@ -200,7 +201,7 @@ class NutritionMealSaveRepository(
                         sodiumMg = sod,
                         isEstimated = true,
                         confidence = estimate.confidence,
-                        source = if (enrichment != null) "ai_image_enriched" else MealItemSource.AiImage.value,
+                        source = if (enrichment != null) "${source.value}_enriched" else source.value,
                         cronometerNutrients = cronometerNutrientsJson,
                         cronometerSource = enrichment?.primarySource,
                     ),

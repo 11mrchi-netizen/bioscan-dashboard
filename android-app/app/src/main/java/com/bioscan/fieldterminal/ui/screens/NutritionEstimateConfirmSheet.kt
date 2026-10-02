@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.CronometerEnrichment
+import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -52,6 +53,7 @@ fun NutritionEstimateConfirmSheet(
     aiEstimateId: Long?,
     enrichment: CronometerEnrichment? = null,
     enriching: Boolean = false,
+    source: MealItemSource = MealItemSource.AiImage,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
 ) {
@@ -88,7 +90,12 @@ fun NutritionEstimateConfirmSheet(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("MEAL ESTIMATE", style = sheetHeaderTitleStyle, color = FT.Emerald)
+            val headerTitle = when (source) {
+                MealItemSource.AiText -> "TEXT LOOKUP"
+                MealItemSource.Barcode -> "BARCODE LOOKUP"
+                else -> "MEAL ESTIMATE"
+            }
+            Text(headerTitle, style = sheetHeaderTitleStyle, color = FT.Emerald)
             if (enrichment != null) {
                 Text(
                     "ENRICHED WITH CRONOMETER",
@@ -160,7 +167,7 @@ fun NutritionEstimateConfirmSheet(
                                 confidence = estimate.confidence,
                             )
                             NutritionMealSaveRepository(SupabaseClientProvider.client)
-                                .saveEstimatedMeal(mealDateTime.toIsoWithOffset(), finalEstimate, aiEstimateId, enrichment)
+                                .saveEstimatedMeal(mealDateTime.toIsoWithOffset(), finalEstimate, aiEstimateId, enrichment, source)
                             onSaved()
                         } catch (e: Exception) {
                             error = e.message ?: "Unknown error"

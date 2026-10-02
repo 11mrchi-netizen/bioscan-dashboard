@@ -230,7 +230,19 @@ class HealthConnectDailySyncRepository(
             val stages = session.stages.map {
                 SleepStageInterval(it.startTime.epochSecond, it.endTime.epochSecond, it.stage)
             }
-            val hours = (session.endTime.epochSecond - session.startTime.epochSecond) / 3600.0
+            val timeInBedHours = (session.endTime.epochSecond - session.startTime.epochSecond) / 3600.0
+            // Subtract awake/out-of-bed time when stage data is available --
+            // without this, `hours` is time-in-bed, not actual sleep, which
+            // inflates the reported duration vs what the Zepp app shows.
+            val awakeMin = if (stages.isNotEmpty()) {
+                (sumStageMinutes(stages, SleepSessionRecord.STAGE_TYPE_AWAKE) ?: 0.0) +
+                    (sumStageMinutes(stages, SleepSessionRecord.STAGE_TYPE_OUT_OF_BED) ?: 0.0)
+            } else null
+            val hours = if (awakeMin != null && awakeMin > 0) {
+                (timeInBedHours - awakeMin / 60.0).coerceAtLeast(0.0)
+            } else {
+                timeInBedHours
+            }
             val respiratoryForNight = respiratoryReadings
                 .filter { it.time >= session.startTime && it.time <= session.endTime }
                 .map { it.rate }

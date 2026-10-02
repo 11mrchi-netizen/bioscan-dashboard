@@ -64,14 +64,18 @@ val SOURCE_CAPABILITIES: List<SourceCapability> = listOf(
     SourceCapability(DataSource.ZEPP, "efficiency_factor", "per-session", MetricKind.MODELED, SourceStatus.LIVE, "zepp_workout_detail.decoded.summary.efficiencyFactor"),
     SourceCapability(DataSource.ZEPP, "hr_decoupling_pct", "per-session", MetricKind.MODELED, SourceStatus.LIVE, "zepp_workout_detail.decoded.summary.hrDecouplingPct"),
     SourceCapability(DataSource.ZEPP, "lactate_threshold_hr", "per-session (watch-estimated)", MetricKind.INFERRED, SourceStatus.LIVE, "zepp_workout_detail.decoded.summary.lactateThresholdHrBpm"),
-    // Daily/watch-level Zepp metrics -- endpoint shapes still 404/500 on
-    // every real attempt (zepp-extract/index.ts's METRIC_DEFS comments) --
-    // BROKEN, not a source analysis code should route to yet.
-    SourceCapability(DataSource.ZEPP, "stress", "daily (events timeline)", MetricKind.RAW, SourceStatus.BROKEN, "zepp_raw_extracts.raw_body"),
-    SourceCapability(DataSource.ZEPP, "heart_rate", "daily", MetricKind.RAW, SourceStatus.BROKEN, "zepp_raw_extracts.raw_body"),
+    // Daily Zepp metrics via band_data (v10 parser decodes the base64
+    // summary and upserts into sleep_daily/wearable_daily server-side).
+    SourceCapability(DataSource.ZEPP, "sleep_duration", "daily", MetricKind.RAW, SourceStatus.LIVE, "sleep_daily.hours"),
+    SourceCapability(DataSource.ZEPP, "sleep_score", "daily", MetricKind.RAW, SourceStatus.LIVE, "sleep_daily.score"),
+    SourceCapability(DataSource.ZEPP, "heart_rate", "daily", MetricKind.RAW, SourceStatus.LIVE, "wearable_daily.rhr"),
+    // band_data summary returns spo2/hrv fields as 0 in testing -- keep
+    // BROKEN until confirmed with real non-zero readings.
     SourceCapability(DataSource.ZEPP, "hrv", "daily", MetricKind.RAW, SourceStatus.BROKEN, "zepp_raw_extracts.raw_body"),
-    SourceCapability(DataSource.ZEPP, "sleep_duration", "daily", MetricKind.RAW, SourceStatus.BROKEN, "zepp_raw_extracts.raw_body"),
     SourceCapability(DataSource.ZEPP, "spo2", "daily", MetricKind.RAW, SourceStatus.BROKEN, "zepp_raw_extracts.raw_body"),
+    // Stress uses a separate events endpoint, not band_data.
+    SourceCapability(DataSource.ZEPP, "stress", "daily (events timeline)", MetricKind.RAW, SourceStatus.BROKEN, "zepp_raw_extracts.raw_body"),
+    // These endpoints still 404/500 independently of band_data.
     SourceCapability(DataSource.ZEPP, "training_load", "daily", MetricKind.MODELED, SourceStatus.BROKEN, "zepp_raw_extracts.raw_body"),
     SourceCapability(DataSource.ZEPP, "vo2max", "daily (intermittent)", MetricKind.RAW, SourceStatus.BROKEN, "zepp_raw_extracts.raw_body"),
 )

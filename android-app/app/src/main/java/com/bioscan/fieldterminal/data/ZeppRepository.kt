@@ -36,13 +36,9 @@ class ZeppRepository(private val supabase: SupabaseClient) {
     // (ZeppSyncWorker) -- keeping recent workouts current, not a backfill.
     // The Settings "SYNC NOW" button calls this with a larger daysBack for an
     // ad hoc historical pull (server caps at 31 days per request either way).
-    // metrics=null pulls every METRIC_DEFS entry; several (heart_rate, hrv,
-    // sleep, spo2, training_load, vo2max) still 404/500 -- wrong endpoint
-    // shapes, a separate bug from this integration (SpO2 already comes from
-    // Health Connect instead, so it isn't blocking anything). "stress" is
-    // fixed (05.1 Stress Rhythm, DAV-246) and included here so a normal sync
-    // actually pulls it, not just sport_history.
-    suspend fun sync(daysBack: Long = 3, metrics: String? = "sport_history,stress"): ZeppSyncResult {
+    // band_data (v9) is the unified heart_rate/hrv/sleep/spo2 pull via the
+    // corrected /v1/ endpoint; training_load and vo2max still 404/500.
+    suspend fun sync(daysBack: Long = 3, metrics: String? = "sport_history,stress,band_data"): ZeppSyncResult {
         val to = LocalDate.now()
         val from = to.minusDays(daysBack)
         return try {

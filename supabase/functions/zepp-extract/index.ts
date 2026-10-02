@@ -22,7 +22,7 @@ function json(body: unknown, status: number) {
   });
 }
 
-const EXTRACTOR_VERSION = "8"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
+const EXTRACTOR_VERSION = "9"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
 // 6: write Zepp's own decoded distance back onto exercise_sessions.distance_km, and merge
 // orphaned zepp-sourced placeholder rows created by the Zepp/Health-Connect sync race (DAV-274)
 // 7: fix the "stress" metric's endpoint (was 404ing every attempt -- see METRIC_DEFS) (DAV-246)
@@ -34,6 +34,11 @@ const EXTRACTOR_VERSION = "8"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is
 // zepp-health-cli's own _headers() (github.com/m4ary/zepp-health-cli,
 // literal defaults baked into the library, not placeholders) -- same
 // reverse-engineering source that found the endpoint shape itself.
+// 9: band_data endpoints (heart_rate/hrv/sleep/spo2) were all 404ing because
+// we used /v2/ path, query_type=summary, single `date` param, and a
+// data_type filter -- none of which match the real mobile API. Corrected to
+// match ZeppBridge's working approach: /v1/ path, query_type=detail,
+// from_date/to_date range params, byteLength=8, no data_type filter.
 
 
 // DAV-115/123: decode detail.json's per-second fields into plain TimePoint-
@@ -367,34 +372,20 @@ interface MetricDef {
 
 const METRIC_DEFS: MetricDef[] = [
   {
-    metric: "heart_rate",
+    // v9: band_data is now a single "detail" query per day (matching
+    // ZeppBridge's fetch_band_data), returning heart_rate + hrv + sleep +
+    // spo2 in one response. The v1 endpoint with query_type=detail,
+    // from_date/to_date, and byteLength=8 is the shape the mobile app
+    // actually uses -- /v2/ with query_type=summary was never real.
+    metric: "band_data",
     endpoint: (uid, date) =>
-      `/v2/data/band_data.json?query_type=summary&device_type=0&userid=${uid}&date=${date}`,
+      `/v1/data/band_data.json?query_type=detail&device_type=0&userid=${uid}&from_date=${date}&to_date=${date}&byteLength=8`,
   },
   {
-    metric: "hrv",
-    endpoint: (uid, date) =>
-      `/v2/data/band_data.json?query_type=summary&device_type=0&userid=${uid}&date=${date}&data_type=hrv`,
-  },
-  {
-    metric: "sleep",
-    endpoint: (uid, date) =>
-      `/v2/data/band_data.json?query_type=summary&device_type=0&userid=${uid}&date=${date}&data_type=sleep`,
-  },
-  {
-    metric: "spo2",
-    endpoint: (uid, date) =>
-      `/v2/data/band_data.json?query_type=summary&device_type=0&userid=${uid}&date=${date}&data_type=spo2`,
-  },
-  {
-    // 05.1 Stress Rhythm: the guessed band_data.json?data_type=stress shape
-    // above (still used by heart_rate/hrv/sleep/spo2, all also 404ing the
-    // same way -- a separate, not-yet-fixed bug) 404'd on every real attempt.
-    // Real shape confirmed by reading zepp-health-cli's actual source
-    // (github.com/m4ary/zepp-health-cli) -- a user-events timeline, not a
-    // band_data summary. `from`/`to` are epoch-ms bounds; this metric's
-    // fetchAndStore call already runs once per requested day (the loop
-    // below), so each call's window is just that one UTC day.
+    // Stress: a user-events timeline, not a band_data field. `from`/`to`
+    // are epoch-ms bounds; this metric's fetchAndStore call already runs
+    // once per requested day (the loop below), so each call's window is
+    // just that one UTC day.
     metric: "stress",
     endpoint: (uid, date) => {
       const startMs = new Date(`${date}T00:00:00Z`).getTime();
@@ -529,9 +520,19 @@ Deno.serve(async (req: Request) => {
       return json({ error: "invalid_params", message: dateError }, 400);
     }
 
-    const requestedMetrics = metricsParam
+    // v9: the old per-type band_data metrics (heart_rate, hrv, sleep, spo2)
+    // are now a single "band_data" metric. Accept the old names as aliases
+    // so existing callers don't break.
+    const BAND_DATA_ALIASES = new Set(["heart_rate", "hrv", "sleep", "spo2"]);
+    let requestedMetrics = metricsParam
       ? metricsParam.split(",").map((m) => m.trim())
       : METRIC_DEFS.map((d) => d.metric);
+    if (requestedMetrics.some((m) => BAND_DATA_ALIASES.has(m))) {
+      requestedMetrics = [
+        ...requestedMetrics.filter((m) => !BAND_DATA_ALIASES.has(m)),
+        "band_data",
+      ];
+    }
 
     const defs = METRIC_DEFS.filter((d) =>
       requestedMetrics.includes(d.metric)

@@ -30,7 +30,7 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsOverview
 import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.SupplementRow
-import com.bioscan.fieldterminal.domain.supplementOutcome
+import com.bioscan.fieldterminal.data.EvidenceRepository
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -49,6 +49,7 @@ private val sectionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = 
 @Composable
 fun SupplementsScreen() {
     var overview by remember { mutableStateOf<SupplementsOverview?>(null) }
+    var outcomes by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
     var isLoading by remember { mutableStateOf(true) }
     // DAV-81: bumping this re-runs the LaunchedEffect below to reload the
     // roster after add/edit/end -- simpler than threading a repository
@@ -63,7 +64,11 @@ fun SupplementsScreen() {
         isLoading = true
         error = null
         try {
-            overview = SupplementsRepository(SupabaseClientProvider.client).loadOverview()
+            val loaded = SupplementsRepository(SupabaseClientProvider.client).loadOverview()
+            overview = loaded
+            // Evidence is enrichment: a failed lookup must not hide the roster.
+            outcomes = runCatching { EvidenceRepository(SupabaseClientProvider.client).outcomeTextBySupplement(loaded.active) }
+                .getOrDefault(emptyMap())
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
         }
@@ -79,6 +84,7 @@ fun SupplementsScreen() {
         }
         else -> SupplementsContent(
             overview = overview!!,
+            outcomes = outcomes,
             onAddClick = { showAddSheet = true },
             onSupplementClick = { editing = it },
         )
@@ -101,7 +107,7 @@ fun SupplementsScreen() {
 }
 
 @Composable
-private fun SupplementsContent(overview: SupplementsOverview, onAddClick: () -> Unit, onSupplementClick: (SupplementRow) -> Unit) {
+private fun SupplementsContent(overview: SupplementsOverview, outcomes: Map<Long, String>, onAddClick: () -> Unit, onSupplementClick: (SupplementRow) -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -135,7 +141,7 @@ private fun SupplementsContent(overview: SupplementsOverview, onAddClick: () -> 
                         Text(timeOfDay.uppercase(), style = sectionLabelStyle, color = FT.TextSecondary)
                         Column(modifier = Modifier.fillMaxWidth().background(FT.GlassFill)) {
                             items.forEachIndexed { i, s ->
-                                ActiveRow(s, showDivider = i < items.lastIndex, onClick = { onSupplementClick(s) })
+                                ActiveRow(s, outcomes[s.id].orEmpty(), showDivider = i < items.lastIndex, onClick = { onSupplementClick(s) })
                             }
                         }
                     }
@@ -163,7 +169,7 @@ private fun SectionLabel(text: String, color: androidx.compose.ui.graphics.Color
 }
 
 @Composable
-private fun ActiveRow(s: SupplementRow, showDivider: Boolean, onClick: () -> Unit) {
+private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Boolean, onClick: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -174,11 +180,11 @@ private fun ActiveRow(s: SupplementRow, showDivider: Boolean, onClick: () -> Uni
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(s.name, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.5.sp), color = FT.TextPrimary)
-                // DAV-83: the curated outcome map wins where it has a real,
-                // research-backed entry -- s.aiNote (a one-off Gemini guess
-                // made when this supplement was first added) only fills in
-                // for names that map has nothing for, never overwrites it.
-                val outcome = supplementOutcome(s.name).ifEmpty { s.aiNote ?: "" }
+                // Evidence-registry claims win (each labelled with its review
+                // status); s.aiNote (a one-off Gemini guess made when this
+                // supplement was first added) only fills in where the registry
+                // has nothing, never overwrites it. DAV-83 / DAV-357.
+                val outcome = registryOutcome.ifEmpty { s.aiNote ?: "" }
                 if (outcome.isNotEmpty()) {
                     Text(
                         outcome,

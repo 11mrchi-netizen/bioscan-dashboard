@@ -95,7 +95,10 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
             ingredients.clear()
             full.forEach { ing ->
                 ingredients.add(EditableIngredient().apply {
-                    name = ing.name
+                    // `this.` is required: a bare `name` resolves to the sheet's own
+                    // local `var name` (locals beat implicit-receiver members) and
+                    // overwrote the supplement NAME field with the ingredient name.
+                    this.name = ing.name
                     nutrientKey = ing.nutrientKey ?: ""
                     compoundAmount = ing.compoundAmount.toString()
                     compoundUnit = ing.compoundUnit
@@ -175,6 +178,8 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
             }
 
             IngredientsSection(ingredients)
+
+            existing?.productId?.let { DsldVerifySection(it) }
 
             error?.let {
                 Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical)

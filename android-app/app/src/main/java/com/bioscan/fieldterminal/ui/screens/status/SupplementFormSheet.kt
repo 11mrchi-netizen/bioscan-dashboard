@@ -179,7 +179,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
 
             IngredientsSection(ingredients)
 
-            existing?.productId?.let { DsldVerifySection(it) }
+            existing?.productId?.let { ProductVerifySection(it) }
 
             error?.let {
                 Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical)

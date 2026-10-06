@@ -1,44 +1,34 @@
 package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.DsldLabel
-import com.bioscan.fieldterminal.data.model.DsldLookupResponse
+import com.bioscan.fieldterminal.data.model.SuppcoProduct
 import com.bioscan.fieldterminal.domain.DsldComparison
 import com.bioscan.fieldterminal.domain.DsldIngredient
 import com.bioscan.fieldterminal.domain.ProductIngredientView
 import com.bioscan.fieldterminal.domain.compareToDsld
+import com.bioscan.fieldterminal.domain.pickBestListing
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
-private const val FUNCTIONS_BASE_URL = "https://ugfrglbcoivkprjqvjzz.supabase.co/functions/v1"
 private const val DSLD_SOURCE_NAME = "nih_dsld"
-
-class DsldVerificationException(message: String) : Exception(message)
+private const val SUPPCO_SOURCE_NAME = "suppco"
 
 @Serializable
 private data class SourceIdRow(val id: Long)
 
 @Serializable
 private data class NewSourceRow(val name: String, val url: String)
+
+@Serializable
+private data class ProductNameRow(val name: String)
 
 @Serializable
 private data class NewSnapshotRow(
@@ -58,44 +48,96 @@ data class DsldVerification(
     val status: String, // matched | conflict | not_found
     val label: DsldLabel?,
     val comparison: DsldComparison?,
+    val retrievedAt: String?,
 )
 
-// DAV-359. Verifies one of the user's own products against NIH DSLD through the
-// supplement-dsld-lookup edge function and stores a per-user snapshot with its
-// provenance (source, DSLD id, retrieval time, version, payload hash). The
-// user's product and ingredient rows are never modified -- conflicting provider
-// data is recorded, not applied.
+data class SuppcoVerification(
+    val status: String, // matched | conflict | not_found
+    val product: SuppcoProduct?,
+    // Listings sharing this UPC; product is the one best matching the user's own name.
+    val listings: Int,
+    val comparison: DsldComparison?,
+    val retrievedAt: String?,
+)
+
+// One provider failing is reported next to the other provider's result, never
+// instead of it.
+data class ProductVerification(
+    val dsld: DsldVerification?,
+    val dsldError: String?,
+    val suppco: SuppcoVerification?,
+    val suppcoError: String?,
+)
+
+// DAV-359 / DAV-360. Verifies one of the user's own products against NIH DSLD and
+// SuppCo by barcode and stores a per-user snapshot for each provider with its
+// provenance (source, provider id, retrieval time, version, payload hash,
+// match status, conflicts). The user's product and ingredient rows are never
+// modified here -- conflicting provider data is recorded, not applied.
 class SupplementSourceRepository(private val supabase: SupabaseClient) {
-    companion object { private val client = HttpClient(Android) }
-    private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun verifyAgainstDsld(productId: Long, barcode: String): DsldVerification {
-        val token = supabase.auth.currentAccessTokenOrNull() ?: throw DsldVerificationException("Not signed in")
-
-        val response = client.post("$FUNCTIONS_BASE_URL/supplement-dsld-lookup") {
-            header("Authorization", "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(buildJsonObject { put("barcode", barcode) }.toString())
+    suspend fun verifyProduct(productId: Long, barcode: String): ProductVerification {
+        val lookup = SupplementLookupRepository(supabase).lookupBarcode(barcode)
+        val productName = supabase.postgrest.from("supplement_products")
+            .select(columns = Columns.list("name")) { filter { eq("id", productId) } }
+            .decodeSingle<ProductNameRow>().name
+        val product = SupplementsRepository(supabase).loadProductIngredientsFull(productId).map {
+            ProductIngredientView(it.name, it.compoundAmount, it.compoundUnit, it.elementalAmount, it.elementalUnit)
         }
-        val root = json.parseToJsonElement(response.bodyAsText()).jsonObject
-        val parsed = json.decodeFromJsonElement(DsldLookupResponse.serializer(), root)
-        if (parsed.error != null) throw DsldVerificationException(parsed.message ?: parsed.error)
 
-        val label = parsed.labels.firstOrNull()
-        val comparison = label?.let { l ->
-            val product = SupplementsRepository(supabase).loadProductIngredientsFull(productId).map {
-                ProductIngredientView(it.name, it.compoundAmount, it.compoundUnit, it.elementalAmount, it.elementalUnit)
+        val dsld = lookup.dsld.value?.let { r ->
+            // The function already ranks same-UPC labels current-first.
+            val label = r.labels.firstOrNull()
+            val comparison = label?.let { l ->
+                compareToDsld(product, l.ingredients.map { DsldIngredient(it.name, it.category, it.amount, it.unit) })
             }
-            compareToDsld(product, l.ingredients.map { DsldIngredient(it.name, it.category, it.amount, it.unit) })
-        }
-        val status = when {
-            label == null -> "not_found"
-            comparison!!.conflicts.isNotEmpty() -> "conflict"
-            else -> "matched"
+            val status = statusOf(label != null, comparison)
+            saveSnapshot(
+                productId, DSLD_SOURCE_NAME, r.source.url ?: "https://dsld.od.nih.gov/", label?.dsldId?.toString(), barcode,
+                r.retrievedAt, label?.productVersionCode ?: r.source.apiVersion, r.payloadHash,
+                lookup.dsld.raw?.get("labels"), status, comparison,
+            )
+            DsldVerification(status, label, comparison, r.retrievedAt)
         }
 
+        val suppco = lookup.suppco.value?.let { r ->
+            val listing = pickBestListing(r.products, productName, { it.name }, { it.offMarket })
+            val comparison = listing?.let { p ->
+                compareToDsld(product, p.ingredients.map { DsldIngredient(it.name, it.category, it.amount, it.unit) })
+            }
+            val status = statusOf(listing != null, comparison)
+            saveSnapshot(
+                productId, SUPPCO_SOURCE_NAME, r.source.url ?: "https://supp.co", listing?.id, barcode,
+                r.retrievedAt, r.source.apiVersion, r.payloadHash,
+                lookup.suppco.raw?.get("products"), status, comparison,
+            )
+            SuppcoVerification(status, listing, r.products.size, comparison, r.retrievedAt)
+        }
+
+        return ProductVerification(dsld, lookup.dsld.error, suppco, lookup.suppco.error)
+    }
+
+    private fun statusOf(found: Boolean, comparison: DsldComparison?): String = when {
+        !found -> "not_found"
+        comparison != null && comparison.conflicts.isNotEmpty() -> "conflict"
+        else -> "matched"
+    }
+
+    private suspend fun saveSnapshot(
+        productId: Long,
+        sourceName: String,
+        sourceUrl: String,
+        sourceProductId: String?,
+        barcode: String,
+        retrievedAt: String?,
+        sourceVersion: String?,
+        payloadHash: String?,
+        payload: JsonElement?,
+        status: String,
+        comparison: DsldComparison?,
+    ) {
         val sourceId = supabase.postgrest.from("supplement_sources")
-            .upsert(NewSourceRow(DSLD_SOURCE_NAME, parsed.source.url ?: "https://dsld.od.nih.gov/")) {
+            .upsert(NewSourceRow(sourceName, sourceUrl)) {
                 onConflict = "user_id,name"
                 select(Columns.list("id"))
             }
@@ -105,12 +147,12 @@ class SupplementSourceRepository(private val supabase: SupabaseClient) {
             NewSnapshotRow(
                 supplementProductId = productId,
                 supplementSourceId = sourceId,
-                sourceProductId = label?.dsldId?.toString(),
+                sourceProductId = sourceProductId,
                 barcode = barcode,
-                retrievedAt = parsed.retrievedAt ?: java.time.Instant.now().toString(),
-                sourceVersion = label?.productVersionCode ?: parsed.source.apiVersion,
-                payloadHash = parsed.payloadHash ?: "",
-                payload = root["labels"] ?: JsonArray(emptyList()),
+                retrievedAt = retrievedAt ?: java.time.Instant.now().toString(),
+                sourceVersion = sourceVersion,
+                payloadHash = payloadHash ?: "",
+                payload = payload ?: JsonArray(emptyList()),
                 matchStatus = status,
                 conflicts = buildJsonArray {
                     comparison?.conflicts?.forEach { c ->
@@ -127,7 +169,5 @@ class SupplementSourceRepository(private val supabase: SupabaseClient) {
             onConflict = "user_id,supplement_product_id,supplement_source_id,payload_hash"
             ignoreDuplicates = true
         }
-
-        return DsldVerification(status, label, comparison)
     }
 }

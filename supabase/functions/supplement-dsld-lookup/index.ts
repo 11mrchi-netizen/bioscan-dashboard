@@ -1,18 +1,18 @@
-// supplement-dsld-lookup — DAV-359
+// supplement-dsld-lookup — DAV-359 / DAV-360
 //
-// Read-only barcode verification against the NIH Dietary Supplement Label
-// Database (public API v9, no key). Returns the matching label(s) in a compact
-// shape plus retrieval metadata; it writes nothing. The app stores the result
-// as a per-user snapshot and never overwrites the user's own product data with
-// it (DSLD is enrichment/verification, not a runtime dependency).
-//
-// Search hits do not carry the UPC and DSLD stores it inconsistently, so a hit
-// is only a candidate: its label's own upcSku must equal the barcode. No
-// scraping -- only the documented API.
+// Read-only access to the NIH Dietary Supplement Label Database (public API v9,
+// no key). It writes nothing. The app stores results as per-user snapshots and
+// never overwrites the user's own product data with them (DSLD is enrichment and
+// verification, not a runtime dependency). Three modes:
+//   {barcode}  verify a UPC: candidate hits are only kept when the label's own
+//              upcSku equals the barcode; matches are ranked current-first.
+//   {query}    name search: a candidate list (no UPC at this stage).
+//   {labelId}  fetch one label by DSLD id (after the user picks a candidate).
+// No scraping -- only the documented API.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { barcodeRepresentations, type CompactLabel, mapLabel, sameBarcode } from "./dsld.ts";
+import { barcodeRepresentations, type CompactLabel, mapHit, mapLabel, rankLabels, sameBarcode } from "./dsld.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,6 +29,7 @@ function json(body: unknown, status: number) {
 const DSLD = "https://api.ods.od.nih.gov/dsld/v9";
 const CANDIDATES_PER_PROBE = 5;
 const MAX_LABEL_FETCHES = 12;
+const MAX_NAME_RESULTS = 10;
 
 async function getJson(url: string) {
   const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
@@ -40,6 +41,8 @@ async function sha256Hex(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+const SOURCE = { name: "NIH DSLD", url: "https://dsld.od.nih.gov/", apiVersion: "v9" };
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -57,12 +60,38 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: userError } = await callerClient.auth.getUser(token);
     if (userError || !user) return json({ error: "unauthorized" }, 401);
 
-    let body: { barcode?: string };
+    let body: { barcode?: string; query?: string; labelId?: number | string };
     try {
       body = await req.json();
     } catch {
       return json({ error: "invalid_json" }, 400);
     }
+    const retrievedAt = new Date().toISOString();
+
+    // --- name search: candidates only ---
+    if (body.query) {
+      const query = body.query.trim().slice(0, 80);
+      if (query.length < 3) return json({ error: "query_too_short" }, 400);
+      const search = await getJson(`${DSLD}/search-filter?q=${encodeURIComponent(query)}&size=${MAX_NAME_RESULTS}`);
+      const candidates = rankLabels((search.hits ?? []).map(mapHit));
+      return json({ found: candidates.length > 0, retrievedAt, source: SOURCE, candidates }, 200);
+    }
+
+    // --- fetch one label by id ---
+    if (body.labelId !== undefined) {
+      const id = String(body.labelId).replace(/\D/g, "");
+      if (!id) return json({ error: "invalid_label_id" }, 400);
+      const labels: CompactLabel[] = [mapLabel(await getJson(`${DSLD}/label/${id}`))];
+      return json({
+        found: true,
+        retrievedAt,
+        source: SOURCE,
+        payloadHash: await sha256Hex(JSON.stringify(labels)),
+        labels,
+      }, 200);
+    }
+
+    // --- barcode verification ---
     const barcode = body.barcode?.trim();
     if (!barcode || barcode.replace(/\D/g, "").length < 6) return json({ error: "invalid_barcode" }, 400);
 
@@ -81,11 +110,12 @@ Deno.serve(async (req: Request) => {
       matched = labels.filter((l) => sameBarcode(l.upcSku, barcode)).map(mapLabel);
       if (matched.length > 0 || seen.size >= MAX_LABEL_FETCHES) break;
     }
+    matched = rankLabels(matched);
 
     return json({
       found: matched.length > 0,
-      retrievedAt: new Date().toISOString(),
-      source: { name: "NIH DSLD", url: "https://dsld.od.nih.gov/", apiVersion: "v9" },
+      retrievedAt,
+      source: SOURCE,
       payloadHash: await sha256Hex(JSON.stringify(matched)),
       labels: matched,
     }, 200);

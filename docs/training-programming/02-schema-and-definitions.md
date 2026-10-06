@@ -1,6 +1,6 @@
 # Training programming: schema and definition format (DAV-342, DAV-344, DAV-350)
 
-Version 1.0.0 · 2026-10-06 · status: **proposal for review**. Nothing here is applied. On approval the DDL is applied with the Supabase migration tool (the repo tracks no SQL; each migration is noted in ROADMAP.md like earlier ones) and then verified in SQL: owner default `auth.uid()`, four policies per table, CHECK constraints reject bad values.
+Version 1.1.0 · 2026-10-06 · status: **applied** (migrations `training_programming_schema` and `training_programming_backfill_cycles`; the repo tracks no SQL). Verified in SQL: owner default `auth.uid()` and four policies on all eight tables, CHECK constraints reject bad values, the 14 existing cycles backfilled.
 
 All numbers in the JSON examples below are **placeholders chosen to show structure**. They are not taken from any book. Real program content lives only in the private `training_definitions` rows.
 
@@ -34,7 +34,7 @@ create table public.training_definitions (
   id bigint generated always as identity primary key,
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   methodology text not null,                                         -- 'tactical_barbell'
-  kind text not null check (kind in ('strength_module','se_module','conditioning_session','template','system')),
+  kind text not null check (kind in ('strength_module','se_module','conditioning_session','conditioning_protocol','composition','template','system')),
   key text not null,
   version int not null default 1 check (version >= 1),
   schema_version int not null default 1,
@@ -67,6 +67,7 @@ create table public.training_blocks (
   origin text not null default 'generated' check (origin in ('generated','imported')),
   name text not null,
   template_key text, template_version int,
+  components jsonb not null default '[]',                            -- [{role: strength|conditioning|se|power|activation, ref: {kind,key,version}}]
   definition_refs jsonb not null default '[]',                       -- [{kind,key,version}]
   definition_snapshot jsonb,                                         -- frozen copy used to generate; null for imported
   choices jsonb not null default '{}',                               -- see section 4
@@ -177,11 +178,11 @@ Weeks are not a table (derived from `start_date` and the snapshot; see `01-archi
 | sport_skill | sport_skill |
 | recovery | recovery_deload |
 
-Role mapping: `primary` -> `primary`; `secondary` and `maintenance` -> `maintained`. The lossless domain data stays in `training_block_domains`.
+Role mapping: `primary` -> `primary`; `secondary` and `maintenance` -> `maintained`. The lossless domain data stays in `training_block_domains`. The mapping was reviewed and accepted by the user (2026-10-06).
 
-### Backfill of the 13 existing cycles
+### Backfill of the 14 existing cycles (done)
 
-One `training_blocks` row per `training_cycles` row (`origin = 'imported'`, `cycle_id` set, dates copied, `definition_snapshot` null). Template name, primary and secondary focus come from `notes -> notion_import_focus`, parsed with a guarded cast (a row whose `notes` is not valid JSON gets only its dates). Primary and secondary become `training_block_domains` rows using the existing `TbFocus` keys: max_strength -> max_strength, strength_maintenance -> max_strength (maintenance), hypertrophy -> hypertrophy, work_capacity -> work_capacity, aerobic_base -> aerobic_base, vo2max and threshold -> anaerobic_capacity, endurance -> specific_endurance, speed_power -> power, deload -> recovery. The `notes` JSON is left untouched.
+One `training_blocks` row per `training_cycles` row (`origin = 'imported'`, `cycle_id` set, dates copied, `definition_snapshot` null, status from the dates). The template name, primary and secondary focus come from `notes -> notion_import_focus` (all 14 rows had valid JSON) and are kept in `choices.imported_focus`. Primary and secondary became `training_block_domains` rows using the keys actually present in the data: max_strength -> max_strength, strength_maintenance -> max_strength (maintenance), aerobic_maintenance -> aerobic_base (maintenance), aerobic_capacity -> aerobic_base, work_capacity -> work_capacity, endurance -> specific_endurance. The `notes` JSON is left untouched. Result: 14 blocks, each with its domains (for example the current Velocity block: specific_endurance primary, work_capacity secondary).
 
 ## 3. Definition format
 
@@ -273,7 +274,39 @@ Load kinds: `pct_1rm`, `pct_tm`, `pct_max_reps`, `work_up_rm` (`{rm: {min, max}}
 
 Cell reference grammar: `strength:<key|$VAR>`, `se:<key|$VAR>`, `cond:<key>`, `test:<what>`, `rest`. `params` override or add to the session type's prescription (`minutes`, `distance_mi`, `distance_km`, `rounds`, `ruck_kg`, `rpe`), each a number or `{min, max}`. Two cells in one day are a two-a-day (`slot_in_day` 1 and 2). Days are positions; weekdays come from the block's choices.
 
-### 3.5 `system`
+### 3.5 `conditioning_protocol` and `composition` (provisional, until the TB III conditioning, Periodization and Integration chapters are read)
+
+```json
+{
+  "schema_version": 1, "kind": "conditioning_protocol", "key": "example.protocol", "version": 1,
+  "title": "Example conditioning protocol", "source_ref": "book, page",
+  "weeks": { "min": 6, "max": 12 },
+  "slots": [
+    { "id": "hard", "category": "hic",       "per_week": { "min": 2, "max": 2 } },
+    { "id": "long", "category": "endurance", "per_week": { "min": 1, "max": 1 } }
+  ],
+  "week_rules": [ { "every": 3, "kind": "easy", "reduce": ["sessions", "duration"] } ],
+  "allowed_categories": ["hic", "endurance", "hills"]
+}
+```
+
+```json
+{
+  "schema_version": 1, "kind": "composition", "key": "example.pairing", "version": 1, "title": "...", "source_ref": "...",
+  "strength":     { "choose_from": ["example.two_day"] },
+  "conditioning": { "choose_from": ["example.protocol"] },
+  "weeks": { "min": 3, "max": 12 },
+  "integration": [
+    { "rule": "week_alignment", "strength_week_kind": "peak", "conditioning_week_kind": "easy" },
+    { "rule": "avoid_adjacent", "a": "heavy_lower", "b": "hard_conditioning" }
+  ],
+  "domains_from_components": true
+}
+```
+
+A composed block carries no week x day grid of its own: the generator lays the strength module's sessions on the weekdays the user assigned to strength, fills the conditioning slots on the weekdays assigned to conditioning and endurance with sessions from the user's preferences, and applies the week rules. Integration rules are warnings in the setup preview.
+
+### 3.6 `system`
 
 An ordered or optional list of templates with transition rules (benchmark that gates the next one, allowed skips, start-later variants). It drives the strategic-plan suggestions in the UI; blocks are generated from templates, not from a system.
 

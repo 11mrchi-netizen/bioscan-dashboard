@@ -1,6 +1,6 @@
 # Training programming engine: audit and architecture (DAV-341)
 
-Version 1.0.0 · 2026-10-06 · status: **proposal for review** (no migration applied, no code written).
+Version 1.1.0 · 2026-10-06 · status: **approved for build**. Schema applied 2026-10-06 (migrations `training_programming_schema`, `training_programming_backfill_cycles`); no app code written yet.
 
 Scope: milestone 13. A reusable programming engine with Tactical Barbell as the first methodology. This document locks the architecture; `02-schema-and-definitions.md` holds the proposed tables and the definition format.
 
@@ -10,7 +10,7 @@ Sources read for this audit: the repo (Android app, Supabase schema), Linear DAV
 
 | Area | Today | Consequence for 13 |
 |---|---|---|
-| Blocks | `training_cycles` (13 rows, Notion import + 1 user-created "Velocity" 2026-08-10..2026-12-07). Block facts for Tactical Barbell live as a JSON **string inside `notes`** (`notion_import_focus`: template, primary, secondary, strength_days, conditioning_days). `focus jsonb` is `[]` on most rows. | Real block tables replace the notes hack. `training_cycles` stays (User page, `v_training_block_metrics`) and is linked, not removed. |
+| Blocks | `training_cycles` (14 rows: Notion imports + the user-created "Velocity" 2026-08-10..2026-12-07). Block facts for Tactical Barbell live as a JSON **string inside `notes`** (`notion_import_focus`: template, primary, secondary, strength_days, conditioning_days). `focus jsonb` is `[]` on most rows. | Real block tables replace the notes hack. `training_cycles` stays (User page, `v_training_block_metrics`) and is linked, not removed. |
 | Block UI | `TrainingBlockFormSheet` (free-text template name, weeks, primary/secondary focus chips, strength days 3 / conditioning days 2 defaults); `TrainingBlocksScreen`. | Strength and conditioning day counts are free numbers, not generated sessions. Becomes the entry point of the block-first setup. |
 | Planned sessions | None. "Next session" on the Map tab reads Google Calendar events and classifies them by emoji in the title. | Planned sessions become first-class rows; the calendar becomes a projection of them. |
 | Actual sessions | `exercise_sessions` (345 strength via Health Connect, 187 strength from Notion, runs, walks, other). Strength detail is `details.exercises[].sets[]` (reps, `weight_kg`, `percent_1rm`, rpe, rir). 186/187 Notion strength sessions have exercises; only 4/345 Health Connect ones. | Reused as the single actual-session store. No parallel workout database. |
@@ -50,6 +50,7 @@ None of these break a block with zero strength sessions, but none can express it
 | Methodology definition | Modules (strength, SE, conditioning session types) and templates (week x day grids) transcribed from the books, with book and page. | Immutable per `(key, version)` once reviewed; edits create a new version. | `training_definitions` (jsonb document per row), private per user. |
 | Strategic plan | The user's intended sequence of blocks over time ("Capacity, then Velocity, benchmark 2026-12-07"). | Editable. | `training_plans`, ordered `training_blocks`. |
 | Block | One template instance for a date range, with the user's choices (clusters, weekday map, conditioning preferences, endurance goal) and its domain composition. | Choices editable while `draft`; frozen at activation. Carries a **frozen copy** of the definitions it used (`definition_snapshot`). | `training_blocks`, `training_block_domains`. |
+| Block components | The protocols the block is built from: a **strength component** and a **conditioning component** (plus optional SE, power or activation), each a reference to a definition, chosen by the user at setup. The pair determines the weekly layout and the default domain composition. | Same as block. | `training_blocks.components`, mirrored in `definition_refs`. |
 | Domain composition | Which domains the block develops and in what role: primary, secondary, maintenance, with target exposure (min/target/max sessions per week). Zero strength domains is valid. | Same as block. | `training_block_domains`; mirrored into `training_cycles.focus` for existing screens. |
 | Week | Index and kind (normal, deload, taper, test, easy) read from the snapshot. | Derived. | No table (see 3.4). |
 | Planned session | One executable session: sequence position, week, day slot, domain, module, resolved prescription, current calendar slot. | `sequence_no`, `original_date`, `prescription` immutable; `scheduled_*` and status change, each change recorded as a deviation. | `planned_sessions`. |
@@ -68,7 +69,7 @@ Rules that fall out of this:
 
 ### 3.2 Definition format (summary)
 
-A definition is a JSON document, validated by Kotlin DTOs and unit tests, with `schema_version`. Four kinds: `strength_module`, `se_module`, `conditioning_session`, `template`. A template cell is `{ref, params}`. Full shapes and the Fighter, Velocity and Zulu/HT examples are in `02-schema-and-definitions.md`.
+A definition is a JSON document, validated by Kotlin DTOs and unit tests, with `schema_version`. Kinds: `strength_module`, `se_module`, `conditioning_session`, `conditioning_protocol`, `composition`, `template` (fixed week x day grid), `system`. A template cell is `{ref, params}`. Full shapes and the Fighter, Velocity and Zulu/HT examples are in `02-schema-and-definitions.md`.
 
 Why documents and not normalised rows: definitions are read as a whole, never queried by cell, and each book adds forms nobody can predict (the grids above differ from each other in structure). A normalised model would need a migration per new program; a validated document needs a new definition and, at most, a new `ref` type in the engine.
 
@@ -94,6 +95,17 @@ Maxes, in priority order: (1) a recorded test, (2) implied by the user's own log
 Progression at block end: a proposal (not a mutation) using the increments the definition states for upper and lower lifts, converted to the user's 2.5 kg step, or "no change" (the books explicitly allow it). The user confirms; a new snapshot is appended.
 
 Test weeks are ordinary planned sessions of `work_kind = test` and are schedulable like any other session.
+
+### 3.3b Block = strength component + conditioning component
+
+Tactical Barbell III is organised this way: strength templates (Operator and its variants, Zulu and its variants, Fighter, Breacher, SE) and conditioning protocols (Polarized: Black, Green, Blue; Work Capacity; LDP RAT; Base Building) are separate chapters, joined by Integration and Periodization chapters. The older Green Protocol book instead publishes fixed week x day grids. The engine supports both:
+
+- **Composed block** (primary path): the user picks a strength component and a conditioning component. The strength module supplies its own sessions per week (days, lifts, wave); the conditioning protocol supplies conditioning slots per week (category, count, minimums, easy-week rule) that the user fills from the session library by preference. A `composition` definition holds the integration rules (e.g. which weeks align, which days not to combine); violations are warnings in the setup preview, not blockers.
+- **Fixed-grid template**: a published week x day grid whose cells reference modules (section 3.2).
+- A block may have a single component (Base Building, an activation block) or three (strength + conditioning + SE or power).
+- Domain composition is derived from the components (e.g. strength primary + conditioning secondary) and shown for confirmation; the user can override roles.
+
+The TB III conditioning, Base Building, Periodization and Activation chapters are not yet read, so `conditioning_protocol` and `composition` shapes in `02` are provisional until they are.
 
 ### 3.4 Weeks are derived, not stored
 
@@ -129,7 +141,7 @@ States: `planned` -> `confirmed` (the user marked it done and, optionally, enter
 
 ## 5. Compatibility with existing data
 
-- The 13 `training_cycles` rows become `training_blocks` with `origin = 'imported'`, `definition_snapshot = null`, template and focus parsed from `notes`, and `cycle_id` pointing at the original row. The notes JSON is left in place (read-only history).
+- The 14 `training_cycles` rows became `training_blocks` with `origin = 'imported'`, `definition_snapshot = null`, template and focus parsed from `notes`, and `cycle_id` pointing at the original row. The notes JSON is left in place (read-only history).
 - The current "Velocity" block (2026-08-10 .. 2026-12-07) is a Green Protocol template. It is the **backtest case**: generate Velocity from 2026-08-10, then compare against the logged sessions and the calendar events it was actually run from.
 - Notion strength sessions (187, with `percent_1rm`) are the source for implied maxes and for backtesting the load engine.
 
@@ -148,13 +160,16 @@ States: `planned` -> `confirmed` (the user marked it done and, optionally, enter
 | 9 | Details are filled in after the workout. |
 | 10 | Matching uses Health Connect and the Zepp integration. |
 | 11 | Build from Tactical Barbell III; the older core book is not needed. |
+| 12 | Trap bar default weight 25 kg (configurable in `training_settings.bars`). |
+| 13 | The app may create the "Training" Google calendar. |
+| 14 | No-wearable fallback: after a grace period the user can confirm a session without wearable data, creating a clearly marked manual session. Grace period length: to be set (default proposal 48 h). |
+| 15 | Domain-to-`FocusQuality` mapping (`02`) accepted. |
+| 16 | Blocks are composed from a strength component and a conditioning component (the Tactical Barbell model); fixed-grid templates remain supported. |
 
 ## 7. Open questions
 
-1. **Tactical Barbell III contents.** A screenshot of the table of contents, then the program tables for the templates the user will run. The Operator variants (standard, Op/PRO, Op/DUP), Fighter, Zulu/HT, Gladiator, Grey Man, Base Building and Black are described in the books already read; TB III may change numbers.
-2. **Trap bar weight** (default 25 kg suggested, confirm).
-3. **No-wearable fallback** (3.5, item 6).
-4. **Second calendar on the same account**: the "Training" calendar is created by the app; confirm it is acceptable to create one.
+1. **Tactical Barbell III, remaining chapters** (the first batch covered the contents page, Operator and its 3/6-week tables, part of Operator/ULF, Zulu/AV, Operator/PRO, Fighter, Fighter/Bangkok, Breacher and SE). Still needed: Evolution (how it works, rules), the rest of Strength (Operator overview text, Operator/AV and /VI, Zulu, Zulu/PRO, strategy and progression sections, Power, cut-off table ends), all of Conditioning (including Integration), Base Building, Periodization, Activation and Appendices A and B.
+2. **Grace period** before a session may be confirmed without wearable data (decision 14).
 
 ## 8. Delivery plan
 

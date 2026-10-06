@@ -235,6 +235,32 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
             .mapValues { (_, rows) -> LocalDate.parse(rows.first().takenAt.take(10)) }
     }
 
+    // DAV-362. Active roster items whose product carries this (normalized) barcode.
+    suspend fun activeSupplementsForBarcode(barcode: String): List<SupplementRow> {
+        val productIds = supabase.postgrest.from("supplement_products")
+            .select(columns = Columns.list("id")) { filter { eq("barcode", barcode) } }
+            .decodeList<IdRow>().map { it.id }.toSet()
+        if (productIds.isEmpty()) return emptyList()
+        return loadOverview().active.filter { it.productId in productIds }
+    }
+
+    // DAV-362. Remembers that this roster item is the bottle with `barcode`. Only the
+    // barcode is written: no provider data is applied here (that is the reviewed
+    // verify-and-apply flow). A roster item without a product gets a minimal manual one.
+    suspend fun linkBarcode(supplement: SupplementRow, barcode: String) {
+        val productId = supplement.productId
+        if (productId != null) {
+            supabase.postgrest.from("supplement_products")
+                .update(buildJsonObject { put("barcode", barcode) }) { filter { eq("id", productId) } }
+            return
+        }
+        val created = supabase.postgrest.from("supplement_products")
+            .insert(NewSupplementProductRow(name = supplement.name, matchConfidence = "manual", barcode = barcode)) { select(Columns.list("id")) }
+            .decodeSingle<IdRow>()
+        supabase.postgrest.from("supplements")
+            .update(buildJsonObject { put("product_id", created.id) }) { filter { eq("id", supplement.id) } }
+    }
+
     // A supplement is "ended," never deleted -- its past supplement_log rows
     // (Log tab history) stay meaningful either way, and the ENDED section
     // already exists in the UI to hold it, matching how this table's own

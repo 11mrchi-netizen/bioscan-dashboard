@@ -105,6 +105,8 @@ dependencies {
     // current API/dependency directly against Android's own developer docs
     // (developer.android.com/identity/authorization), not assumed.
     implementation("com.google.android.gms:play-services-auth:22.0.0")
+    // Barcode scanning via Google Play services: no CAMERA permission, no camera code.
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 
     // Map tab background: osmdroid (free, no API key of its own, no billing)
     // over CARTO's free-tier Dark Matter tiles -- chosen over the Google Maps

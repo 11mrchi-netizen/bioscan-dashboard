@@ -48,6 +48,7 @@ data class NewSupplementProductRow(
     @SerialName("serving_unit") val servingUnit: String? = null,
     @SerialName("serving_form") val servingForm: String? = null,
     @SerialName("match_confidence") val matchConfidence: String? = null,
+    val barcode: String? = null,
 )
 
 // Flat read of one product's ingredient rows -- joined against

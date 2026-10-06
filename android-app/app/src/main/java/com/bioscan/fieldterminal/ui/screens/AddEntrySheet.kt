@@ -125,6 +125,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var saving by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf<String?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -149,12 +150,22 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
                 val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
                     saving = true
+                    saveError = null
                     scope.launch {
-                        write(repo)
-                        saving = false
-                        onSaved()
+                        // A rejected write must surface here, not crash the app.
+                        try {
+                            write(repo)
+                            saving = false
+                            onSaved()
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            saving = false
+                            saveError = e.message ?: "Save failed"
+                        }
                     }
                 }
+                saveError?.let { Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical) }
                 when (type) {
                     AddEntryType.Fuel -> FuelForm(saving, onSubmit, onCanonicalSaved = onSaved)
                     AddEntryType.Encounter -> EncounterForm(
@@ -279,6 +290,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
     val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var saving by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf<String?>(null) }
     var loaded by remember { mutableStateOf<Any?>(null) }
 
     LaunchedEffect(entry.id) {
@@ -316,12 +328,21 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             val row = loaded
             val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
                 saving = true
+                saveError = null
                 scope.launch {
-                    write(repo)
-                    saving = false
-                    onSaved()
+                    try {
+                        write(repo)
+                        saving = false
+                        onSaved()
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        saving = false
+                        saveError = e.message ?: "Save failed"
+                    }
                 }
             }
+            saveError?.let { Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical) }
 
             if (row == null) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
@@ -611,7 +632,7 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
                 onCanonicalSaved = onCanonicalSaved,
             )
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
-            FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items -> onSubmit { it.addSupplementsTaken(takenAt, items) } })
+            FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items, source -> onSubmit { it.addSupplementsTaken(takenAt, items, source) } })
         }
     }
 }
@@ -1099,11 +1120,14 @@ private fun DrinkForm(
 // from the Log feed like any other entry -- no separate "batch" concept
 // needed for "add or remove single items."
 @Composable
-private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Triple<Long, String, String>>) -> Unit) {
+private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String) -> Unit) {
     var dateTime by remember { mutableStateOf(initialDateTime) }
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
     var checkedBundles by remember { mutableStateOf(setOf<String>()) }
     var checkedAsNeeded by remember { mutableStateOf(setOf<Long>()) }
+    // DAV-362: items picked by barcode are selected one by one, never as a time-of-day bundle.
+    var scanned by remember { mutableStateOf<List<SupplementRow>>(emptyList()) }
+    var scannedChecked by remember { mutableStateOf(setOf<Long>()) }
     var recentLastTaken by remember { mutableStateOf<Map<Long, LocalDate>>(emptyMap()) }
 
     LaunchedEffect(Unit) {
@@ -1134,7 +1158,10 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
     val selectedItems = buildList {
         checkedBundles.forEach { tod -> groups[tod]?.forEach { add(Triple(it.id, it.name, it.dose)) } }
         asNeeded.filter { it.id in checkedAsNeeded }.forEach { add(Triple(it.id, it.name, it.dose)) }
+        scanned.filter { it.id in scannedChecked }.forEach { s -> if (none { it.first == s.id }) add(Triple(s.id, s.name, s.dose)) }
     }
+    // "scan" only when everything being saved was picked by barcode.
+    val source = if (scannedChecked.isNotEmpty() && checkedBundles.isEmpty() && checkedAsNeeded.isEmpty()) "scan" else "manual"
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateTimeField("WHEN", dateTime, { dateTime = it })
@@ -1148,6 +1175,22 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
                 color = FT.TextSecondary,
             )
             else -> {
+                BarcodeLogPanel(list) { hits ->
+                    scanned = (scanned + hits).distinctBy { it.id }
+                    scannedChecked = scannedChecked + hits.map { it.id }
+                }
+                if (scanned.isNotEmpty()) {
+                    FormLabel("SCANNED")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        scanned.forEach { supp ->
+                            CheckToggleRow(
+                                label = supp.name,
+                                checked = supp.id in scannedChecked,
+                                onToggle = { scannedChecked = if (supp.id in scannedChecked) scannedChecked - supp.id else scannedChecked + supp.id },
+                            )
+                        }
+                    }
+                }
                 listOf("morning", "afternoon", "night").forEach { timeOfDay ->
                     val itemsInGroup = groups[timeOfDay]
                     if (!itemsInGroup.isNullOrEmpty()) {
@@ -1201,7 +1244,7 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
             }
         }
         SaveButton(saving, selectedItems.isNotEmpty()) {
-            onSave(dateTime.toIsoWithOffset(), selectedItems)
+            onSave(dateTime.toIsoWithOffset(), selectedItems, source)
         }
     }
 }

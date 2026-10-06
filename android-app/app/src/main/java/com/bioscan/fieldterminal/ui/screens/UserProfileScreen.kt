@@ -178,7 +178,7 @@ private fun AgingCard(overview: AgingProfileOverview?, onOpen: () -> Unit) {
             overview == null -> CircularProgressIndicator(color = FT.Emerald)
             overview.chronologicalAgeYears == null -> FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile to see this.")
             else -> {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     AgingHeadline("Chronological", overview.chronologicalAgeYears.toString())
                     overview.phenoAge?.let { AgingHeadline("PhenoAge", it.biologicalAge?.let { v -> "%.0f".format(v) } ?: "—") }
                     overview.cardioAge?.let { AgingHeadline("Cardio Age", it.biologicalAge?.let { v -> "%.0f".format(v) } ?: "—") }
@@ -199,7 +199,7 @@ private fun AgingHeadline(label: String, value: String) {
 
 @Composable
 private fun DomainLevelRow(domain: AchievementDomain, level: DomainLevel?) {
-    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+    Column {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(domain.label(), style = TextStyle(fontFamily = RobotoMono, fontSize = 12.5.sp), color = FT.TextSecondary)
             Text(

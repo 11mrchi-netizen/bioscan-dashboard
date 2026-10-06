@@ -171,12 +171,16 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         if (items.isEmpty()) return
         // product_id is optional provenance: a failed roster lookup must never
         // block recording that the supplement was taken.
-        val productIdBySupp = runCatching { loadProductLinks(items.map { it.first }) }.getOrDefault(emptyMap())
+        val links = runCatching { loadProductLinks(items.map { it.first }) }.getOrDefault(emptyMap())
+        val productIdBySupp = links.mapNotNull { (id, l) -> l.productId?.let { id to it } }.toMap()
+        // Label servings consumed per dose (DAV-361): feeds pantry consumption and
+        // scales the ingredient contribution. Missing link row = the default of 1.
+        val servingsBySupp = links.mapValues { it.value.servingsPerDose }
         val rows = items.map { (id, name, dose) ->
             val (value, unit) = parseDose(dose)
             NewSupplementLogRow(
                 supplementId = id, supplementName = name, takenAt = takenAt, doseValue = value, doseUnit = unit,
-                productId = productIdBySupp[id], source = source,
+                productId = productIdBySupp[id], source = source, servingCount = servingsBySupp[id] ?: 1.0,
             )
         }
         val insertedRows = supabase.postgrest.from("supplement_log")
@@ -184,18 +188,17 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
             .decodeList<SupplementLogIdRow>()
 
         try {
-            writeSupplementNutrientIntake(takenAt, insertedRows, items, productIdBySupp)
+            writeSupplementNutrientIntake(takenAt, insertedRows, items, productIdBySupp, servingsBySupp)
         } catch (_: Exception) {
             // Best-effort: supplement_log row is the primary record
         }
     }
 
-    private suspend fun loadProductLinks(supplementIds: List<Long>): Map<Long, Long> =
+    private suspend fun loadProductLinks(supplementIds: List<Long>): Map<Long, SupplementProductLinkRow> =
         supabase.postgrest.from("supplements")
-            .select(columns = Columns.list("id,product_id")) { filter { isIn("id", supplementIds) } }
+            .select(columns = Columns.list("id,product_id,servings_per_dose")) { filter { isIn("id", supplementIds) } }
             .decodeList<SupplementProductLinkRow>()
-            .filter { it.productId != null }
-            .associate { it.id to it.productId!! }
+            .associateBy { it.id }
 
     // Supplement Intelligence Phase 1 (DAV-328): a roster item linked to a
     // real supplement_products row (supplements.product_id) gets its
@@ -211,6 +214,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         logRows: List<SupplementLogIdRow>,
         items: List<Triple<Long, String, String>>,
         productIdBySupp: Map<Long, Long>,
+        servingsBySupp: Map<Long, Double>,
     ) {
         if (logRows.isEmpty()) return
         val supplementIds = logRows.map { it.supplementId }
@@ -228,7 +232,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
             if (productId != null) {
                 val composition = suppRepo.loadProductComposition(productId)
                 for (productIngredient in composition) {
-                    val contribution = nutrientContribution(productIngredient, servingCount = 1.0) ?: continue
+                    val contribution = nutrientContribution(productIngredient, servingCount = servingsBySupp[logRow.supplementId] ?: 1.0) ?: continue
                     nutrientRows.add(
                         NutrientIntakeRow(
                             loggedAt = takenAt,
@@ -487,6 +491,7 @@ private data class SupplementLogIdRow(
 private data class SupplementProductLinkRow(
     val id: Long,
     @SerialName("product_id") val productId: Long? = null,
+    @SerialName("servings_per_dose") val servingsPerDose: Double = 1.0,
 )
 
 @kotlinx.serialization.Serializable

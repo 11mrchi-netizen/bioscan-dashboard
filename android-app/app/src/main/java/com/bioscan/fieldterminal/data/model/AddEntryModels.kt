@@ -110,6 +110,8 @@ data class NewSupplementLogRow(
     // existed -- unknown, never backfilled with a guess.
     @SerialName("product_id") val productId: Long? = null,
     val source: String? = null,
+    // Label servings consumed (supplements.servings_per_dose); pantry consumption.
+    @SerialName("serving_count") val servingCount: Double? = null,
 )
 
 // Update-only counterpart -- a taken supplement's name/supplement_id are

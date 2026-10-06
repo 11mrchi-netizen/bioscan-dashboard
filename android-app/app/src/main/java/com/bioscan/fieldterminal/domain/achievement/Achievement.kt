@@ -30,6 +30,8 @@ data class Achievement(
     // estimated 1RM); null when the value is a direct measurement.
     val confidence: Double? = null,
     val comparisonContext: String? = null,
+    val previousValue: Double? = null,
+    val previousOccurredAt: OffsetDateTime? = null,
 )
 
 // The "is this a new record" rule mirrors exactly what

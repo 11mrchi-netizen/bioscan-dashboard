@@ -77,6 +77,11 @@ data class TrainingCycle(
     // constructions (UserProfileScreen.kt) don't need updating. 0 = not a
     // real row (mock data only -- every real row's id is a real bigint > 0).
     val id: Long = 0,
+    val tbTemplate: String? = null,
+    val tbPrimary: String? = null,
+    val tbSecondary: String? = null,
+    val tbStrengthDays: Int? = null,
+    val tbConditioningDays: Int? = null,
 ) {
     fun isActiveOn(date: LocalDate): Boolean =
         !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate))

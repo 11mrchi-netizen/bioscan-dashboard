@@ -20,6 +20,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -85,13 +86,25 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
     var saving by remember { mutableStateOf(false) }
     var ending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    // Supplement Intelligence Phase 1 (DAV-328): optional, collapsed-by-
-    // default ingredient composition -- empty unless the user fills one in,
-    // so the existing fast NAME/DOSE/TIME-OF-DAY/FREQUENCY path is untouched.
-    // An item that already has a linked product (existing.productId != null)
-    // shows a read-only note instead -- editing recorded composition is a
-    // later step, not this slice.
     val ingredients = remember { mutableStateListOf<EditableIngredient>() }
+
+    LaunchedEffect(existing?.productId) {
+        val pid = existing?.productId ?: return@LaunchedEffect
+        try {
+            val full = repo.loadProductIngredientsFull(pid)
+            ingredients.clear()
+            full.forEach { ing ->
+                ingredients.add(EditableIngredient().apply {
+                    name = ing.name
+                    nutrientKey = ing.nutrientKey ?: ""
+                    compoundAmount = ing.compoundAmount.toString()
+                    compoundUnit = ing.compoundUnit
+                    elementalAmount = ing.elementalAmount?.toString() ?: ""
+                    elementalUnit = ing.elementalUnit ?: ""
+                })
+            }
+        } catch (_: Exception) {}
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -161,15 +174,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                 }
             }
 
-            if (existing?.productId != null) {
-                Text(
-                    "Ingredient composition already recorded for this product.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
-                    color = FT.TextMuted,
-                )
-            } else {
-                IngredientsSection(ingredients)
-            }
+            IngredientsSection(ingredients)
 
             error?.let {
                 Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical)
@@ -187,9 +192,14 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                             // over from "+ ADD INGREDIENT" is silently dropped
                             // rather than saved as an empty ingredient.
                             val filledIngredients = ingredients.mapNotNull { it.toInputOrNull() }
-                            val productId = if (filledIngredients.isNotEmpty()) {
-                                repo.createProductWithIngredients(name.trim(), null, null, filledIngredients)
-                            } else null
+                            val productId = when {
+                                filledIngredients.isNotEmpty() && existing?.productId != null -> {
+                                    repo.replaceProductIngredients(existing.productId, filledIngredients)
+                                    existing.productId
+                                }
+                                filledIngredients.isNotEmpty() -> repo.createProductWithIngredients(name.trim(), null, null, filledIngredients)
+                                else -> null
+                            }
 
                             if (existing == null) {
                                 // DAV-83: best-effort only -- a failed or

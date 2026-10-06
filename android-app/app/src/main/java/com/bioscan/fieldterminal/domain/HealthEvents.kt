@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.domain
 
 import com.bioscan.fieldterminal.data.model.IllnessRow
 import com.bioscan.fieldterminal.data.model.InjuryRow
+import com.bioscan.fieldterminal.data.model.MedicationEntry
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -15,6 +16,8 @@ data class HealthEvent(
     val status: String,
     val startDate: LocalDate,
     val endDate: LocalDate?,
+    val doctorSeen: Boolean = false,
+    val medications: List<MedicationEntry> = emptyList(),
 )
 
 // Merges injuries + illnesses into one list, same "display decision, not a
@@ -51,6 +54,8 @@ fun mergeHealthEvents(injuries: List<InjuryRow>, illnesses: List<IllnessRow>): L
             status = it.status,
             startDate = LocalDate.parse(it.startDate),
             endDate = it.endDate?.let(LocalDate::parse),
+            doctorSeen = it.doctorSeen,
+            medications = it.medications,
         )
     }
     return (fromInjuries + fromIllnesses).sortedByDescending { it.startDate }

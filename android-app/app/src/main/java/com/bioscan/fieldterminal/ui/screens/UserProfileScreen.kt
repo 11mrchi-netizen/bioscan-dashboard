@@ -36,6 +36,7 @@ import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.AgingProfileRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
+import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
 import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.ConfidenceLevel
 import com.bioscan.fieldterminal.domain.DataAvailability
@@ -90,7 +91,11 @@ data class UserProfileData(
 )
 
 @Composable
-fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {}) {
+fun UserProfileScreen(
+    data: UserProfileData? = null,
+    onOpenAging: () -> Unit = {},
+    onOpenTrainingBlocks: () -> Unit = {},
+) {
     val profile = data ?: remember { mockUserProfileData() }
 
     var agingOverview by remember { mutableStateOf<AgingProfileOverview?>(null) }
@@ -99,14 +104,20 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
     }
 
     var cycles by remember { mutableStateOf<List<TrainingCycle>?>(null) }
+    var blockSummaries by remember { mutableStateOf<List<TrainingBlockSummaryRow>?>(null) }
     val cyclesRepo = remember { TrainingCyclesRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { cycles = cyclesRepo.loadCycles() }
+    LaunchedEffect(Unit) {
+        cycles = cyclesRepo.loadCycles()
+        blockSummaries = cyclesRepo.loadBlockSummaries()
+    }
 
     var realAchievements by remember { mutableStateOf<Map<AchievementDomain, List<Achievement>>?>(null) }
+    var bodyWeightKg by remember { mutableStateOf<Double?>(null) }
     val achievementsRepo = remember { AchievementsRepository(SupabaseClientProvider.client) }
     LaunchedEffect(Unit) {
         val (strength, running) = achievementsRepo.loadAchievements()
+        bodyWeightKg = achievementsRepo.loadBodyWeight()
         realAchievements = mapOf(
             AchievementDomain.STRENGTH to strength,
             AchievementDomain.RUNNING to running,
@@ -151,7 +162,11 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
             val achievements = realAchievements ?: profile.achievements
             val populatedDomains = AchievementDomain.entries.filter { achievements[it].orEmpty().isNotEmpty() }
             populatedDomains.forEachIndexed { i, domain ->
-                AchievementSection(domain, achievements[domain].orEmpty())
+                if (domain == AchievementDomain.STRENGTH) {
+                    StrengthAchievementSection(achievements[domain].orEmpty(), bodyWeightKg)
+                } else {
+                    AchievementSection(domain, achievements[domain].orEmpty())
+                }
                 if (i < populatedDomains.lastIndex) Spacer(Modifier.height(12.dp))
             }
 
@@ -165,7 +180,7 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
                 onAdd = { addingCycle = true },
             )
             Spacer(Modifier.height(12.dp))
-            TrainingBlockHistoryCard(cycleHistory)
+            TrainingBlockHistoryCard(blockSummaries, onOpenTrainingBlocks)
         }
     }
 
@@ -176,7 +191,10 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
             onSaved = {
                 addingCycle = false
                 editingCycle = null
-                scope.launch { cycles = cyclesRepo.loadCycles() }
+                scope.launch {
+                    cycles = cyclesRepo.loadCycles()
+                    blockSummaries = cyclesRepo.loadBlockSummaries()
+                }
             },
         )
     }
@@ -308,16 +326,6 @@ private fun AchievementSection(domain: AchievementDomain, achievements: List<Ach
                         color = FT.Emerald,
                     )
                 }
-                achievement.confidence?.let { conf ->
-                    Spacer(Modifier.height(4.dp))
-                    FTConfidenceChip(
-                        when {
-                            conf >= 0.8 -> ConfidenceLevel.High
-                            conf >= 0.5 -> ConfidenceLevel.Medium
-                            else -> ConfidenceLevel.Low
-                        },
-                    )
-                }
             }
         }
     }
@@ -333,12 +341,22 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
             EditLink("+ ADD TRAINING BLOCK", onAdd)
             return@FTCard
         }
+        val blockTitle = cycle.tbTemplate
+            ?: cycle.focus.joinToString(" + ") { it.quality.label() }.ifBlank { "No stated focus" }
+        val blockSubtitle = listOfNotNull(cycle.tbPrimary, cycle.tbSecondary)
+            .joinToString(" · ") { it.toFocusLabel() }
+            .ifBlank { null }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                cycle.focus.joinToString(" + ") { it.quality.label() }.ifBlank { "No stated focus" },
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
-                color = FT.TextPrimary,
-            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    blockTitle,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    color = FT.TextPrimary,
+                )
+                blockSubtitle?.let {
+                    Text(it, style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextMuted)
+                }
+            }
             EditLink("EDIT", onEdit)
         }
         Text(
@@ -438,57 +456,216 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
 // ---- Section 5: Training Block History ----
 
 @Composable
-private fun TrainingBlockHistoryCard(history: List<TrainingCycle>) {
-    var expanded by remember { mutableStateOf(false) }
-    val visible = if (expanded || history.size <= 3) history else history.take(3)
-
+private fun TrainingBlockHistoryCard(
+    summaries: List<TrainingBlockSummaryRow>?,
+    onViewAll: () -> Unit = {},
+) {
     FTCard(title = "TRAINING BLOCK HISTORY") {
-        if (history.isEmpty()) {
+        if (summaries == null) {
+            FTDataState(DataAvailability.Building, "Loading blocks…")
+            return@FTCard
+        }
+        if (summaries.isEmpty()) {
             FTDataState(DataAvailability.Unavailable, "No past training blocks yet.")
             return@FTCard
         }
-
-        visible.forEach { cycle ->
+        summaries.take(3).forEach { block ->
+            val templateLabel = (block.template ?: "")
+                .replace(Regex("\\s*\\(\\d+\\s+Weeks?\\)", RegexOption.IGNORE_CASE), "")
+                .trim()
+            val weeks = block.blockDays?.let { "${it / 7}W" } ?: ""
+            val dateRange = buildBlockDateRange(block.startDate, block.endDate)
+            val sessions = buildString {
+                append("${block.strengthSessions} STR")
+                append("  ${block.conditioningSessions} COND")
+                if (block.enduranceSessions > 0) append("  ${block.enduranceSessions} END")
+            }
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    cycle.focus.joinToString(" + ") { it.quality.label() },
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
-                    color = FT.TextPrimary,
-                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "${cycle.startDate} — ${cycle.endDate ?: "ongoing"}",
-                        style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
-                        color = FT.TextMuted,
+                        templateLabel,
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
+                        color = FT.TextPrimary,
+                        modifier = Modifier.weight(1f),
                     )
-                    cycle.endDate?.let { end ->
-                        val weeks = ChronoUnit.WEEKS.between(cycle.startDate, end)
+                    if (weeks.isNotEmpty()) {
                         Text(
-                            "${weeks}w",
+                            weeks,
                             style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
                             color = FT.TextSecondary,
                         )
                     }
                 }
-                if (cycle.goalMetric != null && cycle.startingValue != null && cycle.targetValue != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
                     Text(
-                        "Goal: ${cycle.goalMetric} — %.0f → %.0f".format(cycle.startingValue, cycle.targetValue),
+                        dateRange,
                         style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
                         color = FT.TextMuted,
+                    )
+                    Text(
+                        sessions,
+                        style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                        color = FT.TextSecondary,
                     )
                 }
             }
         }
+        EditLink("VIEW ALL BLOCKS →", onViewAll)
+    }
+}
 
-        if (history.size > 3) {
-            EditLink(if (expanded) "SHOW LESS" else "SHOW ALL ${history.size} BLOCKS") {
-                expanded = !expanded
+// ---- Strength achievements ----
+
+@Composable
+private fun StrengthAchievementSection(achievements: List<Achievement>, bodyWeightKg: Double?) {
+    FTCard(title = "STRENGTH ACHIEVEMENTS") {
+        if (achievements.isEmpty()) {
+            FTDataState(DataAvailability.Unavailable, "No strength data yet.")
+            return@FTCard
+        }
+        achievements.forEachIndexed { i, ach ->
+            if (i > 0) Spacer(Modifier.height(14.dp))
+
+            val slug = ach.metric.removePrefix("best_1rm_")
+            val exerciseLabel = slug.split("_").joinToString(" ") { w ->
+                if (w.length <= 3) w.uppercase() else w.replaceFirstChar { it.uppercaseChar() }
+            }
+            val delta = ach.previousValue?.let { ach.value - it }
+            val weeksSince = ach.previousOccurredAt?.let {
+                ChronoUnit.WEEKS.between(it.toLocalDate(), ach.occurredAt.toLocalDate()).toInt()
+            }
+            val progressText = when {
+                delta != null -> "${if (delta >= 0) "+" else ""}${"%.1f".format(delta)}kg${weeksSince?.let { " · ${it}w ago" } ?: ""}"
+                else -> "first PR"
+            }
+            val tier = strengthTier(slug, ach.value, bodyWeightKg)
+
+            // Row 1: name | best | delta
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                Text(
+                    exerciseLabel,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+                    color = FT.TextPrimary,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    "${"%.1f".format(ach.value)} kg",
+                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                    color = FT.TextPrimary,
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    progressText,
+                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                    color = if (delta != null && delta > 0) FT.Emerald else FT.TextMuted,
+                )
+            }
+
+            // Row 2: tier + bar + next target (indented)
+            if (tier != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        tier.tier.label,
+                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 10.sp),
+                        color = tier.tierColor,
+                        modifier = Modifier.width(60.dp),
+                    )
+                    Column(Modifier.weight(1f)) {
+                        RangeBar(value = tier.barFraction, max = 1.0, watchBelow = null, color = tier.tierColor, height = 5.dp, topPadding = 1.dp)
+                    }
+                    tier.nextLabel?.let {
+                        Spacer(Modifier.width(8.dp))
+                        Text(it, style = TextStyle(fontFamily = RobotoMono, fontSize = 10.sp), color = FT.TextMuted)
+                    }
+                }
             }
         }
+
+        // Ratios footer
+        val dlBest = achievements.firstOrNull { "barbell_deadlift" in it.metric }?.value
+        val sqBest = achievements.firstOrNull { "barbell_squat" in it.metric && "front" !in it.metric }?.value
+        val pullBest = achievements.firstOrNull { "pull_up_weighted" in it.metric || "weighted_pull_ups" in it.metric }?.value
+        val ratios = buildList {
+            if (dlBest != null && sqBest != null && sqBest > 0) add("DL/SQ ${"%.2f".format(dlBest / sqBest)}")
+            if (sqBest != null && bodyWeightKg != null && bodyWeightKg > 0) add("SQ/BW ${"%.2f".format(sqBest / bodyWeightKg)}")
+            if (pullBest != null) add("Pull +${"%.0f".format(pullBest)}kg")
+        }
+        if (ratios.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder))
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "RATIOS   ${ratios.joinToString("   ")}",
+                style = TextStyle(fontFamily = RobotoMono, fontSize = 11.5.sp),
+                color = FT.TextSecondary,
+            )
+        }
     }
+}
+
+private enum class StrTier(val label: String) {
+    Untrained("Untrained"), Novice("Novice"), Intermediate("Interm."), Advanced("Advanced"), Elite("Elite")
+}
+
+private data class TierResult(val tier: StrTier, val barFraction: Double, val tierColor: androidx.compose.ui.graphics.Color, val nextLabel: String?)
+
+// bodyweight multiples: [novice, intermediate, advanced, elite]
+private val BW_STANDARDS = mapOf(
+    "barbell_deadlift"         to doubleArrayOf(1.0, 1.5, 2.0, 2.5),
+    "barbell_squat"            to doubleArrayOf(0.75, 1.25, 1.75, 2.25),
+    "front_barbell_squat"      to doubleArrayOf(0.6, 1.0, 1.4, 1.8),
+    "chest_press"              to doubleArrayOf(0.5, 0.75, 1.25, 1.5),
+    "inclined_chest_press_icp" to doubleArrayOf(0.45, 0.7, 1.1, 1.4),
+    "military_press"           to doubleArrayOf(0.35, 0.55, 0.8, 1.0),
+    "clean_and_press"          to doubleArrayOf(0.5, 0.7, 0.9, 1.2),
+    "bent_over_barbell_row"    to doubleArrayOf(0.5, 0.75, 1.0, 1.3),
+)
+// absolute added-weight thresholds for weighted pull-ups
+private val ABS_STANDARDS = mapOf(
+    "pull_up_weighted"  to doubleArrayOf(10.0, 25.0, 45.0, 70.0),
+    "weighted_pull_ups" to doubleArrayOf(10.0, 25.0, 45.0, 70.0),
+)
+
+private fun strengthTier(slug: String, e1rmKg: Double, bodyWeightKg: Double?): TierResult? {
+    val thresholds = bodyWeightKg?.let { bw -> BW_STANDARDS[slug]?.let { m -> DoubleArray(4) { m[it] * bw } } }
+        ?: ABS_STANDARDS[slug]
+        ?: return null
+    val tiers = listOf(StrTier.Novice, StrTier.Intermediate, StrTier.Advanced, StrTier.Elite)
+    val idx = thresholds.indexOfLast { e1rmKg >= it }
+    val tier = if (idx < 0) StrTier.Untrained else tiers[idx]
+    val floor = if (idx < 0) 0.0 else thresholds[idx]
+    val ceiling = if (idx < 0) thresholds[0] else thresholds.getOrNull(idx + 1)
+    val nextTier = if (idx < 0) tiers[0] else tiers.getOrNull(idx + 1)
+    val fraction = if (ceiling != null && ceiling > floor) ((e1rmKg - floor) / (ceiling - floor)).coerceIn(0.0, 1.0) else 1.0
+    val nextLabel = if (ceiling != null && nextTier != null) "→ ${nextTier.label} ${"%.0f".format(ceiling)}kg" else null
+    val color = when (tier) {
+        StrTier.Untrained    -> FT.TextMuted
+        StrTier.Novice       -> FT.Warning
+        StrTier.Intermediate -> FT.Info
+        StrTier.Advanced     -> FT.Emerald
+        StrTier.Elite        -> FT.DomainUser
+    }
+    return TierResult(tier, fraction, color, nextLabel)
+}
+
+private fun buildBlockDateRange(start: String, end: String): String {
+    val s = runCatching { java.time.LocalDate.parse(start) }.getOrNull() ?: return start
+    val e = runCatching { java.time.LocalDate.parse(end) }.getOrNull() ?: return end
+    val fmt = java.time.format.DateTimeFormatter.ofPattern("MMM d")
+    return if (s.year == e.year)
+        "${s.format(fmt)} — ${e.format(fmt)}, ${s.year}"
+    else
+        "${s.format(fmt)}, ${s.year} — ${e.format(fmt)}, ${e.year}"
 }
 
 // ---- Helper functions ----
@@ -547,6 +724,9 @@ private fun AchievementDomain.label(): String = when (this) {
 }
 
 private fun FocusQuality.label(): String = name.replace(Regex("(?<=.)(?=\\p{Upper})"), " ")
+
+private fun String.toFocusLabel(): String =
+    split("_").joinToString(" ") { it.replaceFirstChar { c -> c.uppercaseChar() } }
 
 private fun Achievement.metricLabel(): String = metric.replace('_', ' ').replaceFirstChar { it.uppercase() }
 

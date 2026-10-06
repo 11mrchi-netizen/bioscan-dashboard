@@ -73,7 +73,10 @@ import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
+import com.bioscan.fieldterminal.data.model.NewPersonRow
+import com.bioscan.fieldterminal.data.model.PersonRow
 import com.bioscan.fieldterminal.data.model.SexualActivityInstance
+import com.bioscan.fieldterminal.data.PeopleRepository
 import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
@@ -164,8 +167,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so, mw, al -> onSubmit { it.addWellbeing(date, e, m, s, so, mw, al) } })
                     AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
                     AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
-                    AddEntryType.Masturbation -> SexualActivityForm(saving, activityType = "masturbation", onSave = { date, instances, n -> onSubmit { it.addSexualActivity(date, "masturbation", instances, n) } })
-                    AddEntryType.Intercourse -> SexualActivityForm(saving, activityType = "intercourse", onSave = { date, instances, n -> onSubmit { it.addSexualActivity(date, "intercourse", instances, n) } })
+                    AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -367,11 +369,11 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                 )
                 is LogSexualActivityRow -> SexualActivityForm(
                     saving,
-                    activityType = row.activityType,
+                    lockedActivityType = row.activityType,
                     initialDate = LocalDate.parse(row.date),
                     initialInstances = row.instances,
                     initialNotes = row.notes ?: "",
-                    onSave = { date, instances, n -> onSubmit { it.updateSexualActivity(row.id, date, row.activityType, instances, n) } },
+                    onSave = { date, type, instances, n -> onSubmit { it.updateSexualActivity(row.id, date, type, instances, n) } },
                 )
                 is LogNoteRow -> NoteForm(
                     saving,
@@ -1428,6 +1430,7 @@ private fun SexualActivityInstance.toEditable() = EditableSexualActivityInstance
     watchedPorn = watchedPorn,
     loadSize = loadSize?.toString() ?: "",
     notes = notes ?: "",
+    partnerId = partnerId,
 )
 
 private class EditableSexualActivityInstance(
@@ -1436,12 +1439,15 @@ private class EditableSexualActivityInstance(
     watchedPorn: Boolean? = null,
     loadSize: String = "",
     notes: String = "",
+    partnerId: Long? = null,
 ) {
     var orgasm by mutableStateOf(orgasm)
     var orgasmIntensity by mutableStateOf(orgasmIntensity)
     var watchedPorn by mutableStateOf(watchedPorn)
     var loadSize by mutableStateOf(loadSize)
     var notes by mutableStateOf(notes)
+    var partnerId by mutableStateOf(partnerId)
+    var partnerName by mutableStateOf("")
 
     fun toDto() = SexualActivityInstance(
         orgasm = orgasm,
@@ -1449,17 +1455,18 @@ private class EditableSexualActivityInstance(
         watchedPorn = watchedPorn,
         loadSize = loadSize.toIntOrNull(),
         notes = notes.trim().ifBlank { null },
+        partnerId = partnerId,
     )
 }
 
 @Composable
 private fun SexualActivityForm(
     saving: Boolean,
-    activityType: String,
+    lockedActivityType: String? = null,
     initialDate: LocalDate = LocalDate.now(),
     initialInstances: List<SexualActivityInstance> = emptyList(),
     initialNotes: String = "",
-    onSave: (date: String, instances: List<SexualActivityInstance>, notes: String?) -> Unit,
+    onSave: (date: String, activityType: String, instances: List<SexualActivityInstance>, notes: String?) -> Unit,
 ) {
     var date by remember { mutableStateOf(initialDate) }
     val instances = remember {
@@ -1467,14 +1474,43 @@ private fun SexualActivityForm(
         mutableStateListOf(*seeded.ifEmpty { listOf(EditableSexualActivityInstance()) }.toTypedArray())
     }
     var notes by remember { mutableStateOf(initialNotes) }
+    var activityType by remember { mutableStateOf(lockedActivityType ?: "masturbation") }
     val isMasturbation = activityType == "masturbation"
 
+    val peopleRepo = remember { PeopleRepository(SupabaseClientProvider.client) }
+    var allPeople by remember { mutableStateOf<List<PersonRow>>(emptyList()) }
+    LaunchedEffect(activityType) {
+        if (activityType == "intercourse") {
+            allPeople = try { peopleRepo.loadAll() } catch (e: Exception) { emptyList() }
+        }
+    }
+    // Resolve partner names for existing instances when people list loads
+    LaunchedEffect(allPeople) {
+        instances.forEach { inst ->
+            if (inst.partnerId != null && inst.partnerName.isEmpty()) {
+                inst.partnerName = allPeople.firstOrNull { it.id == inst.partnerId }?.name ?: ""
+            }
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        if (lockedActivityType == null) {
+            Column {
+                FormLabel("TYPE")
+                TextChipRow(listOf("Masturbation", "Intercourse"), if (isMasturbation) "Masturbation" else "Intercourse") {
+                    activityType = if (it == "Intercourse") "intercourse" else "masturbation"
+                }
+            }
+        }
         DateField("DATE", date, { date = it })
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             FormLabel("INSTANCES")
             instances.forEachIndexed { i, instance ->
-                SexualActivityInstanceEditor(instance, isMasturbation, canRemove = instances.size > 1) { instances.removeAt(i) }
+                SexualActivityInstanceEditor(
+                    instance, isMasturbation, canRemove = instances.size > 1,
+                    allPeople = allPeople,
+                    peopleRepo = peopleRepo,
+                ) { instances.removeAt(i) }
             }
             Text(
                 "+ ADD INSTANCE",
@@ -1488,13 +1524,20 @@ private fun SexualActivityForm(
         }
         Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
         SaveButton(saving, true) {
-            onSave(date.toString(), instances.map { it.toDto() }, notes.trim().ifBlank { null })
+            onSave(date.toString(), activityType, instances.map { it.toDto() }, notes.trim().ifBlank { null })
         }
     }
 }
 
 @Composable
-private fun SexualActivityInstanceEditor(instance: EditableSexualActivityInstance, isMasturbation: Boolean, canRemove: Boolean, onRemove: () -> Unit) {
+private fun SexualActivityInstanceEditor(
+    instance: EditableSexualActivityInstance,
+    isMasturbation: Boolean,
+    canRemove: Boolean,
+    allPeople: List<PersonRow> = emptyList(),
+    peopleRepo: PeopleRepository,
+    onRemove: () -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1518,12 +1561,158 @@ private fun SexualActivityInstanceEditor(instance: EditableSexualActivityInstanc
             Column { FormLabel("WATCHED PORN"); TextChipRow(YES_NO_OPTIONS, instance.watchedPorn?.let { if (it) "Yes" else "No" }) { instance.watchedPorn = it?.let { s -> s == "Yes" } } }
             Column { FormLabel("LOAD SIZE 1-5 (OPTIONAL)"); TextChipRow(listOf("1", "2", "3", "4", "5"), instance.loadSize.ifBlank { null }, perRow = 5) { instance.loadSize = it ?: "" } }
         }
+        if (!isMasturbation) {
+            var partnerQuery by remember { mutableStateOf("") }
+            var showNewPartnerSheet by remember { mutableStateOf(false) }
+            var newPartnerInitialName by remember { mutableStateOf("") }
+            val filteredPeople = remember(partnerQuery, allPeople) {
+                if (partnerQuery.isBlank()) allPeople.take(5)
+                else allPeople.filter { it.name.contains(partnerQuery, ignoreCase = true) }.take(8)
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                FormLabel("PARTNER (OPTIONAL)")
+                if (instance.partnerId != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            instance.partnerName.ifEmpty { "#${instance.partnerId}" },
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+                            color = FT.TextPrimary,
+                        )
+                        Text(
+                            "CLEAR",
+                            style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp),
+                            color = FT.Critical,
+                            modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                instance.partnerId = null
+                                instance.partnerName = ""
+                                partnerQuery = ""
+                            },
+                        )
+                    }
+                } else {
+                    FieldTextField(partnerQuery, { partnerQuery = it }, "Search people…")
+                    filteredPeople.forEach { person ->
+                        Text(
+                            person.name,
+                            style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                            color = FT.TextSecondary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                    instance.partnerId = person.id
+                                    instance.partnerName = person.name
+                                    partnerQuery = ""
+                                }
+                                .padding(vertical = 4.dp),
+                        )
+                    }
+                    val trimmedQuery = partnerQuery.trim()
+                    if (trimmedQuery.isNotEmpty() && filteredPeople.none { it.name.equals(trimmedQuery, ignoreCase = true) }) {
+                        Text(
+                            "+ ADD \"$trimmedQuery\"",
+                            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.08f.em),
+                            color = FT.Emerald,
+                            modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                newPartnerInitialName = trimmedQuery
+                                showNewPartnerSheet = true
+                            },
+                        )
+                    }
+                }
+            }
+            if (showNewPartnerSheet) {
+                NewPartnerSheet(
+                    initialName = newPartnerInitialName,
+                    repo = peopleRepo,
+                    onDismiss = { showNewPartnerSheet = false },
+                    onCreated = { person ->
+                        instance.partnerId = person.id
+                        instance.partnerName = person.name
+                        partnerQuery = ""
+                        showNewPartnerSheet = false
+                    },
+                )
+            }
+        }
         Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(instance.notes, { instance.notes = it }, "Anything else about this instance", singleLine = false) }
     }
 }
 
 private val OSTRC_Q1Q4_OPTIONS = listOf("0", "8", "17", "25")
 private val OSTRC_Q2Q3_OPTIONS = listOf("0", "6", "13", "19", "25")
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NewPartnerSheet(
+    initialName: String,
+    repo: PeopleRepository,
+    onDismiss: () -> Unit,
+    onCreated: (PersonRow) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    var name by remember { mutableStateOf(initialName) }
+    var relationship by remember { mutableStateOf("") }
+    var whereMet by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("") }
+    var ageRange by remember { mutableStateOf("") }
+    var country by remember { mutableStateOf("") }
+    var score by remember { mutableStateOf<Int?>(null) }
+    var notes by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RectangleShape,
+        containerColor = FT.Surface,
+        contentColor = FT.TextPrimary,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("NEW PARTNER", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp), color = FT.DomainLog)
+            Column { FormLabel("NAME"); FieldTextField(name, { name = it }, "") }
+            Column { FormLabel("RELATIONSHIP (OPTIONAL)"); FieldTextField(relationship, { relationship = it }, "e.g. FWB, Dating, Hookup") }
+            Column { FormLabel("WHERE MET (OPTIONAL)"); FieldTextField(whereMet, { whereMet = it }, "e.g. Tinder, Work, Mutual Friends") }
+            Column { FormLabel("GENDER (OPTIONAL)"); FieldTextField(gender, { gender = it }, "e.g. Female, Non-binary") }
+            Column { FormLabel("AGE RANGE (OPTIONAL)"); FieldTextField(ageRange, { ageRange = it }, "e.g. 25-30") }
+            Column { FormLabel("COUNTRY (OPTIONAL)"); FieldTextField(country, { country = it }, "e.g. Australia") }
+            Column {
+                FormLabel("SCORE (OPTIONAL)")
+                TextChipRow(listOf("1", "2", "3", "4", "5"), score?.toString(), perRow = 5) { score = it?.toIntOrNull() }
+            }
+            Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "", singleLine = false) }
+            error?.let { Text("Couldn't create ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical) }
+            SaveButton(saving, name.isNotBlank()) {
+                if (!saving && name.isNotBlank()) {
+                    saving = true
+                    scope.launch {
+                        try {
+                            val person = repo.createPerson(NewPersonRow(
+                                name = name.trim(),
+                                relationship = relationship.trim().ifBlank { null },
+                                whereMet = whereMet.trim().ifBlank { null },
+                                gender = gender.trim().ifBlank { null },
+                                ageRange = ageRange.trim().ifBlank { null },
+                                country = country.trim().ifBlank { null },
+                                score = score,
+                                notes = notes.trim().ifBlank { null },
+                            ))
+                            onCreated(person)
+                        } catch (e: Exception) {
+                            error = e.message
+                            saving = false
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
 
 // Phase A4 (Category 8). OSTRC-H2's own four-question weekly prompt per body
 // area -- q1/q4 (participation/performance) share one value set, q2/q3

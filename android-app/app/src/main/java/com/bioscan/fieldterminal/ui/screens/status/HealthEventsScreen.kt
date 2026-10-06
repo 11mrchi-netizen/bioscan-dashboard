@@ -61,6 +61,7 @@ fun HealthEventsScreen() {
     var isLoading by remember { mutableStateOf(true) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var showAddSheet by remember { mutableStateOf(false) }
+    var showAddIllnessSheet by remember { mutableStateOf(false) }
 
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -83,12 +84,12 @@ fun HealthEventsScreen() {
             Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
         }
         overview == null || (overview!!.open.isEmpty() && overview!!.resolved.isEmpty()) -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
-            AddInjuryButton(onClick = { showAddSheet = true })
+            AddEventButtons(onAddInjuryClick = { showAddSheet = true }, onAddIllnessClick = { showAddIllnessSheet = true })
             Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
                 Text("No injuries or illnesses logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
             }
         }
-        else -> HealthEventsContent(overview!!, onAddClick = { showAddSheet = true }, onResolved = { reloadKey++ })
+        else -> HealthEventsContent(overview!!, onAddInjuryClick = { showAddSheet = true }, onAddIllnessClick = { showAddIllnessSheet = true }, onResolved = { reloadKey++ })
     }
 
     if (showAddSheet) {
@@ -97,23 +98,37 @@ fun HealthEventsScreen() {
             onSaved = { showAddSheet = false; reloadKey++ },
         )
     }
-}
-
-@Composable
-private fun AddInjuryButton(onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        AmberButton(label = "+ ADD INJURY") { onClick() }
+    if (showAddIllnessSheet) {
+        IllnessFormSheet(
+            onDismiss = { showAddIllnessSheet = false },
+            onSaved = { showAddIllnessSheet = false; reloadKey++ },
+        )
     }
 }
 
 @Composable
-private fun HealthEventsContent(overview: HealthEventsOverview, onAddClick: () -> Unit, onResolved: () -> Unit) {
+private fun AddEventButtons(onAddInjuryClick: () -> Unit, onAddIllnessClick: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
+        Text(
+            "+ ADD ILLNESS",
+            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.08f.em),
+            color = FT.Info,
+            modifier = Modifier
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onAddIllnessClick() }
+                .padding(vertical = 8.dp),
+        )
+        AmberButton(label = "+ ADD INJURY") { onAddInjuryClick() }
+    }
+}
+
+@Composable
+private fun HealthEventsContent(overview: HealthEventsOverview, onAddInjuryClick: () -> Unit, onAddIllnessClick: () -> Unit, onResolved: () -> Unit) {
     val today = LocalDate.now()
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        AddInjuryButton(onClick = onAddClick)
+        AddEventButtons(onAddInjuryClick = onAddInjuryClick, onAddIllnessClick = onAddIllnessClick)
         Text(
             text = "${overview.open.size} OPEN · ${overview.resolved.size} RESOLVED",
             style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.08f.em),
@@ -195,41 +210,53 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
             event.detail?.takeIf { it.isNotBlank() }?.let {
                 Text(it, style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 5.dp))
             }
+            if (event.kind == HealthEventKind.Illness) {
+                Text(
+                    if (event.doctorSeen) "Doctor seen" else "Doctor not seen",
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    color = if (event.doctorSeen) FT.Emerald else FT.TextSecondary,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                event.medications.forEach { med ->
+                    Text(
+                        "${med.name} · ${med.dose} · ${med.frequency}",
+                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                        color = FT.TextSecondary,
+                        modifier = Modifier.padding(top = 3.dp),
+                    )
+                }
+            }
             Text(
                 "Reported ${event.startDate}",
                 style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
                 color = FT.TextSecondary,
                 modifier = Modifier.padding(top = 10.dp),
             )
-            // DAV-88: illnesses aren't in this ticket's scope -- resolveInjury()
-            // only ever targets the injuries table, so this action only shows
-            // for that kind rather than silently no-op'ing on an illness card.
-            if (event.kind == HealthEventKind.Injury) {
-                Text(
-                    if (resolving) "RESOLVING..." else "RESOLVE",
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.14f.em),
-                    color = FT.Emerald,
-                    modifier = Modifier
-                        .padding(top = 12.dp)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                            if (!resolving) {
-                                resolving = true
-                                resolveError = null
-                                scope.launch {
-                                    try {
-                                        repo.resolveInjury(event.id)
-                                        onResolved()
-                                    } catch (e: Exception) {
-                                        resolveError = e.message ?: "Couldn't resolve this injury"
-                                        resolving = false
-                                    }
+            Text(
+                if (resolving) "RESOLVING..." else "RESOLVE",
+                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.14f.em),
+                color = FT.Emerald,
+                modifier = Modifier
+                    .padding(top = 12.dp)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        if (!resolving) {
+                            resolving = true
+                            resolveError = null
+                            scope.launch {
+                                try {
+                                    if (event.kind == HealthEventKind.Injury) repo.resolveInjury(event.id)
+                                    else repo.resolveIllness(event.id)
+                                    onResolved()
+                                } catch (e: Exception) {
+                                    resolveError = e.message ?: "Couldn't resolve"
+                                    resolving = false
                                 }
                             }
-                        },
-                )
-                resolveError?.let {
-                    Text(it, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.Critical, modifier = Modifier.padding(top = 4.dp))
-                }
+                        }
+                    },
+            )
+            resolveError?.let {
+                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.Critical, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }

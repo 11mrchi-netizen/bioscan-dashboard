@@ -14,6 +14,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import java.time.Duration
 import java.time.Instant
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 sealed interface HealthConnectSyncResult {
     data object Unavailable : HealthConnectSyncResult
@@ -36,14 +38,13 @@ class HealthConnectSyncCoordinator(private val context: Context, private val sup
     companion object {
         private const val TAG = "HealthConnectSync"
     }
-    // Only applies to a user's very first sync (no watermark yet) -- every
-    // later run resumes from the watermark instead. Wide on purpose: with
-    // PERMISSION_READ_HEALTH_DATA_HISTORY granted, Health Connect will
-    // actually return however much real history exists in this window, not
-    // just a rolling 30 days. Analysis wants as much real history as
-    // possible; nothing displays this raw, so there's no UI cost to it being
-    // wide (Log tab already caps each source at FETCH_LIMIT_PER_SOURCE).
-    private val defaultLookback: Duration = Duration.ofDays(3650)
+    // Only applies to the very first sync (no watermark yet) — every later
+    // run resumes from the watermark instead. Capped at 90 days: the original
+    // 10-year default caused multi-minute first-sync stalls on opening
+    // (paginating 3650 days × 9 record types sequentially). 90 days covers
+    // the full rolling analysis window every dashboard view uses; older data
+    // can be backfilled via Settings → "Sync full history" if ever added.
+    private val defaultLookback: Duration = Duration.ofDays(90)
 
     suspend fun syncAll(): HealthConnectSyncResult {
         if (!HealthConnectManager.isAvailable(context)) return HealthConnectSyncResult.Unavailable
@@ -57,21 +58,32 @@ class HealthConnectSyncCoordinator(private val context: Context, private val sup
             val daily = HealthConnectDailySyncRepository(context, supabase)
             val exercise = HealthConnectExerciseSyncRepository(context, supabase)
 
-            val counts = linkedMapOf<String, Int>()
-            // Step-by-step, not one linkedMapOf(... = a(), ... = b()) call --
-            // that gave zero visibility into which of the 9 real steps a
-            // multi-year sync was actually on. This was the difference
-            // between "still working" and "silently hung" being guessable
-            // from logcat instead of pure guesswork.
-            counts["steps"] = daily.syncSteps(since, until).also { Log.d(TAG, "steps: $it") }
-            counts["active_calories"] = daily.syncActiveCalories(since, until).also { Log.d(TAG, "active_calories: $it") }
-            counts["total_calories"] = daily.syncTotalCalories(since, until).also { Log.d(TAG, "total_calories: $it") }
-            counts["vo2max"] = daily.syncVo2Max(since, until).also { Log.d(TAG, "vo2max: $it") }
-            counts["bmr"] = daily.syncBmr(since, until).also { Log.d(TAG, "bmr: $it") }
-            counts["body_composition"] = daily.syncBodyComposition(since, until).also { Log.d(TAG, "body_composition: $it") }
-            counts["vitals"] = daily.syncVitals(since, until).also { Log.d(TAG, "vitals: $it") }
-            counts["sleep"] = daily.syncSleep(since, until).also { Log.d(TAG, "sleep: $it") }
-            counts["exercise_sessions"] = exercise.syncSessions(since, until).also { Log.d(TAG, "exercise_sessions: $it") }
+            // All 9 steps run concurrently -- each writes to a different
+            // table/column using onConflict upserts, so there is zero
+            // contention between them. Total time = max(slowest type) instead
+            // of sum(all types), which matters most on the 90-day first sync.
+            val counts = coroutineScope {
+                val dSteps        = async { daily.syncSteps(since, until).also            { Log.d(TAG, "steps: $it") } }
+                val dActiveCal    = async { daily.syncActiveCalories(since, until).also   { Log.d(TAG, "active_calories: $it") } }
+                val dTotalCal     = async { daily.syncTotalCalories(since, until).also    { Log.d(TAG, "total_calories: $it") } }
+                val dVo2max       = async { daily.syncVo2Max(since, until).also           { Log.d(TAG, "vo2max: $it") } }
+                val dBmr          = async { daily.syncBmr(since, until).also             { Log.d(TAG, "bmr: $it") } }
+                val dBodyComp     = async { daily.syncBodyComposition(since, until).also  { Log.d(TAG, "body_composition: $it") } }
+                val dVitals       = async { daily.syncVitals(since, until).also           { Log.d(TAG, "vitals: $it") } }
+                val dSleep        = async { daily.syncSleep(since, until).also            { Log.d(TAG, "sleep: $it") } }
+                val dExercise     = async { exercise.syncSessions(since, until).also      { Log.d(TAG, "exercise_sessions: $it") } }
+                linkedMapOf(
+                    "steps"              to dSteps.await(),
+                    "active_calories"    to dActiveCal.await(),
+                    "total_calories"     to dTotalCal.await(),
+                    "vo2max"             to dVo2max.await(),
+                    "bmr"                to dBmr.await(),
+                    "body_composition"   to dBodyComp.await(),
+                    "vitals"             to dVitals.await(),
+                    "sleep"              to dSleep.await(),
+                    "exercise_sessions"  to dExercise.await(),
+                )
+            }
 
             writeWatermark(until, counts)
             Log.d(TAG, "syncAll succeeded: $counts")

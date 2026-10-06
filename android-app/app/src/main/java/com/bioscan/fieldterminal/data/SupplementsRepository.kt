@@ -7,6 +7,7 @@ import com.bioscan.fieldterminal.data.model.NewSupplementRosterRow
 import com.bioscan.fieldterminal.data.model.SupplementIngredientRow
 import com.bioscan.fieldterminal.data.model.SupplementLogDateRow
 import com.bioscan.fieldterminal.data.model.SupplementProductIngredientRow
+import com.bioscan.fieldterminal.data.model.SupplementProductIngredientFull
 import com.bioscan.fieldterminal.data.model.SupplementProductIngredientWithKey
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.isSupplementActive
@@ -149,6 +150,68 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
                 elementalUnit = pi.elementalUnit,
                 nutrientKey = ingredient.nutrientKey,
             )
+        }
+    }
+
+    // Same join as loadProductComposition but includes ingredient name -- used
+    // to pre-populate SupplementFormSheet when editing a supplement with an
+    // existing product.
+    suspend fun loadProductIngredientsFull(productId: Long): List<SupplementProductIngredientFull> {
+        val productIngredients = supabase.postgrest.from("supplement_product_ingredients")
+            .select(columns = Columns.list("id,supplement_ingredient_id,compound_amount,compound_unit,elemental_amount,elemental_unit")) {
+                filter { eq("supplement_product_id", productId) }
+            }
+            .decodeList<SupplementProductIngredientRow>()
+        if (productIngredients.isEmpty()) return emptyList()
+
+        val ingredientIds = productIngredients.map { it.supplementIngredientId }.distinct()
+        val ingredientsById = supabase.postgrest.from("supplement_ingredients")
+            .select(columns = Columns.list("id,name,nutrient_key")) {
+                filter { isIn("id", ingredientIds) }
+            }
+            .decodeList<SupplementIngredientRow>()
+            .associateBy { it.id }
+
+        return productIngredients.mapNotNull { pi ->
+            val ingredient = ingredientsById[pi.supplementIngredientId] ?: return@mapNotNull null
+            SupplementProductIngredientFull(
+                name = ingredient.name,
+                nutrientKey = ingredient.nutrientKey,
+                compoundAmount = pi.compoundAmount,
+                compoundUnit = pi.compoundUnit,
+                elementalAmount = pi.elementalAmount,
+                elementalUnit = pi.elementalUnit,
+            )
+        }
+    }
+
+    // Delete-then-reinsert ingredient rows for an existing product -- used
+    // when the user edits ingredient composition after initial save.
+    suspend fun replaceProductIngredients(productId: Long, ingredients: List<IngredientInput>) {
+        supabase.postgrest.from("supplement_product_ingredients")
+            .delete { filter { eq("supplement_product_id", productId) } }
+
+        val ingredientIds = ingredients.map { ingredient ->
+            supabase.postgrest.from("supplement_ingredients")
+                .upsert(
+                    NewSupplementIngredientRow(name = ingredient.name, category = ingredient.category, nutrientKey = ingredient.nutrientKey),
+                ) { onConflict = "user_id,name"; select(Columns.list("id")) }
+                .decodeSingle<IdRow>()
+                .id
+        }
+
+        val rows = ingredients.zip(ingredientIds).map { (ingredient, ingredientId) ->
+            NewSupplementProductIngredientRow(
+                supplementProductId = productId,
+                supplementIngredientId = ingredientId,
+                compoundAmount = ingredient.compoundAmount,
+                compoundUnit = ingredient.compoundUnit,
+                elementalAmount = ingredient.elementalAmount,
+                elementalUnit = ingredient.elementalUnit,
+            )
+        }
+        if (rows.isNotEmpty()) {
+            supabase.postgrest.from("supplement_product_ingredients").insert(rows)
         }
     }
 

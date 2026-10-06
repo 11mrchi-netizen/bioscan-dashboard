@@ -9,12 +9,23 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import java.time.OffsetDateTime
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 class AchievementsRepository(private val supabase: SupabaseClient) {
 
     // Returns (strengthPRs, runningPRs).
     suspend fun loadAchievements(): Pair<List<Achievement>, List<Achievement>> =
         Pair(strengthPRs(), runningPRs())
+
+    suspend fun loadBodyWeight(): Double? =
+        supabase.postgrest.from("body_metrics")
+            .select(columns = Columns.list("weight_kg")) {
+                order("date", Order.DESCENDING)
+                limit(1)
+            }
+            .decodeList<BwRow>()
+            .firstOrNull()?.weightKg
 
     private suspend fun strengthPRs(): List<Achievement> {
         val sessions = supabase.postgrest.from("exercise_sessions")
@@ -28,6 +39,7 @@ class AchievementsRepository(private val supabase: SupabaseClient) {
         data class BestSet(val e1rm: Double, val weightKg: Double, val reps: Int, val sessionId: Long, val startTime: String, val source: String?)
 
         val bests = mutableMapOf<String, BestSet>()
+        val prevBests = mutableMapOf<String, BestSet>()
         val counts = mutableMapOf<String, Int>()
         for (session in sessions) {
             session.details.exercises?.forEach { exercise ->
@@ -37,7 +49,10 @@ class AchievementsRepository(private val supabase: SupabaseClient) {
                         // ponytail: direct 1-rep measure skips Epley; reps > 30 would invert the formula so cap there
                         val e1rm = if (set.reps >= 30) set.weightKg else set.weightKg * (1.0 + set.reps / 30.0)
                         val cur = bests[exercise.name]
-                        if (cur == null || e1rm > cur.e1rm) {
+                        if (cur == null) {
+                            bests[exercise.name] = BestSet(e1rm, set.weightKg, set.reps, session.id, session.startTime, session.source)
+                        } else if (e1rm > cur.e1rm) {
+                            prevBests[exercise.name] = cur
                             bests[exercise.name] = BestSet(e1rm, set.weightKg, set.reps, session.id, session.startTime, session.source)
                         }
                     }
@@ -50,6 +65,7 @@ class AchievementsRepository(private val supabase: SupabaseClient) {
             .take(6)
             .map { (name, best) ->
                 val slug = name.lowercase().replace(Regex("[^a-z0-9]+"), "_").trimEnd('_')
+                val prev = prevBests[name]
                 Achievement(
                     domain = AchievementDomain.STRENGTH,
                     metric = "best_1rm_$slug",
@@ -60,9 +76,14 @@ class AchievementsRepository(private val supabase: SupabaseClient) {
                     provenance = Provenance(best.source ?: "unknown", "epley_1rm", "1"),
                     confidence = if (best.reps == 1) null else 0.85,
                     comparisonContext = if (best.reps == 1) null else "Epley: ${best.weightKg}kg × ${best.reps}",
+                    previousValue = prev?.e1rm,
+                    previousOccurredAt = prev?.let { runCatching { OffsetDateTime.parse(it.startTime) }.getOrNull() },
                 )
             }
     }
+
+    @Serializable
+    private data class BwRow(@SerialName("weight_kg") val weightKg: Double? = null)
 
     private suspend fun runningPRs(): List<Achievement> {
         val sessions = supabase.postgrest.from("exercise_sessions")

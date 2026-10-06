@@ -59,6 +59,7 @@ data class SexualActivityInstance(
     @SerialName("watchedPorn") val watchedPorn: Boolean? = null,
     @SerialName("loadSize") val loadSize: Int? = null,
     val notes: String? = null,
+    @SerialName("partner_id") val partnerId: Long? = null,
 )
 
 // Replaces the old per-occurrence masturbation_log (DAV-91) -- one row per

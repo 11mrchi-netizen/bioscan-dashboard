@@ -35,8 +35,13 @@ class PeopleRepository(private val supabase: SupabaseClient) {
             .decodeList()
     }
 
-    suspend fun createPerson(name: String): PersonRow =
+    suspend fun loadAll(): List<PersonRow> =
+        supabase.postgrest.from("people").select(Columns.list("id,name")).decodeList()
+
+    suspend fun createPerson(name: String): PersonRow = createPerson(NewPersonRow(name = name))
+
+    suspend fun createPerson(row: NewPersonRow): PersonRow =
         supabase.postgrest.from("people")
-            .insert(NewPersonRow(name)) { select(Columns.list("id,name")) }
+            .insert(row) { select(Columns.list("id,name")) }
             .decodeSingle()
 }

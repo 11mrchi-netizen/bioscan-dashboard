@@ -55,6 +55,43 @@ class WeatherRepository {
         )
     }
 
+    // DAV-173. Historical weather for a past session. Same SessionWeather
+    // shape as fetchAt(); callers treat them identically -- the distinction
+    // (forecast vs. archive endpoint) lives here, not in the caller.
+    // archive-api.open-meteo.com is Open-Meteo's historical endpoint --
+    // same no-key, no-billing policy as the forecast endpoint.
+    suspend fun fetchHistoricalAt(lat: Double, lon: Double, at: ZonedDateTime): SessionWeather {
+        val date = at.toLocalDate()
+        val response = client.get("https://archive-api.open-meteo.com/v1/archive") {
+            url {
+                parameters.append("latitude", lat.toString())
+                parameters.append("longitude", lon.toString())
+                parameters.append("start_date", date.toString())
+                parameters.append("end_date", date.toString())
+                parameters.append("hourly", "temperature_2m,weathercode,windspeed_10m,precipitation")
+                parameters.append("timezone", "auto")
+            }
+        }
+
+        val bodyText = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            throw WeatherFetchException("Historical weather request failed (${response.status.value})")
+        }
+
+        val hourly = json.decodeFromString<OpenMeteoResponse>(bodyText).hourly
+            ?: throw WeatherFetchException("No hourly data returned from archive endpoint.")
+        val index = closestHourIndex(hourly.time, at)
+            ?: throw WeatherFetchException("Session time $at is outside the archive window for $date.")
+
+        return SessionWeather(
+            temperatureC = hourly.temperature_2m.getOrNull(index)
+                ?: throw WeatherFetchException("Missing temperature data for $date."),
+            code = hourly.weathercode.getOrNull(index) ?: throw WeatherFetchException("Missing weather code for $date."),
+            windSpeedKmh = hourly.windspeed_10m.getOrNull(index) ?: 0.0,
+            precipitationMm = hourly.precipitation.getOrNull(index) ?: 0.0,
+        )
+    }
+
     // Open-Meteo returns naive local-time strings (already resolved to the
     // location's own zone via timezone=auto) -- compared here against the
     // session's own zoned start time by instant, same principle as the web

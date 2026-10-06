@@ -74,6 +74,17 @@ data class SupplementProductIngredientWithKey(
     val nutrientKey: String?,
 )
 
+// Full ingredient data including name -- used to pre-populate the
+// edit form in SupplementFormSheet when existing.productId != null.
+data class SupplementProductIngredientFull(
+    val name: String,
+    val nutrientKey: String?,
+    val compoundAmount: Double,
+    val compoundUnit: String,
+    val elementalAmount: Double?,
+    val elementalUnit: String?,
+)
+
 @Serializable
 data class NewSupplementProductIngredientRow(
     @SerialName("supplement_product_id") val supplementProductId: Long,

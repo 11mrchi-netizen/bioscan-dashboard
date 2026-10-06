@@ -33,6 +33,8 @@ import com.bioscan.fieldterminal.data.NutritionGoals
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
+import com.bioscan.fieldterminal.data.GeminiApiKeyStore
+import com.bioscan.fieldterminal.data.HydrationExplanationRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.domain.CaffeineEvent
@@ -249,6 +251,19 @@ fun HydrationTabContent(overview: NutritionOverview) {
         exerciseDurationMinutesToday = todayExerciseMinutes,
     )
 
+    val context = LocalContext.current
+    val geminiKey = remember { GeminiApiKeyStore.get(context) }
+    var explanation by remember { mutableStateOf<String?>(null) }
+    var explanationLoading by remember { mutableStateOf(false) }
+    LaunchedEffect(hydrationIntelligence, caffeineWindow) {
+        val key = geminiKey ?: return@LaunchedEffect
+        explanationLoading = true
+        explanation = try {
+            HydrationExplanationRepository(key).explain(hydrationIntelligence, caffeineWindow)
+        } catch (e: Exception) { null }
+        explanationLoading = false
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -312,6 +327,26 @@ fun HydrationTabContent(overview: NutritionOverview) {
                         color = FT.TextMuted,
                     )
                 }
+            }
+        }
+
+        if (geminiKey != null) {
+            FTCard(title = "AI HYDRATION SUMMARY") {
+                if (explanationLoading) {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(strokeWidth = 2.dp, color = FT.DomainFuel)
+                    }
+                } else {
+                    explanation?.let { text ->
+                        Text(text, style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextPrimary)
+                    } ?: Text("Explanation unavailable.", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextMuted)
+                }
+                Text(
+                    "AI interpretation · validated data only · not medical advice",
+                    style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+                    color = FT.TextMuted,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
             }
         }
     }

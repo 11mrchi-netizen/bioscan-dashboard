@@ -38,6 +38,7 @@ import com.bioscan.fieldterminal.ui.screens.AgingProfileScreen
 import com.bioscan.fieldterminal.ui.screens.LogScreen
 import com.bioscan.fieldterminal.ui.screens.SessionDetailScreen
 import com.bioscan.fieldterminal.ui.screens.SettingsScreen
+import com.bioscan.fieldterminal.ui.screens.TrainingBlocksScreen
 import com.bioscan.fieldterminal.ui.screens.UserProfileScreen
 import com.bioscan.fieldterminal.ui.screens.status.DailyReadinessScreen
 import com.bioscan.fieldterminal.ui.screens.status.FuelTileScreen
@@ -102,9 +103,15 @@ fun FieldTerminalNavHost() {
             composable(TileRoute.Heart.route) { HeartTileScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Labs.route) { LabsTileScreen(onBack = { navController.popBackStack() }) }
             composable(TopLevelTab.User.route) {
-                UserProfileScreen(onOpenAging = { navController.navigate("aging_profile") })
+                UserProfileScreen(
+                    onOpenAging = { navController.navigate("aging_profile") },
+                    onOpenTrainingBlocks = { navController.navigate("training_blocks") },
+                )
             }
             composable("aging_profile") { AgingProfileScreen(onBack = { navController.popBackStack() }) }
+            composable("training_blocks") {
+                TrainingBlocksScreen(onBack = { navController.popBackStack() })
+            }
             composable(TopLevelTab.Log.route) {
                 LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") })
             }

@@ -106,6 +106,10 @@ data class NewSupplementLogRow(
     @SerialName("taken_at") val takenAt: String,
     @SerialName("dose_value") val doseValue: Double? = null,
     @SerialName("dose_unit") val doseUnit: String? = null,
+    // DAV-356: exposure provenance. Null on rows logged before these columns
+    // existed -- unknown, never backfilled with a guess.
+    @SerialName("product_id") val productId: Long? = null,
+    val source: String? = null,
 )
 
 // Update-only counterpart -- a taken supplement's name/supplement_id are

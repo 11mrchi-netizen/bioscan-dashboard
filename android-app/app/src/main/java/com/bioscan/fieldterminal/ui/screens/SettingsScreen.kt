@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,8 +39,12 @@ import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HealthConnectSyncResult
 import com.bioscan.fieldterminal.data.MapSettingsStore
+import com.bioscan.fieldterminal.data.NotificationRulesRepository
 import com.bioscan.fieldterminal.data.NutritionGoals
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
+import com.bioscan.fieldterminal.data.model.NotificationPrefsRow
+import com.bioscan.fieldterminal.domain.notifications.parseHm
+import com.bioscan.fieldterminal.ui.components.TimeField
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.UserProfileRepository
 import com.bioscan.fieldterminal.data.ZeppRepository
@@ -97,6 +103,22 @@ fun SettingsScreen(scope: CoroutineScope) {
         dobInput = profile?.dateOfBirth ?: ""
         selectedSex = profile?.sex
         profileLoaded = true
+    }
+
+    val notificationsRepository = remember { NotificationRulesRepository(SupabaseClientProvider.client) }
+    var notifPrefs by remember { mutableStateOf<NotificationPrefsRow?>(null) }
+    var notifSaving by remember { mutableStateOf(false) }
+    var notifError by remember { mutableStateOf(false) }
+    var notifSavedAt by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        val zone = ZoneId.systemDefault().id
+        notifPrefs = runCatching {
+            notificationsRepository.loadPrefs() ?: run {
+                notificationsRepository.ensureDefaults(zone)
+                notificationsRepository.loadPrefs()
+            }
+        }.getOrNull() ?: NotificationPrefsRow(timezone = zone)
     }
 
     val hcAvailable = remember { HealthConnectManager.isAvailable(context) }
@@ -174,6 +196,76 @@ fun SettingsScreen(scope: CoroutineScope) {
                 }
                 profileSavedAt?.let {
                     Text("Saved $it", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextSecondary)
+                }
+            }
+
+            notifPrefs?.let { prefs ->
+                FTCard(title = "NOTIFICATIONS") {
+                    Text(
+                        "Quiet hours hold reminders until the window ends instead of interrupting you. " +
+                            "Stored with your account.",
+                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                        color = FT.TextSecondary,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "QUIET HOURS",
+                            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+                            color = FT.TextSecondary,
+                        )
+                        Switch(
+                            checked = prefs.quietEnabled,
+                            onCheckedChange = {
+                                notifPrefs = notifPrefs?.copy(quietEnabled = it)
+                                notifSavedAt = null
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = FT.Emerald,
+                                checkedTrackColor = FT.Emerald.copy(alpha = 0.3f),
+                                uncheckedThumbColor = FT.TextSecondary,
+                                uncheckedTrackColor = FT.GlassFill,
+                            ),
+                        )
+                    }
+                    if (prefs.quietEnabled) {
+                        TimeField("FROM", parseHm(prefs.quietStart)) {
+                            notifPrefs = notifPrefs?.copy(quietStart = it.format(DateTimeFormatter.ofPattern("HH:mm")))
+                            notifSavedAt = null
+                        }
+                        TimeField("UNTIL", parseHm(prefs.quietEnd)) {
+                            notifPrefs = notifPrefs?.copy(quietEnd = it.format(DateTimeFormatter.ofPattern("HH:mm")))
+                            notifSavedAt = null
+                        }
+                        Text(
+                            if (prefs.quietStart == prefs.quietEnd) "FROM and UNTIL are the same, so there is no quiet window."
+                            else "Reminders due ${prefs.quietStart}–${prefs.quietEnd} are shown at ${prefs.quietEnd}.",
+                            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                            color = FT.TextSecondary,
+                        )
+                    }
+                    AmberButton(label = if (notifSaving) "SAVING…" else "SAVE QUIET HOURS") {
+                        val toSave = notifPrefs ?: return@AmberButton
+                        scope.launch {
+                            notifSaving = true
+                            notifError = runCatching { notificationsRepository.savePrefs(toSave) }.isFailure
+                            if (!notifError) notifSavedAt = java.time.LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                            notifSaving = false
+                        }
+                    }
+                    if (notifError) {
+                        Text(
+                            "Couldn't save. Check your connection and try again.",
+                            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                            color = FT.Critical,
+                        )
+                    }
+                    notifSavedAt?.let {
+                        Text("Saved $it", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextSecondary)
+                    }
                 }
             }
 

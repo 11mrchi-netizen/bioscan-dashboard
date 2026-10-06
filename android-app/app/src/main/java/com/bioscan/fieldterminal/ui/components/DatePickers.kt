@@ -48,6 +48,20 @@ fun DateField(label: String, date: LocalDate, onDateChange: (LocalDate) -> Unit)
 }
 
 @Composable
+fun TimeField(label: String, time: LocalTime, onTimeChange: (LocalTime) -> Unit) {
+    val context = LocalContext.current
+    PickerBox(label = label, valueText = time.format(DateTimeFormatter.ofPattern("HH:mm"))) {
+        TimePickerDialog(
+            context,
+            { _, hour, minute -> onTimeChange(LocalTime.of(hour, minute)) },
+            time.hour,
+            time.minute,
+            true,
+        ).show()
+    }
+}
+
+@Composable
 fun DateTimeField(label: String, dateTime: LocalDateTime, onDateTimeChange: (LocalDateTime) -> Unit) {
     val context = LocalContext.current
     PickerBox(label = label, valueText = dateTime.format(DateTimeFormatter.ofPattern("dd MMM yyyy · HH:mm"))) {

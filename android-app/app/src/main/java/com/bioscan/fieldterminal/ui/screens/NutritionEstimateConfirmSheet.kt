@@ -166,8 +166,35 @@ fun NutritionEstimateConfirmSheet(
                                 sodiumMg = sodium.toDoubleOrNull(),
                                 confidence = estimate.confidence,
                             )
+                            val scaledEnrichment = enrichment?.let { e ->
+                                val croCal = e.calories
+                                if (croCal != null && croCal > 0) {
+                                    val scale = caloriesValue!! / croCal
+                                    e.copy(
+                                        calories = caloriesValue,
+                                        proteinG = proteinValue,
+                                        carbsG = carbsValue,
+                                        fatG = fatValue,
+                                        fiberG = fiber.toDoubleOrNull(),
+                                        sugarG = sugar.toDoubleOrNull(),
+                                        sodiumMg = sodium.toDoubleOrNull(),
+                                        allNutrients = e.allNutrients.mapValues { (key, v) ->
+                                            when (key) {
+                                                "calories" -> caloriesValue!!
+                                                "protein" -> proteinValue!!
+                                                "carbs" -> carbsValue!!
+                                                "fat" -> fatValue!!
+                                                "fiber" -> fiber.toDoubleOrNull() ?: (v * scale)
+                                                "sugar" -> sugar.toDoubleOrNull() ?: (v * scale)
+                                                "sodium" -> sodium.toDoubleOrNull() ?: (v * scale)
+                                                else -> Math.round(v * scale * 100.0) / 100.0
+                                            }
+                                        },
+                                    )
+                                } else e
+                            }
                             NutritionMealSaveRepository(SupabaseClientProvider.client)
-                                .saveEstimatedMeal(mealDateTime.toIsoWithOffset(), finalEstimate, aiEstimateId, enrichment, source)
+                                .saveEstimatedMeal(mealDateTime.toIsoWithOffset(), finalEstimate, aiEstimateId, scaledEnrichment, source)
                             onSaved()
                         } catch (e: Exception) {
                             error = e.message ?: "Unknown error"

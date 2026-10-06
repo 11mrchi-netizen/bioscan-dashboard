@@ -568,6 +568,24 @@ async function decomposeMealDescription(
 }
 
 // ---------------------------------------------------------------------------
+// Single-item vs compound-meal detection
+// ---------------------------------------------------------------------------
+
+function looksCompound(desc: string): boolean {
+  // Non-ASCII likely needs Gemini to translate/decompose
+  if (/[^\x00-\x7F]/.test(desc)) return true;
+  // Long descriptions are usually compound meals
+  if (desc.length > 80) return true;
+  // Multiple commas suggest a list of items
+  if ((desc.match(/,/g) ?? []).length >= 2) return true;
+  // Conjunctions joining food items
+  if (/\b(and|with|plus)\b/i.test(desc)) return true;
+  // Slash-separated items
+  if (/\w\s*\/\s*\w/.test(desc) && desc.split("/").length >= 2) return true;
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
 
@@ -629,6 +647,25 @@ Deno.serve(async (req: Request) => {
 
     // Mode 2: decompose an aggregate description, then look up each item
     if (body.description?.trim()) {
+      const desc = body.description.trim();
+
+      // Simple descriptions (single food item) go through direct lookup
+      // to avoid Gemini inflating portions with decomposition guesses.
+      if (!looksCompound(desc)) {
+        const result = await lookupItem(session, desc);
+        const results = [result];
+        const { totals, nutrient_units, included, skipped } = sumNutrients(results);
+        return json({
+          mode: "direct_auto",
+          original_description: desc,
+          results,
+          totals,
+          nutrient_units,
+          items_included: included,
+          items_skipped: skipped,
+        }, 200);
+      }
+
       if (!geminiKey) {
         return json({
           error: "not_configured",
@@ -636,9 +673,9 @@ Deno.serve(async (req: Request) => {
         }, 500);
       }
 
-      const decomposed = await decomposeMealDescription(geminiKey, body.description);
+      const decomposed = await decomposeMealDescription(geminiKey, desc);
       if (decomposed.length === 0) {
-        return json({ error: "decomposition_failed", description: body.description }, 502);
+        return json({ error: "decomposition_failed", description: desc }, 502);
       }
 
       const results: ResolvedItem[] = [];
@@ -649,7 +686,7 @@ Deno.serve(async (req: Request) => {
       const { totals, nutrient_units, included, skipped } = sumNutrients(results);
       return json({
         mode: "decompose",
-        original_description: body.description,
+        original_description: desc,
         decomposed,
         results,
         totals,

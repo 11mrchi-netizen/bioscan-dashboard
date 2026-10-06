@@ -25,6 +25,15 @@ class NutritionCronometerLookupException(message: String) : Exception(message)
 private data class CronometerRequest(val description: String)
 
 @Serializable
+private data class CronometerItemsRequest(val items: List<CronometerItemInput>)
+
+@Serializable
+data class CronometerItemInput(
+    val description: String,
+    @SerialName("quantity_g") val quantityG: Double? = null,
+)
+
+@Serializable
 data class CronometerItemResult(
     val query: String,
     @SerialName("cronometer_food_name") val cronometerFoodName: String? = null,
@@ -70,14 +79,20 @@ class NutritionCronometerLookupRepository(private val supabase: SupabaseClient) 
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun enrich(mealDescription: String): CronometerEnrichment {
+    suspend fun enrich(mealDescription: String): CronometerEnrichment =
+        callLookup(json.encodeToString(CronometerRequest(mealDescription)))
+
+    suspend fun enrichItems(items: List<CronometerItemInput>): CronometerEnrichment =
+        callLookup(json.encodeToString(CronometerItemsRequest(items)))
+
+    private suspend fun callLookup(requestBody: String): CronometerEnrichment {
         val token = supabase.auth.currentAccessTokenOrNull()
             ?: throw NutritionCronometerLookupException("Not signed in")
 
         val response = client.post("$FUNCTIONS_BASE_URL/nutrition-cronometer-lookup") {
             header("Authorization", "Bearer $token")
             contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(CronometerRequest(mealDescription)))
+            setBody(requestBody)
         }
 
         val body = response.bodyAsText()

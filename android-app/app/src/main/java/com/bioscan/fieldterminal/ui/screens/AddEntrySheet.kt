@@ -51,6 +51,7 @@ import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
 import com.bioscan.fieldterminal.data.CronometerEnrichment
+import com.bioscan.fieldterminal.data.CronometerItemInput
 import com.bioscan.fieldterminal.data.NutritionBarcodeLookupRepository
 import com.bioscan.fieldterminal.data.NutritionCronometerLookupRepository
 import com.bioscan.fieldterminal.data.NutritionImageEstimateRepository
@@ -769,7 +770,7 @@ private fun FoodForm(
                     enriching = true
                     try {
                         val enrichResult = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
-                            .enrich(foodDesc)
+                            .enrichItems(listOf(CronometerItemInput(food.name)))
                         cronometerEnrichment = enrichResult
                         mealEstimate = NutritionMealEstimate(
                             description = foodDesc,

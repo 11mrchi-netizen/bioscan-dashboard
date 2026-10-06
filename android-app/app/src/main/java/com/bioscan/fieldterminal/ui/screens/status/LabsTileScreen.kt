@@ -50,7 +50,7 @@ import java.time.LocalDate
 // DAV-209 (24/9 fixes): Supplements moved in from Fuel as a second subtab --
 // SupplementsScreen() itself is reused unchanged.
 @Composable
-fun LabsTileScreen(onBack: () -> Unit) {
+fun LabsTileScreen(onBack: () -> Unit, onOpenPantry: () -> Unit = {}) {
     var tab by remember { mutableStateOf(LabsTab.Bloodwork) }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
@@ -62,7 +62,7 @@ fun LabsTileScreen(onBack: () -> Unit) {
                 LabsScreen()
                 BloodworkAnalysisSection()
             }
-            LabsTab.Supplements -> SupplementsScreen()
+            LabsTab.Supplements -> SupplementsScreen(onOpenPantry = onOpenPantry)
         }
     }
 }

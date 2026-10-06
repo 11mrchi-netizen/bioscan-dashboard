@@ -81,3 +81,13 @@ data class SuppcoLookupResponse(
     val error: String? = null,
     val message: String? = null,
 )
+
+// Safety facts stated in words (never by color alone). Shared by the verify screen
+// and the pantry so both read the same.
+fun SuppcoProduct.flagTexts(): List<String> = buildList {
+    if (safety.activeFdaRecall) add("ACTIVE FDA RECALL${safety.recallBody?.let { ": $it" } ?: ""}")
+    if (safety.brandActiveFdaRecall) add("ACTIVE FDA RECALL ON ANOTHER PRODUCT FROM THIS BRAND")
+    if (safety.fdaWarningLetter) add("FDA WARNING LETTER RECEIVED")
+    if (safety.failedAnyTests) add("FAILED INDEPENDENT TESTS")
+    if (offMarket == true) add("OFF MARKET")
+}

@@ -45,6 +45,7 @@ import com.bioscan.fieldterminal.ui.screens.status.FuelTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.HeartTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.NutrientBreakdownScreen
 import com.bioscan.fieldterminal.ui.screens.status.LabsTileScreen
+import com.bioscan.fieldterminal.ui.screens.status.PantryScreen
 import com.bioscan.fieldterminal.ui.screens.status.StatusScreen
 import com.bioscan.fieldterminal.ui.screens.status.TrainingTileScreen
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -101,7 +102,10 @@ fun FieldTerminalNavHost() {
             }
             composable("nutrient_breakdown") { NutrientBreakdownScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Heart.route) { HeartTileScreen(onBack = { navController.popBackStack() }) }
-            composable(TileRoute.Labs.route) { LabsTileScreen(onBack = { navController.popBackStack() }) }
+            composable(TileRoute.Labs.route) {
+                LabsTileScreen(onBack = { navController.popBackStack() }, onOpenPantry = { navController.navigate("pantry") })
+            }
+            composable("pantry") { PantryScreen(onBack = { navController.popBackStack() }) }
             composable(TopLevelTab.User.route) {
                 UserProfileScreen(
                     onOpenAging = { navController.navigate("aging_profile") },

@@ -32,6 +32,7 @@ import com.bioscan.fieldterminal.data.ProductVerification
 import com.bioscan.fieldterminal.data.SUPPCO_SOURCE_NAME
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SuppcoVerification
+import com.bioscan.fieldterminal.data.model.flagTexts
 import com.bioscan.fieldterminal.data.SupplementLookupRepository
 import com.bioscan.fieldterminal.data.SupplementSourceRepository
 import com.bioscan.fieldterminal.domain.DsldComparison
@@ -355,13 +356,7 @@ private fun SuppcoBlock(v: SuppcoVerification?, error: String?) {
         }
 
         // Safety facts are stated in words, never by color alone.
-        val flags = buildList {
-            if (p.safety.activeFdaRecall) add("ACTIVE FDA RECALL${p.safety.recallBody?.let { ": $it" } ?: ""}")
-            if (p.safety.brandActiveFdaRecall) add("ACTIVE FDA RECALL ON ANOTHER PRODUCT FROM THIS BRAND")
-            if (p.safety.fdaWarningLetter) add("FDA WARNING LETTER RECEIVED")
-            if (p.safety.failedAnyTests) add("FAILED INDEPENDENT TESTS")
-            if (p.offMarket == true) add("OFF MARKET")
-        }
+        val flags = p.flagTexts()
         if (flags.isEmpty()) {
             Text("No recall, warning letter, failed test or off-market flag reported.", style = body, color = FT.TextSecondary)
         } else {

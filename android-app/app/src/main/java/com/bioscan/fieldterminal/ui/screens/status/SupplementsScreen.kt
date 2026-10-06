@@ -47,7 +47,7 @@ private val TIME_OF_DAY_ORDER = listOf("morning", "afternoon", "night", "as-need
 private val sectionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
 
 @Composable
-fun SupplementsScreen() {
+fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     var overview by remember { mutableStateOf<SupplementsOverview?>(null) }
     var outcomes by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -86,6 +86,7 @@ fun SupplementsScreen() {
             overview = overview!!,
             outcomes = outcomes,
             onAddClick = { showAddSheet = true },
+            onOpenPantry = onOpenPantry,
             onSupplementClick = { editing = it },
         )
     }
@@ -107,7 +108,7 @@ fun SupplementsScreen() {
 }
 
 @Composable
-private fun SupplementsContent(overview: SupplementsOverview, outcomes: Map<Long, String>, onAddClick: () -> Unit, onSupplementClick: (SupplementRow) -> Unit) {
+private fun SupplementsContent(overview: SupplementsOverview, outcomes: Map<Long, String>, onAddClick: () -> Unit, onOpenPantry: () -> Unit, onSupplementClick: (SupplementRow) -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -118,7 +119,10 @@ private fun SupplementsContent(overview: SupplementsOverview, outcomes: Map<Long
                 style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.08f.em),
                 color = FT.TextSecondary,
             )
-            AmberButton(label = "+ ADD") { onAddClick() }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                AmberButton(label = "PANTRY") { onOpenPantry() }
+                AmberButton(label = "+ ADD") { onAddClick() }
+            }
         }
 
         if (overview.active.isEmpty() && overview.ended.isEmpty()) {

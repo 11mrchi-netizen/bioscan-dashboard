@@ -32,8 +32,18 @@ export interface MetricResult {
   error: string | null
 }
 
-// Fetch a time series for a single column from a canonical Supabase table.
+const cache = new Map<string, { result: MetricResult; ts: number }>()
+const CACHE_TTL = 5 * 60 * 1000
+
+function cacheKey(req: MetricRequest): string {
+  return `${req.table}.${req.column}:${req.range.start}:${req.range.end}:${req.aggregation}`
+}
+
 export async function fetchMetric(req: MetricRequest): Promise<MetricResult> {
+  const key = cacheKey(req)
+  const cached = cache.get(key)
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.result
+
   const dateCol = req.dateColumn ?? 'date'
   const metricId = `${req.table}.${req.column}`
 
@@ -72,7 +82,9 @@ export async function fetchMetric(req: MetricRequest): Promise<MetricResult> {
     nonNull < points.length ? 'gaps' :
     'none'
 
-  return { metricId, unit: null, points, missingness, error: null }
+  const result: MetricResult = { metricId, unit: null, points, missingness, error: null }
+  cache.set(key, { result, ts: Date.now() })
+  return result
 }
 
 function daysBetween(a: string, b: string): number {

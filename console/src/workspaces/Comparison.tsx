@@ -1,63 +1,36 @@
 // Comparison workspace — side-by-side overlay of any two metrics over the primary range.
 // Both series on a shared x-axis; optional second y-axis for different units.
 
-import { useEffect, useState } from 'react'
-import { useRef } from 'react'
-import * as echarts from 'echarts'
-import { useAnalysis } from '../context/AnalysisContext'
-import { fetchMetric, METRICS, type MetricResult } from '../lib/metricAdapter'
+import { useEffect, useRef, useState } from 'react'
+import { useChart } from '../lib/useChart'
+import { useRange } from '../lib/analysisStore'
+import { fetchMetric, type MetricResult } from '../lib/metricAdapter'
+import { PALETTE } from '../lib/palette'
+import { METRIC_OPTIONS, type MetricOption } from '../lib/metricOptions'
 import './Comparison.css'
 
-// All selectable metrics
-const METRIC_OPTIONS = [
-  { id: `${METRICS.HRV.table}.${METRICS.HRV.column}`,                   label: 'HRV (RMSSD)',      unit: 'ms',         ...METRICS.HRV },
-  { id: `${METRICS.RHR.table}.${METRICS.RHR.column}`,                   label: 'Resting HR',       unit: 'bpm',        ...METRICS.RHR },
-  { id: `${METRICS.STEPS.table}.${METRICS.STEPS.column}`,               label: 'Steps',            unit: 'steps',      ...METRICS.STEPS },
-  { id: `${METRICS.SLEEP_DURATION.table}.${METRICS.SLEEP_DURATION.column}`, label: 'Sleep Duration', unit: 'min',      ...METRICS.SLEEP_DURATION },
-  { id: `${METRICS.ENERGY_LEVEL.table}.${METRICS.ENERGY_LEVEL.column}`, label: 'Energy Level',     unit: '/10',        ...METRICS.ENERGY_LEVEL },
-  { id: `${METRICS.MOOD.table}.${METRICS.MOOD.column}`,                 label: 'Mood',             unit: '/10',        ...METRICS.MOOD },
-  { id: 'body_metrics.weight_kg',                                        label: 'Weight',           unit: 'kg',         table: 'body_metrics', column: 'weight_kg' },
-]
-
 const COLORS = {
-  a:         '#10B981',
-  b:         '#F59E0B',
-  text:      '#A4AFBA',
-  textMuted: '#66717C',
-  border:    'rgba(255,255,255,0.09)',
-  surface:   '#171E23',
+  a: PALETTE.emerald,
+  b: PALETTE.amber,
 }
 
-interface MetricOption { id: string; label: string; unit: string; table: string; column: string }
-
 export function Comparison() {
-  const { ctx } = useAnalysis()
+  const range = useRange()
   const [metricA, setMetricA] = useState<MetricOption>(METRIC_OPTIONS[0])
   const [metricB, setMetricB] = useState<MetricOption>(METRIC_OPTIONS[2])
   const [resultA, setResultA] = useState<MetricResult | null>(null)
   const [resultB, setResultB] = useState<MetricResult | null>(null)
   const [loading, setLoading] = useState(false)
   const chartRef = useRef<HTMLDivElement>(null)
-  const chartInstance = useRef<echarts.EChartsType | null>(null)
+  const chartInstance = useChart(chartRef)
 
-  // Fetch both metrics
   useEffect(() => {
     setLoading(true)
-    const range = ctx.primaryRange
     Promise.all([
       fetchMetric({ table: metricA.table, column: metricA.column, range, aggregation: 'daily_avg' }),
       fetchMetric({ table: metricB.table, column: metricB.column, range, aggregation: 'daily_avg' }),
     ]).then(([a, b]) => { setResultA(a); setResultB(b); setLoading(false) })
-  }, [metricA, metricB, ctx.primaryRange])
-
-  // Initialize chart
-  useEffect(() => {
-    if (!chartRef.current) return
-    chartInstance.current = echarts.init(chartRef.current, null, { renderer: 'canvas' })
-    const ro = new ResizeObserver(() => chartInstance.current?.resize())
-    ro.observe(chartRef.current)
-    return () => { chartInstance.current?.dispose(); chartInstance.current = null; ro.disconnect() }
-  }, [])
+  }, [metricA, metricB, range])
 
   // Update chart when data arrives
   useEffect(() => {
@@ -84,9 +57,9 @@ export function Comparison() {
       grid: { top: 16, right: sameUnit ? 12 : 60, bottom: 40, left: 52 },
       xAxis: {
         type: 'category', data: allDates,
-        axisLine: { lineStyle: { color: COLORS.border } },
+        axisLine: { lineStyle: { color: PALETTE.border } },
         axisTick: { show: false },
-        axisLabel: { color: COLORS.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
+        axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
         splitLine: { show: false },
       },
       yAxis: [
@@ -94,7 +67,7 @@ export function Comparison() {
           type: 'value', name: metricA.unit,
           nameTextStyle: { color: COLORS.a, fontSize: 10 },
           axisLabel: { color: COLORS.a, fontSize: 10, fontFamily: 'Roboto Mono' },
-          splitLine: { lineStyle: { color: COLORS.border } },
+          splitLine: { lineStyle: { color: PALETTE.border } },
           axisLine: { show: false }, axisTick: { show: false },
         },
         {
@@ -107,13 +80,13 @@ export function Comparison() {
       ],
       tooltip: {
         trigger: 'axis',
-        backgroundColor: COLORS.surface,
-        borderColor: COLORS.border,
-        textStyle: { color: COLORS.text, fontFamily: 'Roboto Mono', fontSize: 11 },
+        backgroundColor: PALETTE.surface,
+        borderColor: PALETTE.border,
+        textStyle: { color: PALETTE.text, fontFamily: 'Roboto Mono', fontSize: 11 },
       },
       legend: {
         data: [metricA.label, metricB.label],
-        textStyle: { color: COLORS.text, fontFamily: 'Roboto Mono', fontSize: 11 },
+        textStyle: { color: PALETTE.text, fontFamily: 'Roboto Mono', fontSize: 11 },
         top: 0,
       },
       series: [
@@ -206,3 +179,5 @@ function ComparisonStat({ label, result, color, unit }: {
     </div>
   )
 }
+
+export default Comparison

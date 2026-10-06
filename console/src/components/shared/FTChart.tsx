@@ -2,22 +2,13 @@
 // Every chart in the console is rendered through this component.
 // Components supply a ChartSpec + MetricResult; this owns the ECharts option.
 
-import { useEffect, useRef } from 'react'
-import * as echarts from 'echarts'
+import { memo, useEffect, useRef } from 'react'
+import echarts from '../../lib/echarts'
 import type { ChartSpec } from '../../lib/chartSpec'
 import type { MetricResult, MetricPoint } from '../../lib/metricAdapter'
-import { useAnalysis } from '../../context/AnalysisContext'
+import { PALETTE } from '../../lib/palette'
+import { useSelectedDate, useSetSelectedDate, useInspect } from '../../lib/analysisStore'
 import './FTChart.css'
-
-
-// Field Terminal palette for ECharts
-const COLORS = {
-  emerald:   '#10B981',
-  text:      '#A4AFBA',
-  textMuted: '#66717C',
-  border:    'rgba(255,255,255,0.09)',
-  surface:   '#171E23',
-}
 
 interface Props {
   spec: ChartSpec
@@ -26,10 +17,12 @@ interface Props {
   onDateSelect?: (date: string) => void
 }
 
-export function FTChart({ spec, result, height = 200, onDateSelect }: Props) {
+export const FTChart = memo(function FTChart({ spec, result, height = 200, onDateSelect }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const chartRef = useRef<echarts.EChartsType | null>(null)
-  const { ctx, setSelectedDate, inspect } = useAnalysis()
+  const selectedDate = useSelectedDate()
+  const setSelectedDate = useSetSelectedDate()
+  const inspect = useInspect()
 
   // Initialize
   useEffect(() => {
@@ -52,7 +45,7 @@ export function FTChart({ spec, result, height = 200, onDateSelect }: Props) {
       data: values,
       smooth: spec.smooth ?? false,
       symbolSize: 4,
-      itemStyle: { color: COLORS.emerald },
+      itemStyle: { color: PALETTE.emerald },
     }
 
     const series = [
@@ -68,28 +61,28 @@ export function FTChart({ spec, result, height = 200, onDateSelect }: Props) {
       xAxis: {
         type: 'category',
         data: dates,
-        axisLine: { lineStyle: { color: COLORS.border } },
+        axisLine: { lineStyle: { color: PALETTE.border } },
         axisTick: { show: false },
-        axisLabel: { color: COLORS.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
+        axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
         splitLine: { show: false },
       },
       yAxis: {
         type: 'value',
         name: spec.yAxisLabel ?? spec.unit ?? '',
-        nameTextStyle: { color: COLORS.textMuted, fontSize: 10 },
-        axisLabel: { color: COLORS.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
-        splitLine: { lineStyle: { color: COLORS.border } },
+        nameTextStyle: { color: PALETTE.textMuted, fontSize: 10 },
+        axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
+        splitLine: { lineStyle: { color: PALETTE.border } },
         axisLine: { show: false },
         axisTick: { show: false },
       },
       tooltip: {
         trigger: 'axis',
-        backgroundColor: COLORS.surface,
-        borderColor: COLORS.border,
-        textStyle: { color: COLORS.text, fontFamily: 'Roboto Mono', fontSize: 11 },
+        backgroundColor: PALETTE.surface,
+        borderColor: PALETTE.border,
+        textStyle: { color: PALETTE.text, fontFamily: 'Roboto Mono', fontSize: 11 },
         formatter: (params: unknown) => {
           const p = (params as { axisValue: string; data: number | null }[])[0]
-          return `<span style="color:${COLORS.textMuted}">${p.axisValue}</span><br/><b>${p.data ?? '—'}</b> ${spec.unit ?? ''}`
+          return `<span style="color:${PALETTE.textMuted}">${p.axisValue}</span><br/><b>${p.data ?? '—'}</b> ${spec.unit ?? ''}`
         },
       },
       series,
@@ -124,13 +117,13 @@ export function FTChart({ spec, result, height = 200, onDateSelect }: Props) {
   // Sync cursor from AnalysisContext
   useEffect(() => {
     const chart = chartRef.current
-    if (!chart || !ctx.selectedDate) return
+    if (!chart || !selectedDate) return
     const dates = result.points.map(p => p.date)
-    const idx = dates.indexOf(ctx.selectedDate)
+    const idx = dates.indexOf(selectedDate)
     if (idx >= 0) {
       chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: idx })
     }
-  }, [ctx.selectedDate, result.points])
+  }, [selectedDate, result.points])
 
   // Resize observer
   useEffect(() => {
@@ -157,4 +150,4 @@ export function FTChart({ spec, result, height = 200, onDateSelect }: Props) {
       <div ref={ref} style={{ width: '100%', height }} />
     </div>
   )
-}
+})

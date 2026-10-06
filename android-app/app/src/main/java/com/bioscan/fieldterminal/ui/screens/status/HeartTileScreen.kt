@@ -29,8 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.model.LogArousalRow
-import com.bioscan.fieldterminal.data.model.LogMasturbationRow
+import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.MealRow
@@ -47,7 +46,9 @@ import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
 import com.bioscan.fieldterminal.data.BenchmarkArtifactRepository
 import com.bioscan.fieldterminal.domain.analysis.ComparisonResult
+import com.bioscan.fieldterminal.domain.analysis.Directionality
 import com.bioscan.fieldterminal.domain.comparison.BenchmarkArtifact
+import com.bioscan.fieldterminal.domain.comparison.METRIC_DIRECTIONALITY
 import com.bioscan.fieldterminal.domain.comparison.PopulationContext
 import com.bioscan.fieldterminal.domain.comparison.comparePersonal
 import com.bioscan.fieldterminal.domain.comparison.comparePopulation
@@ -78,6 +79,7 @@ import com.bioscan.fieldterminal.domain.evaluateSleepDuration
 import com.bioscan.fieldterminal.domain.evaluateSri
 import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.expValue
+import com.bioscan.fieldterminal.domain.interpretSwcEvaluation
 import com.bioscan.fieldterminal.domain.vitalsTrendSeries
 import com.bioscan.fieldterminal.ui.components.ComparisonStrip
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
@@ -85,6 +87,7 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.stateTreatment
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
@@ -114,8 +117,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
-    var arousal by remember { mutableStateOf<List<LogArousalRow>?>(null) }
-    var masturbation by remember { mutableStateOf<List<LogMasturbationRow>?>(null) }
+    var sexualActivity by remember { mutableStateOf<List<LogSexualActivityRow>?>(null) }
     var stepsBenchmark by remember { mutableStateOf<List<BenchmarkArtifact>>(emptyList()) }
     var exerciseSessions by remember { mutableStateOf<List<TrainingLoadSessionRow>>(emptyList()) }
     var recentMealsForTiming by remember { mutableStateOf<List<MealRow>>(emptyList()) }
@@ -126,10 +128,8 @@ fun HeartTileScreen(onBack: () -> Unit) {
         wearable = repo.loadWearableDaily()
         sleep = repo.loadSleepDaily()
         wellbeing = repo.loadWellbeingDaily()
-        // DAV-215 (24/9 fixes): both now routed through AnalysisRepository
-        // like every other Heart data source, instead of an inline raw query.
-        arousal = repo.loadArousalDaily()
-        masturbation = repo.loadMasturbationLog()
+        // Arousal folded into wellbeing_daily -- see `wellbeing` above.
+        sexualActivity = repo.loadSexualActivityDaily()
         // DAV-196: first real population artifact (Tudor-Locke & Bassett's
         // steps/day categories) -- see docs/analysis-layer-2/25-population-benchmark-engine.md.
         stepsBenchmark = BenchmarkArtifactRepository(SupabaseClientProvider.client).loadArtifacts("steps")
@@ -155,9 +155,8 @@ fun HeartTileScreen(onBack: () -> Unit) {
         val w = wearable
         val s = sleep
         val wb = wellbeing
-        val ar = arousal
-        val m = masturbation
-        if (w == null || s == null || wb == null || ar == null || m == null) {
+        val sa = sexualActivity
+        if (w == null || s == null || wb == null || sa == null) {
             Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = FT.DomainHeart)
             }
@@ -192,7 +191,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                             origin = "health_connect",
                         )
                     }
-                    EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", points = hrvPoints, comparison = hrvComparison, timeframe = vitalsTimeframe)
+                    EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints, comparison = hrvComparison, timeframe = vitalsTimeframe)
                     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
                     // Same live comparison wiring as HRV above (DAV-200) --
                     // "resting_heart_rate" is the canonical registry name
@@ -207,9 +206,9 @@ fun HeartTileScreen(onBack: () -> Unit) {
                             origin = "health_connect",
                         )
                     }
-                    EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm", points = rhrPoints, comparison = rhrComparison, timeframe = vitalsTimeframe)
+                    EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints, comparison = rhrComparison, timeframe = vitalsTimeframe)
                     val spo2Points = w.mapNotNull { row -> row.spo2?.let { LocalDate.parse(row.date) to it } }
-                    EvalCard("SPO2", evaluateSpo2(spo2Points), "%", points = spo2Points, timeframe = vitalsTimeframe)
+                    EvalCard("SPO2", evaluateSpo2(spo2Points), "%", directionality = Directionality.NON_DIRECTIONAL, points = spo2Points, timeframe = vitalsTimeframe)
                     val rrPoints = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
                     RespiratoryCard(evaluateRespiratoryAnomaly(rrPoints))
                     val stepsPoints = w.mapNotNull { row -> row.steps?.let { LocalDate.parse(row.date) to it } }
@@ -249,6 +248,8 @@ fun HeartTileScreen(onBack: () -> Unit) {
                             stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
                             sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
                             physiologicalStress = physiologicalStressForRecovery,
+                            morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+                            arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
                         ),
                     )
 
@@ -256,7 +257,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     // component cards below it -- an aggregation layer, never
                     // a replacement (DAV-235's own rule).
                     SleepIndexCard(sleepIndexResult)
-                    EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints), "h", points = hoursPoints)
+                    EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints), "h", directionality = METRIC_DIRECTIONALITY.getValue("sleep_duration"), points = hoursPoints)
                     val sriEval = evaluateSri(nights)
                     SriCard(sriEval)
                     SleepPhasesCard(s)
@@ -280,6 +281,11 @@ fun HeartTileScreen(onBack: () -> Unit) {
                         "MOOD" to wb.mapNotNull { row -> row.mood?.let { LocalDate.parse(row.date) to it.toDouble() } },
                         "STRESS" to wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } },
                         "SORENESS" to wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } },
+                        // Arousal fold-in: morning-wood/arousal are now part
+                        // of the same daily wellness survey, shown the same
+                        // way as the other four dimensions here.
+                        "MORNING WOOD" to wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } },
+                        "AROUSAL" to wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } },
                     )
                     dimensions.forEach { (title, points) -> SubjectiveCard(title, points, modifier = Modifier.fillMaxWidth()) }
                     // 05.1 Stress Rhythm: labeled distinctly from the
@@ -293,60 +299,42 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     stressDays.firstOrNull()?.let { today ->
                         PhysiologicalStressCard(analyzeStressDay(today, stressDays.drop(1), exerciseWindows), today)
                     }
-                    ArousalHistory(ar, m)
+                    SexualActivityHistory(sa)
                 }
             }
         }
     }
 }
 
-// DAV-215 (24/9 fixes): merges masturbation_log entries into the same
-// timeline instead of only ever showing arousal_daily rows. Encounter
-// entries stay out of scope until copulation tracking itself is built.
-private data class ArousalHistoryEntry(val date: LocalDate, val dateLabel: String, val text: String)
-
+// Arousal folded into the wellbeing_daily SubjectiveCards above (DAV-215's
+// original arousal_daily rows are gone) -- this history is masturbation/
+// intercourse-only now, reading sexual_activity_daily's per-instance detail.
 @Composable
-private fun ArousalHistory(rows: List<LogArousalRow>, masturbation: List<LogMasturbationRow>) {
-    val arousalEntries = rows.map { row ->
-        ArousalHistoryEntry(
-            date = LocalDate.parse(row.date),
-            dateLabel = row.date,
-            text = listOfNotNull(
-                row.morningErectionQuality?.let { "Morning wood $it/10" },
-                row.arousalLevel?.let { "Arousal $it/10" },
-            ).joinToString(" · "),
-        )
-    }
-    val masturbationEntries = masturbation.mapNotNull { row ->
-        val at = runCatching { OffsetDateTime.parse(row.occurredAt) }.getOrNull() ?: return@mapNotNull null
-        ArousalHistoryEntry(
-            date = at.toLocalDate(),
-            dateLabel = at.toLocalDate().toString(),
-            text = "Masturbation" + (row.orgasmIntensity?.let { " · intensity $it/10" } ?: ""),
-        )
-    }
-    val combined = (arousalEntries + masturbationEntries).sortedByDescending { it.date }
-
-    if (combined.isEmpty()) {
-        Text("No arousal entries logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
+private fun SexualActivityHistory(rows: List<LogSexualActivityRow>) {
+    if (rows.isEmpty()) {
+        Text("No entries logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
         return
     }
+    val sorted = rows.sortedByDescending { it.date }
     FTCard(title = "RECENT ENTRIES") {
         Text(
-            "No Analysis Layer evaluation exists for arousal yet -- real recent log history only.",
+            "No Analysis Layer evaluation exists for this yet -- real recent log history only.",
             style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
             color = FT.TextMuted,
         )
-        combined.forEach { entry ->
+        sorted.forEach { row ->
+            val orgasmCount = row.instances.count { it.orgasm }
+            val text = "${row.activityType.replaceFirstChar { it.uppercase() }} · ${row.instances.size} instance${if (row.instances.size == 1) "" else "s"}" +
+                if (orgasmCount > 0) " · $orgasmCount with orgasm" else ""
             Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(entry.dateLabel, style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp), color = FT.TextSecondary)
-                Text(entry.text, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextPrimary)
+                Text(row.date, style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp), color = FT.TextSecondary)
+                Text(text, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextPrimary)
             }
         }
     }
 }
 
-private fun SwcEvaluation.toExpSpace(): SwcEvaluation = copy(baseline7d = expValue(baseline7d), mean60d = expValue(mean60d))
+internal fun SwcEvaluation.toExpSpace(): SwcEvaluation = copy(baseline7d = expValue(baseline7d), mean60d = expValue(mean60d))
 
 // DAV-75/101: baseline/mean/CV were plain numbers with no sense of the real
 // day-to-day shape behind them, and no personal-range context -- the raw
@@ -356,10 +344,11 @@ private fun SwcEvaluation.toExpSpace(): SwcEvaluation = copy(baseline7d = expVal
 // SWC band becomes a real FTRangeIndicator personal baseline rather than
 // two disconnected StatLine rows.
 @Composable
-private fun EvalCard(
+internal fun EvalCard(
     title: String,
     eval: SwcEvaluation,
     unit: String,
+    directionality: Directionality,
     points: List<Pair<LocalDate, Double>>? = null,
     comparison: ComparisonResult? = null,
     // DAV-285: HRV/RHR pass a real VitalsTimeframe selection (7D shows raw
@@ -373,13 +362,17 @@ private fun EvalCard(
         FTStatePill(eval.state.toMetricState())
         StatLine("Confidence", eval.confidence.label)
         comparison?.let { ComparisonStrip(it) }
+        var bandLow: Double? = null
+        var bandHigh: Double? = null
         if (eval.mean60d != null && eval.swcPct != null) {
             val band = eval.mean60d * (eval.swcPct / 100.0)
+            bandLow = eval.mean60d - band
+            bandHigh = eval.mean60d + band
             FTRangeIndicator(
                 PersonalRange(
                     kind = RangeKind.PersonalBaseline,
-                    lower = eval.mean60d - band,
-                    upper = eval.mean60d + band,
+                    lower = bandLow,
+                    upper = bandHigh,
                     baseline = eval.mean60d,
                     current = eval.baseline7d,
                     label = "60-DAY BASELINE ± SWC ($unit)",
@@ -392,7 +385,19 @@ private fun EvalCard(
             if (timeframe != null) vitalsTrendSeries(pts, timeframe).takeIf { it.size >= 2 }
             else recentTrendWindow(pts)
         }
-        series?.let { DateTrendLine(points = it, color = FT.Emerald, modifier = Modifier.padding(top = 8.dp)) }
+        series?.let {
+            DateTrendLine(
+                points = it,
+                color = FT.Emerald,
+                refLow = bandLow,
+                refHigh = bandHigh,
+                highlightColor = stateTreatment(eval.state.toMetricState()).color,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        interpretSwcEvaluation(title, eval, directionality)?.let { sentence ->
+            Text(sentence, style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextMuted, modifier = Modifier.padding(top = 6.dp))
+        }
     }
 }
 

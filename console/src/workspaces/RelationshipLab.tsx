@@ -2,69 +2,16 @@
 // Explicit n= and missingness caveats shown on every view.
 
 import { useEffect, useState, useMemo, useRef } from 'react'
-import * as echarts from 'echarts'
-import { useAnalysis } from '../context/AnalysisContext'
-import { fetchMetric, METRICS, type MetricResult } from '../lib/metricAdapter'
+import { useChart } from '../lib/useChart'
+import { useRange } from '../lib/analysisStore'
+import { fetchMetric, type MetricResult } from '../lib/metricAdapter'
+import { pearson, buildPairs } from '../lib/stats'
+import { PALETTE } from '../lib/palette'
+import { METRIC_OPTIONS, type MetricOption } from '../lib/metricOptions'
 import './RelationshipLab.css'
 
-const METRIC_OPTIONS = [
-  { id: `${METRICS.HRV.table}.${METRICS.HRV.column}`,   label: 'HRV (RMSSD)', unit: 'ms',    ...METRICS.HRV },
-  { id: `${METRICS.RHR.table}.${METRICS.RHR.column}`,   label: 'Resting HR',  unit: 'bpm',   ...METRICS.RHR },
-  { id: `${METRICS.STEPS.table}.${METRICS.STEPS.column}`, label: 'Steps',     unit: 'steps', ...METRICS.STEPS },
-  { id: `${METRICS.SLEEP_DURATION.table}.${METRICS.SLEEP_DURATION.column}`, label: 'Sleep Duration', unit: 'min', ...METRICS.SLEEP_DURATION },
-  { id: `${METRICS.ENERGY_LEVEL.table}.${METRICS.ENERGY_LEVEL.column}`, label: 'Energy Level', unit: '/10', ...METRICS.ENERGY_LEVEL },
-  { id: `${METRICS.MOOD.table}.${METRICS.MOOD.column}`,  label: 'Mood',        unit: '/10',   ...METRICS.MOOD },
-  { id: 'body_metrics.weight_kg', label: 'Weight', unit: 'kg', table: 'body_metrics', column: 'weight_kg' },
-]
-
-const COLORS = {
-  scatter:   '#10B981',
-  text:      '#A4AFBA',
-  textMuted: '#66717C',
-  border:    'rgba(255,255,255,0.09)',
-  surface:   '#171E23',
-}
-
-interface MetricOption { id: string; label: string; unit: string; table: string; column: string }
-
-// Pearson r
-function pearson(xs: number[], ys: number[]): number {
-  const n = xs.length
-  if (n < 2) return NaN
-  const meanX = xs.reduce((a, b) => a + b, 0) / n
-  const meanY = ys.reduce((a, b) => a + b, 0) / n
-  let num = 0, sdX = 0, sdY = 0
-  for (let i = 0; i < n; i++) {
-    num  += (xs[i] - meanX) * (ys[i] - meanY)
-    sdX  += (xs[i] - meanX) ** 2
-    sdY  += (ys[i] - meanY) ** 2
-  }
-  return num / Math.sqrt(sdX * sdY)
-}
-
-// Build paired arrays at a given lag (lag > 0 means Y leads X by lag days)
-function buildPairs(
-  resultX: MetricResult, resultY: MetricResult, lag: number
-): { xs: number[]; ys: number[]; dates: string[] } {
-  const mapY = new Map(resultY.points.map(p => [p.date, p.value]))
-
-  // All dates in X
-  const xs: number[] = [], ys: number[] = [], dates: string[] = []
-  for (const { date, value: vx } of resultX.points) {
-    if (vx === null) continue
-    // Find date for Y with lag offset
-    const yDate = new Date(date)
-    yDate.setDate(yDate.getDate() + lag)
-    const yDateStr = yDate.toISOString().slice(0, 10)
-    const vy = mapY.get(yDateStr)
-    if (vy === null || vy === undefined) continue
-    xs.push(vx); ys.push(vy); dates.push(date)
-  }
-  return { xs, ys, dates }
-}
-
 export function RelationshipLab() {
-  const { ctx } = useAnalysis()
+  const range = useRange()
   const [metricX, setMetricX] = useState<MetricOption>(METRIC_OPTIONS[3]) // Sleep
   const [metricY, setMetricY] = useState<MetricOption>(METRIC_OPTIONS[0]) // HRV
   const [lag, setLag]         = useState(0)
@@ -74,34 +21,16 @@ export function RelationshipLab() {
 
   const scatterRef = useRef<HTMLDivElement>(null)
   const lagRef     = useRef<HTMLDivElement>(null)
-  const scatterChart = useRef<echarts.EChartsType | null>(null)
-  const lagChart     = useRef<echarts.EChartsType | null>(null)
+  const scatterChart = useChart(scatterRef)
+  const lagChart     = useChart(lagRef)
 
   useEffect(() => {
     setLoading(true)
     Promise.all([
-      fetchMetric({ table: metricX.table, column: metricX.column, range: ctx.primaryRange, aggregation: 'daily_avg' }),
-      fetchMetric({ table: metricY.table, column: metricY.column, range: ctx.primaryRange, aggregation: 'daily_avg' }),
+      fetchMetric({ table: metricX.table, column: metricX.column, range, aggregation: 'daily_avg' }),
+      fetchMetric({ table: metricY.table, column: metricY.column, range, aggregation: 'daily_avg' }),
     ]).then(([rx, ry]) => { setResultX(rx); setResultY(ry); setLoading(false) })
-  }, [metricX, metricY, ctx.primaryRange])
-
-  // Init charts
-  useEffect(() => {
-    if (scatterRef.current) {
-      scatterChart.current = echarts.init(scatterRef.current, null, { renderer: 'canvas' })
-      const ro = new ResizeObserver(() => scatterChart.current?.resize())
-      ro.observe(scatterRef.current)
-      return () => { scatterChart.current?.dispose(); scatterChart.current = null; ro.disconnect() }
-    }
-  }, [])
-  useEffect(() => {
-    if (lagRef.current) {
-      lagChart.current = echarts.init(lagRef.current, null, { renderer: 'canvas' })
-      const ro = new ResizeObserver(() => lagChart.current?.resize())
-      ro.observe(lagRef.current)
-      return () => { lagChart.current?.dispose(); lagChart.current = null; ro.disconnect() }
-    }
-  }, [])
+  }, [metricX, metricY, range])
 
   // Scatter chart
   const { xs, ys, dates } = useMemo(() => {
@@ -117,21 +46,21 @@ export function RelationshipLab() {
       grid: { top: 16, right: 16, bottom: 40, left: 52 },
       xAxis: {
         type: 'value', name: metricX.unit,
-        nameTextStyle: { color: COLORS.textMuted, fontSize: 10 },
-        axisLabel: { color: COLORS.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
-        splitLine: { lineStyle: { color: COLORS.border } },
+        nameTextStyle: { color: PALETTE.textMuted, fontSize: 10 },
+        axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
+        splitLine: { lineStyle: { color: PALETTE.border } },
         axisLine: { show: false }, axisTick: { show: false },
       },
       yAxis: {
         type: 'value', name: metricY.unit,
-        nameTextStyle: { color: COLORS.textMuted, fontSize: 10 },
-        axisLabel: { color: COLORS.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
-        splitLine: { lineStyle: { color: COLORS.border } },
+        nameTextStyle: { color: PALETTE.textMuted, fontSize: 10 },
+        axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
+        splitLine: { lineStyle: { color: PALETTE.border } },
         axisLine: { show: false }, axisTick: { show: false },
       },
       tooltip: {
-        trigger: 'item', backgroundColor: COLORS.surface, borderColor: COLORS.border,
-        textStyle: { color: COLORS.text, fontFamily: 'Roboto Mono', fontSize: 11 },
+        trigger: 'item', backgroundColor: PALETTE.surface, borderColor: PALETTE.border,
+        textStyle: { color: PALETTE.text, fontFamily: 'Roboto Mono', fontSize: 11 },
         formatter: (p: { dataIndex: number; data: [number, number] }) =>
           `${dates[p.dataIndex] ?? ''}<br/>${metricX.label}: <b>${p.data[0]}</b><br/>${metricY.label}: <b>${p.data[1]}</b>`,
       },
@@ -139,7 +68,7 @@ export function RelationshipLab() {
         type: 'scatter',
         data: xs.map((x, i) => [x, ys[i]]),
         symbolSize: 7,
-        itemStyle: { color: COLORS.scatter, opacity: 0.7 },
+        itemStyle: { color: PALETTE.emerald, opacity: 0.7 },
       }],
     }, true)
   }, [xs, ys, dates, metricX, metricY])
@@ -162,22 +91,22 @@ export function RelationshipLab() {
       grid: { top: 16, right: 16, bottom: 40, left: 52 },
       xAxis: {
         type: 'category', data: lagCorrs.map(l => String(l.lag)),
-        axisLine: { lineStyle: { color: COLORS.border } },
+        axisLine: { lineStyle: { color: PALETTE.border } },
         axisTick: { show: false },
-        axisLabel: { color: COLORS.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
-        name: 'Lag (days)', nameTextStyle: { color: COLORS.textMuted, fontSize: 10 },
+        axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
+        name: 'Lag (days)', nameTextStyle: { color: PALETTE.textMuted, fontSize: 10 },
         splitLine: { show: false },
       },
       yAxis: {
         type: 'value', name: 'r', min: -1, max: 1,
-        nameTextStyle: { color: COLORS.textMuted, fontSize: 10 },
-        axisLabel: { color: COLORS.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
-        splitLine: { lineStyle: { color: COLORS.border } },
+        nameTextStyle: { color: PALETTE.textMuted, fontSize: 10 },
+        axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
+        splitLine: { lineStyle: { color: PALETTE.border } },
         axisLine: { show: false }, axisTick: { show: false },
       },
       tooltip: {
-        trigger: 'axis', backgroundColor: COLORS.surface, borderColor: COLORS.border,
-        textStyle: { color: COLORS.text, fontFamily: 'Roboto Mono', fontSize: 11 },
+        trigger: 'axis', backgroundColor: PALETTE.surface, borderColor: PALETTE.border,
+        textStyle: { color: PALETTE.text, fontFamily: 'Roboto Mono', fontSize: 11 },
         formatter: (params: { axisValue: string; data: number; dataIndex: number }[]) => {
           const p = params[0]
           const c = lagCorrs[p.dataIndex]
@@ -187,7 +116,7 @@ export function RelationshipLab() {
       series: [{
         type: 'bar', data: lagCorrs.map(l => isNaN(l.r) ? null : Math.round(l.r * 1000) / 1000),
         itemStyle: {
-          color: (p: { data: number }) => p.data >= 0 ? COLORS.scatter : '#EF4444',
+          color: (p: { data: number }) => p.data >= 0 ? PALETTE.emerald : PALETTE.critical,
           opacity: 0.85,
         },
       }],
@@ -244,3 +173,5 @@ export function RelationshipLab() {
     </div>
   )
 }
+
+export default RelationshipLab

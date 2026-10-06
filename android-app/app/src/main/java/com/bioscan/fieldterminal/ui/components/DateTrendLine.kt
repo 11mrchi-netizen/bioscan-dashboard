@@ -41,7 +41,10 @@ private val TREND_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("
 private val INSPECT_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy")
 
 // `label` names the series in the tap-to-inspect box; null = value only.
-data class TrendSeries(val points: List<Pair<LocalDate, Double>>, val color: Color, val label: String? = null)
+// `highlightLast` draws a permanent state-colored dot on the series' latest
+// point (BodyConsole.kt's "engine pin" two-circle motif, at chart scale) so
+// the most recent reading reads at a glance, without needing to tap first.
+data class TrendSeries(val points: List<Pair<LocalDate, Double>>, val color: Color, val label: String? = null, val highlightLast: Color? = null)
 
 private fun defaultTrendFormat(v: Double): String = if (kotlin.math.abs(v) >= 100) "%.0f".format(v) else "%.1f".format(v)
 
@@ -51,9 +54,10 @@ fun DateTrendLine(
     color: Color,
     refLow: Double? = null,
     refHigh: Double? = null,
+    highlightColor: Color? = null,
     modifier: Modifier = Modifier,
     valueFormat: (Double) -> String = ::defaultTrendFormat,
-) = DateTrendLine(series = listOf(TrendSeries(points, color)), refLow = refLow, refHigh = refHigh, modifier = modifier, valueFormat = valueFormat)
+) = DateTrendLine(series = listOf(TrendSeries(points, color, highlightLast = highlightColor)), refLow = refLow, refHigh = refHigh, modifier = modifier, valueFormat = valueFormat)
 
 // DAV-80: multi-series overload -- raw/7-day-avg/28-day-avg VO2max all share
 // one y-axis (same unit, just different smoothing), unlike weight vs.
@@ -133,6 +137,13 @@ fun DateTrendLine(
                     }
                 }
                 drawPath(line, color = s.color, style = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+
+                s.highlightLast?.let { highlight ->
+                    val (lastDay, lastValue) = s.points.last()
+                    val center = Offset(xFor(lastDay, size.width), yFor(lastValue, size.height))
+                    drawCircle(highlight.copy(alpha = 0.18f), radius = 9f, center = center)
+                    drawCircle(highlight, radius = 4.5f, center = center)
+                }
             }
 
             activeDay?.let { day ->

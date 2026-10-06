@@ -60,7 +60,7 @@ class NutritionRepository(private val supabase: SupabaseClient) {
         val todayBeverageItems = if (todayMealIds.isNotEmpty()) {
             try {
                 supabase.postgrest.from("meal_items")
-                    .select(columns = Columns.list("description,water_ml,caffeine_mg,effective_hydration_ml")) {
+                    .select(columns = Columns.list("meal_id,description,water_ml,caffeine_mg,effective_hydration_ml")) {
                         filter {
                             isIn("meal_id", todayMealIds)
                             eq("is_beverage", true)

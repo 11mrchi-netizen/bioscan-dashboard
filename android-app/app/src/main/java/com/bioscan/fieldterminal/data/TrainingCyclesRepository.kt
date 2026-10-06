@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.FocusEntryDto
 import com.bioscan.fieldterminal.data.model.NewTrainingCycleRow
+import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
 import com.bioscan.fieldterminal.data.model.TrainingCycleRow
 import com.bioscan.fieldterminal.domain.FocusEntry
 import com.bioscan.fieldterminal.domain.FocusQuality
@@ -13,6 +14,11 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import java.time.LocalDate
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 // Phase A3 (Analysis Layer). A cycle with a malformed quality/role value is
 // dropped from its own focus list rather than crashing the whole read --
@@ -31,7 +37,7 @@ class TrainingCyclesRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadCycles(): List<TrainingCycle> {
         val rows = supabase.postgrest.from("training_cycles")
-            .select(columns = Columns.list("id,start_date,end_date,focus,goal_metric,starting_value,target_value")) {
+            .select(columns = Columns.list("id,start_date,end_date,focus,goal_metric,starting_value,target_value,notes")) {
                 order("start_date", Order.DESCENDING)
                 limit(50)
             }
@@ -61,6 +67,54 @@ class TrainingCyclesRepository(private val supabase: SupabaseClient) {
             ),
         )
     }
+
+    suspend fun insertTbCycle(
+        startDate: LocalDate,
+        endDate: LocalDate,
+        notes: String,
+        goalMetric: String?,
+        startingValue: Double?,
+        targetValue: Double?,
+    ) {
+        supabase.postgrest.from("training_cycles").insert(
+            NewTrainingCycleRow(
+                startDate = startDate.toString(),
+                endDate = endDate.toString(),
+                focus = emptyList(),
+                notes = notes,
+                goalMetric = goalMetric,
+                startingValue = startingValue,
+                targetValue = targetValue,
+            ),
+        )
+    }
+
+    suspend fun updateTbCycle(
+        id: Long,
+        startDate: LocalDate,
+        endDate: LocalDate,
+        notes: String,
+        goalMetric: String?,
+        startingValue: Double?,
+        targetValue: Double?,
+    ) {
+        supabase.postgrest.from("training_cycles").update(
+            NewTrainingCycleRow(
+                startDate = startDate.toString(),
+                endDate = endDate.toString(),
+                focus = emptyList(),
+                notes = notes,
+                goalMetric = goalMetric,
+                startingValue = startingValue,
+                targetValue = targetValue,
+            ),
+        ) { filter { eq("id", id) } }
+    }
+
+    suspend fun loadBlockSummaries(): List<TrainingBlockSummaryRow> =
+        supabase.postgrest.from("v_training_block_metrics")
+            .select { order("start_date", Order.DESCENDING) }
+            .decodeList<TrainingBlockSummaryRow>()
 
     suspend fun updateCycle(
         id: Long,
@@ -96,5 +150,23 @@ private fun TrainingCycleRow.toDomain(): TrainingCycle? {
         }
         FocusEntry(quality, dto.weight, role)
     }
-    return TrainingCycle(start, end, entries, goalMetric, startingValue, targetValue, id)
+    val tbInfo = notes?.let { n ->
+        runCatching {
+            Json.parseToJsonElement(n).jsonObject["notion_import_focus"]?.jsonObject
+        }.getOrNull()
+    }
+    return TrainingCycle(
+        startDate = start,
+        endDate = end,
+        focus = entries,
+        goalMetric = goalMetric,
+        startingValue = startingValue,
+        targetValue = targetValue,
+        id = id,
+        tbTemplate = tbInfo?.get("template")?.jsonPrimitive?.contentOrNull,
+        tbPrimary = tbInfo?.get("primary")?.jsonPrimitive?.contentOrNull,
+        tbSecondary = tbInfo?.get("secondary")?.jsonPrimitive?.contentOrNull,
+        tbStrengthDays = tbInfo?.get("strength_days")?.jsonPrimitive?.intOrNull,
+        tbConditioningDays = tbInfo?.get("conditioning_days")?.jsonPrimitive?.intOrNull,
+    )
 }

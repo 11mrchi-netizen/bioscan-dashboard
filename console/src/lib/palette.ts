@@ -1,0 +1,9 @@
+export const PALETTE = {
+  emerald:   '#10B981',
+  amber:     '#F59E0B',
+  critical:  '#EF4444',
+  text:      '#A4AFBA',
+  textMuted: '#66717C',
+  border:    'rgba(255,255,255,0.09)',
+  surface:   '#171E23',
+} as const

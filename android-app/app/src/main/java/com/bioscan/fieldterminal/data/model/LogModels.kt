@@ -42,14 +42,6 @@ data class LogSleepRow(
 )
 
 @Serializable
-data class LogArousalRow(
-    val id: Long,
-    val date: String,
-    @SerialName("morning_erection_quality") val morningErectionQuality: Int? = null,
-    @SerialName("arousal_level") val arousalLevel: Int? = null,
-)
-
-@Serializable
 data class LogStoolRow(
     val id: Long,
     @SerialName("occurred_at") val occurredAt: String,
@@ -57,14 +49,28 @@ data class LogStoolRow(
     val discomfort: Int? = null,
 )
 
-// DAV-91
+// One instance within a sexual_activity_daily row's `instances` array --
+// watchedPorn/loadSize are masturbation-specific and stay null for
+// intercourse instances rather than getting their own intercourse-only type.
 @Serializable
-data class LogMasturbationRow(
+data class SexualActivityInstance(
+    val orgasm: Boolean,
+    @SerialName("orgasmIntensity") val orgasmIntensity: Int? = null,
+    @SerialName("watchedPorn") val watchedPorn: Boolean? = null,
+    @SerialName("loadSize") val loadSize: Int? = null,
+    val notes: String? = null,
+    @SerialName("partner_id") val partnerId: Long? = null,
+)
+
+// Replaces the old per-occurrence masturbation_log (DAV-91) -- one row per
+// (date, activityType), `instances` is the single source of truth, counts
+// are derived from it, never stored separately.
+@Serializable
+data class LogSexualActivityRow(
     val id: Long,
-    @SerialName("occurred_at") val occurredAt: String,
-    @SerialName("watched_porn") val watchedPorn: Boolean? = null,
-    @SerialName("load_size") val loadSize: Int? = null,
-    @SerialName("orgasm_intensity") val orgasmIntensity: Int? = null,
+    val date: String,
+    @SerialName("activity_type") val activityType: String,
+    val instances: List<SexualActivityInstance> = emptyList(),
     val notes: String? = null,
 )
 
@@ -106,6 +112,8 @@ data class LogWellbeingRow(
     val mood: Int? = null,
     val stress: Int? = null,
     val soreness: Int? = null,
+    @SerialName("morning_erection_quality") val morningErectionQuality: Int? = null,
+    @SerialName("arousal_level") val arousalLevel: Int? = null,
 )
 
 @Serializable

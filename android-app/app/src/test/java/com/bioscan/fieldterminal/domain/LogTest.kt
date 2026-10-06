@@ -85,7 +85,7 @@ class LogTest {
                 calories = 100.0,
             )
         )
-        val entries = buildLogEntries(meals = meals, exerciseSessions = emptyList(), sleep = emptyList(), arousal = emptyList(), stool = emptyList(), encounters = emptyList())
+        val entries = buildLogEntries(meals = meals, exerciseSessions = emptyList(), sleep = emptyList(), stool = emptyList(), encounters = emptyList())
         assertEquals(1, entries.size)
         assertEquals(LocalDateTime.MIN, entries[0].timestamp)
     }
@@ -99,7 +99,7 @@ class LogTest {
                 calories = 500.0,
             )
         )
-        val entries = buildLogEntries(meals = meals, exerciseSessions = emptyList(), sleep = emptyList(), arousal = emptyList(), stool = emptyList(), encounters = emptyList())
+        val entries = buildLogEntries(meals = meals, exerciseSessions = emptyList(), sleep = emptyList(), stool = emptyList(), encounters = emptyList())
         assertEquals(1, entries.size)
         assertNotEquals(LocalDateTime.MIN, entries[0].timestamp)
         assertEquals(12, entries[0].timestamp.hour)
@@ -111,7 +111,7 @@ class LogTest {
             com.bioscan.fieldterminal.data.model.LogMealRow(id = 2, loggedAt = "2026-09-19T13:00:00+00:00", description = "Lunch"),
             com.bioscan.fieldterminal.data.model.LogMealRow(id = 3, loggedAt = "2026-09-19T19:00:00+00:00", description = "Dinner"),
         )
-        val entries = buildLogEntries(meals = meals, exerciseSessions = emptyList(), sleep = emptyList(), arousal = emptyList(), stool = emptyList(), encounters = emptyList())
+        val entries = buildLogEntries(meals = meals, exerciseSessions = emptyList(), sleep = emptyList(), stool = emptyList(), encounters = emptyList())
         assertEquals(3, entries.size)
         assertEquals(19, entries[0].timestamp.hour)  // dinner first (most recent)
         assertEquals(8, entries[2].timestamp.hour)   // breakfast last (oldest)

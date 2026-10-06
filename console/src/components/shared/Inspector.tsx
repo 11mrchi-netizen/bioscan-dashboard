@@ -6,8 +6,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { useAnalysis } from '../../context/AnalysisContext'
-import type { EventRef } from '../../types/analysis'
+import { useInspection, useTimezone } from '../../lib/analysisStore'
+import type { EventRef, MetricPointInspection } from '../../types/analysis'
 import './Inspector.css'
 
 const EVENT_TABLE: Record<EventRef['kind'], string> = {
@@ -23,9 +23,9 @@ const EVENT_TABLE: Record<EventRef['kind'], string> = {
 interface Props { onClose: () => void }
 
 export function Inspector({ onClose }: Props) {
-  const { ctx } = useAnalysis()
+  const target = useInspection()
+  const timezone = useTimezone()
   const navigate = useNavigate()
-  const target = ctx.inspectionTarget
   const [eventRecord, setEventRecord] = useState<Record<string, unknown> | null>(null)
   const [loadingEvent, setLoadingEvent] = useState(false)
 
@@ -48,7 +48,7 @@ export function Inspector({ onClose }: Props) {
       </div>
 
       {target.kind === 'metric_point' && (
-        <MetricPointView target={target} timezone={ctx.timezone} navigate={navigate} />
+        <MetricPointView target={target} timezone={timezone} navigate={navigate} />
       )}
 
       {target.kind === 'event' && (
@@ -65,7 +65,7 @@ export function Inspector({ onClose }: Props) {
 type NavFn = (path: string) => void
 
 function MetricPointView({ target, timezone, navigate }: {
-  target: Extract<NonNullable<ReturnType<typeof useAnalysis>['ctx']['inspectionTarget']>, { kind: 'metric_point' }>
+  target: MetricPointInspection
   timezone: string
   navigate: NavFn
 }) {

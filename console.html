@@ -218,9 +218,10 @@ tbody tr:hover td{background:rgba(76,241,255,.03);color:var(--text);}
           <div id="tr-vol-chart" style="height:160px;"></div>
         </div>
         <div class="card">
-          <div class="card-title">SESSIONS</div>
+          <div class="card-title">SESSIONS · click ▶ for cleaned per-second charts</div>
           <div class="tbl-wrap" id="tr-table"><div class="loading mono">LOADING…</div></div>
         </div>
+        <div id="tr-detail" style="display:none;margin-top:14px;"></div>
       </div>
 
       <!-- RECOVERY -->
@@ -346,7 +347,8 @@ tbody tr:hover td{background:rgba(76,241,255,.03);color:var(--text);}
         <div class="select-row">
           <span class="select-label">TABLE</span>
           <select class="sel" id="ex-table">
-            <option value="runs">runs</option>
+            <option value="exercise_sessions">exercise_sessions</option>
+            <option value="zepp_workout_detail">zepp_workout_detail</option>
             <option value="wearable_daily">wearable_daily</option>
             <option value="sleep_daily">sleep_daily</option>
             <option value="wellbeing_daily">wellbeing_daily</option>
@@ -473,13 +475,61 @@ async function fetchRange(table, dateCol, extra){
   return data || [];
 }
 
+async function fetchRuns(fromDate, toDate, cols){
+  // exercise_sessions uses start_time (timestamp), not date
+  const select = cols || 'id,type,start_time,distance_km,duration_min,avg_speed_kmh,avg_power_w,avg_hr,max_hr,details';
+  const { data, error } = await sb.from('exercise_sessions')
+    .select(select)
+    .in('type', ['run','trail_run','track'])
+    .gte('start_time', fromDate)
+    .lte('start_time', toDate + 'T23:59:59')
+    .order('start_time');
+  if(error) console.warn('exercise_sessions', error.message);
+  return (data || []).map(r => ({
+    ...r,
+    date: r.start_time?.slice(0,10),
+    // Compute pace from distance/duration — more reliable than avg_speed_kmh
+    // (Zepp avg_speed includes GPS-lock zeros, dragging it down)
+    pace_min_per_km: (r.distance_km > 0 && r.duration_min > 0)
+      ? r.duration_min / r.distance_km : null,
+  }));
+}
+
+// ─── OUTLIER CLEANING ────────────────────────────────────────────────────────
+// Extracts {value, offsetSeconds} array from zepp decoded field,
+// strips values outside [minV, maxV], trims leading/trailing zeros.
+// Returns { offsets: number[], values: (number|null)[] }
+function cleanZeppSeries(arr, minV, maxV) {
+  if (!Array.isArray(arr) || !arr.length) return { offsets: [], values: [] };
+  const raw = arr.map(e => ({ t: e.offsetSeconds, v: e.value }));
+
+  // Trim leading zeros (GPS acquiring)
+  let start = raw.findIndex(e => e.v > 0);
+  let end   = raw.length - 1 - [...raw].reverse().findIndex(e => e.v > 0);
+  if (start < 0) return { offsets: [], values: [] };
+  const trimmed = raw.slice(start, end + 1);
+
+  // IQR-based spike removal (3×IQR — lenient, catches only real spikes)
+  const vals = trimmed.map(e => e.v).filter(v => v > 0).sort((a,b) => a-b);
+  const q1 = vals[Math.floor(vals.length * 0.25)] ?? 0;
+  const q3 = vals[Math.floor(vals.length * 0.75)] ?? Infinity;
+  const iqr = q3 - q1;
+  const lo  = Math.max(minV ?? 0,  q1 - 3 * iqr);
+  const hi  = Math.min(maxV ?? Infinity, q3 + 3 * iqr);
+
+  return {
+    offsets: trimmed.map(e => e.t),
+    values:  trimmed.map(e => (e.v >= lo && e.v <= hi) ? e.v : null),
+  };
+}
+
 // ─── OVERVIEW ─────────────────────────────────────────────────────────────────
 async function loadOverview(){
   const [wear, sleep, well, runs] = await Promise.all([
     fetchRange('wearable_daily','date'),
     fetchRange('sleep_daily','date'),
     fetchRange('wellbeing_daily','date'),
-    fetchRange('runs','date'),
+    fetchRuns(rangeFrom(), rangeTo(), 'id,distance_km'),
   ]);
 
   const kpis = [
@@ -529,22 +579,22 @@ function drawLine(id, dates, series){
 async function loadTimeline(){
   const el = document.getElementById('tl-content');
   const [runs, sleep, injuries, illnesses, rest] = await Promise.all([
-    fetchRange('runs','date','date,distance_km,duration_min,activity_type'),
+    fetchRuns(rangeFrom(), rangeTo(), 'id,type,start_time,distance_km,duration_min'),
     fetchRange('sleep_daily','date','date,hours,score'),
-    fetchRange('injuries','start_date','start_date,end_date,location,note'),
-    fetchRange('illnesses','start_date','start_date,end_date,type,note'),
+    fetchRange('injuries','start_date','start_date,end_date,part,notes'),
+    fetchRange('illnesses','start_date','start_date,end_date,type,notes'),
     fetchRange('rest_days','date','date,reason'),
   ]);
 
   const events = [];
   runs.forEach(r => events.push({ date:r.date, kind:'run',
-    text:`${r.activity_type||'run'} · ${fmt1(r.distance_km)}km · ${r.duration_min||'—'}min` }));
+    text:`${r.type||'run'} · ${fmt1(r.distance_km)}km · ${r.duration_min||'—'}min` }));
   sleep.forEach(r => events.push({ date:r.date, kind:'sleep',
     text:`sleep · ${fmt1(r.hours)}h${r.score ? ` · score ${r.score}` : ''}` }));
   injuries.forEach(r => events.push({ date:r.start_date, kind:'injury',
-    text:`injury · ${r.location||'—'}${r.note ? ` · ${r.note}` : ''}` }));
+    text:`injury · ${r.part||'—'}${r.notes ? ` · ${r.notes}` : ''}` }));
   illnesses.forEach(r => events.push({ date:r.start_date, kind:'illness',
-    text:`illness · ${r.type||'—'}${r.note ? ` · ${r.note}` : ''}` }));
+    text:`illness · ${r.type||'—'}${r.notes ? ` · ${r.notes}` : ''}` }));
   rest.forEach(r => events.push({ date:r.date, kind:'rest',
     text:`rest day${r.reason ? ` · ${r.reason}` : ''}` }));
 
@@ -569,21 +619,20 @@ async function loadTimeline(){
 
 // ─── TRAINING ─────────────────────────────────────────────────────────────────
 async function loadTraining(){
-  // Need 180 days for CTL
-  const fromDate = daysAgo(180);
-  const { data:runs } = await sb.from('runs').select('*').gte('date', fromDate).lte('date', rangeTo()).order('date');
-  const allRuns = runs || [];
+  // Need 180 days for CTL warmup
+  const allRuns = await fetchRuns(daysAgo(180), rangeTo());
 
-  // Daily TSS proxy
+  // Daily TSS proxy (using details.run_type if available)
   const tssMap = {};
   allRuns.forEach(r => {
-    const factor = { interval:1.3, race:1.5, easy:0.7 }[r.activity_type] || 1.0;
+    const runType = r.details?.run_type || '';
+    const factor = { interval:1.3, race:1.5, easy:0.7, tempo:1.1 }[runType] || 1.0;
     tssMap[r.date] = (tssMap[r.date]||0) + ((r.duration_min||0) * factor);
   });
 
-  // Build date range from 180 days ago to today
+  // Build full date range for CTL/ATL warmup
   const allDates = [];
-  const d = new Date(fromDate);
+  const d = new Date(daysAgo(180));
   while(d.toISOString().slice(0,10) <= rangeTo()){
     allDates.push(d.toISOString().slice(0,10));
     d.setDate(d.getDate()+1);
@@ -604,7 +653,6 @@ async function loadTraining(){
     }
   });
 
-  // CTL/ATL/TSB chart
   const c = initChart('tr-load-chart');
   if(c){ c.setOption({ ...chartBase(),
     grid:{top:16,right:16,bottom:30,left:44},
@@ -638,16 +686,93 @@ async function loadTraining(){
       itemStyle:{ color:C.cyan, opacity:.8 } }]
   });}
 
-  // Runs table
+  // Sessions table — pace computed from distance/duration (not stored avg_speed_kmh)
   const displayRuns = allRuns.filter(r=>r.date>=rangeFrom()).reverse();
+  const fmtPace = r => {
+    if (!r.pace_min_per_km) return '—';
+    const min = Math.floor(r.pace_min_per_km);
+    const sec = Math.round((r.pace_min_per_km - min) * 60).toString().padStart(2,'0');
+    return `${min}:${sec}/km`;
+  };
   document.getElementById('tr-table').innerHTML = displayRuns.length ?
-    `<table><thead><tr><th>DATE</th><th>TYPE</th><th>KM</th><th>MIN</th><th>PACE</th></tr></thead><tbody>
+    `<table><thead><tr><th>DATE</th><th>TYPE</th><th>KM</th><th>MIN</th><th>PACE</th><th>AVG HR</th><th>AVG W</th><th>DETAIL</th></tr></thead><tbody>
       ${displayRuns.map(r => `<tr>
-        <td>${r.date}</td><td>${r.activity_type||'—'}</td>
-        <td>${fmt1(r.distance_km)}</td><td>${r.duration_min||'—'}</td>
-        <td>${r.pace_min_per_km ? fmt1(r.pace_min_per_km)+' /km' : '—'}</td>
+        <td>${r.date}</td>
+        <td>${r.details?.run_type || r.type || '—'}</td>
+        <td>${fmt1(r.distance_km)}</td>
+        <td>${r.duration_min||'—'}</td>
+        <td>${fmtPace(r)}</td>
+        <td>${r.avg_hr ? fmtInt(r.avg_hr) : '—'}</td>
+        <td>${r.avg_power_w ? fmtInt(r.avg_power_w) : '—'}</td>
+        <td><button class="range-btn" style="padding:3px 8px;font-size:9px;" onclick="loadSessionDetail(${r.id})">▶</button></td>
       </tr>`).join('')}
     </tbody></table>` : '<div class="empty mono">No runs in range.</div>';
+}
+
+// Per-workout drill-down — fetches zepp_workout_detail and renders cleaned charts
+async function loadSessionDetail(sessionId){
+  const panel = document.getElementById('tr-detail');
+  panel.style.display = 'block';
+  panel.innerHTML = '<div class="loading mono">LOADING SESSION DETAIL…</div>';
+
+  const { data, error } = await sb.from('zepp_workout_detail')
+    .select('id,start_time,decoded')
+    .eq('exercise_session_id', sessionId)
+    .limit(1)
+    .single();
+
+  if(error || !data){
+    panel.innerHTML = `<div class="empty mono">No Zepp time-series for this session.</div>`;
+    return;
+  }
+
+  const dec = data.decoded || {};
+  panel.innerHTML = `
+    <div class="card" style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        <div class="chart-title" style="margin:0;">SESSION DETAIL · ${data.start_time?.slice(0,10)}</div>
+        <button class="range-btn" style="padding:3px 8px;font-size:9px;margin-left:auto;" onclick="this.closest('#tr-detail').style.display='none'">CLOSE ✕</button>
+      </div>
+      <div class="caveat" id="tr-detail-flags"></div>
+      <div class="grid-2" style="margin-top:10px;">
+        <div><div class="chart-title">SPEED · km/h <span style="color:var(--muted);font-size:9px;">(zeros trimmed · IQR filtered)</span></div>
+          <div id="sd-speed" style="height:160px;"></div></div>
+        <div><div class="chart-title">HEART RATE · bpm</div>
+          <div id="sd-hr" style="height:160px;"></div></div>
+        <div><div class="chart-title">CADENCE · spm</div>
+          <div id="sd-cad" style="height:160px;"></div></div>
+        <div><div class="chart-title">ALTITUDE · m</div>
+          <div id="sd-alt" style="height:160px;"></div></div>
+      </div>
+    </div>`;
+
+  // Clean and render each series
+  const flags = [];
+  const renderSD = (chartId, arr, minV, maxV, color) => {
+    const { offsets, values } = cleanZeppSeries(arr, minV, maxV);
+    const nullCount = values.filter(v=>v===null).length;
+    if (nullCount > 0) flags.push(`${chartId.replace('sd-','')}: ${nullCount} outlier(s) nulled`);
+    const c = initChart(chartId);
+    if(!c || !offsets.length) return;
+    c.setOption({ ...chartBase(),
+      grid:{top:8,right:8,bottom:28,left:40},
+      xAxis:{ type:'category', data:offsets.map(t=>t+'s'), axisLabel:{show:false}, axisTick:{show:false}, axisLine:{show:false}, splitLine:{show:false} },
+      yAxis:{ type:'value', ...axisStyle() },
+      tooltip:{ trigger:'axis', ...tooltipStyle() },
+      series:[{ type:'line', data:values, smooth:false, symbol:'none', connectNulls:false,
+        lineStyle:{color,width:1.5}, itemStyle:{color} }]
+    });
+  };
+
+  renderSD('sd-speed', dec.speedKmh,    0.5,  25,   C.cyan);
+  renderSD('sd-hr',    dec.heartRate,   50,  220,   C.magenta);
+  renderSD('sd-cad',   dec.cadenceSpm, 100,  220,   C.green);
+  renderSD('sd-alt',   dec.altitudeM,  -200, 4000,  C.amber);
+
+  const flagEl = document.getElementById('tr-detail-flags');
+  if(flagEl) flagEl.textContent = flags.length
+    ? 'Cleaned: ' + flags.join(' · ')
+    : 'No outliers detected';
 }
 
 // ─── RECOVERY ─────────────────────────────────────────────────────────────────
@@ -656,7 +781,7 @@ async function loadRecovery(){
     fetchRange('wearable_daily','date','date,hrv,rhr'),
     fetchRange('sleep_daily','date','date,hours'),
     fetchRange('body_metrics','date','date,weight_kg'),
-    sb.from('injuries').select('start_date,end_date,location,note').order('start_date',{ascending:false}).then(r=>r.data||[]),
+    sb.from('injuries').select('start_date,end_date,part,notes').order('start_date',{ascending:false}).then(r=>r.data||[]),
   ]);
 
   drawLine('rc-hrv-chart',  wear.map(r=>r.date), [{ data:wear.map(r=>r.hrv||null),  color:C.cyan }]);
@@ -665,10 +790,10 @@ async function loadRecovery(){
   drawLine('rc-weight-chart', weight.map(r=>r.date), [{ data:weight.map(r=>r.weight_kg||null), color:C.amber }]);
 
   document.getElementById('rc-injuries').innerHTML = injuries.length ?
-    `<table><thead><tr><th>START</th><th>END</th><th>LOCATION</th><th>NOTE</th></tr></thead><tbody>
+    `<table><thead><tr><th>START</th><th>END</th><th>PART</th><th>NOTES</th></tr></thead><tbody>
       ${injuries.map(i => `<tr>
         <td>${i.start_date||'—'}</td><td>${i.end_date||'ongoing'}</td>
-        <td>${i.location||'—'}</td><td>${i.note||'—'}</td>
+        <td>${i.part||'—'}</td><td>${i.notes||'—'}</td>
       </tr>`).join('')}
     </tbody></table>` : '<div class="empty mono">No injuries on record.</div>';
 }
@@ -872,7 +997,10 @@ async function runExplorer(){
   const el    = document.getElementById('ex-content');
   el.innerHTML = '<div class="loading mono">QUERYING…</div>';
 
-  const DATE_COLS = { meals:'logged_at', lab_results:'draw_date', lab_draws:'draw_date' };
+  const DATE_COLS = {
+    meals:'logged_at', lab_results:'draw_date', lab_draws:'draw_date',
+    exercise_sessions:'start_time', zepp_workout_detail:'start_time',
+  };
   const dateCol = DATE_COLS[tbl] || 'date';
 
   let q = sb.from(tbl).select('*').order(dateCol,{ascending:false}).limit(500);

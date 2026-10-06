@@ -2,7 +2,7 @@
 // Proves: AnalysisContext drives 4+ independent components; cursor syncs across all.
 
 import { useEffect, useState } from 'react'
-import { useAnalysis } from '../context/AnalysisContext'
+import { useRange, useSelectedDate, useSetSelectedDate, useClearInspection } from '../lib/analysisStore'
 import { fetchMetric, METRICS, type MetricResult } from '../lib/metricAdapter'
 import { CHART_SPECS } from '../lib/chartSpec'
 import { FTChart } from '../components/shared/FTChart'
@@ -18,7 +18,10 @@ const OVERVIEW_METRICS = [
 ] as const
 
 export function Overview() {
-  const { ctx, setSelectedDate, clearInspection } = useAnalysis()
+  const range = useRange()
+  const selectedDate = useSelectedDate()
+  const setSelectedDate = useSetSelectedDate()
+  const clearInspection = useClearInspection()
   const [results, setResults] = useState<Record<string, MetricResult>>({})
   const [loading, setLoading] = useState(true)
 
@@ -26,14 +29,14 @@ export function Overview() {
     setLoading(true)
     Promise.all(
       OVERVIEW_METRICS.map(m =>
-        fetchMetric({ ...m, range: ctx.primaryRange, aggregation: 'daily_avg' })
+        fetchMetric({ ...m, range, aggregation: 'daily_avg' })
           .then(r => [r.metricId, r] as const)
       )
     ).then(entries => {
       setResults(Object.fromEntries(entries))
       setLoading(false)
     })
-  }, [ctx.primaryRange])
+  }, [range])
 
   if (loading) return <div className="state-loading mono">LOADING OVERVIEW…</div>
 
@@ -41,9 +44,9 @@ export function Overview() {
     <div className="overview">
       <div className="overview-header">
         <h2 className="overview-title">Overview</h2>
-        {ctx.selectedDate && (
+        {selectedDate && (
           <div className="overview-cursor mono">
-            CURSOR: {ctx.selectedDate}
+            CURSOR: {selectedDate}
             <button className="overview-cursor-clear mono" onClick={() => { setSelectedDate(null); clearInspection() }}>✕</button>
           </div>
         )}
@@ -69,3 +72,5 @@ export function Overview() {
     </div>
   )
 }
+
+export default Overview

@@ -134,6 +134,7 @@ data class MealInputRow(
 // without loading the full MealItemRow schema.
 @Serializable
 data class BeverageItemRow(
+    @SerialName("meal_id") val mealId: Long? = null,
     val description: String? = null,
     @SerialName("water_ml") val waterMl: Double? = null,
     @SerialName("caffeine_mg") val caffeineMg: Double? = null,

@@ -82,12 +82,12 @@ import java.time.temporal.ChronoUnit
 // explicitly slated for a richer anatomical redraw later) -- only the new
 // tile row adopts the Futuristic Material tokens.
 @Composable
-fun BodyConsole(overview: StatusOverview?, isLoading: Boolean, onOpenTile: (TileRoute) -> Unit) {
+fun BodyConsole(overview: StatusOverview?, isLoading: Boolean, onOpenTile: (TileRoute) -> Unit, onOpenDailyReadiness: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         // 25/9 rework: figure absorbs all leftover height; Next Up band and the
         // tile row sit at the bottom, resting on the Scaffold's bottom menu.
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            ConditionFigureField(overview, isLoading)
+            ConditionFigureField(overview, isLoading, onOpenDailyReadiness)
         }
         NextUpSection()
         SystemTileRow(overview, onOpenTile)
@@ -160,7 +160,7 @@ private val tileLabelStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeig
 private val tilePreviewStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 10.sp)
 
 @Composable
-private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean) {
+private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean, onOpenDailyReadiness: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -179,12 +179,32 @@ private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean) 
                 }
             },
     ) {
-        Text(
-            text = "CONDITION",
-            style = FieldTextStyles.subTabLabel,
-            color = FieldColors.InkMuted,
-            modifier = Modifier.align(Alignment.TopStart).padding(14.dp),
-        )
+        // Daily Readiness: the only part of this field adopting the
+        // Futuristic Material tokens (per the user's own "just the top line"
+        // scoping) -- the schematic/footer below keep their amber Field
+        // Terminal look untouched, same as this file's header comment
+        // already explains for the drawing itself.
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpenDailyReadiness)
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "CONDITION",
+                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14.em),
+                color = FT.TextSecondary,
+            )
+            overview?.let {
+                Text(
+                    text = it.readiness.label.display,
+                    style = TextStyle(fontFamily = SairaCondensed, fontWeight = FontWeight.Bold, fontSize = 26.sp),
+                    color = if (it.readiness.label == ReadinessLabel.Unknown) FT.TextMuted else FT.Emerald,
+                )
+            }
+        }
 
         when {
             isLoading -> CircularProgressIndicator(
@@ -192,12 +212,6 @@ private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean) 
                 modifier = Modifier.align(Alignment.Center),
             )
             overview != null -> {
-                Text(
-                    text = overview.readiness.label.display,
-                    style = TextStyle(fontFamily = SairaCondensed, fontWeight = FontWeight.Bold, fontSize = 26.sp),
-                    color = if (overview.readiness.label == ReadinessLabel.Unknown) FieldColors.InkMuted else FieldColors.Amber,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(14.dp),
-                )
                 // Inset clears the CONDITION/readiness header and the sleep/flag footer.
                 BodySchematic(overview, modifier = Modifier.fillMaxSize().padding(top = 44.dp, bottom = 40.dp, start = 8.dp, end = 8.dp))
                 Row(

@@ -13,6 +13,11 @@ data class SupplementRow(
     @SerialName("end_date") val endDate: String? = null,
     @SerialName("ai_note") val aiNote: String? = null,
     @SerialName("every_n_days") val everyNDays: Int? = null,
+    // Supplement Intelligence Phase 1: links to a canonical supplement_products
+    // row when one exists. Null for a roster item never given real ingredient
+    // composition -- addSupplementsTaken()'s nutrient mapping falls back to
+    // the pre-existing name-inference path for those, unchanged.
+    @SerialName("product_id") val productId: Long? = null,
 )
 
 // DAV-81
@@ -25,6 +30,7 @@ data class NewSupplementRosterRow(
     @SerialName("start_date") val startDate: String,
     @SerialName("ai_note") val aiNote: String? = null,
     @SerialName("every_n_days") val everyNDays: Int? = null,
+    @SerialName("product_id") val productId: Long? = null,
 )
 
 // Lightweight projection for computing last-taken dates per supplement in

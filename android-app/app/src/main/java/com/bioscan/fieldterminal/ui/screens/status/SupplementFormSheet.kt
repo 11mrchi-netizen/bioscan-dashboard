@@ -20,7 +20,9 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -32,10 +34,12 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
+import com.bioscan.fieldterminal.data.IngredientInput
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementImpactRepository
 import com.bioscan.fieldterminal.data.SupplementsRepository
@@ -82,6 +86,25 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
     var saving by remember { mutableStateOf(false) }
     var ending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val ingredients = remember { mutableStateListOf<EditableIngredient>() }
+
+    LaunchedEffect(existing?.productId) {
+        val pid = existing?.productId ?: return@LaunchedEffect
+        try {
+            val full = repo.loadProductIngredientsFull(pid)
+            ingredients.clear()
+            full.forEach { ing ->
+                ingredients.add(EditableIngredient().apply {
+                    name = ing.name
+                    nutrientKey = ing.nutrientKey ?: ""
+                    compoundAmount = ing.compoundAmount.toString()
+                    compoundUnit = ing.compoundUnit
+                    elementalAmount = ing.elementalAmount?.toString() ?: ""
+                    elementalUnit = ing.elementalUnit ?: ""
+                })
+            }
+        } catch (_: Exception) {}
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -151,6 +174,8 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                 }
             }
 
+            IngredientsSection(ingredients)
+
             error?.let {
                 Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical)
             }
@@ -162,6 +187,20 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                     error = null
                     scope.launch {
                         try {
+                            // Supplement Intelligence Phase 1: only ingredient
+                            // rows with a real name count -- a blank row left
+                            // over from "+ ADD INGREDIENT" is silently dropped
+                            // rather than saved as an empty ingredient.
+                            val filledIngredients = ingredients.mapNotNull { it.toInputOrNull() }
+                            val productId = when {
+                                filledIngredients.isNotEmpty() && existing?.productId != null -> {
+                                    repo.replaceProductIngredients(existing.productId, filledIngredients)
+                                    existing.productId
+                                }
+                                filledIngredients.isNotEmpty() -> repo.createProductWithIngredients(name.trim(), null, null, filledIngredients)
+                                else -> null
+                            }
+
                             if (existing == null) {
                                 // DAV-83: best-effort only -- a failed or
                                 // missing-key blurb attempt never blocks
@@ -176,9 +215,9 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                                         null
                                     }
                                 }
-                                repo.addSupplement(name.trim(), dose.trim(), timeOfDay, LocalDate.now(), aiNote, everyNDays)
+                                repo.addSupplement(name.trim(), dose.trim(), timeOfDay, LocalDate.now(), aiNote, everyNDays, productId)
                             } else {
-                                repo.updateSupplement(existing.id, name.trim(), dose.trim(), timeOfDay, everyNDays)
+                                repo.updateSupplement(existing.id, name.trim(), dose.trim(), timeOfDay, everyNDays, productId)
                             }
                             onSaved()
                         } catch (e: Exception) {
@@ -222,4 +261,84 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
 @Composable
 private fun FormFieldLabel(text: String) {
     Text(text, style = sheetActionLabelStyle, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
+}
+
+// Supplement Intelligence Phase 1 (DAV-328): one ingredient row's editable
+// state -- mirrors this session's EditableSexualActivityInstance pattern
+// (AddEntrySheet.kt) for a dynamic add/remove list.
+private class EditableIngredient {
+    var name by mutableStateOf("")
+    var compoundAmount by mutableStateOf("")
+    var compoundUnit by mutableStateOf("")
+    var nutrientKey by mutableStateOf("")
+    var elementalAmount by mutableStateOf("")
+    var elementalUnit by mutableStateOf("")
+
+    // Null when the row was never really filled in (left over from
+    // "+ ADD INGREDIENT") -- a blank name or unparseable amount silently
+    // drops the row rather than saving a broken ingredient.
+    fun toInputOrNull(): IngredientInput? {
+        val amount = compoundAmount.toDoubleOrNull() ?: return null
+        if (name.isBlank() || compoundUnit.isBlank()) return null
+        return IngredientInput(
+            name = name.trim(),
+            category = null,
+            nutrientKey = nutrientKey.trim().ifBlank { null },
+            compoundAmount = amount,
+            compoundUnit = compoundUnit.trim(),
+            elementalAmount = elementalAmount.toDoubleOrNull(),
+            elementalUnit = elementalUnit.trim().ifBlank { null },
+        )
+    }
+}
+
+@Composable
+private fun IngredientsSection(ingredients: androidx.compose.runtime.snapshots.SnapshotStateList<EditableIngredient>) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        FormFieldLabel("INGREDIENTS (OPTIONAL)")
+        ingredients.forEachIndexed { i, ingredient -> IngredientEditor(ingredient) { ingredients.removeAt(i) } }
+        Text(
+            "+ ADD INGREDIENT",
+            style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+            color = FT.Emerald,
+            modifier = Modifier.clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { ingredients.add(EditableIngredient()) },
+        )
+    }
+}
+
+@Composable
+private fun IngredientEditor(ingredient: EditableIngredient, onRemove: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            FieldTextField(ingredient.name, { ingredient.name = it }, "Ingredient, e.g. Magnesium bisglycinate", modifier = Modifier.weight(1f))
+            Text(
+                "REMOVE",
+                style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                color = FT.Critical,
+                modifier = Modifier
+                    .padding(start = 10.dp)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onRemove),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FieldTextField(ingredient.compoundAmount, { ingredient.compoundAmount = it }, "Amount, e.g. 2000", keyboardType = KeyboardType.Number, modifier = Modifier.weight(1f))
+            FieldTextField(ingredient.compoundUnit, { ingredient.compoundUnit = it }, "Unit, e.g. mg", modifier = Modifier.weight(1f))
+        }
+        FieldTextField(ingredient.nutrientKey, { ingredient.nutrientKey = it }, "Nutrient key (optional), e.g. magnesium")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FieldTextField(ingredient.elementalAmount, { ingredient.elementalAmount = it }, "Elemental amount (optional)", keyboardType = KeyboardType.Number, modifier = Modifier.weight(1f))
+            FieldTextField(ingredient.elementalUnit, { ingredient.elementalUnit = it }, "Elemental unit (optional)", modifier = Modifier.weight(1f))
+        }
+        Text(
+            "Leave elemental blank unless the label states it separately (e.g. \"2000mg magnesium bisglycinate providing 200mg elemental magnesium\") -- never guessed.",
+            style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+            color = FT.TextMuted,
+        )
+    }
 }

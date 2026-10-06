@@ -239,7 +239,7 @@ private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
 }
 
 @Composable
-private fun TrainingReadinessCard(result: TrainingReadinessResult) {
+internal fun TrainingReadinessCard(result: TrainingReadinessResult) {
     FTCard(title = "TODAY'S READINESS") {
         FTStatePill(result.generalState.toMetricState())
         StatLine("Confidence", result.confidence.label)
@@ -335,6 +335,8 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
             stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
             sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
             physiologicalStress = physiologicalStress,
+            morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
         )
         TrainingReadinessCard(computeTrainingReadiness(recovery))
 
@@ -343,7 +345,7 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
 }
 
 @Composable
-private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier?, series: List<TrainingLoadPoint>, timeframe: PerformanceTimeframe) {
+internal fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier?, series: List<TrainingLoadPoint>, timeframe: PerformanceTimeframe) {
     val cutoff = LocalDate.now().minusMonths(timeframe.months)
     val visible = series.filter { it.date >= cutoff }
 

@@ -258,6 +258,30 @@ def already_imported(key: str, source_notion_cluster: str) -> bool:
     return resp.ok and len(resp.json()) > 0
 
 
+def find_wearable_session(key: str, date_key: str, hc_by_date: dict) -> str | None:
+    """Returns HC session id (as string) for same-day 'other' session, if any."""
+    hc = hc_by_date.get(date_key)
+    return str(hc["id"]) if hc else None
+
+
+def fetch_hc_other_by_date(key: str) -> dict:
+    """Returns {date_str: session_dict} for all HC 'other' sessions."""
+    resp = requests.get(
+        f"{SUPABASE_URL}/rest/v1/exercise_sessions",
+        headers=supabase_headers(key),
+        params={"select": "id,start_time,avg_hr", "source": "eq.health_connect",
+                "type": "eq.other", "limit": "10000"},
+    )
+    resp.raise_for_status()
+    by_date: dict = {}
+    for s in resp.json():
+        date = s["start_time"][:10]
+        existing = by_date.get(date)
+        if not existing or (s.get("avg_hr") and not existing.get("avg_hr")):
+            by_date[date] = s
+    return by_date
+
+
 # ---------------------------------------------------------------------------
 # Build session payload
 # ---------------------------------------------------------------------------
@@ -300,6 +324,8 @@ def build_session(session: dict, drill_logs: dict, definitions: dict) -> dict:
         details["notes"] = session["notes"]
     if session["intensity"]:
         details["intensity"] = session["intensity"]
+    if session.get("wearable_session_id"):
+        details["wearable_session_id"] = session["wearable_session_id"]
 
     return {
         "user_id": FT_USER_ID,
@@ -339,6 +365,16 @@ def main():
     drill_logs = parse_drill_logs(zf)
     print(f"  {len(sessions)} conditioning sessions")
     print(f"  {len(drill_logs)} drill logs parsed")
+
+    print("  Fetching Health Connect 'other' sessions for auto-linking...")
+    hc_by_date = fetch_hc_other_by_date(args.service_role_key)
+    linked_count = 0
+    for s in sessions:
+        wid = find_wearable_session(args.service_role_key, s["date_key"], hc_by_date)
+        if wid:
+            s["wearable_session_id"] = wid
+            linked_count += 1
+    print(f"  {linked_count} sessions auto-linked to wearable data")
 
     print("[3/4] Importing to Supabase...")
     created = skipped = errors = 0

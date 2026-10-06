@@ -33,7 +33,15 @@ import com.bioscan.fieldterminal.data.NutritionGoals
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
+import com.bioscan.fieldterminal.data.GeminiApiKeyStore
+import com.bioscan.fieldterminal.data.HydrationExplanationRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.AnalysisRepository
+import com.bioscan.fieldterminal.domain.CaffeineEvent
+import com.bioscan.fieldterminal.domain.computeCaffeineWindow
+import com.bioscan.fieldterminal.domain.computeHydrationIntelligence
+import com.bioscan.fieldterminal.domain.HydrationIntelligenceResult
+import java.time.LocalDateTime
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.DataAvailability
@@ -213,6 +221,48 @@ fun HydrationTabContent(overview: NutritionOverview) {
     val totalMl = waterMl + beverageMl
     val hasAnyHydration = overview.todayHydrationMl != null || overview.todayBeverageItems.isNotEmpty()
     val todayCaffeineMg = overview.todayBeverageItems.mapNotNull { it.caffeineMg }.takeIf { it.isNotEmpty() }?.sum()
+    val caffeineWindow = run {
+        val mealTimestamps = overview.todaysMeals.associate { it.id to it.loggedAt }
+        val events = overview.todayBeverageItems.mapNotNull { item ->
+            val caffeineMg = item.caffeineMg ?: return@mapNotNull null
+            val loggedAtStr = mealTimestamps[item.mealId] ?: return@mapNotNull null
+            val dt = runCatching {
+                OffsetDateTime.parse(loggedAtStr).toLocalDateTime()
+            }.getOrNull() ?: return@mapNotNull null
+            CaffeineEvent(dt, caffeineMg, false)
+        }
+        if (events.isNotEmpty()) computeCaffeineWindow(events) else null
+    }
+
+    // 09.5 Hydration Intelligence: this tab's own small independent load
+    // (today's exercise duration only), same "each subtab loads its own
+    // data" convention TrainingTileScreen.kt's InjuryTab already follows.
+    var todayExerciseMinutes by remember { mutableStateOf(0.0) }
+    LaunchedEffect(Unit) {
+        val today = java.time.LocalDate.now()
+        todayExerciseMinutes = AnalysisRepository(SupabaseClientProvider.client)
+            .loadExerciseSessionsForTrainingLoad()
+            .filter { runCatching { java.time.OffsetDateTime.parse(it.startTime).toLocalDate() == today }.getOrDefault(false) }
+            .sumOf { it.durationMin ?: 0.0 }
+    }
+    val hydrationIntelligence = computeHydrationIntelligence(
+        measuredIntakeMl = overview.todayHydrationMl?.toDouble(),
+        effectiveHydrationMl = overview.todayBeverageItems.mapNotNull { it.effectiveHydrationMl }.sum().takeIf { overview.todayBeverageItems.isNotEmpty() },
+        exerciseDurationMinutesToday = todayExerciseMinutes,
+    )
+
+    val context = LocalContext.current
+    val geminiKey = remember { GeminiApiKeyStore.get(context) }
+    var explanation by remember { mutableStateOf<String?>(null) }
+    var explanationLoading by remember { mutableStateOf(false) }
+    LaunchedEffect(hydrationIntelligence, caffeineWindow) {
+        val key = geminiKey ?: return@LaunchedEffect
+        explanationLoading = true
+        explanation = try {
+            HydrationExplanationRepository(key).explain(hydrationIntelligence, caffeineWindow)
+        } catch (e: Exception) { null }
+        explanationLoading = false
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
@@ -248,13 +298,54 @@ fun HydrationTabContent(overview: NutritionOverview) {
             }
         }
 
+        HydrationIntelligenceCard(hydrationIntelligence)
+
         if (todayCaffeineMg != null) {
-            FTCard(title = "CAFFEINE TODAY") {
-                FTMetricValue(DisplayValue(primary = "%.0f".format(todayCaffeineMg), unit = "MG"))
+            FTCard(title = "CAFFEINE WINDOW") {
+                FTMetricValue(DisplayValue(primary = "%.0f".format(todayCaffeineMg), unit = "MG TODAY"))
+                if (caffeineWindow != null) {
+                    Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        StatLine("Residual now", "~%.0f mg".format(caffeineWindow.residualNowMg))
+                        caffeineWindow.residualAtBedtimeMg?.let { r ->
+                            StatLine("At 11pm", "~%.0f mg".format(r))
+                        }
+                        caffeineWindow.cutoffHour?.let { h ->
+                            val label = if (h == 0) "Threshold already met" else "Last dose by %02d:00".format(h)
+                            StatLine("Cutoff", label)
+                        }
+                    }
+                    Text(
+                        "Half-life 5h model · 200 mg reference dose · not personalized yet",
+                        style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                        color = FT.TextMuted,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                } else {
+                    Text(
+                        "Total from logged beverages",
+                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        color = FT.TextMuted,
+                    )
+                }
+            }
+        }
+
+        if (geminiKey != null) {
+            FTCard(title = "AI HYDRATION SUMMARY") {
+                if (explanationLoading) {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(strokeWidth = 2.dp, color = FT.DomainFuel)
+                    }
+                } else {
+                    explanation?.let { text ->
+                        Text(text, style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextPrimary)
+                    } ?: Text("Explanation unavailable.", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextMuted)
+                }
                 Text(
-                    "Total from logged beverages",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    "AI interpretation · validated data only · not medical advice",
+                    style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
                     color = FT.TextMuted,
+                    modifier = Modifier.padding(top = 6.dp),
                 )
             }
         }
@@ -360,6 +451,31 @@ private fun StatLine(label: String, value: String) {
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f).padding(start = 8.dp),
         )
+    }
+}
+
+@Composable
+private fun HydrationIntelligenceCard(result: HydrationIntelligenceResult) {
+    FTCard(title = "HYDRATION INTELLIGENCE") {
+        StatLine("Confidence", result.confidence.label)
+        result.measuredIntakeMl?.let { StatLine("Measured intake", "%.0f ml".format(it)) }
+        result.effectiveHydrationMl?.let { StatLine("Effective hydration (modeled)", "%.0f ml".format(it)) }
+        if (result.inferredDemandMl != null) {
+            StatLine("Inferred demand from today's exercise", "%.0f ml".format(result.inferredDemandMl))
+        } else {
+            Text(
+                "No exercise logged today -- no additional demand inferred.",
+                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                color = FT.TextMuted,
+            )
+        }
+        if (!result.environmentalContextAvailable) {
+            Text(
+                "Environmental context (temperature/humidity) isn't available yet -- demand estimate is exercise-only.",
+                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                color = FT.TextMuted,
+            )
+        }
     }
 }
 

@@ -1512,6 +1512,10 @@ window.Gear3D = { create };
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
+  window.addEventListener('unhandledrejection', function(e) {
+    console.error('[Dashboard] Unhandled rejection:', e.reason);
+  });
+
   // Real Supabase project — bioscan-dashboard, ap-southeast-1
   const SUPABASE_URL = 'https://ugfrglbcoivkprjqvjzz.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_GyandyvuVbF0RxZLnugz4A_GlNIstPc';
@@ -1565,31 +1569,39 @@ async function fetchDashboardData(sb){
     if(upsertError) console.warn('Failed to store Google refresh token:', upsertError.message);
   }
 
+  // Default 90-day window for time-series tables to avoid loading entire history.
+  const rangeEnd = new Date();
+  const rangeStart = new Date(rangeEnd);
+  rangeStart.setDate(rangeStart.getDate() - 90);
+  const dStart = rangeStart.toISOString().slice(0, 10);
+  const dEnd = rangeEnd.toISOString().slice(0, 10);
+
   // Fire every query in parallel — independent tables, no reason to serialize.
   const [
     wearableRes, sleepRes, wellbeingRes, hydrationRes, bodyMetricsRes,
     mealsRes, recoveryRes, restDaysRes, injuriesRes, supplementsRes,
     labDrawsRes, labResultsRes, runsRes, stoolRes, arousalRes, illnessesRes
   ] = await Promise.all([
-    sb.from('wearable_daily').select('*').order('date'),
-    sb.from('sleep_daily').select('*').order('date'),
-    sb.from('wellbeing_daily').select('*').order('date'),
-    sb.from('hydration_daily').select('*').order('date'),
-    sb.from('body_metrics').select('*').order('date'),
-    sb.from('meals').select('*').order('logged_at'),
-    sb.from('recovery_sessions').select('*').order('date', {ascending:false}),
-    sb.from('rest_days').select('*').order('date'),
+    sb.from('wearable_daily').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
+    sb.from('sleep_daily').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
+    sb.from('wellbeing_daily').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
+    sb.from('hydration_daily').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
+    sb.from('body_metrics').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
+    sb.from('meals').select('*').gte('logged_at', dStart).lte('logged_at', dEnd).order('logged_at'),
+    sb.from('recovery_sessions').select('*').gte('date', dStart).lte('date', dEnd).order('date', {ascending:false}),
+    sb.from('rest_days').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
     sb.from('injuries').select('*').order('start_date', {ascending:false}),
     sb.from('supplements').select('*').order('status').order('time_of_day'),
     sb.from('lab_draws').select('*').order('draw_date'),
     sb.from('lab_results').select('*'),
-    sb.from('runs').select('*').order('date', {ascending:false}),
-    sb.from('stool_log').select('*').order('occurred_at', {ascending:false}),
-    sb.from('arousal_daily').select('*').order('date'),
+    sb.from('runs').select('*').gte('date', dStart).lte('date', dEnd).order('date', {ascending:false}),
+    sb.from('stool_log').select('*').gte('occurred_at', dStart).lte('occurred_at', dEnd).order('occurred_at', {ascending:false}),
+    sb.from('arousal_daily').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
     sb.from('illnesses').select('*').order('start_date', {ascending:false})
   ]);
 
-  // surface the first real error rather than silently rendering empty panels
+  // Collect per-table errors instead of failing on the first one.
+  const fetchErrors = [];
   for(const [name, res] of Object.entries({
     wearable:wearableRes, sleep:sleepRes, wellbeing:wellbeingRes, hydration:hydrationRes,
     bodyMetrics:bodyMetricsRes, meals:mealsRes, recovery:recoveryRes, restDays:restDaysRes,
@@ -1597,8 +1609,9 @@ async function fetchDashboardData(sb){
     labResults:labResultsRes, runs:runsRes, stool:stoolRes, arousal:arousalRes,
     illnesses:illnessesRes
   })){
-    if(res.error) throw new Error(`Supabase fetch failed (${name}): ${res.error.message}`);
+    if(res.error) fetchErrors.push(`${name}: ${res.error.message}`);
   }
+  if(fetchErrors.length) console.warn('Dashboard fetch errors (non-fatal):', fetchErrors.join('; '));
 
   const wearableRows = wearableRes.data || [];
   const sleepRows = sleepRes.data || [];

@@ -1,10 +1,9 @@
 package com.bioscan.fieldterminal.data
 
-import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogExerciseRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
-import com.bioscan.fieldterminal.data.model.LogMasturbationRow
+import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
@@ -59,13 +58,6 @@ class LogRepository(private val supabase: SupabaseClient) {
                     limit(FETCH_LIMIT_PER_SOURCE)
                 }.decodeList<LogSleepRow>()
         }
-        val arousal = async {
-            supabase.postgrest.from("arousal_daily")
-                .select(columns = Columns.list("id,date,morning_erection_quality,arousal_level")) {
-                    order("date", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
-                }.decodeList<LogArousalRow>()
-        }
         val stool = async {
             supabase.postgrest.from("stool_log")
                 .select(columns = Columns.list("id,occurred_at,bristol_type,discomfort")) {
@@ -96,7 +88,7 @@ class LogRepository(private val supabase: SupabaseClient) {
         }
         val wellbeing = async {
             supabase.postgrest.from("wellbeing_daily")
-                .select(columns = Columns.list("id,date,energy,mood,stress,soreness")) {
+                .select(columns = Columns.list("id,date,energy,mood,stress,soreness,morning_erection_quality,arousal_level")) {
                     order("date", Order.DESCENDING)
                     limit(FETCH_LIMIT_PER_SOURCE)
                 }.decodeList<LogWellbeingRow>()
@@ -115,17 +107,17 @@ class LogRepository(private val supabase: SupabaseClient) {
                     limit(FETCH_LIMIT_PER_SOURCE)
                 }.decodeList<LogOstrcRow>()
         }
-        val masturbation = async {
-            supabase.postgrest.from("masturbation_log")
-                .select(columns = Columns.list("id,occurred_at,watched_porn,load_size,orgasm_intensity,notes")) {
-                    order("occurred_at", Order.DESCENDING)
+        val sexualActivity = async {
+            supabase.postgrest.from("sexual_activity_daily")
+                .select(columns = Columns.list("id,date,activity_type,instances,notes")) {
+                    order("date", Order.DESCENDING)
                     limit(FETCH_LIMIT_PER_SOURCE)
-                }.decodeList<LogMasturbationRow>()
+                }.decodeList<LogSexualActivityRow>()
         }
         buildLogEntries(
-            meals.await(), exerciseSessions.await(), sleep.await(), arousal.await(),
+            meals.await(), exerciseSessions.await(), sleep.await(),
             stool.await(), encounters.await(), notes.await(), hydration.await(),
-            wellbeing.await(), supplementsTaken.await(), ostrc.await(), masturbation.await(),
+            wellbeing.await(), supplementsTaken.await(), ostrc.await(), sexualActivity.await(),
         )
     }
 }

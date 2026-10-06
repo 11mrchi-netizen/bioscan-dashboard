@@ -2,9 +2,9 @@
 // Small-multiples: sleep, HRV, RHR, wellbeing, body metrics, injury periods.
 // Injury bands overlay on HRV chart via annotation bands.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { useAnalysis } from '../context/AnalysisContext'
+import { useRange } from '../lib/analysisStore'
 import { fetchMetric, METRICS } from '../lib/metricAdapter'
 import { CHART_SPECS } from '../lib/chartSpec'
 import { FTChart } from '../components/shared/FTChart'
@@ -27,26 +27,23 @@ const BODY_METRICS: ChartSpec[] = [
 ]
 
 export function Recovery() {
-  const { ctx } = useAnalysis()
+  const range = useRange()
   const [results, setResults] = useState<Record<string, MetricResult>>({})
   const [injuries, setInjuries] = useState<InjuryBand[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     setLoading(true)
-    const { start, end } = ctx.primaryRange
+    const { start, end } = range
     Promise.all([
-      // Metric fetches
       Promise.all(
         RECOVERY_METRICS.map(m =>
-          fetchMetric({ ...m, range: ctx.primaryRange, aggregation: 'daily_avg' })
+          fetchMetric({ ...m, range, aggregation: 'daily_avg' })
             .then(r => [r.metricId, r] as const)
         )
       ),
-      // Body weight
-      fetchMetric({ table: 'body_metrics', column: 'weight_kg', range: ctx.primaryRange, aggregation: 'daily_avg' })
+      fetchMetric({ table: 'body_metrics', column: 'weight_kg', range, aggregation: 'daily_avg' })
         .then(r => [r.metricId, r] as const),
-      // Injuries in range
       supabase.from('injuries')
         .select('start_date, end_date, body_part')
         .lte('start_date', end).or(`end_date.gte.${start},end_date.is.null`)
@@ -56,22 +53,20 @@ export function Recovery() {
       setInjuries(injuryData as InjuryBand[])
       setLoading(false)
     })
-  }, [ctx.primaryRange])
+  }, [range])
 
   if (loading) return <div className="state-loading mono">LOADING RECOVERY…</div>
 
-  // Build injury bands for HRV chart
-  const injuryBands = injuries.map(inj => ({
-    lower: 0, upper: 9999,
-    label: inj.body_part ?? 'Injury',
-    color: 'rgba(239,68,68,0.12)',
-  }))
-
   const hrvMetricId = `${METRICS.HRV.table}.${METRICS.HRV.column}`
-  const hrvSpec: ChartSpec = {
-    ...CHART_SPECS[hrvMetricId],
-    bands: injuryBands.length ? injuryBands : undefined,
-  }
+
+  const hrvSpec = useMemo<ChartSpec>(() => {
+    const bands = injuries.map(inj => ({
+      lower: 0, upper: 9999,
+      label: inj.body_part ?? 'Injury',
+      color: 'rgba(239,68,68,0.12)',
+    }))
+    return { ...CHART_SPECS[hrvMetricId], bands: bands.length ? bands : undefined }
+  }, [injuries, hrvMetricId])
 
   return (
     <div className="recovery">
@@ -84,7 +79,7 @@ export function Recovery() {
           {results[hrvMetricId] && (
             <div className="card recovery-card">
               <FTChart spec={hrvSpec} result={results[hrvMetricId]} height={160} />
-              {injuryBands.length > 0 && (
+              {injuries.length > 0 && (
                 <p className="recovery-band-note mono">
                   INJURY PERIODS SHADED
                 </p>
@@ -139,3 +134,5 @@ export function Recovery() {
     </div>
   )
 }
+
+export default Recovery

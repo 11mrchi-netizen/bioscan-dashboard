@@ -139,15 +139,17 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
 
     Column(modifier = modifier.semantics { contentDescription = range.label }) {
         Text(range.label.uppercase(), color = FT.TextSecondary, fontFamily = Telemetry, fontSize = 10.sp)
-        Canvas(modifier = Modifier.fillMaxWidth().height(24.dp).padding(top = 6.dp)) {
+        Canvas(modifier = Modifier.fillMaxWidth().height(28.dp).padding(top = 6.dp)) {
             val y = size.height / 2f
-            drawLine(FT.GlassTrack, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), strokeWidth = 8f)
-            drawLine(FT.Emerald.copy(alpha = 0.38f), androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), strokeWidth = 8f)
+            val trackH = 8f
+            val cr = androidx.compose.ui.geometry.CornerRadius(100f)
+            drawRoundRect(FT.GlassTrack, topLeft = androidx.compose.ui.geometry.Offset(0f, y - trackH / 2), size = androidx.compose.ui.geometry.Size(size.width, trackH), cornerRadius = cr)
+            drawRoundRect(FT.Emerald.copy(alpha = 0.38f), topLeft = androidx.compose.ui.geometry.Offset(0f, y - trackH / 2), size = androidx.compose.ui.geometry.Size(size.width, trackH), cornerRadius = cr)
             fraction(range.baseline)?.let { x ->
-                drawCircle(FT.TextSecondary, radius = 4f, center = androidx.compose.ui.geometry.Offset(x * size.width, y), style = Stroke(2f))
+                drawCircle(FT.TextSecondary, radius = 5f, center = androidx.compose.ui.geometry.Offset(x * size.width, y), style = Stroke(2f))
             }
             fraction(range.current)?.let { x ->
-                drawCircle(currentColor, radius = 5f, center = androidx.compose.ui.geometry.Offset(x * size.width, y))
+                drawCircle(currentColor, radius = 7f, center = androidx.compose.ui.geometry.Offset(x * size.width, y))
             }
         }
         Text(
@@ -282,9 +284,9 @@ private fun formatRangeValue(value: Double?): String {
     return if (value == Math.floor(value)) value.toInt().toString() else "%.1f".format(value)
 }
 
-private data class StateTreatment(val label: String, val symbol: String, val color: Color)
+internal data class StateTreatment(val label: String, val symbol: String, val color: Color)
 
-private fun stateTreatment(state: MetricState) = when (state) {
+internal fun stateTreatment(state: MetricState) = when (state) {
     MetricState.Optimal -> StateTreatment("OPTIMAL", "●", FT.Emerald)
     MetricState.Neutral -> StateTreatment("CURRENT", "●", FT.TextSecondary)
     MetricState.Warning -> StateTreatment("ATTENTION", "!", FT.Warning)

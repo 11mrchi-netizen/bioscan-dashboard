@@ -153,3 +153,5 @@ export function DataExplorer() {
     </div>
   )
 }
+
+export default DataExplorer

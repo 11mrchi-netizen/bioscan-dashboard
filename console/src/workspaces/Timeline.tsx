@@ -4,7 +4,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { useAnalysis } from '../context/AnalysisContext'
+import { useRange, useInspect } from '../lib/analysisStore'
 import type { EventRef } from '../types/analysis'
 import './Timeline.css'
 
@@ -90,13 +90,14 @@ const KIND_BADGE: Record<TimelineEvent['kind'], { label: string; color: string }
 }
 
 export function Timeline() {
-  const { ctx, inspect } = useAnalysis()
+  const range = useRange()
+  const inspect = useInspect()
   const [events, setEvents] = useState<TimelineEvent[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     setLoading(true)
-    const { start, end } = ctx.primaryRange
+    const { start, end } = range
     Promise.all([
       fetchRuns(start, end),
       fetchSleep(start, end),
@@ -108,7 +109,7 @@ export function Timeline() {
       setEvents(all)
       setLoading(false)
     })
-  }, [ctx.primaryRange])
+  }, [range])
 
   // Group by date for sticky headers
   const grouped = useMemo(() => {
@@ -164,3 +165,5 @@ export function Timeline() {
     </div>
   )
 }
+
+export default Timeline

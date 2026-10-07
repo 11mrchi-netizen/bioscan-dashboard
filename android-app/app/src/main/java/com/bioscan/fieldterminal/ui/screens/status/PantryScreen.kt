@@ -29,13 +29,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.PantryItem
 import com.bioscan.fieldterminal.data.PantryRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -47,16 +43,15 @@ import com.bioscan.fieldterminal.domain.OBSERVED_WINDOW_DAYS
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-private val label = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
-private val body = TextStyle(fontFamily = Inter, fontSize = 13.sp)
-private val strong = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+private val label = FTType.LabelCaps
+private val body = FTType.BodySmall
+private val strong = FTType.RowTitle
 
 private fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toLong().toString() else "%.1f".format(d)
 
@@ -85,7 +80,7 @@ fun PantryScreen(onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
         TileHeader(onBack = onBack)
         Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("PANTRY", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp), color = FT.TextPrimary)
+            Text("PANTRY", style = FTType.SectionTitle, color = FT.TextPrimary)
             Text(
                 "Remaining stock is your recorded purchases minus the servings you logged since the first one. " +
                     "Run-out dates are estimates from your schedule or recent logging.",
@@ -228,10 +223,10 @@ private fun PantryDetailSheet(item: PantryItem, repo: PantryRepository, onDismis
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        shape = RectangleShape, containerColor = FT.Surface, contentColor = FT.TextPrimary,
+        shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary,
     ) {
         Column(Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(item.name, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp), color = FT.TextPrimary)
+            Text(item.name, style = FTType.SectionTitle, color = FT.TextPrimary)
             item.brand?.let { Text(it, style = body, color = FT.TextSecondary) }
             StockLines(item)
 

@@ -21,12 +21,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -57,7 +55,8 @@ fun DateTrendLine(
     highlightColor: Color? = null,
     modifier: Modifier = Modifier,
     valueFormat: (Double) -> String = ::defaultTrendFormat,
-) = DateTrendLine(series = listOf(TrendSeries(points, color, highlightLast = highlightColor)), refLow = refLow, refHigh = refHigh, modifier = modifier, valueFormat = valueFormat)
+    unit: String? = null,
+) = DateTrendLine(series = listOf(TrendSeries(points, color, highlightLast = highlightColor)), refLow = refLow, refHigh = refHigh, modifier = modifier, valueFormat = valueFormat, unit = unit)
 
 // DAV-80: multi-series overload -- raw/7-day-avg/28-day-avg VO2max all share
 // one y-axis (same unit, just different smoothing), unlike weight vs.
@@ -74,6 +73,9 @@ fun DateTrendLine(
     refHigh: Double? = null,
     modifier: Modifier = Modifier,
     valueFormat: (Double) -> String = ::defaultTrendFormat,
+    // Chart frame: the unit every value on this chart is in, shown as a header
+    // so a trend is never an unlabeled squiggle (contract section 10).
+    unit: String? = null,
 ) {
     val sortedSeries = series.map { it.copy(points = it.points.sortedBy { p -> p.first }) }.filter { it.points.size >= 2 }
     if (sortedSeries.isEmpty()) return
@@ -111,6 +113,9 @@ fun DateTrendLine(
     val activeDay = selectedDay?.takeIf { it in dayMin..dayMax }
 
     Column(modifier = modifier.fillMaxWidth()) {
+        unit?.let {
+            Text(it.uppercase(), style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
+        }
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -161,8 +166,8 @@ fun DateTrendLine(
             }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(allPoints.minOf { it.first }.format(TREND_DATE_FORMAT), style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
-            Text(allPoints.maxOf { it.first }.format(TREND_DATE_FORMAT), style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
+            Text(allPoints.minOf { it.first }.format(TREND_DATE_FORMAT), style = FTType.MonoCaption, color = FT.TextSecondary)
+            Text(allPoints.maxOf { it.first }.format(TREND_DATE_FORMAT), style = FTType.MonoCaption, color = FT.TextSecondary)
         }
     }
 }

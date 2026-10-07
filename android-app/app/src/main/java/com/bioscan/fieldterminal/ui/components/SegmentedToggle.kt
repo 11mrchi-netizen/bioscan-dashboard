@@ -16,13 +16,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // DAV-115/123. Generalized from what was three near-identical copies
 // (PeriodToggle, the old Vo2MaxTimeframeToggle, and a metric-tab row this
@@ -57,7 +53,7 @@ fun <T> SegmentedToggle(
             ) {
                 Text(
                     labelOf(option),
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+                    style = FTType.LabelCaps,
                     color = if (isSelected) accentColor else FT.TextSecondary,
                 )
             }

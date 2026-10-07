@@ -15,13 +15,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // Shared primary-action button, used across every screen's add/edit/connect
 // flows -- migrated to the Futuristic Material contract in one place (DAV-108
@@ -69,6 +65,6 @@ fun AmberButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
             }
             .padding(horizontal = 20.dp, vertical = 12.dp),
     ) {
-        Text(text = label, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = tint)
+        Text(text = label, style = FTType.LabelCaps, color = tint)
     }
 }

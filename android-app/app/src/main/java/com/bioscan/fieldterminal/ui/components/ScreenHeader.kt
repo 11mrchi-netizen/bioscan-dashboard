@@ -7,14 +7,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // design/FIELD_TERMINAL_IA_CONTRACT.md + FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md
 // (DAV-94): title/context chrome shared across all top-level and tile screens,
@@ -45,5 +41,5 @@ fun ScreenHeader(title: String, context: String) {
     }
 }
 
-private val headerTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
-private val headerContextStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.08.em)
+private val headerTitleStyle = FTType.SectionTitle
+private val headerContextStyle = FTType.LabelCaps

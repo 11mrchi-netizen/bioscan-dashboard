@@ -66,6 +66,9 @@ import com.bioscan.fieldterminal.domain.levels.runningLevel
 import com.bioscan.fieldterminal.domain.levels.strengthLevel
 import com.bioscan.fieldterminal.domain.progressFraction
 import com.bioscan.fieldterminal.ui.components.ComparisonStrip
+import com.bioscan.fieldterminal.ui.components.ageAccelerationState
+import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.components.percentileBandState
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
@@ -74,8 +77,8 @@ import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -151,7 +154,7 @@ fun UserProfileScreen(
                         "Loading achievements from your training history…"
                     else
                         "Domain levels require population benchmarks and are not yet live.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                    style = FTType.Caption,
                     color = FT.TextMuted,
                 )
             }
@@ -212,53 +215,14 @@ private fun AgingCard(overview: AgingProfileOverview?, onOpen: () -> Unit) {
             overview == null -> CircularProgressIndicator(color = FT.Emerald)
             overview.chronologicalAgeYears == null -> FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile to see this.")
             else -> {
-                FTMetricValue(
-                    DisplayValue(
-                        primary = overview.chronologicalAgeYears.toString(),
-                        unit = "years",
-                        secondary = "CHRONOLOGICAL AGE",
-                    ),
-                )
-                Spacer(Modifier.height(8.dp))
-                overview.phenoAge?.let { BioAgeRow("PhenoAge", it) }
-                overview.cardioAge?.let { BioAgeRow("Cardio Age", it) }
-                Spacer(Modifier.height(4.dp))
-                Text("Tap for the full breakdown", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.TextMuted)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BioAgeRow(label: String, result: BiologicalAgeResult) {
-    val bioAge = result.biologicalAge
-    val accel = result.ageAcceleration
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(label.uppercase(), style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextMuted)
-            Row(verticalAlignment = Alignment.Bottom) {
+                BioAgeHero(overview)
                 Text(
-                    bioAge?.let { "%.0f".format(it) } ?: "—",
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
-                    color = FT.TextPrimary,
+                    "CHRONOLOGICAL ${overview.chronologicalAgeYears} YRS · TAP FOR THE FULL BREAKDOWN",
+                    style = FTType.Micro,
+                    color = FT.TextMuted,
                 )
-                if (accel != null) {
-                    Spacer(Modifier.width(8.dp))
-                    val deltaText = if (accel <= 0) "%.1f yrs".format(accel) else "+%.1f yrs".format(accel)
-                    val deltaColor = if (accel <= 0) FT.Emerald else FT.Warning
-                    Text(
-                        deltaText,
-                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-                        color = deltaColor,
-                    )
-                }
             }
         }
-        FTStatePill(ageAccelerationToState(accel))
     }
 }
 
@@ -272,13 +236,13 @@ private fun DomainLevelRow(domain: AchievementDomain, level: DomainLevel?) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(domain.label(), style = TextStyle(fontFamily = RobotoMono, fontSize = 12.5.sp), color = FT.TextSecondary)
+            Text(domain.label(), style = FTType.Value, color = FT.TextSecondary)
             if (level?.band != null) {
-                FTStatePill(bandToMetricState(level.band))
+                FTStatePill(percentileBandState(level.band))
             } else {
                 Text(
                     "Not enough data yet",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+                    style = FTType.RowTitle,
                     color = FT.TextMuted,
                     textAlign = TextAlign.End,
                 )
@@ -290,12 +254,12 @@ private fun DomainLevelRow(domain: AchievementDomain, level: DomainLevel?) {
                 RangeBar(
                     value = percentile,
                     max = 100.0,
-                    watchBelow = 25.0,
+                    watchBelow = null,
                     color = bandToColor(level.band),
                 )
             }
             ComparisonStrip(population = evidence)
-            FTConfidenceChip(confidenceToLevel(evidence.confidence))
+            FTConfidenceChip(confidenceLevel(evidence.confidence))
         }
     }
 }
@@ -313,7 +277,7 @@ private fun AchievementSection(domain: AchievementDomain, achievements: List<Ach
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     achievement.metricLabel(),
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    style = FTType.RowTitle,
                     color = FT.TextSecondary,
                 )
                 Spacer(Modifier.height(4.dp))
@@ -322,7 +286,7 @@ private fun AchievementSection(domain: AchievementDomain, achievements: List<Ach
                 achievement.comparisonContext?.let {
                     Text(
                         it,
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                        style = FTType.Caption,
                         color = FT.Emerald,
                     )
                 }
@@ -350,18 +314,18 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
             Column(Modifier.weight(1f)) {
                 Text(
                     blockTitle,
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    style = FTType.RowTitle,
                     color = FT.TextPrimary,
                 )
                 blockSubtitle?.let {
-                    Text(it, style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextMuted)
+                    Text(it, style = FTType.MonoCaption, color = FT.TextMuted)
                 }
             }
             EditLink("EDIT", onEdit)
         }
         Text(
             "${cycle.startDate} — ${cycle.endDate ?: "ongoing"}",
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+            style = FTType.MonoCaption,
             color = FT.TextMuted,
         )
 
@@ -381,7 +345,7 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
                 val remaining = (totalDays - elapsedDays).toInt()
                 Text(
                     "Week $weeksElapsed of $totalWeeks — $remaining days remaining",
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                    style = FTType.MonoCaption,
                     color = FT.TextMuted,
                 )
             }
@@ -398,13 +362,13 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
                 ) {
                     Text(
                         entry.quality.label(),
-                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                        style = FTType.BodySmall,
                         color = FT.TextSecondary,
                         modifier = Modifier.weight(0.45f),
                     )
                     Text(
                         "${(entry.weight * 100).toInt()}%",
-                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                        style = FTType.Label,
                         color = FT.TextPrimary,
                         modifier = Modifier.width(40.dp),
                         textAlign = TextAlign.End,
@@ -446,7 +410,7 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
         } else {
             Text(
                 "No numeric goal set for this block.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
@@ -488,14 +452,14 @@ private fun TrainingBlockHistoryCard(
                 ) {
                     Text(
                         templateLabel,
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
+                        style = FTType.RowTitle,
                         color = FT.TextPrimary,
                         modifier = Modifier.weight(1f),
                     )
                     if (weeks.isNotEmpty()) {
                         Text(
                             weeks,
-                            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                            style = FTType.Label,
                             color = FT.TextSecondary,
                         )
                     }
@@ -506,12 +470,12 @@ private fun TrainingBlockHistoryCard(
                 ) {
                     Text(
                         dateRange,
-                        style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                        style = FTType.MonoCaption,
                         color = FT.TextMuted,
                     )
                     Text(
                         sessions,
-                        style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                        style = FTType.MonoCaption,
                         color = FT.TextSecondary,
                     )
                 }
@@ -551,19 +515,19 @@ private fun StrengthAchievementSection(achievements: List<Achievement>, bodyWeig
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                 Text(
                     exerciseLabel,
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+                    style = FTType.RowTitle,
                     color = FT.TextPrimary,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
                     "${"%.1f".format(ach.value)} kg",
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                    style = FTType.Telemetry,
                     color = FT.TextPrimary,
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
                     progressText,
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                    style = FTType.MonoCaption,
                     color = if (delta != null && delta > 0) FT.Emerald else FT.TextMuted,
                 )
             }
@@ -576,7 +540,7 @@ private fun StrengthAchievementSection(achievements: List<Achievement>, bodyWeig
                 ) {
                     Text(
                         tier.tier.label,
-                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 10.sp),
+                        style = FTType.Label,
                         color = tier.tierColor,
                         modifier = Modifier.width(60.dp),
                     )
@@ -585,7 +549,7 @@ private fun StrengthAchievementSection(achievements: List<Achievement>, bodyWeig
                     }
                     tier.nextLabel?.let {
                         Spacer(Modifier.width(8.dp))
-                        Text(it, style = TextStyle(fontFamily = RobotoMono, fontSize = 10.sp), color = FT.TextMuted)
+                        Text(it, style = FTType.Micro, color = FT.TextMuted)
                     }
                 }
             }
@@ -606,7 +570,7 @@ private fun StrengthAchievementSection(achievements: List<Achievement>, bodyWeig
             Spacer(Modifier.height(8.dp))
             Text(
                 "RATIOS   ${ratios.joinToString("   ")}",
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 11.5.sp),
+                style = FTType.MonoCaption,
                 color = FT.TextSecondary,
             )
         }
@@ -670,38 +634,13 @@ private fun buildBlockDateRange(start: String, end: String): String {
 
 // ---- Helper functions ----
 
-private fun bandToMetricState(band: PercentileBand?): MetricState = when (band) {
-    PercentileBand.TOP_DECILE -> MetricState.Optimal
-    PercentileBand.ABOVE_AVERAGE -> MetricState.Neutral
-    PercentileBand.AVERAGE -> MetricState.Neutral
-    PercentileBand.BELOW_AVERAGE -> MetricState.Warning
-    PercentileBand.BOTTOM_DECILE -> MetricState.Building
-    null -> MetricState.Unavailable
-}
-
-private fun bandToColor(band: PercentileBand?): Color = when (band) {
-    PercentileBand.TOP_DECILE -> FT.Emerald
-    PercentileBand.ABOVE_AVERAGE -> FT.Emerald
-    PercentileBand.AVERAGE -> FT.Info
-    PercentileBand.BELOW_AVERAGE -> FT.Warning
-    PercentileBand.BOTTOM_DECILE -> FT.Analysis
-    null -> FT.TextMuted
-}
-
-private fun ageAccelerationToState(accel: Double?): MetricState = when {
-    accel == null -> MetricState.Unavailable
-    accel <= -2.0 -> MetricState.Optimal
-    accel <= 2.0 -> MetricState.Neutral
-    else -> MetricState.Warning
-}
-
-private fun confidenceToLevel(c: Confidence): ConfidenceLevel {
-    val ratio = if (c.need > 0) c.have.toDouble() / c.need else 0.0
-    return when {
-        ratio >= 0.8 -> ConfidenceLevel.High
-        ratio >= 0.5 -> ConfidenceLevel.Medium
-        else -> ConfidenceLevel.Low
-    }
+// Bar fill follows the same state as the pill beside it (percentileBandState):
+// Optimal = emerald, Neutral = cool neutral, Building = analysis violet.
+private fun bandToColor(band: PercentileBand?): Color = when (percentileBandState(band)) {
+    MetricState.Optimal -> FT.Emerald
+    MetricState.Neutral -> FT.TextSecondary
+    MetricState.Building -> FT.Analysis
+    else -> FT.TextMuted
 }
 
 private fun Achievement.toDisplayValue(): DisplayValue {
@@ -734,7 +673,7 @@ private fun Achievement.metricLabel(): String = metric.replace('_', ' ').replace
 private fun EditLink(label: String, onClick: () -> Unit) {
     Text(
         label,
-        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp),
+        style = FTType.Label,
         color = FT.Emerald,
         modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
     )

@@ -17,13 +17,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // Small "?" that opens a plain-language explanation. First help/popup pattern
 // in the app (25/9 rework) -- kept to one dialog, no bottom-sheet machinery.
@@ -39,14 +36,14 @@ fun InfoHelpButton(title: String, body: String, modifier: Modifier = Modifier) {
             .clickable { open = true },
         contentAlignment = Alignment.Center,
     ) {
-        Text("?", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 12.sp), color = FT.TextSecondary)
+        Text("?", style = FTType.Label, color = FT.TextSecondary)
     }
     if (open) {
         AlertDialog(
             onDismissRequest = { open = false },
             containerColor = FT.Surface,
-            title = { Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.sp), color = FT.TextPrimary) },
-            text = { Text(body, style = TextStyle(fontFamily = Inter, fontSize = 14.sp, lineHeight = 20.sp), color = FT.TextSecondary) },
+            title = { Text(title, style = FTType.SectionTitle, color = FT.TextPrimary) },
+            text = { Text(body, style = FTType.BodySmall.copy(lineHeight = 20.sp), color = FT.TextSecondary) },
             confirmButton = { TextButton(onClick = { open = false }) { Text("GOT IT", color = FT.DomainTraining) } },
         )
     }

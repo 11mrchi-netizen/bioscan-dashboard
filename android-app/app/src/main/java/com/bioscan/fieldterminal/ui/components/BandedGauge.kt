@@ -18,6 +18,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -68,8 +69,9 @@ fun BandedGauge(
             drawCircle(activeColor, radius = stroke * 0.55f, center = m, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(valueText, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 26.sp), color = FT.TextPrimary)
-            Text(label, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp), color = activeColor)
+            // The centred value is the card's hero metric.
+            Text(valueText, style = FTType.DisplayMetric, color = FT.TextPrimary)
+            Text(label, style = FTType.CaptionStrong, color = activeColor)
         }
     }
 }

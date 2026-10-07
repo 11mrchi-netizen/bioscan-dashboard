@@ -16,13 +16,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.domain.HeartRateZone
 import com.bioscan.fieldterminal.domain.HeartRateZoneBreakdown
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
 import kotlin.math.roundToInt
 
 // Session detail's HR zone breakdown. Its own fixed ordinal palette (low to
@@ -79,6 +77,6 @@ private fun HeartRateZoneLegendRow(entry: HeartRateZoneBreakdown, totalSeconds: 
     val minutes = entry.seconds / 60
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(modifier = Modifier.size(10.dp).background(heartRateZoneColor(entry.zone), CircleShape))
-        Text("${entry.zone.label} — ${minutes}min ($pct%)", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary)
+        Text("${entry.zone.label} — ${minutes}min ($pct%)", style = FTType.BodySmall, color = FT.TextSecondary)
     }
 }

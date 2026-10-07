@@ -98,6 +98,27 @@ Domain accents identify sections or navigation; they do not encode health/warnin
 DAV-296: the User tab replaces Map in the bottom bar. Map's accent and screen stay in the
 codebase (unmounted from navigation, not deleted) for possible reuse elsewhere later.
 
+### Category colors (third tier)
+
+Three tiers, never interchangeable: **State** = how is it; **Domain** = which section; **Category** = what kind of thing is this (a log entry kind, a chart series, a sub-domain).
+
+| Category | 500 anchor | Used for |
+|---|---|---|
+| Sleep | `#4A5FD9` | sleep entries, sleep stages (stages are lightness steps 300–900 of this one hue) |
+| Activity | `#FF8040` | runs, strength, exercise series |
+| Wellbeing | `#3FA9E8` | wellness entries and series |
+| Arousal | `#E11D74` | arousal / intimacy entries (magenta-crimson, deliberately not red: red reads as Critical) |
+| Digestion | `#C9A876` | stool / OSTRC entries |
+| Intake | `#7EF2A8` | food, drink, supplement entries |
+
+Each has 300/500/700/900 stops (`FuturisticMaterialTokens.Category.*`). Guardrails:
+
+1. Category colors never appear on `FTStatePill`, state text, gauge bands or range tracks; those stay State tokens.
+2. Identity marks only — dot, left rail, icon, chip outline, series stroke. No large fills, no glow.
+3. Multi-series charts need a legend. Where a category hue sits near a state hue (Activity/Warning, Wellbeing/Info), the item also carries its text label, and state always carries pill + icon, so color is never the only signal.
+4. One category color per card unless the card is explicitly multi-series.
+5. A chart series never borrows a State color to tell series apart (no "ATL is amber, TSB is blue"); use Category or neutral tokens.
+
 ### Glass / overlay system
 
 - Glass fill: white at roughly 5–8%.
@@ -137,6 +158,30 @@ Conceptually: **Inter = interface · Roboto Mono = telemetry**. Do not make whol
 | Telemetry | Roboto Mono | Bold | 13–14 |
 | Label | Roboto Mono | Bold | 11–12 |
 | Micro | Roboto Mono | Regular | 10 |
+
+### Implemented roles (`FTType`)
+
+Screens use these named roles; hand-written `TextStyle(...)` is not used. A new size means a new role here (and in `FTType.kt`), not a one-off.
+
+| Role | Font | Weight | Size | Use |
+|---|---|---|---:|---|
+| `DisplayMetric` | Roboto Mono | Bold | 36 | The one hero value |
+| `MetricMedium` | Roboto Mono | Bold | 24 | Supporting levels beside a hero |
+| `PageTitle` | Inter | Bold | 24 | Page titles |
+| `SectionTitle` | Inter | SemiBold | 20 | Section / sheet / back-header titles |
+| `CardTitle` | Inter | Bold | 13 | `FTCard` title bar |
+| `RowTitle` | Inter | SemiBold | 15 | List-row titles |
+| `Body` / `BodySmall` | Inter | Regular | 15 / 13 | Copy |
+| `Caption` / `CaptionStrong` | Inter | Regular / SemiBold | 12 | Secondary notes |
+| `Value` | Roboto Mono | Regular | 14 | Row values |
+| `Telemetry` | Roboto Mono | Bold | 13 | Emphasised data |
+| `Label` / `LabelCaps` | Roboto Mono | Bold | 11 | Labels, pills, chips (`LabelCaps` adds 0.14em tracking) |
+| `MonoCaption` | Roboto Mono | Regular | 11 | Timestamps, metadata |
+| `Micro` | Roboto Mono | Regular | 10 | Smallest allowed; never for a primary metric |
+
+### Date and time entry
+
+Date / time fields open a themed bottom sheet (`DateField` / `DateTimeField` in `DatePickers.kt`): a month calendar with month and year navigation, and a 12-hour time panel with an AM/PM toggle. No platform dialogs, no 24-hour clock or inner ring; nothing is written back until SET.
 
 Primary metrics should be visually dominant. Preferred pattern:
 

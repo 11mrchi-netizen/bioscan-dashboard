@@ -194,7 +194,14 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
 // itself stays legacy-amber until every one of its callers migrates (see
 // FuturisticMaterialTokens.kt's own "legacy tokens stay intact" precedent).
 @Composable
-fun FTCard(title: String, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+fun FTCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    // Caveats / "what this is" copy lives behind one help button in the title
+    // bar instead of a muted paragraph inside the card.
+    info: String? = null,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
     val shape = RoundedCornerShape(FT.RadiusCard)
     Column(
         modifier = modifier
@@ -209,14 +216,20 @@ fun FTCard(title: String, modifier: Modifier = Modifier, content: @Composable an
             .border(FT.BorderWidth, FT.GlassBorder, shape)
             .background(FT.GlassFill, shape),
     ) {
-        Text(
-            text = title.uppercase(),
-            color = FT.Emerald,
-            fontFamily = Interface,
-            fontWeight = FontWeight.Bold,
-            fontSize = 13.sp,
+        Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title.uppercase(),
+                color = FT.Emerald,
+                fontFamily = Interface,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f),
+            )
+            info?.let { InfoHelpButton(title = title, body = it) }
+        }
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             content()
         }

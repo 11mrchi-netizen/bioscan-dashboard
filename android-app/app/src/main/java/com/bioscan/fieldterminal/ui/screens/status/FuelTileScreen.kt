@@ -59,6 +59,8 @@ import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.FuelTab
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.FTSegment
+import com.bioscan.fieldterminal.ui.components.FTSegmentBar
 import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
 import com.bioscan.fieldterminal.ui.components.confidenceLevel
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -137,26 +139,24 @@ fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {})
 // comment, the shape across days is the signal.
 @Composable
 private fun BristolCard(eval: BristolEvaluation, entries: List<Pair<LocalDate, Int>>) {
-    FTCard(title = "DIGESTIVE PATTERN (BRISTOL)") {
+    FTCard(title = "DIGESTIVE PATTERN (BRISTOL)", info = "Descriptive pattern only — not a diagnostic tool.") {
         FTMetricRow("Frequency (14d)", "${eval.confidence.have} entries logged")
         FTConfidenceChip(confidenceLevel(eval.confidence))
         eval.pattern?.let { FTMetricRow("Pattern", bristolPatternLabel(it)) }
-        eval.pctHard?.let { FTMetricRow("Hard (types 1-2)", "%.0f%%".format(it)) }
-        eval.pctNormal?.let { FTMetricRow("Normal (types 3-5)", "%.0f%%".format(it)) }
-        eval.pctLoose?.let { FTMetricRow("Loose (types 6-7)", "%.0f%%".format(it)) }
-        if (entries.size >= 2) {
-            DateTrendLine(
-                points = entries.map { (date, type) -> date to type.toDouble() },
-                color = FT.Category.Digestion.c500,
-                modifier = Modifier.padding(top = 8.dp),
-                unit = "Bristol type (1-7)",
+        // Bristol type is an ordinal category (1-7), so the shape across days is
+        // shown as a hard / normal / loose distribution, not a continuous line.
+        val hard = eval.pctHard
+        val normal = eval.pctNormal
+        val loose = eval.pctLoose
+        if (hard != null && normal != null && loose != null) {
+            FTSegmentBar(
+                listOf(
+                    FTSegment("Hard (1-2)", hard, FT.Category.Digestion.c700),
+                    FTSegment("Normal (3-5)", normal, FT.Category.Digestion.c500),
+                    FTSegment("Loose (6-7)", loose, FT.Category.Digestion.c300),
+                ),
             )
         }
-        Text(
-            "Descriptive pattern only — not a diagnostic tool.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-            color = FT.TextMuted,
-        )
     }
 }
 
@@ -284,7 +284,10 @@ private fun BodyFatCard(eval: BodyFatEvaluation) {
 // the data gate does not support."
 @Composable
 private fun TdeeCard(eval: TdeeEvaluation) {
-    FTCard(title = "ENERGY BALANCE (TDEE ESTIMATE)") {
+    FTCard(
+        title = "ENERGY BALANCE (TDEE ESTIMATE)",
+        info = "Post-fact estimate from your own logged intake and real weight trend — not a predictive formula, and not a target to hit.",
+    ) {
         FTConfidenceChip(confidenceLevel(eval.confidence))
         if (eval.state == EvalState.Stable && eval.tdeeKcal != null && eval.rangeLowKcal != null && eval.rangeHighKcal != null) {
             FTMetricValue(
@@ -300,11 +303,6 @@ private fun TdeeCard(eval: TdeeEvaluation) {
                 "Needs 10+ complete-logged days in the last 14 and an established weight trend (10+ weigh-ins across 14+ days) before an estimate is trustworthy.",
             )
         }
-        Text(
-            "Post-fact estimate from your own logged intake and real weight trend — not a predictive formula, and not a target to hit.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-            color = FT.TextMuted,
-        )
     }
 }
 

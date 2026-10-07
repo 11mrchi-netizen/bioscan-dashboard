@@ -189,7 +189,10 @@ private fun InjuryTab() {
 // DAV-216 (24/9 fixes): moved verbatim from HeartTileScreen.kt.
 @Composable
 private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int, sorenessMedian: Double?, weeklyRestCadence: List<WeeklyRestCadencePoint>) {
-    FTCard(title = "OSTRC-H2 · ${eval.bodyArea.uppercase()}") {
+    FTCard(
+        title = "OSTRC-H2 · ${eval.bodyArea.uppercase()}",
+        info = "No injury risk score — single-factor screening doesn't predict injury. You do the synthesis; this doesn't.",
+    ) {
         FTConfidenceChip(confidenceLevel(eval.confidence))
         eval.latestSeverityScore?.let { FTMetricRow("Latest severity", "$it / 100") }
         eval.latestCheckDate?.let { FTMetricRow("Last check-in", it.toString()) }
@@ -202,11 +205,6 @@ private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int,
         FTMetricRow("Days without rest", "$daysWithoutRest")
         sorenessMedian?.let { FTMetricRow("7-day soreness median", "%.1f".format(it)) }
         RestCadenceStrip(weeklyRestCadence)
-        Text(
-            "No injury risk score — single-factor screening doesn't predict injury. You do the synthesis; this doesn't.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-            color = FT.TextMuted,
-        )
     }
 }
 

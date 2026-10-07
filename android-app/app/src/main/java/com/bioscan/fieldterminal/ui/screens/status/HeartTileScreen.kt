@@ -90,6 +90,9 @@ import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.HeartTab
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.FTScoreRow
+import com.bioscan.fieldterminal.ui.components.FTSegment
+import com.bioscan.fieldterminal.ui.components.FTSegmentBar
 import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
 import com.bioscan.fieldterminal.ui.components.confidenceLevel
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -334,12 +337,7 @@ private fun ArousalHistory(rows: List<LogArousalRow>, masturbation: List<LogMast
         Text("No arousal entries logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
         return
     }
-    FTCard(title = "RECENT ENTRIES") {
-        Text(
-            "No Analysis Layer evaluation exists for arousal yet -- real recent log history only.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-            color = FT.TextMuted,
-        )
+    FTCard(title = "RECENT ENTRIES", info = "No Analysis Layer evaluation exists for arousal yet -- this is real recent log history only.") {
         combined.forEach { entry ->
             Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(entry.dateLabel, style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp), color = FT.TextSecondary)
@@ -424,13 +422,14 @@ private fun DynamicRecoveryCard(result: DynamicRecoveryResult) {
             )
         } else {
             result.contributors.forEach { contributor ->
-                val arrow = when (contributor.direction) {
-                    1 -> "↑"
-                    -1 -> "↓"
-                    0 -> "="
-                    else -> "?"
+                // Arrow + word, so direction never rests on glyph or color alone.
+                val effect = when (contributor.direction) {
+                    1 -> "↑ SUPPORTS RECOVERY"
+                    -1 -> "↓ HOLDS RECOVERY BACK"
+                    0 -> "= NEUTRAL"
+                    else -> "— NO SIGNAL YET"
                 }
-                FTMetricRow(contributor.dimension.replace('_', ' ').replaceFirstChar { it.uppercase() }, "$arrow (${contributor.confidence.label})")
+                FTMetricRow(contributor.dimension.replace('_', ' ').replaceFirstChar { it.uppercase() }, effect)
             }
         }
     }
@@ -443,7 +442,7 @@ private fun SleepIndexCard(result: SleepIndexResult) {
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
             result.components.forEach { (component, componentScore) ->
-                FTMetricRow(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, "%.0f".format(componentScore.score))
+                FTScoreRow(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, componentScore.score, FT.Category.Sleep.c500)
             }
         } else {
             Text(
@@ -457,17 +456,12 @@ private fun SleepIndexCard(result: SleepIndexResult) {
 
 @Composable
 private fun CircadianAlignmentCard(result: CircadianAlignmentResult) {
-    FTCard(title = "CIRCADIAN ALIGNMENT") {
-        Text(
-            "A behavioral regularity proxy, not a measured circadian phase.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-            color = FT.TextMuted,
-        )
+    FTCard(title = "CIRCADIAN ALIGNMENT", info = "A behavioral regularity proxy, not a measured circadian phase.") {
         FTConfidenceChip(confidenceLevel(result.confidence))
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
             result.components.forEach { (component, componentScore) ->
-                FTMetricRow(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, "%.0f".format(componentScore.score))
+                FTScoreRow(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, componentScore.score, FT.Category.Sleep.c300)
             }
         } else {
             Text(
@@ -494,17 +488,17 @@ private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay
         val medium = summary.mediumProportion
         val high = summary.highProportion
         if (relax != null && normal != null && medium != null && high != null) {
-            val total = (relax + normal + medium + high).takeIf { it > 0 } ?: 1
-            Row(modifier = Modifier.fillMaxWidth().height(10.dp)) {
-                // Ordinal intensity (relax -> high): one hue, rising opacity,
-                // not a state ramp -- the percentages below carry the values.
-                val stressHue = FT.Category.Wellbeing.c500
-                Box(Modifier.weight((relax.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(stressHue.copy(alpha = 0.30f)))
-                Box(Modifier.weight((normal.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(stressHue.copy(alpha = 0.50f)))
-                Box(Modifier.weight((medium.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(stressHue.copy(alpha = 0.75f)))
-                Box(Modifier.weight((high.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(stressHue))
-            }
-            FTMetricRow("Relax / Normal / Medium / High", "$relax% / $normal% / $medium% / $high%")
+            // Ordinal intensity (relax -> high): one hue, rising opacity, not a
+            // state ramp -- the legend carries the labels and percentages.
+            val stressHue = FT.Category.Wellbeing.c500
+            FTSegmentBar(
+                listOf(
+                    FTSegment("Relax", relax.toDouble(), stressHue.copy(alpha = 0.30f)),
+                    FTSegment("Normal", normal.toDouble(), stressHue.copy(alpha = 0.50f)),
+                    FTSegment("Medium", medium.toDouble(), stressHue.copy(alpha = 0.75f)),
+                    FTSegment("High", high.toDouble(), stressHue),
+                ),
+            )
         }
         if (result.peakMagnitude != null) {
             FTMetricRow("Today's baseline", "%.0f".format(result.baseline))
@@ -561,20 +555,23 @@ private fun SleepPhasesCard(nights: List<SleepAnalysisRow>) {
     val avgTotal = (avgDeep + avgRem + avgLight).takeIf { it > 0 } ?: 1.0
 
     FTCard(title = "SLEEP PHASES") {
-        Row(modifier = Modifier.fillMaxWidth().height(10.dp)) {
-            Box(Modifier.weight((avgDeep / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Category.Sleep.c700))
-            Box(Modifier.weight((avgRem / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Category.Sleep.c500))
-            Box(Modifier.weight((avgLight / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Category.Sleep.c300))
-        }
-        PhaseFTMetricRow("Deep", avgDeep, avgTotal, FT.Category.Sleep.c700)
-        PhaseFTMetricRow("REM", avgRem, avgTotal, FT.Category.Sleep.c500)
-        PhaseFTMetricRow("Light", avgLight, avgTotal, FT.Category.Sleep.c300)
+        FTSegmentBar(
+            listOf(
+                FTSegment("Deep", avgDeep, FT.Category.Sleep.c700),
+                FTSegment("REM", avgRem, FT.Category.Sleep.c500),
+                FTSegment("Light", avgLight, FT.Category.Sleep.c300),
+            ),
+            showLegend = false,
+        )
+        PhaseRow("Deep", avgDeep, avgTotal, FT.Category.Sleep.c700)
+        PhaseRow("REM", avgRem, avgTotal, FT.Category.Sleep.c500)
+        PhaseRow("Light", avgLight, avgTotal, FT.Category.Sleep.c300)
         FTMetricRow("Nights averaged", "${recent.size}")
     }
 }
 
 @Composable
-private fun PhaseFTMetricRow(label: String, minutes: Double, totalMinutes: Double, dotColor: androidx.compose.ui.graphics.Color) {
+private fun PhaseRow(label: String, minutes: Double, totalMinutes: Double, dotColor: androidx.compose.ui.graphics.Color) {
     Row(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.width(8.dp).height(8.dp).background(dotColor))
@@ -603,7 +600,7 @@ private fun MovementIndexCard(result: MovementIndexResult) {
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100"))
             result.components.forEach { (component, componentScore) ->
-                FTMetricRow(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, "%.0f".format(componentScore.score))
+                FTScoreRow(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, componentScore.score, FT.Category.Activity.c500)
             }
             if (result.unavailableComponents.isNotEmpty()) {
                 Text(

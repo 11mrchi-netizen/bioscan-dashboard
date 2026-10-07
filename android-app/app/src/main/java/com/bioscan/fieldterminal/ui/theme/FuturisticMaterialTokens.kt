@@ -5,7 +5,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Tokenized Futuristic Material foundation for new and migrated analytical UI.
- * Existing legacy FieldColors stay intact until their owning screens migrate.
+ * The only palette in the app: the legacy amber FieldColors/FieldTextStyles are gone.
  */
 object FuturisticMaterialTokens {
     val Base = Color(0xFF0A0C0E)

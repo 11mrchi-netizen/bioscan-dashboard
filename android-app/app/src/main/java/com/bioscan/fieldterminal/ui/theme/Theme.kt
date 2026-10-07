@@ -4,20 +4,24 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
-// Field Terminal is a single deliberate dark theme (design/README.md has no
-// light variant) -- not following system light/dark, matching the mockups'
-// own fixed "machined instrument" look.
+// Field Terminal is a single deliberate dark theme (the Futuristic Material
+// contract defines no light variant) -- not following system light/dark.
+// Seeded from FuturisticMaterialTokens so any stock Material 3 component that
+// isn't explicitly styled still lands on the same palette as the rest of the app.
 private val FieldColorScheme = darkColorScheme(
-    background = FieldColors.Ground,
-    surface = FieldColors.Ground,
-    surfaceVariant = FieldColors.RaisedSurface,
-    onBackground = FieldColors.Ink,
-    onSurface = FieldColors.Ink,
-    primary = FieldColors.Amber,
-    onPrimary = FieldColors.Ground,
-    secondary = FieldColors.Green,
-    error = FieldColors.Alert,
-    outline = FieldColors.Hairline,
+    background = FuturisticMaterialTokens.Base,
+    surface = FuturisticMaterialTokens.Surface,
+    surfaceVariant = FuturisticMaterialTokens.Elevated,
+    onBackground = FuturisticMaterialTokens.TextPrimary,
+    onSurface = FuturisticMaterialTokens.TextPrimary,
+    onSurfaceVariant = FuturisticMaterialTokens.TextSecondary,
+    primary = FuturisticMaterialTokens.Emerald,
+    onPrimary = FuturisticMaterialTokens.Base,
+    secondary = FuturisticMaterialTokens.EmeraldHighlight,
+    onSecondary = FuturisticMaterialTokens.Base,
+    error = FuturisticMaterialTokens.Critical,
+    onError = FuturisticMaterialTokens.Base,
+    outline = FuturisticMaterialTokens.GlassBorder,
 )
 
 @Composable

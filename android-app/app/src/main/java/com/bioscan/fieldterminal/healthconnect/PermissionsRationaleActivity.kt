@@ -13,10 +13,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FieldTerminalTheme
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
-import com.bioscan.fieldterminal.ui.theme.Saira
+import com.bioscan.fieldterminal.ui.theme.FTType
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.ui.theme.Inter
 
 // Phase G1: Health Connect requires an activity answering
 // androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE (reachable from Health
@@ -30,18 +30,18 @@ class PermissionsRationaleActivity : ComponentActivity() {
         setContent {
             FieldTerminalTheme {
                 Column(
-                    modifier = Modifier.fillMaxSize().background(FieldColors.Ground).padding(22.dp),
+                    modifier = Modifier.fillMaxSize().background(FT.Base).padding(22.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    Text("HEALTH CONNECT DATA USE", style = FieldTextStyles.headerTitle, color = FieldColors.Amber)
+                    Text("HEALTH CONNECT DATA USE", style = FTType.SectionTitle, color = FT.Emerald)
                     Text(
                         "Field Terminal reads activity, body measurement, sleep, and vitals records from " +
                             "Health Connect to show them in the Status and Training tabs, and reads/writes " +
                             "hydration and nutrition records to keep them in sync with entries logged in " +
                             "this app's Log tab. Nothing is sent off this device except to this app's own " +
                             "private Supabase project, which only this account can read.",
-                        style = TextStyle(fontFamily = Saira, fontSize = 15.sp),
-                        color = FieldColors.InkMuted,
+                        style = TextStyle(fontFamily = Inter, fontSize = 15.sp),
+                        color = FT.TextSecondary,
                     )
                 }
             }

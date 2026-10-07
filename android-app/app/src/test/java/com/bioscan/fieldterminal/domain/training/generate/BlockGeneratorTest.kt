@@ -174,4 +174,12 @@ class BlockGeneratorTest {
         assertEquals("primary", d.first().role)
         assertTrue(d.any { it.domain == "aerobic_base" || it.domain == "anaerobic_capacity" })
     }
+
+    @Test
+    fun itemsReadAsOneLine() {
+        val b = tpl()
+        val a = b.sessions.first { it.moduleRef.startsWith("strength") }.items.first { it.slot == "A" }
+        assertEquals("Press 3-5 x 5 @ 55 kg (15+2.5 per side)", a.text())
+        assertEquals("Example run · 30-60 min", b.sessions.first { it.conditioning != null }.summaryLines().single())
+    }
 }

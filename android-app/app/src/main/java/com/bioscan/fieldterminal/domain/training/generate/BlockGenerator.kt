@@ -95,6 +95,16 @@ private class Gen(
     private val liveMax = mutableMapOf<String, Double>()
     private val warnedMissing = mutableSetOf<String>()
     private val stepKg = loadStepKg(eq.platesKg)
+    private val varCounters = mutableMapOf<String, Int>()
+
+    // A conditioning variable may hold several keys (comma separated); they rotate by occurrence.
+    fun pickConditioningVariable(name: String): String? {
+        val list = c.variables[name]?.split(',')?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
+        if (list.isEmpty()) return null
+        val i = varCounters.getOrDefault(name, 0)
+        varCounters[name] = i + 1
+        return list[i % list.size]
+    }
 
     fun weekdayFor(day: Int): DayOfWeek = c.weekdays[day] ?: c.startDate.dayOfWeek.plus((day - 1).toLong())
 
@@ -135,7 +145,7 @@ private class Gen(
                 val entry = maxes(name)
                 val ctx = ResolveContext(
                     oneRmKg = currentOneRm(name), trainingMaxKg = entry?.trainingMaxKg, maxReps = entry?.maxReps, bodyweightKg = c.bodyweightKg,
-                    barKg = eq.barKg, platesKg = eq.platesKg, addedStepKg = eq.addedStepKg, weightedBase = eq.weightedBase,
+                    barKg = if (name.contains("trap", ignoreCase = true)) eq.trapBarKg else eq.barKg, platesKg = eq.platesKg, addedStepKg = eq.addedStepKg, weightedBase = eq.weightedBase,
                 )
                 val spec = dto.load.toSpec()
                 val pi = PrescriptionItem(
@@ -208,7 +218,7 @@ fun generateTemplateBlock(
                     "test" -> g.emit(gw.week, gw.countsTowardBlock, day.day, slotInDay, "max_strength", "test", cell.ref, cell.label ?: "Test: ${target.replace('_', ' ')}")
                     "inline" -> g.emit(gw.week, gw.countsTowardBlock, day.day, slotInDay, "recovery", if (gw.kind == "deload" || gw.kind == "taper") "deload" else "recovery", cell.ref, cell.label ?: "Session")
                     "cond" -> {
-                        val key = if (target.startsWith("$")) c.variables[target.drop(1)] else target
+                        val key = if (target.startsWith("$")) g.pickConditioningVariable(target.drop(1)) else target
                         val def = key?.let { idx.session(it) }
                         if (def == null) {
                             g.warnings += "Week ${gw.week} day ${day.day}: choose a session for ${cell.label ?: cell.ref}"
@@ -232,7 +242,7 @@ private fun generateStrengthCell(
     g: Gen, idx: DefinitionIndex, c: GenChoices, cell: Cell, target: String, week: Int, counts: Boolean, day: Int, slotInDay: Int,
     cycles: MutableMap<String, Cycle>, perModuleCount: MutableMap<String, Int>, moduleWeekSeen: MutableSet<String>,
 ) {
-    val key = if (target.startsWith("$")) c.variables[target.drop(1)] else target
+    val key = if (target.startsWith("$")) c.variables[target.drop(1)]?.substringBefore(',') else target
     val strength = key?.let { idx.strength(it) }
     val seMod = key?.let { idx.se(it) }
     if (strength == null && seMod == null) {

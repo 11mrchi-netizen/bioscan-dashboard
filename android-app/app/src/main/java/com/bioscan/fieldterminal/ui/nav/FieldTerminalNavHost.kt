@@ -92,7 +92,11 @@ fun FieldTerminalNavHost() {
                 TrainingTileScreen(
                     onBack = { navController.popBackStack() },
                     onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") },
+                    onOpenPlanner = { navController.navigate("training_planner") },
                 )
+            }
+            composable("training_planner") {
+                com.bioscan.fieldterminal.ui.screens.training.TrainingPlannerScreen(onBack = { navController.popBackStack() }, onCreated = { navController.popBackStack() })
             }
             composable(TileRoute.Fuel.route) {
                 FuelTileScreen(

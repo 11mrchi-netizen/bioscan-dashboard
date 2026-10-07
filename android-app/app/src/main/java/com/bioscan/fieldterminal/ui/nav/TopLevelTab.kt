@@ -75,5 +75,6 @@ enum class LabsTab(val label: String) {
 // from Heart (see HeartTab above).
 enum class TrainingTab(val label: String) {
     Load("LOAD"),
+    Plan("PLAN"),
     Injury("INJURY"),
 }

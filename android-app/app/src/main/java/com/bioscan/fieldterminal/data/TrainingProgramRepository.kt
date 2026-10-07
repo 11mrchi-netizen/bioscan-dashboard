@@ -8,7 +8,9 @@ import com.bioscan.fieldterminal.data.model.NewBlockDomainRow
 import com.bioscan.fieldterminal.data.model.NewPlannedSessionRow
 import com.bioscan.fieldterminal.data.model.NewTrainingBlockRow
 import com.bioscan.fieldterminal.data.model.NewTrainingDefinitionRow
+import com.bioscan.fieldterminal.data.model.GeneratedBlockRow
 import com.bioscan.fieldterminal.data.model.TrainingDefinitionRow
+import com.bioscan.fieldterminal.data.model.UpcomingSessionRow
 import com.bioscan.fieldterminal.data.model.TrainingSettingsRow
 import com.bioscan.fieldterminal.domain.training.DatedSet
 import com.bioscan.fieldterminal.domain.training.RecordedMax
@@ -100,6 +102,26 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
             }
         }
         return ImportReport(ok.size, rejected, report.errors, report.warnings)
+    }
+
+    suspend fun loadGeneratedBlocks(): List<GeneratedBlockRow> =
+        supabase.postgrest.from("training_blocks")
+            .select(columns = Columns.list("id,name,start_date,end_date,status")) {
+                filter { eq("origin", "generated"); neq("status", "abandoned") }
+                order("start_date", Order.DESCENDING)
+            }.decodeList<GeneratedBlockRow>()
+
+    suspend fun loadUpcoming(from: LocalDate, limit: Int = 14): List<UpcomingSessionRow> =
+        supabase.postgrest.from("planned_sessions")
+            .select(columns = Columns.list("id,block_id,scheduled_date,week_index,title,domain,status")) {
+                filter { gte("scheduled_date", from.toString()); eq("status", "planned") }
+                order("scheduled_date", Order.ASCENDING)
+                order("slot_in_day", Order.ASCENDING)
+                limit(limit.toLong())
+            }.decodeList<UpcomingSessionRow>()
+
+    suspend fun deleteBlock(id: Long) {
+        supabase.postgrest.from("training_blocks").delete { filter { eq("id", id) } }
     }
 
     suspend fun loadSettings(): TrainingSettingsRow =

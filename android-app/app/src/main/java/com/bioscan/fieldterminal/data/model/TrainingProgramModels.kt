@@ -116,3 +116,23 @@ data class NewPlannedSessionRow(
 
 @Serializable
 data class IdRow(val id: Long)
+
+@Serializable
+data class UpcomingSessionRow(
+    val id: Long,
+    @SerialName("block_id") val blockId: Long,
+    @SerialName("scheduled_date") val scheduledDate: String,
+    @SerialName("week_index") val weekIndex: Int = 0,
+    val title: String,
+    val domain: String = "",
+    val status: String = "planned",
+)
+
+@Serializable
+data class GeneratedBlockRow(
+    val id: Long,
+    val name: String,
+    @SerialName("start_date") val startDate: String,
+    @SerialName("end_date") val endDate: String,
+    val status: String = "scheduled",
+)

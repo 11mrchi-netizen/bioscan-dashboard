@@ -13,6 +13,7 @@ import java.time.LocalTime
 
 data class GenEquipment(
     val barKg: Double = 20.0,
+    val trapBarKg: Double = 25.0,
     val platesKg: List<Double> = listOf(1.25, 2.5, 5.0, 10.0, 15.0, 20.0),
     val addedStepKg: Double = 1.25,
     val weightedBase: PercentBase = PercentBase.AddedLoad,

@@ -725,16 +725,37 @@ private fun SummaryCard(
     val isStrength = header.type == "strength"
     val activeCalories = header.caloriesActive ?: detail?.caloriesKcal?.lastOrNull()?.value
 
+    // One dominant value, then supporting rows: distance (with duration and
+    // pace as its context) for runs/rides, duration alone for strength.
+    val heroDistance = header.distanceKm?.takeIf { !isStrength }
+    val hero = if (heroDistance != null) {
+        DisplayValue(
+            primary = "%.2f".format(heroDistance),
+            unit = "KM",
+            secondary = listOfNotNull(
+                header.durationMin?.let { formatDuration(it) },
+                avgPaceMinPerKm?.let { formatSplitPace((it * 60).toLong()) },
+            ).joinToString(" · ").ifBlank { null },
+        )
+    } else {
+        header.durationMin?.let { DisplayValue(primary = formatDuration(it), secondary = "DURATION") }
+    }
+
     FTCard(title = "SUMMARY") {
-        header.durationMin?.let { FTMetricRow("Duration", formatDuration(it)) }
-        header.distanceKm?.let { FTMetricRow("Distance", "%.2f km".format(it)) }
+        hero?.let { FTMetricValue(it) }
+        // With a distance hero, duration and pace ride in its context line.
+        if (heroDistance == null) {
+            header.distanceKm?.let { FTMetricRow("Distance", "%.2f km".format(it)) }
+        }
         header.details.runType?.let { FTMetricRow("Run type", it.replaceFirstChar(Char::uppercase)) }
         header.details.routeType?.let { FTMetricRow("Route", it.replaceFirstChar(Char::uppercase)) }
         avgHr?.let { FTMetricRow("Avg heart rate", "${it.toInt()} bpm") }
         header.maxHr?.let { FTMetricRow("Max heart rate", "${it.toInt()} bpm") }
         header.elevationGainM?.let { FTMetricRow("Elevation gain", "${it.toInt()} m") }
         header.avgPowerW?.let { FTMetricRow("Avg power", "${it.toInt()} W") }
-        avgPaceMinPerKm?.let { FTMetricRow("Avg pace", formatSplitPace((it * 60).toLong())) }
+        if (heroDistance == null) {
+            avgPaceMinPerKm?.let { FTMetricRow("Avg pace", formatSplitPace((it * 60).toLong())) }
+        }
         if (!isStrength) {
             activeCalories?.let { FTMetricRow("Active calories", "${it.toInt()} kcal") }
             header.caloriesTotal?.let { FTMetricRow("Total calories", "${it.toInt()} kcal") }

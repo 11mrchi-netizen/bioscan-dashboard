@@ -88,6 +88,8 @@ mapping needed here.
 
 Summary → route/map (when route data exists) → one switchable performance chart
 (`[HR] [PACE] [POWER] [CAL]`, only showing signals that exist for that session) → splits/intervals.
+
+> **Update 2026-10:** as built, the switchable chart (`HR / PACE / POWER / CADENCE`) lives inside SUMMARY, the route map was deliberately moved to the bottom (direct user request, 28/9), and CADENCE replaced CAL. The summary leads with one hero value (distance, or duration for strength) with duration and pace as its context line. The code is authoritative.
 Locking this now, even though DAV-106 is a milestone-5 issue, so the chart-switching component built
 for it doesn't get designed twice.
 

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.components
 
+import com.bioscan.fieldterminal.domain.BloodworkTrendState
 import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.ConfidenceLevel
 import com.bioscan.fieldterminal.domain.MetricState
@@ -60,4 +61,22 @@ fun ageAccelerationState(accelerationYears: Double?): MetricState = when {
     accelerationYears <= -2.0 -> MetricState.Optimal
     accelerationYears <= 2.0 -> MetricState.Neutral
     else -> MetricState.Warning
+}
+
+// Lab flag vs the marker's reference range: high/low = out of range (Critical),
+// "watch" = Warning. In range or unflagged -> null, so no pill is drawn for
+// normal results.
+fun labFlagState(flag: String?): MetricState? = when (flag) {
+    "high", "low" -> MetricState.Critical
+    "watch" -> MetricState.Warning
+    else -> null
+}
+
+// Bloodwork change vs the marker's reference change value (RCV): inside RCV is
+// Neutral (no claim -- it says nothing about good/bad), a shift beyond RCV is
+// Warning (attention: a real change, desirability unknown). No evaluation -> null.
+fun bloodworkTrendMetricState(state: BloodworkTrendState?): MetricState? = when (state) {
+    BloodworkTrendState.Stable -> MetricState.Neutral
+    BloodworkTrendState.ShiftUp, BloodworkTrendState.ShiftDown -> MetricState.Warning
+    null -> null
 }

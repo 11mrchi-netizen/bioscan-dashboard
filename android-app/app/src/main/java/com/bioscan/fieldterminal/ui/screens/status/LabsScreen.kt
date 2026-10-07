@@ -39,6 +39,9 @@ import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.labMarkerTheme
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
+import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.labFlagState
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -204,6 +207,7 @@ private fun MarkerRow(marker: MarkerComparison) {
                         color = flagColor(marker.latestFlag),
                     )
                 }
+                FlagLine(marker.latestFlag, Modifier.padding(top = 6.dp))
                 FTRangeIndicator(
                     PersonalRange(
                         kind = RangeKind.ReferenceRange,
@@ -225,6 +229,7 @@ private fun MarkerRow(marker: MarkerComparison) {
                     if (refText.isNotEmpty()) {
                         Text(refText, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
                     }
+                    FlagLine(marker.latestFlag, Modifier.padding(top = 6.dp))
                 }
                 Text(
                     marker.earlierDisplay ?: "—",
@@ -250,6 +255,24 @@ private fun MarkerRow(marker: MarkerComparison) {
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder.copy(alpha = 0.5f)))
+    }
+}
+
+// Out-of-range / watch flag as a state pill plus words (never color alone).
+@Composable
+private fun FlagLine(flag: String?, modifier: Modifier = Modifier) {
+    val state = labFlagState(flag) ?: return
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FTStatePill(state)
+        Text(
+            when (flag) {
+                "high" -> "ABOVE REFERENCE"
+                "low" -> "BELOW REFERENCE"
+                else -> "WATCH"
+            },
+            style = FTType.Label,
+            color = FT.TextSecondary,
+        )
     }
 }
 

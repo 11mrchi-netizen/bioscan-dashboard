@@ -1,7 +1,13 @@
 package com.bioscan.fieldterminal.domain.training.definition
 
 import com.bioscan.fieldterminal.domain.training.Rounding
+import com.bioscan.fieldterminal.domain.training.ResolvedLoad
+import com.bioscan.fieldterminal.domain.training.generate.DefinitionIndex
+import com.bioscan.fieldterminal.domain.training.generate.GenChoices
+import com.bioscan.fieldterminal.domain.training.generate.MaxEntry
+import com.bioscan.fieldterminal.domain.training.generate.generateTemplateBlock
 import com.bioscan.fieldterminal.domain.training.loadableFor
+import java.time.LocalDate
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -61,6 +67,44 @@ class PrivateBlockReplayTest {
         }
         File(dir.parentFile, "replay.txt").writeText("${records.size} records\nHARD:\n" + hard.joinToString("\n") + "\nSOFT:\n" + soft.joinToString("\n"))
         assertTrue("replay mismatches:\n" + hard.joinToString("\n"), hard.isEmpty())
+    }
+
+
+    // The generator, given the block's start date and maxes, must produce on each logged date the
+    // session whose item the lifter actually loaded (records carry template, block_start, variables).
+    @Test
+    fun theGeneratorReproducesTheLoggedBlock() {
+        val dir = System.getenv("TB_DEFS_DIR")?.let(::File)
+        val logs = System.getenv("TB_LOGS")?.let(::File)
+        assumeTrue("TB_DEFS_DIR/TB_LOGS not set", dir != null && dir.isDirectory && logs != null && logs.isFile)
+        val defs = dir!!.listFiles { f -> f.extension == "json" }!!.map { parseDefinition(it.readText()) }
+        val idx = DefinitionIndex(defs)
+        val records = Json.parseToJsonElement(logs!!.readText()).jsonArray.map { it.jsonObject }.filter { it["template"] != null }
+        val failures = mutableListOf<String>()
+        for ((key, group) in records.groupBy { it.s("template") + "@" + it.s("block_start") }) {
+            val first = group.first()
+            val template = idx.template(first.s("template")) ?: run { failures += "$key: unknown template"; null } ?: continue
+            val variables = first["variables"]!!.jsonObject.mapValues { it.value.jsonPrimitive.content }
+            val maxes = group.associate { it.s("exercise").lowercase() to MaxEntry(oneRmKg = it["max_kg"]!!.jsonPrimitive.double) }
+            val block = generateTemplateBlock(template, idx, GenChoices(startDate = LocalDate.parse(first.s("block_start")), variables = variables, projectProgression = false), com.bioscan.fieldterminal.domain.training.generate.GenEquipment(weightedBase = com.bioscan.fieldterminal.domain.training.PercentBase.AddedLoad), maxes = { maxes[it.lowercase()] })
+            for (o in group) {
+                val date = LocalDate.parse(o.s("date"))
+                val sessions = block.sessions.filter { it.date == date && it.items.any { i -> i.exercise.equals(o.s("exercise"), true) } }
+                val item = sessions.firstNotNullOfOrNull { s -> s.items.firstOrNull { it.exercise.equals(o.s("exercise"), true) } }
+                if (item == null) { failures += "${o.s("date")} ${o.s("exercise")}: no generated session that day"; continue }
+                val logged = (o["sets"] as JsonArray).map { it.jsonObject["weight_kg"]!!.jsonPrimitive.double }.distinct().single()
+                val got = when (val l = item.load) {
+                    is ResolvedLoad.Barbell -> l.loadable.totalKg
+                    is ResolvedLoad.Added -> l.addedKg
+                    else -> null
+                }
+                val tol = if (item.load is ResolvedLoad.Added) 4.0 else 0.001
+                if (got == null || abs(got - logged) > tol) failures += "${o.s("date")} ${o.s("exercise")}: generated $got, logged $logged"
+            }
+        }
+        val report = failures.joinToString(System.lineSeparator())
+        File(dir.parentFile, "generator-replay.txt").writeText(report.ifEmpty { "all logged sessions reproduced" })
+        assertTrue("generator replay mismatches: $report", failures.isEmpty())
     }
 
     private fun JsonObject.s(k: String) = this[k]!!.jsonPrimitive.content

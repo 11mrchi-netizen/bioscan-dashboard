@@ -47,7 +47,7 @@ fun renderDefinition(def: Definition): String = buildString {
     when (def) {
         is StrengthModuleDef -> {
             append("Strength module (${def.family}, ${def.domain}); ${def.sessionsPerWeek} sessions/week on days ${def.dayPositions.joinToString()}; block lengths ${def.blockLengths.joinToString()} weeks\n")
-            append("Slots: ${def.slots.joinToString("; ") { "${it.id}=${it.standard}${if (it.alternates.isNotEmpty()) " (or ${it.alternates.joinToString(", ")})" else ""}${if (it.weightedCalisthenics) " [weighted calisthenics]" else ""}" }}\n")
+            append("Slots: ${def.slots.joinToString("; ") { "${it.id}=${it.standard}${if (it.alternates.isNotEmpty()) " (or ${it.alternates.joinToString(", ")})" else ""}${if (it.weightedCalisthenics) " [weighted calisthenics]" else ""}${it.pick?.let { p -> " [cluster: pick ${p.text()}]" } ?: ""}" }}\n")
             append("Sessions: ${def.sessions.joinToString("; ") { "${it.id} ${it.label} = ${it.slots.joinToString("+")}" }}\n")
             def.variants.forEach { v -> append("Variant ${v.key}: ${v.title}\n"); weeks(v.weeks) }
             if (def.supplemental.isNotEmpty()) append("Supplemental: ${def.supplemental.joinToString("; ") { "weeks ${it.weeks.joinToString("&")}: ${it.sets.text()} x ${it.reps.text()} ${it.load.text()}" }}\n")

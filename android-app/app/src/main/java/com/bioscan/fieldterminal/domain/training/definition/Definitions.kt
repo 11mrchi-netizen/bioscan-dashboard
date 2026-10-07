@@ -103,6 +103,9 @@ data class SlotDef(
     val alternates: List<String> = emptyList(),
     @SerialName("weighted_calisthenics") val weightedCalisthenics: Boolean = false,
     val optional: Boolean = false,
+    // A cluster slot (supplementary or hypertrophy cluster): the lifter picks this many
+    // exercises at setup and every item on the slot applies to each of them.
+    val pick: NumRange? = null,
 )
 
 @Serializable
@@ -190,6 +193,14 @@ data class Budget(
     @SerialName("high_intensity_per_week") val highIntensityPerWeek: NumRange? = null,
     @SerialName("high_intensity_every_n_weeks") val highIntensityEveryNWeeks: Int? = null,
     @SerialName("sessions_per_week") val sessionsPerWeek: NumRange? = null,
+    // Session-count protocols (Tactical Barbell II Black/Green): counts and cadences
+    // instead of a minutes budget.
+    @SerialName("strength_sessions_per_week") val strengthSessionsPerWeek: NumRange? = null,
+    @SerialName("endurance_sessions_per_week") val enduranceSessionsPerWeek: NumRange? = null,
+    @SerialName("endurance_every_n_weeks") val enduranceEveryNWeeks: Int? = null,
+    @SerialName("easy_week_every_n_weeks") val easyWeekEveryNWeeks: Int? = null,
+    @SerialName("min_conditioning_sessions_per_week") val minConditioningSessionsPerWeek: Int? = null,
+    @SerialName("min_rest_days_per_week") val minRestDaysPerWeek: Int? = null,
 )
 
 @Serializable
@@ -380,6 +391,9 @@ data class TemplateDef(
     val grid: List<GridWeek>,
     val budget: Budget? = null,
     val benchmark: JsonObject? = null,
+    // $VARIABLE -> {kind, choose_from?, note}: cells such as strength:$MS are resolved at setup.
+    val variables: JsonObject? = null,
+    val minimums: List<String> = emptyList(),
 ) : Definition()
 
 @Serializable

@@ -111,6 +111,14 @@ class DefinitionsTest {
     }
 
     @Test
+    fun clusterSlotsCarryTheirPickRange() {
+        val d = parseDefinition(module.replace("{\"id\":\"A\",\"role\":\"press\",\"standard\":\"Press\"}", "{\"id\":\"A\",\"role\":\"press\",\"standard\":\"Press\",\"pick\":{\"min\":2,\"max\":3}}")) as StrengthModuleDef
+        assertEquals(3.0, d.slots[0].pick!!.max, 0.0)
+        assertTrue(validateDefinition(d).isEmpty())
+        assertTrue(renderDefinition(d).contains("[cluster: pick 2-3]"))
+    }
+
+    @Test
     fun theRenderingStatesTheStructure() {
         val text = renderDefinition(parseDefinition(module))
         assertTrue(text.contains("Week 1"))

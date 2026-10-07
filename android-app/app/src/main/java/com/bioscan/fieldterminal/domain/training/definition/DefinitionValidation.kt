@@ -11,7 +11,7 @@ private val KEY = Regex("^[a-z0-9_.]+$")
 private val WEEK_KINDS = setOf("normal", "peak", "deload", "taper", "test", "easy")
 private val STRENGTH_DOMAINS = setOf("max_strength", "hypertrophy", "power", "strength_endurance")
 private val CATEGORIES = setOf("lic", "hic", "wc", "power_hic", "core")
-private val PROTOCOL_TYPES = setOf("polarized", "work_capacity", "ldp")
+private val PROTOCOL_TYPES = setOf("polarized", "work_capacity", "ldp", "session_minimums")
 private val PEAK_TECHNIQUES = setOf("peak", "amrap", "amsap", "none")
 
 fun validateDefinition(def: Definition): List<String> {
@@ -97,7 +97,7 @@ private fun validateTemplate(d: TemplateDef, e: MutableList<String>) {
         if (w.kind !in WEEK_KINDS) e += "week ${w.week}: kind '${w.kind}' unknown"
         for (day in w.days) {
             if (day.day !in 1..7) e += "week ${w.week}: day ${day.day} outside 1..7"
-            for (c in day.cells) if (!Regex("^(strength|se|cond|test|rest|inline):?[a-z0-9_.$]*$").matches(c.ref)) e += "week ${w.week} day ${day.day}: bad ref '${c.ref}'"
+            for (c in day.cells) if (!Regex("^(strength|se|cond|test|rest|inline):?[A-Za-z0-9_.$]*$").matches(c.ref)) e += "week ${w.week} day ${day.day}: bad ref '${c.ref}'"
         }
     }
 }

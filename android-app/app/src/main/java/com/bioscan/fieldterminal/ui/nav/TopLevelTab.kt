@@ -75,15 +75,17 @@ enum class LabsTab(val label: String) {
 // from Heart (see HeartTab above).
 enum class TrainingTab(val label: String) {
     Load("LOAD"),
+    Plan("PLAN"),
     Injury("INJURY"),
 }
 
-// Setup's own pushed routes -- Setup is now a 3-button hub rather than one
+// Setup's own pushed routes -- Setup is now a 4-button hub rather than one
 // flat card dump, same push-and-back pattern as TileRoute above.
 enum class SettingsRoute(val route: String) {
     User("settings_user"),
     Notifications("settings_notifications"),
     ConnectedServices("settings_connected"),
+    Training("settings_training"),
 }
 
 enum class UserTab(val label: String) {

@@ -95,7 +95,11 @@ fun FieldTerminalNavHost() {
                 TrainingTileScreen(
                     onBack = { navController.popBackStack() },
                     onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") },
+                    onOpenPlanner = { navController.navigate("training_planner") },
                 )
+            }
+            composable("training_planner") {
+                com.bioscan.fieldterminal.ui.screens.training.TrainingPlannerScreen(onBack = { navController.popBackStack() }, onCreated = { navController.popBackStack() })
             }
             composable(TileRoute.Fuel.route) {
                 FuelTileScreen(
@@ -128,11 +132,25 @@ fun FieldTerminalNavHost() {
                     onOpenUser = { navController.navigate(SettingsRoute.User.route) },
                     onOpenNotifications = { navController.navigate(SettingsRoute.Notifications.route) },
                     onOpenConnectedServices = { navController.navigate(SettingsRoute.ConnectedServices.route) },
+                    onOpenTraining = { navController.navigate(SettingsRoute.Training.route) },
                 )
             }
             composable(SettingsRoute.User.route) { UserSettingsScreen(scope = scope, onBack = { navController.popBackStack() }) }
             composable(SettingsRoute.Notifications.route) { NotificationsSettingsScreen(scope = scope, onBack = { navController.popBackStack() }) }
             composable(SettingsRoute.ConnectedServices.route) { ConnectedServicesScreen(scope = scope, onBack = { navController.popBackStack() }) }
+            composable(SettingsRoute.Training.route) {
+                com.bioscan.fieldterminal.ui.screens.training.TrainingSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onStart = { key -> navController.navigate("training_planner/$key") },
+                )
+            }
+            composable("training_planner/{program}") { entry ->
+                com.bioscan.fieldterminal.ui.screens.training.TrainingPlannerScreen(
+                    onBack = { navController.popBackStack() },
+                    onCreated = { navController.popBackStack() },
+                    initialProgram = entry.arguments?.getString("program"),
+                )
+            }
             // Phase G4: the app's first pushed detail route (every other
             // screen so far is a flat tab or a bottom sheet) -- a session's
             // on-demand Health Connect time-series detail, reached by

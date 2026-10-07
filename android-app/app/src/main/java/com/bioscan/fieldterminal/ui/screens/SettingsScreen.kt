@@ -29,7 +29,7 @@ import com.bioscan.fieldterminal.ui.theme.Inter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-// Setup's own hub: a flat card dump got too big to scan, so this is now 3
+// Setup's own hub: a flat card dump got too big to scan, so this is now 4
 // buttons into their own pushed sub-screens (ui/screens/settings/), same
 // push-and-back pattern as the Status tiles. Sign-out stays here -- it's an
 // account action for the whole app, not a sub-section's content.
@@ -39,9 +39,10 @@ fun SettingsScreen(
     onOpenUser: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenConnectedServices: () -> Unit,
+    onOpenTraining: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        ScreenHeader(title = "SETUP", context = "USER · NOTIFICATIONS · CONNECTED SERVICES")
+        ScreenHeader(title = "SETUP", context = "USER · NOTIFICATIONS · CONNECTED SERVICES · TRAINING")
         Column(
             modifier = Modifier.fillMaxSize().padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -49,6 +50,7 @@ fun SettingsScreen(
             SettingsNavRow(title = "USER", subtitle = "Profile, nutrition goals", onClick = onOpenUser)
             SettingsNavRow(title = "NOTIFICATIONS", subtitle = "Quiet hours", onClick = onOpenNotifications)
             SettingsNavRow(title = "CONNECTED SERVICES", subtitle = "AI nutrition, Map, Health Connect, Zepp", onClick = onOpenConnectedServices)
+            SettingsNavRow(title = "TRAINING PROGRAMS", subtitle = "Program library, equipment, session times", onClick = onOpenTraining)
 
             Box(modifier = Modifier.fillMaxWidth().padding(top = 20.dp), contentAlignment = Alignment.Center) {
                 AmberButton(label = "SIGN OUT") { scope.launch { GoogleAuthManager.signOut() } }

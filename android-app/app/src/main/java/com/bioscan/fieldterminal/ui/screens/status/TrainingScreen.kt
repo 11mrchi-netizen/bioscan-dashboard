@@ -54,7 +54,6 @@ import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import com.bioscan.fieldterminal.domain.EF_MIN_RUNS_28D
 import com.bioscan.fieldterminal.domain.efficiencyRollingMedian28
-import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.TrendSeries
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -201,9 +200,8 @@ private fun SessionRow(session: ExerciseSessionRow, onClick: () -> Unit) {
 // "4-week avg km/wk" is dropped as its own fixed stat since selecting "1M"
 // on the same toggle now covers that; longest run stays all-time (its own
 // label already says so, not something a timeframe toggle should touch).
-// The weekly-volume RangeBar only makes sense at the Week grain -- a fixed
-// 32km ceiling means nothing once the period can be a year, so it's shown
-// only there rather than picking an arbitrary scaled ceiling for the rest.
+// No volume bar: a fixed km ceiling was arbitrary at any period, so the hero
+// value stands alone until a real personal baseline backs a comparison.
 @Composable
 private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimeframe, onMarkTrail: (List<Long>) -> Unit) {
     var period by remember { mutableStateOf(RunningPeriod.Week) }
@@ -222,9 +220,6 @@ private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimefr
 
             SegmentedToggle(options = RunningPeriod.entries, selected = period, labelOf = { it.label }, onSelect = { period = it })
             FTMetricValue(DisplayValue(primary = "%.1f".format(totalKm), unit = "KM"))
-            if (period == RunningPeriod.Week) {
-                RangeBar(value = totalKm, max = 32.0, watchBelow = null, color = FT.Emerald)
-            }
 
             avgPace?.let { StatLine("Avg pace", formatPace(it)) }
 

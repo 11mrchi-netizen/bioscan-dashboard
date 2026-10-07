@@ -41,7 +41,6 @@ import com.bioscan.fieldterminal.domain.LogEntryKind
 import com.bioscan.fieldterminal.domain.LogSource
 import com.bioscan.fieldterminal.domain.category
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
-import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -281,17 +280,19 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
 // preserves these exact hues ("keep... category colors") even though the
 // FT contract's own domain-accent table doesn't define per-entry-type
 // colors (only per-section) -- only the font/text-color-for-"filled"
-// chips migrated to FT tokens.
+// chips migrated to FT tokens. Now sourced from FT.Category (the contract's
+// third color tier) rather than the legacy FieldColors; arousal moved from
+// red to magenta-crimson so it no longer reads as a Critical state.
 @Composable
 private fun TypeChip(kind: LogEntryKind) {
     val color = when (kind) {
-        LogEntryKind.Exercise -> FieldColors.Orange
-        LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> FieldColors.Green
-        LogEntryKind.Sleep -> FieldColors.DeepBlue
-        LogEntryKind.Arousal, LogEntryKind.Encounter, LogEntryKind.Masturbation -> FieldColors.Red
+        LogEntryKind.Exercise -> FT.Category.Activity.c500
+        LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> FT.Category.Intake.c500
+        LogEntryKind.Sleep -> FT.Category.Sleep.c500
+        LogEntryKind.Arousal, LogEntryKind.Encounter, LogEntryKind.Masturbation -> FT.Category.Arousal.c500
         LogEntryKind.Note -> FT.TextSecondary
-        LogEntryKind.Stool, LogEntryKind.Ostrc -> FieldColors.Sand
-        LogEntryKind.Wellness -> FieldColors.Azure
+        LogEntryKind.Stool, LogEntryKind.Ostrc -> FT.Category.Digestion.c500
+        LogEntryKind.Wellness -> FT.Category.Wellbeing.c500
     }
     val filled = kind in setOf(LogEntryKind.Exercise, LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement, LogEntryKind.Stool)
     val shape = RoundedCornerShape(FT.RadiusSmall)

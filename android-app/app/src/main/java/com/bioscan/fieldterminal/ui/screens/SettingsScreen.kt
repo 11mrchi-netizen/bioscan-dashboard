@@ -82,6 +82,8 @@ fun SettingsScreen(scope: CoroutineScope) {
     var proteinInput by remember { mutableStateOf(savedGoals.value.proteinG?.toString() ?: "") }
     var carbsInput by remember { mutableStateOf(savedGoals.value.carbsG?.toString() ?: "") }
     var fatInput by remember { mutableStateOf(savedGoals.value.fatG?.toString() ?: "") }
+    var hydrationMinInput by remember { mutableStateOf(savedGoals.value.hydrationMinMl?.toString() ?: "") }
+    var hydrationMaxInput by remember { mutableStateOf(savedGoals.value.hydrationMaxMl?.toString() ?: "") }
     var goalsInputError by remember { mutableStateOf(false) }
 
     val userProfileRepository = remember { UserProfileRepository(SupabaseClientProvider.client) }
@@ -227,6 +229,15 @@ fun SettingsScreen(scope: CoroutineScope) {
                     FieldTextField(fatInput, { fatInput = it }, "Fat (g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FieldTextField(hydrationMinInput, { hydrationMinInput = it }, "Water min (ml)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+                    FieldTextField(hydrationMaxInput, { hydrationMaxInput = it }, "Water max (ml)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+                }
+                Text(
+                    "Water is a range; set both ends, or leave both blank for the 2,500–3,500 ml reference range.",
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    color = FT.TextMuted,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     AmberButton(label = "SAVE GOALS") {
                         // Blank clears that one field; anything entered must be a positive number.
                         fun parse(input: String): Double? = input.trim().takeIf { it.isNotEmpty() }?.toDoubleOrNull()
@@ -234,29 +245,37 @@ fun SettingsScreen(scope: CoroutineScope) {
                         val protein = parse(proteinInput)
                         val carbs = parse(carbsInput)
                         val fat = parse(fatInput)
-                        val enteredButInvalid = listOf(caloriesInput to calories, proteinInput to protein, carbsInput to carbs, fatInput to fat)
-                            .any { (input, parsed) -> input.isNotBlank() && (parsed == null || parsed <= 0) }
-                        if (enteredButInvalid) {
+                        val hydrationMin = parse(hydrationMinInput)
+                        val hydrationMax = parse(hydrationMaxInput)
+                        val enteredButInvalid = listOf(
+                            caloriesInput to calories, proteinInput to protein, carbsInput to carbs, fatInput to fat,
+                            hydrationMinInput to hydrationMin, hydrationMaxInput to hydrationMax,
+                        ).any { (input, parsed) -> input.isNotBlank() && (parsed == null || parsed <= 0) }
+                        // A range needs both ends, in order.
+                        val hydrationRangeInvalid = (hydrationMin == null) != (hydrationMax == null) ||
+                            (hydrationMin != null && hydrationMax != null && hydrationMin >= hydrationMax)
+                        if (enteredButInvalid || hydrationRangeInvalid) {
                             goalsInputError = true
                         } else {
-                            val goals = NutritionGoals(calories, protein, carbs, fat)
+                            val goals = NutritionGoals(calories, protein, carbs, fat, hydrationMin, hydrationMax)
                             NutritionGoalsStore.saveGoals(context, goals)
                             savedGoals.value = goals
                             goalsInputError = false
                         }
                     }
-                    if (savedGoals.value.isSet) {
+                    if (savedGoals.value.anySet) {
                         ClearChip {
                             NutritionGoalsStore.clearGoals(context)
                             savedGoals.value = NutritionGoals()
                             caloriesInput = ""; proteinInput = ""; carbsInput = ""; fatInput = ""
+                            hydrationMinInput = ""; hydrationMaxInput = ""
                             goalsInputError = false
                         }
                     }
                 }
                 if (goalsInputError) {
                     Text(
-                        "Enter a positive number for each target you set (or leave it blank).",
+                        "Enter a positive number for each target you set (or leave it blank). Water needs both a min and a max, min below max.",
                         style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
                         color = FT.Critical,
                     )

@@ -13,6 +13,13 @@ raw observations → analysis / interpretation → MetricPresentation → design
 
 The analysis layer determines what a metric means. The UI only renders the supplied meaning consistently. A component must never infer that a value is good, bad, improving, safe, or reliable from a number, its direction, source, or threshold.
 
+## Amendments (2026-10)
+
+- **Threshold mappings in the presentation layer.** Deterministic, documented threshold-to-`MetricState` mappings (TSB bands, lab flag vs reference range, age-acceleration sign, etc.) are allowed in UI-adjacent code, but they live in one central mapper module (`MetricStateMappers`), never inline in a screen or component, each with its thresholds documented where defined. Components still receive a `MetricState` and render it; state is always pill/icon + label, never color alone.
+- **User-set targets are a first-class `TargetRange` source** (e.g. calorie and macro goals saved in Settings). Generic `ReferenceRange` values are only the fallback when no target is set.
+- **Hydration is a range, not a single goal.** It is rendered as a `TargetRange` band (user-set min–max, with a documented default), never a fixed hard-coded volume.
+- **No invented ceilings.** A bar must not use an arbitrary fixed maximum (e.g. a "weekly km" ceiling) as if it were a reference.
+
 ## Non-goals
 
 This contract does not define clinical/performance thresholds; calculate baselines, reference ranges, trends, confidence, or derived values; choose targets, diagnoses, recommendations, or composite scores; change IA/workflow; or promise unsupported precision.

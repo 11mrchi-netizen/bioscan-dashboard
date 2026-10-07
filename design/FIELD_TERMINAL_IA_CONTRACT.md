@@ -24,9 +24,11 @@ Login, Add Entry (workflow/IA), broad Setup IA (only sync status relocates here 
 calendar-free chronological-feed behavior, and Map's spatial IA. Any issue in this project that
 appears to require touching one of these has scope-crept — stop and re-check against DAV-107.
 
-## 3. Top-level navigation — unchanged
+## 3. Top-level navigation
 
-Four tabs: `STATUS | MAP | LOG | SETUP`. No new top-level tab, no removed one.
+Four tabs: `STATUS | USER | LOG | SETUP`. (DAV-296: USER replaced MAP in the bottom bar; Map's screen stays in the codebase, unmounted.)
+
+> **Update 2026-10:** the tab sets in §6/§7 below were implemented differently — see `TopLevelTab.kt`: `FuelTab` = Nutrition, Digestion; `HeartTab` = Cardio, Recovery, Wellbeing; `TrainingTab` = Load, Injury; `LabsTab` = Bloodwork, Supplements (Hydration and Body folded into Fuel/Nutrition; Supplements moved under Labs; Injury moved under Training — DAV-207/208/209/216). The code is authoritative where it differs.
 
 ## 4. Status IA — Body/Condition as hub
 

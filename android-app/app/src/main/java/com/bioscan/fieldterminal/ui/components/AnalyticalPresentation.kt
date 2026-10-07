@@ -34,6 +34,8 @@ import com.bioscan.fieldterminal.domain.MetricPresentation
 import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.PersonalRange
 import com.bioscan.fieldterminal.domain.Provenance
+import com.bioscan.fieldterminal.domain.RangeComparison
+import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.TrendState
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
@@ -134,27 +136,55 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
         FTDataState(DataAvailability.Building, range.explanation ?: "More history is needed for a personal range.", modifier)
         return
     }
-    val span = (maximum - minimum).takeIf { it > 0.0 } ?: 1.0
-    fun fraction(value: Double?) = value?.let { ((it - minimum) / span).toFloat().coerceIn(0f, 1f) }
+    // The track spans a domain wider than the band so the band reads as
+    // "the expected range" and a current/baseline value outside it stays
+    // visible instead of being clamped onto the band's edge.
+    val bandSpan = (maximum - minimum).takeIf { it > 0.0 } ?: 1.0
+    val pad = bandSpan * 0.08
+    val domainMin = listOfNotNull(minimum, maximum, range.current, range.baseline).min() - pad
+    val domainMax = listOfNotNull(minimum, maximum, range.current, range.baseline).max() + pad
+    val domainSpan = (domainMax - domainMin).takeIf { it > 0.0 } ?: 1.0
+    fun fraction(value: Double) = ((value - domainMin) / domainSpan).toFloat().coerceIn(0f, 1f)
+    val bandColor = if (range.kind == RangeKind.ReferenceRange) FT.TextSecondary.copy(alpha = 0.30f) else FT.Emerald.copy(alpha = 0.38f)
+    val comparisonLabel = when (range.comparison) {
+        RangeComparison.Below -> "BELOW RANGE"
+        RangeComparison.Within -> "WITHIN RANGE"
+        RangeComparison.Above -> "ABOVE RANGE"
+        RangeComparison.NotComparable -> null
+    }
 
-    Column(modifier = modifier.semantics { contentDescription = range.label }) {
-        Text(range.label.uppercase(), color = FT.TextSecondary, fontFamily = Telemetry, fontSize = 10.sp)
+    Column(modifier = modifier.semantics { contentDescription = range.label + (comparisonLabel?.let { ", " + it.lowercase() } ?: "") }) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(range.label.uppercase(), color = FT.TextSecondary, fontFamily = Telemetry, fontSize = 11.sp, modifier = Modifier.weight(1f))
+            comparisonLabel?.let { Text(it, color = FT.TextSecondary, fontFamily = Telemetry, fontWeight = FontWeight.Bold, fontSize = 11.sp) }
+        }
         Canvas(modifier = Modifier.fillMaxWidth().height(24.dp).padding(top = 6.dp)) {
             val y = size.height / 2f
-            drawLine(FT.GlassTrack, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), strokeWidth = 8f)
-            drawLine(FT.Emerald.copy(alpha = 0.38f), androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), strokeWidth = 8f)
-            fraction(range.baseline)?.let { x ->
-                drawCircle(FT.TextSecondary, radius = 4f, center = androidx.compose.ui.geometry.Offset(x * size.width, y), style = Stroke(2f))
+            val stroke = 8.dp.toPx()
+            drawLine(FT.GlassTrack, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), strokeWidth = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawLine(
+                bandColor,
+                androidx.compose.ui.geometry.Offset(fraction(minimum) * size.width, y),
+                androidx.compose.ui.geometry.Offset(fraction(maximum) * size.width, y),
+                strokeWidth = stroke,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+            )
+            range.baseline?.let {
+                drawCircle(FT.TextSecondary, radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(fraction(it) * size.width, y), style = Stroke(2.dp.toPx()))
             }
-            fraction(range.current)?.let { x ->
-                drawCircle(currentColor, radius = 5f, center = androidx.compose.ui.geometry.Offset(x * size.width, y))
+            range.current?.let {
+                drawCircle(currentColor, radius = 5.dp.toPx(), center = androidx.compose.ui.geometry.Offset(fraction(it) * size.width, y))
             }
         }
         Text(
-            text = "CURRENT " + formatRangeValue(range.current) + " · BASELINE " + formatRangeValue(range.baseline),
+            text = buildString {
+                append("CURRENT " + formatRangeValue(range.current))
+                range.baseline?.let { append(" · BASELINE " + formatRangeValue(it)) }
+                append(" · RANGE " + formatRangeValue(minimum) + "–" + formatRangeValue(maximum))
+            },
             color = FT.TextMuted,
             fontFamily = Telemetry,
-            fontSize = 10.sp,
+            fontSize = 11.sp,
         )
     }
 }

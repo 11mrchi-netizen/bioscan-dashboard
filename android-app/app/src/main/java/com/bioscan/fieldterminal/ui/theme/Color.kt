@@ -2,9 +2,11 @@ package com.bioscan.fieldterminal.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Design tokens, 1:1 with design/README.md's "Design Tokens" table -- the
-// single source of truth for this palette. Don't add colors here that aren't
-// in that table; don't dim FieldInkMuted further (it's the AA-checked value).
+// LEGACY palette (original amber direction; design/README.md is superseded).
+// Do not add anything here and do not use it in new UI -- use
+// FuturisticMaterialTokens. Log-entry category hues now live in
+// FuturisticMaterialTokens.Category; this object is slated for deletion once
+// BodyConsole and LogScreen finish migrating.
 object FieldColors {
     val Ground = Color(0xFF14161A)
     val Panel = Color(0xFF0E1013) // header, tab bar, figure field, inset panels

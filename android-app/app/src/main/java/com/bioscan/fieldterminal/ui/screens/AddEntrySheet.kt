@@ -40,7 +40,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -94,7 +93,6 @@ import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.util.createCameraCaptureUri
 import com.bioscan.fieldterminal.util.readAndCompressImage
@@ -165,7 +163,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                         }
                     }
                 }
-                saveError?.let { Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical) }
+                saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
                 when (type) {
                     AddEntryType.Fuel -> FuelForm(saving, onSubmit, onCanonicalSaved = onSaved)
                     AddEntryType.Encounter -> EncounterForm(
@@ -342,7 +340,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     }
                 }
             }
-            saveError?.let { Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical) }
+            saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
 
             if (row == null) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
@@ -1557,7 +1555,7 @@ private fun SexualActivityForm(
             }
             Text(
                 "+ ADD INSTANCE",
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+                style = FTType.MonoCaption,
                 color = FT.DomainLog,
                 modifier = Modifier.clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -1590,7 +1588,7 @@ private fun SexualActivityInstanceEditor(
             if (canRemove) {
                 Text(
                     "REMOVE",
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                    style = FTType.MonoCaption,
                     color = FT.Critical,
                     modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onRemove() },
                 )
@@ -1618,12 +1616,12 @@ private fun SexualActivityInstanceEditor(
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             instance.partnerName.ifEmpty { "#${instance.partnerId}" },
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+                            style = FTType.RowTitle,
                             color = FT.TextPrimary,
                         )
                         Text(
                             "CLEAR",
-                            style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp),
+                            style = FTType.Micro,
                             color = FT.Critical,
                             modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                 instance.partnerId = null
@@ -1637,7 +1635,7 @@ private fun SexualActivityInstanceEditor(
                     filteredPeople.forEach { person ->
                         Text(
                             person.name,
-                            style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                            style = FTType.BodySmall,
                             color = FT.TextSecondary,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1653,7 +1651,7 @@ private fun SexualActivityInstanceEditor(
                     if (trimmedQuery.isNotEmpty() && filteredPeople.none { it.name.equals(trimmedQuery, ignoreCase = true) }) {
                         Text(
                             "+ ADD \"$trimmedQuery\"",
-                            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.08f.em),
+                            style = FTType.LabelCaps,
                             color = FT.Emerald,
                             modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                 newPartnerInitialName = trimmedQuery
@@ -1708,7 +1706,7 @@ private fun NewPartnerSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RectangleShape,
+        shape = FT.SheetShape,
         containerColor = FT.Surface,
         contentColor = FT.TextPrimary,
     ) {
@@ -1716,7 +1714,7 @@ private fun NewPartnerSheet(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("NEW PARTNER", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp), color = FT.DomainLog)
+            Text("NEW PARTNER", style = FTType.SectionTitle, color = FT.DomainLog)
             Column { FormLabel("NAME"); FieldTextField(name, { name = it }, "") }
             Column { FormLabel("RELATIONSHIP (OPTIONAL)"); FieldTextField(relationship, { relationship = it }, "e.g. FWB, Dating, Hookup") }
             Column { FormLabel("WHERE MET (OPTIONAL)"); FieldTextField(whereMet, { whereMet = it }, "e.g. Tinder, Work, Mutual Friends") }
@@ -1728,7 +1726,7 @@ private fun NewPartnerSheet(
                 TextChipRow(listOf("1", "2", "3", "4", "5"), score?.toString(), perRow = 5) { score = it?.toIntOrNull() }
             }
             Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "", singleLine = false) }
-            error?.let { Text("Couldn't create ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical) }
+            error?.let { Text("Couldn't create ($it).", style = FTType.Caption, color = FT.Critical) }
             SaveButton(saving, name.isNotBlank()) {
                 if (!saving && name.isNotBlank()) {
                     saving = true

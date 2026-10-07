@@ -44,7 +44,7 @@ import java.util.Locale
 // and showed a 24-hour clock with a second, inner ring of hours. This is a
 // Futuristic Material bottom sheet instead: a custom month calendar, and a
 // 12-hour time panel with an AM/PM toggle (no dial, no 24h, no inner ring).
-// The public API (DateField / DateTimeField) is unchanged.
+// The public API (DateField / DateTimeField / TimeField) is unchanged.
 //
 // Nothing is written back to the caller until SET: dismissing or CANCEL
 // leaves the field as it was.
@@ -70,17 +70,21 @@ fun DateField(label: String, date: LocalDate, onDateChange: (LocalDate) -> Unit)
     }
 }
 
+// Time-only entry (quiet hours, default session times): the same sheet in
+// time mode -- 12-hour with AM/PM, no calendar. Seconds are dropped.
 @Composable
 fun TimeField(label: String, time: LocalTime, onTimeChange: (LocalTime) -> Unit) {
-    val context = LocalContext.current
-    PickerBox(label = label, valueText = time.format(DateTimeFormatter.ofPattern("HH:mm"))) {
-        TimePickerDialog(
-            context,
-            { _, hour, minute -> onTimeChange(LocalTime.of(hour, minute)) },
-            time.hour,
-            time.minute,
-            true,
-        ).show()
+    var open by remember { mutableStateOf(false) }
+    PickerBox(label = label, valueText = time.format(SUMMARY_TIME)) { open = true }
+    if (open) {
+        FTPickerSheet(
+            label = label,
+            initial = LocalDateTime.of(LocalDate.now(), time),
+            withDate = false,
+            withTime = true,
+            onConfirm = { onTimeChange(it.toLocalTime()); open = false },
+            onDismiss = { open = false },
+        )
     }
 }
 
@@ -125,6 +129,7 @@ private enum class TimeUnit { Hour, Minute }
 private fun FTPickerSheet(
     label: String,
     initial: LocalDateTime,
+    withDate: Boolean = true,
     withTime: Boolean,
     onConfirm: (LocalDateTime) -> Unit,
     onDismiss: () -> Unit,
@@ -147,17 +152,20 @@ private fun FTPickerSheet(
             Column {
                 Text(label, style = FTType.LabelCaps, color = FT.TextMuted)
                 Text(
-                    text = selected.format(SUMMARY_DATE) + if (withTime) " · " + selected.format(SUMMARY_TIME) else "",
+                    text = listOfNotNull(
+                        if (withDate) selected.format(SUMMARY_DATE) else null,
+                        if (withTime) selected.format(SUMMARY_TIME) else null,
+                    ).joinToString(" · "),
                     style = FTType.SectionTitle,
                     color = FT.TextPrimary,
                 )
             }
 
-            if (withTime) {
+            if (withDate && withTime) {
                 SegmentedToggle(options = PickerTab.entries, selected = tab, labelOf = { it.label }, onSelect = { tab = it })
             }
 
-            if (!withTime || tab == PickerTab.Date) {
+            if (withDate && (!withTime || tab == PickerTab.Date)) {
                 CalendarPanel(date = selected.toLocalDate()) { picked ->
                     selected = LocalDateTime.of(picked, selected.toLocalTime())
                 }

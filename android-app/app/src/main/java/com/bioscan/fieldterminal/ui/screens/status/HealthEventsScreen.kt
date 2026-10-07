@@ -27,10 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.HealthEventsOverview
 import com.bioscan.fieldterminal.data.HealthEventsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -40,7 +37,6 @@ import com.bioscan.fieldterminal.domain.daysSince
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -110,7 +106,7 @@ private fun AddEventButtons(onAddInjuryClick: () -> Unit, onAddIllnessClick: () 
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
         Text(
             "+ ADD ILLNESS",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.08f.em),
+            style = FTType.LabelCaps,
             color = FT.Info,
             modifier = Modifier
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onAddIllnessClick() }
@@ -212,14 +208,14 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
             if (event.kind == HealthEventKind.Illness) {
                 Text(
                     if (event.doctorSeen) "Doctor seen" else "Doctor not seen",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    style = FTType.BodySmall,
                     color = if (event.doctorSeen) FT.Emerald else FT.TextSecondary,
                     modifier = Modifier.padding(top = 6.dp),
                 )
                 event.medications.forEach { med ->
                     Text(
                         "${med.name} · ${med.dose} · ${med.frequency}",
-                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                        style = FTType.BodySmall,
                         color = FT.TextSecondary,
                         modifier = Modifier.padding(top = 3.dp),
                     )

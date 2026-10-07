@@ -24,12 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.NutritionGoals
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -41,9 +37,8 @@ import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.UserTab
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -87,7 +82,7 @@ private fun ProfileCard(scope: CoroutineScope) {
         Text(
             "Date of birth and sex, used by the Aging Profile (User tab) and by population " +
                 "comparisons elsewhere. Stored with your account, not on this device only.",
-            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            style = FTType.BodySmall,
             color = FT.TextSecondary,
         )
         FieldTextField(
@@ -98,7 +93,7 @@ private fun ProfileCard(scope: CoroutineScope) {
         Column {
             Text(
                 "SEX",
-                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+                style = FTType.LabelCaps,
                 color = FT.TextSecondary,
                 modifier = Modifier.padding(bottom = 6.dp),
             )
@@ -124,12 +119,12 @@ private fun ProfileCard(scope: CoroutineScope) {
         if (profileError) {
             Text(
                 "Enter the date as YYYY-MM-DD (e.g. 1990-05-14).",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.Critical,
             )
         }
         profileSavedAt?.let {
-            Text("Saved $it", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextSecondary)
+            Text("Saved $it", style = FTType.Caption, color = FT.TextSecondary)
         }
     }
 }
@@ -142,13 +137,15 @@ private fun NutritionGoalsCard() {
     var proteinInput by remember { mutableStateOf(savedGoals.value.proteinG?.toString() ?: "") }
     var carbsInput by remember { mutableStateOf(savedGoals.value.carbsG?.toString() ?: "") }
     var fatInput by remember { mutableStateOf(savedGoals.value.fatG?.toString() ?: "") }
+    var hydrationMinInput by remember { mutableStateOf(savedGoals.value.hydrationMinMl?.toString() ?: "") }
+    var hydrationMaxInput by remember { mutableStateOf(savedGoals.value.hydrationMaxMl?.toString() ?: "") }
     var goalsInputError by remember { mutableStateOf(false) }
 
     FTCard(title = "NUTRITION GOALS") {
         Text(
             "Daily calorie and macro targets, used by Nutrition Analysis's goal-adherence view. " +
                 "Leave a field blank to clear just that target — stored on this device only.",
-            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            style = FTType.BodySmall,
             color = FT.TextSecondary,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -160,6 +157,15 @@ private fun NutritionGoalsCard() {
             FieldTextField(fatInput, { fatInput = it }, "Fat (g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FieldTextField(hydrationMinInput, { hydrationMinInput = it }, "Water min (ml)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+            FieldTextField(hydrationMaxInput, { hydrationMaxInput = it }, "Water max (ml)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+        }
+        Text(
+            "Water is a range; set both ends, or leave both blank for the 2,500–3,500 ml reference range.",
+            style = FTType.Caption,
+            color = FT.TextMuted,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             AmberButton(label = "SAVE GOALS") {
                 // Blank clears that one field; anything entered must be a positive number.
                 fun parse(input: String): Double? = input.trim().takeIf { it.isNotEmpty() }?.toDoubleOrNull()
@@ -167,30 +173,38 @@ private fun NutritionGoalsCard() {
                 val protein = parse(proteinInput)
                 val carbs = parse(carbsInput)
                 val fat = parse(fatInput)
-                val enteredButInvalid = listOf(caloriesInput to calories, proteinInput to protein, carbsInput to carbs, fatInput to fat)
-                    .any { (input, parsed) -> input.isNotBlank() && (parsed == null || parsed <= 0) }
-                if (enteredButInvalid) {
+                val hydrationMin = parse(hydrationMinInput)
+                val hydrationMax = parse(hydrationMaxInput)
+                val enteredButInvalid = listOf(
+                    caloriesInput to calories, proteinInput to protein, carbsInput to carbs, fatInput to fat,
+                    hydrationMinInput to hydrationMin, hydrationMaxInput to hydrationMax,
+                ).any { (input, parsed) -> input.isNotBlank() && (parsed == null || parsed <= 0) }
+                // A range needs both ends, in order.
+                val hydrationRangeInvalid = (hydrationMin == null) != (hydrationMax == null) ||
+                    (hydrationMin != null && hydrationMax != null && hydrationMin >= hydrationMax)
+                if (enteredButInvalid || hydrationRangeInvalid) {
                     goalsInputError = true
                 } else {
-                    val goals = NutritionGoals(calories, protein, carbs, fat)
+                    val goals = NutritionGoals(calories, protein, carbs, fat, hydrationMin, hydrationMax)
                     NutritionGoalsStore.saveGoals(context, goals)
                     savedGoals.value = goals
                     goalsInputError = false
                 }
             }
-            if (savedGoals.value.isSet) {
+            if (savedGoals.value.anySet) {
                 ClearChip {
                     NutritionGoalsStore.clearGoals(context)
                     savedGoals.value = NutritionGoals()
                     caloriesInput = ""; proteinInput = ""; carbsInput = ""; fatInput = ""
+                    hydrationMinInput = ""; hydrationMaxInput = ""
                     goalsInputError = false
                 }
             }
         }
         if (goalsInputError) {
             Text(
-                "Enter a positive number for each target you set (or leave it blank).",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                "Enter a positive number for each target you set (or leave it blank). Water needs both a min and a max, min below max.",
+                style = FTType.Caption,
                 color = FT.Critical,
             )
         }
@@ -212,7 +226,7 @@ private fun SexChip(label: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             label.uppercase(),
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+            style = FTType.LabelCaps,
             color = if (selected) FT.Emerald else FT.TextSecondary,
         )
     }

@@ -315,7 +315,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
 @Composable
 private fun SexualActivityHistory(rows: List<LogSexualActivityRow>) {
     if (rows.isEmpty()) {
-        Text("No entries logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
+        Text("No entries logged yet.", style = FTType.Body, color = FT.TextSecondary)
         return
     }
     val sorted = rows.sortedByDescending { it.date }
@@ -325,8 +325,8 @@ private fun SexualActivityHistory(rows: List<LogSexualActivityRow>) {
             val text = "${row.activityType.replaceFirstChar { it.uppercase() }} · ${row.instances.size} instance${if (row.instances.size == 1) "" else "s"}" +
                 if (orgasmCount > 0) " · $orgasmCount with orgasm" else ""
             Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(row.date, style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp), color = FT.TextSecondary)
-                Text(text, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextPrimary)
+                Text(row.date, style = FTType.Value, color = FT.TextSecondary)
+                Text(text, style = FTType.BodySmall, color = FT.TextPrimary)
             }
         }
     }
@@ -395,7 +395,7 @@ internal fun EvalCard(
             )
         }
         interpretSwcEvaluation(title, eval, directionality)?.let { sentence ->
-            Text(sentence, style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextMuted, modifier = Modifier.padding(top = 6.dp))
+            Text(sentence, style = FTType.Caption, color = FT.TextMuted, modifier = Modifier.padding(top = 6.dp))
         }
     }
 }

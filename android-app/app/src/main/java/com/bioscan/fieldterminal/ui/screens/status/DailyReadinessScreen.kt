@@ -20,9 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
@@ -56,8 +54,8 @@ import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.HydrationSourceDonutChart
 import com.bioscan.fieldterminal.ui.components.MacroDonutChart
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
@@ -170,7 +168,7 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
             FTCard(title = "CALORIES TODAY") {
                 val today = nut.today
                 if (today == null) {
-                    Text("No meals logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp), color = FT.TextSecondary)
+                    Text("No meals logged yet.", style = FTType.BodySmall, color = FT.TextSecondary)
                 } else {
                     FTMetricValue(DisplayValue(primary = today.calories.roundToInt().toString(), unit = "KCAL"))
                     MacroDonutChart(carbsG = today.carbsG, proteinG = today.proteinG, fatG = today.fatG, modifier = Modifier.padding(top = 10.dp))
@@ -178,7 +176,7 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
             }
             FTCard(title = "HYDRATION TODAY") {
                 if (waterMl + beverageMl <= 0.0) {
-                    Text("No hydration logged yet today.", style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp), color = FT.TextSecondary)
+                    Text("No hydration logged yet today.", style = FTType.BodySmall, color = FT.TextSecondary)
                 } else {
                     FTMetricValue(DisplayValue(primary = "%.1f".format((waterMl + beverageMl) / 1000.0), unit = "L"))
                     HydrationSourceDonutChart(waterMl = waterMl, beverageMl = beverageMl, modifier = Modifier.padding(top = 10.dp))
@@ -190,7 +188,7 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
                     FTMetricValue(DisplayValue(primary = "%.0f".format(todayCaffeineMg), unit = "MG"))
                     Text(
                         "Total from logged beverages",
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        style = FTType.Caption,
                         color = FT.TextMuted,
                     )
                 }

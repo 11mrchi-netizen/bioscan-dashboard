@@ -18,9 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.health.connect.client.PermissionController
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
@@ -38,8 +36,8 @@ import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.ConnectedServicesTab
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
@@ -77,7 +75,7 @@ private fun AiNutritionCard(context: android.content.Context) {
         Text(
             "Gemini API key for photo-based calorie/macro estimation on the Food entry form. " +
                 "Stored on this device only (Android Keystore-encrypted) — never synced to Supabase.",
-            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            style = FTType.BodySmall,
             color = FT.TextSecondary,
         )
         FieldTextField(
@@ -102,7 +100,7 @@ private fun AiNutritionCard(context: android.content.Context) {
         }
         Text(
             if (keySaved) "AI estimation is available on the Food entry form." else "No key set — AI estimation is hidden on the Food entry form until one is saved.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            style = FTType.Caption,
             color = FT.TextSecondary,
         )
     }
@@ -121,7 +119,7 @@ private fun MapCard(context: android.content.Context) {
         Text(
             "Free CARTO API key for the Map tab's dark basemap tiles (no billing — " +
                 "get one at carto.com/basemaps/apikey). Stored on this device only.",
-            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            style = FTType.BodySmall,
             color = FT.TextSecondary,
         )
         FieldTextField(
@@ -148,7 +146,7 @@ private fun MapCard(context: android.content.Context) {
         Text(
             "Home location — the starting point for the Map tab's \"DIRECTIONS\" link. " +
                 "Never synced anywhere; used only to build a Google Maps link on this device.",
-            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            style = FTType.BodySmall,
             color = FT.TextSecondary,
             modifier = Modifier.padding(top = 4.dp),
         )
@@ -192,13 +190,13 @@ private fun MapCard(context: android.content.Context) {
         if (homeInputError) {
             Text(
                 "Enter valid decimal coordinates (lat −90 to 90, lon −180 to 180).",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.Critical,
             )
         }
         Text(
             savedHome.value?.let { "Home set: %.4f, %.4f".format(it.first, it.second) } ?: "No home location set — the DIRECTIONS link is hidden until one is saved.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            style = FTType.Caption,
             color = FT.TextSecondary,
         )
     }
@@ -222,7 +220,7 @@ private fun HealthConnectCard(context: android.content.Context) {
         Text(
             "Reads activity, body, sleep, and vitals data on every app open. " +
                 "Grants are managed by the OS, not re-requested every screen load.",
-            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            style = FTType.BodySmall,
             color = FT.TextSecondary,
         )
         Text(
@@ -232,7 +230,7 @@ private fun HealthConnectCard(context: android.content.Context) {
                 hcGranted -> "Connected — all requested permissions granted."
                 else -> "Not connected yet."
             },
-            style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+            style = FTType.BodySmall,
             color = if (hcGranted) FT.Emerald else FT.TextSecondary,
         )
         if (hcAvailable && hcChecked && !hcGranted) {
@@ -254,7 +252,7 @@ private fun HealthConnectCard(context: android.content.Context) {
                     HealthConnectSyncResult.NotGranted -> "Sync skipped — permissions not granted."
                     HealthConnectSyncResult.Unavailable -> "Sync skipped — Health Connect unavailable."
                 },
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
             HealthConnectSyncStatus.lastWriteBackResult?.let { wbResult ->
@@ -273,7 +271,7 @@ private fun HealthConnectCard(context: android.content.Context) {
                 }
                 Text(
                     text = wbText,
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    style = FTType.Caption,
                     color = if (wbResult is com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Success) FT.TextSecondary else FT.Warning,
                 )
             }
@@ -298,7 +296,7 @@ private fun ZeppCard(scope: CoroutineScope) {
             "Pulls workout detail (real per-point pace/power/route) and Zepp-native " +
                 "metrics directly from Zepp's cloud, reconciled against Health Connect " +
                 "sessions rather than duplicating them. Runs automatically on app open.",
-            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            style = FTType.BodySmall,
             color = FT.TextSecondary,
         )
         Text(
@@ -308,7 +306,7 @@ private fun ZeppCard(scope: CoroutineScope) {
                 zeppStatus?.lastSyncedAt != null -> "Last synced ${zeppStatus?.lastSyncedAt}"
                 else -> "Not synced yet."
             },
-            style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+            style = FTType.BodySmall,
             color = if (zeppStatus?.lastError != null) FT.Warning else FT.TextSecondary,
         )
         if (zeppStatus?.lastError != null) {
@@ -316,7 +314,7 @@ private fun ZeppCard(scope: CoroutineScope) {
                 "Re-capture: log into watchface.zepp.com in a browser, read apptoken/userid " +
                     "from cookies, and update the ZEPP_APP_TOKEN/ZEPP_USER_ID Edge Function " +
                     "secrets (docs/zepp-integration/02-token-capture-and-data-extraction.md).",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }

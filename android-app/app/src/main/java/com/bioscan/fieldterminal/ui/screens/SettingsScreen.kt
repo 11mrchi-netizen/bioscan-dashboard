@@ -17,15 +17,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -72,9 +69,9 @@ private fun SettingsNavRow(title: String, subtitle: String, onClick: () -> Unit)
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column {
-            Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp), color = FT.TextPrimary)
-            Text(subtitle, style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
+            Text(title, style = FTType.RowTitle, color = FT.TextPrimary)
+            Text(subtitle, style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
         }
-        Text("›", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp), color = FT.TextSecondary)
+        Text("›", style = FTType.SectionTitle, color = FT.TextSecondary)
     }
 }

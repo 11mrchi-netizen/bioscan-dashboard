@@ -32,7 +32,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
@@ -300,7 +299,7 @@ private fun IngredientsSection(ingredients: androidx.compose.runtime.snapshots.S
         ingredients.forEachIndexed { i, ingredient -> IngredientEditor(ingredient) { ingredients.removeAt(i) } }
         Text(
             "+ ADD INGREDIENT",
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+            style = FTType.MonoCaption,
             color = FT.Emerald,
             modifier = Modifier.clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -320,7 +319,7 @@ private fun IngredientEditor(ingredient: EditableIngredient, onRemove: () -> Uni
             FieldTextField(ingredient.name, { ingredient.name = it }, "Ingredient, e.g. Magnesium bisglycinate", modifier = Modifier.weight(1f))
             Text(
                 "REMOVE",
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                style = FTType.MonoCaption,
                 color = FT.Critical,
                 modifier = Modifier
                     .padding(start = 10.dp)
@@ -338,7 +337,7 @@ private fun IngredientEditor(ingredient: EditableIngredient, onRemove: () -> Uni
         }
         Text(
             "Leave elemental blank unless the label states it separately (e.g. \"2000mg magnesium bisglycinate providing 200mg elemental magnesium\") -- never guessed.",
-            style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+            style = FTType.Caption,
             color = FT.TextMuted,
         )
     }

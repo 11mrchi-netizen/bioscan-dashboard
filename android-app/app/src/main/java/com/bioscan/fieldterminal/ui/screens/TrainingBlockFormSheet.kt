@@ -110,7 +110,7 @@ fun TrainingBlockFormSheet(cycle: TrainingCycle?, onDismiss: () -> Unit, onSaved
             }
             Text(
                 "Ends $endDate",
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 11.5.sp),
+                style = FTType.MonoCaption,
                 color = FT.TextMuted,
             )
 
@@ -284,11 +284,11 @@ private fun FormLabel(text: String) {
     Text(text, style = formLabelStyle, color = FT.TextSecondary)
 }
 
-private val sheetHeaderStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
-private val formLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
-private val chipLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
-private val stepperButtonStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-private val stepperValueStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+private val sheetHeaderStyle = FTType.SectionTitle
+private val formLabelStyle = FTType.LabelCaps
+private val chipLabelStyle = FTType.Label
+private val stepperButtonStyle = FTType.MetricMedium
+private val stepperValueStyle = FTType.MetricMedium
 
 private enum class TbFocus(val label: String, val key: String) {
     MaxStrength("Max Strength", "max_strength"),

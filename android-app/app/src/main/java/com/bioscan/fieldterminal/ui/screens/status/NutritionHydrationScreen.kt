@@ -315,25 +315,25 @@ fun HydrationTabContent(overview: NutritionOverview) {
                 FTMetricValue(DisplayValue(primary = "%.0f".format(todayCaffeineMg), unit = "MG TODAY"))
                 if (caffeineWindow != null) {
                     Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        StatLine("Residual now", "~%.0f mg".format(caffeineWindow.residualNowMg))
+                        FTMetricRow("Residual now", "~%.0f mg".format(caffeineWindow.residualNowMg))
                         caffeineWindow.residualAtBedtimeMg?.let { r ->
-                            StatLine("At 11pm", "~%.0f mg".format(r))
+                            FTMetricRow("At 11pm", "~%.0f mg".format(r))
                         }
                         caffeineWindow.cutoffHour?.let { h ->
                             val label = if (h == 0) "Threshold already met" else "Last dose by %02d:00".format(h)
-                            StatLine("Cutoff", label)
+                            FTMetricRow("Cutoff", label)
                         }
                     }
                     Text(
                         "Half-life 5h model · 200 mg reference dose · not personalized yet",
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                        style = FTType.Caption,
                         color = FT.TextMuted,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 } else {
                     Text(
                         "Total from logged beverages",
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        style = FTType.Caption,
                         color = FT.TextMuted,
                     )
                 }
@@ -348,8 +348,8 @@ fun HydrationTabContent(overview: NutritionOverview) {
                     }
                 } else {
                     explanation?.let { text ->
-                        Text(text, style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextPrimary)
-                    } ?: Text("Explanation unavailable.", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextMuted)
+                        Text(text, style = FTType.BodySmall, color = FT.TextPrimary)
+                    } ?: Text("Explanation unavailable.", style = FTType.BodySmall, color = FT.TextMuted)
                 }
                 Text(
                     "AI interpretation · validated data only · not medical advice",

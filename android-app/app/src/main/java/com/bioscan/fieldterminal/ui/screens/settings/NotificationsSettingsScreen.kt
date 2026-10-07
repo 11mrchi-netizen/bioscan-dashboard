@@ -20,11 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.NotificationRulesRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.NotificationPrefsRow
@@ -34,9 +30,8 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.TimeField
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
@@ -70,13 +65,13 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
         ) {
             val prefs = notifPrefs
             if (prefs == null) {
-                Text("Loading…", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary)
+                Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
             } else {
                 FTCard(title = "NOTIFICATIONS") {
                     Text(
                         "Quiet hours hold reminders until the window ends instead of interrupting you. " +
                             "Stored with your account.",
-                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                        style = FTType.BodySmall,
                         color = FT.TextSecondary,
                     )
                     Row(
@@ -86,7 +81,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                     ) {
                         Text(
                             "QUIET HOURS",
-                            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+                            style = FTType.LabelCaps,
                             color = FT.TextSecondary,
                         )
                         Switch(
@@ -115,7 +110,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                         Text(
                             if (prefs.quietStart == prefs.quietEnd) "FROM and UNTIL are the same, so there is no quiet window."
                             else "Reminders due ${prefs.quietStart}–${prefs.quietEnd} are shown at ${prefs.quietEnd}.",
-                            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                            style = FTType.Caption,
                             color = FT.TextSecondary,
                         )
                     }
@@ -131,12 +126,12 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                     if (notifError) {
                         Text(
                             "Couldn't save. Check your connection and try again.",
-                            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                            style = FTType.Caption,
                             color = FT.Critical,
                         )
                     }
                     notifSavedAt?.let {
-                        Text("Saved $it", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextSecondary)
+                        Text("Saved $it", style = FTType.Caption, color = FT.TextSecondary)
                     }
                 }
             }

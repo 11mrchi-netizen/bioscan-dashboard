@@ -37,6 +37,11 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
+import com.bioscan.fieldterminal.domain.DisplayValue
+import com.bioscan.fieldterminal.ui.components.FTMetricValue
+import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.ageAccelerationState
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -79,9 +84,47 @@ fun AgingProfileScreen(onBack: () -> Unit) {
 @Composable
 private fun OverviewCard(overview: AgingProfileOverview) {
     FTCard(title = "OVERVIEW") {
-        StatLineHelp("Chronological age", "${overview.chronologicalAgeYears} yr", "Chronological age", "Your real age, from date of birth (Setup › Profile). Every biological-age model below is compared against this.")
-        overview.phenoAge?.let { ResultLine(it, PHENOAGE_HELP) }
-        overview.cardioAge?.let { ResultLine(it, CARDIO_AGE_HELP) }
+        BioAgeHero(overview)
+        StatLineHelp("Chronological age", "${overview.chronologicalAgeYears} yr", "Chronological age", "Your real age, from date of birth (Setup › Profile). Every biological-age model is compared against this.")
+    }
+}
+
+// The hero of the aging pages: each model's current biological age, side by
+// side and never merged into one figure (models stay parallel, DAV-230). Each
+// cell is label + help, the age as a display metric, a state pill and the
+// signed delta against real age. Shared with the User tab's AGING card.
+@Composable
+internal fun BioAgeHero(overview: AgingProfileOverview, modifier: Modifier = Modifier) {
+    if (overview.phenoAge == null && overview.cardioAge == null) {
+        FTDataState(DataAvailability.Unavailable, "No biological-age model has a result yet.", modifier)
+        return
+    }
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        overview.phenoAge?.let { BioAgeHeroCell(it, PHENOAGE_HELP, Modifier.weight(1f)) }
+        overview.cardioAge?.let { BioAgeHeroCell(it, CARDIO_AGE_HELP, Modifier.weight(1f)) }
+    }
+}
+
+@Composable
+private fun BioAgeHeroCell(result: BiologicalAgeResult, help: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(result.model.label.uppercase(), style = FTType.LabelCaps, color = FT.TextMuted)
+            InfoHelpButton(result.model.label, help)
+        }
+        if (result.isAvailable) {
+            FTMetricValue(DisplayValue(primary = "%.0f".format(result.biologicalAge), unit = "YRS"))
+            FTStatePill(ageAccelerationState(result.ageAcceleration))
+            result.ageAcceleration?.let {
+                Text(
+                    "%+.1f yrs vs. real age".format(it),
+                    style = FTType.Label,
+                    color = if (it <= 0) FT.Emerald else FT.Warning,
+                )
+            }
+        } else {
+            FTDataState(DataAvailability.Unavailable, result.unavailableReason ?: "Unavailable")
+        }
     }
 }
 

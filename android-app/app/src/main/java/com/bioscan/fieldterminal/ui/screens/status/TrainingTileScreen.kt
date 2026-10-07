@@ -82,6 +82,7 @@ import com.bioscan.fieldterminal.ui.nav.TrainingTab
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
 import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -374,10 +375,19 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier
             }
         }
         FTConfidenceChip(confidenceLevel(eval.confidence))
-        eval.ctl?.let { LoadMetricBlock("CTL (fitness)", "%.1f".format(it), "CTL — fitness", LOAD_HELP_CTL, visible.map { p -> p.date to p.ctl }, FT.Category.Activity.c500) }
-        eval.atl?.let { LoadMetricBlock("ATL (fatigue)", "%.1f".format(it), "ATL — fatigue", LOAD_HELP_ATL, visible.map { p -> p.date to p.atl }, FT.Category.Activity.c500) }
+        // Supporting levels beside the TSB hero above: current fitness (CTL)
+        // and fatigue (ATL), each at one step below the hero's size.
+        if (eval.ctl != null || eval.atl != null) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                eval.ctl?.let { LoadLevel("CTL · FITNESS", "%.1f".format(it), "CTL — fitness", LOAD_HELP_CTL, Modifier.weight(1f)) }
+                eval.atl?.let { LoadLevel("ATL · FATIGUE", "%.1f".format(it), "ATL — fatigue", LOAD_HELP_ATL, Modifier.weight(1f)) }
+            }
+        }
+        // Trend lines: the numbers live above, so these carry only the history.
+        eval.ctl?.let { LoadMetricBlock("CTL trend", visible.map { p -> p.date to p.ctl }, FT.Category.Activity.c500) }
+        eval.atl?.let { LoadMetricBlock("ATL trend", visible.map { p -> p.date to p.atl }, FT.Category.Activity.c500) }
         eval.tsb?.let {
-            LoadMetricBlock("TSB (form)", "%+.1f".format(it), "TSB — form", LOAD_HELP_TSB, visible.map { p -> p.date to p.tsb }, FT.Category.Activity.c500, refLow = TSB_LOADED_BELOW, refHigh = TSB_FRESHENED_FROM, signed = true)
+            LoadMetricBlock("TSB trend", visible.map { p -> p.date to p.tsb }, FT.Category.Activity.c500, helpTitle = "TSB — form", helpBody = LOAD_HELP_TSB, refLow = TSB_LOADED_BELOW, refHigh = TSB_FRESHENED_FROM, signed = true)
         }
         // Phase A3: a pure re-label of the state above, never a
         // recomputation -- only rendered when a training cycle is actually
@@ -386,30 +396,35 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier
     }
 }
 
-// Label + value + "?" on one row, a small history line of the same metric under it.
+// A supporting load level: small caps label + help, the current value one step
+// below the hero's size.
+@Composable
+private fun LoadLevel(label: String, value: String, helpTitle: String, helpBody: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(label, style = FTType.LabelCaps, color = FT.TextMuted)
+            InfoHelpButton(helpTitle, helpBody)
+        }
+        Text(value, style = FTType.MetricMedium, color = FT.TextPrimary)
+    }
+}
+
+// Label (+ optional help) with a small history line of the metric under it.
 @Composable
 private fun LoadMetricBlock(
     label: String,
-    value: String,
-    helpTitle: String,
-    helpBody: String,
     points: List<Pair<LocalDate, Double>>,
     color: androidx.compose.ui.graphics.Color,
+    helpTitle: String? = null,
+    helpBody: String? = null,
     refLow: Double? = null,
     refHigh: Double? = null,
     signed: Boolean = false,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
-            InfoHelpButton(helpTitle, helpBody)
-            Text(
-                value,
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
-                color = FT.TextPrimary,
-                textAlign = TextAlign.End,
-                modifier = Modifier.weight(1f),
-            )
+            Text(label, style = FTType.Body, color = FT.TextSecondary)
+            if (helpTitle != null && helpBody != null) InfoHelpButton(helpTitle, helpBody)
         }
         if (points.size >= 2) {
             DateTrendLine(

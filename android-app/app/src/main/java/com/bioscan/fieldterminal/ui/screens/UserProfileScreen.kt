@@ -170,53 +170,14 @@ private fun AgingCard(overview: AgingProfileOverview?, onOpen: () -> Unit) {
             overview == null -> CircularProgressIndicator(color = FT.Emerald)
             overview.chronologicalAgeYears == null -> FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile to see this.")
             else -> {
-                FTMetricValue(
-                    DisplayValue(
-                        primary = overview.chronologicalAgeYears.toString(),
-                        unit = "years",
-                        secondary = "CHRONOLOGICAL AGE",
-                    ),
-                )
-                Spacer(Modifier.height(8.dp))
-                overview.phenoAge?.let { BioAgeRow("PhenoAge", it) }
-                overview.cardioAge?.let { BioAgeRow("Cardio Age", it) }
-                Spacer(Modifier.height(4.dp))
-                Text("Tap for the full breakdown", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.TextMuted)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BioAgeRow(label: String, result: BiologicalAgeResult) {
-    val bioAge = result.biologicalAge
-    val accel = result.ageAcceleration
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(label.uppercase(), style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextMuted)
-            Row(verticalAlignment = Alignment.Bottom) {
+                BioAgeHero(overview)
                 Text(
-                    bioAge?.let { "%.0f".format(it) } ?: "—",
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
-                    color = FT.TextPrimary,
+                    "CHRONOLOGICAL ${overview.chronologicalAgeYears} YRS · TAP FOR THE FULL BREAKDOWN",
+                    style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp),
+                    color = FT.TextMuted,
                 )
-                if (accel != null) {
-                    Spacer(Modifier.width(8.dp))
-                    val deltaText = if (accel <= 0) "%.1f yrs".format(accel) else "+%.1f yrs".format(accel)
-                    val deltaColor = if (accel <= 0) FT.Emerald else FT.Warning
-                    Text(
-                        deltaText,
-                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-                        color = deltaColor,
-                    )
-                }
             }
         }
-        FTStatePill(ageAccelerationState(accel))
     }
 }
 

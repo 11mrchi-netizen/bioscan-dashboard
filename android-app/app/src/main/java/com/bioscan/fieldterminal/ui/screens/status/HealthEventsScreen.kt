@@ -149,8 +149,8 @@ private fun SectionLabel(text: String, color: Color) {
 
 @Composable
 private fun KindBadge(kind: HealthEventKind) {
-    val color = if (kind == HealthEventKind.Injury) FT.Warning else FT.Info
-    Box(modifier = Modifier.background(color).padding(horizontal = 6.dp, vertical = 2.dp)) {
+    // Kind is identity, not state: neutral chip, the text says which kind.
+    Box(modifier = Modifier.background(FT.TextSecondary).padding(horizontal = 6.dp, vertical = 2.dp)) {
         Text(
             kind.name.uppercase(),
             style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 10.5.sp),

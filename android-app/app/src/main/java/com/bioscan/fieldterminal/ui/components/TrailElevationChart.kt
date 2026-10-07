@@ -40,9 +40,9 @@ import com.bioscan.fieldterminal.ui.theme.RobotoMono
 // PerfSignal (a private screen-level concern) across files for one shared
 // palette.
 enum class OverlaySignal(val label: String, val color: Color) {
-    HR("HR", FT.Critical),
-    PACE("PACE", FT.Emerald),
-    CADENCE("CADENCE", FT.Info),
+    HR("HR", FT.DomainHeart),
+    PACE("PACE", FT.Category.Activity.c500),
+    CADENCE("CADENCE", FT.TextSecondary),
 }
 
 private data class OverlayLine(val signal: OverlaySignal, val values: List<Float?>, val min: Float, val max: Float)

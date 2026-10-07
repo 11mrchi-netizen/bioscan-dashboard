@@ -91,7 +91,7 @@ fun BodyHeatMap(loads: Map<BodyZone, Double>, modifier: Modifier = Modifier) {
     val maxLoad = loads.values.maxOrNull()?.takeIf { it > 0 } ?: return
     val total = loads.values.sum()
     var selected by remember { mutableStateOf<BodyZone?>(null) }
-    val idle = Color.White.copy(alpha = 0.07f)
+    val idle = FT.GlassFill
 
     fun tint(zone: BodyZone): Color {
         val load = loads[zone] ?: 0.0
@@ -121,14 +121,14 @@ fun BodyHeatMap(loads: Map<BodyZone, Double>, modifier: Modifier = Modifier) {
             listOf(FRONT_SHAPES to size.width / 4f, BACK_SHAPES to size.width * 3f / 4f).forEach { (shapes, cx) ->
                 val ox = cx - 50f * scale
                 fun p(pt: Pair<Float, Float>) = Offset(ox + pt.first * scale, oy + pt.second * scale)
-                drawCircle(Color.White.copy(alpha = 0.18f), radius = 9f * scale, center = p(50f to 13f), style = Stroke(1.5f))
+                drawCircle(FT.GlassBorder, radius = 9f * scale, center = p(50f to 13f), style = Stroke(1.5f))
                 shapes.forEach { s ->
                     val path = Path().apply {
                         s.pts.forEachIndexed { i, pt -> p(pt).let { o -> if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) } }
                         close()
                     }
                     drawPath(path, tint(s.zone))
-                    drawPath(path, Color.White.copy(alpha = if (s.zone == selected) 0.9f else 0.16f), style = Stroke(if (s.zone == selected) 3f else 1f))
+                    drawPath(path, if (s.zone == selected) FT.TextPrimary else FT.GlassBorder, style = Stroke(if (s.zone == selected) 3f else 1f))
                 }
             }
         }

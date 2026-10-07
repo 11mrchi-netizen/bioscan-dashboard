@@ -230,7 +230,7 @@ private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .fillMaxHeight(fraction)
-                            .background(if (week.isDeload) FT.Emerald else FT.GlassFill),
+                            .background(if (week.isDeload) FT.Category.Activity.c500 else FT.GlassStrongFill),
                     )
                 }
             }
@@ -373,10 +373,10 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier
             }
         }
         StatLine("Confidence", eval.confidence.label)
-        eval.ctl?.let { LoadMetricBlock("CTL (fitness)", "%.1f".format(it), "CTL — fitness", LOAD_HELP_CTL, visible.map { p -> p.date to p.ctl }, FT.Emerald) }
-        eval.atl?.let { LoadMetricBlock("ATL (fatigue)", "%.1f".format(it), "ATL — fatigue", LOAD_HELP_ATL, visible.map { p -> p.date to p.atl }, FT.Warning) }
+        eval.ctl?.let { LoadMetricBlock("CTL (fitness)", "%.1f".format(it), "CTL — fitness", LOAD_HELP_CTL, visible.map { p -> p.date to p.ctl }, FT.Category.Activity.c500) }
+        eval.atl?.let { LoadMetricBlock("ATL (fatigue)", "%.1f".format(it), "ATL — fatigue", LOAD_HELP_ATL, visible.map { p -> p.date to p.atl }, FT.Category.Activity.c500) }
         eval.tsb?.let {
-            LoadMetricBlock("TSB (form)", "%+.1f".format(it), "TSB — form", LOAD_HELP_TSB, visible.map { p -> p.date to p.tsb }, FT.Info, refLow = TSB_LOADED_BELOW, refHigh = TSB_FRESHENED_FROM, signed = true)
+            LoadMetricBlock("TSB (form)", "%+.1f".format(it), "TSB — form", LOAD_HELP_TSB, visible.map { p -> p.date to p.tsb }, FT.Category.Activity.c500, refLow = TSB_LOADED_BELOW, refHigh = TSB_FRESHENED_FROM, signed = true)
         }
         // Phase A3: a pure re-label of the state above, never a
         // recomputation -- only rendered when a training cycle is actually

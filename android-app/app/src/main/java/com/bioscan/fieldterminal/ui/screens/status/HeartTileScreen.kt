@@ -392,7 +392,7 @@ private fun EvalCard(
             if (timeframe != null) vitalsTrendSeries(pts, timeframe).takeIf { it.size >= 2 }
             else recentTrendWindow(pts)
         }
-        series?.let { DateTrendLine(points = it, color = FT.Emerald, modifier = Modifier.padding(top = 8.dp)) }
+        series?.let { DateTrendLine(points = it, color = FT.DomainHeart, modifier = Modifier.padding(top = 8.dp)) }
     }
 }
 
@@ -493,10 +493,13 @@ private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay
         if (relax != null && normal != null && medium != null && high != null) {
             val total = (relax + normal + medium + high).takeIf { it > 0 } ?: 1
             Row(modifier = Modifier.fillMaxWidth().height(10.dp)) {
-                Box(Modifier.weight((relax.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Emerald))
-                Box(Modifier.weight((normal.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Info))
-                Box(Modifier.weight((medium.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Warning))
-                Box(Modifier.weight((high.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Critical))
+                // Ordinal intensity (relax -> high): one hue, rising opacity,
+                // not a state ramp -- the percentages below carry the values.
+                val stressHue = FT.Category.Wellbeing.c500
+                Box(Modifier.weight((relax.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(stressHue.copy(alpha = 0.30f)))
+                Box(Modifier.weight((normal.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(stressHue.copy(alpha = 0.50f)))
+                Box(Modifier.weight((medium.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(stressHue.copy(alpha = 0.75f)))
+                Box(Modifier.weight((high.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(stressHue))
             }
             StatLine("Relax / Normal / Medium / High", "$relax% / $normal% / $medium% / $high%")
         }
@@ -556,13 +559,13 @@ private fun SleepPhasesCard(nights: List<SleepAnalysisRow>) {
 
     FTCard(title = "SLEEP PHASES") {
         Row(modifier = Modifier.fillMaxWidth().height(10.dp)) {
-            Box(Modifier.weight((avgDeep / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Info))
-            Box(Modifier.weight((avgRem / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Emerald))
-            Box(Modifier.weight((avgLight / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.TextMuted))
+            Box(Modifier.weight((avgDeep / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Category.Sleep.c700))
+            Box(Modifier.weight((avgRem / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Category.Sleep.c500))
+            Box(Modifier.weight((avgLight / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Category.Sleep.c300))
         }
-        PhaseStatLine("Deep", avgDeep, avgTotal, FT.Info)
-        PhaseStatLine("REM", avgRem, avgTotal, FT.Emerald)
-        PhaseStatLine("Light", avgLight, avgTotal, FT.TextMuted)
+        PhaseStatLine("Deep", avgDeep, avgTotal, FT.Category.Sleep.c700)
+        PhaseStatLine("REM", avgRem, avgTotal, FT.Category.Sleep.c500)
+        PhaseStatLine("Light", avgLight, avgTotal, FT.Category.Sleep.c300)
         StatLine("Nights averaged", "${recent.size}")
     }
 }
@@ -673,7 +676,7 @@ private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>,
         eval.iqr7d?.let { StatLine("7-day IQR", "%.1f".format(it)) }
         eval.trendDirection?.let { StatLine("14-day trend", if (it > 0) "↑ rising (p<0.05)" else "↓ falling (p<0.05)") }
         recentTrendWindow(points)?.let { recent ->
-            DateTrendLine(points = recent, color = FT.Info, modifier = Modifier.padding(top = 8.dp))
+            DateTrendLine(points = recent, color = FT.Category.Wellbeing.c500, modifier = Modifier.padding(top = 8.dp))
         }
     }
 }

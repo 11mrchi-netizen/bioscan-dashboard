@@ -57,6 +57,9 @@ fun LineChart(
     filled: Boolean = false,
     xRange: Pair<Long, Long>? = null,
     valueFormat: (Double) -> String = { if (kotlin.math.abs(it) >= 100) "%.0f".format(it) else "%.1f".format(it) },
+    // Lower-is-better series (pace in min/km): plot low values at the top so
+    // "up" always means "better".
+    invertY: Boolean = false,
 ) {
     if (points.size < 2) return
 
@@ -71,7 +74,10 @@ fun LineChart(
     val ySpan = yMax - yMin
 
     fun xFor(x: Float, width: Float) = pad + (x - xMin) / xSpan * (width - pad * 2)
-    fun yFor(y: Float, height: Float) = pad + (1f - (y - yMin) / ySpan) * (height - pad * 2)
+    fun yFor(y: Float, height: Float): Float {
+        val t = (y - yMin) / ySpan
+        return pad + (if (invertY) t else 1f - t) * (height - pad * 2)
+    }
 
     var selected by remember { mutableStateOf<Int?>(null) }
     val measurer = rememberTextMeasurer()

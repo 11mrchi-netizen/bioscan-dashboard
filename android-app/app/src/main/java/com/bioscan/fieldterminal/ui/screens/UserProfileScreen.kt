@@ -245,7 +245,7 @@ private fun DomainLevelRow(domain: AchievementDomain, level: DomainLevel?) {
                 RangeBar(
                     value = percentile,
                     max = 100.0,
-                    watchBelow = 25.0,
+                    watchBelow = null,
                     color = bandToColor(level.band),
                 )
             }

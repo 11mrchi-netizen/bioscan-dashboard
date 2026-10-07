@@ -388,11 +388,20 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
 }
 
 private enum class PerfSignal(val label: String, val unit: String, val color: Color) {
-    HR("HR", "bpm", FT.Critical),
-    PACE("PACE", "min/km", FT.Emerald),
-    POWER("POWER", "W", FT.Warning),
-    CADENCE("CADENCE", "spm", FT.Info),
+    HR("HR", "bpm", FT.DomainHeart),
+    PACE("PACE", "min/km", FT.Category.Activity.c500),
+    POWER("POWER", "W", FT.Category.Activity.c300),
+    CADENCE("CADENCE", "spm", FT.TextSecondary),
 }
+
+// Pace reads as m:ss /km (not a decimal like 4.8), everything else as value + unit.
+private fun formatSignalValue(signal: PerfSignal, v: Double): String =
+    if (signal == PerfSignal.PACE) {
+        val s = Math.round(v * 60).toInt()
+        "%d:%02d /km".format(s / 60, s % 60)
+    } else {
+        "%.1f %s".format(v, signal.unit)
+    }
 
 // One chart, switchable rather than four stacked ones -- only signals this
 // session actually recorded appear as options. PACE is derived from the
@@ -431,9 +440,16 @@ private fun PerformanceChartSection(d: SessionDetail) {
         average = values.average(),
         max = values.max(),
         color = selected.color,
-        format = { v -> "%.1f %s".format(v, selected.unit) },
+        format = { v -> formatSignalValue(selected, v) },
     )
-    LineChart(points = points, color = selected.color, xRange = sessionStart to sessionEnd, modifier = Modifier.padding(top = 4.dp))
+    LineChart(
+        points = points,
+        color = selected.color,
+        xRange = sessionStart to sessionEnd,
+        modifier = Modifier.padding(top = 4.dp),
+        valueFormat = { v -> formatSignalValue(selected, v) },
+        invertY = selected == PerfSignal.PACE,
+    )
     if (points.first().offsetSeconds > sessionStart || points.last().offsetSeconds < sessionEnd) {
         Text(
             "${selected.label} only reported for part of this session.",

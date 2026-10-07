@@ -1,6 +1,6 @@
 # Training programming: schema and definition format (DAV-342, DAV-344, DAV-350)
 
-Version 1.1.0 · 2026-10-06 · status: **applied** (migrations `training_programming_schema` and `training_programming_backfill_cycles`; the repo tracks no SQL). Verified in SQL: owner default `auth.uid()` and four policies on all eight tables, CHECK constraints reject bad values, the 14 existing cycles backfilled.
+Version 1.2.0 · 2026-10-07 · status: **applied** (migrations `training_programming_schema` and `training_programming_backfill_cycles`; the repo tracks no SQL). Verified in SQL: owner default `auth.uid()` and four policies on all eight tables, CHECK constraints reject bad values, the 14 existing cycles backfilled.
 
 All numbers in the JSON examples below are **placeholders chosen to show structure**. They are not taken from any book. Real program content lives only in the private `training_definitions` rows.
 
@@ -26,6 +26,7 @@ create table public.training_settings (
   second_duration_min int not null default 120 check (second_duration_min between 10 and 360),
   calendar_id text,                                                  -- set when the app creates the calendar
   timezone text,
+  weighted_percent_base text not null default 'total' check (weighted_percent_base in ('total','added')),  -- added by migration training_settings_weighted_percent_base
   updated_at timestamptz not null default now()
 );
 
@@ -274,19 +275,24 @@ Load kinds: `pct_1rm`, `pct_tm`, `pct_max_reps`, `work_up_rm` (`{rm: {min, max}}
 
 Cell reference grammar: `strength:<key|$VAR>`, `se:<key|$VAR>`, `cond:<key>`, `test:<what>`, `rest`. `params` override or add to the session type's prescription (`minutes`, `distance_mi`, `distance_km`, `rounds`, `ruck_kg`, `rpe`), each a number or `{min, max}`. Two cells in one day are a two-a-day (`slot_in_day` 1 and 2). Days are positions; weekdays come from the block's choices.
 
-### 3.5 `conditioning_protocol` and `composition` (provisional, until the TB III conditioning, Periodization and Integration chapters are read)
+### 3.5 `conditioning_protocol` and `composition` (shapes confirmed against Tactical Barbell III; values are placeholders)
 
 ```json
 {
   "schema_version": 1, "kind": "conditioning_protocol", "key": "example.protocol", "version": 1,
   "title": "Example conditioning protocol", "source_ref": "book, page",
-  "weeks": { "min": 6, "max": 12 },
-  "slots": [
-    { "id": "hard", "category": "hic",       "per_week": { "min": 2, "max": 2 } },
-    { "id": "long", "category": "endurance", "per_week": { "min": 1, "max": 1 } }
+  "budget": {
+    "low_intensity_minutes_per_week": { "min": 100, "max": 160 },
+    "session_min_minutes": 25,
+    "high_intensity": { "per_week": 1 }
+  },
+  "week_adjustments": [
+    { "when": "week_has_high_intensity", "low_intensity_minutes_per_week": { "min": 70, "max": 110 } }
   ],
-  "week_rules": [ { "every": 3, "kind": "easy", "reduce": ["sessions", "duration"] } ],
-  "allowed_categories": ["hic", "endurance", "hills"]
+  "cadence": { "high_intensity": { "every_n_weeks": 3 } },
+  "suggested": { "low_intensity": ["<session key>"], "high_intensity": ["<session key>"] },
+  "pairs_well_with": ["<strength module key>"],
+  "example_weeks": [ { "days": { "2": "low:60", "4": "low:60", "6": "high" } } ]
 }
 ```
 
@@ -304,9 +310,22 @@ Cell reference grammar: `strength:<key|$VAR>`, `se:<key|$VAR>`, `cond:<key>`, `t
 }
 ```
 
+`cadence` replaces `per_week` when a session is not weekly ("every other week"). Rotation rules (alternate a speed session with a hill session each week) live in `rotation`.
+
 A composed block carries no week x day grid of its own: the generator lays the strength module's sessions on the weekdays the user assigned to strength, fills the conditioning slots on the weekdays assigned to conditioning and endurance with sessions from the user's preferences, and applies the week rules. Integration rules are warnings in the setup preview.
 
-### 3.6 `system`
+### 3.5b Week kinds and strength-module extras (from Tactical Barbell III)
+
+- Week kinds: `normal`, `peak`, `deload`, `taper`, `test`, `easy`. Each week carries `counts_toward_block` (false for deload weeks, which are invisible to the block length).
+- A strength module may define `variants` (a short block without a peak and a longer block with one) and `peak` options (`peak`, `amsap`, `amrap`, `none`) with a `schedule_hint` (spread the peak sessions out).
+- `options` toggle documented alternatives (rep schemes such as a heavier-volume option, set-count patterns, deadlift handling). They never change the table silently; the user picks them at setup.
+- `scheduling_rules` carry the ordering rules ("get all sessions in, keep A/B order, avoid long runs of consecutive sessions") as preview warnings.
+- Prescription load kinds also include `work_up_rm` (primary lift worked up to a comfortable 2-3RM, with secondaries at fixed percentages) and paired primer + power exercises (a single heavy primer set, a long rest, then the power sets), represented as two linked items.
+- `progression` states per-block increments for upper and lower lifts in pounds (converted to the user's plate step) and `skip_if_incomplete: true`.
+
+### 3.6 `system` (and cycles)
+
+A `system` also expresses a **cycle**: an ordered list of blocks (`{composition, weeks}`, durations that may be a range) with `repeat: true`, and a **perpetual** model: a `baseline` composition plus allowed `detours`. A strategic plan in `training_plans` is the user's chosen instance of one of these.
 
 An ordered or optional list of templates with transition rules (benchmark that gates the next one, allowed skips, start-later variants). It drives the strategic-plan suggestions in the UI; blocks are generated from templates, not from a system.
 

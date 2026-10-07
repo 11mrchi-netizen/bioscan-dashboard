@@ -1,10 +1,10 @@
 # Training programming engine: audit and architecture (DAV-341)
 
-Version 1.1.0 · 2026-10-06 · status: **approved for build**. Schema applied 2026-10-06 (migrations `training_programming_schema`, `training_programming_backfill_cycles`); no app code written yet.
+Version 1.2.0 · 2026-10-07 · status: **approved for build**. Schema applied 2026-10-06 (migrations `training_programming_schema`, `training_programming_backfill_cycles`); no app code written yet.
 
 Scope: milestone 13. A reusable programming engine with Tactical Barbell as the first methodology. This document locks the architecture; `02-schema-and-definitions.md` holds the proposed tables and the definition format.
 
-Sources read for this audit: the repo (Android app, Supabase schema), Linear DAV-341..350, and the user's own copies of Tactical Barbell II (Conditioning), Mass Protocol and Green Protocol (full text, plus rendered pages for tables). Tactical Barbell III (Kindle) is not yet available; programs from it are added later through the definition format, not through schema changes.
+Tactical Barbell III (the user's own copy, as structured markdown captured from the Kindle app) has now been read in full; its structure is reflected in 3.3b and in `02`. Sources read for this audit: the repo (Android app, Supabase schema), Linear DAV-341..350, and the user's own copies of Tactical Barbell II (Conditioning), Mass Protocol and Green Protocol (full text, plus rendered pages for tables). Tactical Barbell III (Kindle) is not yet available; programs from it are added later through the definition format, not through schema changes.
 
 ## 1. What exists today
 
@@ -88,7 +88,7 @@ Prescription resolution by load kind:
 | `rpe` / `bodyweight` / `none` | SE circuits, plyometrics | Passed through. |
 | peak options | AMRAP / AMSAP / peaking | Kept as a labelled option on the item; user picks at execution. |
 
-Loadable weight: `bar_kg + 2 x sum(plates per side)` from the user's plates (1.25, 2.5, 5, 10, 15, 20 kg), so the step is **2.5 kg total**. Default bar 20 kg; a trap bar is a second bar with its own weight (configurable). Rounding is to the nearest loadable weight; ties round down for the heaviest week of a wave (no silent overloading), up otherwise. Plate composition is the greedy largest-first fit per side, with the exact fit verified in tests.
+Loadable weight: `bar_kg + 2 x sum(plates per side)` from the user's plates (1.25, 2.5, 5, 10, 15, 20 kg), so the step is **2.5 kg total**. Default bar 20 kg; a trap bar is a second bar with its own weight (configurable). Rounding is to the nearest loadable weight; exact ties round down (no silent overloading). Plate composition is the greedy largest-first fit per side, with the exact fit verified in tests.
 
 Maxes, in priority order: (1) a recorded test, (2) implied by the user's own logged `percent_1rm` (weight / percent), (3) Epley estimate on reps <= 12, (4) manual entry. Every snapshot stores its derivation (formula, source session ids). A Training Max is stored as its own snapshot (`kind = training_max`, a configurable fraction of the 1RM; the fraction the book recommends is the default).
 
@@ -106,6 +106,17 @@ Tactical Barbell III is organised this way: strength templates (Operator and its
 - Domain composition is derived from the components (e.g. strength primary + conditioning secondary) and shown for confirmation; the user can override roles.
 
 The TB III conditioning, Base Building, Periodization and Activation chapters are not yet read, so `conditioning_protocol` and `composition` shapes in `02` are provisional until they are.
+
+### 3.3c What TB III adds (structure only)
+
+- **Conditioning protocols are budgets, not grids.** The three polarized protocols set a weekly low-intensity budget in minutes (with a minimum session length), a high-intensity count or cadence (including "every other week"), and week-to-week adjustments (fewer low-intensity minutes in weeks that contain a high-intensity session). They give example weeks, but the rules are the budget. The generator therefore fills conditioning slots against a budget and the user's session preferences.
+- **A block is a strength template plus a conditioning protocol**, and the books recommend which pairs go together (compatibility lists). Pair recommendations become setup-preview hints.
+- **Work-capacity blocks** are short (three-week) blocks with their own weekly counts, optionally combined with a power or strength-endurance template.
+- **Base Building** is a short block followed by a rest-and-test week; **Activation** is a fixed multi-block onboarding grid; **Periodization** gives cycles (an ordered list of blocks with durations that repeat) and a perpetual model (a baseline protocol plus optional detours).
+- **Deloads are invisible weeks**: they do not count toward a block's length, so a block with two deloads simply spans more calendar weeks. Week kinds therefore carry a `counts_toward_block` flag.
+- **Peak weeks override the table**: sessions are spread out (the book's example spaces them across days 1, 4 and 7) and one technique is chosen per peak (peak, AMSAP, AMRAP, or none, which repeats the heaviest week).
+- **Progression:** forced progression adds a small increment to upper-body and a larger one to lower-body maxes per block, **unless the block's reps were not completed**, in which case the same maxes are kept. Retesting is only for specific situations (after a layoff, after Base Building, when changing clusters).
+- **Weighted calisthenics:** the book includes bodyweight in the max and switches to a percentage of max reps at or below bodyweight. The user's own logs apply the percentage to the **added weight only** (21.5 kg at 80% and 25 kg at 85% imply the same added-weight max of roughly 27-29 kg). The engine supports both conventions through `training_settings.weighted_percent_base` (`total` per the book, `added` per the user's practice) and never assumes one. Decision needed from the user: see section 7.
 
 ### 3.4 Weeks are derived, not stored
 
@@ -168,8 +179,8 @@ States: `planned` -> `confirmed` (the user marked it done and, optionally, enter
 
 ## 7. Open questions
 
-1. **Tactical Barbell III, remaining chapters** (the first batch covered the contents page, Operator and its 3/6-week tables, part of Operator/ULF, Zulu/AV, Operator/PRO, Fighter, Fighter/Bangkok, Breacher and SE). Still needed: Evolution (how it works, rules), the rest of Strength (Operator overview text, Operator/AV and /VI, Zulu, Zulu/PRO, strategy and progression sections, Power, cut-off table ends), all of Conditioning (including Integration), Base Building, Periodization, Activation and Appendices A and B.
-2. **Grace period** before a session may be confirmed without wearable data (decision 14).
+1. **Weighted pull-up convention.** Keep your current practice (percentages of the added-weight max, `added`) or move to the book's rule (percentages of bodyweight plus added weight, `total`)? With your numbers the book rule makes early-week pull-ups bodyweight-only, so the two give very different loads. The engine supports both; the setting defaults to `total` until you choose.
+2. **Grace period** before a session may be confirmed without wearable data (decision 14; suggested 48 h).
 
 ## 8. Delivery plan
 

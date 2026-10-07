@@ -153,4 +153,25 @@ class BlockGeneratorTest {
         assertEquals(2.5, progressionIncrementKg(inc.upper, inc.unit, 2.5), 0.001)
         assertEquals(5.0, progressionIncrementKg(inc.lower, inc.unit, 2.5), 0.001)
     }
+
+    @Test
+    fun requirementsListTheVariablesModulesDaysAndSlotsToAskAbout() {
+        val t = idx.template("example.grid")!!
+        val vars = templateVariables(t)
+        assertEquals(listOf("MS", "HILL"), vars.map { it.name })
+        assertEquals(listOf("example.two_day"), vars.first().options)
+        assertEquals(listOf("example.two_day"), templateModuleKeys(t, mapOf("MS" to "example.two_day")))
+        assertEquals(emptyList<String>(), templateModuleKeys(t, emptyMap()))
+        assertEquals(listOf(1, 2, 4), templateDayPositions(t))
+        assertEquals(listOf("A", "B", "C"), slotsToChoose(idx.strength("example.two_day")!!).map { it.id })
+    }
+
+    @Test
+    fun blockDomainsFollowTheSessionMix() {
+        val b = tpl()
+        val d = deriveBlockDomains(b.sessions)
+        assertEquals("max_strength", d.first().domain)
+        assertEquals("primary", d.first().role)
+        assertTrue(d.any { it.domain == "aerobic_base" || it.domain == "anaerobic_capacity" })
+    }
 }

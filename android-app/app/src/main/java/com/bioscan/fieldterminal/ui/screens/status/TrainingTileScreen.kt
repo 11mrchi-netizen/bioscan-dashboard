@@ -79,6 +79,9 @@ import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.TrainingTab
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.confidenceLevel
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -187,17 +190,17 @@ private fun InjuryTab() {
 @Composable
 private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int, sorenessMedian: Double?, weeklyRestCadence: List<WeeklyRestCadencePoint>) {
     FTCard(title = "OSTRC-H2 · ${eval.bodyArea.uppercase()}") {
-        StatLine("Confidence", eval.confidence.label)
-        eval.latestSeverityScore?.let { StatLine("Latest severity", "$it / 100") }
-        eval.latestCheckDate?.let { StatLine("Last check-in", it.toString()) }
+        FTConfidenceChip(confidenceLevel(eval.confidence))
+        eval.latestSeverityScore?.let { FTMetricRow("Latest severity", "$it / 100") }
+        eval.latestCheckDate?.let { FTMetricRow("Last check-in", it.toString()) }
         Text(
             "LOAD CONTEXT (shown adjacent, never combined into one score)",
             style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
             color = FT.TextMuted,
         )
-        tsb?.let { StatLine("TSB (form)", "%+.1f".format(it)) }
-        StatLine("Days without rest", "$daysWithoutRest")
-        sorenessMedian?.let { StatLine("7-day soreness median", "%.1f".format(it)) }
+        tsb?.let { FTMetricRow("TSB (form)", "%+.1f".format(it)) }
+        FTMetricRow("Days without rest", "$daysWithoutRest")
+        sorenessMedian?.let { FTMetricRow("7-day soreness median", "%.1f".format(it)) }
         RestCadenceStrip(weeklyRestCadence)
         Text(
             "No injury risk score — single-factor screening doesn't predict injury. You do the synthesis; this doesn't.",
@@ -242,7 +245,7 @@ private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
 private fun TrainingReadinessCard(result: TrainingReadinessResult) {
     FTCard(title = "TODAY'S READINESS") {
         FTStatePill(result.generalState.toMetricState())
-        StatLine("Confidence", result.confidence.label)
+        FTConfidenceChip(confidenceLevel(result.confidence))
         result.demandRelative.forEach { (tier, state) ->
             val label = when (tier) {
                 TrainingDemandTier.EASY_AEROBIC -> "Easy aerobic"
@@ -256,7 +259,7 @@ private fun TrainingReadinessCard(result: TrainingReadinessResult) {
                 EvalState.ShiftDown -> "Caution"
                 else -> "Building"
             }
-            StatLine(label, symbol)
+            FTMetricRow(label, symbol)
         }
     }
 }
@@ -372,7 +375,7 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier
                 FTStatePill(eval.state.toMetricState())
             }
         }
-        StatLine("Confidence", eval.confidence.label)
+        FTConfidenceChip(confidenceLevel(eval.confidence))
         eval.ctl?.let { LoadMetricBlock("CTL (fitness)", "%.1f".format(it), "CTL — fitness", LOAD_HELP_CTL, visible.map { p -> p.date to p.ctl }, FT.Category.Activity.c500) }
         eval.atl?.let { LoadMetricBlock("ATL (fatigue)", "%.1f".format(it), "ATL — fatigue", LOAD_HELP_ATL, visible.map { p -> p.date to p.atl }, FT.Category.Activity.c500) }
         eval.tsb?.let {
@@ -381,7 +384,7 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier
         // Phase A3: a pure re-label of the state above, never a
         // recomputation -- only rendered when a training cycle is actually
         // active. No active cycle means no framing applies, not "unmanaged."
-        tier?.let { StatLine("This cycle", tierLabel(it)) }
+        tier?.let { FTMetricRow("This cycle", tierLabel(it)) }
     }
 }
 
@@ -417,6 +420,7 @@ private fun LoadMetricBlock(
                 refLow = refLow,
                 refHigh = refHigh,
                 valueFormat = { v -> if (signed) "%+.1f".format(v) else "%.1f".format(v) },
+                unit = "training load (AU)",
             )
         }
     }
@@ -452,22 +456,3 @@ private fun tierLabel(tier: ExpectationTier): String = when (tier) {
     ExpectationTier.Unmanaged -> "NOT A TARGET THIS CYCLE"
 }
 
-// DAV-108: label is unweighted (always a short fixed phrase in practice) so
-// it never shrinks; value takes the rest of the row via weight(1f) so a long
-// value (e.g. "NEEDS 8 WEEKS OF LOAD HISTORY") wraps within its own bounded
-// width and stays right-aligned instead of colliding with the label -- the
-// bug this exact Row+SpaceBetween-with-two-unweighted-Texts shape produced
-// identically across every screen's own private StatLine copy.
-@Composable
-private fun StatLine(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
-        Text(
-            value,
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
-            color = FT.TextPrimary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f).padding(start = 8.dp),
-        )
-    }
-}

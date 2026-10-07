@@ -58,6 +58,9 @@ import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.FuelTab
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.confidenceLevel
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -135,17 +138,18 @@ fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {})
 @Composable
 private fun BristolCard(eval: BristolEvaluation, entries: List<Pair<LocalDate, Int>>) {
     FTCard(title = "DIGESTIVE PATTERN (BRISTOL)") {
-        StatLine("Frequency (14d)", "${eval.confidence.have} entries logged")
-        StatLine("Confidence", eval.confidence.label)
-        eval.pattern?.let { StatLine("Pattern", bristolPatternLabel(it)) }
-        eval.pctHard?.let { StatLine("Hard (types 1-2)", "%.0f%%".format(it)) }
-        eval.pctNormal?.let { StatLine("Normal (types 3-5)", "%.0f%%".format(it)) }
-        eval.pctLoose?.let { StatLine("Loose (types 6-7)", "%.0f%%".format(it)) }
+        FTMetricRow("Frequency (14d)", "${eval.confidence.have} entries logged")
+        FTConfidenceChip(confidenceLevel(eval.confidence))
+        eval.pattern?.let { FTMetricRow("Pattern", bristolPatternLabel(it)) }
+        eval.pctHard?.let { FTMetricRow("Hard (types 1-2)", "%.0f%%".format(it)) }
+        eval.pctNormal?.let { FTMetricRow("Normal (types 3-5)", "%.0f%%".format(it)) }
+        eval.pctLoose?.let { FTMetricRow("Loose (types 6-7)", "%.0f%%".format(it)) }
         if (entries.size >= 2) {
             DateTrendLine(
                 points = entries.map { (date, type) -> date to type.toDouble() },
-                color = FT.Emerald,
+                color = FT.Category.Digestion.c500,
                 modifier = Modifier.padding(top = 8.dp),
+                unit = "Bristol type (1-7)",
             )
         }
         Text(
@@ -214,12 +218,12 @@ private const val TREND_WINDOW_DAYS = 90L
 private fun WeightCard(eval: WeightEvaluation) {
     FTCard(title = "WEIGHT TREND") {
         FTStatePill(eval.state.toMetricState())
-        StatLine("Confidence", eval.confidence.label)
-        eval.emaToday?.let { StatLine("EMA (today)", "%.1f kg".format(it)) }
-        eval.rateKgPerWeek?.let { StatLine("Rate", "%+.2f kg/week".format(it)) }
+        FTConfidenceChip(confidenceLevel(eval.confidence))
+        eval.emaToday?.let { FTMetricRow("EMA (today)", "%.1f kg".format(it)) }
+        eval.rateKgPerWeek?.let { FTMetricRow("Rate", "%+.2f kg/week".format(it)) }
         val today = LocalDate.now()
         val recentSeries = eval.emaSeries.filter { ChronoUnit.DAYS.between(it.first, today) <= TREND_WINDOW_DAYS }
-        DateTrendLine(points = recentSeries, color = FT.Emerald, modifier = Modifier.padding(top = 6.dp))
+        DateTrendLine(points = recentSeries, color = FT.DomainFuel, modifier = Modifier.padding(top = 6.dp), unit = "kg (EMA)")
     }
 }
 
@@ -238,9 +242,10 @@ private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) 
         } else {
             DateTrendLine(
                 points = proteinSeries,
-                color = FT.Emerald,
+                color = FT.DomainFuel,
                 refLow = PROTEIN_PCT_LOW * 100,
                 refHigh = PROTEIN_PCT_HIGH * 100,
+                unit = "% of calories from protein",
             )
         }
     }
@@ -254,10 +259,10 @@ private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) 
 private fun NutritionCard(eval: NutritionEvaluation) {
     FTCard(title = "NUTRITION (ANALYSIS)") {
         FTStatePill(eval.state.toMetricState())
-        StatLine("Confidence", eval.confidence.label)
-        eval.energyTrend14d?.let { StatLine("14-day energy trend", "%.0f kcal".format(it)) }
-        eval.energyCv28d?.let { StatLine("28-day energy CV", "%.1f%%".format(it)) }
-        eval.proteinAdherence14d?.let { StatLine("Protein in AMDR band (10-35% kcal)", "%.0f%%".format(it)) }
+        FTConfidenceChip(confidenceLevel(eval.confidence))
+        eval.energyTrend14d?.let { FTMetricRow("14-day energy trend", "%.0f kcal".format(it)) }
+        eval.energyCv28d?.let { FTMetricRow("28-day energy CV", "%.1f%%".format(it)) }
+        eval.proteinAdherence14d?.let { FTMetricRow("Protein in AMDR band (10-35% kcal)", "%.0f%%".format(it)) }
     }
 }
 
@@ -265,10 +270,10 @@ private fun NutritionCard(eval: NutritionEvaluation) {
 private fun BodyFatCard(eval: BodyFatEvaluation) {
     FTCard(title = "BODY FAT %") {
         FTStatePill(eval.state.toMetricState())
-        StatLine("Confidence", eval.confidence.label)
-        eval.latest?.let { StatLine("Latest", "%.1f%%".format(it)) }
-        eval.previous?.let { StatLine("Previous (≥30d prior)", "%.1f%%".format(it)) }
-        eval.delta?.let { StatLine("Delta", "%+.1f pp".format(it)) }
+        FTConfidenceChip(confidenceLevel(eval.confidence))
+        eval.latest?.let { FTMetricRow("Latest", "%.1f%%".format(it)) }
+        eval.previous?.let { FTMetricRow("Previous (≥30d prior)", "%.1f%%".format(it)) }
+        eval.delta?.let { FTMetricRow("Delta", "%+.1f pp".format(it)) }
     }
 }
 
@@ -280,7 +285,7 @@ private fun BodyFatCard(eval: BodyFatEvaluation) {
 @Composable
 private fun TdeeCard(eval: TdeeEvaluation) {
     FTCard(title = "ENERGY BALANCE (TDEE ESTIMATE)") {
-        StatLine("Confidence", eval.confidence.label)
+        FTConfidenceChip(confidenceLevel(eval.confidence))
         if (eval.state == EvalState.Stable && eval.tdeeKcal != null && eval.rangeLowKcal != null && eval.rangeHighKcal != null) {
             FTMetricValue(
                 DisplayValue(
@@ -303,20 +308,3 @@ private fun TdeeCard(eval: TdeeEvaluation) {
     }
 }
 
-@Composable
-// DAV-108: label is unweighted (always a short fixed phrase) so it never
-// shrinks; value takes the rest of the row via weight(1f) so a long value
-// wraps within its own bounded width and stays right-aligned instead of
-// colliding with the label.
-private fun StatLine(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
-        Text(
-            value,
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
-            color = FT.TextPrimary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f).padding(start = 8.dp),
-        )
-    }
-}

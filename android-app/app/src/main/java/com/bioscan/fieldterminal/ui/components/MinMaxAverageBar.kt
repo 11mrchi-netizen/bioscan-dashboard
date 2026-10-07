@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -41,7 +43,7 @@ fun MinMaxAverageBar(
     val fraction = ((average - min) / range).toFloat().coerceIn(0.02f, 0.98f)
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().height(8.dp).background(FT.GlassFill)) {
+        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(FT.GlassTrack)) {
             Box(Modifier.fillMaxWidth().height(8.dp).background(color.copy(alpha = 0.22f)))
             Row(Modifier.fillMaxWidth()) {
                 Spacer(Modifier.weight(fraction))

@@ -56,6 +56,7 @@ import com.bioscan.fieldterminal.domain.EF_MIN_RUNS_28D
 import com.bioscan.fieldterminal.domain.efficiencyRollingMedian28
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.TrendSeries
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -129,7 +130,7 @@ private fun TrainingContent(overview: TrainingOverview, timeframe: PerformanceTi
                         unit = if (overview.strengthSessionsThisWeek == 1) "SESSION" else "SESSIONS",
                     ),
                 )
-                StatLine("This week", "${overview.strengthMinutesThisWeek} min")
+                FTMetricRow("This week", "${overview.strengthMinutesThisWeek} min")
                 Text(
                     "Synced from Health Connect. Per-lift/set detail isn't shown here yet.",
                     style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
@@ -221,7 +222,7 @@ private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimefr
             SegmentedToggle(options = RunningPeriod.entries, selected = period, labelOf = { it.label }, onSelect = { period = it })
             FTMetricValue(DisplayValue(primary = "%.1f".format(totalKm), unit = "KM"))
 
-            avgPace?.let { StatLine("Avg pace", formatPace(it)) }
+            avgPace?.let { FTMetricRow("Avg pace", formatPace(it)) }
 
             // DAV-198: pace is genuinely session-shaped (unlike HRV/RHR's
             // daily wearable readings, which have no context to filter on --
@@ -255,7 +256,7 @@ private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimefr
             }
 
             overview.longestRunKm?.let { longest ->
-                StatLine("Longest run (all-time)", "%.2f km".format(longest))
+                FTMetricRow("Longest run (all-time)", "%.2f km".format(longest))
             }
 
             // DAV-144. No per-session list exists on this tab (see
@@ -263,9 +264,9 @@ private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimefr
             // this is the same rollup shape every other figure here uses, only
             // shown when a real trail run happened in the selected period.
             if (trailRuns.isNotEmpty()) {
-                StatLine("Trail runs", "${trailRuns.size}")
+                FTMetricRow("Trail runs", "${trailRuns.size}")
                 trailRuns.mapNotNull { it.elevationGainM }.takeIf { it.isNotEmpty() }?.sum()?.let { gain ->
-                    StatLine("Elevation gained", "${gain.toInt()} m")
+                    FTMetricRow("Elevation gained", "${gain.toInt()} m")
                 }
             }
 
@@ -373,8 +374,8 @@ private fun RunEfficiencySection(overview: TrainingOverview, timeframe: Performa
             color = FT.TextSecondary,
         )
     }
-    overview.latestGapMinPerKm?.let { StatLine("Latest grade-adjusted pace", formatPace(it)) }
-    overview.latestHrDecouplingPct?.let { StatLine("Latest HR decoupling", "%+.1f%%".format(it)) }
+    overview.latestGapMinPerKm?.let { FTMetricRow("Latest grade-adjusted pace", formatPace(it)) }
+    overview.latestHrDecouplingPct?.let { FTMetricRow("Latest HR decoupling", "%+.1f%%".format(it)) }
 
     val raw = overview.efficiencyPoints.filter { it.first >= cutoff }
     if (raw.size >= 2) {
@@ -384,6 +385,7 @@ private fun RunEfficiencySection(overview: TrainingOverview, timeframe: Performa
                 TrendSeries(rolling.filter { it.first >= cutoff }, FT.Emerald, "28D MEDIAN"),
             ),
             valueFormat = { "%.2f".format(it) },
+            unit = "EF (m/min per bpm)",
         )
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             LegendItem("PER RUN", FT.TextMuted)
@@ -426,7 +428,7 @@ private fun PerformanceSection(overview: TrainingOverview, timeframe: Performanc
     }
     when (selected) {
         PerformanceMetric.VO2MAX -> {
-            FTMetricValue(DisplayValue(primary = "%.1f".format(overview.latestVo2Max)))
+            FTMetricValue(DisplayValue(primary = "%.1f".format(overview.latestVo2Max), unit = "ML/KG/MIN"))
             Text(
                 "Wearable-estimated, not lab-confirmed.",
                 style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
@@ -460,6 +462,10 @@ private fun PerformanceSection(overview: TrainingOverview, timeframe: Performanc
             PerformanceMetric.VO2MAX -> { v -> "%.1f".format(v) }
             PerformanceMetric.LACTATE_THRESHOLD -> ::formatPace
         },
+        unit = when (selected) {
+            PerformanceMetric.VO2MAX -> "ml/kg/min"
+            PerformanceMetric.LACTATE_THRESHOLD -> "pace · min:sec per km"
+        },
     )
 }
 
@@ -472,6 +478,7 @@ private fun PerformanceTrendChart(
     series: List<Pair<LocalDate, Double>>,
     timeframe: PerformanceTimeframe,
     valueFormat: (Double) -> String,
+    unit: String,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (series.size < 2) {
@@ -493,6 +500,7 @@ private fun PerformanceTrendChart(
                 ),
                 modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 valueFormat = valueFormat,
+                unit = unit,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 LegendItem("RAW", FT.TextMuted)
@@ -521,24 +529,6 @@ private fun LegendItem(label: String, color: androidx.compose.ui.graphics.Color)
                 .background(color),
         )
         Text(label, style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextSecondary)
-    }
-}
-
-// DAV-108: label is unweighted (always a short fixed phrase) so it never
-// shrinks; value takes the rest of the row via weight(1f) so a long value
-// wraps within its own bounded width and stays right-aligned instead of
-// colliding with the label.
-@Composable
-private fun StatLine(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
-        Text(
-            value,
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
-            color = FT.TextPrimary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f).padding(start = 8.dp),
-        )
     }
 }
 

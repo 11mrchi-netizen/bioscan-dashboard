@@ -64,6 +64,9 @@ import com.bioscan.fieldterminal.domain.levels.runningLevel
 import com.bioscan.fieldterminal.domain.levels.strengthLevel
 import com.bioscan.fieldterminal.domain.progressFraction
 import com.bioscan.fieldterminal.ui.components.ComparisonStrip
+import com.bioscan.fieldterminal.ui.components.ageAccelerationState
+import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.components.percentileBandState
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
@@ -213,7 +216,7 @@ private fun BioAgeRow(label: String, result: BiologicalAgeResult) {
                 }
             }
         }
-        FTStatePill(ageAccelerationToState(accel))
+        FTStatePill(ageAccelerationState(accel))
     }
 }
 
@@ -229,7 +232,7 @@ private fun DomainLevelRow(domain: AchievementDomain, level: DomainLevel?) {
         ) {
             Text(domain.label(), style = TextStyle(fontFamily = RobotoMono, fontSize = 12.5.sp), color = FT.TextSecondary)
             if (level?.band != null) {
-                FTStatePill(bandToMetricState(level.band))
+                FTStatePill(percentileBandState(level.band))
             } else {
                 Text(
                     "Not enough data yet",
@@ -250,7 +253,7 @@ private fun DomainLevelRow(domain: AchievementDomain, level: DomainLevel?) {
                 )
             }
             ComparisonStrip(population = evidence)
-            FTConfidenceChip(confidenceToLevel(evidence.confidence))
+            FTConfidenceChip(confidenceLevel(evidence.confidence))
         }
     }
 }
@@ -283,13 +286,7 @@ private fun AchievementSection(domain: AchievementDomain, achievements: List<Ach
                 }
                 achievement.confidence?.let { conf ->
                     Spacer(Modifier.height(4.dp))
-                    FTConfidenceChip(
-                        when {
-                            conf >= 0.8 -> ConfidenceLevel.High
-                            conf >= 0.5 -> ConfidenceLevel.Medium
-                            else -> ConfidenceLevel.Low
-                        },
-                    )
+                    FTConfidenceChip(confidenceLevel(conf))
                 }
             }
         }
@@ -475,38 +472,13 @@ private fun TrainingBlockHistoryCard(history: List<TrainingCycle>) {
 
 // ---- Helper functions ----
 
-private fun bandToMetricState(band: PercentileBand?): MetricState = when (band) {
-    PercentileBand.TOP_DECILE -> MetricState.Optimal
-    PercentileBand.ABOVE_AVERAGE -> MetricState.Neutral
-    PercentileBand.AVERAGE -> MetricState.Neutral
-    PercentileBand.BELOW_AVERAGE -> MetricState.Warning
-    PercentileBand.BOTTOM_DECILE -> MetricState.Building
-    null -> MetricState.Unavailable
-}
-
-private fun bandToColor(band: PercentileBand?): Color = when (band) {
-    PercentileBand.TOP_DECILE -> FT.Emerald
-    PercentileBand.ABOVE_AVERAGE -> FT.Emerald
-    PercentileBand.AVERAGE -> FT.Info
-    PercentileBand.BELOW_AVERAGE -> FT.Warning
-    PercentileBand.BOTTOM_DECILE -> FT.Analysis
-    null -> FT.TextMuted
-}
-
-private fun ageAccelerationToState(accel: Double?): MetricState = when {
-    accel == null -> MetricState.Unavailable
-    accel <= -2.0 -> MetricState.Optimal
-    accel <= 2.0 -> MetricState.Neutral
-    else -> MetricState.Warning
-}
-
-private fun confidenceToLevel(c: Confidence): ConfidenceLevel {
-    val ratio = if (c.need > 0) c.have.toDouble() / c.need else 0.0
-    return when {
-        ratio >= 0.8 -> ConfidenceLevel.High
-        ratio >= 0.5 -> ConfidenceLevel.Medium
-        else -> ConfidenceLevel.Low
-    }
+// Bar fill follows the same state as the pill beside it (percentileBandState):
+// Optimal = emerald, Neutral = cool neutral, Building = analysis violet.
+private fun bandToColor(band: PercentileBand?): Color = when (percentileBandState(band)) {
+    MetricState.Optimal -> FT.Emerald
+    MetricState.Neutral -> FT.TextSecondary
+    MetricState.Building -> FT.Analysis
+    else -> FT.TextMuted
 }
 
 private fun Achievement.toDisplayValue(): DisplayValue {

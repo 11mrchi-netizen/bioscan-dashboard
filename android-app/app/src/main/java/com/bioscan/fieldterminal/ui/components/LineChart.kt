@@ -25,6 +25,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.domain.TimePoint
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
@@ -60,6 +61,8 @@ fun LineChart(
     // Lower-is-better series (pace in min/km): plot low values at the top so
     // "up" always means "better".
     invertY: Boolean = false,
+    // Chart frame: unit header (see DateTrendLine).
+    unit: String? = null,
 ) {
     if (points.size < 2) return
 
@@ -84,6 +87,9 @@ fun LineChart(
     val active = selected?.takeIf { it in points.indices }
 
     Column(modifier = modifier.fillMaxWidth()) {
+        unit?.let {
+            Text(it.uppercase(), style = FTType.Label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
+        }
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()

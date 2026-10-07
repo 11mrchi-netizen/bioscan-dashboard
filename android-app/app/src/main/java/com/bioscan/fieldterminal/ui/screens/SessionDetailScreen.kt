@@ -79,6 +79,7 @@ import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.components.RouteMiniMap
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TrailElevationChart
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -449,6 +450,7 @@ private fun PerformanceChartSection(d: SessionDetail) {
         modifier = Modifier.padding(top = 4.dp),
         valueFormat = { v -> formatSignalValue(selected, v) },
         invertY = selected == PerfSignal.PACE,
+        unit = if (selected == PerfSignal.PACE) "pace · min:sec per km" else selected.unit,
     )
     if (points.first().offsetSeconds > sessionStart || points.last().offsetSeconds < sessionEnd) {
         Text(
@@ -508,7 +510,7 @@ private fun RunDynamicsCard(summary: ZeppWorkoutSummary) {
 
     FTCard(title = "RUN DYNAMICS") {
         rows.forEach { (label, value, help) ->
-            if (help != null) StatLineHelp(label, value, help.first, help.second) else StatLine(label, value)
+            if (help != null) StatLineHelp(label, value, help.first, help.second) else FTMetricRow(label, value)
         }
     }
 }
@@ -553,10 +555,10 @@ private fun TrailCard(state: SessionStateObject, routePoints: List<RoutePoint>, 
         }
 
         kmEffort?.let { StatLineHelp("KM-effort", "%.1f".format(it), "KM-effort", KM_EFFORT_HELP) }
-        state.dimensions.getValue(StateDimension.ELEVATION_GAIN_M).value?.let { StatLine("Elevation gain", "${it.toInt()} m") }
-        state.dimensions.getValue(StateDimension.ELEVATION_LOSS_M).value?.let { StatLine("Elevation loss", "${it.toInt()} m") }
+        state.dimensions.getValue(StateDimension.ELEVATION_GAIN_M).value?.let { FTMetricRow("Elevation gain", "${it.toInt()} m") }
+        state.dimensions.getValue(StateDimension.ELEVATION_LOSS_M).value?.let { FTMetricRow("Elevation loss", "${it.toInt()} m") }
         state.dimensions.getValue(StateDimension.AVERAGE_VAM).value?.let { StatLineHelp("Avg VAM", "${it.toInt()} m/h", "VAM", VAM_HELP) }
-        state.dimensions.getValue(StateDimension.UPHILL_RUN_PERCENT).value?.let { StatLine("Uphill run", "%.0f%%".format(it)) }
+        state.dimensions.getValue(StateDimension.UPHILL_RUN_PERCENT).value?.let { FTMetricRow("Uphill run", "%.0f%%".format(it)) }
         state.dimensions.getValue(StateDimension.UPHILL_EFFICIENCY).value?.let { StatLineHelp("Uphill efficiency", "%.2f m/h per bpm".format(it), "Uphill efficiency", GRADE_EFFICIENCY_HELP) }
         state.dimensions.getValue(StateDimension.DOWNHILL_EFFICIENCY).value?.let { StatLineHelp("Downhill efficiency", "%.2f m/h per bpm".format(it), "Downhill efficiency", GRADE_EFFICIENCY_HELP) }
         state.dimensions.getValue(StateDimension.CLIMB_CONSISTENCY).value?.let { StatLineHelp("Climb consistency (CV)", "%.2f".format(it), "Climb consistency", CONSISTENCY_HELP) }
@@ -641,9 +643,9 @@ private fun StrengthCard(exercises: List<StrengthExerciseDto>, library: List<Exe
     val avgRpe = remember(exercises) { sessionAverageRpe(exercises) }
     val avgRir = remember(exercises) { sessionAverageRir(exercises) }
     FTCard(title = "STRENGTH") {
-        StatLine("Total volume", "%.0f kg".format(totalVolume))
-        avgRpe?.let { StatLine("Avg RPE", "%.1f".format(it)) }
-        avgRir?.let { StatLine("Avg RIR", "%.1f".format(it)) }
+        FTMetricRow("Total volume", "%.0f kg".format(totalVolume))
+        avgRpe?.let { FTMetricRow("Avg RPE", "%.1f".format(it)) }
+        avgRir?.let { FTMetricRow("Avg RIR", "%.1f".format(it)) }
 
         // Body heat map replaces the old per-region bars (25/9 rework).
         val zones = remember(regional) { zoneLoads(regional) }
@@ -688,7 +690,7 @@ private fun StrengthCard(exercises: List<StrengthExerciseDto>, library: List<Exe
                         set.rpe?.let { "RPE $it" },
                         set.rir?.let { "RIR $it" },
                     )
-                    StatLine("Set ${i + 1}", "${set.reps} × %.0f kg".format(set.weightKg) + extras.joinToString("") { "  ·  $it" })
+                    FTMetricRow("Set ${i + 1}", "${set.reps} × %.0f kg".format(set.weightKg) + extras.joinToString("") { "  ·  $it" })
                 }
             }
         }
@@ -724,20 +726,20 @@ private fun SummaryCard(
     val activeCalories = header.caloriesActive ?: detail?.caloriesKcal?.lastOrNull()?.value
 
     FTCard(title = "SUMMARY") {
-        header.durationMin?.let { StatLine("Duration", formatDuration(it)) }
-        header.distanceKm?.let { StatLine("Distance", "%.2f km".format(it)) }
-        header.details.runType?.let { StatLine("Run type", it.replaceFirstChar(Char::uppercase)) }
-        header.details.routeType?.let { StatLine("Route", it.replaceFirstChar(Char::uppercase)) }
-        avgHr?.let { StatLine("Avg heart rate", "${it.toInt()} bpm") }
-        header.maxHr?.let { StatLine("Max heart rate", "${it.toInt()} bpm") }
-        header.elevationGainM?.let { StatLine("Elevation gain", "${it.toInt()} m") }
-        header.avgPowerW?.let { StatLine("Avg power", "${it.toInt()} W") }
-        avgPaceMinPerKm?.let { StatLine("Avg pace", formatSplitPace((it * 60).toLong())) }
+        header.durationMin?.let { FTMetricRow("Duration", formatDuration(it)) }
+        header.distanceKm?.let { FTMetricRow("Distance", "%.2f km".format(it)) }
+        header.details.runType?.let { FTMetricRow("Run type", it.replaceFirstChar(Char::uppercase)) }
+        header.details.routeType?.let { FTMetricRow("Route", it.replaceFirstChar(Char::uppercase)) }
+        avgHr?.let { FTMetricRow("Avg heart rate", "${it.toInt()} bpm") }
+        header.maxHr?.let { FTMetricRow("Max heart rate", "${it.toInt()} bpm") }
+        header.elevationGainM?.let { FTMetricRow("Elevation gain", "${it.toInt()} m") }
+        header.avgPowerW?.let { FTMetricRow("Avg power", "${it.toInt()} W") }
+        avgPaceMinPerKm?.let { FTMetricRow("Avg pace", formatSplitPace((it * 60).toLong())) }
         if (!isStrength) {
-            activeCalories?.let { StatLine("Active calories", "${it.toInt()} kcal") }
-            header.caloriesTotal?.let { StatLine("Total calories", "${it.toInt()} kcal") }
+            activeCalories?.let { FTMetricRow("Active calories", "${it.toInt()} kcal") }
+            header.caloriesTotal?.let { FTMetricRow("Total calories", "${it.toInt()} kcal") }
         }
-        header.rpe?.let { StatLine("RPE", "$it/10") }
+        header.rpe?.let { FTMetricRow("RPE", "$it/10") }
         header.notes?.takeIf { it.isNotBlank() }?.let {
             Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp), color = FT.TextSecondary)
         }
@@ -762,24 +764,6 @@ private fun SummaryCard(
                 detail != null -> PerformanceChartSection(detail)
             }
         }
-    }
-}
-
-// DAV-108: label is unweighted (always a short fixed phrase) so it never
-// shrinks; value takes the rest of the row via weight(1f) so a long value
-// wraps within its own bounded width and stays right-aligned instead of
-// colliding with the label.
-@Composable
-private fun StatLine(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
-        Text(
-            value,
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
-            color = FT.TextPrimary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f).padding(start = 8.dp),
-        )
     }
 }
 

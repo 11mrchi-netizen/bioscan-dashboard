@@ -54,6 +54,9 @@ import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.MacroDonutChart
 import com.bioscan.fieldterminal.ui.components.PeriodToggle
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.confidenceLevel
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -264,11 +267,11 @@ fun HydrationTabContent(overview: NutritionOverview) {
                 if (overview.todayBeverageItems.isNotEmpty()) {
                     Column(modifier = Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         overview.todayHydrationMl?.let { ml ->
-                            StatLine("Water", "${ml} ml")
+                            FTMetricRow("Water", "${ml} ml")
                         }
                         overview.todayBeverageItems.forEach { item ->
                             val hydStr = item.effectiveHydrationMl?.let { "%.0f ml (est.)".format(it) } ?: "—"
-                            StatLine(item.description ?: "Beverage", hydStr)
+                            FTMetricRow(item.description ?: "Beverage", hydStr)
                         }
                     }
                 }
@@ -312,9 +315,9 @@ private fun NutritionAveragesCard(allDays: List<DailyNutrition>) {
     FTCard(title = "NUTRITION AVERAGES") {
         PeriodToggle(selected = period, onSelect = { period = it })
         FTMetricValue(DisplayValue(primary = (totals.calories / days).roundToInt().toString(), unit = "KCAL/DAY"))
-        StatLine("Fiber", "${(totals.fiberG / days).roundToInt()} g/day")
-        StatLine("Sugar", "${(totals.sugarG / days).roundToInt()} g/day")
-        StatLine("Sodium", "${(totals.sodiumMg / days).roundToInt()} mg/day")
+        FTMetricRow("Fiber", "${(totals.fiberG / days).roundToInt()} g/day")
+        FTMetricRow("Sugar", "${(totals.sugarG / days).roundToInt()} g/day")
+        FTMetricRow("Sodium", "${(totals.sodiumMg / days).roundToInt()} mg/day")
         MacroDonutChart(
             carbsG = totals.carbsG / days,
             proteinG = totals.proteinG / days,
@@ -382,31 +385,13 @@ private fun targetRange(label: String, current: Double, target: Double): Persona
 }
 
 @Composable
-// DAV-108: label is unweighted (always a short fixed phrase) so it never
-// shrinks; value takes the rest of the row via weight(1f) so a long value
-// wraps within its own bounded width and stays right-aligned instead of
-// colliding with the label.
-private fun StatLine(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
-        Text(
-            value,
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
-            color = FT.TextPrimary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f).padding(start = 8.dp),
-        )
-    }
-}
-
-@Composable
 private fun HydrationIntelligenceCard(result: HydrationIntelligenceResult) {
     FTCard(title = "HYDRATION INTELLIGENCE") {
-        StatLine("Confidence", result.confidence.label)
-        result.measuredIntakeMl?.let { StatLine("Measured intake", "%.0f ml".format(it)) }
-        result.effectiveHydrationMl?.let { StatLine("Effective hydration (modeled)", "%.0f ml".format(it)) }
+        FTConfidenceChip(confidenceLevel(result.confidence))
+        result.measuredIntakeMl?.let { FTMetricRow("Measured intake", "%.0f ml".format(it)) }
+        result.effectiveHydrationMl?.let { FTMetricRow("Effective hydration (modeled)", "%.0f ml".format(it)) }
         if (result.inferredDemandMl != null) {
-            StatLine("Inferred demand from today's exercise", "%.0f ml".format(result.inferredDemandMl))
+            FTMetricRow("Inferred demand from today's exercise", "%.0f ml".format(result.inferredDemandMl))
         } else {
             Text(
                 "No exercise logged today -- no additional demand inferred.",

@@ -47,6 +47,7 @@ import com.bioscan.fieldterminal.domain.NutrientCategory
 import com.bioscan.fieldterminal.domain.NutrientInfo
 import com.bioscan.fieldterminal.domain.nutrientDisplayName
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -54,10 +55,10 @@ import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import kotlin.math.roundToInt
 
 private enum class TimeRange(val label: String, val days: Int) {
-    Today("TODAY", 1),
-    Week("7 DAYS", 7),
-    Month("28 DAYS", 28),
-    Quarter("90 DAYS", 90),
+    Today("1D", 1),
+    Week("7D", 7),
+    Month("28D", 28),
+    Quarter("90D", 90),
 }
 
 private enum class ValueMode(val label: String) {
@@ -90,16 +91,16 @@ fun NutrientBreakdownScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(12.dp))
 
             SegmentedToggle(
-                items = TimeRange.entries,
+                options = TimeRange.entries,
                 selected = timeRange,
-                label = { it.label },
+                labelOf = { it.label },
                 onSelect = { timeRange = it },
             )
             Spacer(Modifier.height(8.dp))
             SegmentedToggle(
-                items = ValueMode.entries,
+                options = ValueMode.entries,
                 selected = valueMode,
-                label = { it.label },
+                labelOf = { it.label },
                 onSelect = { valueMode = it },
             )
         }
@@ -293,44 +294,6 @@ private fun nutrientsForCategory(
 }
 
 private fun guessCategoryForUnknown(key: String): NutrientCategory = NutrientCategory.Other
-
-@Composable
-private fun <T> SegmentedToggle(
-    items: List<T>,
-    selected: T,
-    label: (T) -> String,
-    onSelect: (T) -> Unit,
-) {
-    val shape = RoundedCornerShape(FT.RadiusSmall)
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        items.forEach { item ->
-            val isSelected = item == selected
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .border(FT.BorderWidth, if (isSelected) FT.Emerald else FT.GlassBorder, shape)
-                    .background(if (isSelected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, shape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onSelect(item) }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    label(item),
-                    style = TextStyle(
-                        fontFamily = RobotoMono,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 11.sp,
-                        letterSpacing = 0.14f.em,
-                    ),
-                    color = if (isSelected) FT.Emerald else FT.TextSecondary,
-                )
-            }
-        }
-    }
-}
 
 private fun formatAmount(value: Double, unit: String): String {
     val formatted = when {

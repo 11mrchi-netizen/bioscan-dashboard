@@ -123,7 +123,20 @@ fun FieldTerminalNavHost() {
             composable(TopLevelTab.Log.route) {
                 LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") })
             }
-            composable(TopLevelTab.Setup.route) { SettingsScreen(scope) }
+            composable(TopLevelTab.Setup.route) { SettingsScreen(scope, onOpenTraining = { navController.navigate("settings_training") }) }
+            composable("settings_training") {
+                com.bioscan.fieldterminal.ui.screens.training.TrainingSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onStart = { key -> navController.navigate("training_planner/$key") },
+                )
+            }
+            composable("training_planner/{program}") { entry ->
+                com.bioscan.fieldterminal.ui.screens.training.TrainingPlannerScreen(
+                    onBack = { navController.popBackStack() },
+                    onCreated = { navController.popBackStack() },
+                    initialProgram = entry.arguments?.getString("program"),
+                )
+            }
             // Phase G4: the app's first pushed detail route (every other
             // screen so far is a flat tab or a bottom sheet) -- a session's
             // on-demand Health Connect time-series detail, reached by

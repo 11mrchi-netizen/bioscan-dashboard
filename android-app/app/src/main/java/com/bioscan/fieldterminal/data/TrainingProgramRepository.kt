@@ -124,6 +124,18 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("training_blocks").delete { filter { eq("id", id) } }
     }
 
+    suspend fun saveSettings(s: TrainingSettingsRow) {
+        supabase.postgrest.from("training_settings").upsert(buildJsonObject {
+            put("plates_kg", buildJsonArray { s.platesKg.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
+            put("default_start_time", s.defaultStartTime)
+            put("default_duration_min", s.defaultDurationMin)
+            put("second_start_time", s.secondStartTime)
+            put("second_duration_min", s.secondDurationMin)
+            put("weighted_percent_base", s.weightedPercentBase)
+            put("updated_at", java.time.Instant.now().toString())
+        }) { onConflict = "user_id" }
+    }
+
     suspend fun loadSettings(): TrainingSettingsRow =
         supabase.postgrest.from("training_settings")
             .select(columns = Columns.list("plates_kg,default_start_time,default_duration_min,second_start_time,second_duration_min,weighted_percent_base"))

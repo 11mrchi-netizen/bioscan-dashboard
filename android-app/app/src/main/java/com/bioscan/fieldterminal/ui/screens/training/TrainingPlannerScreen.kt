@@ -70,16 +70,25 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-private val methodologyLabels = mapOf("tb3" to "TB III", "tb2" to "TB II", "mass" to "MASS", "green" to "GREEN")
-private fun methodologyOf(key: String) = key.substringBefore('.')
+internal val methodologyLabels = mapOf("tb3" to "TB III", "tb2" to "TB II", "mass" to "MASS", "green" to "GREEN")
+internal fun methodologyOf(key: String) = key.substringBefore('.')
 
 // DAV-345. Block-first setup: pick a program, the modules and dates, the exercises of each
 // cluster, the conditioning sessions, then review the generated block before it is created.
 @Composable
-fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit) {
+fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit, initialProgram: String? = null) {
     val scope = rememberCoroutineScope()
     val state = remember { TrainingPlannerState(TrainingProgramRepository(SupabaseClientProvider.client), scope) }
     LaunchedEffect(Unit) { state.load() }
+    // Started from the program library in Settings: jump straight to the modules step.
+    LaunchedEffect(state.loading, initialProgram) {
+        if (!state.loading && initialProgram != null && state.program == null) {
+            val defs = state.catalog?.definitions.orEmpty()
+            val p = defs.filterIsInstance<TemplateDef>().firstOrNull { it.key == initialProgram }?.let { Program.Fixed(it) }
+                ?: defs.filterIsInstance<CompositionDef>().firstOrNull { it.key == initialProgram }?.let { Program.Composed(it) }
+            if (p != null) { state.choose(p); state.step = PlannerStep.Modules }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         TileHeader(onBack = { if (state.step.ordinal > 0 && !state.creating) state.step = PlannerStep.entries[state.step.ordinal - 1] else onBack() })
@@ -118,13 +127,13 @@ fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit) {
 }
 
 @Composable
-private fun Label(text: String) = Text(text, color = FT.TextMuted, fontFamily = RobotoMono, fontSize = 10.5.sp, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
+internal fun Label(text: String) = Text(text, color = FT.TextMuted, fontFamily = RobotoMono, fontSize = 10.5.sp, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
 
 @Composable
-private fun Body(text: String, muted: Boolean = false) = Text(text, color = if (muted) FT.TextSecondary else FT.TextPrimary, fontFamily = Inter, fontSize = 13.5.sp)
+internal fun Body(text: String, muted: Boolean = false) = Text(text, color = if (muted) FT.TextSecondary else FT.TextPrimary, fontFamily = Inter, fontSize = 13.5.sp)
 
 @Composable
-private fun Chips(options: List<String>, selected: Set<String>, label: (String) -> String = { it }, onToggle: (String) -> Unit) {
+internal fun Chips(options: List<String>, selected: Set<String>, label: (String) -> String = { it }, onToggle: (String) -> Unit) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { SubTabChip(label(it), it in selected) { onToggle(it) } }
     }
@@ -138,8 +147,10 @@ private fun ProgramStep(state: TrainingPlannerState) {
     val compositions = catalog?.definitions.orEmpty().filterIsInstance<CompositionDef>()
     var method by remember { mutableStateOf("all") }
     var composed by remember { mutableStateOf(false) }
-    ImportCard(state)
-    if (templates.isEmpty() && compositions.isEmpty()) return
+    if (templates.isEmpty() && compositions.isEmpty()) {
+        Body("No programs yet. Import your program definitions in Settings, under Training programs.", muted = true)
+        return
+    }
 
     val methods = listOf("all") + (templates.map { methodologyOf(it.key) } + compositions.map { methodologyOf(it.key) }).distinct().sorted()
     SubTabRow(items = methods, selected = method, label = { methodologyLabels[it] ?: it.uppercase() }, onSelect = { method = it })
@@ -173,7 +184,7 @@ private fun ProgramCard(title: String, meta: String, note: String?, selected: Bo
 }
 
 @Composable
-private fun ImportCard(state: TrainingPlannerState) {
+internal fun ImportCard(state: TrainingPlannerState) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->

@@ -91,6 +91,16 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
         }
     }
 
+    var settingsMessage by mutableStateOf<String?>(null)
+
+    fun saveSettings(new: TrainingSettingsRow) {
+        scope.launch {
+            runCatching { repo.saveSettings(new) }
+                .onSuccess { settings = new; settingsMessage = "Saved" }
+                .onFailure { settingsMessage = "Could not save: ${it.message}" }
+        }
+    }
+
     fun import(files: List<com.bioscan.fieldterminal.data.ImportFile>) {
         scope.launch {
             importMessage = "Importing ${files.size} files..."

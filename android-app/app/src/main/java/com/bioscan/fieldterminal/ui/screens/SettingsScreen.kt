@@ -70,7 +70,7 @@ import kotlinx.coroutines.launch
 // data/GeminiApiKeyStore.kt for why it's stored locally (Android Keystore)
 // rather than synced to Supabase.
 @Composable
-fun SettingsScreen(scope: CoroutineScope) {
+fun SettingsScreen(scope: CoroutineScope, onOpenTraining: () -> Unit = {}) {
     val context = LocalContext.current
     var apiKeyInput by remember { mutableStateOf("") }
     var keySaved by remember { mutableStateOf(GeminiApiKeyStore.get(context) != null) }
@@ -197,6 +197,15 @@ fun SettingsScreen(scope: CoroutineScope) {
                 profileSavedAt?.let {
                     Text("Saved $it", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextSecondary)
                 }
+            }
+
+            FTCard(title = "TRAINING PROGRAMS") {
+                Text(
+                    "Your program library, the plates you own and default session times. Plan a block from any program.",
+                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    color = FT.TextSecondary,
+                )
+                AmberButton(label = "OPEN", onClick = onOpenTraining)
             }
 
             notifPrefs?.let { prefs ->

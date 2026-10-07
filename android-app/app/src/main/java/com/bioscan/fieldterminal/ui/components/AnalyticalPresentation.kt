@@ -312,6 +312,12 @@ private fun formatRangeValue(value: Double?): String {
     return if (value == Math.floor(value)) value.toInt().toString() else "%.1f".format(value)
 }
 
+// Public read access to the one state treatment table, for surfaces that draw
+// state without a pill (e.g. the body figure's zone tints) -- they must use
+// the same color and word the pill uses, never a parallel table.
+fun metricStateColor(state: MetricState): Color = stateTreatment(state).color
+fun metricStateLabel(state: MetricState): String = stateTreatment(state).label
+
 private data class StateTreatment(val label: String, val symbol: String, val color: Color)
 
 private fun stateTreatment(state: MetricState) = when (state) {

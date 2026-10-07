@@ -38,14 +38,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
@@ -94,6 +92,7 @@ import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -109,8 +108,8 @@ import java.time.format.DateTimeFormatter
 // Shared text styles for this sheet's own chrome (sheet titles, action/
 // confirm labels) -- DAV-108 follow-up migration off FieldTextStyles'
 // legacy JetBrainsMono onto the FT contract's Inter/Roboto Mono split.
-private val sheetHeaderTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
-private val sheetActionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
+private val sheetHeaderTitleStyle = FTType.SectionTitle
+private val sheetActionLabelStyle = FTType.LabelCaps
 
 // Step 12 (Phase D) + the 2026-09-15 follow-up pass: the "+" add-entry flow.
 // Type picker first, then a minimal per-type form that writes straight to
@@ -131,7 +130,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RectangleShape,
+        shape = FT.SheetShape,
         containerColor = FT.Surface,
         contentColor = FT.TextPrimary,
     ) {
@@ -214,7 +213,7 @@ fun EntryActionSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RectangleShape,
+        shape = FT.SheetShape,
         containerColor = FT.Surface,
         contentColor = FT.TextPrimary,
     ) {
@@ -241,7 +240,7 @@ fun EntryActionSheet(
             } else {
                 Text(
                     "Delete this entry? This can't be undone.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp),
+                    style = FTType.Body,
                     color = FT.TextSecondary,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -313,7 +312,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RectangleShape,
+        shape = FT.SheetShape,
         containerColor = FT.Surface,
         contentColor = FT.TextPrimary,
     ) {
@@ -465,7 +464,7 @@ fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RectangleShape,
+        shape = FT.SheetShape,
         containerColor = FT.Surface,
         contentColor = FT.TextPrimary,
     ) {
@@ -498,10 +497,10 @@ fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
 @Composable
 private fun SleepDetailLine(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+        Text(label, style = FTType.Body, color = FT.TextSecondary)
         Text(
             value,
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
+            style = FTType.Value,
             color = FT.TextPrimary,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f).padding(start = 8.dp),
@@ -881,7 +880,7 @@ private fun FoodForm(
                 ) {
                     Text(
                         "${pendingPhotos.size} photo${if (pendingPhotos.size == 1) "" else "s"} ready",
-                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                        style = FTType.BodySmall,
                         color = FT.TextSecondary,
                     )
                     Text(
@@ -907,11 +906,11 @@ private fun FoodForm(
             if (estimating) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
                     CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.size(14.dp))
-                    Text("Estimating...", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary)
+                    Text("Estimating...", style = FTType.BodySmall, color = FT.TextSecondary)
                 }
             }
             estimationError?.let {
-                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.Critical, modifier = Modifier.padding(top = 10.dp))
+                Text(it, style = FTType.BodySmall, color = FT.Critical, modifier = Modifier.padding(top = 10.dp))
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 14.dp)) {
@@ -927,7 +926,7 @@ private fun FoodForm(
                 }
             }
             barcodeError?.let {
-                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.Critical, modifier = Modifier.padding(top = 8.dp))
+                Text(it, style = FTType.BodySmall, color = FT.Critical, modifier = Modifier.padding(top = 8.dp))
             }
 
             Text(
@@ -950,13 +949,13 @@ private fun FoodForm(
                 if (meals == null) {
                     CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.padding(top = 8.dp).size(14.dp))
                 } else if (meals.isEmpty()) {
-                    Text("No recent meals yet.", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 8.dp))
+                    Text("No recent meals yet.", style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.padding(top = 8.dp))
                 } else {
                     Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         meals.forEach { meal ->
                             Text(
                                 meal.description ?: "Meal",
-                                style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                style = FTType.BodySmall,
                                 color = if (cloning) FT.TextMuted else FT.TextPrimary,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1082,7 +1081,7 @@ private fun DrinkForm(
         }
 
         beverageError?.let {
-            Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.Critical)
+            Text(it, style = FTType.BodySmall, color = FT.Critical)
         }
 
         if (beverageClass == null) {
@@ -1172,7 +1171,7 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
             }
             list.isEmpty() -> Text(
                 "No active supplements to log.",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
             else -> {
@@ -1229,13 +1228,13 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 Text(
                                     supp.name,
-                                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                    style = FTType.BodySmall,
                                     color = FT.TextMuted,
                                     modifier = Modifier.weight(1f),
                                 )
                                 Text(
                                     if (nextDate != null) "Next: $nextDate" else "every ${supp.everyNDays}d",
-                                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                                    style = FTType.MonoCaption,
                                     color = FT.TextMuted,
                                 )
                             }
@@ -1270,7 +1269,7 @@ private fun SupplementEditForm(
     var doseUnit by remember { mutableStateOf(initialDoseUnit) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(supplementName, style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp), color = FT.TextPrimary)
+        Text(supplementName, style = FTType.Value, color = FT.TextPrimary)
         DateTimeField("WHEN", dateTime, { dateTime = it })
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) { FormLabel("DOSE (OPTIONAL)"); FieldTextField(doseValue, { doseValue = it }, "e.g. 500", keyboardType = KeyboardType.Number) }
@@ -1296,8 +1295,8 @@ private fun BundleToggleRow(label: String, itemNames: String, checked: Boolean, 
     ) {
         CheckboxGlyph(checked)
         Column {
-            Text(label, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 12.5.sp), color = FT.TextPrimary)
-            Text(itemNames, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
+            Text(label, style = FTType.Telemetry, color = FT.TextPrimary)
+            Text(itemNames, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
@@ -1315,7 +1314,7 @@ private fun CheckToggleRow(label: String, checked: Boolean, onToggle: () -> Unit
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         CheckboxGlyph(checked)
-        Text(label, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp), color = FT.TextPrimary)
+        Text(label, style = FTType.RowTitle, color = FT.TextPrimary)
     }
 }
 
@@ -1453,7 +1452,7 @@ private fun IntChipRow(range: IntRange, selected: Int?, onSelect: (Int) -> Unit)
             ) {
                 Text(
                     "$n",
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
+                    style = FTType.Value,
                     color = if (isSelected) FT.DomainLog else FT.TextSecondary,
                 )
             }
@@ -1868,7 +1867,7 @@ private fun ExerciseDetailsForm(
         Text(
             "Health Connect supplies the time, distance, and heart rate for this $type session — " +
                 "everything below is entered by hand.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            style = FTType.Caption,
             color = FT.TextSecondary,
         )
 
@@ -1883,7 +1882,7 @@ private fun ExerciseDetailsForm(
                 exercises.forEachIndexed { i, exercise -> ExerciseEditor(exercise, canRemove = exercises.size > 1) { exercises.removeAt(i) } }
                 Text(
                     "+ ADD EXERCISE",
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+                    style = FTType.MonoCaption,
                     color = FT.DomainLog,
                     modifier = Modifier.clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -1931,7 +1930,7 @@ private fun TextChipRow(options: List<String>, selected: String?, perRow: Int = 
                     ) {
                         Text(
                             option.uppercase(),
-                            style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                            style = FTType.MonoCaption,
                             color = if (isSelected) FT.DomainLog else FT.TextSecondary,
                         )
                     }
@@ -2014,7 +2013,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
             if (canRemove) {
                 Text(
                     "REMOVE",
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                    style = FTType.MonoCaption,
                     color = FT.Critical,
                     modifier = Modifier.clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -2032,7 +2031,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                 suggestions.forEach { match ->
                     Text(
                         match.name,
-                        style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                        style = FTType.BodySmall,
                         color = FT.TextSecondary,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2062,7 +2061,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                     if (exercise.sets.size > 1) {
                         Text(
                             "REMOVE",
-                            style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                            style = FTType.MonoCaption,
                             color = FT.Critical,
                             modifier = Modifier.clickable(
                                 interactionSource = remember { MutableInteractionSource() },
@@ -2076,7 +2075,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
 
         Text(
             "+ ADD SET",
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+            style = FTType.MonoCaption,
             color = FT.DomainLog,
             modifier = Modifier.clickable(
                 interactionSource = remember { MutableInteractionSource() },

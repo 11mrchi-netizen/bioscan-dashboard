@@ -23,10 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
@@ -92,9 +90,14 @@ import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.HeartTab
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.FTScoreRow
+import com.bioscan.fieldterminal.ui.components.FTSegment
+import com.bioscan.fieldterminal.ui.components.FTSegmentBar
+import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -316,12 +319,7 @@ private fun SexualActivityHistory(rows: List<LogSexualActivityRow>) {
         return
     }
     val sorted = rows.sortedByDescending { it.date }
-    FTCard(title = "RECENT ENTRIES") {
-        Text(
-            "No Analysis Layer evaluation exists for this yet -- real recent log history only.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-            color = FT.TextMuted,
-        )
+    FTCard(title = "RECENT ENTRIES", info = "No Analysis Layer evaluation exists for this yet -- this is real recent log history only.") {
         sorted.forEach { row ->
             val orgasmCount = row.instances.count { it.orgasm }
             val text = "${row.activityType.replaceFirstChar { it.uppercase() }} · ${row.instances.size} instance${if (row.instances.size == 1) "" else "s"}" +
@@ -360,7 +358,7 @@ internal fun EvalCard(
 ) {
     FTCard(title = title, modifier = modifier) {
         FTStatePill(eval.state.toMetricState())
-        StatLine("Confidence", eval.confidence.label)
+        FTConfidenceChip(confidenceLevel(eval.confidence))
         comparison?.let { ComparisonStrip(it) }
         var bandLow: Double? = null
         var bandHigh: Double? = null
@@ -380,7 +378,7 @@ internal fun EvalCard(
                 ),
             )
         }
-        eval.cv7d?.let { StatLine("7-day CV", "%.1f%%".format(it)) }
+        eval.cv7d?.let { FTMetricRow("7-day CV", "%.1f%%".format(it)) }
         val series = points?.let { pts ->
             if (timeframe != null) vitalsTrendSeries(pts, timeframe).takeIf { it.size >= 2 }
             else recentTrendWindow(pts)
@@ -388,11 +386,12 @@ internal fun EvalCard(
         series?.let {
             DateTrendLine(
                 points = it,
-                color = FT.Emerald,
+                color = FT.DomainHeart,
                 refLow = bandLow,
                 refHigh = bandHigh,
                 highlightColor = stateTreatment(eval.state.toMetricState()).color,
                 modifier = Modifier.padding(top = 8.dp),
+                unit = unit,
             )
         }
         interpretSwcEvaluation(title, eval, directionality)?.let { sentence ->
@@ -417,22 +416,23 @@ private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<
 private fun DynamicRecoveryCard(result: DynamicRecoveryResult) {
     FTCard(title = "TODAY'S RECOVERY") {
         FTStatePill(result.state.toMetricState())
-        StatLine("Confidence", result.confidence.label)
+        FTConfidenceChip(confidenceLevel(result.confidence))
         if (result.contributors.isEmpty()) {
             Text(
                 "Not enough contributors yet -- needs at least 2 of sleep/HRV/RHR/training load/subjective state.",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
         } else {
             result.contributors.forEach { contributor ->
-                val arrow = when (contributor.direction) {
-                    1 -> "↑"
-                    -1 -> "↓"
-                    0 -> "="
-                    else -> "?"
+                // Arrow + word, so direction never rests on glyph or color alone.
+                val effect = when (contributor.direction) {
+                    1 -> "↑ SUPPORTS RECOVERY"
+                    -1 -> "↓ HOLDS RECOVERY BACK"
+                    0 -> "= NEUTRAL"
+                    else -> "— NO SIGNAL YET"
                 }
-                StatLine(contributor.dimension.replace('_', ' ').replaceFirstChar { it.uppercase() }, "$arrow (${contributor.confidence.label})")
+                FTMetricRow(contributor.dimension.replace('_', ' ').replaceFirstChar { it.uppercase() }, effect)
             }
         }
     }
@@ -441,16 +441,16 @@ private fun DynamicRecoveryCard(result: DynamicRecoveryResult) {
 @Composable
 private fun SleepIndexCard(result: SleepIndexResult) {
     FTCard(title = "SLEEP INDEX") {
-        StatLine("Confidence", result.confidence.label)
+        FTConfidenceChip(confidenceLevel(result.confidence))
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
             result.components.forEach { (component, componentScore) ->
-                StatLine(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, "%.0f".format(componentScore.score))
+                FTScoreRow(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, componentScore.score, FT.Category.Sleep.c500)
             }
         } else {
             Text(
                 "Not enough components yet -- needs at least 2 of duration/regularity/respiratory/stage-composition.",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
         }
@@ -459,22 +459,17 @@ private fun SleepIndexCard(result: SleepIndexResult) {
 
 @Composable
 private fun CircadianAlignmentCard(result: CircadianAlignmentResult) {
-    FTCard(title = "CIRCADIAN ALIGNMENT") {
-        Text(
-            "A behavioral regularity proxy, not a measured circadian phase.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-            color = FT.TextMuted,
-        )
-        StatLine("Confidence", result.confidence.label)
+    FTCard(title = "CIRCADIAN ALIGNMENT", info = "A behavioral regularity proxy, not a measured circadian phase.") {
+        FTConfidenceChip(confidenceLevel(result.confidence))
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
             result.components.forEach { (component, componentScore) ->
-                StatLine(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, "%.0f".format(componentScore.score))
+                FTScoreRow(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, componentScore.score, FT.Category.Sleep.c300)
             }
         } else {
             Text(
                 "Not enough sleep/meal/exercise timing history yet.",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
         }
@@ -486,7 +481,7 @@ private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay
     // "PHYSIOLOGICAL STRESS" not "STRESS" -- never visually conflated with
     // the subjective SubjectiveCard("STRESS") above it (DAV-246's own rule).
     FTCard(title = "PHYSIOLOGICAL STRESS") {
-        StatLine("Confidence", result.confidence.label)
+        FTConfidenceChip(confidenceLevel(result.confidence))
         val summary = today.summary
         if (summary.avg != null) {
             FTMetricValue(DisplayValue(primary = "${summary.avg}", unit = "/ 100 avg today"))
@@ -496,25 +491,28 @@ private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay
         val medium = summary.mediumProportion
         val high = summary.highProportion
         if (relax != null && normal != null && medium != null && high != null) {
-            val total = (relax + normal + medium + high).takeIf { it > 0 } ?: 1
-            Row(modifier = Modifier.fillMaxWidth().height(10.dp)) {
-                Box(Modifier.weight((relax.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Emerald))
-                Box(Modifier.weight((normal.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Info))
-                Box(Modifier.weight((medium.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Warning))
-                Box(Modifier.weight((high.toFloat() / total).coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Critical))
-            }
-            StatLine("Relax / Normal / Medium / High", "$relax% / $normal% / $medium% / $high%")
+            // Ordinal intensity (relax -> high): one hue, rising opacity, not a
+            // state ramp -- the legend carries the labels and percentages.
+            val stressHue = FT.Category.Wellbeing.c500
+            FTSegmentBar(
+                listOf(
+                    FTSegment("Relax", relax.toDouble(), stressHue.copy(alpha = 0.30f)),
+                    FTSegment("Normal", normal.toDouble(), stressHue.copy(alpha = 0.50f)),
+                    FTSegment("Medium", medium.toDouble(), stressHue.copy(alpha = 0.75f)),
+                    FTSegment("High", high.toDouble(), stressHue),
+                ),
+            )
         }
         if (result.peakMagnitude != null) {
-            StatLine("Today's baseline", "%.0f".format(result.baseline))
-            StatLine("Peak above baseline", "+${result.peakMagnitude}")
-            result.peakDurationMinutes?.let { StatLine("Peak duration", "${it} min") }
-            result.eveningDownRegulationPct?.let { StatLine("Evening wind-down", "%.0f%%".format(it)) }
-            result.deviationFromPersonalPattern?.let { StatLine("Vs. your own recent average", "%+.0f".format(it)) }
+            FTMetricRow("Today's baseline", "%.0f".format(result.baseline))
+            FTMetricRow("Peak above baseline", "+${result.peakMagnitude}")
+            result.peakDurationMinutes?.let { FTMetricRow("Peak duration", "${it} min") }
+            result.eveningDownRegulationPct?.let { FTMetricRow("Evening wind-down", "%.0f%%".format(it)) }
+            result.deviationFromPersonalPattern?.let { FTMetricRow("Vs. your own recent average", "%+.0f".format(it)) }
         } else {
             Text(
                 "Not enough intraday samples yet for the diurnal pattern -- daily summary above is still real.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
@@ -524,13 +522,13 @@ private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay
 @Composable
 private fun SriCard(eval: SriEvaluation) {
     FTCard(title = "SLEEP REGULARITY (SRI)") {
-        StatLine("Confidence", eval.confidence.label)
+        FTConfidenceChip(confidenceLevel(eval.confidence))
         if (eval.value != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(eval.value), unit = "/ 100"))
         } else {
             Text(
                 "Not enough consecutive nights yet (gaps over 2 nights reset the count).",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
         }
@@ -560,28 +558,31 @@ private fun SleepPhasesCard(nights: List<SleepAnalysisRow>) {
     val avgTotal = (avgDeep + avgRem + avgLight).takeIf { it > 0 } ?: 1.0
 
     FTCard(title = "SLEEP PHASES") {
-        Row(modifier = Modifier.fillMaxWidth().height(10.dp)) {
-            Box(Modifier.weight((avgDeep / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Info))
-            Box(Modifier.weight((avgRem / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.Emerald))
-            Box(Modifier.weight((avgLight / avgTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(FT.TextMuted))
-        }
-        PhaseStatLine("Deep", avgDeep, avgTotal, FT.Info)
-        PhaseStatLine("REM", avgRem, avgTotal, FT.Emerald)
-        PhaseStatLine("Light", avgLight, avgTotal, FT.TextMuted)
-        StatLine("Nights averaged", "${recent.size}")
+        FTSegmentBar(
+            listOf(
+                FTSegment("Deep", avgDeep, FT.Category.Sleep.c700),
+                FTSegment("REM", avgRem, FT.Category.Sleep.c500),
+                FTSegment("Light", avgLight, FT.Category.Sleep.c300),
+            ),
+            showLegend = false,
+        )
+        PhaseRow("Deep", avgDeep, avgTotal, FT.Category.Sleep.c700)
+        PhaseRow("REM", avgRem, avgTotal, FT.Category.Sleep.c500)
+        PhaseRow("Light", avgLight, avgTotal, FT.Category.Sleep.c300)
+        FTMetricRow("Nights averaged", "${recent.size}")
     }
 }
 
 @Composable
-private fun PhaseStatLine(label: String, minutes: Double, totalMinutes: Double, dotColor: androidx.compose.ui.graphics.Color) {
+private fun PhaseRow(label: String, minutes: Double, totalMinutes: Double, dotColor: androidx.compose.ui.graphics.Color) {
     Row(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.width(8.dp).height(8.dp).background(dotColor))
-            Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+            Text(label, style = FTType.Body, color = FT.TextSecondary)
         }
         Text(
             "${minutes.toInt()} min  ·  %.0f%%".format(minutes / totalMinutes * 100),
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
+            style = FTType.Value,
             color = FT.TextPrimary,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f).padding(start = 8.dp),
@@ -598,23 +599,23 @@ private const val STEPS_WINDOW_DAYS = 15L
 @Composable
 private fun MovementIndexCard(result: MovementIndexResult) {
     FTCard(title = "MOVEMENT INDEX") {
-        StatLine("Confidence", result.confidence.label)
+        FTConfidenceChip(confidenceLevel(result.confidence))
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100"))
             result.components.forEach { (component, componentScore) ->
-                StatLine(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, "%.0f".format(componentScore.score))
+                FTScoreRow(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, componentScore.score, FT.Category.Activity.c500)
             }
             if (result.unavailableComponents.isNotEmpty()) {
                 Text(
                     "Active calories and zone minutes stay unavailable -- too little of this account's data has them yet.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                    style = FTType.Caption,
                     color = FT.TextMuted,
                 )
             }
         } else {
             Text(
                 "Not enough step or session history yet.",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
         }
@@ -646,22 +647,22 @@ private fun StepsCard(points: List<Pair<LocalDate, Double>>, benchmarkArtifacts:
         // steps/day categories) -- no personal-history comparison wired for
         // steps yet.
         ComparisonStrip(population = comparison)
-        DateTrendLine(points = recent, color = FT.DomainHeart)
+        DateTrendLine(points = recent, color = FT.DomainHeart, unit = "steps / day")
     }
 }
 
 @Composable
 private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation) {
     FTCard(title = "RESPIRATORY RATE") {
-        StatLine("Confidence", eval.confidence.label)
-        eval.baseline?.let { StatLine("14-night baseline", "%.1f breaths/min".format(it)) }
+        FTConfidenceChip(confidenceLevel(eval.confidence))
+        eval.baseline?.let { FTMetricRow("14-night baseline", "%.1f breaths/min".format(it)) }
         Text(
             if (eval.flagged) {
                 "Physiological anomaly flagged — 2 consecutive nights outside your baseline ±2 SD. Not a diagnosis."
             } else {
                 "No anomaly flagged."
             },
-            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            style = FTType.BodySmall,
             color = if (eval.flagged) FT.Critical else FT.TextSecondary,
         )
     }
@@ -672,31 +673,14 @@ private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>,
     val eval = evaluateSubjective(points)
     FTCard(title = title, modifier = modifier) {
         FTStatePill(eval.state.toMetricState())
-        StatLine("Confidence", eval.confidence.label)
-        eval.median7d?.let { StatLine("7-day median", "%.1f".format(it)) }
-        eval.medianBaseline30d?.let { StatLine("30-day baseline", "%.1f".format(it)) }
-        eval.iqr7d?.let { StatLine("7-day IQR", "%.1f".format(it)) }
-        eval.trendDirection?.let { StatLine("14-day trend", if (it > 0) "↑ rising (p<0.05)" else "↓ falling (p<0.05)") }
+        FTConfidenceChip(confidenceLevel(eval.confidence))
+        eval.median7d?.let { FTMetricRow("7-day median", "%.1f".format(it)) }
+        eval.medianBaseline30d?.let { FTMetricRow("30-day baseline", "%.1f".format(it)) }
+        eval.iqr7d?.let { FTMetricRow("7-day IQR", "%.1f".format(it)) }
+        eval.trendDirection?.let { FTMetricRow("14-day trend", if (it > 0) "↑ rising (p<0.05)" else "↓ falling (p<0.05)") }
         recentTrendWindow(points)?.let { recent ->
-            DateTrendLine(points = recent, color = FT.Info, modifier = Modifier.padding(top = 8.dp))
+            DateTrendLine(points = recent, color = FT.Category.Wellbeing.c500, modifier = Modifier.padding(top = 8.dp))
         }
     }
 }
 
-@Composable
-// DAV-108: label is unweighted (always a short fixed phrase) so it never
-// shrinks; value takes the rest of the row via weight(1f) so a long value
-// wraps within its own bounded width and stays right-aligned instead of
-// colliding with the label.
-private fun StatLine(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
-        Text(
-            value,
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
-            color = FT.TextPrimary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f).padding(start = 8.dp),
-        )
-    }
-}

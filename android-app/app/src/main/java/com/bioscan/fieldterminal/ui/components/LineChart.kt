@@ -21,12 +21,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.domain.TimePoint
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // Phase G5. This app's first general-purpose line/area chart primitive --
 // generalizes the old Step-14 RouteCanvas's bounding-box -> single-scale ->
@@ -62,6 +60,11 @@ fun LineChart(
     // solid `color` -- every other caller leaves this null and gets today's
     // unchanged single-color line.
     segmentColor: ((Double) -> Color)? = null,
+    // Lower-is-better series (pace in min/km): plot low values at the top so
+    // "up" always means "better".
+    invertY: Boolean = false,
+    // Chart frame: unit header (see DateTrendLine).
+    unit: String? = null,
 ) {
     if (points.size < 2) return
 
@@ -76,13 +79,19 @@ fun LineChart(
     val ySpan = yMax - yMin
 
     fun xFor(x: Float, width: Float) = pad + (x - xMin) / xSpan * (width - pad * 2)
-    fun yFor(y: Float, height: Float) = pad + (1f - (y - yMin) / ySpan) * (height - pad * 2)
+    fun yFor(y: Float, height: Float): Float {
+        val t = (y - yMin) / ySpan
+        return pad + (if (invertY) t else 1f - t) * (height - pad * 2)
+    }
 
     var selected by remember { mutableStateOf<Int?>(null) }
     val measurer = rememberTextMeasurer()
     val active = selected?.takeIf { it in points.indices }
 
     Column(modifier = modifier.fillMaxWidth()) {
+        unit?.let {
+            Text(it.uppercase(), style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
+        }
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -137,8 +146,8 @@ fun LineChart(
             }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatElapsed(xRange?.first ?: points.first().offsetSeconds), style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
-            Text(formatElapsed(xRange?.second ?: points.last().offsetSeconds), style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
+            Text(formatElapsed(xRange?.first ?: points.first().offsetSeconds), style = FTType.MonoCaption, color = FT.TextSecondary)
+            Text(formatElapsed(xRange?.second ?: points.last().offsetSeconds), style = FTType.MonoCaption, color = FT.TextSecondary)
         }
     }
 }

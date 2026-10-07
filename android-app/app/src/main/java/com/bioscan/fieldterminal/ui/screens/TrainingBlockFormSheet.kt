@@ -30,12 +30,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
@@ -43,9 +40,8 @@ import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -82,7 +78,7 @@ fun TrainingBlockFormSheet(cycle: TrainingCycle?, onDismiss: () -> Unit, onSaved
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RectangleShape,
+        shape = FT.SheetShape,
         containerColor = FT.Surface,
         contentColor = FT.TextPrimary,
     ) {
@@ -165,7 +161,7 @@ fun TrainingBlockFormSheet(cycle: TrainingCycle?, onDismiss: () -> Unit, onSaved
             }
 
             error?.let {
-                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical)
+                Text(it, style = FTType.Caption, color = FT.Critical)
             }
 
             val hasGoal = goalMetric.isNotBlank()

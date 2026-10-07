@@ -22,11 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.AgingProfileRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -35,10 +32,14 @@ import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
 import com.bioscan.fieldterminal.ui.components.DotPlot
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDataState
+import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
+import com.bioscan.fieldterminal.domain.DisplayValue
+import com.bioscan.fieldterminal.ui.components.FTMetricValue
+import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.ageAccelerationState
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.format.DateTimeFormatter
 
 // DAV-232 (09A Aging Profile, Phase 1). Overview / Dimensions / History /
@@ -53,19 +54,7 @@ fun AgingProfileScreen(onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                "BACK",
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp, fontWeight = FontWeight.Bold),
-                color = FT.TextMuted,
-                modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onBack),
-            )
-            Text("AGING PROFILE", style = TextStyle(fontFamily = Inter, fontSize = 20.sp, fontWeight = FontWeight.Bold), color = FT.TextPrimary)
-        }
+        TileHeader(onBack = onBack, title = "AGING PROFILE")
 
         val current = overview
         when {
@@ -90,9 +79,47 @@ fun AgingProfileScreen(onBack: () -> Unit) {
 @Composable
 private fun OverviewCard(overview: AgingProfileOverview) {
     FTCard(title = "OVERVIEW") {
-        StatLineHelp("Chronological age", "${overview.chronologicalAgeYears} yr", "Chronological age", "Your real age, from date of birth (Setup › Profile). Every biological-age model below is compared against this.")
-        overview.phenoAge?.let { ResultLine(it, PHENOAGE_HELP) }
-        overview.cardioAge?.let { ResultLine(it, CARDIO_AGE_HELP) }
+        BioAgeHero(overview)
+        StatLineHelp("Chronological age", "${overview.chronologicalAgeYears} yr", "Chronological age", "Your real age, from date of birth (Setup › Profile). Every biological-age model is compared against this.")
+    }
+}
+
+// The hero of the aging pages: each model's current biological age, side by
+// side and never merged into one figure (models stay parallel, DAV-230). Each
+// cell is label + help, the age as a display metric, a state pill and the
+// signed delta against real age. Shared with the User tab's AGING card.
+@Composable
+internal fun BioAgeHero(overview: AgingProfileOverview, modifier: Modifier = Modifier) {
+    if (overview.phenoAge == null && overview.cardioAge == null) {
+        FTDataState(DataAvailability.Unavailable, "No biological-age model has a result yet.", modifier)
+        return
+    }
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        overview.phenoAge?.let { BioAgeHeroCell(it, PHENOAGE_HELP, Modifier.weight(1f)) }
+        overview.cardioAge?.let { BioAgeHeroCell(it, CARDIO_AGE_HELP, Modifier.weight(1f)) }
+    }
+}
+
+@Composable
+private fun BioAgeHeroCell(result: BiologicalAgeResult, help: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(result.model.label.uppercase(), style = FTType.LabelCaps, color = FT.TextMuted)
+            InfoHelpButton(result.model.label, help)
+        }
+        if (result.isAvailable) {
+            FTMetricValue(DisplayValue(primary = "%.0f".format(result.biologicalAge), unit = "YRS"))
+            FTStatePill(ageAccelerationState(result.ageAcceleration))
+            result.ageAcceleration?.let {
+                Text(
+                    "%+.1f yrs vs. real age".format(it),
+                    style = FTType.Label,
+                    color = if (it <= 0) FT.Emerald else FT.Warning,
+                )
+            }
+        } else {
+            FTDataState(DataAvailability.Unavailable, result.unavailableReason ?: "Unavailable")
+        }
     }
 }
 
@@ -105,7 +132,7 @@ private fun DimensionsCard(overview: AgingProfileOverview) {
         overview.cardioAge?.let { ResultLine(it, CARDIO_AGE_HELP) } ?: FTDataState(DataAvailability.Unavailable, "No VO2max reading yet.")
         Text(
             "Molecular and organ-system dimensions arrive in a later pass.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            style = FTType.Caption,
             color = FT.TextMuted,
             modifier = Modifier.padding(top = 6.dp),
         )
@@ -117,14 +144,14 @@ private fun HistoryCard(overview: AgingProfileOverview) {
     FTCard(title = "HISTORY") {
         Text(
             "PhenoAge, by draw",
-            style = TextStyle(fontFamily = Inter, fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+            style = FTType.RowTitle,
             color = FT.TextPrimary,
         )
         val available = overview.phenoAgeHistory.filter { it.isAvailable }
         if (available.size < 2) {
             Text(
                 "Not enough complete draws yet for a trend — shown as points, never connected, until there's real history to connect.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
@@ -139,7 +166,7 @@ private fun HistoryCard(overview: AgingProfileOverview) {
         overview.phenoAgeHistory.filter { !it.isAvailable }.forEach { incomplete ->
             Text(
                 "${incomplete.observedAt.format(DateTimeFormatter.ofPattern("d MMM yyyy"))}: incomplete — ${incomplete.unavailableReason}",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                style = FTType.Caption,
                 color = FT.TextMuted,
                 modifier = Modifier.padding(top = 6.dp),
             )
@@ -154,25 +181,25 @@ private fun HistoryCard(overview: AgingProfileOverview) {
 private fun ResultLine(result: BiologicalAgeResult, help: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(result.model.label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+            Text(result.model.label, style = FTType.Body, color = FT.TextSecondary)
             InfoHelpButton(result.model.label, help)
         }
         Column(horizontalAlignment = Alignment.End) {
             if (result.isAvailable) {
                 Text(
                     "%.1f yr".format(result.biologicalAge),
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
+                    style = FTType.Value,
                     color = FT.TextPrimary,
                 )
                 Text(
                     "%+.1f yr vs. chronological".format(result.ageAcceleration),
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.5.sp),
+                    style = FTType.MonoCaption,
                     color = if (result.ageAcceleration!! < 0) FT.Emerald else FT.Warning,
                 )
             } else {
                 Text(
                     result.unavailableReason ?: "Unavailable",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    style = FTType.Caption,
                     color = FT.TextMuted,
                     textAlign = TextAlign.End,
                 )
@@ -185,19 +212,19 @@ private fun ResultLine(result: BiologicalAgeResult, help: String) {
 private fun StatLineHelp(label: String, value: String, helpTitle: String, helpBody: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+            Text(label, style = FTType.Body, color = FT.TextSecondary)
             InfoHelpButton(helpTitle, helpBody)
         }
         Text(
             value,
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
+            style = FTType.Value,
             color = FT.TextPrimary,
             textAlign = TextAlign.End,
         )
     }
 }
 
-private val sectionLabel = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp)
+private val sectionLabel = FTType.Label
 
 private const val PHENOAGE_HELP =
     "PhenoAge (Levine et al. 2018) is a published formula combining 9 routine blood markers " +

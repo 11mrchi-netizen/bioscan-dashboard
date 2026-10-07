@@ -34,23 +34,24 @@ import com.bioscan.fieldterminal.domain.MetricPresentation
 import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.PersonalRange
 import com.bioscan.fieldterminal.domain.Provenance
+import com.bioscan.fieldterminal.domain.RangeComparison
+import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.TrendState
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-private val Telemetry = com.bioscan.fieldterminal.ui.theme.RobotoMono
-private val Interface = com.bioscan.fieldterminal.ui.theme.Inter
 
 @Composable
 fun FTMetricValue(value: DisplayValue, modifier: Modifier = Modifier) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(value.primary, color = FT.TextPrimary, fontFamily = Telemetry, fontWeight = FontWeight.Bold, fontSize = 36.sp)
+            Text(value.primary, color = FT.TextPrimary, style = FTType.DisplayMetric)
             value.unit?.let {
                 Spacer(Modifier.width(6.dp))
-                Text(it, color = FT.TextSecondary, fontFamily = Telemetry, fontSize = 13.sp)
+                Text(it, color = FT.TextSecondary, style = FTType.Value)
             }
         }
-        value.secondary?.let { Text(it, color = FT.TextSecondary, fontFamily = Interface, fontSize = 13.sp) }
+        value.secondary?.let { Text(it, color = FT.TextSecondary, style = FTType.BodySmall) }
     }
 }
 
@@ -65,9 +66,9 @@ fun FTStatePill(state: MetricState, modifier: Modifier = Modifier) {
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(treatment.symbol, color = treatment.color, fontFamily = Telemetry, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(treatment.symbol, color = treatment.color, style = FTType.Label)
         Spacer(Modifier.width(5.dp))
-        Text(treatment.label, color = treatment.color, fontFamily = Telemetry, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Text(treatment.label, color = treatment.color, style = FTType.Label)
     }
 }
 
@@ -84,9 +85,7 @@ fun FTTrendIndicator(trend: TrendState, modifier: Modifier = Modifier) {
         text = treatment.first + " " + treatment.second,
         modifier = modifier.semantics { contentDescription = treatment.second.lowercase() },
         color = FT.TextSecondary,
-        fontFamily = Telemetry,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
+        style = FTType.Label,
     )
 }
 
@@ -105,9 +104,7 @@ fun FTConfidenceChip(level: ConfidenceLevel, modifier: Modifier = Modifier) {
             .border(FT.BorderWidth, color.copy(alpha = 0.5f), RoundedCornerShape(FT.RadiusSmall))
             .padding(horizontal = 8.dp, vertical = 5.dp),
         color = color,
-        fontFamily = Telemetry,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
+        style = FTType.Label,
     )
 }
 
@@ -119,8 +116,7 @@ fun FTProvenanceCue(provenance: List<Provenance>, modifier: Modifier = Modifier)
         text = label,
         modifier = modifier.semantics { contentDescription = "Source: " + label },
         color = FT.TextMuted,
-        fontFamily = Telemetry,
-        fontSize = 10.sp,
+        style = FTType.Micro,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
@@ -134,29 +130,54 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
         FTDataState(DataAvailability.Building, range.explanation ?: "More history is needed for a personal range.", modifier)
         return
     }
-    val span = (maximum - minimum).takeIf { it > 0.0 } ?: 1.0
-    fun fraction(value: Double?) = value?.let { ((it - minimum) / span).toFloat().coerceIn(0f, 1f) }
+    // The track spans a domain wider than the band so the band reads as
+    // "the expected range" and a current/baseline value outside it stays
+    // visible instead of being clamped onto the band's edge.
+    val bandSpan = (maximum - minimum).takeIf { it > 0.0 } ?: 1.0
+    val pad = bandSpan * 0.08
+    val domainMin = listOfNotNull(minimum, maximum, range.current, range.baseline).min() - pad
+    val domainMax = listOfNotNull(minimum, maximum, range.current, range.baseline).max() + pad
+    val domainSpan = (domainMax - domainMin).takeIf { it > 0.0 } ?: 1.0
+    fun fraction(value: Double) = ((value - domainMin) / domainSpan).toFloat().coerceIn(0f, 1f)
+    val bandColor = if (range.kind == RangeKind.ReferenceRange) FT.TextSecondary.copy(alpha = 0.30f) else FT.Emerald.copy(alpha = 0.38f)
+    val comparisonLabel = when (range.comparison) {
+        RangeComparison.Below -> "BELOW RANGE"
+        RangeComparison.Within -> "WITHIN RANGE"
+        RangeComparison.Above -> "ABOVE RANGE"
+        RangeComparison.NotComparable -> null
+    }
 
-    Column(modifier = modifier.semantics { contentDescription = range.label }) {
-        Text(range.label.uppercase(), color = FT.TextSecondary, fontFamily = Telemetry, fontSize = 10.sp)
+    Column(modifier = modifier.semantics { contentDescription = range.label + (comparisonLabel?.let { ", " + it.lowercase() } ?: "") }) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(range.label.uppercase(), color = FT.TextSecondary, style = FTType.MonoCaption, modifier = Modifier.weight(1f))
+            comparisonLabel?.let { Text(it, color = FT.TextSecondary, style = FTType.Label) }
+        }
         Canvas(modifier = Modifier.fillMaxWidth().height(28.dp).padding(top = 6.dp)) {
             val y = size.height / 2f
-            val trackH = 8f
-            val cr = androidx.compose.ui.geometry.CornerRadius(100f)
-            drawRoundRect(FT.GlassTrack, topLeft = androidx.compose.ui.geometry.Offset(0f, y - trackH / 2), size = androidx.compose.ui.geometry.Size(size.width, trackH), cornerRadius = cr)
-            drawRoundRect(FT.Emerald.copy(alpha = 0.38f), topLeft = androidx.compose.ui.geometry.Offset(0f, y - trackH / 2), size = androidx.compose.ui.geometry.Size(size.width, trackH), cornerRadius = cr)
-            fraction(range.baseline)?.let { x ->
-                drawCircle(FT.TextSecondary, radius = 5f, center = androidx.compose.ui.geometry.Offset(x * size.width, y), style = Stroke(2f))
+            val stroke = 8.dp.toPx()
+            drawLine(FT.GlassTrack, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), strokeWidth = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawLine(
+                bandColor,
+                androidx.compose.ui.geometry.Offset(fraction(minimum) * size.width, y),
+                androidx.compose.ui.geometry.Offset(fraction(maximum) * size.width, y),
+                strokeWidth = stroke,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+            )
+            range.baseline?.let {
+                drawCircle(FT.TextSecondary, radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(fraction(it) * size.width, y), style = Stroke(2.dp.toPx()))
             }
-            fraction(range.current)?.let { x ->
-                drawCircle(currentColor, radius = 7f, center = androidx.compose.ui.geometry.Offset(x * size.width, y))
+            range.current?.let {
+                drawCircle(currentColor, radius = 5.dp.toPx(), center = androidx.compose.ui.geometry.Offset(fraction(it) * size.width, y))
             }
         }
         Text(
-            text = "CURRENT " + formatRangeValue(range.current) + " · BASELINE " + formatRangeValue(range.baseline),
+            text = buildString {
+                append("CURRENT " + formatRangeValue(range.current))
+                range.baseline?.let { append(" · BASELINE " + formatRangeValue(it)) }
+                append(" · RANGE " + formatRangeValue(minimum) + "–" + formatRangeValue(maximum))
+            },
             color = FT.TextMuted,
-            fontFamily = Telemetry,
-            fontSize = 10.sp,
+            style = FTType.MonoCaption,
         )
     }
 }
@@ -166,7 +187,14 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
 // itself stays legacy-amber until every one of its callers migrates (see
 // FuturisticMaterialTokens.kt's own "legacy tokens stay intact" precedent).
 @Composable
-fun FTCard(title: String, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+fun FTCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    // Caveats / "what this is" copy lives behind one help button in the title
+    // bar instead of a muted paragraph inside the card.
+    info: String? = null,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
     val shape = RoundedCornerShape(FT.RadiusCard)
     Column(
         modifier = modifier
@@ -181,14 +209,18 @@ fun FTCard(title: String, modifier: Modifier = Modifier, content: @Composable an
             .border(FT.BorderWidth, FT.GlassBorder, shape)
             .background(FT.GlassFill, shape),
     ) {
-        Text(
-            text = title.uppercase(),
-            color = FT.Emerald,
-            fontFamily = Interface,
-            fontWeight = FontWeight.Bold,
-            fontSize = 13.sp,
+        Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title.uppercase(),
+                color = FT.Emerald,
+                style = FTType.CardTitle,
+                modifier = Modifier.weight(1f),
+            )
+            info?.let { InfoHelpButton(title = title, body = it) }
+        }
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             content()
         }
@@ -210,8 +242,8 @@ fun FTDataState(availability: DataAvailability, reason: String? = null, modifier
             .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule))
             .padding(12.dp),
     ) {
-        Text(label, color = if (availability == DataAvailability.Building) FT.Analysis else FT.TextSecondary, fontFamily = Telemetry, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-        reason?.let { Text(it, color = FT.TextSecondary, fontFamily = Interface, fontSize = 13.sp) }
+        Text(label, color = if (availability == DataAvailability.Building) FT.Analysis else FT.TextSecondary, style = FTType.Label)
+        reason?.let { Text(it, color = FT.TextSecondary, style = FTType.BodySmall) }
     }
 }
 
@@ -226,13 +258,13 @@ fun FTChartFrame(chart: ChartPresentation, modifier: Modifier = Modifier, conten
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(chart.timeWindow ?: "CURRENT WINDOW", color = FT.TextSecondary, fontFamily = Telemetry, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            Text(chart.timeWindow ?: "CURRENT WINDOW", color = FT.TextSecondary, style = FTType.Label)
             Spacer(Modifier.weight(1f))
-            chart.unit?.let { Text(it, color = FT.TextMuted, fontFamily = Telemetry, fontSize = 11.sp) }
+            chart.unit?.let { Text(it, color = FT.TextMuted, style = FTType.MonoCaption) }
         }
         content()
         if (chart.missingness.name != "None") {
-            Text("DATA: " + chart.missingness.name.uppercase(), color = FT.TextMuted, fontFamily = Telemetry, fontSize = 10.sp)
+            Text("DATA: " + chart.missingness.name.uppercase(), color = FT.TextMuted, style = FTType.Micro)
         }
     }
 }
@@ -258,8 +290,8 @@ fun FTAnalyticalCard(
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
-                Text(presentation.label.uppercase(), color = FT.TextPrimary, fontFamily = Interface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                presentation.context?.let { Text(it, color = FT.TextSecondary, fontFamily = Interface, fontSize = 13.sp) }
+                Text(presentation.label.uppercase(), color = FT.TextPrimary, style = FTType.SectionTitle)
+                presentation.context?.let { Text(it, color = FT.TextSecondary, style = FTType.BodySmall) }
             }
             FTStatePill(presentation.semanticState)
         }
@@ -283,6 +315,12 @@ private fun formatRangeValue(value: Double?): String {
     if (value == null) return "—"
     return if (value == Math.floor(value)) value.toInt().toString() else "%.1f".format(value)
 }
+
+// Public read access to the one state treatment table, for surfaces that draw
+// state without a pill (e.g. the body figure's zone tints) -- they must use
+// the same color and word the pill uses, never a parallel table.
+fun metricStateColor(state: MetricState): Color = stateTreatment(state).color
+fun metricStateLabel(state: MetricState): String = stateTreatment(state).label
 
 internal data class StateTreatment(val label: String, val symbol: String, val color: Color)
 

@@ -21,7 +21,7 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.ZeppSyncWorker
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.nav.FieldTerminalNavHost
-import com.bioscan.fieldterminal.ui.theme.FieldColors
+import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.FieldTerminalTheme
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -74,7 +74,7 @@ private fun AuthGate() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(FieldColors.Ground),
+            .background(FT.Base),
         contentAlignment = Alignment.Center,
     ) {
         when (sessionStatus) {
@@ -84,7 +84,7 @@ private fun AuthGate() {
                     scope.launch { GoogleAuthManager.signIn(context) }
                 }
             }
-            is SessionStatus.Initializing -> CircularProgressIndicator(color = FieldColors.Amber)
+            is SessionStatus.Initializing -> CircularProgressIndicator(color = FT.Emerald)
             is SessionStatus.RefreshFailure -> {
                 // Mirrors the web dashboard's own handling of a dead
                 // refresh token (see ROADMAP.md's Google token-refresh

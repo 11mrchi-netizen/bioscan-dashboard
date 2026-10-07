@@ -1,0 +1,82 @@
+package com.bioscan.fieldterminal.ui.components
+
+import com.bioscan.fieldterminal.domain.BloodworkTrendState
+import com.bioscan.fieldterminal.domain.Confidence
+import com.bioscan.fieldterminal.domain.ConfidenceLevel
+import com.bioscan.fieldterminal.domain.MetricState
+import com.bioscan.fieldterminal.domain.ReadinessLabel
+import com.bioscan.fieldterminal.domain.comparison.PercentileBand
+
+// The one place threshold -> presentation-state decisions live (Analytical
+// Presentation Contract, 2026-10 amendment). Each mapping is deterministic and
+// documents its thresholds here; screens and components never inline their
+// own. Callers render the result as a pill/chip with a label, never color
+// alone.
+
+// Confidence is evidence have/need (an observation count against what the
+// model asks for): >= 80% of need is High, >= 50% Medium, otherwise Low.
+fun confidenceLevel(confidence: Confidence): ConfidenceLevel {
+    val ratio = if (confidence.need > 0) confidence.have.toDouble() / confidence.need else 0.0
+    return when {
+        ratio >= 0.8 -> ConfidenceLevel.High
+        ratio >= 0.5 -> ConfidenceLevel.Medium
+        else -> ConfidenceLevel.Low
+    }
+}
+
+// An estimate that carries its own 0..1 confidence (e.g. Epley 1RM).
+fun confidenceLevel(score: Double): ConfidenceLevel = when {
+    score >= 0.8 -> ConfidenceLevel.High
+    score >= 0.5 -> ConfidenceLevel.Medium
+    else -> ConfidenceLevel.Low
+}
+
+// A percentile band is a position in a population, not a health verdict:
+// only the top decile reads as Optimal; a low band is "Building", never
+// Warning/Critical (low percentile != something is wrong).
+fun percentileBandState(band: PercentileBand?): MetricState = when (band) {
+    PercentileBand.TOP_DECILE -> MetricState.Optimal
+    PercentileBand.ABOVE_AVERAGE, PercentileBand.AVERAGE -> MetricState.Neutral
+    PercentileBand.BELOW_AVERAGE, PercentileBand.BOTTOM_DECILE -> MetricState.Building
+    null -> MetricState.Unavailable
+}
+
+// HRV z-score band (readinessBand): Primed is favorable, Normal is no claim,
+// Reduced/Low both warrant attention (neither is urgent, so neither is
+// Critical -- the label word itself carries the difference), no baseline yet
+// is Building.
+fun readinessState(label: ReadinessLabel): MetricState = when (label) {
+    ReadinessLabel.Primed -> MetricState.Optimal
+    ReadinessLabel.Normal -> MetricState.Neutral
+    ReadinessLabel.Reduced, ReadinessLabel.Low -> MetricState.Warning
+    ReadinessLabel.Unknown -> MetricState.Building
+}
+
+// Biological age minus chronological age, in years: <= -2 clearly younger
+// (Optimal), within +/-2 Neutral, > +2 Warning. The +/-2 year band is a
+// pragmatic noise margin for the PhenoAge/Cardio-Age estimates, not a
+// clinical cut-off.
+fun ageAccelerationState(accelerationYears: Double?): MetricState = when {
+    accelerationYears == null -> MetricState.Unavailable
+    accelerationYears <= -2.0 -> MetricState.Optimal
+    accelerationYears <= 2.0 -> MetricState.Neutral
+    else -> MetricState.Warning
+}
+
+// Lab flag vs the marker's reference range: high/low = out of range (Critical),
+// "watch" = Warning. In range or unflagged -> null, so no pill is drawn for
+// normal results.
+fun labFlagState(flag: String?): MetricState? = when (flag) {
+    "high", "low" -> MetricState.Critical
+    "watch" -> MetricState.Warning
+    else -> null
+}
+
+// Bloodwork change vs the marker's reference change value (RCV): inside RCV is
+// Neutral (no claim -- it says nothing about good/bad), a shift beyond RCV is
+// Warning (attention: a real change, desirability unknown). No evaluation -> null.
+fun bloodworkTrendMetricState(state: BloodworkTrendState?): MetricState? = when (state) {
+    BloodworkTrendState.Stable -> MetricState.Neutral
+    BloodworkTrendState.ShiftUp, BloodworkTrendState.ShiftDown -> MetricState.Warning
+    null -> null
+}

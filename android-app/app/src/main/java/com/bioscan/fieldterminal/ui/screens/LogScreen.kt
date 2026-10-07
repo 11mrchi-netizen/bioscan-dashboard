@@ -27,11 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.LOG_PAGE_SIZE
 import com.bioscan.fieldterminal.data.LogRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -41,10 +37,8 @@ import com.bioscan.fieldterminal.domain.LogEntryKind
 import com.bioscan.fieldterminal.domain.LogSource
 import com.bioscan.fieldterminal.domain.category
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
-import com.bioscan.fieldterminal.ui.theme.FieldColors
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -98,13 +92,13 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
 
             when {
                 error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
+                    Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
                 }
                 entries == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = FT.DomainLog)
                 }
                 entries.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Nothing logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
+                    Text("Nothing logged yet.", style = FTType.Body, color = FT.TextSecondary)
                 }
                 else -> {
                     val visible = entries.take(visibleCount)
@@ -203,7 +197,7 @@ private fun AddEntryFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
     ) {
         Text(
             "+",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
+            style = FTType.MetricMedium,
             color = FT.Base,
         )
     }
@@ -224,10 +218,10 @@ private fun DayHeader(date: LocalDate) {
             .padding(horizontal = 22.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14.em), color = FT.TextSecondary)
+        Text(label, style = FTType.LabelCaps, color = FT.TextSecondary)
         Text(
             date.format(DateTimeFormatter.ofPattern("dd MMM")).uppercase(),
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14.em),
+            style = FTType.LabelCaps,
             color = FT.TextSecondary,
         )
     }
@@ -239,7 +233,7 @@ private fun DayHeader(date: LocalDate) {
 private fun CategoryLabel(category: LogCategory) {
     Text(
         category.label,
-        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp, letterSpacing = 0.14.em),
+        style = FTType.LabelCaps,
         color = FT.TextMuted,
         modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 10.dp, bottom = 2.dp),
     )
@@ -256,17 +250,17 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
     ) {
         Text(
             entry.timestamp.format(DateTimeFormatter.ofPattern("HH:mm")),
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp),
+            style = FTType.Value,
             color = FT.TextSecondary,
             modifier = Modifier.width(42.dp).padding(top = 2.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TypeChip(entry.kind)
-                Text(entry.headline, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FT.TextPrimary)
+                Text(entry.headline, style = FTType.RowTitle, color = FT.TextPrimary)
             }
             entry.detail?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 4.dp))
+                Text(it, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }
@@ -281,17 +275,19 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
 // preserves these exact hues ("keep... category colors") even though the
 // FT contract's own domain-accent table doesn't define per-entry-type
 // colors (only per-section) -- only the font/text-color-for-"filled"
-// chips migrated to FT tokens.
+// chips migrated to FT tokens. Now sourced from FT.Category (the contract's
+// third color tier) rather than the legacy FieldColors; arousal moved from
+// red to magenta-crimson so it no longer reads as a Critical state.
 @Composable
 private fun TypeChip(kind: LogEntryKind) {
     val color = when (kind) {
-        LogEntryKind.Exercise -> FieldColors.Orange
-        LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> FieldColors.Green
-        LogEntryKind.Sleep -> FieldColors.DeepBlue
-        LogEntryKind.Encounter, LogEntryKind.Masturbation, LogEntryKind.Intercourse -> FieldColors.Red
+        LogEntryKind.Exercise -> FT.Category.Activity.c500
+        LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> FT.Category.Intake.c500
+        LogEntryKind.Sleep -> FT.Category.Sleep.c500
+        LogEntryKind.Encounter, LogEntryKind.Masturbation, LogEntryKind.Intercourse -> FT.Category.Arousal.c500
         LogEntryKind.Note -> FT.TextSecondary
-        LogEntryKind.Stool, LogEntryKind.Ostrc -> FieldColors.Sand
-        LogEntryKind.Wellness -> FieldColors.Azure
+        LogEntryKind.Stool, LogEntryKind.Ostrc -> FT.Category.Digestion.c500
+        LogEntryKind.Wellness -> FT.Category.Wellbeing.c500
     }
     val filled = kind in setOf(LogEntryKind.Exercise, LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement, LogEntryKind.Stool)
     val shape = RoundedCornerShape(FT.RadiusSmall)
@@ -303,7 +299,7 @@ private fun TypeChip(kind: LogEntryKind) {
     ) {
         Text(
             kind.label,
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, letterSpacing = 0.14f.em),
+            style = FTType.LabelCaps,
             color = if (filled) FT.Base else color,
         )
     }
@@ -318,7 +314,7 @@ private fun LoadOlderButton(onClick: () -> Unit) {
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
-            Text("LOAD OLDER", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = FT.TextSecondary)
+            Text("LOAD OLDER", style = FTType.LabelCaps, color = FT.TextSecondary)
         }
     }
 }

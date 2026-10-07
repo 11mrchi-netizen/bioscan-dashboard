@@ -20,21 +20,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.LabsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -45,8 +39,8 @@ import java.time.LocalDate
 // saves (LabsRepository.addLabResult tolerates partial data the same way
 // this table's own imported rows already do -- not every real result comes
 // with both bounds).
-private val sheetHeaderTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
-private val sheetActionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
+private val sheetHeaderTitleStyle = FTType.SectionTitle
+private val sheetActionLabelStyle = FTType.LabelCaps
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LabResultFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
@@ -66,7 +60,7 @@ fun LabResultFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RectangleShape,
+        shape = FT.SheetShape,
         containerColor = FT.Surface,
         contentColor = FT.TextPrimary,
     ) {
@@ -86,7 +80,7 @@ fun LabResultFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
             }
 
             error?.let {
-                Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical)
+                Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical)
             }
 
             val valid = markerName.isNotBlank() && value.toDoubleOrNull() != null

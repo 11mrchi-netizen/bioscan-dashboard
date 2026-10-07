@@ -9,13 +9,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
@@ -41,7 +44,7 @@ fun MinMaxAverageBar(
     val fraction = ((average - min) / range).toFloat().coerceIn(0.02f, 0.98f)
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().height(8.dp).background(FT.GlassFill)) {
+        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(FT.GlassTrack)) {
             Box(Modifier.fillMaxWidth().height(8.dp).background(color.copy(alpha = 0.22f)))
             Row(Modifier.fillMaxWidth()) {
                 Spacer(Modifier.weight(fraction))
@@ -66,11 +69,7 @@ fun MinMaxAverageBar(
 private fun Text(value: String, color: Color, modifier: Modifier, bold: Boolean = false, alignEnd: Boolean = false) {
     androidx.compose.material3.Text(
         value,
-        style = TextStyle(
-            fontFamily = RobotoMono,
-            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
-            fontSize = 12.sp,
-        ),
+        style = if (bold) FTType.Telemetry else FTType.MonoCaption,
         color = color,
         textAlign = if (alignEnd) androidx.compose.ui.text.style.TextAlign.End else androidx.compose.ui.text.style.TextAlign.Start,
         modifier = modifier,

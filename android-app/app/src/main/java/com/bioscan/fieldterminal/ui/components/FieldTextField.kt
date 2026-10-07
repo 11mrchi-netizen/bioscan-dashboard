@@ -15,6 +15,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 
@@ -33,7 +34,7 @@ fun FieldTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     singleLine: Boolean = true,
 ) {
-    val textStyle = TextStyle(fontFamily = Inter, fontSize = 15.5.sp, color = FT.TextPrimary)
+    val textStyle = FTType.Body.copy(color = FT.TextPrimary)
     BasicTextField(
         value = value,
         onValueChange = onValueChange,

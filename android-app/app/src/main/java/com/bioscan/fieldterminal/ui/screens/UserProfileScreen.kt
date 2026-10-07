@@ -66,6 +66,9 @@ import com.bioscan.fieldterminal.domain.levels.runningLevel
 import com.bioscan.fieldterminal.domain.levels.strengthLevel
 import com.bioscan.fieldterminal.domain.progressFraction
 import com.bioscan.fieldterminal.ui.components.ComparisonStrip
+import com.bioscan.fieldterminal.ui.components.ageAccelerationState
+import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.components.percentileBandState
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
@@ -212,53 +215,14 @@ private fun AgingCard(overview: AgingProfileOverview?, onOpen: () -> Unit) {
             overview == null -> CircularProgressIndicator(color = FT.Emerald)
             overview.chronologicalAgeYears == null -> FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile to see this.")
             else -> {
-                FTMetricValue(
-                    DisplayValue(
-                        primary = overview.chronologicalAgeYears.toString(),
-                        unit = "years",
-                        secondary = "CHRONOLOGICAL AGE",
-                    ),
-                )
-                Spacer(Modifier.height(8.dp))
-                overview.phenoAge?.let { BioAgeRow("PhenoAge", it) }
-                overview.cardioAge?.let { BioAgeRow("Cardio Age", it) }
-                Spacer(Modifier.height(4.dp))
-                Text("Tap for the full breakdown", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.TextMuted)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BioAgeRow(label: String, result: BiologicalAgeResult) {
-    val bioAge = result.biologicalAge
-    val accel = result.ageAcceleration
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(label.uppercase(), style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextMuted)
-            Row(verticalAlignment = Alignment.Bottom) {
+                BioAgeHero(overview)
                 Text(
-                    bioAge?.let { "%.0f".format(it) } ?: "—",
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 20.sp),
-                    color = FT.TextPrimary,
+                    "CHRONOLOGICAL ${overview.chronologicalAgeYears} YRS · TAP FOR THE FULL BREAKDOWN",
+                    style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp),
+                    color = FT.TextMuted,
                 )
-                if (accel != null) {
-                    Spacer(Modifier.width(8.dp))
-                    val deltaText = if (accel <= 0) "%.1f yrs".format(accel) else "+%.1f yrs".format(accel)
-                    val deltaColor = if (accel <= 0) FT.Emerald else FT.Warning
-                    Text(
-                        deltaText,
-                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-                        color = deltaColor,
-                    )
-                }
             }
         }
-        FTStatePill(ageAccelerationToState(accel))
     }
 }
 
@@ -274,7 +238,7 @@ private fun DomainLevelRow(domain: AchievementDomain, level: DomainLevel?) {
         ) {
             Text(domain.label(), style = TextStyle(fontFamily = RobotoMono, fontSize = 12.5.sp), color = FT.TextSecondary)
             if (level?.band != null) {
-                FTStatePill(bandToMetricState(level.band))
+                FTStatePill(percentileBandState(level.band))
             } else {
                 Text(
                     "Not enough data yet",
@@ -290,12 +254,12 @@ private fun DomainLevelRow(domain: AchievementDomain, level: DomainLevel?) {
                 RangeBar(
                     value = percentile,
                     max = 100.0,
-                    watchBelow = 25.0,
+                    watchBelow = null,
                     color = bandToColor(level.band),
                 )
             }
             ComparisonStrip(population = evidence)
-            FTConfidenceChip(confidenceToLevel(evidence.confidence))
+            FTConfidenceChip(confidenceLevel(evidence.confidence))
         }
     }
 }
@@ -670,38 +634,13 @@ private fun buildBlockDateRange(start: String, end: String): String {
 
 // ---- Helper functions ----
 
-private fun bandToMetricState(band: PercentileBand?): MetricState = when (band) {
-    PercentileBand.TOP_DECILE -> MetricState.Optimal
-    PercentileBand.ABOVE_AVERAGE -> MetricState.Neutral
-    PercentileBand.AVERAGE -> MetricState.Neutral
-    PercentileBand.BELOW_AVERAGE -> MetricState.Warning
-    PercentileBand.BOTTOM_DECILE -> MetricState.Building
-    null -> MetricState.Unavailable
-}
-
-private fun bandToColor(band: PercentileBand?): Color = when (band) {
-    PercentileBand.TOP_DECILE -> FT.Emerald
-    PercentileBand.ABOVE_AVERAGE -> FT.Emerald
-    PercentileBand.AVERAGE -> FT.Info
-    PercentileBand.BELOW_AVERAGE -> FT.Warning
-    PercentileBand.BOTTOM_DECILE -> FT.Analysis
-    null -> FT.TextMuted
-}
-
-private fun ageAccelerationToState(accel: Double?): MetricState = when {
-    accel == null -> MetricState.Unavailable
-    accel <= -2.0 -> MetricState.Optimal
-    accel <= 2.0 -> MetricState.Neutral
-    else -> MetricState.Warning
-}
-
-private fun confidenceToLevel(c: Confidence): ConfidenceLevel {
-    val ratio = if (c.need > 0) c.have.toDouble() / c.need else 0.0
-    return when {
-        ratio >= 0.8 -> ConfidenceLevel.High
-        ratio >= 0.5 -> ConfidenceLevel.Medium
-        else -> ConfidenceLevel.Low
-    }
+// Bar fill follows the same state as the pill beside it (percentileBandState):
+// Optimal = emerald, Neutral = cool neutral, Building = analysis violet.
+private fun bandToColor(band: PercentileBand?): Color = when (percentileBandState(band)) {
+    MetricState.Optimal -> FT.Emerald
+    MetricState.Neutral -> FT.TextSecondary
+    MetricState.Building -> FT.Analysis
+    else -> FT.TextMuted
 }
 
 private fun Achievement.toDisplayValue(): DisplayValue {

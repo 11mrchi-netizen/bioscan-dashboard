@@ -24,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsOverview
@@ -32,9 +31,9 @@ import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.data.EvidenceRepository
 import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // Step 8 (Phase C). Real data from `supplements`. Ports index.html's
 // isSupplementActive()/supplementOutcome() 1:1 (domain/Supplements.kt) --
@@ -44,7 +43,7 @@ import com.bioscan.fieldterminal.ui.theme.RobotoMono
 // web-specific decision from an earlier chapter, outside Step 8's own
 // "active/ended list, condensed" scope). See ROADMAP.md P8 Step 8.
 private val TIME_OF_DAY_ORDER = listOf("morning", "afternoon", "night", "as-needed")
-private val sectionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
+private val sectionLabelStyle = FTType.LabelCaps
 
 @Composable
 fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
@@ -80,7 +79,7 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
             CircularProgressIndicator(color = FT.Emerald)
         }
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
+            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
         }
         else -> SupplementsContent(
             overview = overview!!,
@@ -116,7 +115,7 @@ private fun SupplementsContent(overview: SupplementsOverview, outcomes: Map<Long
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "${overview.active.size} ACTIVE · ${overview.ended.size} ENDED",
-                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.08f.em),
+                style = FTType.LabelCaps,
                 color = FT.TextSecondary,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -126,7 +125,7 @@ private fun SupplementsContent(overview: SupplementsOverview, outcomes: Map<Long
         }
 
         if (overview.active.isEmpty() && overview.ended.isEmpty()) {
-            Text("No supplements logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
+            Text("No supplements logged yet.", style = FTType.Body, color = FT.TextSecondary)
             return@Column
         }
 
@@ -183,7 +182,7 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(s.name, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.5.sp), color = FT.TextPrimary)
+                Text(s.name, style = FTType.RowTitle, color = FT.TextPrimary)
                 // Evidence-registry claims win (each labelled with its review
                 // status); s.aiNote (a one-off Gemini guess made when this
                 // supplement was first added) only fills in where the registry
@@ -192,17 +191,17 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
                 if (outcome.isNotEmpty()) {
                     Text(
                         outcome,
-                        style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                        style = FTType.BodySmall,
                         color = FT.TextSecondary,
                         modifier = Modifier.padding(top = 3.dp),
                     )
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(s.dose, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp), color = FT.TextPrimary)
+                Text(s.dose, style = FTType.Telemetry, color = FT.TextPrimary)
                 Text(
                     s.timeOfDay.uppercase(),
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 12.sp),
+                    style = FTType.MonoCaption,
                     color = FT.TextSecondary,
                     modifier = Modifier.padding(top = 3.dp),
                 )
@@ -220,10 +219,10 @@ private fun EndedRow(s: SupplementRow, showDivider: Boolean) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(s.name, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FT.TextSecondary)
+        Text(s.name, style = FTType.RowTitle, color = FT.TextSecondary)
         Text(
             s.endDate ?: "",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 12.5.sp),
+            style = FTType.Value,
             color = FT.TextSecondary,
         )
     }

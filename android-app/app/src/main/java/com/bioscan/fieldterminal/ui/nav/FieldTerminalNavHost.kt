@@ -38,6 +38,9 @@ import com.bioscan.fieldterminal.ui.screens.LogScreen
 import com.bioscan.fieldterminal.ui.screens.MapScreen
 import com.bioscan.fieldterminal.ui.screens.SessionDetailScreen
 import com.bioscan.fieldterminal.ui.screens.SettingsScreen
+import com.bioscan.fieldterminal.ui.screens.settings.ConnectedServicesScreen
+import com.bioscan.fieldterminal.ui.screens.settings.NotificationsSettingsScreen
+import com.bioscan.fieldterminal.ui.screens.settings.UserSettingsScreen
 import com.bioscan.fieldterminal.ui.screens.status.FuelTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.HeartTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.LabsTileScreen
@@ -109,7 +112,17 @@ fun FieldTerminalNavHost() {
             composable(TopLevelTab.Log.route) {
                 LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") })
             }
-            composable(TopLevelTab.Setup.route) { SettingsScreen(scope) }
+            composable(TopLevelTab.Setup.route) {
+                SettingsScreen(
+                    scope = scope,
+                    onOpenUser = { navController.navigate(SettingsRoute.User.route) },
+                    onOpenNotifications = { navController.navigate(SettingsRoute.Notifications.route) },
+                    onOpenConnectedServices = { navController.navigate(SettingsRoute.ConnectedServices.route) },
+                )
+            }
+            composable(SettingsRoute.User.route) { UserSettingsScreen(onBack = { navController.popBackStack() }) }
+            composable(SettingsRoute.Notifications.route) { NotificationsSettingsScreen(onBack = { navController.popBackStack() }) }
+            composable(SettingsRoute.ConnectedServices.route) { ConnectedServicesScreen(scope = scope, onBack = { navController.popBackStack() }) }
             // Phase G4: the app's first pushed detail route (every other
             // screen so far is a flat tab or a bottom sheet) -- a session's
             // on-demand Health Connect time-series detail, reached by

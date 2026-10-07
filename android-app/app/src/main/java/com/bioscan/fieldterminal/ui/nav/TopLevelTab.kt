@@ -52,3 +52,23 @@ enum class HeartTab(val label: String) {
     Wellbeing("WELLBEING"),
     Injury("INJURY"),
 }
+
+// Setup's own pushed routes -- Setup is now a 3-button hub rather than one
+// flat card dump, same push-and-back pattern as TileRoute above.
+enum class SettingsRoute(val route: String) {
+    User("settings_user"),
+    Notifications("settings_notifications"),
+    ConnectedServices("settings_connected"),
+}
+
+enum class UserTab(val label: String) {
+    Profile("PROFILE"),
+    NutritionGoals("NUTRITION GOALS"),
+}
+
+enum class ConnectedServicesTab(val label: String) {
+    AiNutrition("AI NUTRITION"),
+    Map("MAP"),
+    HealthConnect("HEALTH CONNECT"),
+    Zepp("ZEPP"),
+}

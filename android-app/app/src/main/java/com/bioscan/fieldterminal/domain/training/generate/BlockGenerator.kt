@@ -72,11 +72,9 @@ private fun JsonElement.toNumRange(): NumRange? = when (this) {
 private fun nameKey(name: String) = name.trim().lowercase()
 
 // Converts a definition's progression increment (a range, in the definition's unit) to the
-// kilograms actually added, on the lifter's loadable step.
-//
-// TODO(human): decide where in the book's range to land and how to round. Today it takes the
-// bottom of the range and rounds to the nearest loadable step, never below one step. Options:
-// the midpoint, the top for lower-body lifts, or "hold" when the range converts to less than half a step.
+// kilograms actually added, on the lifter's loadable step. Decided with the lifter: the bottom of
+// the book's range, rounded to the nearest step and never below one step (5 lb -> 2.5 kg,
+// 10 lb -> 5 kg, 2.5 lb -> 2.5 kg).
 fun progressionIncrementKg(range: NumRange, unit: String, stepKg: Double): Double {
     val kg = if (unit == "lb") lbToKg(range.min) else range.min
     return maxOf(stepKg, roundToStep(kg, stepKg))

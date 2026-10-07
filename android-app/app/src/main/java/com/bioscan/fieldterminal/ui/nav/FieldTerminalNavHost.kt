@@ -1,9 +1,11 @@
 package com.bioscan.fieldterminal.ui.nav
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -20,8 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -118,83 +120,74 @@ fun FieldTerminalNavHost() {
     }
 }
 
-// Custom bottom bar rather than Material3's NavigationBar/NavigationBarItem --
-// their built-in selected-state treatment (a rounded pill indicator) doesn't
-// match this shape (a top border + background tint per cell, square corners
-// throughout), so this recreates that layout directly instead of fighting
-// the default component's styling. DAV-108 follow-up: retinted to the
-// Futuristic Material contract -- solid Level-1 surface, emerald as the
-// primary selected-state signal (not a domain accent; this is the global
-// shell, not a Log-specific surface), Roboto Mono for the compact labels.
+// Floating dock: inset from the screen edges, soft 24dp geometry, glass-border
+// outline, and a rounded selected pill (accent tint + accent outline) instead
+// of the old full-width square bar with a top rule. Custom rather than
+// Material3's NavigationBar so the pill, accent-per-tab and Roboto Mono labels
+// follow the Futuristic Material contract. Selected state is accent color AND
+// the filled pill AND the label, never color alone.
 @Composable
 private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -> Unit) {
-    Row(
+    val dockShape = RoundedCornerShape(FT.RadiusCard)
+    val pillShape = RoundedCornerShape(FT.RadiusModule)
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(78.dp)
-            .background(FT.Surface)
-            .drawBehind {
-                val strokeWidth = 2.dp.toPx()
-                drawLine(
-                    color = FT.GlassBorder,
-                    start = Offset(0f, strokeWidth / 2),
-                    end = Offset(size.width, strokeWidth / 2),
-                    strokeWidth = strokeWidth,
-                )
-            }
-            .padding(bottom = 14.dp),
+            .background(FT.Base)
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 14.dp),
     ) {
-        // A `for` loop, not `.forEach { }` -- `weight()` needs RowScope as its
-        // implicit receiver, and a real build confirmed the Kotlin compiler
-        // doesn't reliably propagate that receiver into a non-inline lambda
-        // passed to `entries.forEach` here. A for-loop body is inlined in
-        // place, so there's no separate lambda for the receiver to fail to
-        // reach.
-        for (tab in TopLevelTab.entries) {
-            val selected = currentRoute == tab.route
-            val accent = tab.domainAccent
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .then(
-                        if (selected) {
-                            Modifier
-                                .padding(top = 1.dp) // net -2dp margin vs the 3dp top border below
-                                .drawBehind {
-                                    drawRect(color = accent.copy(alpha = 0.08f))
-                                    val strokeWidth = 3.dp.toPx()
-                                    drawLine(
-                                        color = accent,
-                                        start = Offset(0f, strokeWidth / 2),
-                                        end = Offset(size.width, strokeWidth / 2),
-                                        strokeWidth = strokeWidth,
-                                    )
-                                }
-                        } else {
-                            Modifier
-                        },
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .clip(dockShape)
+                .background(FT.Surface)
+                .border(FT.BorderWidth, FT.GlassBorder, dockShape)
+                .padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // A `for` loop, not `.forEach { }` -- `weight()` needs RowScope as
+            // its implicit receiver, and a real build confirmed the Kotlin
+            // compiler doesn't reliably propagate that receiver into a
+            // non-inline lambda passed to `entries.forEach` here.
+            for (tab in TopLevelTab.entries) {
+                val selected = currentRoute == tab.route
+                val accent = tab.domainAccent
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(pillShape)
+                        .then(
+                            if (selected) {
+                                Modifier
+                                    .background(accent.copy(alpha = 0.14f), pillShape)
+                                    .border(FT.BorderWidth, accent.copy(alpha = 0.55f), pillShape)
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onTabSelected(tab) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    val tint = if (selected) accent else FT.TextSecondary
+                    Icon(
+                        painter = painterResource(tab.iconRes),
+                        contentDescription = tab.label,
+                        tint = tint,
+                        modifier = Modifier.size(21.dp),
                     )
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onTabSelected(tab) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                val tint = if (selected) accent else FT.TextSecondary
-                Icon(
-                    painter = painterResource(tab.iconRes),
-                    contentDescription = tab.label,
-                    tint = tint,
-                    modifier = Modifier.size(21.dp),
-                )
-                Text(
-                    text = tab.label,
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.14.em),
-                    color = tint,
-                    modifier = Modifier.padding(top = 5.dp),
-                )
+                    Text(
+                        text = tab.label,
+                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.14.em),
+                        color = tint,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.theme
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
@@ -78,4 +79,7 @@ object FuturisticMaterialTokens {
     val RadiusCard = 24.dp
     val RadiusCardLarge = 28.dp
     val BorderWidth = 1.dp
+
+    // Modal bottom sheets: soft top corners at the primary-card radius.
+    val SheetShape = RoundedCornerShape(topStart = RadiusCard, topEnd = RadiusCard)
 }

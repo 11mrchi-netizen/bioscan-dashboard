@@ -80,6 +80,7 @@ import com.bioscan.fieldterminal.ui.components.RouteMiniMap
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TrailElevationChart
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -225,32 +226,11 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                "BACK",
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp, fontWeight = FontWeight.Bold),
-                color = FT.TextMuted,
-                modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onBack),
-            )
-            Column {
-                Text(
-                    header?.type?.replaceFirstChar { it.uppercase() } ?: "SESSION",
-                    style = TextStyle(fontFamily = Inter, fontSize = 20.sp, fontWeight = FontWeight.Bold),
-                    color = FT.TextPrimary,
-                )
-                header?.let {
-                    Text(
-                        sessionWhen(it.startTime),
-                        style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
-                        color = FT.TextSecondary,
-                    )
-                }
-            }
-        }
+        TileHeader(
+            onBack = onBack,
+            title = header?.type?.replaceFirstChar { it.uppercase() } ?: "SESSION",
+            subtitle = header?.let { sessionWhen(it.startTime) },
+        )
 
         when {
             loadingHeader -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

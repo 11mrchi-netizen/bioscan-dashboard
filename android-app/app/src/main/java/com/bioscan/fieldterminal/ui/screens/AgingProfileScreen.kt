@@ -35,6 +35,7 @@ import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
 import com.bioscan.fieldterminal.ui.components.DotPlot
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDataState
+import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -53,19 +54,7 @@ fun AgingProfileScreen(onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                "BACK",
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp, fontWeight = FontWeight.Bold),
-                color = FT.TextMuted,
-                modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onBack),
-            )
-            Text("AGING PROFILE", style = TextStyle(fontFamily = Inter, fontSize = 20.sp, fontWeight = FontWeight.Bold), color = FT.TextPrimary)
-        }
+        TileHeader(onBack = onBack, title = "AGING PROFILE")
 
         val current = overview
         when {

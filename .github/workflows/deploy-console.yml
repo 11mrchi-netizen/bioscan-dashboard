@@ -1,0 +1,55 @@
+name: Deploy Analysis Console
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'console/**'
+      - '.github/workflows/deploy-console.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: console/package-lock.json
+
+      - name: Install dependencies
+        working-directory: console
+        run: npm ci
+
+      - name: Build
+        working-directory: console
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      # Copy built output into console/ in-place so GitHub Pages (main branch) serves it.
+      # Clears stale hashed assets first to avoid accumulation.
+      - name: Stage built files into console/
+        run: |
+          rm -rf console/assets
+          cp console/dist/index.html console/index.html
+          cp -r console/dist/assets console/assets
+          cp console/dist/favicon.svg console/favicon.svg 2>/dev/null || true
+          cp console/dist/icons.svg console/icons.svg 2>/dev/null || true
+
+      - name: Commit and push built console
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add console/index.html console/assets
+          # Only commit if there are changes
+          git diff --cached --quiet || git commit -m "chore: deploy console build [skip ci]"
+          git push

@@ -1,15 +1,21 @@
 // nutrition-estimate-image — DAV-167
 //
 // Server-side Gemini vision call for photo-based meal/beverage logging.
-// Same "candidates only, never authoritative nutrients" rule as
-// nutrition-estimate-text (DAV-166) -- DAV-164's resolver is what turns a
-// candidate matched against USDA/TFND/Open Food Facts into real numbers.
 //
-// The photo is forwarded to Gemini inline (base64, same shape this app's
-// existing client-side NutritionEstimationRepository.kt already uses) and
-// never written to Supabase Storage or any other persistent location --
-// this ticket's own "original images are temporary/not retained permanently
-// by default" requirement is satisfied by construction: nothing in this
+// v2 (2026-09-30, user request): reworked from "candidates only, matched
+// against a food database" to "one approximate whole-meal estimate,
+// directly usable." The original design (DAV-166/167's "never authoritative
+// nutrients, the resolver is") required every detected item to be manually
+// searched and matched against `foods` before a meal could even be saved --
+// real friction for a quick photo log. This version asks Gemini to look at
+// one or more photos of the SAME meal and return one combined, approximate
+// nutrition estimate for everything visible, skipping database-matching
+// entirely for this path. Text-description and barcode logging are
+// unaffected -- they still go through the resolver, which stays exactly as
+// implemented (still authoritative when a real database match exists).
+//
+// Photos are forwarded to Gemini inline (base64) and never written to
+// Supabase Storage or any other persistent location -- nothing in this
 // function writes the image bytes anywhere, they only exist for the
 // duration of the one Gemini request.
 
@@ -29,68 +35,53 @@ function json(body: unknown, status: number) {
   });
 }
 
-const MODEL = "gemini-3.8-flash";
-const FALLBACK_MODEL = "gemini-3.5-flash-lite";
-const MODEL_VERSION = "1";
+// DAV-220: moved off gemini-3.8-flash's scarce 20/day free-tier quota onto
+// the two flash-lite tiers (500/day each), same reasoning as
+// nutrition-estimate-text -- see that function's own comment.
+const MODEL = "gemini-3.5-flash-lite";
+const FALLBACK_MODEL = "gemini-3.1-flash-lite";
+const MODEL_VERSION = "2"; // 2: one aggregate whole-meal estimate across 1+ photos, nutrients included (was candidates-only)
 
-// Explicitly tells Gemini what a photo cannot reveal (DAV-167's own
-// "Important limitation" section) rather than letting it imply false
-// precision -- the low/high range exists specifically because a photo
-// estimate is never as certain as a stated quantity.
-const PROMPT = `Look at this food/beverage photo and extract structured logging candidates.
+const PROMPT = `Look at these photo(s) of one single meal (one or more angles/items of the same
+sitting, not separate meals) and produce ONE combined, approximate nutrition estimate for
+everything visible across all photos together.
+
 Photos cannot reliably reveal exact weight, hidden ingredients, cooking oil, or obscured
-components -- always reflect that uncertainty in quantityLow/quantityHigh and portionConfidence
-rather than stating a single precise weight as if measured.
+components. Do your best whole-meal approximation anyway rather than refusing or asking for more
+detail -- this is explicitly meant to be a fast, approximate estimate, not a lab measurement.
+Mentally identify the distinct foods/beverages present, then sum their nutrition into one total.
 
-For each distinct food or beverage item visible, extract:
-- description: a short, clear description of the item
-- quantity_low and quantity_high: a plausible gram/ml range for the visible portion
-- quantity_unit: "g" or "ml"
-- preparation: cooking/preparation state if visually apparent (e.g. "grilled", "fried"), else omit
-- is_beverage: true if this item is a drink
-- beverage_class: one of water/coffee/tea/milk/plant_milk/soda/juice/electrolyte/alcohol if is_beverage and visually determinable, else omit
-- food_confidence: 0 to 1, how confident you are in the food identity
-- portion_confidence: 0 to 1, how confident you are in the estimated portion range -- this should usually be modest, since a photo cannot weigh anything
-- ambiguous: true if the food identity itself is genuinely unclear and a person should confirm it
-
-Do NOT provide calories, protein, fat, carbs, fiber, sugar, sodium, caffeine, or any other nutrient
-amounts -- nutrient totals are computed separately by matching each item against a food database,
-never estimated by you from the image. Do not attempt to read any visible nutrition-label text --
-base every estimate on visual inspection of the food itself.`;
+Return:
+- description: a short human-readable summary of the whole meal (e.g. "Grilled chicken breast
+  with rice and steamed broccoli")
+- calories, protein_g, carbs_g, fat_g: your best approximate totals for the whole meal
+- fiber_g, sugar_g, sodium_mg: include if visually inferable, omit if you have no basis to guess
+- confidence: 0 to 1, your overall confidence in this whole-meal approximation (this should
+  usually be modest -- a photo estimate is never as certain as a measured meal)`;
 
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
-    items: {
-      type: "ARRAY",
-      items: {
-        type: "OBJECT",
-        properties: {
-          description: { type: "STRING" },
-          quantity_low: { type: "NUMBER" },
-          quantity_high: { type: "NUMBER" },
-          quantity_unit: { type: "STRING" },
-          preparation: { type: "STRING" },
-          is_beverage: { type: "BOOLEAN" },
-          beverage_class: { type: "STRING" },
-          food_confidence: { type: "NUMBER" },
-          portion_confidence: { type: "NUMBER" },
-          ambiguous: { type: "BOOLEAN" },
-        },
-        required: ["description", "is_beverage", "food_confidence", "portion_confidence", "ambiguous"],
-      },
-    },
+    description: { type: "STRING" },
+    calories: { type: "NUMBER" },
+    protein_g: { type: "NUMBER" },
+    carbs_g: { type: "NUMBER" },
+    fat_g: { type: "NUMBER" },
+    fiber_g: { type: "NUMBER" },
+    sugar_g: { type: "NUMBER" },
+    sodium_mg: { type: "NUMBER" },
+    confidence: { type: "NUMBER" },
   },
-  required: ["items"],
+  required: ["description", "calories", "protein_g", "carbs_g", "fat_g", "confidence"],
 };
 
-async function callGemini(apiKey: string, imageBase64: string, mimeType: string): Promise<{ status: number; body: string }> {
+async function callGemini(apiKey: string, images: string[], mimeType: string): Promise<{ status: number; body: string; model: string }> {
   const requestBody = JSON.stringify({
     contents: [
       {
         parts: [
           { text: PROMPT },
-          { inline_data: { mime_type: mimeType, data: imageBase64 } },
+          ...images.map((data) => ({ inline_data: { mime_type: mimeType, data } })),
         ],
       },
     ],
@@ -102,16 +93,22 @@ async function callGemini(apiKey: string, imageBase64: string, mimeType: string)
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       { method: "POST", headers: { "Content-Type": "application/json" }, body: requestBody },
     );
-    return { status: res.status, body: await res.text() };
+    return { status: res.status, body: await res.text(), model };
   }
 
   let result = await attempt(MODEL);
+
+  // DAV-220: 429 means MODEL's daily quota is exhausted -- go straight to
+  // FALLBACK_MODEL's separate quota instead of retry-delaying a request
+  // that can't succeed again until tomorrow.
+  if (result.status === 429) return await attempt(FALLBACK_MODEL);
+
   for (const delayMs of [1000, 2000]) {
     if (result.status !== 503) return result;
     await new Promise((r) => setTimeout(r, delayMs));
     result = await attempt(MODEL);
   }
-  if (result.status === 503) result = await attempt(FALLBACK_MODEL);
+  if (result.status === 503 || result.status === 429) result = await attempt(FALLBACK_MODEL);
   return result;
 }
 
@@ -138,18 +135,18 @@ Deno.serve(async (req: Request) => {
       return json({ error: "not_configured", message: "GEMINI_API_KEY must be set as an Edge Function secret." }, 500);
     }
 
-    let body: { imageBase64?: string; mimeType?: string };
+    let body: { images?: string[]; mimeType?: string };
     try {
       body = await req.json();
     } catch {
       return json({ error: "invalid_json" }, 400);
     }
-    const imageBase64 = body.imageBase64;
+    const images = body.images;
     const mimeType = body.mimeType || "image/jpeg";
-    if (!imageBase64) return json({ error: "missing_image" }, 400);
+    if (!images || !Array.isArray(images) || images.length === 0) return json({ error: "missing_image" }, 400);
 
     const startedAt = Date.now();
-    const { status, body: geminiBodyText } = await callGemini(apiKey, imageBase64, mimeType);
+    const { status, body: geminiBodyText, model: servedByModel } = await callGemini(apiKey, images, mimeType);
     const latencyMs = Date.now() - startedAt;
 
     const db = createClient(
@@ -157,14 +154,14 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // The image itself is never part of what gets persisted -- only Gemini's
-    // text response and a marker of what kind of input produced it.
+    // The images themselves are never part of what gets persisted -- only
+    // Gemini's text response and a marker of what kind of input produced it.
     if (status < 200 || status >= 300) {
       await db.from("ai_estimates").insert({
         user_id: user.id,
-        model: MODEL,
+        model: servedByModel,
         model_version: MODEL_VERSION,
-        prompt_text: "[image estimate]",
+        prompt_text: `[image estimate, ${images.length} photo(s)]`,
         raw_response: safeParseJson(geminiBodyText),
         latency_ms: latencyMs,
         accepted: false,
@@ -180,9 +177,9 @@ Deno.serve(async (req: Request) => {
       .from("ai_estimates")
       .insert({
         user_id: user.id,
-        model: MODEL,
+        model: servedByModel,
         model_version: MODEL_VERSION,
-        prompt_text: "[image estimate]",
+        prompt_text: `[image estimate, ${images.length} photo(s)]`,
         raw_response: geminiResponse,
         parsed_output: parsedOutput,
         latency_ms: latencyMs,
@@ -192,12 +189,11 @@ Deno.serve(async (req: Request) => {
       .single();
     if (insertError) return json({ error: "db_error", message: insertError.message }, 500);
 
-    const items = Array.isArray(parsedOutput?.items) ? parsedOutput.items : null;
-    if (!items) {
+    if (!parsedOutput || typeof parsedOutput.calories !== "number") {
       return json({ error: "invalid_model_output", estimateId: estimateRow.id }, 502);
     }
 
-    return json({ estimateId: estimateRow.id, items }, 200);
+    return json({ estimateId: estimateRow.id, estimate: parsedOutput }, 200);
   } catch (e) {
     return json({ error: "internal_error", message: String(e) }, 500);
   }

@@ -2,6 +2,8 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.IllnessRow
 import com.bioscan.fieldterminal.data.model.InjuryRow
+import com.bioscan.fieldterminal.data.model.MedicationEntry
+import com.bioscan.fieldterminal.data.model.NewIllnessRow
 import com.bioscan.fieldterminal.data.model.NewInjuryRow
 import com.bioscan.fieldterminal.domain.HealthEvent
 import com.bioscan.fieldterminal.domain.mergeHealthEvents
@@ -25,7 +27,7 @@ class HealthEventsRepository(private val supabase: SupabaseClient) {
             .decodeList<InjuryRow>()
 
         val illnesses = supabase.postgrest.from("illnesses")
-            .select(columns = Columns.list("id,name,symptoms,status,start_date,end_date"))
+            .select(columns = Columns.list("id,name,symptoms,status,start_date,end_date,doctor_seen,medications"))
             .decodeList<IllnessRow>()
 
         val all = mergeHealthEvents(injuries, illnesses)
@@ -34,8 +36,21 @@ class HealthEventsRepository(private val supabase: SupabaseClient) {
         return HealthEventsOverview(open = open, resolved = resolved)
     }
 
-    // DAV-88. Illnesses aren't in this ticket's scope -- add/resolve stays
-    // injury-only, matching the ticket's own title.
+    suspend fun addIllness(name: String, symptoms: String?, startDate: LocalDate, doctorSeen: Boolean, medications: List<MedicationEntry>, notes: String?) {
+        supabase.postgrest.from("illnesses").insert(
+            NewIllnessRow(name = name, symptoms = symptoms, status = "active", startDate = startDate.toString(), doctorSeen = doctorSeen, medications = medications, notes = notes)
+        )
+    }
+
+    suspend fun resolveIllness(id: Long, endDate: LocalDate = LocalDate.now()) {
+        supabase.postgrest.from("illnesses").update(
+            buildJsonObject {
+                put("status", "resolved")
+                put("end_date", endDate.toString())
+            }
+        ) { filter { eq("id", id) } }
+    }
+
     suspend fun addInjury(part: String, type: String, severity: Int, startDate: LocalDate, notes: String?) {
         supabase.postgrest.from("injuries").insert(
             NewInjuryRow(part = part, type = type, severity = severity, status = "active", startDate = startDate.toString(), notes = notes)

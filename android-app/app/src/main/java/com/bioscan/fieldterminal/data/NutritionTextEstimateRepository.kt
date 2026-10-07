@@ -57,7 +57,7 @@ private data class TextEstimateResponse(
 data class NutritionEstimateResult(val estimateId: Long, val candidates: List<NutritionCandidate>)
 
 class NutritionTextEstimateRepository(private val supabase: SupabaseClient) {
-    private val client = HttpClient(Android)
+    companion object { private val client = HttpClient(Android) }
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun estimate(description: String): NutritionEstimateResult {

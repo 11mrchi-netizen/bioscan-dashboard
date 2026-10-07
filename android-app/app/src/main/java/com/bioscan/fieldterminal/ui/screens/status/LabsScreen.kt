@@ -59,15 +59,25 @@ fun LabsScreen() {
     var showAddSheet by remember { mutableStateOf(false) }
     var showUploadSheet by remember { mutableStateOf(false) }
 
+    var error by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(reloadKey) {
         isLoading = true
-        overview = LabsRepository(SupabaseClientProvider.client).loadOverview()
+        error = null
+        try {
+            overview = LabsRepository(SupabaseClientProvider.client).loadOverview()
+        } catch (e: Exception) {
+            error = e.message ?: "Unknown error"
+        }
         isLoading = false
     }
 
     when {
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FT.DomainLabs)
+        }
+        error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
         }
         overview?.latestDraw == null -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
             AddResultButtons(onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })

@@ -87,6 +87,8 @@ dependencies {
     implementation(platform("io.github.jan-tennert.supabase:bom:3.8.0"))
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:auth-kt")
+    // Zepp integration plan: first client-side Edge Function call site (zepp-extract).
+    implementation("io.github.jan-tennert.supabase:functions-kt")
     implementation("io.ktor:ktor-client-android:3.5.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
@@ -103,6 +105,8 @@ dependencies {
     // current API/dependency directly against Android's own developer docs
     // (developer.android.com/identity/authorization), not assumed.
     implementation("com.google.android.gms:play-services-auth:22.0.0")
+    // Barcode scanning via Google Play services: no CAMERA permission, no camera code.
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 
     // Map tab background: osmdroid (free, no API key of its own, no billing)
     // over CARTO's free-tier Dark Matter tiles -- chosen over the Google Maps

@@ -37,6 +37,7 @@ import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.domain.MetricState
+import com.bioscan.fieldterminal.domain.toMetricState
 import com.bioscan.fieldterminal.domain.NutritionEvaluation
 import com.bioscan.fieldterminal.domain.PROTEIN_PCT_HIGH
 import com.bioscan.fieldterminal.domain.PROTEIN_PCT_LOW
@@ -74,7 +75,7 @@ import kotlin.math.roundToInt
 // backlog per ROADMAP.md) -- this tab shows the real weight/body-fat trend
 // data that does exist rather than fabricate a TDEE number.
 @Composable
-fun FuelTileScreen(onBack: () -> Unit) {
+fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {}) {
     var tab by remember { mutableStateOf(FuelTab.Nutrition) }
     var overview by remember { mutableStateOf<NutritionOverview?>(null) }
     var stool by remember { mutableStateOf<List<StoolAnalysisRow>?>(null) }
@@ -87,34 +88,41 @@ fun FuelTileScreen(onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
-        TileHeader(title = "FUEL", context = "NUTRITION · HYDRATION · SUPPLEMENTS · DIGESTION · BODY", onBack = onBack)
+        TileHeader(onBack = onBack)
         SubTabRow(items = FuelTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
 
         when {
-            isLoading && tab != FuelTab.Supplements && tab != FuelTab.Body -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = FT.DomainFuel)
             }
             else -> when (tab) {
+                // DAV-207 (24/9 fixes): Hydration folded in as a second
+                // stacked section rather than its own subtab -- both
+                // composables already render their own full-width padded
+                // Column, so they stack cleanly as-is.
                 FuelTab.Nutrition -> overview?.let {
-                    NutritionTabContent(it)
+                    NutritionTabContent(it, onOpenNutrientBreakdown = onOpenNutrientBreakdown)
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp)) {
                         NutritionCard(evaluateNutrition(it.allDays))
                     }
+                    HydrationTabContent(it)
                 }
-                FuelTab.Hydration -> overview?.let { HydrationTabContent(it) }
-                FuelTab.Supplements -> SupplementsScreen()
                 // DAV-96/100: relocated from Heart's old Stool tab -- frequency
                 // and longitudinal pattern, descriptive only, no food->stool
                 // causal link implied or computed (room is left for a future
                 // correlation analysis once enough nutrition+digestion history
                 // exists, per the ticket's own framing -- not built here).
-                FuelTab.Digestion -> stool?.let { rows ->
-                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                        val stoolEntries = rows.mapNotNull { row -> row.bristolType?.let { OffsetDateTime.parse(row.occurredAt).toLocalDateTime().toLocalDate() to it } }
-                        BristolCard(evaluateBristol(stoolEntries), stoolEntries)
+                // DAV-208 (24/9 fixes): Body (weight/body-fat/TDEE) folded in
+                // as a second stacked section, same reasoning as Hydration above.
+                FuelTab.Digestion -> {
+                    stool?.let { rows ->
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                            val stoolEntries = rows.mapNotNull { row -> row.bristolType?.let { OffsetDateTime.parse(row.occurredAt).toLocalDateTime().toLocalDate() to it } }
+                            BristolCard(evaluateBristol(stoolEntries), stoolEntries)
+                        }
                     }
+                    BodyTab(allDays = overview?.allDays ?: emptyList())
                 }
-                FuelTab.Body -> BodyTab(allDays = overview?.allDays ?: emptyList())
             }
         }
     }
@@ -201,18 +209,6 @@ private fun BodyTab(allDays: List<DailyNutrition>) {
 }
 
 private const val TREND_WINDOW_DAYS = 90L
-
-// DAV-101/103's toMetricState() equivalent for this file -- kept local
-// rather than shared since only this screen's cards use the legacy 6-state
-// EvalState vocabulary now that Nutrition/Hydration/Digestion moved to
-// MetricPresentation-native states in DAV-100.
-private fun EvalState.toMetricState(): MetricState = when (this) {
-    EvalState.NoData -> MetricState.Unavailable
-    EvalState.Building -> MetricState.Building
-    EvalState.Stable -> MetricState.Optimal
-    EvalState.ShiftUp, EvalState.ShiftDown -> MetricState.Warning
-    EvalState.Unstable -> MetricState.Critical
-}
 
 @Composable
 private fun WeightCard(eval: WeightEvaluation) {

@@ -36,6 +36,10 @@ object FuturisticMaterialTokens {
     val DomainLabs = Color(0xFFA78BFA)
     val DomainMap = Color(0xFF60A5FA)
     val DomainLog = Color(0xFFF59E0B)
+    // DAV-296: the User/Profile tab that replaces Map in the bottom bar.
+    // Indigo -- distinct from every accent above (Map's own Blue included,
+    // since MapScreen.kt stays in the codebase and keeps its accent).
+    val DomainUser = Color(0xFF818CF8)
 
     val GlassFill = Color(0x14FFFFFF)
     val GlassStrongFill = Color(0x1FFFFFFF)

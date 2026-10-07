@@ -34,16 +34,21 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.bioscan.fieldterminal.R
+import com.bioscan.fieldterminal.ui.screens.AgingProfileScreen
 import com.bioscan.fieldterminal.ui.screens.LogScreen
-import com.bioscan.fieldterminal.ui.screens.MapScreen
 import com.bioscan.fieldterminal.ui.screens.SessionDetailScreen
 import com.bioscan.fieldterminal.ui.screens.SettingsScreen
 import com.bioscan.fieldterminal.ui.screens.settings.ConnectedServicesScreen
 import com.bioscan.fieldterminal.ui.screens.settings.NotificationsSettingsScreen
 import com.bioscan.fieldterminal.ui.screens.settings.UserSettingsScreen
+import com.bioscan.fieldterminal.ui.screens.TrainingBlocksScreen
+import com.bioscan.fieldterminal.ui.screens.UserProfileScreen
+import com.bioscan.fieldterminal.ui.screens.status.DailyReadinessScreen
 import com.bioscan.fieldterminal.ui.screens.status.FuelTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.HeartTileScreen
+import com.bioscan.fieldterminal.ui.screens.status.NutrientBreakdownScreen
 import com.bioscan.fieldterminal.ui.screens.status.LabsTileScreen
+import com.bioscan.fieldterminal.ui.screens.status.PantryScreen
 import com.bioscan.fieldterminal.ui.screens.status.StatusScreen
 import com.bioscan.fieldterminal.ui.screens.status.TrainingTileScreen
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -77,37 +82,42 @@ fun FieldTerminalNavHost() {
             composable(TopLevelTab.Status.route) {
                 StatusScreen(
                     onOpenTile = { tile -> navController.navigate(tile.route) },
-                    // DAV-69: routed through the Map back stack entry's own
-                    // SavedStateHandle rather than a nav-route argument, so
-                    // TopLevelTab.Map.route stays a plain "map" -- FieldBottomBar's
-                    // currentRoute == tab.route check below would otherwise stop
-                    // recognizing Map as selected whenever it carries an argument.
-                    onOpenMap = { eventId ->
-                        // Set AFTER navigate(), not before -- currentBackStackEntry
-                        // is still Status's own entry until navigate() actually moves
-                        // the back stack, so setting it first stamps the value onto
-                        // the wrong entry and Map's composable below never sees it.
-                        navController.navigate(TopLevelTab.Map.route) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                        navController.currentBackStackEntry?.savedStateHandle?.set("focusEventId", eventId)
-                    },
+                    onOpenDailyReadiness = { navController.navigate("daily_readiness") },
                 )
             }
+            composable("daily_readiness") { DailyReadinessScreen(onBack = { navController.popBackStack() }) }
             // DAV-70 (First feedback fixes): the 4 tile pages, pushed routes
             // like session_detail rather than nested inside Status's own
             // NavHost entry -- keeps their own back stack entries so
             // Android's system back button behaves the same as everywhere
             // else in this app.
-            composable(TileRoute.Training.route) { TrainingTileScreen(onBack = { navController.popBackStack() }) }
-            composable(TileRoute.Fuel.route) { FuelTileScreen(onBack = { navController.popBackStack() }) }
+            composable(TileRoute.Training.route) {
+                TrainingTileScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") },
+                )
+            }
+            composable(TileRoute.Fuel.route) {
+                FuelTileScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenNutrientBreakdown = { navController.navigate("nutrient_breakdown") },
+                )
+            }
+            composable("nutrient_breakdown") { NutrientBreakdownScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Heart.route) { HeartTileScreen(onBack = { navController.popBackStack() }) }
-            composable(TileRoute.Labs.route) { LabsTileScreen(onBack = { navController.popBackStack() }) }
-            composable(TopLevelTab.Map.route) { backStackEntry ->
-                val focusEventId = remember(backStackEntry) { backStackEntry.savedStateHandle.remove<String>("focusEventId") }
-                MapScreen(focusEventId = focusEventId)
+            composable(TileRoute.Labs.route) {
+                LabsTileScreen(onBack = { navController.popBackStack() }, onOpenPantry = { navController.navigate("pantry") })
+            }
+            composable("pantry") { PantryScreen(onBack = { navController.popBackStack() }) }
+            composable(TopLevelTab.User.route) {
+                UserProfileScreen(
+                    onOpenAging = { navController.navigate("aging_profile") },
+                    onOpenTrainingBlocks = { navController.navigate("training_blocks") },
+                )
+            }
+            composable("aging_profile") { AgingProfileScreen(onBack = { navController.popBackStack() }) }
+            composable("training_blocks") {
+                TrainingBlocksScreen(onBack = { navController.popBackStack() })
             }
             composable(TopLevelTab.Log.route) {
                 LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") })
@@ -120,8 +130,8 @@ fun FieldTerminalNavHost() {
                     onOpenConnectedServices = { navController.navigate(SettingsRoute.ConnectedServices.route) },
                 )
             }
-            composable(SettingsRoute.User.route) { UserSettingsScreen(onBack = { navController.popBackStack() }) }
-            composable(SettingsRoute.Notifications.route) { NotificationsSettingsScreen(onBack = { navController.popBackStack() }) }
+            composable(SettingsRoute.User.route) { UserSettingsScreen(scope = scope, onBack = { navController.popBackStack() }) }
+            composable(SettingsRoute.Notifications.route) { NotificationsSettingsScreen(scope = scope, onBack = { navController.popBackStack() }) }
             composable(SettingsRoute.ConnectedServices.route) { ConnectedServicesScreen(scope = scope, onBack = { navController.popBackStack() }) }
             // Phase G4: the app's first pushed detail route (every other
             // screen so far is a flat tab or a bottom sheet) -- a session's
@@ -222,18 +232,18 @@ private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -
 private val TopLevelTab.iconRes
     get() = when (this) {
         TopLevelTab.Status -> R.drawable.ic_tab_status
-        TopLevelTab.Map -> R.drawable.ic_tab_map
+        TopLevelTab.User -> R.drawable.ic_tab_user
         TopLevelTab.Log -> R.drawable.ic_tab_log
         TopLevelTab.Setup -> R.drawable.ic_tab_setup
     }
 
-// Map and Log have documented domain accents (contract section 4); Status
+// User and Log have documented domain accents (contract section 4); Status
 // and Setup aren't "domains" with their own accent in that table, so they
 // default to Emerald, the contract's own primary/default signal.
 private val TopLevelTab.domainAccent
     get() = when (this) {
         TopLevelTab.Status -> FT.Emerald
-        TopLevelTab.Map -> FT.DomainMap
+        TopLevelTab.User -> FT.DomainUser
         TopLevelTab.Log -> FT.DomainLog
         TopLevelTab.Setup -> FT.Emerald
     }

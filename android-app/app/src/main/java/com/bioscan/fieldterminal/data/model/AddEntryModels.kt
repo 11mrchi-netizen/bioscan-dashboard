@@ -65,20 +65,14 @@ data class NewStoolRow(
     val discomfort: Int? = null,
 )
 
+// Replaces NewMasturbationRow (DAV-91) -- one upsert row per (date,
+// activityType) against sexual_activity_daily, instances carrying the real
+// per-instance detail.
 @Serializable
-data class NewArousalRow(
+data class NewSexualActivityRow(
     val date: String,
-    @SerialName("morning_erection_quality") val morningErectionQuality: Int,
-    @SerialName("arousal_level") val arousalLevel: Int,
-)
-
-// DAV-91
-@Serializable
-data class NewMasturbationRow(
-    @SerialName("occurred_at") val occurredAt: String,
-    @SerialName("watched_porn") val watchedPorn: Boolean,
-    @SerialName("load_size") val loadSize: Int? = null,
-    @SerialName("orgasm_intensity") val orgasmIntensity: Int? = null,
+    @SerialName("activity_type") val activityType: String,
+    val instances: List<SexualActivityInstance>,
     val notes: String? = null,
 )
 
@@ -95,6 +89,8 @@ data class NewWellbeingRow(
     val mood: Int? = null,
     val stress: Int? = null,
     val soreness: Int? = null,
+    @SerialName("morning_erection_quality") val morningErectionQuality: Int? = null,
+    @SerialName("arousal_level") val arousalLevel: Int? = null,
 )
 
 // DAV-156. doseValue/doseUnit default from the roster's own free-text dose
@@ -110,6 +106,12 @@ data class NewSupplementLogRow(
     @SerialName("taken_at") val takenAt: String,
     @SerialName("dose_value") val doseValue: Double? = null,
     @SerialName("dose_unit") val doseUnit: String? = null,
+    // DAV-356: exposure provenance. Null on rows logged before these columns
+    // existed -- unknown, never backfilled with a guess.
+    @SerialName("product_id") val productId: Long? = null,
+    val source: String? = null,
+    // Label servings consumed (supplements.servings_per_dose); pantry consumption.
+    @SerialName("serving_count") val servingCount: Double? = null,
 )
 
 // Update-only counterpart -- a taken supplement's name/supplement_id are

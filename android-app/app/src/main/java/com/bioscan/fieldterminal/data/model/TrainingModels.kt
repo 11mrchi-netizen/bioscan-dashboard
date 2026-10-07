@@ -12,6 +12,7 @@ import kotlinx.serialization.Serializable
 // TrainingRepository's dedupeRunSessions().
 @Serializable
 data class ExerciseSessionRow(
+    val id: Long = 0,
     val type: String,
     @SerialName("start_time") val startTime: String,
     @SerialName("duration_min") val durationMin: Double? = null,

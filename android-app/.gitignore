@@ -9,3 +9,5 @@
 .cxx
 /app/build
 /app/release
+dump*.xml
+emulator.log

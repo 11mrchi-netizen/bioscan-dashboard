@@ -50,16 +50,20 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
+import com.bioscan.fieldterminal.data.CronometerEnrichment
+import com.bioscan.fieldterminal.data.CronometerItemInput
 import com.bioscan.fieldterminal.data.NutritionBarcodeLookupRepository
+import com.bioscan.fieldterminal.data.NutritionCronometerLookupRepository
 import com.bioscan.fieldterminal.data.NutritionImageEstimateRepository
+import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.NutritionTextEstimateRepository
+import java.time.LocalTime
 import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.ExerciseLibraryMatch
-import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetails
 import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
@@ -69,7 +73,11 @@ import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
-import com.bioscan.fieldterminal.data.model.LogMasturbationRow
+import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
+import com.bioscan.fieldterminal.data.model.NewPersonRow
+import com.bioscan.fieldterminal.data.model.PersonRow
+import com.bioscan.fieldterminal.data.model.SexualActivityInstance
+import com.bioscan.fieldterminal.data.PeopleRepository
 import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
@@ -77,6 +85,8 @@ import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.AddEntryType
+import com.bioscan.fieldterminal.domain.isSupplementDueToday
+import com.bioscan.fieldterminal.domain.supplementNextDueDate
 import com.bioscan.fieldterminal.domain.FuelSubType
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogSource
@@ -116,6 +126,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var saving by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf<String?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -140,12 +151,22 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
                 val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
                     saving = true
+                    saveError = null
                     scope.launch {
-                        write(repo)
-                        saving = false
-                        onSaved()
+                        // A rejected write must surface here, not crash the app.
+                        try {
+                            write(repo)
+                            saving = false
+                            onSaved()
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            saving = false
+                            saveError = e.message ?: "Save failed"
+                        }
                     }
                 }
+                saveError?.let { Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical) }
                 when (type) {
                     AddEntryType.Fuel -> FuelForm(saving, onSubmit, onCanonicalSaved = onSaved)
                     AddEntryType.Encounter -> EncounterForm(
@@ -155,11 +176,10 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                         },
                     )
                     AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d -> onSubmit { it.addStool(occurredAt, bt, d) } })
-                    AddEntryType.Arousal -> ArousalForm(saving, onSave = { date, mw, al -> onSubmit { it.addArousal(date, mw, al) } })
-                    AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so -> onSubmit { it.addWellbeing(date, e, m, s, so) } })
+                    AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so, mw, al -> onSubmit { it.addWellbeing(date, e, m, s, so, mw, al) } })
                     AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
                     AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
-                    AddEntryType.Masturbation -> MasturbationForm(saving, onSave = { occurredAt, wp, ls, oi, n -> onSubmit { it.addMasturbation(occurredAt, wp, ls, oi, n) } })
+                    AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -271,6 +291,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
     val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var saving by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf<String?>(null) }
     var loaded by remember { mutableStateOf<Any?>(null) }
 
     LaunchedEffect(entry.id) {
@@ -279,12 +300,11 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Hydration -> repo.fetchHydration(entry.id)
             LogSource.Encounter -> repo.fetchEncounter(entry.id)
             LogSource.Stool -> repo.fetchStool(entry.id)
-            LogSource.Arousal -> repo.fetchArousal(entry.id)
             LogSource.Note -> repo.fetchNote(entry.id)
             LogSource.Wellbeing -> repo.fetchWellbeing(entry.id)
             LogSource.Exercise -> repo.fetchExerciseSession(entry.id)
             LogSource.Ostrc -> repo.fetchOstrc(entry.id)
-            LogSource.Masturbation -> repo.fetchMasturbation(entry.id)
+            LogSource.Masturbation -> repo.fetchSexualActivity(entry.id)
             LogSource.Supplement -> repo.fetchSupplementTaken(entry.id)
             LogSource.Sleep -> null // no edit form; EntryActionSheet never offers EDIT for this
         }
@@ -309,12 +329,21 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             val row = loaded
             val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
                 saving = true
+                saveError = null
                 scope.launch {
-                    write(repo)
-                    saving = false
-                    onSaved()
+                    try {
+                        write(repo)
+                        saving = false
+                        onSaved()
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        saving = false
+                        saveError = e.message ?: "Save failed"
+                    }
                 }
             }
+            saveError?.let { Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical) }
 
             if (row == null) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
@@ -360,21 +389,13 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialDiscomfort = row.discomfort,
                     onSave = { occurredAt, bt, d -> onSubmit { it.updateStool(row.id, occurredAt, bt, d) } },
                 )
-                is LogMasturbationRow -> MasturbationForm(
+                is LogSexualActivityRow -> SexualActivityForm(
                     saving,
-                    initialDateTime = parseIsoToLocalDateTime(row.occurredAt),
-                    initialWatchedPorn = row.watchedPorn,
-                    initialLoadSize = row.loadSize,
-                    initialOrgasmIntensity = row.orgasmIntensity,
-                    initialNotes = row.notes ?: "",
-                    onSave = { occurredAt, wp, ls, oi, n -> onSubmit { it.updateMasturbation(row.id, occurredAt, wp, ls, oi, n) } },
-                )
-                is LogArousalRow -> ArousalForm(
-                    saving,
+                    lockedActivityType = row.activityType,
                     initialDate = LocalDate.parse(row.date),
-                    initialMorningWood = row.morningErectionQuality,
-                    initialArousalLevel = row.arousalLevel,
-                    onSave = { date, mw, al -> onSubmit { it.updateArousal(row.id, date, mw, al) } },
+                    initialInstances = row.instances,
+                    initialNotes = row.notes ?: "",
+                    onSave = { date, type, instances, n -> onSubmit { it.updateSexualActivity(row.id, date, type, instances, n) } },
                 )
                 is LogNoteRow -> NoteForm(
                     saving,
@@ -389,7 +410,9 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialMood = row.mood,
                     initialStress = row.stress,
                     initialSoreness = row.soreness,
-                    onSave = { date, e, m, s, so -> onSubmit { it.updateWellbeing(row.id, date, e, m, s, so) } },
+                    initialMorningWood = row.morningErectionQuality,
+                    initialArousalLevel = row.arousalLevel,
+                    onSave = { date, e, m, s, so, mw, al -> onSubmit { it.updateWellbeing(row.id, date, e, m, s, so, mw, al) } },
                 )
                 is LogOstrcRow -> OstrcForm(
                     saving,
@@ -609,8 +632,8 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
                 onSave = { dt, desc, cal, p, c, f, fi, su, so -> onSubmit { it.addFood(dt, desc, cal, p, c, f, fi, su, so) } },
                 onCanonicalSaved = onCanonicalSaved,
             )
-            FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } })
-            FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items -> onSubmit { it.addSupplementsTaken(takenAt, items) } })
+            FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
+            FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items, source -> onSubmit { it.addSupplementsTaken(takenAt, items, source) } })
         }
     }
 }
@@ -661,6 +684,17 @@ private fun FoodForm(
     var estimationError by remember { mutableStateOf<String?>(null) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
 
+    // User request (2026-09-30): one or more photos of the same meal queue up
+    // here before a single ESTIMATE tap -- was "first photo taken/picked
+    // auto-runs estimate," now a real batch since the whole point is letting
+    // Gemini see everything on the plate at once.
+    var pendingPhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var mealEstimate by remember { mutableStateOf<NutritionMealEstimate?>(null) }
+    var mealEstimateId by remember { mutableStateOf<Long?>(null) }
+    var cronometerEnrichment by remember { mutableStateOf<CronometerEnrichment?>(null) }
+    var enriching by remember { mutableStateOf(false) }
+    var mealEstimateSource by remember { mutableStateOf(MealItemSource.AiImage) }
+
     // DAV-168: candidates from any of the three sources funnel into the
     // same review sheet before ever touching meal_items.
     var reviewSeedItems by remember { mutableStateOf<List<ReviewSeedItem>?>(null) }
@@ -671,26 +705,28 @@ private fun FoodForm(
     var recentMeals by remember { mutableStateOf<List<MealRow>?>(null) }
     var cloning by remember { mutableStateOf(false) }
 
-    fun runImageEstimate(uri: Uri) {
+    fun runImageEstimate(uris: List<Uri>) {
+        if (uris.isEmpty()) return
         estimating = true
         estimationError = null
+        cronometerEnrichment = null
+        mealEstimateSource = MealItemSource.AiImage
         scope.launch {
             try {
-                val bytes = readAndCompressImage(context, uri)
-                val result = NutritionImageEstimateRepository(SupabaseClientProvider.client).estimate(bytes)
-                reviewSeedItems = result.candidates.map { c ->
-                    ReviewSeedItem(
-                        description = c.description,
-                        quantityLow = c.quantityLow,
-                        quantityHigh = c.quantityHigh,
-                        quantityUnit = c.quantityUnit,
-                        isBeverage = c.isBeverage,
-                        foodConfidence = c.foodConfidence,
-                        portionConfidence = c.portionConfidence,
-                        ambiguous = c.ambiguous,
-                        source = MealItemSource.AiImage,
-                        aiEstimateId = result.estimateId,
-                    )
+                val images = uris.map { readAndCompressImage(context, it) }
+                val result = NutritionImageEstimateRepository(SupabaseClientProvider.client).estimate(images)
+                mealEstimateId = result.estimateId
+                mealEstimate = result.estimate
+                pendingPhotos = emptyList()
+
+                enriching = true
+                try {
+                    cronometerEnrichment = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
+                        .enrich(result.estimate.description)
+                } catch (_: Exception) {
+                    // Enrichment is best-effort; Gemini estimate stands if Cronometer fails
+                } finally {
+                    enriching = false
                 }
             } catch (e: Exception) {
                 estimationError = e.message ?: "Estimation failed"
@@ -700,34 +736,34 @@ private fun FoodForm(
         }
     }
 
-    // DAV-90/DAV-166: same idea, no photo required -- estimate straight
-    // from whatever's typed in DESCRIPTION, now via the server-side
-    // candidates-only Gemini path instead of NutritionEstimationRepository.
     fun runTextEstimate() {
         if (description.isBlank()) return
         estimating = true
         estimationError = null
+        cronometerEnrichment = null
+        mealEstimateSource = MealItemSource.AiText
         scope.launch {
             try {
-                val result = NutritionTextEstimateRepository(SupabaseClientProvider.client).estimate(description)
-                reviewSeedItems = result.candidates.map { c ->
-                    ReviewSeedItem(
-                        description = c.description,
-                        quantityValue = c.quantityValue,
-                        quantityUnit = c.quantityUnit,
-                        quantityLow = c.quantityLow,
-                        quantityHigh = c.quantityHigh,
-                        isBeverage = c.isBeverage,
-                        foodConfidence = c.foodConfidence,
-                        portionConfidence = c.portionConfidence,
-                        ambiguous = c.ambiguous,
-                        source = MealItemSource.AiText,
-                        aiEstimateId = result.estimateId,
-                    )
-                }
+                enriching = true
+                val enrichResult = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
+                    .enrich(description)
+                cronometerEnrichment = enrichResult
+                mealEstimate = NutritionMealEstimate(
+                    description = description.trim(),
+                    calories = enrichResult.calories ?: 0.0,
+                    proteinG = enrichResult.proteinG ?: 0.0,
+                    carbsG = enrichResult.carbsG ?: 0.0,
+                    fatG = enrichResult.fatG ?: 0.0,
+                    fiberG = enrichResult.fiberG,
+                    sugarG = enrichResult.sugarG,
+                    sodiumMg = enrichResult.sodiumMg,
+                    confidence = 0.85,
+                )
+                mealEstimateId = null
             } catch (e: Exception) {
                 estimationError = e.message ?: "Estimation failed"
             } finally {
+                enriching = false
                 estimating = false
             }
         }
@@ -738,30 +774,54 @@ private fun FoodForm(
         if (barcode.isBlank()) return
         barcodeLooking = true
         barcodeError = null
+        cronometerEnrichment = null
+        mealEstimateSource = MealItemSource.Barcode
         scope.launch {
             try {
                 val food = NutritionBarcodeLookupRepository(SupabaseClientProvider.client).lookup(barcode)
                 if (food == null) {
                     barcodeError = "Barcode not recognized -- try search instead."
                 } else {
-                    reviewSeedItems = listOf(
-                        ReviewSeedItem(
-                            description = food.name,
-                            isBeverage = food.beverageClass != null,
-                            foodConfidence = 1.0,
-                            source = MealItemSource.Barcode,
-                            preMatchedFood = com.bioscan.fieldterminal.data.model.FoodRow(
-                                id = food.id,
-                                foodSourceId = 0,
-                                name = food.name,
-                                brand = food.brand,
-                                barcode = food.barcode,
-                                category = food.category,
-                                beverageClass = food.beverageClass,
-                                beverageSubtype = food.beverageSubtype,
+                    val foodDesc = if (food.brand != null) "${food.name} (${food.brand})" else food.name
+                    enriching = true
+                    try {
+                        val enrichResult = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
+                            .enrichItems(listOf(CronometerItemInput(food.name)))
+                        cronometerEnrichment = enrichResult
+                        mealEstimate = NutritionMealEstimate(
+                            description = foodDesc,
+                            calories = enrichResult.calories ?: 0.0,
+                            proteinG = enrichResult.proteinG ?: 0.0,
+                            carbsG = enrichResult.carbsG ?: 0.0,
+                            fatG = enrichResult.fatG ?: 0.0,
+                            fiberG = enrichResult.fiberG,
+                            sugarG = enrichResult.sugarG,
+                            sodiumMg = enrichResult.sodiumMg,
+                            confidence = 0.9,
+                        )
+                        mealEstimateId = null
+                    } catch (_: Exception) {
+                        reviewSeedItems = listOf(
+                            ReviewSeedItem(
+                                description = food.name,
+                                isBeverage = food.beverageClass != null,
+                                foodConfidence = 1.0,
+                                source = MealItemSource.Barcode,
+                                preMatchedFood = com.bioscan.fieldterminal.data.model.FoodRow(
+                                    id = food.id,
+                                    foodSourceId = 0,
+                                    name = food.name,
+                                    brand = food.brand,
+                                    barcode = food.barcode,
+                                    category = food.category,
+                                    beverageClass = food.beverageClass,
+                                    beverageSubtype = food.beverageSubtype,
+                                ),
                             ),
-                        ),
-                    )
+                        )
+                    } finally {
+                        enriching = false
+                    }
                 }
             } catch (e: Exception) {
                 barcodeError = e.message ?: "Lookup failed"
@@ -772,7 +832,7 @@ private fun FoodForm(
     }
 
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success) pendingCameraUri?.let { runImageEstimate(it) }
+        if (success) pendingCameraUri?.let { pendingPhotos = pendingPhotos + it }
     }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
@@ -783,8 +843,8 @@ private fun FoodForm(
             estimationError = "Camera permission denied"
         }
     }
-    val pickPhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) runImageEstimate(uri)
+    val pickPhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+        if (uris.isNotEmpty()) pendingPhotos = pendingPhotos + uris
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -809,9 +869,35 @@ private fun FoodForm(
                         cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                     }
                 }
-                PhotoActionButton(label = "CHOOSE PHOTO", modifier = Modifier.weight(1f)) {
+                PhotoActionButton(label = "CHOOSE PHOTOS", modifier = Modifier.weight(1f)) {
                     pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }
+            }
+            if (pendingPhotos.isNotEmpty()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(top = 10.dp),
+                ) {
+                    Text(
+                        "${pendingPhotos.size} photo${if (pendingPhotos.size == 1) "" else "s"} ready",
+                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                        color = FT.TextSecondary,
+                    )
+                    Text(
+                        "CLEAR",
+                        style = sheetActionLabelStyle,
+                        color = FT.Critical,
+                        modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            pendingPhotos = emptyList()
+                        },
+                    )
+                }
+                PhotoActionButton(
+                    label = if (estimating) "ESTIMATING..." else "ESTIMATE MEAL",
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    enabled = !estimating,
+                ) { runImageEstimate(pendingPhotos) }
             }
             PhotoActionButton(
                 label = "FROM DESCRIPTION",
@@ -936,19 +1022,92 @@ private fun FoodForm(
             },
         )
     }
+
+    mealEstimate?.let { estimate ->
+        NutritionEstimateConfirmSheet(
+            estimate = estimate,
+            mealDateTime = dateTime,
+            aiEstimateId = mealEstimateId,
+            enrichment = cronometerEnrichment,
+            enriching = enriching,
+            source = mealEstimateSource,
+            onDismiss = { mealEstimate = null; mealEstimateId = null; cronometerEnrichment = null },
+            onSaved = {
+                mealEstimate = null
+                mealEstimateId = null
+                cronometerEnrichment = null
+                onCanonicalSaved()
+            },
+        )
+    }
 }
 
+// Beverage classes from DAV-181's hydration_factor_models vocabulary that
+// go through the meal_items path (non-water). Water stays on the simple
+// hydration_daily path for backward compatibility.
+private val BEVERAGE_CLASSES = listOf("coffee", "tea", "juice", "soda", "milk", "electrolyte", "alcohol")
+private val BEVERAGE_CLASS_LABELS = mapOf(
+    "coffee" to "COFFEE", "tea" to "TEA", "juice" to "JUICE",
+    "soda" to "SODA", "milk" to "MILK", "electrolyte" to "ELECTROLYTE", "alcohol" to "ALCOHOL",
+)
+
 @Composable
-private fun DrinkForm(saving: Boolean, initialDate: LocalDate = LocalDate.now(), initialMl: Int? = null, onSave: (date: String, ml: Int) -> Unit) {
+private fun DrinkForm(
+    saving: Boolean,
+    initialDate: LocalDate = LocalDate.now(),
+    initialMl: Int? = null,
+    onSave: (date: String, ml: Int) -> Unit,
+    // DAV-181: non-water beverage path bypasses hydration_daily entirely and
+    // writes a meal_items row with effective hydration via the retention model.
+    // Same "whole sheet is done" signal as FoodForm.onCanonicalSaved.
+    onCanonicalSaved: () -> Unit = {},
+) {
+    val scope = rememberCoroutineScope()
     var date by remember { mutableStateOf(initialDate) }
     var ml by remember { mutableStateOf(initialMl?.toString() ?: "") }
+    var beverageClass by remember { mutableStateOf<String?>(null) }
+    var beverageSaving by remember { mutableStateOf(false) }
+    var beverageError by remember { mutableStateOf<String?>(null) }
     val mlValue = ml.toIntOrNull()
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateField("DATE", date, { date = it })
         Column { FormLabel("AMOUNT (ML)"); FieldTextField(ml, { ml = it }, "e.g. 500", keyboardType = KeyboardType.Number) }
-        SaveButton(saving, mlValue != null && mlValue > 0) {
-            onSave(date.toString(), mlValue!!)
+
+        // Unselected = water → simple hydration_daily path. Any other class
+        // creates a meal_items beverage row with the DAV-181 retention factor.
+        Column {
+            FormLabel("TYPE (WATER IF UNSELECTED)")
+            TextChipRow(BEVERAGE_CLASSES, beverageClass, perRow = 4) { beverageClass = it }
+        }
+
+        beverageError?.let {
+            Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.Critical)
+        }
+
+        if (beverageClass == null) {
+            SaveButton(saving, mlValue != null && mlValue > 0) {
+                onSave(date.toString(), mlValue!!)
+            }
+        } else {
+            val label = BEVERAGE_CLASS_LABELS[beverageClass] ?: beverageClass!!.uppercase()
+            AmberButton(label = if (beverageSaving) "SAVING..." else "LOG $label") {
+                val vol = mlValue ?: return@AmberButton
+                if (vol <= 0 || beverageSaving) return@AmberButton
+                beverageSaving = true
+                beverageError = null
+                scope.launch {
+                    try {
+                        val loggedAt = date.atTime(LocalTime.now()).toIsoWithOffset()
+                        NutritionMealSaveRepository(SupabaseClientProvider.client)
+                            .saveBeverageDrink(loggedAt, beverageClass!!, vol.toDouble())
+                        onCanonicalSaved()
+                    } catch (e: Exception) {
+                        beverageError = e.message ?: "Could not save beverage"
+                        beverageSaving = false
+                    }
+                }
+            }
         }
     }
 }
@@ -962,19 +1121,37 @@ private fun DrinkForm(saving: Boolean, initialDate: LocalDate = LocalDate.now(),
 // from the Log feed like any other entry -- no separate "batch" concept
 // needed for "add or remove single items."
 @Composable
-private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Triple<Long, String, String>>) -> Unit) {
+private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String) -> Unit) {
     var dateTime by remember { mutableStateOf(initialDateTime) }
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
     var checkedBundles by remember { mutableStateOf(setOf<String>()) }
     var checkedAsNeeded by remember { mutableStateOf(setOf<Long>()) }
+    // DAV-362: items picked by barcode are selected one by one, never as a time-of-day bundle.
+    var scanned by remember { mutableStateOf<List<SupplementRow>>(emptyList()) }
+    var scannedChecked by remember { mutableStateOf(setOf<Long>()) }
+    var recentLastTaken by remember { mutableStateOf<Map<Long, LocalDate>>(emptyMap()) }
 
     LaunchedEffect(Unit) {
-        supplements = SupplementsRepository(SupabaseClientProvider.client).loadOverview().active
+        val repo = SupplementsRepository(SupabaseClientProvider.client)
+        val active = repo.loadOverview().active
+        supplements = active
+        if (active.any { it.everyNDays != null }) {
+            recentLastTaken = repo.loadRecentTakenDates(active.map { it.id })
+        }
     }
 
+    val today = LocalDate.now()
     val list = supplements ?: emptyList()
-    val groups = list.filter { it.timeOfDay != "as-needed" }.groupBy { it.timeOfDay }
-    val asNeeded = list.filter { it.timeOfDay == "as-needed" }
+
+    // Supplements with an interval that haven't reached their next due date
+    // are removed from the pickable groups so the bundle toggle doesn't log
+    // them too early. They appear in a "NOT DUE TODAY" section instead.
+    val dueList = list.filter { isSupplementDueToday(it.everyNDays, recentLastTaken[it.id], today) }
+    val notDueList = list.filter { !isSupplementDueToday(it.everyNDays, recentLastTaken[it.id], today) }
+
+    val groups = dueList.filter { it.timeOfDay != "as-needed" }.groupBy { it.timeOfDay }
+    val asNeeded = dueList.filter { it.timeOfDay == "as-needed" }
+
     // DAV-156: each selected item carries its roster dose string along so
     // addSupplementsTaken can parse a real per-supplement dose default --
     // Creatine's "5 g" and Boron's "10 mg" are different doses, so this has
@@ -982,7 +1159,10 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
     val selectedItems = buildList {
         checkedBundles.forEach { tod -> groups[tod]?.forEach { add(Triple(it.id, it.name, it.dose)) } }
         asNeeded.filter { it.id in checkedAsNeeded }.forEach { add(Triple(it.id, it.name, it.dose)) }
+        scanned.filter { it.id in scannedChecked }.forEach { s -> if (none { it.first == s.id }) add(Triple(s.id, s.name, s.dose)) }
     }
+    // "scan" only when everything being saved was picked by barcode.
+    val source = if (scannedChecked.isNotEmpty() && checkedBundles.isEmpty() && checkedAsNeeded.isEmpty()) "scan" else "manual"
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateTimeField("WHEN", dateTime, { dateTime = it })
@@ -996,6 +1176,22 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
                 color = FT.TextSecondary,
             )
             else -> {
+                BarcodeLogPanel(list) { hits ->
+                    scanned = (scanned + hits).distinctBy { it.id }
+                    scannedChecked = scannedChecked + hits.map { it.id }
+                }
+                if (scanned.isNotEmpty()) {
+                    FormLabel("SCANNED")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        scanned.forEach { supp ->
+                            CheckToggleRow(
+                                label = supp.name,
+                                checked = supp.id in scannedChecked,
+                                onToggle = { scannedChecked = if (supp.id in scannedChecked) scannedChecked - supp.id else scannedChecked + supp.id },
+                            )
+                        }
+                    }
+                }
                 listOf("morning", "afternoon", "night").forEach { timeOfDay ->
                     val itemsInGroup = groups[timeOfDay]
                     if (!itemsInGroup.isNullOrEmpty()) {
@@ -1023,10 +1219,33 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
                         }
                     }
                 }
+                if (notDueList.isNotEmpty()) {
+                    FormLabel("NOT DUE TODAY")
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        notDueList.forEach { supp ->
+                            val nextDate = supp.everyNDays?.let { n ->
+                                recentLastTaken[supp.id]?.let { supplementNextDueDate(n, it) }
+                            }
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    supp.name,
+                                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                    color = FT.TextMuted,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    if (nextDate != null) "Next: $nextDate" else "every ${supp.everyNDays}d",
+                                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                                    color = FT.TextMuted,
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
         SaveButton(saving, selectedItems.isNotEmpty()) {
-            onSave(dateTime.toIsoWithOffset(), selectedItems)
+            onSave(dateTime.toIsoWithOffset(), selectedItems, source)
         }
     }
 }
@@ -1244,41 +1463,300 @@ private fun IntChipRow(range: IntRange, selected: Int?, onSelect: (Int) -> Unit)
 
 private val YES_NO_OPTIONS = listOf("Yes", "No")
 
-// DAV-91. Alongside the existing Arousal logging, but its own table
-// (masturbation_log) rather than columns on arousal_daily -- that table's
-// real unique(user_id, date) constraint makes it a once-per-day row, and
-// this can genuinely happen more than once in a day.
-@Composable
-private fun MasturbationForm(
-    saving: Boolean,
-    initialDateTime: LocalDateTime = LocalDateTime.now(),
-    initialWatchedPorn: Boolean? = null,
-    initialLoadSize: Int? = null,
-    initialOrgasmIntensity: Int? = null,
-    initialNotes: String = "",
-    onSave: (occurredAt: String, watchedPorn: Boolean, loadSize: Int?, orgasmIntensity: Int?, notes: String?) -> Unit,
+// Replaces the old per-occurrence MasturbationForm (DAV-91 rework): one
+// daily row per activityType ("masturbation"/"intercourse"), holding a real
+// list of that day's instances so per-instance detail (orgasm, intensity,
+// and -- masturbation only -- watched-porn/load-size) survives, same pattern
+// ExerciseDetailsForm's editable `exercises` list already uses below.
+private fun SexualActivityInstance.toEditable() = EditableSexualActivityInstance(
+    orgasm = orgasm,
+    orgasmIntensity = orgasmIntensity?.toString() ?: "",
+    watchedPorn = watchedPorn,
+    loadSize = loadSize?.toString() ?: "",
+    notes = notes ?: "",
+    partnerId = partnerId,
+)
+
+private class EditableSexualActivityInstance(
+    orgasm: Boolean = false,
+    orgasmIntensity: String = "",
+    watchedPorn: Boolean? = null,
+    loadSize: String = "",
+    notes: String = "",
+    partnerId: Long? = null,
 ) {
-    var dateTime by remember { mutableStateOf(initialDateTime) }
-    var watchedPorn by remember { mutableStateOf(initialWatchedPorn?.let { if (it) "Yes" else "No" }) }
-    var loadSize by remember { mutableStateOf(initialLoadSize?.toString()) }
-    var orgasmIntensity by remember { mutableStateOf(initialOrgasmIntensity?.toString() ?: "") }
+    var orgasm by mutableStateOf(orgasm)
+    var orgasmIntensity by mutableStateOf(orgasmIntensity)
+    var watchedPorn by mutableStateOf(watchedPorn)
+    var loadSize by mutableStateOf(loadSize)
+    var notes by mutableStateOf(notes)
+    var partnerId by mutableStateOf(partnerId)
+    var partnerName by mutableStateOf("")
+
+    fun toDto() = SexualActivityInstance(
+        orgasm = orgasm,
+        orgasmIntensity = orgasmIntensity.toIntOrNull(),
+        watchedPorn = watchedPorn,
+        loadSize = loadSize.toIntOrNull(),
+        notes = notes.trim().ifBlank { null },
+        partnerId = partnerId,
+    )
+}
+
+@Composable
+private fun SexualActivityForm(
+    saving: Boolean,
+    lockedActivityType: String? = null,
+    initialDate: LocalDate = LocalDate.now(),
+    initialInstances: List<SexualActivityInstance> = emptyList(),
+    initialNotes: String = "",
+    onSave: (date: String, activityType: String, instances: List<SexualActivityInstance>, notes: String?) -> Unit,
+) {
+    var date by remember { mutableStateOf(initialDate) }
+    val instances = remember {
+        val seeded = initialInstances.map { it.toEditable() }
+        mutableStateListOf(*seeded.ifEmpty { listOf(EditableSexualActivityInstance()) }.toTypedArray())
+    }
     var notes by remember { mutableStateOf(initialNotes) }
+    var activityType by remember { mutableStateOf(lockedActivityType ?: "masturbation") }
+    val isMasturbation = activityType == "masturbation"
+
+    val peopleRepo = remember { PeopleRepository(SupabaseClientProvider.client) }
+    var allPeople by remember { mutableStateOf<List<PersonRow>>(emptyList()) }
+    LaunchedEffect(activityType) {
+        if (activityType == "intercourse") {
+            allPeople = try { peopleRepo.loadAll() } catch (e: Exception) { emptyList() }
+        }
+    }
+    // Resolve partner names for existing instances when people list loads
+    LaunchedEffect(allPeople) {
+        instances.forEach { inst ->
+            if (inst.partnerId != null && inst.partnerName.isEmpty()) {
+                inst.partnerName = allPeople.firstOrNull { it.id == inst.partnerId }?.name ?: ""
+            }
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateTimeField("WHEN", dateTime, { dateTime = it })
-        Column { FormLabel("WATCHED PORN"); TextChipRow(YES_NO_OPTIONS, watchedPorn) { watchedPorn = it } }
-        Column { FormLabel("LOAD SIZE 1-5 (OPTIONAL)"); TextChipRow(listOf("1", "2", "3", "4", "5"), loadSize, perRow = 5) { loadSize = it } }
-        Column { FormLabel("ORGASM INTENSITY 0-10 (OPTIONAL)"); FieldTextField(orgasmIntensity, { orgasmIntensity = it }, "e.g. 7", keyboardType = KeyboardType.Number) }
-        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
-        val valid = watchedPorn != null
-        SaveButton(saving, valid) {
-            onSave(dateTime.toIsoWithOffset(), watchedPorn == "Yes", loadSize?.toIntOrNull(), orgasmIntensity.toIntOrNull(), notes.trim().ifBlank { null })
+        if (lockedActivityType == null) {
+            Column {
+                FormLabel("TYPE")
+                TextChipRow(listOf("Masturbation", "Intercourse"), if (isMasturbation) "Masturbation" else "Intercourse") {
+                    activityType = if (it == "Intercourse") "intercourse" else "masturbation"
+                }
+            }
         }
+        DateField("DATE", date, { date = it })
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            FormLabel("INSTANCES")
+            instances.forEachIndexed { i, instance ->
+                SexualActivityInstanceEditor(
+                    instance, isMasturbation, canRemove = instances.size > 1,
+                    allPeople = allPeople,
+                    peopleRepo = peopleRepo,
+                ) { instances.removeAt(i) }
+            }
+            Text(
+                "+ ADD INSTANCE",
+                style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+                color = FT.DomainLog,
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { instances.add(EditableSexualActivityInstance()) },
+            )
+        }
+        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
+        SaveButton(saving, true) {
+            onSave(date.toString(), activityType, instances.map { it.toDto() }, notes.trim().ifBlank { null })
+        }
+    }
+}
+
+@Composable
+private fun SexualActivityInstanceEditor(
+    instance: EditableSexualActivityInstance,
+    isMasturbation: Boolean,
+    canRemove: Boolean,
+    allPeople: List<PersonRow> = emptyList(),
+    peopleRepo: PeopleRepository,
+    onRemove: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            FormLabel("ORGASM")
+            if (canRemove) {
+                Text(
+                    "REMOVE",
+                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                    color = FT.Critical,
+                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onRemove() },
+                )
+            }
+        }
+        TextChipRow(YES_NO_OPTIONS, if (instance.orgasm) "Yes" else "No") { instance.orgasm = it == "Yes" }
+        if (instance.orgasm) {
+            Column { FormLabel("ORGASM INTENSITY 0-10 (OPTIONAL)"); FieldTextField(instance.orgasmIntensity, { instance.orgasmIntensity = it }, "e.g. 7", keyboardType = KeyboardType.Number) }
+        }
+        if (isMasturbation) {
+            Column { FormLabel("WATCHED PORN"); TextChipRow(YES_NO_OPTIONS, instance.watchedPorn?.let { if (it) "Yes" else "No" }) { instance.watchedPorn = it?.let { s -> s == "Yes" } } }
+            Column { FormLabel("LOAD SIZE 1-5 (OPTIONAL)"); TextChipRow(listOf("1", "2", "3", "4", "5"), instance.loadSize.ifBlank { null }, perRow = 5) { instance.loadSize = it ?: "" } }
+        }
+        if (!isMasturbation) {
+            var partnerQuery by remember { mutableStateOf("") }
+            var showNewPartnerSheet by remember { mutableStateOf(false) }
+            var newPartnerInitialName by remember { mutableStateOf("") }
+            val filteredPeople = remember(partnerQuery, allPeople) {
+                if (partnerQuery.isBlank()) allPeople.take(5)
+                else allPeople.filter { it.name.contains(partnerQuery, ignoreCase = true) }.take(8)
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                FormLabel("PARTNER (OPTIONAL)")
+                if (instance.partnerId != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            instance.partnerName.ifEmpty { "#${instance.partnerId}" },
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+                            color = FT.TextPrimary,
+                        )
+                        Text(
+                            "CLEAR",
+                            style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp),
+                            color = FT.Critical,
+                            modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                instance.partnerId = null
+                                instance.partnerName = ""
+                                partnerQuery = ""
+                            },
+                        )
+                    }
+                } else {
+                    FieldTextField(partnerQuery, { partnerQuery = it }, "Search people…")
+                    filteredPeople.forEach { person ->
+                        Text(
+                            person.name,
+                            style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                            color = FT.TextSecondary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                    instance.partnerId = person.id
+                                    instance.partnerName = person.name
+                                    partnerQuery = ""
+                                }
+                                .padding(vertical = 4.dp),
+                        )
+                    }
+                    val trimmedQuery = partnerQuery.trim()
+                    if (trimmedQuery.isNotEmpty() && filteredPeople.none { it.name.equals(trimmedQuery, ignoreCase = true) }) {
+                        Text(
+                            "+ ADD \"$trimmedQuery\"",
+                            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.08f.em),
+                            color = FT.Emerald,
+                            modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                newPartnerInitialName = trimmedQuery
+                                showNewPartnerSheet = true
+                            },
+                        )
+                    }
+                }
+            }
+            if (showNewPartnerSheet) {
+                NewPartnerSheet(
+                    initialName = newPartnerInitialName,
+                    repo = peopleRepo,
+                    onDismiss = { showNewPartnerSheet = false },
+                    onCreated = { person ->
+                        instance.partnerId = person.id
+                        instance.partnerName = person.name
+                        partnerQuery = ""
+                        showNewPartnerSheet = false
+                    },
+                )
+            }
+        }
+        Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(instance.notes, { instance.notes = it }, "Anything else about this instance", singleLine = false) }
     }
 }
 
 private val OSTRC_Q1Q4_OPTIONS = listOf("0", "8", "17", "25")
 private val OSTRC_Q2Q3_OPTIONS = listOf("0", "6", "13", "19", "25")
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NewPartnerSheet(
+    initialName: String,
+    repo: PeopleRepository,
+    onDismiss: () -> Unit,
+    onCreated: (PersonRow) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    var name by remember { mutableStateOf(initialName) }
+    var relationship by remember { mutableStateOf("") }
+    var whereMet by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("") }
+    var ageRange by remember { mutableStateOf("") }
+    var country by remember { mutableStateOf("") }
+    var score by remember { mutableStateOf<Int?>(null) }
+    var notes by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RectangleShape,
+        containerColor = FT.Surface,
+        contentColor = FT.TextPrimary,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("NEW PARTNER", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp), color = FT.DomainLog)
+            Column { FormLabel("NAME"); FieldTextField(name, { name = it }, "") }
+            Column { FormLabel("RELATIONSHIP (OPTIONAL)"); FieldTextField(relationship, { relationship = it }, "e.g. FWB, Dating, Hookup") }
+            Column { FormLabel("WHERE MET (OPTIONAL)"); FieldTextField(whereMet, { whereMet = it }, "e.g. Tinder, Work, Mutual Friends") }
+            Column { FormLabel("GENDER (OPTIONAL)"); FieldTextField(gender, { gender = it }, "e.g. Female, Non-binary") }
+            Column { FormLabel("AGE RANGE (OPTIONAL)"); FieldTextField(ageRange, { ageRange = it }, "e.g. 25-30") }
+            Column { FormLabel("COUNTRY (OPTIONAL)"); FieldTextField(country, { country = it }, "e.g. Australia") }
+            Column {
+                FormLabel("SCORE (OPTIONAL)")
+                TextChipRow(listOf("1", "2", "3", "4", "5"), score?.toString(), perRow = 5) { score = it?.toIntOrNull() }
+            }
+            Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "", singleLine = false) }
+            error?.let { Text("Couldn't create ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical) }
+            SaveButton(saving, name.isNotBlank()) {
+                if (!saving && name.isNotBlank()) {
+                    saving = true
+                    scope.launch {
+                        try {
+                            val person = repo.createPerson(NewPersonRow(
+                                name = name.trim(),
+                                relationship = relationship.trim().ifBlank { null },
+                                whereMet = whereMet.trim().ifBlank { null },
+                                gender = gender.trim().ifBlank { null },
+                                ageRange = ageRange.trim().ifBlank { null },
+                                country = country.trim().ifBlank { null },
+                                score = score,
+                                notes = notes.trim().ifBlank { null },
+                            ))
+                            onCreated(person)
+                        } catch (e: Exception) {
+                            error = e.message
+                            saving = false
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
 
 // Phase A4 (Category 8). OSTRC-H2's own four-question weekly prompt per body
 // area -- q1/q4 (participation/performance) share one value set, q2/q3
@@ -1321,31 +1799,8 @@ private fun OstrcForm(
     }
 }
 
-@Composable
-private fun ArousalForm(
-    saving: Boolean,
-    initialDate: LocalDate = LocalDate.now(),
-    initialMorningWood: Int? = null,
-    initialArousalLevel: Int? = null,
-    onSave: (date: String, morningWood: Int, arousalLevel: Int) -> Unit,
-) {
-    var date by remember { mutableStateOf(initialDate) }
-    var morningWood by remember { mutableStateOf(initialMorningWood?.toString() ?: "5") }
-    var arousalLevel by remember { mutableStateOf(initialArousalLevel?.toString() ?: "5") }
-    val morningWoodValue = morningWood.toIntOrNull()
-    val arousalValue = arousalLevel.toIntOrNull()
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateField("DATE", date, { date = it })
-        Column { FormLabel("MORNING WOOD (0-10)"); FieldTextField(morningWood, { morningWood = it }, "5", keyboardType = KeyboardType.Number) }
-        Column { FormLabel("AROUSAL LEVEL (0-10)"); FieldTextField(arousalLevel, { arousalLevel = it }, "5", keyboardType = KeyboardType.Number) }
-        val valid = morningWoodValue != null && morningWoodValue in 0..10 && arousalValue != null && arousalValue in 0..10
-        SaveButton(saving, valid) {
-            onSave(date.toString(), morningWoodValue!!, arousalValue!!)
-        }
-    }
-}
-
+// Arousal fold-in: morning-wood/arousal moved in from the old ArousalForm --
+// one combined daily survey instead of two separate ones.
 @Composable
 private fun WellnessForm(
     saving: Boolean,
@@ -1354,13 +1809,17 @@ private fun WellnessForm(
     initialMood: Int? = null,
     initialStress: Int? = null,
     initialSoreness: Int? = null,
-    onSave: (date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?) -> Unit,
+    initialMorningWood: Int? = null,
+    initialArousalLevel: Int? = null,
+    onSave: (date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?, morningWood: Int?, arousalLevel: Int?) -> Unit,
 ) {
     var date by remember { mutableStateOf(initialDate) }
     var energy by remember { mutableStateOf(initialEnergy?.toString() ?: "") }
     var mood by remember { mutableStateOf(initialMood?.toString() ?: "") }
     var stress by remember { mutableStateOf(initialStress?.toString() ?: "") }
     var soreness by remember { mutableStateOf(initialSoreness?.toString() ?: "") }
+    var morningWood by remember { mutableStateOf(initialMorningWood?.toString() ?: "") }
+    var arousalLevel by remember { mutableStateOf(initialArousalLevel?.toString() ?: "") }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateField("DATE", date, { date = it })
@@ -1368,9 +1827,11 @@ private fun WellnessForm(
         Column { FormLabel("MOOD 0-10 (OPTIONAL)"); FieldTextField(mood, { mood = it }, "e.g. 7", keyboardType = KeyboardType.Number) }
         Column { FormLabel("STRESS 0-10 (OPTIONAL)"); FieldTextField(stress, { stress = it }, "e.g. 3", keyboardType = KeyboardType.Number) }
         Column { FormLabel("SORENESS 0-10 (OPTIONAL)"); FieldTextField(soreness, { soreness = it }, "e.g. 2", keyboardType = KeyboardType.Number) }
-        val valid = listOf(energy, mood, stress, soreness).any { it.isNotBlank() }
+        Column { FormLabel("MORNING WOOD 0-10 (OPTIONAL)"); FieldTextField(morningWood, { morningWood = it }, "e.g. 7", keyboardType = KeyboardType.Number) }
+        Column { FormLabel("AROUSAL LEVEL 0-10 (OPTIONAL)"); FieldTextField(arousalLevel, { arousalLevel = it }, "e.g. 5", keyboardType = KeyboardType.Number) }
+        val valid = listOf(energy, mood, stress, soreness, morningWood, arousalLevel).any { it.isNotBlank() }
         SaveButton(saving, valid) {
-            onSave(date.toString(), energy.toIntOrNull(), mood.toIntOrNull(), stress.toIntOrNull(), soreness.toIntOrNull())
+            onSave(date.toString(), energy.toIntOrNull(), mood.toIntOrNull(), stress.toIntOrNull(), soreness.toIntOrNull(), morningWood.toIntOrNull(), arousalLevel.toIntOrNull())
         }
     }
 }

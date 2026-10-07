@@ -1,0 +1,88 @@
+.comparison {
+  padding: var(--sp-4);
+  max-width: 960px;
+}
+
+.comparison-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.comparison-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.comparison-selectors {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.comparison-selector {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.comparison-selector-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.comparison-select {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  padding: 4px 10px;
+  height: 30px;
+  outline: none;
+}
+
+.comparison-select:focus { border-color: var(--color-emerald); }
+
+.comparison-chart-card {
+  margin-bottom: var(--sp-4);
+  min-height: 380px;
+  position: relative;
+}
+
+.comparison-stats {
+  display: flex;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.comparison-stat-block {
+  border-left: 2px solid;
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+}
+
+.comparison-stat-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--sp-1);
+}
+
+.comparison-stat-row {
+  display: flex;
+  gap: var(--sp-3);
+  font-size: 11px;
+}
+
+.comparison-stat-key { color: var(--color-text-muted); width: 30px; flex-shrink: 0; }
+.comparison-stat-val { color: var(--color-text-primary); }

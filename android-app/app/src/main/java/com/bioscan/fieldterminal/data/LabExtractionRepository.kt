@@ -32,7 +32,7 @@ data class ExtractedLabMarker(
 )
 
 class LabExtractionRepository(private val apiKey: String) {
-    private val client = HttpClient(Android)
+    companion object { private val client = HttpClient(Android) }
 
     suspend fun extract(fileBytes: ByteArray, mimeType: String, knownMarkerNames: List<String>): List<ExtractedLabMarker> {
         val prompt = buildString {

@@ -26,6 +26,6 @@ class ExerciseLibraryRepository(private val supabase: SupabaseClient) {
     // than resolving one exercise name at a time per logged set.
     suspend fun fetchAll(): List<ExerciseLibraryRow> =
         supabase.postgrest.from("exercise_library")
-            .select(columns = Columns.list("id,name,category,force,mechanic,primary_muscles,secondary_muscles"))
+            .select(columns = Columns.list("id,name,category,force,mechanic,equipment,primary_muscles,secondary_muscles"))
             .decodeList<ExerciseLibraryRow>()
 }

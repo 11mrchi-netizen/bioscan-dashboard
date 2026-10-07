@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.data.HealthConnectSyncWorker
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.ZeppSyncWorker
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.nav.FieldTerminalNavHost
 import com.bioscan.fieldterminal.ui.theme.FieldColors
@@ -66,6 +67,7 @@ private fun AuthGate() {
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated) {
             HealthConnectSyncWorker.enqueue(context)
+            ZeppSyncWorker.enqueue(context)
         }
     }
 

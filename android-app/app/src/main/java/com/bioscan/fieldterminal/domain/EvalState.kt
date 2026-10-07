@@ -14,3 +14,16 @@ data class Confidence(val have: Int, val need: Int) {
     val met: Boolean get() = have >= need
     val label: String get() = "$have/$need"
 }
+
+// DAV-210/DAV-212: single shared mapping, replacing 4 byte-identical private
+// copies (SessionDetailScreen/FuelTileScreen/HeartTileScreen/TrainingTileScreen).
+// Unstable maps to Warning, not Critical -- it flags elevated week-over-week
+// variability, a milder signal than a genuine ShiftUp/ShiftDown, so it shouldn't
+// read as more alarming than a real shift.
+fun EvalState.toMetricState(): MetricState = when (this) {
+    EvalState.NoData -> MetricState.Unavailable
+    EvalState.Building -> MetricState.Building
+    EvalState.Stable -> MetricState.Optimal
+    EvalState.ShiftUp, EvalState.ShiftDown -> MetricState.Warning
+    EvalState.Unstable -> MetricState.Warning
+}

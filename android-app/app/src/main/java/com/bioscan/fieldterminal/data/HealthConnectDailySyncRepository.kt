@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.data
 
 import android.content.Context
+import androidx.health.connect.client.aggregate.AggregateMetric
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BasalMetabolicRateRecord
 import androidx.health.connect.client.records.BodyFatRecord
@@ -15,6 +16,8 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.request.AggregateGroupByPeriodRequest
+import androidx.health.connect.client.time.TimeRangeFilter
 import com.bioscan.fieldterminal.data.model.ActiveCaloriesUpsertRow
 import com.bioscan.fieldterminal.data.model.BmrUpsertRow
 import com.bioscan.fieldterminal.data.model.BodyFatUpsertRow
@@ -39,6 +42,9 @@ import com.bioscan.fieldterminal.healthconnect.readAllRecords
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.Period
 import java.time.ZoneId
 import kotlin.reflect.KClass
 
@@ -55,9 +61,33 @@ class HealthConnectDailySyncRepository(
 ) {
     private val zone = ZoneId.systemDefault()
 
+    // Steps and calories are cumulative, not point-in-time like HRV/weight --
+    // summing raw records (the readAll+sumByLocalDate pattern every
+    // point-in-time metric here uses) double/triple-counts whenever more
+    // than one Health Connect source (phone + a watch app, say) reports
+    // overlapping time. Live check against this account's own data caught
+    // it: 125,388 steps and 10,668 kcal total on the same day (2026-09-12).
+    // aggregateGroupByPeriod() is Health Connect's own answer to exactly
+    // this -- it resolves overlapping sources per bucket instead of the app
+    // re-summing raw records.
+    private suspend fun <T : Any> aggregateDailyTotal(
+        metric: AggregateMetric<T>,
+        since: Instant,
+        until: Instant,
+    ): Map<LocalDate, T> =
+        HealthConnectManager.client(context).aggregateGroupByPeriod(
+            AggregateGroupByPeriodRequest(
+                metrics = setOf(metric),
+                timeRangeFilter = TimeRangeFilter.between(
+                    LocalDateTime.ofInstant(since, zone),
+                    LocalDateTime.ofInstant(until, zone),
+                ),
+                timeRangeSlicer = Period.ofDays(1),
+            ),
+        ).mapNotNull { bucket -> bucket.result[metric]?.let { bucket.startTime.toLocalDate() to it } }.toMap()
+
     suspend fun syncSteps(since: Instant, until: Instant): Int {
-        val values = readAll(StepsRecord::class, since, until).map { TimedValue(it.startTime, it.count.toDouble()) }
-        val byDate = sumByLocalDate(values, zone)
+        val byDate = aggregateDailyTotal(StepsRecord.COUNT_TOTAL, since, until)
         if (byDate.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
                 .upsert(byDate.map { (date, steps) -> StepsUpsertRow(date.toString(), steps.toInt()) }) { onConflict = "user_id,date" }
@@ -66,23 +96,19 @@ class HealthConnectDailySyncRepository(
     }
 
     suspend fun syncActiveCalories(since: Instant, until: Instant): Int {
-        val values = readAll(ActiveCaloriesBurnedRecord::class, since, until)
-            .map { TimedValue(it.startTime, it.energy.inKilocalories) }
-        val byDate = sumByLocalDate(values, zone)
+        val byDate = aggregateDailyTotal(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL, since, until)
         if (byDate.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
-                .upsert(byDate.map { (date, kcal) -> ActiveCaloriesUpsertRow(date.toString(), kcal.toInt()) }) { onConflict = "user_id,date" }
+                .upsert(byDate.map { (date, kcal) -> ActiveCaloriesUpsertRow(date.toString(), kcal.inKilocalories.toInt()) }) { onConflict = "user_id,date" }
         }
         return byDate.size
     }
 
     suspend fun syncTotalCalories(since: Instant, until: Instant): Int {
-        val values = readAll(TotalCaloriesBurnedRecord::class, since, until)
-            .map { TimedValue(it.startTime, it.energy.inKilocalories) }
-        val byDate = sumByLocalDate(values, zone)
+        val byDate = aggregateDailyTotal(TotalCaloriesBurnedRecord.ENERGY_TOTAL, since, until)
         if (byDate.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
-                .upsert(byDate.map { (date, kcal) -> TotalCaloriesUpsertRow(date.toString(), kcal.toInt()) }) { onConflict = "user_id,date" }
+                .upsert(byDate.map { (date, kcal) -> TotalCaloriesUpsertRow(date.toString(), kcal.inKilocalories.toInt()) }) { onConflict = "user_id,date" }
         }
         return byDate.size
     }
@@ -176,6 +202,18 @@ class HealthConnectDailySyncRepository(
     // only the longest session per date fixes that without guessing at
     // which of several real Health Connect records is "the" sleep -- the
     // longest one is the one actually worth calling a night's sleep.
+    // DAV-212: even after picking the longest session per date, a night with
+    // no real full-night recording at all (watch uncharged, app not worn)
+    // can still have its "longest" candidate be a short nap/interruption
+    // blip -- live data showed 0.13h/0.88h/0.17h "nights" this way, which
+    // corrupted the sleep-duration/SRI evaluators' variability checks. A
+    // plausibility floor means a date with nothing better than a blip gets
+    // no row at all (NoData downstream) instead of a fabricated near-zero
+    // night.
+    // ponytail: fixed 2h floor, not sex/age/device-aware -- revisit if real
+    // legitimate short naps ever need their own path separate from "night sleep."
+    private val MIN_PLAUSIBLE_SLEEP_HOURS = 2.0
+
     suspend fun syncSleep(since: Instant, until: Instant): Int {
         val sessions = readAll(SleepSessionRecord::class, since, until)
         val respiratoryReadings = readAll(RespiratoryRateRecord::class, since, until)
@@ -183,6 +221,7 @@ class HealthConnectDailySyncRepository(
         val mainSessionByDate = sessions
             .groupBy { it.endTime.atZone(zone).toLocalDate() }
             .mapValues { (_, nights) -> nights.maxBy { it.endTime.epochSecond - it.startTime.epochSecond } }
+            .filterValues { (it.endTime.epochSecond - it.startTime.epochSecond) / 3600.0 >= MIN_PLAUSIBLE_SLEEP_HOURS }
 
         val sleepRows = mutableListOf<SleepUpsertRow>()
         val respiratoryRows = mutableListOf<RespiratoryRateUpsertRow>()
@@ -191,7 +230,19 @@ class HealthConnectDailySyncRepository(
             val stages = session.stages.map {
                 SleepStageInterval(it.startTime.epochSecond, it.endTime.epochSecond, it.stage)
             }
-            val hours = (session.endTime.epochSecond - session.startTime.epochSecond) / 3600.0
+            val timeInBedHours = (session.endTime.epochSecond - session.startTime.epochSecond) / 3600.0
+            // Subtract awake/out-of-bed time when stage data is available --
+            // without this, `hours` is time-in-bed, not actual sleep, which
+            // inflates the reported duration vs what the Zepp app shows.
+            val awakeMin = if (stages.isNotEmpty()) {
+                (sumStageMinutes(stages, SleepSessionRecord.STAGE_TYPE_AWAKE) ?: 0.0) +
+                    (sumStageMinutes(stages, SleepSessionRecord.STAGE_TYPE_OUT_OF_BED) ?: 0.0)
+            } else null
+            val hours = if (awakeMin != null && awakeMin > 0) {
+                (timeInBedHours - awakeMin / 60.0).coerceAtLeast(0.0)
+            } else {
+                timeInBedHours
+            }
             val respiratoryForNight = respiratoryReadings
                 .filter { it.time >= session.startTime && it.time <= session.endTime }
                 .map { it.rate }

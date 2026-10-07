@@ -1,0 +1,36 @@
+.ft-chart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ft-chart-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+.ft-chart-missingness {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--color-warning);
+  opacity: 0.7;
+}
+
+.ft-chart-empty,
+.ft-chart-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 80px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+}
+
+.ft-chart-error {
+  color: var(--color-critical);
+}

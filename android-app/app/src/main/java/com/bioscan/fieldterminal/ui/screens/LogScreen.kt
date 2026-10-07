@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -33,9 +35,11 @@ import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.LOG_PAGE_SIZE
 import com.bioscan.fieldterminal.data.LogRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.domain.LogCategory
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogEntryKind
 import com.bioscan.fieldterminal.domain.LogSource
+import com.bioscan.fieldterminal.domain.category
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.theme.FieldColors
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -64,9 +68,15 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     var actionEntry by remember { mutableStateOf<LogEntry?>(null) }
     var editingEntry by remember { mutableStateOf<LogEntry?>(null) }
     var sleepDetailEntryId by remember { mutableStateOf<Long?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(reloadKey) {
-        allEntries = LogRepository(SupabaseClientProvider.client).loadAllEntries()
+        error = null
+        try {
+            allEntries = LogRepository(SupabaseClientProvider.client).loadAllEntries()
+        } catch (e: Exception) {
+            error = e.message ?: "Unknown error"
+        }
     }
 
     fun refresh() {
@@ -79,10 +89,17 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
             val entries = allEntries
             ScreenHeader(
                 title = "LOG",
-                context = if (entries != null) "${entries.size} ENTRIES" else "LOADING",
+                context = when {
+                    error != null -> "ERROR"
+                    entries != null -> "${entries.size} ENTRIES"
+                    else -> "LOADING"
+                },
             )
 
             when {
+                error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
+                }
                 entries == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = FT.DomainLog)
                 }
@@ -96,7 +113,16 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
                     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                         grouped.forEach { (date, dayEntries) ->
                             DayHeader(date)
-                            dayEntries.forEach { entry -> EntryRow(entry, onClick = { actionEntry = entry }) }
+                            // DAV-219 (24/9 fixes): sub-grouped by category
+                            // within the day instead of one flat chronological
+                            // list -- a day with 8 supplements logged at once
+                            // no longer buries the day's other entries between them.
+                            val byCategory = dayEntries.groupBy { it.kind.category }
+                            LogCategory.entries.forEach { category ->
+                                val categoryEntries = byCategory[category] ?: return@forEach
+                                CategoryLabel(category)
+                                categoryEntries.forEach { entry -> EntryRow(entry, onClick = { actionEntry = entry }) }
+                            }
                         }
                         if (visibleCount < entries.size) {
                             LoadOlderButton(onClick = { visibleCount += LOG_PAGE_SIZE })
@@ -170,7 +196,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
 private fun AddEntryFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .background(FT.DomainLog)
+            .background(FT.DomainLog, CircleShape)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 16.dp),
         contentAlignment = Alignment.Center,
@@ -207,6 +233,18 @@ private fun DayHeader(date: LocalDate) {
     }
 }
 
+// DAV-219 (24/9 fixes): lighter weight than DayHeader (no background fill) --
+// subordinate to the day it sits under, not a peer section of its own.
+@Composable
+private fun CategoryLabel(category: LogCategory) {
+    Text(
+        category.label,
+        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp, letterSpacing = 0.14.em),
+        color = FT.TextMuted,
+        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 10.dp, bottom = 2.dp),
+    )
+}
+
 @Composable
 private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
     Row(
@@ -237,7 +275,7 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
 // Category colors per direct user request (2026-09-15): deep blue for
 // sleep, orange for activity (runs, strength, ...), green for food/drink/
 // supplements, sand for stool, azure for wellness, red for encounter and
-// arousal. Note has no assigned category -- stays neutral. OSTRC (added
+// masturbation/intercourse. Note has no assigned category -- stays neutral. OSTRC (added
 // later, Category 8) shares stool's sand -- both are the Evaluation Method
 // Spec's own "digestive & injury tracking" category. DAV-107 explicitly
 // preserves these exact hues ("keep... category colors") even though the
@@ -250,16 +288,17 @@ private fun TypeChip(kind: LogEntryKind) {
         LogEntryKind.Exercise -> FieldColors.Orange
         LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> FieldColors.Green
         LogEntryKind.Sleep -> FieldColors.DeepBlue
-        LogEntryKind.Arousal, LogEntryKind.Encounter, LogEntryKind.Masturbation -> FieldColors.Red
+        LogEntryKind.Encounter, LogEntryKind.Masturbation, LogEntryKind.Intercourse -> FieldColors.Red
         LogEntryKind.Note -> FT.TextSecondary
         LogEntryKind.Stool, LogEntryKind.Ostrc -> FieldColors.Sand
         LogEntryKind.Wellness -> FieldColors.Azure
     }
     val filled = kind in setOf(LogEntryKind.Exercise, LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement, LogEntryKind.Stool)
+    val shape = RoundedCornerShape(FT.RadiusSmall)
     Box(
         modifier = Modifier
-            .background(if (filled) color else Color.Transparent)
-            .then(if (!filled) Modifier.border(1.dp, color) else Modifier)
+            .background(if (filled) color else Color.Transparent, shape)
+            .then(if (!filled) Modifier.border(1.dp, color, shape) else Modifier)
             .padding(horizontal = 6.dp, vertical = 2.dp),
     ) {
         Text(
@@ -275,7 +314,7 @@ private fun LoadOlderButton(onClick: () -> Unit) {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
         Box(
             modifier = Modifier
-                .border(1.dp, FT.GlassBorder)
+                .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {

@@ -1,0 +1,64 @@
+.recovery {
+  padding: var(--sp-4);
+  max-width: 960px;
+}
+
+.recovery-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--sp-5);
+}
+
+.recovery-section {
+  margin-bottom: var(--sp-6);
+}
+
+.recovery-section-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--color-text-muted);
+  margin-bottom: var(--sp-3);
+}
+
+.recovery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--sp-3);
+}
+
+.recovery-card {}
+
+.recovery-band-note {
+  font-size: 9px;
+  color: var(--color-critical, #EF4444);
+  letter-spacing: 0.08em;
+  margin: var(--sp-1) var(--sp-3) 0;
+}
+
+.recovery-injury-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.recovery-injury-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.recovery-injury-dates {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.recovery-injury-part {
+  font-size: 13px;
+  color: var(--color-text-primary);
+}

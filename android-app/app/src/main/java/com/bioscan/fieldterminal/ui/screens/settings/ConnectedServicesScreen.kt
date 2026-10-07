@@ -1,18 +1,12 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,13 +16,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.health.connect.client.PermissionController
@@ -36,13 +27,12 @@ import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HealthConnectSyncResult
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.healthconnect.BackfillResult
+import com.bioscan.fieldterminal.data.ZeppRepository
+import com.bioscan.fieldterminal.data.ZeppSyncStateRow
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
-import com.bioscan.fieldterminal.healthconnect.OneOffBackfillStatus
-import com.bioscan.fieldterminal.healthconnect.runNutritionHydrationBackfill
 import com.bioscan.fieldterminal.ui.components.AmberButton
-import com.bioscan.fieldterminal.ui.components.ComingSoonCard
+import com.bioscan.fieldterminal.ui.components.ClearChip
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabRow
@@ -50,22 +40,19 @@ import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.ConnectedServicesTab
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-// Setup > Connected Services: AI Nutrition Estimation, Map, Health Connect
-// (all real, moved out of the old flat Setup dump unchanged) plus Zepp
-// (stub -- no Zepp integration exists in this codebase yet).
+// Setup > Connected Services: AI Nutrition Estimation, Map, Health Connect, Zepp.
 @Composable
 fun ConnectedServicesScreen(scope: CoroutineScope, onBack: () -> Unit) {
     var tab by remember { mutableStateOf(ConnectedServicesTab.AiNutrition) }
     val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(title = "CONNECTED SERVICES", context = "AI NUTRITION · MAP · HEALTH CONNECT · ZEPP", onBack = onBack)
+        TileHeader(onBack = onBack)
         SubTabRow(items = ConnectedServicesTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
@@ -74,8 +61,8 @@ fun ConnectedServicesScreen(scope: CoroutineScope, onBack: () -> Unit) {
             when (tab) {
                 ConnectedServicesTab.AiNutrition -> AiNutritionCard(context)
                 ConnectedServicesTab.Map -> MapCard(context)
-                ConnectedServicesTab.HealthConnect -> HealthConnectCard(context, scope)
-                ConnectedServicesTab.Zepp -> ComingSoonCard(title = "ZEPP")
+                ConnectedServicesTab.HealthConnect -> HealthConnectCard(context)
+                ConnectedServicesTab.Zepp -> ZeppCard(scope)
             }
         }
     }
@@ -128,6 +115,7 @@ private fun MapCard(context: android.content.Context) {
     val savedHome = remember { mutableStateOf(MapSettingsStore.getHome(context)) }
     var homeLatInput by remember { mutableStateOf(savedHome.value?.first?.toString() ?: "") }
     var homeLonInput by remember { mutableStateOf(savedHome.value?.second?.toString() ?: "") }
+    var homeInputError by remember { mutableStateOf(false) }
 
     FTCard(title = "MAP") {
         Text(
@@ -184,9 +172,12 @@ private fun MapCard(context: android.content.Context) {
             AmberButton(label = "SAVE HOME") {
                 val lat = homeLatInput.toDoubleOrNull()
                 val lon = homeLonInput.toDoubleOrNull()
-                if (lat != null && lon != null) {
+                if (lat != null && lon != null && lat in -90.0..90.0 && lon in -180.0..180.0) {
                     MapSettingsStore.saveHome(context, lat, lon)
                     savedHome.value = lat to lon
+                    homeInputError = false
+                } else {
+                    homeInputError = true
                 }
             }
             if (savedHome.value != null) {
@@ -198,6 +189,13 @@ private fun MapCard(context: android.content.Context) {
                 }
             }
         }
+        if (homeInputError) {
+            Text(
+                "Enter valid decimal coordinates (lat −90 to 90, lon −180 to 180).",
+                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                color = FT.Critical,
+            )
+        }
         Text(
             savedHome.value?.let { "Home set: %.4f, %.4f".format(it.first, it.second) } ?: "No home location set — the DIRECTIONS link is hidden until one is saved.",
             style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
@@ -207,11 +205,10 @@ private fun MapCard(context: android.content.Context) {
 }
 
 @Composable
-private fun HealthConnectCard(context: android.content.Context, scope: CoroutineScope) {
+private fun HealthConnectCard(context: android.content.Context) {
     val hcAvailable = remember { HealthConnectManager.isAvailable(context) }
     var hcChecked by remember { mutableStateOf(false) }
     var hcGranted by remember { mutableStateOf(false) }
-    var backfillRunning by remember { mutableStateOf(false) }
     val hcPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract(),
     ) { granted -> hcGranted = granted.containsAll(HealthConnectManager.PERMISSIONS) }
@@ -282,68 +279,56 @@ private fun HealthConnectCard(context: android.content.Context, scope: Coroutine
             }
         }
     }
-
-    // TEMPORARY -- delete this card (and
-    // healthconnect/OneOffNutritionHydrationBackfill.kt) before the
-    // next real release. Exists only to backfill this account's real
-    // historical meals/hydration_daily rows into Health Connect once,
-    // since this app has only ever read from Health Connect, never
-    // written to it.
-    if (hcAvailable) {
-        FTCard(title = "ONE-OFF: BACKFILL HISTORY") {
-            Text(
-                "Writes this account's existing meal and hydration history into Health Connect " +
-                    "(it has none today). Safe to run more than once — matching entries are updated, " +
-                    "not duplicated. Temporary utility, removed in a future update.",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
-                color = FT.TextSecondary,
-            )
-            if (hcGranted) {
-                AmberButton(label = if (backfillRunning) "BACKFILLING…" else "BACKFILL NUTRITION + HYDRATION") {
-                    if (!backfillRunning) {
-                        backfillRunning = true
-                        scope.launch {
-                            val result = runNutritionHydrationBackfill(context, SupabaseClientProvider.client)
-                            OneOffBackfillStatus.record(result)
-                            backfillRunning = false
-                        }
-                    }
-                }
-            } else {
-                Text(
-                    "Connect Health Connect above first.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
-                    color = FT.TextSecondary,
-                )
-            }
-            OneOffBackfillStatus.lastResult?.let { result ->
-                Text(
-                    text = when (result) {
-                        is BackfillResult.Success -> "Backfilled ${result.mealsWritten} meals, ${result.hydrationDaysWritten} hydration days."
-                        is BackfillResult.Failed -> "Backfill failed: ${result.message}"
-                        BackfillResult.NotGranted -> "Backfill skipped — permissions not granted."
-                        BackfillResult.Unavailable -> "Backfill skipped — Health Connect unavailable."
-                    },
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
-                    color = if (result is BackfillResult.Success) FT.Emerald else FT.TextSecondary,
-                )
-            }
-        }
-    }
 }
 
-// Bordered "CLEAR" chip -- shared by every saved-value field on this screen
-// (Gemini key, CARTO key, home location) rather than repeating the same
-// Box/clickable/Text block per field.
 @Composable
-private fun ClearChip(onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("CLEAR", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = FT.TextSecondary)
+private fun ZeppCard(scope: CoroutineScope) {
+    val zeppRepository = remember { ZeppRepository(SupabaseClientProvider.client) }
+    var zeppStatus by remember { mutableStateOf<ZeppSyncStateRow?>(null) }
+    var zeppStatusLoaded by remember { mutableStateOf(false) }
+    var zeppSyncing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        zeppStatus = zeppRepository.getSyncStatus()
+        zeppStatusLoaded = true
+    }
+
+    FTCard(title = "ZEPP") {
+        Text(
+            "Pulls workout detail (real per-point pace/power/route) and Zepp-native " +
+                "metrics directly from Zepp's cloud, reconciled against Health Connect " +
+                "sessions rather than duplicating them. Runs automatically on app open.",
+            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            color = FT.TextSecondary,
+        )
+        Text(
+            text = when {
+                !zeppStatusLoaded -> "Checking status…"
+                zeppStatus?.lastError != null -> "Needs re-authentication: ${zeppStatus?.lastError}"
+                zeppStatus?.lastSyncedAt != null -> "Last synced ${zeppStatus?.lastSyncedAt}"
+                else -> "Not synced yet."
+            },
+            style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+            color = if (zeppStatus?.lastError != null) FT.Warning else FT.TextSecondary,
+        )
+        if (zeppStatus?.lastError != null) {
+            Text(
+                "Re-capture: log into watchface.zepp.com in a browser, read apptoken/userid " +
+                    "from cookies, and update the ZEPP_APP_TOKEN/ZEPP_USER_ID Edge Function " +
+                    "secrets (docs/zepp-integration/02-token-capture-and-data-extraction.md).",
+                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                color = FT.TextSecondary,
+            )
+        }
+        AmberButton(label = if (zeppSyncing) "SYNCING…" else "SYNC NOW") {
+            if (!zeppSyncing) {
+                scope.launch {
+                    zeppSyncing = true
+                    zeppRepository.sync(daysBack = 30)
+                    zeppStatus = zeppRepository.getSyncStatus()
+                    zeppSyncing = false
+                }
+            }
+        }
     }
 }

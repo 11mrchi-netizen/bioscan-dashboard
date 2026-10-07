@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.data
 
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
 
 // Same Supabase project the web dashboard (index.html) already talks to --
@@ -20,6 +21,7 @@ object SupabaseClientProvider {
         ) {
             install(Auth)
             install(Postgrest)
+            install(Functions)
         }
     }
 }

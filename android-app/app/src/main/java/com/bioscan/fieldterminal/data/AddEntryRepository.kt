@@ -5,20 +5,19 @@ import com.bioscan.fieldterminal.data.model.ExerciseDetailsUpdateRow
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetails
 import com.bioscan.fieldterminal.data.model.ExistingHydrationRow
 import com.bioscan.fieldterminal.data.model.FullExerciseSessionRow
-import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
-import com.bioscan.fieldterminal.data.model.LogMasturbationRow
+import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
-import com.bioscan.fieldterminal.data.model.NewArousalRow
 import com.bioscan.fieldterminal.data.model.NewEncounterRow
 import com.bioscan.fieldterminal.data.model.NewHydrationRow
-import com.bioscan.fieldterminal.data.model.NewMasturbationRow
+import com.bioscan.fieldterminal.data.model.NewSexualActivityRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
+import com.bioscan.fieldterminal.data.model.SexualActivityInstance
 import com.bioscan.fieldterminal.data.model.NewNoteRow
 import com.bioscan.fieldterminal.data.model.NewOstrcRow
 import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
@@ -26,11 +25,17 @@ import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.NewStoolRow
 import com.bioscan.fieldterminal.data.model.NewSupplementLogRow
 import com.bioscan.fieldterminal.data.model.NewWellbeingRow
+import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
 import com.bioscan.fieldterminal.data.model.SupplementLogEditRow
+import com.bioscan.fieldterminal.data.model.SupplementNutrientRow
 import com.bioscan.fieldterminal.domain.LogSource
+import com.bioscan.fieldterminal.domain.nutrientContribution
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 // Step 12 (Phase D) + the 2026-09-15 follow-up pass: the "+" add-entry
 // flow's writes. Every add*/update* now takes its date/timestamp as an
@@ -131,25 +136,19 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         )
     }
 
-    suspend fun addMasturbation(occurredAt: String, watchedPorn: Boolean, loadSize: Int?, orgasmIntensity: Int?, notes: String?) {
-        supabase.postgrest.from("masturbation_log").insert(
-            NewMasturbationRow(occurredAt = occurredAt, watchedPorn = watchedPorn, loadSize = loadSize, orgasmIntensity = orgasmIntensity, notes = notes)
-        )
-    }
-
-    suspend fun addArousal(date: String, morningErectionQuality: Int, arousalLevel: Int) {
-        supabase.postgrest.from("arousal_daily").upsert(
-            NewArousalRow(date = date, morningErectionQuality = morningErectionQuality, arousalLevel = arousalLevel)
-        ) { onConflict = "user_id,date" }
+    suspend fun addSexualActivity(date: String, activityType: String, instances: List<SexualActivityInstance>, notes: String?) {
+        supabase.postgrest.from("sexual_activity_daily").upsert(
+            NewSexualActivityRow(date = date, activityType = activityType, instances = instances, notes = notes)
+        ) { onConflict = "user_id,date,activity_type" }
     }
 
     suspend fun addNote(occurredAt: String, text: String) {
         supabase.postgrest.from("notes").insert(NewNoteRow(occurredAt = occurredAt, text = text))
     }
 
-    suspend fun addWellbeing(date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?) {
+    suspend fun addWellbeing(date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?, morningErectionQuality: Int? = null, arousalLevel: Int? = null) {
         supabase.postgrest.from("wellbeing_daily").upsert(
-            NewWellbeingRow(date = date, energy = energy, mood = mood, stress = stress, soreness = soreness)
+            NewWellbeingRow(date = date, energy = energy, mood = mood, stress = stress, soreness = soreness, morningErectionQuality = morningErectionQuality, arousalLevel = arousalLevel)
         ) { onConflict = "user_id,date" }
     }
 
@@ -168,13 +167,120 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // other source already uses. `items` is (supplement id, name, roster
     // dose string) triples from whichever bundle(s)/individual as-needed
     // toggles were checked -- each gets its own parsed dose default (DAV-156).
-    suspend fun addSupplementsTaken(takenAt: String, items: List<Triple<Long, String, String>>) {
+    suspend fun addSupplementsTaken(takenAt: String, items: List<Triple<Long, String, String>>, source: String = "manual") {
         if (items.isEmpty()) return
+        // product_id is optional provenance: a failed roster lookup must never
+        // block recording that the supplement was taken.
+        val links = runCatching { loadProductLinks(items.map { it.first }) }.getOrDefault(emptyMap())
+        val productIdBySupp = links.mapNotNull { (id, l) -> l.productId?.let { id to it } }.toMap()
+        // Label servings consumed per dose (DAV-361): feeds pantry consumption and
+        // scales the ingredient contribution. Missing link row = the default of 1.
+        val servingsBySupp = links.mapValues { it.value.servingsPerDose }
         val rows = items.map { (id, name, dose) ->
             val (value, unit) = parseDose(dose)
-            NewSupplementLogRow(supplementId = id, supplementName = name, takenAt = takenAt, doseValue = value, doseUnit = unit)
+            NewSupplementLogRow(
+                supplementId = id, supplementName = name, takenAt = takenAt, doseValue = value, doseUnit = unit,
+                productId = productIdBySupp[id], source = source, servingCount = servingsBySupp[id] ?: 1.0,
+            )
         }
-        supabase.postgrest.from("supplement_log").insert(rows)
+        val insertedRows = supabase.postgrest.from("supplement_log")
+            .insert(rows) { select(Columns.list("id,supplement_id")) }
+            .decodeList<SupplementLogIdRow>()
+
+        try {
+            writeSupplementNutrientIntake(takenAt, insertedRows, items, productIdBySupp, servingsBySupp)
+        } catch (_: Exception) {
+            // Best-effort: supplement_log row is the primary record
+        }
+    }
+
+    private suspend fun loadProductLinks(supplementIds: List<Long>): Map<Long, SupplementProductLinkRow> =
+        supabase.postgrest.from("supplements")
+            .select(columns = Columns.list("id,product_id,servings_per_dose")) { filter { isIn("id", supplementIds) } }
+            .decodeList<SupplementProductLinkRow>()
+            .associateBy { it.id }
+
+    // Supplement Intelligence Phase 1 (DAV-328): a roster item linked to a
+    // real supplement_products row (supplements.product_id) gets its
+    // nutrient_intake rows from that product's real ingredient composition
+    // (domain/SupplementComposition.kt's nutrientContribution(), elemental
+    // amount preferred, compound amount as an honest fallback -- never a
+    // name guess). Anything not yet linked keeps the pre-existing
+    // supplement_nutrients-profile-then-name-inference fallback unchanged --
+    // zero regression for roster items that haven't been given real
+    // ingredient data yet.
+    private suspend fun writeSupplementNutrientIntake(
+        takenAt: String,
+        logRows: List<SupplementLogIdRow>,
+        items: List<Triple<Long, String, String>>,
+        productIdBySupp: Map<Long, Long>,
+        servingsBySupp: Map<Long, Double>,
+    ) {
+        if (logRows.isEmpty()) return
+        val supplementIds = logRows.map { it.supplementId }
+
+        val profiles = supabase.postgrest.from("supplement_nutrients")
+            .select { filter { isIn("supplement_id", supplementIds) } }
+            .decodeList<SupplementNutrientRow>()
+        val profilesBySupp = profiles.groupBy { it.supplementId }
+
+        val suppRepo = SupplementsRepository(supabase)
+        val nutrientRows = mutableListOf<NutrientIntakeRow>()
+        for (logRow in logRows) {
+            val productId = productIdBySupp[logRow.supplementId]
+            val suppProfile = profilesBySupp[logRow.supplementId]
+            if (productId != null) {
+                val composition = suppRepo.loadProductComposition(productId)
+                for (productIngredient in composition) {
+                    val contribution = nutrientContribution(productIngredient, servingCount = servingsBySupp[logRow.supplementId] ?: 1.0) ?: continue
+                    nutrientRows.add(
+                        NutrientIntakeRow(
+                            loggedAt = takenAt,
+                            nutrient = contribution.nutrientKey,
+                            amount = contribution.amount,
+                            unit = contribution.unit,
+                            sourceType = "supplement",
+                            sourceId = logRow.id,
+                        ),
+                    )
+                }
+            } else if (suppProfile != null) {
+                for (sn in suppProfile) {
+                    nutrientRows.add(
+                        NutrientIntakeRow(
+                            loggedAt = takenAt,
+                            nutrient = sn.nutrient,
+                            amount = sn.amountPerDose,
+                            unit = sn.unit,
+                            sourceType = "supplement",
+                            sourceId = logRow.id,
+                        ),
+                    )
+                }
+            } else {
+                val item = items.firstOrNull { it.first == logRow.supplementId }
+                if (item != null) {
+                    val (doseValue, doseUnit) = parseDose(item.third)
+                    val inferredNutrient = inferNutrientFromName(item.second)
+                    if (inferredNutrient != null && doseValue != null && doseUnit != null) {
+                        nutrientRows.add(
+                            NutrientIntakeRow(
+                                loggedAt = takenAt,
+                                nutrient = inferredNutrient,
+                                amount = doseValue,
+                                unit = doseUnit,
+                                sourceType = "supplement",
+                                sourceId = logRow.id,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+
+        if (nutrientRows.isNotEmpty()) {
+            supabase.postgrest.from("nutrient_intake").insert(nutrientRows)
+        }
     }
 
     suspend fun updateSupplementTaken(id: Long, takenAt: String, doseValue: Double?, doseUnit: String?) {
@@ -264,15 +370,9 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
-    suspend fun updateMasturbation(id: Long, occurredAt: String, watchedPorn: Boolean, loadSize: Int?, orgasmIntensity: Int?, notes: String?) {
-        supabase.postgrest.from("masturbation_log").update(
-            NewMasturbationRow(occurredAt = occurredAt, watchedPorn = watchedPorn, loadSize = loadSize, orgasmIntensity = orgasmIntensity, notes = notes)
-        ) { filter { eq("id", id) } }
-    }
-
-    suspend fun updateArousal(id: Long, date: String, morningErectionQuality: Int, arousalLevel: Int) {
-        supabase.postgrest.from("arousal_daily").update(
-            NewArousalRow(date = date, morningErectionQuality = morningErectionQuality, arousalLevel = arousalLevel)
+    suspend fun updateSexualActivity(id: Long, date: String, activityType: String, instances: List<SexualActivityInstance>, notes: String?) {
+        supabase.postgrest.from("sexual_activity_daily").update(
+            NewSexualActivityRow(date = date, activityType = activityType, instances = instances, notes = notes)
         ) { filter { eq("id", id) } }
     }
 
@@ -282,9 +382,9 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
-    suspend fun updateWellbeing(id: Long, date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?) {
+    suspend fun updateWellbeing(id: Long, date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?, morningErectionQuality: Int? = null, arousalLevel: Int? = null) {
         supabase.postgrest.from("wellbeing_daily").update(
-            NewWellbeingRow(date = date, energy = energy, mood = mood, stress = stress, soreness = soreness)
+            NewWellbeingRow(date = date, energy = energy, mood = mood, stress = stress, soreness = soreness, morningErectionQuality = morningErectionQuality, arousalLevel = arousalLevel)
         ) { filter { eq("id", id) } }
     }
 
@@ -305,6 +405,17 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("exercise_sessions").update(
             ExerciseDetailsUpdateRow(rpe = rpe, notes = notes, details = details)
         ) { filter { eq("id", id) } }
+    }
+
+    // Narrow tag write for the "suspected trail runs" flow: reads the row's
+    // current details JSON and merges only route_type, unlike
+    // updateExerciseDetails() above which overwrites details/rpe/notes whole.
+    suspend fun updateRouteType(id: Long, routeType: String) {
+        val current = supabase.postgrest.from("exercise_sessions")
+            .select(columns = Columns.list("details")) { filter { eq("id", id) } }
+            .decodeSingle<DetailsJsonRow>()
+        val merged = JsonObject(current.details + ("route_type" to JsonPrimitive(routeType)))
+        supabase.postgrest.from("exercise_sessions").update(DetailsJsonRow(merged)) { filter { eq("id", id) } }
     }
 
     // Generic delete, usable on every source including Sleep and Supplement
@@ -332,12 +443,11 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         id,
     )
     suspend fun fetchStool(id: Long) = fetchById<LogStoolRow>("stool_log", "id,occurred_at,bristol_type,discomfort", id)
-    suspend fun fetchArousal(id: Long) = fetchById<LogArousalRow>("arousal_daily", "id,date,morning_erection_quality,arousal_level", id)
     suspend fun fetchNote(id: Long) = fetchById<LogNoteRow>("notes", "id,occurred_at,text", id)
-    suspend fun fetchWellbeing(id: Long) = fetchById<LogWellbeingRow>("wellbeing_daily", "id,date,energy,mood,stress,soreness", id)
+    suspend fun fetchWellbeing(id: Long) = fetchById<LogWellbeingRow>("wellbeing_daily", "id,date,energy,mood,stress,soreness,morning_erection_quality,arousal_level", id)
     suspend fun fetchExerciseSession(id: Long) = fetchById<FullExerciseSessionRow>("exercise_sessions", "id,type,rpe,notes,details", id)
     suspend fun fetchOstrc(id: Long) = fetchById<LogOstrcRow>("ostrc_checkins", "id,check_date,body_area,q1,q2,q3,q4,notes", id)
-    suspend fun fetchMasturbation(id: Long) = fetchById<LogMasturbationRow>("masturbation_log", "id,occurred_at,watched_porn,load_size,orgasm_intensity,notes", id)
+    suspend fun fetchSexualActivity(id: Long) = fetchById<LogSexualActivityRow>("sexual_activity_daily", "id,date,activity_type,instances,notes", id)
     suspend fun fetchSupplementTaken(id: Long) = fetchById<LogSupplementTakenRow>("supplement_log", "id,supplement_name,taken_at,dose_value,dose_unit", id)
 
     // DAV-160. Read-only -- Sleep has no edit form (see LogSource's own doc
@@ -349,11 +459,11 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         id,
     )
 
-    private suspend inline fun <reified T : Any> fetchById(table: String, columns: String, id: Long): T =
+    private suspend inline fun <reified T : Any> fetchById(table: String, columns: String, id: Long): T? =
         supabase.postgrest.from(table)
             .select(columns = Columns.list(columns)) { filter { eq("id", id) } }
             .decodeList<T>()
-            .first()
+            .firstOrNull()
 }
 
 // DAV-156. The roster's `dose` column is free text (e.g. "500 mg", "36 mg,
@@ -369,4 +479,62 @@ internal fun parseDose(dose: String): Pair<Double?, String?> {
     val match = LEADING_NUMBER.find(trimmed) ?: return null to trimmed.ifBlank { null }
     val value = match.groupValues[1].toDoubleOrNull() ?: return null to trimmed.ifBlank { null }
     return value to match.groupValues[2].trim().ifBlank { null }
+}
+
+@kotlinx.serialization.Serializable
+private data class SupplementLogIdRow(
+    val id: Long,
+    @SerialName("supplement_id") val supplementId: Long,
+)
+
+@kotlinx.serialization.Serializable
+private data class SupplementProductLinkRow(
+    val id: Long,
+    @SerialName("product_id") val productId: Long? = null,
+    @SerialName("servings_per_dose") val servingsPerDose: Double = 1.0,
+)
+
+@kotlinx.serialization.Serializable
+private data class DetailsJsonRow(val details: JsonObject = JsonObject(emptyMap()))
+
+private fun inferNutrientFromName(name: String): String? {
+    val n = name.lowercase()
+    return when {
+        n.contains("vitamin d") || n.contains(" d3") -> "vitamin_d"
+        n.contains("vitamin c") -> "vitamin_c"
+        n.contains("vitamin b12") || n.contains(" b12") -> "vitamin_b12"
+        n.contains("vitamin b6") || n.contains(" b6") -> "vitamin_b6"
+        n.contains("vitamin a") -> "vitamin_a"
+        n.contains("vitamin e") -> "vitamin_e"
+        n.contains("vitamin k") -> "vitamin_k"
+        n.contains("folate") || n.contains("folic") -> "folate_b9"
+        n.contains("thiamin") || (n.contains(" b1") && !n.contains("b12")) -> "thiamin_b1"
+        n.contains("riboflavin") -> "riboflavin_b2"
+        n.contains("niacin") -> "niacin_b3"
+        n.contains("biotin") -> "biotin"
+        n.contains("magnesium") -> "magnesium"
+        n.contains("zinc") -> "zinc"
+        n.contains("iron") -> "iron"
+        n.contains("calcium") -> "calcium"
+        n.contains("selenium") -> "selenium"
+        n.contains("potassium") -> "potassium"
+        n.contains("copper") -> "copper"
+        n.contains("manganese") -> "manganese"
+        n.contains("chromium") -> "chromium"
+        n.contains("iodine") -> "iodine"
+        n.contains("fish oil") || n.contains("omega-3") || n.contains("omega 3") -> "omega_3"
+        n.contains("dha") -> "dha"
+        n.contains("epa") -> "epa"
+        n.contains("creatine") -> "creatine"
+        n.contains("collagen") -> "collagen"
+        n.contains("choline") -> "choline"
+        n.contains("melatonin") -> "melatonin"
+        n.contains("caffeine") -> "caffeine"
+        n.contains("ashwagandha") -> "ashwagandha"
+        n.contains("coq10") || n.contains("coenzyme q10") -> "coq10"
+        n.contains("glucosamine") -> "glucosamine"
+        n.contains("curcumin") || n.contains("turmeric") -> "curcumin"
+        n.contains("probiotics") || n.contains("probiotic") -> "probiotics"
+        else -> null
+    }
 }

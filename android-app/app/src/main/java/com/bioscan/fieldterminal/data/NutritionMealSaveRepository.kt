@@ -1,12 +1,16 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.data.model.HydrationFactorModelRow
 import com.bioscan.fieldterminal.data.model.MealItemRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
+import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 // DAV-168. Turns a review sheet's confirmed line items into a real meal +
 // meal_items, via DAV-164's resolver -- this file never computes a nutrient
@@ -76,58 +80,161 @@ class NutritionMealSaveRepository(
             .decodeSingle<MealIdRow>()
             .id
 
-        resolved.forEachIndexed { index, (item, result) ->
+        try {
+            resolved.forEachIndexed { index, (item, result) ->
+                val mealItemRow = supabase.postgrest.from("meal_items")
+                    .insert(
+                        MealItemRow(
+                            mealId = mealId,
+                            foodId = item.foodId,
+                            sortOrder = index,
+                            description = item.description,
+                            quantity = item.quantity,
+                            quantityUnit = item.quantityUnit,
+                            quantityLow = item.quantityLow,
+                            quantityHigh = item.quantityHigh,
+                            servingId = item.servingId,
+                            servingCount = item.servingCount,
+                            preparation = item.preparation,
+                            calories = result.nutrients.calories,
+                            proteinG = result.nutrients.proteinG,
+                            fatG = result.nutrients.fatG,
+                            carbsG = result.nutrients.carbsG,
+                            fiberG = result.nutrients.fiberG,
+                            sugarG = result.nutrients.sugarG,
+                            sodiumMg = result.nutrients.sodiumMg,
+                            isEstimated = item.isEstimated,
+                            confidence = item.confidence,
+                            source = item.source.value,
+                            isBeverage = result.nutrients.waterMl != null && result.hydration != null,
+                            waterMl = result.nutrients.waterMl,
+                            caffeineMg = result.nutrients.caffeineMg,
+                            alcoholG = result.nutrients.alcoholG,
+                            effectiveHydrationMl = result.hydration?.effectiveHydrationMl,
+                            hydrationModelVersion = result.hydration?.modelVersion,
+                        ),
+                    ) { select(Columns.list("id")) }
+                    .decodeSingle<MealIdRow>()
+
+                // Links the audit-trail row back to what was actually saved,
+                // without ever touching ai_estimates.parsed_output -- the
+                // difference between that original field and this meal_items
+                // row IS the correction, per DAV-168's own "stored separately"
+                // requirement. A raw mapOf(...) here fails at runtime
+                // ("Serializer for class 'Any' is not found") since kotlinx.
+                // serialization can't serialize a heterogeneously-typed Map
+                // without a registered polymorphic serializer -- caught live,
+                // fixed with a real @Serializable payload instead.
+                if (item.aiEstimateId != null) {
+                    supabase.postgrest.from("ai_estimates")
+                        .update(AiEstimateLinkUpdate(mealId = mealId, mealItemId = mealItemRow.id, accepted = true)) {
+                            filter { eq("id", item.aiEstimateId) }
+                        }
+                }
+            }
+        } catch (e: Exception) {
+            // Roll back the orphaned meal header so it doesn't appear in the log
+            // with wrong totals and no items.
+            supabase.postgrest.from("meals").delete { filter { eq("id", mealId) } }
+            throw e
+        }
+
+        return mealId
+    }
+
+    // User request (2026-09-30): the photo-estimation path no longer matches
+    // each item against `foods` -- one Gemini call now returns one
+    // already-usable whole-meal approximation, written straight through with
+    // no resolver call, same "no food_id, write directly" shape
+    // saveBeverageDrink() below already established for quick beverage
+    // logging. Exactly one meal_items row per call, by design (DAV-291's
+    // "one usable line for the whole process").
+    suspend fun saveEstimatedMeal(
+        loggedAt: String,
+        estimate: NutritionMealEstimate,
+        aiEstimateId: Long?,
+        enrichment: CronometerEnrichment? = null,
+        source: MealItemSource = MealItemSource.AiImage,
+    ): Long {
+        val cal = enrichment?.calories ?: estimate.calories
+        val pro = enrichment?.proteinG ?: estimate.proteinG
+        val carb = enrichment?.carbsG ?: estimate.carbsG
+        val fat = enrichment?.fatG ?: estimate.fatG
+        val fib = enrichment?.fiberG ?: estimate.fiberG
+        val sug = enrichment?.sugarG ?: estimate.sugarG
+        val sod = enrichment?.sodiumMg ?: estimate.sodiumMg
+
+        val mealId = supabase.postgrest.from("meals")
+            .insert(
+                NewMealRow(
+                    loggedAt = loggedAt,
+                    description = estimate.description,
+                    calories = cal,
+                    proteinG = pro,
+                    carbsG = carb,
+                    fatG = fat,
+                    fiberG = fib,
+                    sugarG = sug,
+                    sodiumMg = sod,
+                ),
+            ) { select(Columns.list("id")) }
+            .decodeSingle<MealIdRow>()
+            .id
+
+        val cronometerNutrientsJson = enrichment?.allNutrients?.let { nutrients ->
+            JsonObject(nutrients.mapValues { (_, v) -> JsonPrimitive(v) })
+        }
+
+        try {
             val mealItemRow = supabase.postgrest.from("meal_items")
                 .insert(
                     MealItemRow(
                         mealId = mealId,
-                        foodId = item.foodId,
-                        sortOrder = index,
-                        description = item.description,
-                        quantity = item.quantity,
-                        quantityUnit = item.quantityUnit,
-                        quantityLow = item.quantityLow,
-                        quantityHigh = item.quantityHigh,
-                        servingId = item.servingId,
-                        servingCount = item.servingCount,
-                        preparation = item.preparation,
-                        calories = result.nutrients.calories,
-                        proteinG = result.nutrients.proteinG,
-                        fatG = result.nutrients.fatG,
-                        carbsG = result.nutrients.carbsG,
-                        fiberG = result.nutrients.fiberG,
-                        sugarG = result.nutrients.sugarG,
-                        sodiumMg = result.nutrients.sodiumMg,
-                        isEstimated = item.isEstimated,
-                        confidence = item.confidence,
-                        source = item.source.value,
-                        isBeverage = result.nutrients.waterMl != null && result.hydration != null,
-                        waterMl = result.nutrients.waterMl,
-                        caffeineMg = result.nutrients.caffeineMg,
-                        alcoholG = result.nutrients.alcoholG,
-                        effectiveHydrationMl = result.hydration?.effectiveHydrationMl,
-                        hydrationModelVersion = result.hydration?.modelVersion,
+                        sortOrder = 0,
+                        description = estimate.description,
+                        calories = cal,
+                        proteinG = pro,
+                        fatG = fat,
+                        carbsG = carb,
+                        fiberG = fib,
+                        sugarG = sug,
+                        sodiumMg = sod,
+                        isEstimated = true,
+                        confidence = estimate.confidence,
+                        source = if (enrichment != null) "${source.value}_enriched" else source.value,
+                        cronometerNutrients = cronometerNutrientsJson,
+                        cronometerSource = enrichment?.primarySource,
                     ),
                 ) { select(Columns.list("id")) }
                 .decodeSingle<MealIdRow>()
 
-            // Links the audit-trail row back to what was actually saved,
-            // without ever touching ai_estimates.parsed_output -- the
-            // difference between that original field and this meal_items
-            // row IS the correction, per DAV-168's own "stored separately"
-            // requirement. A raw mapOf(...) here fails at runtime
-            // ("Serializer for class 'Any' is not found") since kotlinx.
-            // serialization can't serialize a heterogeneously-typed Map
-            // without a registered polymorphic serializer -- caught live,
-            // fixed with a real @Serializable payload instead.
-            if (item.aiEstimateId != null) {
+            if (aiEstimateId != null) {
                 supabase.postgrest.from("ai_estimates")
                     .update(AiEstimateLinkUpdate(mealId = mealId, mealItemId = mealItemRow.id, accepted = true)) {
-                        filter { eq("id", item.aiEstimateId) }
+                        filter { eq("id", aiEstimateId) }
                     }
             }
-        }
 
+            if (enrichment != null && enrichment.nutrientUnits.isNotEmpty()) {
+                val nutrientRows = enrichment.allNutrients.mapNotNull { (nutrient, amount) ->
+                    val unit = enrichment.nutrientUnits[nutrient] ?: return@mapNotNull null
+                    NutrientIntakeRow(
+                        loggedAt = loggedAt,
+                        nutrient = nutrient,
+                        amount = amount,
+                        unit = unit,
+                        sourceType = "meal_item",
+                        sourceId = mealItemRow.id,
+                    )
+                }
+                if (nutrientRows.isNotEmpty()) {
+                    supabase.postgrest.from("nutrient_intake").insert(nutrientRows)
+                }
+            }
+        } catch (e: Exception) {
+            supabase.postgrest.from("meals").delete { filter { eq("id", mealId) } }
+            throw e
+        }
         return mealId
     }
 
@@ -175,6 +282,63 @@ class NutritionMealSaveRepository(
 
         return newMealId
     }
+
+    // DAV-181. Quick beverage log path: creates a meals + meal_items row
+    // directly from a beverage class and volume, without needing a food_id.
+    // water_ml = volumeMl (conservative: nominal volume ≈ water content for
+    // most beverages); effective_hydration_ml = volumeMl × the v1 retention
+    // factor for that class. caffeine_mg stays null unless a food match is
+    // provided (use saveMeal for that richer path).
+    suspend fun saveBeverageDrink(loggedAt: String, beverageClass: String, volumeMl: Double): Long {
+        val factors = supabase.postgrest.from("hydration_factor_models")
+            .select(columns = Columns.list("model_version,beverage_class,retention_factor")) {
+                filter { eq("model_version", "v1") }
+            }
+            .decodeList<HydrationFactorModelRow>()
+        val retentionFactor = factors.firstOrNull { it.beverageClass == beverageClass }?.retentionFactor ?: 1.0
+        val effectiveHydrationMl = volumeMl * retentionFactor
+        val description = beverageClassDisplayName(beverageClass)
+
+        val mealId = supabase.postgrest.from("meals")
+            .insert(NewMealRow(loggedAt = loggedAt, description = description)) {
+                select(Columns.list("id"))
+            }
+            .decodeSingle<MealIdRow>()
+            .id
+
+        try {
+            supabase.postgrest.from("meal_items").insert(
+                MealItemRow(
+                    mealId = mealId,
+                    sortOrder = 0,
+                    description = description,
+                    quantity = volumeMl,
+                    quantityUnit = "ml",
+                    source = "manual",
+                    isBeverage = true,
+                    waterMl = volumeMl,
+                    effectiveHydrationMl = effectiveHydrationMl,
+                    hydrationModelVersion = "v1",
+                ),
+            )
+        } catch (e: Exception) {
+            supabase.postgrest.from("meals").delete { filter { eq("id", mealId) } }
+            throw e
+        }
+        return mealId
+    }
+}
+
+private fun beverageClassDisplayName(beverageClass: String): String = when (beverageClass) {
+    "coffee" -> "Coffee"
+    "tea" -> "Tea"
+    "juice" -> "Juice"
+    "soda" -> "Soda"
+    "milk" -> "Milk"
+    "plant_milk" -> "Plant milk"
+    "electrolyte" -> "Electrolyte drink"
+    "alcohol" -> "Alcohol"
+    else -> beverageClass.replaceFirstChar { it.uppercase() }
 }
 
 private inline fun <T> List<Pair<T, ResolvedMealItem>>.sumNullable(

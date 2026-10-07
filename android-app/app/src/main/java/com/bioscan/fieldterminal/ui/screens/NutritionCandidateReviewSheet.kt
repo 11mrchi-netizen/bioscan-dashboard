@@ -89,9 +89,7 @@ private fun FormLabel(text: String) {
 
 @Composable
 private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    AmberButton(label = if (saving) "SAVING..." else "SAVE") {
-        if (enabled && !saving) onClick()
-    }
+    AmberButton(label = if (saving) "SAVING..." else "SAVE", enabled = enabled && !saving, onClick = onClick)
 }
 
 data class ReviewSeedItem(
@@ -171,6 +169,13 @@ fun NutritionCandidateReviewSheet(
             }
 
             val allResolved = rows.isNotEmpty() && rows.all { confirmed.containsKey(it.first) }
+            if (!allResolved) {
+                Text(
+                    "Pick a match from the search results for every item before saving.",
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    color = FT.TextSecondary,
+                )
+            }
             SaveButton(saving = saving, enabled = allResolved) {
                 saving = true
                 saveError = null

@@ -9,25 +9,28 @@ import java.time.LocalDate
 class TrainingTest {
 
     @Test
-    fun testVo2MaxTimeframeFiltering() {
+    fun testPerformanceTimeframeFiltering() {
         val today = LocalDate.of(2026, 9, 21)
         val series = listOf(
             LocalDate.of(2026, 5, 1) to 48.0, // ~4.5 months ago
             LocalDate.of(2026, 7, 1) to 49.0, // ~2.5 months ago
-            LocalDate.of(2026, 8, 1) to 50.0, // ~1.5 months ago (inside 2M)
-            LocalDate.of(2026, 9, 15) to 51.0, // ~6 days ago (inside 2M)
+            LocalDate.of(2026, 8, 1) to 50.0, // ~1.5 months ago
+            LocalDate.of(2026, 9, 15) to 51.0, // ~6 days ago (inside 1M)
         )
 
-        val data2M = prepareVo2MaxTrendData(series, Vo2MaxTimeframe.TwoMonths, today)
-        assertEquals(2, data2M.raw.size)
-        assertEquals(LocalDate.of(2026, 8, 1), data2M.raw[0].first)
-        assertEquals(LocalDate.of(2026, 9, 15), data2M.raw[1].first)
+        val data1M = preparePerformanceTrendData(series, PerformanceTimeframe.OneMonth, today)
+        assertEquals(1, data1M.raw.size)
+        assertEquals(LocalDate.of(2026, 9, 15), data1M.raw[0].first)
 
-        val data6M = prepareVo2MaxTrendData(series, Vo2MaxTimeframe.SixMonths, today)
+        val data3M = preparePerformanceTrendData(series, PerformanceTimeframe.ThreeMonths, today)
+        assertEquals(3, data3M.raw.size)
+        assertEquals(LocalDate.of(2026, 7, 1), data3M.raw[0].first)
+
+        val data6M = preparePerformanceTrendData(series, PerformanceTimeframe.SixMonths, today)
         assertEquals(4, data6M.raw.size)
 
-        val dataAll = prepareVo2MaxTrendData(series, Vo2MaxTimeframe.All, today)
-        assertEquals(4, dataAll.raw.size)
+        val data1Y = preparePerformanceTrendData(series, PerformanceTimeframe.OneYear, today)
+        assertEquals(4, data1Y.raw.size)
     }
 
     @Test
@@ -88,6 +91,36 @@ class TrainingTest {
     }
 
     @Test
+    fun testDuplicateClusterReconcilesinflatedDistance() {
+        // Winner by HR-priority has an inflated distance from multi-source HC
+        // summing. Speed data on the same session implies the correct distance,
+        // so reconcileDistanceWithSpeed should correct it within the cluster.
+        val sessions = listOf(
+            ExerciseSessionRow(
+                type = "run",
+                startTime = "2026-09-26T07:00:00Z",
+                durationMin = 60.0,
+                distanceKm = 18.5,   // ~2x real via double-counted DistanceRecords
+                avgHr = 152.0,
+                avgSpeedKmh = 9.1,   // speed samples from a single source, accurate
+                source = "health_connect",
+            ),
+            ExerciseSessionRow(
+                type = "run",
+                startTime = "2026-09-26T07:00:30Z",
+                durationMin = 60.0,
+                distanceKm = 9.1,
+                avgHr = null,
+                source = "health_connect",
+            ),
+        )
+        val deduped = dedupeRunSessions(sessions)
+        assertEquals(1, deduped.size)
+        // reconcileDistanceWithSpeed: 18.5 / (9.1 * 1.0h) = 2.03 > 1.5 → corrected to 9.1
+        assertEquals(9.1, deduped.first().distanceKm ?: 0.0, 0.1)
+    }
+
+    @Test
     fun testTwoLegitimateRunsOnSameDayPreserved() {
         val today = LocalDate.of(2026, 9, 21)
         val sessions = listOf(
@@ -145,5 +178,50 @@ class TrainingTest {
 
         val deduped = dedupeRunSessions(listOf(impossiblePaceRun))
         assertTrue(deduped.isEmpty())
+    }
+
+    @Test
+    fun testSuspectedTrailReason() {
+        fun run(routeType: String? = null, km: Double = 10.0, climb: Double? = null) = ExerciseSessionRow(
+            type = "run", startTime = "2026-09-12T08:00:00Z", distanceKm = km, elevationGainM = climb,
+            details = com.bioscan.fieldterminal.data.model.ExerciseSessionDetails(routeType = routeType),
+        )
+        assertEquals("ZEPP TRAIL RUN", suspectedTrailReason(run(), "7"))
+        assertEquals("64 M/KM CLIMB", suspectedTrailReason(run(km = 10.0, climb = 640.0), null))
+        assertEquals(null, suspectedTrailReason(run(km = 10.0, climb = 340.0), "1")) // 34 m/km, road
+        assertEquals(null, suspectedTrailReason(run(routeType = "road", climb = 900.0), "7")) // explicit tag wins
+        assertEquals(null, suspectedTrailReason(run(routeType = "trail", climb = 900.0), "7")) // already trail
+    }
+
+    @Test
+    fun testAveragePaceExcludesTrailRuns() {
+        // DAV-283: a mixed road+trail week should average pace over the road
+        // run only -- the trail run's climb-slowed pace would misrepresent
+        // road fitness if it dragged the average down.
+        val today = LocalDate.of(2026, 9, 21)
+        val sessions = listOf(
+            ExerciseSessionRow(
+                type = "run", startTime = "2026-09-19T08:00:00Z",
+                durationMin = 50.0, distanceKm = 10.0, // 5:00/km
+                details = com.bioscan.fieldterminal.data.model.ExerciseSessionDetails(routeType = "road"),
+            ),
+            ExerciseSessionRow(
+                type = "run", startTime = "2026-09-20T08:00:00Z",
+                durationMin = 90.0, distanceKm = 10.0, // 9:00/km, climbing
+                details = com.bioscan.fieldterminal.data.model.ExerciseSessionDetails(routeType = "trail"),
+            ),
+        )
+
+        assertEquals(5.0, averagePaceMinPerKmSince(sessions, today, 7)!!, 0.001)
+    }
+
+    @Test
+    fun testEfficiencyRollingMedianNeedsSixRunsIn28Days() {
+        val start = LocalDate.of(2026, 9, 1)
+        val runs = listOf(1.0, 1.2, 1.1, 1.3, 1.15, 1.25).mapIndexed { i, ef -> start.plusDays(i * 3L) to ef }
+        val rolling = efficiencyRollingMedian28(runs)
+        assertEquals(1, rolling.size) // only the 6th run has 6 in its window
+        assertEquals(1.175, rolling.first().second, 1e-9) // median of the six
+        assertEquals(0, efficiencyRollingMedian28(runs.take(5)).size)
     }
 }

@@ -1,10 +1,9 @@
 package com.bioscan.fieldterminal.domain
 
-import com.bioscan.fieldterminal.data.model.LogArousalRow
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogExerciseRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
-import com.bioscan.fieldterminal.data.model.LogMasturbationRow
+import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
@@ -12,6 +11,7 @@ import com.bioscan.fieldterminal.data.model.LogSleepRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -19,9 +19,31 @@ import java.time.OffsetDateTime
 
 enum class LogEntryKind(val label: String) {
     Exercise("EXERCISE"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
-    Arousal("AROUSAL"), Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
+    Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
     Wellness("WELL"), Supplement("SUPP"), Ostrc("OSTRC"), Masturbation("MASTURBATION"),
+    Intercourse("INTERCOURSE"),
 }
+
+// DAV-219 (24/9 fixes): a few named groups the Log page clusters same-day
+// entries into (see LogScreen.kt) -- food/hydration/supplements especially
+// used to clutter the flat per-day feed as a long run of same-kind rows.
+// Order below is the display order (a deliberate reading order, not
+// alphabetical): what you put in, what you did, what your body did, then
+// free-text notes.
+enum class LogCategory(val label: String) {
+    Intake("INTAKE"),
+    Activity("ACTIVITY"),
+    Body("BODY"),
+    Notes("NOTES"),
+}
+
+val LogEntryKind.category: LogCategory
+    get() = when (this) {
+        LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> LogCategory.Intake
+        LogEntryKind.Exercise, LogEntryKind.Ostrc -> LogCategory.Activity
+        LogEntryKind.Sleep, LogEntryKind.Wellness, LogEntryKind.Stool, LogEntryKind.Masturbation, LogEntryKind.Intercourse -> LogCategory.Body
+        LogEntryKind.Note, LogEntryKind.Encounter -> LogCategory.Notes
+    }
 
 // Which table (and which AddEntryRepository calls) an entry came from --
 // needed for Log tab edit/delete, added alongside that flow. Phase G3:
@@ -33,10 +55,10 @@ enum class LogEntryKind(val label: String) {
 // add-or-remove-as-a-whole, not field-editable), so those two stay
 // delete-only; every other source is also editable.
 enum class LogSource(val table: String) {
-    Meal("meals"), Exercise("exercise_sessions"), Sleep("sleep_daily"), Arousal("arousal_daily"),
+    Meal("meals"), Exercise("exercise_sessions"), Sleep("sleep_daily"),
     Stool("stool_log"), Encounter("encounters"), Note("notes"), Hydration("hydration_daily"),
     Wellbeing("wellbeing_daily"), Supplement("supplement_log"), Ostrc("ostrc_checkins"),
-    Masturbation("masturbation_log"),
+    Masturbation("sexual_activity_daily"),
 }
 
 data class LogEntry(
@@ -48,18 +70,19 @@ data class LogEntry(
     val detail: String?,
 )
 
-// `sleep_daily`/`arousal_daily`/`hydration_daily`/`wellbeing_daily` only
-// store a `date`, no time-of-day -- these nominal times exist purely to
-// give same-day entries a stable sort position, not a claim about when the
-// real thing happened. Meals, stool, notes, supplement_log and (since
-// Phase G3) exercise_sessions all have real timestamps and use them as-is.
-// Encounter (DAV-158) moved from this fake-time group to the real-timestamp
-// group: `occurred_at` is now a real, user-editable column, so this nominal
-// constant only remains as a fallback for encounters logged before that
-// column existed (occurredAt == null).
+// `sleep_daily`/`hydration_daily`/`wellbeing_daily` only store a `date`, no
+// time-of-day -- these nominal times exist purely to give same-day entries a
+// stable sort position, not a claim about when the real thing happened.
+// Meals, stool, notes, supplement_log and (since Phase G3) exercise_sessions
+// all have real timestamps and use them as-is. Encounter (DAV-158) moved
+// from this fake-time group to the real-timestamp group: `occurred_at` is
+// now a real, user-editable column, so this nominal constant only remains as
+// a fallback for encounters logged before that column existed (occurredAt == null).
 private val SLEEP_NOMINAL_TIME = LocalTime.of(7, 30)
-private val AROUSAL_NOMINAL_TIME = LocalTime.of(7, 15)
 private val ENCOUNTER_NOMINAL_TIME = LocalTime.of(21, 0)
+// sexual_activity_daily (one row per day per type, DAV-91 rework) only
+// stores a `date` too -- same fake-time group as sleep/hydration/wellbeing.
+private val SEXUAL_ACTIVITY_NOMINAL_TIME = LocalTime.of(22, 0)
 private val DRINK_NOMINAL_TIME = LocalTime.of(12, 0)
 private val WELLNESS_NOMINAL_TIME = LocalTime.of(8, 0)
 private val OSTRC_NOMINAL_TIME = LocalTime.of(8, 15)
@@ -68,7 +91,6 @@ fun buildLogEntries(
     meals: List<LogMealRow>,
     exerciseSessions: List<LogExerciseRow>,
     sleep: List<LogSleepRow>,
-    arousal: List<LogArousalRow>,
     stool: List<LogStoolRow>,
     encounters: List<LogEncounterRow>,
     notes: List<LogNoteRow> = emptyList(),
@@ -76,7 +98,7 @@ fun buildLogEntries(
     wellbeing: List<LogWellbeingRow> = emptyList(),
     supplementsTaken: List<LogSupplementTakenRow> = emptyList(),
     ostrc: List<LogOstrcRow> = emptyList(),
-    masturbation: List<LogMasturbationRow> = emptyList(),
+    sexualActivity: List<LogSexualActivityRow> = emptyList(),
 ): List<LogEntry> {
     val entries = mutableListOf<LogEntry>()
 
@@ -96,7 +118,7 @@ fun buildLogEntries(
         )
     }
 
-    exerciseSessions.forEach { e ->
+    dedupeLogExerciseSessions(exerciseSessions).forEach { e ->
         val headline = listOfNotNull(
             e.type.replaceFirstChar { it.uppercase() },
             e.distanceKm?.let { "%.1f km".format(it) },
@@ -122,23 +144,6 @@ fun buildLogEntries(
             headline = formatDuration(hours * 60),
             detail = s.score?.let { "Score $it" },
         )
-    }
-
-    arousal.forEach { a ->
-        val parts = listOfNotNull(
-            a.morningErectionQuality?.let { "Morning wood $it/10" },
-            a.arousalLevel?.let { "Arousal $it/10" },
-        )
-        if (parts.isNotEmpty()) {
-            entries += LogEntry(
-                id = a.id,
-                source = LogSource.Arousal,
-                kind = LogEntryKind.Arousal,
-                timestamp = LocalDateTime.of(LocalDate.parse(a.date), AROUSAL_NOMINAL_TIME),
-                headline = parts.joinToString(" · "),
-                detail = null,
-            )
-        }
     }
 
     stool.forEach { s ->
@@ -192,6 +197,8 @@ fun buildLogEntries(
             w.mood?.let { "Mood $it" },
             w.stress?.let { "Stress $it" },
             w.soreness?.let { "Soreness $it" },
+            w.morningErectionQuality?.let { "Morning wood $it/10" },
+            w.arousalLevel?.let { "Arousal $it/10" },
         )
         if (parts.isNotEmpty()) {
             entries += LogEntry(
@@ -227,23 +234,58 @@ fun buildLogEntries(
         )
     }
 
-    masturbation.forEach { m ->
-        val parts = listOfNotNull(
-            m.watchedPorn?.let { "Porn: ${if (it) "yes" else "no"}" },
-            m.loadSize?.let { "Load $it/5" },
-            m.orgasmIntensity?.let { "Intensity $it/10" },
-        )
+    sexualActivity.forEach { sa ->
+        val orgasmCount = sa.instances.count { it.orgasm }
+        val typeLabel = sa.activityType.replaceFirstChar { it.uppercase() }
+        val headline = "$typeLabel · ${sa.instances.size} instance${if (sa.instances.size == 1) "" else "s"}" +
+            if (orgasmCount > 0) " · $orgasmCount with orgasm" else ""
         entries += LogEntry(
-            id = m.id,
+            id = sa.id,
             source = LogSource.Masturbation,
-            kind = LogEntryKind.Masturbation,
-            timestamp = parseTimestamp(m.occurredAt),
-            headline = parts.joinToString(" · ").ifEmpty { "Masturbation" },
-            detail = m.notes,
+            kind = if (sa.activityType == "intercourse") LogEntryKind.Intercourse else LogEntryKind.Masturbation,
+            timestamp = LocalDateTime.of(LocalDate.parse(sa.date), SEXUAL_ACTIVITY_NOMINAL_TIME),
+            headline = headline,
+            detail = sa.notes,
         )
     }
 
     return entries.sortedByDescending { it.timestamp }
+}
+
+// Mirrors dedupeRunSessions from Training.kt but operates on LogExerciseRow
+// and applies to all exercise types (with a same-type guard so a run and a
+// hike at the same hour aren't merged). Same tolerances and winner-selection
+// priority, so the Log feed keeps one entry per real workout and picks the
+// same representative the Training tab would show.
+internal fun dedupeLogExerciseSessions(sessions: List<LogExerciseRow>): List<LogExerciseRow> {
+    if (sessions.isEmpty()) return emptyList()
+    val sorted = sessions.sortedBy { OffsetDateTime.parse(it.startTime).toInstant() }
+    val clusters = mutableListOf<MutableList<LogExerciseRow>>()
+    for (session in sorted) {
+        val sessionStart = OffsetDateTime.parse(session.startTime)
+        val sessionDuration = session.durationMin ?: 0.0
+        val matchingCluster = clusters.find { cluster ->
+            cluster.any { rep ->
+                val repStart = OffsetDateTime.parse(rep.startTime)
+                val repDuration = rep.durationMin ?: 0.0
+                val sameDay = repStart.toLocalDate() == sessionStart.toLocalDate()
+                val sameType = rep.type == session.type
+                val startDiffMin = kotlin.math.abs(Duration.between(repStart, sessionStart).toMinutes())
+                val durationDiffMin = kotlin.math.abs(repDuration - sessionDuration)
+                val durationTolerance = maxOf(SAME_RUN_DURATION_TOLERANCE_MIN, minOf(repDuration, sessionDuration) * 0.2)
+                sameDay && sameType && startDiffMin <= SAME_RUN_START_TOLERANCE_MIN && durationDiffMin <= durationTolerance
+            }
+        }
+        if (matchingCluster != null) matchingCluster.add(session) else clusters.add(mutableListOf(session))
+    }
+    return clusters.map { cluster ->
+        cluster.maxWith(
+            compareBy<LogExerciseRow> { it.source == "manual" }
+                .thenBy { it.avgHr != null }
+                .thenBy { it.distanceKm ?: 0.0 }
+                .thenBy { it.durationMin ?: 0.0 }
+        )
+    }
 }
 
 // DAV-156. Whole-number doses print without a trailing ".0" (Double's own
@@ -258,8 +300,12 @@ private fun formatDose(value: Double?, unit: String?): String? = when {
 private fun parseTimestamp(iso: String): LocalDateTime =
     try {
         OffsetDateTime.parse(iso).toLocalDateTime()
-    } catch (e: Exception) {
-        LocalDateTime.parse(iso)
+    } catch (_: Exception) {
+        try {
+            LocalDateTime.parse(iso)
+        } catch (_: Exception) {
+            LocalDateTime.MIN
+        }
     }
 
 private fun formatDuration(totalMinutes: Double): String {

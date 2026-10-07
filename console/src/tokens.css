@@ -1,0 +1,56 @@
+/* Field Terminal — Futuristic Material design tokens (console adaptation)
+   Source: design/FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md */
+
+:root {
+  /* Neutral / material */
+  --color-base:            #0A0C0E;
+  --color-surface:         #11161A;
+  --color-elevated:        #171E23;
+  --color-text-primary:    #E2E8F0;
+  --color-text-secondary:  #A4AFBA;
+  --color-text-muted:      #66717C;
+  --color-border:          rgba(255,255,255,0.09);
+  --color-glass:           rgba(255,255,255,0.06);
+  --color-glass-strong:    rgba(255,255,255,0.10);
+
+  /* Primary signal */
+  --color-emerald:         #10B981;
+  --color-emerald-light:   #6EE7B7;
+  --color-emerald-dark:    #047857;
+  --color-emerald-wash:    rgba(16,185,129,0.10);
+
+  /* Semantic states */
+  --color-info:            #60A5FA;
+  --color-warning:         #F59E0B;
+  --color-critical:        #F87171;
+  --color-analysis:        #A78BFA;
+
+  /* Domain accents */
+  --color-training:        #10B981;
+  --color-fuel:            #22D3EE;
+  --color-heart:           #F43F5E;
+  --color-labs:            #A78BFA;
+  --color-log:             #F59E0B;
+  --color-user:            #818CF8;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'Roboto Mono', 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Spacing — 4px base */
+  --sp-1:  4px;
+  --sp-2:  8px;
+  --sp-3:  12px;
+  --sp-4:  16px;
+  --sp-5:  20px;
+  --sp-6:  24px;
+  --sp-8:  32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  /* Shell layout */
+  --header-h:          48px;
+  --rail-w:            240px;
+  --rail-collapsed-w:  48px;
+  --inspector-w:       360px;
+}

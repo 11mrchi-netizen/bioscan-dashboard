@@ -29,10 +29,10 @@ import com.bioscan.fieldterminal.ui.theme.Inter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-// Setup's own hub (DAV-?): a flat card dump got too big to scan, so this is
-// now 3 buttons into their own pushed sub-screens (ui/screens/settings/),
-// same push-and-back pattern as the Status tiles. Sign-out stays here --
-// it's an account action for the whole app, not a sub-section's content.
+// Setup's own hub: a flat card dump got too big to scan, so this is now 3
+// buttons into their own pushed sub-screens (ui/screens/settings/), same
+// push-and-back pattern as the Status tiles. Sign-out stays here -- it's an
+// account action for the whole app, not a sub-section's content.
 @Composable
 fun SettingsScreen(
     scope: CoroutineScope,
@@ -47,7 +47,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             SettingsNavRow(title = "USER", subtitle = "Profile, nutrition goals", onClick = onOpenUser)
-            SettingsNavRow(title = "NOTIFICATIONS", subtitle = "Alert preferences", onClick = onOpenNotifications)
+            SettingsNavRow(title = "NOTIFICATIONS", subtitle = "Quiet hours", onClick = onOpenNotifications)
             SettingsNavRow(title = "CONNECTED SERVICES", subtitle = "AI nutrition, Map, Health Connect, Zepp", onClick = onOpenConnectedServices)
 
             Box(modifier = Modifier.fillMaxWidth().padding(top = 20.dp), contentAlignment = Alignment.Center) {

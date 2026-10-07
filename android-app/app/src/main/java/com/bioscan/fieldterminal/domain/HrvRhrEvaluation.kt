@@ -101,6 +101,38 @@ fun evaluateHrv(hrvDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = Local
 fun evaluateRhr(rhrDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): SwcEvaluation =
     evaluateSwcStream(rhrDaily, asOf)
 
+// Same SWC treatment as RHR (untransformed -- SpO2 is already a bounded
+// percentage, no log-space reason to transform it).
+fun evaluateSpo2(spo2Daily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): SwcEvaluation =
+    evaluateSwcStream(spo2Daily, asOf)
+
 // HRV's baseline7d/mean60d are in ln-space (see evaluateHrv) -- callers
 // exponentiate back to real ms for display. RHR needs no such conversion.
 fun expValue(value: Double?): Double? = value?.let { exp(it) }
+
+// DAV-285: HRV/RHR's *trend chart* window -- independent of
+// evaluateSwcStream()'s own fixed 60-day baseline/gate logic above, which
+// this doesn't touch. days = null means ALL (no lower bound).
+enum class VitalsTimeframe(val label: String, val days: Long?) {
+    Week("7D", 7),
+    Month("1M", 30),
+    SixMonths("6M", 180),
+    Year("1Y", 365),
+    All("ALL", null),
+}
+
+// At 7D, raw daily points render individually -- few enough to read as-is.
+// Longer windows bucket into Monday-anchored weekly means so a year of daily
+// noise doesn't overwhelm the line (same downsampling spirit as
+// vo2MaxRollingAverage's day-aware smoothing, but a bucket average rather
+// than a rolling one, since these windows are wide enough that "one point per
+// day" stops being readable).
+fun vitalsTrendSeries(points: List<Pair<LocalDate, Double>>, timeframe: VitalsTimeframe, asOf: LocalDate = LocalDate.now()): List<Pair<LocalDate, Double>> {
+    val windowed = timeframe.days
+        ?.let { d -> points.filter { ChronoUnit.DAYS.between(it.first, asOf) <= d } }
+        ?: points
+    if (timeframe == VitalsTimeframe.Week) return windowed.sortedBy { it.first }
+    return windowed.groupBy { it.first.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)) }
+        .toSortedMap()
+        .map { (weekStart, values) -> weekStart to values.map { it.second }.average() }
+}

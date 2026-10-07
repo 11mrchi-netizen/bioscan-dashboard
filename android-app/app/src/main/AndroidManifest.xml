@@ -28,6 +28,15 @@
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <uses-permission android:name="android.permission.health.READ_ELEVATION_GAINED" />
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <!-- Phase G5. A route-specific permission, separate from READ_EXERCISE:
+         without this, the per-session VIEW ROUTE button's consent screen
+         (ExerciseRouteRequestContract, ui/screens/SessionDetailScreen.kt)
+         has nothing to grant and silently does nothing when tapped. Never
+         part of HealthConnectManager.PERMISSIONS' bulk grant; Health
+         Connect only ever grants this one per record, through that same
+         consent screen, confirmed against Google's own exercise-routes
+         guide (this permission can't be requested any other way). -->
+    <uses-permission android:name="android.permission.health.READ_EXERCISE_ROUTES" />
     <uses-permission android:name="android.permission.health.READ_POWER" />
     <uses-permission android:name="android.permission.health.READ_SPEED" />
     <uses-permission android:name="android.permission.health.READ_VO2_MAX" />

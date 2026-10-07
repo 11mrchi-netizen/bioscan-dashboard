@@ -32,11 +32,15 @@ function json(body: unknown, status: number) {
   });
 }
 
-// Same primary/fallback pair this app's client-side Gemini calls already use
-// (GeminiClient.kt's postGeminiWithFallback) -- kept in sync manually since
-// this function is a separate runtime (Deno, not the Android app).
-const MODEL = "gemini-3.8-flash";
-const FALLBACK_MODEL = "gemini-3.5-flash-lite";
+// DAV-220: this is a high-frequency call (once per logged meal) -- moved off
+// gemini-3.8-flash's scarce 20/day free-tier quota (the actual cause of the
+// "only one ingredient" reports: most real attempts were failing outright on
+// 429 quota-exhaustion, not under-decomposing) onto the two flash-lite tiers
+// (500/day each, 1000/day combined), fully separate from
+// LabExtractionRepository.kt's deliberately-kept 3.8-flash quota for its own
+// rare, accuracy-sensitive vision task.
+const MODEL = "gemini-3.5-flash-lite";
+const FALLBACK_MODEL = "gemini-3.1-flash-lite";
 const MODEL_VERSION = "1";
 
 const PROMPT = `Extract structured food and beverage logging candidates from the text below.
@@ -84,7 +88,7 @@ const RESPONSE_SCHEMA = {
   required: ["items"],
 };
 
-async function callGemini(apiKey: string, text: string): Promise<{ status: number; body: string }> {
+async function callGemini(apiKey: string, text: string): Promise<{ status: number; body: string; model: string }> {
   const requestBody = JSON.stringify({
     contents: [{ parts: [{ text: PROMPT + text.trim() + '"""' }] }],
     generationConfig: { response_mime_type: "application/json", response_schema: RESPONSE_SCHEMA },
@@ -95,16 +99,23 @@ async function callGemini(apiKey: string, text: string): Promise<{ status: numbe
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       { method: "POST", headers: { "Content-Type": "application/json" }, body: requestBody },
     );
-    return { status: res.status, body: await res.text() };
+    return { status: res.status, body: await res.text(), model };
   }
 
   let result = await attempt(MODEL);
+
+  // DAV-220: 429 means MODEL's *daily* quota is exhausted -- retrying the
+  // same model after a couple seconds can't succeed until tomorrow, so go
+  // straight to FALLBACK_MODEL's own separate quota instead of burning the
+  // 503 retry loop's delays on a request that's guaranteed to fail again.
+  if (result.status === 429) return await attempt(FALLBACK_MODEL);
+
   for (const delayMs of [1000, 2000]) {
     if (result.status !== 503) return result;
     await new Promise((r) => setTimeout(r, delayMs));
     result = await attempt(MODEL);
   }
-  if (result.status === 503) result = await attempt(FALLBACK_MODEL);
+  if (result.status === 503 || result.status === 429) result = await attempt(FALLBACK_MODEL);
   return result;
 }
 
@@ -141,7 +152,7 @@ Deno.serve(async (req: Request) => {
     if (!text) return json({ error: "missing_text" }, 400);
 
     const startedAt = Date.now();
-    const { status, body: geminiBodyText } = await callGemini(apiKey, text);
+    const { status, body: geminiBodyText, model: servedByModel } = await callGemini(apiKey, text);
     const latencyMs = Date.now() - startedAt;
 
     const db = createClient(
@@ -152,7 +163,10 @@ Deno.serve(async (req: Request) => {
     if (status < 200 || status >= 300) {
       await db.from("ai_estimates").insert({
         user_id: user.id,
-        model: MODEL,
+        // DAV-220: the model that actually answered (may be FALLBACK_MODEL),
+        // not always the primary MODEL constant -- without this, a quota
+        // fallback would misreport itself in the audit trail.
+        model: servedByModel,
         model_version: MODEL_VERSION,
         prompt_text: text,
         raw_response: safeParseJson(geminiBodyText),
@@ -174,7 +188,7 @@ Deno.serve(async (req: Request) => {
       .from("ai_estimates")
       .insert({
         user_id: user.id,
-        model: MODEL,
+        model: servedByModel,
         model_version: MODEL_VERSION,
         prompt_text: text,
         raw_response: geminiResponse,

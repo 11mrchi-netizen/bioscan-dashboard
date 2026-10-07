@@ -18,6 +18,7 @@ object FTType {
     // ---- Interface language (Inter) ----
     val PageTitle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 24.sp)
     val SectionTitle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
+    val CardTitle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 13.sp)
     val RowTitle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
     val Body = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 15.sp)
     val BodySmall = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 13.sp)

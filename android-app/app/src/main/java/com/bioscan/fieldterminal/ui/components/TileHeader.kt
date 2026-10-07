@@ -33,7 +33,7 @@ fun TileHeader(onBack: () -> Unit, title: String? = null, subtitle: String? = nu
         if (title != null) {
             Column(modifier = Modifier.padding(start = 4.dp, end = 12.dp)) {
                 Text(title, style = FTType.SectionTitle, color = FT.TextPrimary)
-                subtitle?.let { Text(it, style = FTType.Label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = FT.TextSecondary) }
+                subtitle?.let { Text(it, style = FTType.MonoCaption, color = FT.TextSecondary) }
             }
         }
     }

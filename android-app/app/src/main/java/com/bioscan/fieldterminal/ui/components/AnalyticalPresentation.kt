@@ -37,22 +37,21 @@ import com.bioscan.fieldterminal.domain.Provenance
 import com.bioscan.fieldterminal.domain.RangeComparison
 import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.TrendState
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-private val Telemetry = com.bioscan.fieldterminal.ui.theme.RobotoMono
-private val Interface = com.bioscan.fieldterminal.ui.theme.Inter
 
 @Composable
 fun FTMetricValue(value: DisplayValue, modifier: Modifier = Modifier) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(value.primary, color = FT.TextPrimary, fontFamily = Telemetry, fontWeight = FontWeight.Bold, fontSize = 36.sp)
+            Text(value.primary, color = FT.TextPrimary, style = FTType.DisplayMetric)
             value.unit?.let {
                 Spacer(Modifier.width(6.dp))
-                Text(it, color = FT.TextSecondary, fontFamily = Telemetry, fontSize = 13.sp)
+                Text(it, color = FT.TextSecondary, style = FTType.Value)
             }
         }
-        value.secondary?.let { Text(it, color = FT.TextSecondary, fontFamily = Interface, fontSize = 13.sp) }
+        value.secondary?.let { Text(it, color = FT.TextSecondary, style = FTType.BodySmall) }
     }
 }
 
@@ -67,9 +66,9 @@ fun FTStatePill(state: MetricState, modifier: Modifier = Modifier) {
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(treatment.symbol, color = treatment.color, fontFamily = Telemetry, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(treatment.symbol, color = treatment.color, style = FTType.Label)
         Spacer(Modifier.width(5.dp))
-        Text(treatment.label, color = treatment.color, fontFamily = Telemetry, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Text(treatment.label, color = treatment.color, style = FTType.Label)
     }
 }
 
@@ -86,9 +85,7 @@ fun FTTrendIndicator(trend: TrendState, modifier: Modifier = Modifier) {
         text = treatment.first + " " + treatment.second,
         modifier = modifier.semantics { contentDescription = treatment.second.lowercase() },
         color = FT.TextSecondary,
-        fontFamily = Telemetry,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
+        style = FTType.Label,
     )
 }
 
@@ -107,9 +104,7 @@ fun FTConfidenceChip(level: ConfidenceLevel, modifier: Modifier = Modifier) {
             .border(FT.BorderWidth, color.copy(alpha = 0.5f), RoundedCornerShape(FT.RadiusSmall))
             .padding(horizontal = 8.dp, vertical = 5.dp),
         color = color,
-        fontFamily = Telemetry,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
+        style = FTType.Label,
     )
 }
 
@@ -121,8 +116,7 @@ fun FTProvenanceCue(provenance: List<Provenance>, modifier: Modifier = Modifier)
         text = label,
         modifier = modifier.semantics { contentDescription = "Source: " + label },
         color = FT.TextMuted,
-        fontFamily = Telemetry,
-        fontSize = 10.sp,
+        style = FTType.Micro,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
@@ -155,8 +149,8 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
 
     Column(modifier = modifier.semantics { contentDescription = range.label + (comparisonLabel?.let { ", " + it.lowercase() } ?: "") }) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(range.label.uppercase(), color = FT.TextSecondary, fontFamily = Telemetry, fontSize = 11.sp, modifier = Modifier.weight(1f))
-            comparisonLabel?.let { Text(it, color = FT.TextSecondary, fontFamily = Telemetry, fontWeight = FontWeight.Bold, fontSize = 11.sp) }
+            Text(range.label.uppercase(), color = FT.TextSecondary, style = FTType.MonoCaption, modifier = Modifier.weight(1f))
+            comparisonLabel?.let { Text(it, color = FT.TextSecondary, style = FTType.Label) }
         }
         Canvas(modifier = Modifier.fillMaxWidth().height(24.dp).padding(top = 6.dp)) {
             val y = size.height / 2f
@@ -183,8 +177,7 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
                 append(" · RANGE " + formatRangeValue(minimum) + "–" + formatRangeValue(maximum))
             },
             color = FT.TextMuted,
-            fontFamily = Telemetry,
-            fontSize = 11.sp,
+            style = FTType.MonoCaption,
         )
     }
 }
@@ -223,9 +216,7 @@ fun FTCard(
             Text(
                 text = title.uppercase(),
                 color = FT.Emerald,
-                fontFamily = Interface,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
+                style = FTType.CardTitle,
                 modifier = Modifier.weight(1f),
             )
             info?.let { InfoHelpButton(title = title, body = it) }
@@ -251,8 +242,8 @@ fun FTDataState(availability: DataAvailability, reason: String? = null, modifier
             .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule))
             .padding(12.dp),
     ) {
-        Text(label, color = if (availability == DataAvailability.Building) FT.Analysis else FT.TextSecondary, fontFamily = Telemetry, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-        reason?.let { Text(it, color = FT.TextSecondary, fontFamily = Interface, fontSize = 13.sp) }
+        Text(label, color = if (availability == DataAvailability.Building) FT.Analysis else FT.TextSecondary, style = FTType.Label)
+        reason?.let { Text(it, color = FT.TextSecondary, style = FTType.BodySmall) }
     }
 }
 
@@ -267,13 +258,13 @@ fun FTChartFrame(chart: ChartPresentation, modifier: Modifier = Modifier, conten
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(chart.timeWindow ?: "CURRENT WINDOW", color = FT.TextSecondary, fontFamily = Telemetry, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            Text(chart.timeWindow ?: "CURRENT WINDOW", color = FT.TextSecondary, style = FTType.Label)
             Spacer(Modifier.weight(1f))
-            chart.unit?.let { Text(it, color = FT.TextMuted, fontFamily = Telemetry, fontSize = 11.sp) }
+            chart.unit?.let { Text(it, color = FT.TextMuted, style = FTType.MonoCaption) }
         }
         content()
         if (chart.missingness.name != "None") {
-            Text("DATA: " + chart.missingness.name.uppercase(), color = FT.TextMuted, fontFamily = Telemetry, fontSize = 10.sp)
+            Text("DATA: " + chart.missingness.name.uppercase(), color = FT.TextMuted, style = FTType.Micro)
         }
     }
 }
@@ -299,8 +290,8 @@ fun FTAnalyticalCard(
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
-                Text(presentation.label.uppercase(), color = FT.TextPrimary, fontFamily = Interface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                presentation.context?.let { Text(it, color = FT.TextSecondary, fontFamily = Interface, fontSize = 13.sp) }
+                Text(presentation.label.uppercase(), color = FT.TextPrimary, style = FTType.SectionTitle)
+                presentation.context?.let { Text(it, color = FT.TextSecondary, style = FTType.BodySmall) }
             }
             FTStatePill(presentation.semanticState)
         }

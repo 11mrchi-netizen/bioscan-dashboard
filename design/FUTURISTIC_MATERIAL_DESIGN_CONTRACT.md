@@ -159,6 +159,30 @@ Conceptually: **Inter = interface · Roboto Mono = telemetry**. Do not make whol
 | Label | Roboto Mono | Bold | 11–12 |
 | Micro | Roboto Mono | Regular | 10 |
 
+### Implemented roles (`FTType`)
+
+Screens use these named roles; hand-written `TextStyle(...)` is not used. A new size means a new role here (and in `FTType.kt`), not a one-off.
+
+| Role | Font | Weight | Size | Use |
+|---|---|---|---:|---|
+| `DisplayMetric` | Roboto Mono | Bold | 36 | The one hero value |
+| `MetricMedium` | Roboto Mono | Bold | 24 | Supporting levels beside a hero |
+| `PageTitle` | Inter | Bold | 24 | Page titles |
+| `SectionTitle` | Inter | SemiBold | 20 | Section / sheet / back-header titles |
+| `CardTitle` | Inter | Bold | 13 | `FTCard` title bar |
+| `RowTitle` | Inter | SemiBold | 15 | List-row titles |
+| `Body` / `BodySmall` | Inter | Regular | 15 / 13 | Copy |
+| `Caption` / `CaptionStrong` | Inter | Regular / SemiBold | 12 | Secondary notes |
+| `Value` | Roboto Mono | Regular | 14 | Row values |
+| `Telemetry` | Roboto Mono | Bold | 13 | Emphasised data |
+| `Label` / `LabelCaps` | Roboto Mono | Bold | 11 | Labels, pills, chips (`LabelCaps` adds 0.14em tracking) |
+| `MonoCaption` | Roboto Mono | Regular | 11 | Timestamps, metadata |
+| `Micro` | Roboto Mono | Regular | 10 | Smallest allowed; never for a primary metric |
+
+### Date and time entry
+
+Date / time fields open a themed bottom sheet (`DateField` / `DateTimeField` in `DatePickers.kt`): a month calendar with month and year navigation, and a 12-hour time panel with an AM/PM toggle. No platform dialogs, no 24-hour clock or inner ring; nothing is written back until SET.
+
 Primary metrics should be visually dominant. Preferred pattern:
 
 `RECOVERY`

@@ -26,11 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.health.connect.client.PermissionController
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
@@ -49,9 +45,8 @@ import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
@@ -133,7 +128,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                 Text(
                     "Date of birth and sex, used by the Aging Profile (User tab) and by population " +
                         "comparisons elsewhere. Stored with your account, not on this device only.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
                 FieldTextField(
@@ -144,7 +139,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                 Column {
                     Text(
                         "SEX",
-                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+                        style = FTType.LabelCaps,
                         color = FT.TextSecondary,
                         modifier = Modifier.padding(bottom = 6.dp),
                     )
@@ -170,12 +165,12 @@ fun SettingsScreen(scope: CoroutineScope) {
                 if (profileError) {
                     Text(
                         "Enter the date as YYYY-MM-DD (e.g. 1990-05-14).",
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        style = FTType.Caption,
                         color = FT.Critical,
                     )
                 }
                 profileSavedAt?.let {
-                    Text("Saved $it", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextSecondary)
+                    Text("Saved $it", style = FTType.Caption, color = FT.TextSecondary)
                 }
             }
 
@@ -183,7 +178,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                 Text(
                     "Gemini API key for photo-based calorie/macro estimation on the Food entry form. " +
                         "Stored on this device only (Android Keystore-encrypted) — never synced to Supabase.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
                 FieldTextField(
@@ -208,7 +203,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                 }
                 Text(
                     if (keySaved) "AI estimation is available on the Food entry form." else "No key set — AI estimation is hidden on the Food entry form until one is saved.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    style = FTType.Caption,
                     color = FT.TextSecondary,
                 )
             }
@@ -217,7 +212,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                 Text(
                     "Daily calorie and macro targets, used by Nutrition Analysis's goal-adherence view. " +
                         "Leave a field blank to clear just that target — stored on this device only.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -234,7 +229,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                 }
                 Text(
                     "Water is a range; set both ends, or leave both blank for the 2,500–3,500 ml reference range.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    style = FTType.Caption,
                     color = FT.TextMuted,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -276,7 +271,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                 if (goalsInputError) {
                     Text(
                         "Enter a positive number for each target you set (or leave it blank). Water needs both a min and a max, min below max.",
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        style = FTType.Caption,
                         color = FT.Critical,
                     )
                 }
@@ -286,7 +281,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                 Text(
                     "Free CARTO API key for the Map tab's dark basemap tiles (no billing — " +
                         "get one at carto.com/basemaps/apikey). Stored on this device only.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
                 FieldTextField(
@@ -313,7 +308,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                 Text(
                     "Home location — the starting point for the Map tab's \"DIRECTIONS\" link. " +
                         "Never synced anywhere; used only to build a Google Maps link on this device.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                     modifier = Modifier.padding(top = 4.dp),
                 )
@@ -357,13 +352,13 @@ fun SettingsScreen(scope: CoroutineScope) {
                 if (homeInputError) {
                     Text(
                         "Enter valid decimal coordinates (lat −90 to 90, lon −180 to 180).",
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        style = FTType.Caption,
                         color = FT.Critical,
                     )
                 }
                 Text(
                     savedHome.value?.let { "Home set: %.4f, %.4f".format(it.first, it.second) } ?: "No home location set — the DIRECTIONS link is hidden until one is saved.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    style = FTType.Caption,
                     color = FT.TextSecondary,
                 )
             }
@@ -372,7 +367,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                 Text(
                     "Reads activity, body, sleep, and vitals data on every app open. " +
                         "Grants are managed by the OS, not re-requested every screen load.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
                 Text(
@@ -382,7 +377,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                         hcGranted -> "Connected — all requested permissions granted."
                         else -> "Not connected yet."
                     },
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    style = FTType.BodySmall,
                     color = if (hcGranted) FT.Emerald else FT.TextSecondary,
                 )
                 if (hcAvailable && hcChecked && !hcGranted) {
@@ -404,7 +399,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                             HealthConnectSyncResult.NotGranted -> "Sync skipped — permissions not granted."
                             HealthConnectSyncResult.Unavailable -> "Sync skipped — Health Connect unavailable."
                         },
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        style = FTType.Caption,
                         color = FT.TextSecondary,
                     )
                     HealthConnectSyncStatus.lastWriteBackResult?.let { wbResult ->
@@ -423,7 +418,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                         }
                         Text(
                             text = wbText,
-                            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                            style = FTType.Caption,
                             color = if (wbResult is com.bioscan.fieldterminal.data.HealthConnectWriteBackResult.Success) FT.TextSecondary else FT.Warning,
                         )
                     }
@@ -435,7 +430,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                     "Pulls workout detail (real per-point pace/power/route) and Zepp-native " +
                         "metrics directly from Zepp's cloud, reconciled against Health Connect " +
                         "sessions rather than duplicating them. Runs automatically on app open.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
                 Text(
@@ -445,7 +440,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                         zeppStatus?.lastSyncedAt != null -> "Last synced ${zeppStatus?.lastSyncedAt}"
                         else -> "Not synced yet."
                     },
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    style = FTType.BodySmall,
                     color = if (zeppStatus?.lastError != null) FT.Warning else FT.TextSecondary,
                 )
                 if (zeppStatus?.lastError != null) {
@@ -453,7 +448,7 @@ fun SettingsScreen(scope: CoroutineScope) {
                         "Re-capture: log into watchface.zepp.com in a browser, read apptoken/userid " +
                             "from cookies, and update the ZEPP_APP_TOKEN/ZEPP_USER_ID Edge Function " +
                             "secrets (docs/zepp-integration/02-token-capture-and-data-extraction.md).",
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        style = FTType.Caption,
                         color = FT.TextSecondary,
                     )
                 }
@@ -488,7 +483,7 @@ private fun ClearChip(onClick: () -> Unit) {
             .padding(horizontal = 20.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text("CLEAR", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = FT.TextSecondary)
+        Text("CLEAR", style = FTType.LabelCaps, color = FT.TextSecondary)
     }
 }
 
@@ -507,7 +502,7 @@ private fun SexChip(label: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             label.uppercase(),
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+            style = FTType.LabelCaps,
             color = if (selected) FT.Emerald else FT.TextSecondary,
         )
     }

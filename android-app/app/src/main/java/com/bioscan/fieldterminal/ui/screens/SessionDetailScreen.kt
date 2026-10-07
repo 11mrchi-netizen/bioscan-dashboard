@@ -81,8 +81,8 @@ import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TrailElevationChart
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.Instant
 import java.time.LocalDate
@@ -237,7 +237,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                 CircularProgressIndicator(color = FT.Emerald)
             }
             header == null -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
-                Text(headerError ?: "Session not found.", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary)
+                Text(headerError ?: "Session not found.", style = FTType.BodySmall, color = FT.TextSecondary)
             }
             else -> {
                 val h = header!!
@@ -310,7 +310,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                                         else ->
                                             "Trail metrics need a recorded route and performance data, not available yet for this session."
                                     },
-                                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                    style = FTType.BodySmall,
                                     color = FT.TextSecondary,
                                 )
                             }
@@ -337,7 +337,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                                 } else {
                                     Text(
                                         "Add a CARTO API key in Settings to see the route map.",
-                                        style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                        style = FTType.BodySmall,
                                         color = FT.TextSecondary,
                                     )
                                 }
@@ -348,14 +348,14 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                             routeAvailability is RouteAvailability.ConsentRequired -> FTCard(title = "ROUTE") {
                                 Text(
                                     "This session has a recorded route. Health Connect requires a one-time, per-session permission to view it.",
-                                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                    style = FTType.BodySmall,
                                     color = FT.TextSecondary,
                                 )
                                 AmberButton(label = "VIEW ROUTE") { routeLauncher.launch(recordId) }
                             }
                             routeError != null -> Text(
                                 "Couldn't check for a recorded route (${routeError}).",
-                                style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                style = FTType.BodySmall,
                                 color = FT.TextSecondary,
                             )
                         }
@@ -435,7 +435,7 @@ private fun PerformanceChartSection(d: SessionDetail) {
     if (points.first().offsetSeconds > sessionStart || points.last().offsetSeconds < sessionEnd) {
         Text(
             "${selected.label} only reported for part of this session.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            style = FTType.Caption,
             color = FT.TextSecondary,
         )
     }
@@ -449,10 +449,10 @@ private fun SplitsCard(splits: List<SessionSplit>) {
         splits.forEach { split ->
             val isFastest = split.km == fastestKm
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("KM ${split.km}", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary)
+                Text("KM ${split.km}", style = FTType.BodySmall, color = FT.TextSecondary)
                 Text(
                     formatSplitPace(split.durationSec) + (split.avgHr?.let { "  ·  %.0f bpm".format(it) } ?: "") + (if (isFastest) "  ★" else ""),
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 14.sp, fontWeight = if (isFastest) FontWeight.Bold else FontWeight.Normal),
+                    style = if (isFastest) FTType.Telemetry else FTType.Value,
                     color = if (isFastest) FT.Emerald else FT.TextPrimary,
                 )
             }
@@ -525,7 +525,7 @@ private fun TrailCard(state: SessionStateObject, routePoints: List<RoutePoint>, 
                 if (itra != null) {
                     FTMetricValue(DisplayValue(primary = itra))
                 } else {
-                    Text("—", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 22.sp), color = FT.TextMuted)
+                    Text("—", style = FTType.MetricMedium, color = FT.TextMuted)
                 }
             }
         }
@@ -552,7 +552,7 @@ private fun TrailCard(state: SessionStateObject, routePoints: List<RoutePoint>, 
 @Composable
 private fun TrailHeaderLabel(label: String, helpTitle: String, helpBody: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp), color = FT.TextMuted)
+        Text(label, style = FTType.Label, color = FT.TextMuted)
         InfoHelpButton(helpTitle, helpBody)
     }
 }
@@ -564,11 +564,11 @@ private fun TrailHeaderLabel(label: String, helpTitle: String, helpBody: String)
 @Composable
 private fun StatLineHelp(label: String, value: String, helpTitle: String, helpBody: String) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+        Text(label, style = FTType.Body, color = FT.TextSecondary)
         InfoHelpButton(helpTitle, helpBody, modifier = Modifier.padding(start = 6.dp))
         Text(
             value,
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
+            style = FTType.Value,
             color = FT.TextPrimary,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f).padding(start = 8.dp),
@@ -634,7 +634,7 @@ private fun StrengthCard(exercises: List<StrengthExerciseDto>, library: List<Exe
         } else if (library.isNotEmpty()) {
             Text(
                 "None of this session's logged exercise names matched the exercise library -- no anatomical breakdown available.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
@@ -659,10 +659,10 @@ private fun StrengthCard(exercises: List<StrengthExerciseDto>, library: List<Exe
             Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(exercise.name, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold), color = FT.TextPrimary)
-                        subtitle?.let { Text(it, style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp), color = FT.TextSecondary) }
+                        Text(exercise.name, style = FTType.RowTitle, color = FT.TextPrimary)
+                        subtitle?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
                     }
-                    e1rm?.let { Text("e1RM %.0f kg".format(it), style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp), color = FT.TextSecondary) }
+                    e1rm?.let { Text("e1RM %.0f kg".format(it), style = FTType.MonoCaption, color = FT.TextSecondary) }
                 }
                 exercise.sets.forEachIndexed { i, set ->
                     val extras = listOfNotNull(
@@ -742,7 +742,7 @@ private fun SummaryCard(
         }
         header.rpe?.let { FTMetricRow("RPE", "$it/10") }
         header.notes?.takeIf { it.isNotBlank() }?.let {
-            Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp), color = FT.TextSecondary)
+            Text(it, style = FTType.BodySmall, color = FT.TextSecondary)
         }
 
         // 28/9: HR/PACE/POWER/CADENCE chart folded in here (was its own
@@ -751,7 +751,7 @@ private fun SummaryCard(
             when {
                 !hasHealthConnectRecord -> Text(
                     "No time-series available for sessions logged before Health Connect.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
                 loadingDetail -> Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
@@ -759,7 +759,7 @@ private fun SummaryCard(
                 }
                 detailError != null -> Text(
                     "Couldn't load time-series detail (${detailError}).",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
                 detail != null -> PerformanceChartSection(detail)

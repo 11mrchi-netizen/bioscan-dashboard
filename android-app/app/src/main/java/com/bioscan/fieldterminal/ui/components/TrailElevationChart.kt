@@ -27,13 +27,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.domain.trail.TrailChartPoint
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // 28/9. Same colors SessionDetailScreen's own PerfSignal already uses for
 // these three signals -- kept as a small local enum rather than exporting
@@ -163,8 +161,8 @@ fun TrailElevationChart(points: List<TrailChartPoint>, modifier: Modifier = Modi
             }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("0.0 KM", style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
-            Text("%.1f KM".format(xMax / 1000.0), style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
+            Text("0.0 KM", style = FTType.MonoCaption, color = FT.TextSecondary)
+            Text("%.1f KM".format(xMax / 1000.0), style = FTType.MonoCaption, color = FT.TextSecondary)
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OverlaySignal.entries.forEach { signal ->
@@ -179,7 +177,7 @@ fun TrailElevationChart(points: List<TrailChartPoint>, modifier: Modifier = Modi
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(signal.label, style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = if (isOn) signal.color else FT.TextSecondary)
+                    Text(signal.label, style = FTType.MonoCaption, color = if (isOn) signal.color else FT.TextSecondary)
                 }
             }
         }

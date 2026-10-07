@@ -24,12 +24,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.rememberCoroutineScope
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.SuspectedTrailRun
@@ -57,9 +53,8 @@ import com.bioscan.fieldterminal.domain.efficiencyRollingMedian28
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.TrendSeries
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -104,7 +99,7 @@ fun TrainingScreen(timeframe: PerformanceTimeframe, onOpenSessionDetail: (Long) 
             CircularProgressIndicator(color = FT.DomainTraining)
         }
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
+            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
         }
         else -> TrainingContent(overview!!, timeframe, onOpenSessionDetail, onMarkTrail)
     }
@@ -133,19 +128,19 @@ private fun TrainingContent(overview: TrainingOverview, timeframe: PerformanceTi
                 FTMetricRow("This week", "${overview.strengthMinutesThisWeek} min")
                 Text(
                     "Synced from Health Connect. Per-lift/set detail isn't shown here yet.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    style = FTType.Caption,
                     color = FT.TextSecondary,
                 )
             } else {
                 Text(
                     text = "No strength sessions synced yet.",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    style = FTType.RowTitle,
                     color = FT.TextSecondary,
                 )
                 Text(
                     text = "Health Connect is this app's real data source for strength training now — " +
                         "log a workout with any Health-Connect-aware app on your phone and it'll show up here after the next sync.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    style = FTType.Caption,
                     color = FT.TextSecondary,
                 )
             }
@@ -185,10 +180,10 @@ private fun SessionRow(session: ExerciseSessionRow, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column {
-            Text(session.type.replaceFirstChar { it.uppercase() }, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextPrimary)
-            Text(when_, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.TextSecondary)
+            Text(session.type.replaceFirstChar { it.uppercase() }, style = FTType.Body, color = FT.TextPrimary)
+            Text(when_, style = FTType.Caption, color = FT.TextSecondary)
         }
-        Text(detail, style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp), color = FT.TextSecondary)
+        Text(detail, style = FTType.Value, color = FT.TextSecondary)
     }
 }
 
@@ -210,7 +205,7 @@ private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimefr
 
     FTCard(title = "RUNNING") {
         if (!overview.hasAnyRunning) {
-            Text("No running sessions logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
+            Text("No running sessions logged yet.", style = FTType.Body, color = FT.TextSecondary)
         } else {
             val totalKm = sumDistanceKmSince(overview.runningSessions, today, period.days)
             val avgPace = averagePaceMinPerKmSince(overview.runningSessions, today, period.days)
@@ -290,7 +285,7 @@ private fun SectionDivider() {
     Box(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder))
 }
 
-private val sectionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
+private val sectionLabelStyle = FTType.LabelCaps
 
 // Untagged runs that look like trail runs (Zepp said trail, or a steep
 // climb/km) -- collapsed by default, one tap to confirm each or all.
@@ -306,23 +301,23 @@ private fun SuspectedTrailRuns(suspected: List<SuspectedTrailRun>, onMark: (List
     ) {
         Text(
             "SUSPECTED TRAIL RUNS (${suspected.size})",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+            style = FTType.LabelCaps,
             color = FT.Warning,
         )
-        Text(if (expanded) "HIDE" else "REVIEW", style = TextStyle(fontFamily = RobotoMono, fontSize = 11.5.sp), color = FT.TextSecondary)
+        Text(if (expanded) "HIDE" else "REVIEW", style = FTType.MonoCaption, color = FT.TextSecondary)
     }
     if (!expanded) return
     Text(
         "Logged as plain runs, but Zepp called them trail or they climb like one. Nothing changes until you confirm.",
-        style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+        style = FTType.Caption,
         color = FT.TextSecondary,
     )
     suspected.forEach { s ->
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 val date = OffsetDateTime.parse(s.row.startTime).toLocalDate().format(DateTimeFormatter.ofPattern("EEE d MMM"))
-                Text("$date · ${"%.1f".format(s.row.distanceKm ?: 0.0)} km", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextPrimary)
-                Text(s.reason, style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextSecondary)
+                Text("$date · ${"%.1f".format(s.row.distanceKm ?: 0.0)} km", style = FTType.BodySmall, color = FT.TextPrimary)
+                Text(s.reason, style = FTType.Micro, color = FT.TextSecondary)
             }
             TrailMarkButton("MARK") { onMark(s.sessionIds) }
         }
@@ -342,7 +337,7 @@ private fun TrailMarkButton(label: String, modifier: Modifier = Modifier, onClic
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp), color = FT.DomainTraining)
+        Text(label, style = FTType.Label, color = FT.DomainTraining)
     }
 }
 
@@ -360,7 +355,7 @@ private fun RunEfficiencySection(overview: TrainingOverview, timeframe: Performa
     SectionDivider()
     Text("RUN EFFICIENCY", style = sectionLabelStyle, color = FT.TextMuted)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Efficiency factor", style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+        Text("Efficiency factor", style = FTType.Body, color = FT.TextSecondary)
         InfoHelpButton("Efficiency factor", EF_HELP)
     }
     val median = rolling.lastOrNull()?.second
@@ -370,7 +365,7 @@ private fun RunEfficiencySection(overview: TrainingOverview, timeframe: Performa
         val n = overview.efficiencyPoints.count { it.first.isAfter(today.minusDays(28)) }
         Text(
             "Building — needs $EF_MIN_RUNS_28D aerobic runs of 20+ min in 28 days ($n so far).",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            style = FTType.Caption,
             color = FT.TextSecondary,
         )
     }
@@ -431,7 +426,7 @@ private fun PerformanceSection(overview: TrainingOverview, timeframe: Performanc
             FTMetricValue(DisplayValue(primary = "%.1f".format(overview.latestVo2Max), unit = "ML/KG/MIN"))
             Text(
                 "Wearable-estimated, not lab-confirmed.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
@@ -447,7 +442,7 @@ private fun PerformanceSection(overview: TrainingOverview, timeframe: Performanc
             )
             Text(
                 "Zepp's own estimate, recomputed per qualifying run.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
@@ -484,7 +479,7 @@ private fun PerformanceTrendChart(
         if (series.size < 2) {
             Text(
                 "Not enough readings yet to plot a trend.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
                 modifier = Modifier.padding(vertical = 10.dp),
             )
@@ -510,7 +505,7 @@ private fun PerformanceTrendChart(
         } else {
             Text(
                 "Not enough readings in the last ${timeframe.label.lowercase()} to plot a trend.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
                 modifier = Modifier.padding(vertical = 10.dp),
             )
@@ -528,7 +523,7 @@ private fun LegendItem(label: String, color: androidx.compose.ui.graphics.Color)
                 .width(12.dp)
                 .background(color),
         )
-        Text(label, style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextSecondary)
+        Text(label, style = FTType.Micro, color = FT.TextSecondary)
     }
 }
 

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
@@ -39,7 +40,7 @@ internal fun Modifier.chartInspect(key: Any?, onPick: (x: Float, width: Float, i
 
 internal data class InspectRow(val label: String?, val value: String, val color: Color)
 
-private val inspectRowStyle = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp, color = FT.TextPrimary)
+private val inspectRowStyle = FTType.MonoCaption.copy(color = FT.TextPrimary)
 
 // Guide line + one dot per row + a value box, all drawn inside the chart's own
 // canvas (no layout math: the box is measured, then flipped to the left of the

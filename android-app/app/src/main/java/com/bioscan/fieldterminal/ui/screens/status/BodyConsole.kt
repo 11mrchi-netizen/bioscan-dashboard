@@ -65,12 +65,6 @@ import com.bioscan.fieldterminal.ui.components.metricStateLabel
 import com.bioscan.fieldterminal.ui.components.readinessState
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.font.FontWeight
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 
@@ -182,8 +176,8 @@ private fun SystemTile(tile: SystemTileSpec, state: MetricState?, preview: List<
     }
 }
 
-private val tileLabelStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-private val tilePreviewStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 10.5.sp)
+private val tileLabelStyle = FTType.CaptionStrong
+private val tilePreviewStyle = FTType.Label
 
 @Composable
 private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean) {
@@ -452,7 +446,7 @@ private fun NextUpSection(modifier: Modifier = Modifier) {
             .background(FT.Surface)
             .padding(horizontal = 18.dp, vertical = 14.dp),
     ) {
-        Text(nextUpLabel(state), style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14.em), color = FT.TextSecondary)
+        Text(nextUpLabel(state), style = FTType.LabelCaps, color = FT.TextSecondary)
     }
 }
 

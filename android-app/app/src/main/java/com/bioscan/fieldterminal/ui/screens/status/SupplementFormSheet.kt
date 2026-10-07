@@ -29,11 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementImpactRepository
@@ -41,9 +37,8 @@ import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -63,8 +58,8 @@ private val EVERY_N_DAYS_OPTIONS: List<Pair<Int?, String>> = listOf(
     4 to "4 DAYS",
     7 to "WEEKLY",
 )
-private val sheetHeaderTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
-private val sheetActionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
+private val sheetHeaderTitleStyle = FTType.SectionTitle
+private val sheetActionLabelStyle = FTType.LabelCaps
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -118,7 +113,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                         ) {
                             Text(
                                 option.uppercase(),
-                                style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                                style = FTType.MonoCaption,
                                 color = if (selected) FT.Emerald else FT.TextSecondary,
                             )
                         }
@@ -142,7 +137,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                         ) {
                             Text(
                                 label,
-                                style = TextStyle(fontFamily = RobotoMono, fontSize = 10.sp),
+                                style = FTType.Micro,
                                 color = if (selected) FT.Emerald else FT.TextSecondary,
                             )
                         }
@@ -151,7 +146,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
             }
 
             error?.let {
-                Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical)
+                Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical)
             }
 
             val valid = name.isNotBlank() && dose.isNotBlank()
@@ -193,7 +188,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                 Spacer(Modifier.height(4.dp))
                 Text(
                     if (ending) "ENDING..." else "END THIS SUPPLEMENT",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    style = FTType.BodySmall,
                     color = FT.Critical,
                     modifier = Modifier
                         .fillMaxWidth()

@@ -26,11 +26,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.AgingProfileRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -75,9 +72,8 @@ import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
@@ -121,7 +117,7 @@ fun UserProfileScreen(data: UserProfileData? = null, onOpenAging: () -> Unit = {
             Text(
                 "Domain levels and achievements below are sample data — real ones arrive once the historical " +
                     "archive import lands. The training block below is already real.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextMuted,
             )
 
@@ -173,7 +169,7 @@ private fun AgingCard(overview: AgingProfileOverview?, onOpen: () -> Unit) {
                 BioAgeHero(overview)
                 Text(
                     "CHRONOLOGICAL ${overview.chronologicalAgeYears} YRS · TAP FOR THE FULL BREAKDOWN",
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp),
+                    style = FTType.Micro,
                     color = FT.TextMuted,
                 )
             }
@@ -191,13 +187,13 @@ private fun DomainLevelRow(domain: AchievementDomain, level: DomainLevel?) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(domain.label(), style = TextStyle(fontFamily = RobotoMono, fontSize = 12.5.sp), color = FT.TextSecondary)
+            Text(domain.label(), style = FTType.Value, color = FT.TextSecondary)
             if (level?.band != null) {
                 FTStatePill(percentileBandState(level.band))
             } else {
                 Text(
                     "Not enough data yet",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+                    style = FTType.RowTitle,
                     color = FT.TextMuted,
                     textAlign = TextAlign.End,
                 )
@@ -232,7 +228,7 @@ private fun AchievementSection(domain: AchievementDomain, achievements: List<Ach
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     achievement.metricLabel(),
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    style = FTType.RowTitle,
                     color = FT.TextSecondary,
                 )
                 Spacer(Modifier.height(4.dp))
@@ -241,7 +237,7 @@ private fun AchievementSection(domain: AchievementDomain, achievements: List<Ach
                 achievement.comparisonContext?.let {
                     Text(
                         it,
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                        style = FTType.Caption,
                         color = FT.Emerald,
                     )
                 }
@@ -267,14 +263,14 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 cycle.focus.joinToString(" + ") { it.quality.label() }.ifBlank { "No stated focus" },
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                style = FTType.RowTitle,
                 color = FT.TextPrimary,
             )
             EditLink("EDIT", onEdit)
         }
         Text(
             "${cycle.startDate} — ${cycle.endDate ?: "ongoing"}",
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+            style = FTType.MonoCaption,
             color = FT.TextMuted,
         )
 
@@ -294,7 +290,7 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
                 val remaining = (totalDays - elapsedDays).toInt()
                 Text(
                     "Week $weeksElapsed of $totalWeeks — $remaining days remaining",
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                    style = FTType.MonoCaption,
                     color = FT.TextMuted,
                 )
             }
@@ -311,13 +307,13 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
                 ) {
                     Text(
                         entry.quality.label(),
-                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                        style = FTType.BodySmall,
                         color = FT.TextSecondary,
                         modifier = Modifier.weight(0.45f),
                     )
                     Text(
                         "${(entry.weight * 100).toInt()}%",
-                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                        style = FTType.Label,
                         color = FT.TextPrimary,
                         modifier = Modifier.width(40.dp),
                         textAlign = TextAlign.End,
@@ -359,7 +355,7 @@ private fun TrainingBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
         } else {
             Text(
                 "No numeric goal set for this block.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
@@ -383,7 +379,7 @@ private fun TrainingBlockHistoryCard(history: List<TrainingCycle>) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     cycle.focus.joinToString(" + ") { it.quality.label() },
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
+                    style = FTType.RowTitle,
                     color = FT.TextSecondary,
                 )
                 Row(
@@ -392,14 +388,14 @@ private fun TrainingBlockHistoryCard(history: List<TrainingCycle>) {
                 ) {
                     Text(
                         "${cycle.startDate} — ${cycle.endDate}",
-                        style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+                        style = FTType.MonoCaption,
                         color = FT.TextMuted,
                     )
                     cycle.endDate?.let { end ->
                         val weeks = ChronoUnit.WEEKS.between(cycle.startDate, end)
                         Text(
                             "${weeks}w",
-                            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                            style = FTType.Label,
                             color = FT.TextPrimary,
                         )
                     }
@@ -422,7 +418,7 @@ private fun TrainingBlockHistoryCard(history: List<TrainingCycle>) {
                 if (cycle.goalMetric != null && cycle.startingValue != null && cycle.targetValue != null) {
                     Text(
                         "Goal: ${cycle.goalMetric} — %.0f → %.0f".format(cycle.startingValue, cycle.targetValue),
-                        style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                        style = FTType.MonoCaption,
                         color = FT.TextMuted,
                     )
                 }
@@ -469,7 +465,7 @@ private fun Achievement.metricLabel(): String = metric.replace('_', ' ').replace
 private fun EditLink(label: String, onClick: () -> Unit) {
     Text(
         label,
-        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp),
+        style = FTType.Label,
         color = FT.Emerald,
         modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
     )

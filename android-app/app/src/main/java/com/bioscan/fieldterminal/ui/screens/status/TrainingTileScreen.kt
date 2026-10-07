@@ -22,12 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
@@ -84,8 +80,6 @@ import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
 import com.bioscan.fieldterminal.ui.components.confidenceLevel
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalDate
 
 // DAV-98: LOAD first (dominant instrument), then PERFORMANCE, then SESSIONS
@@ -199,7 +193,7 @@ private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int,
         eval.latestCheckDate?.let { FTMetricRow("Last check-in", it.toString()) }
         Text(
             "LOAD CONTEXT (shown adjacent, never combined into one score)",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+            style = FTType.LabelCaps,
             color = FT.TextMuted,
         )
         tsb?.let { FTMetricRow("TSB (form)", "%+.1f".format(it)) }
@@ -221,7 +215,7 @@ private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             "8-WEEK LOAD (deload weeks marked)",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+            style = FTType.LabelCaps,
             color = FT.TextMuted,
         )
         Row(modifier = Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -357,7 +351,7 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier
         val tsb = eval.tsb
         if (tsb != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("FORM (TSB BAND)", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = FT.TextMuted)
+                Text("FORM (TSB BAND)", style = FTType.LabelCaps, color = FT.TextMuted)
                 InfoHelpButton("TSB band", LOAD_HELP_BAND)
             }
             BandedGauge(
@@ -370,7 +364,7 @@ private fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier
             )
         } else {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("State", style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+                Text("State", style = FTType.Body, color = FT.TextSecondary)
                 FTStatePill(eval.state.toMetricState())
             }
         }

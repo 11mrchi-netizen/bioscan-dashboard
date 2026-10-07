@@ -18,6 +18,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
@@ -68,11 +69,7 @@ fun MinMaxAverageBar(
 private fun Text(value: String, color: Color, modifier: Modifier, bold: Boolean = false, alignEnd: Boolean = false) {
     androidx.compose.material3.Text(
         value,
-        style = TextStyle(
-            fontFamily = RobotoMono,
-            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
-            fontSize = 12.sp,
-        ),
+        style = if (bold) FTType.Telemetry else FTType.MonoCaption,
         color = color,
         textAlign = if (alignEnd) androidx.compose.ui.text.style.TextAlign.End else androidx.compose.ui.text.style.TextAlign.Start,
         modifier = modifier,

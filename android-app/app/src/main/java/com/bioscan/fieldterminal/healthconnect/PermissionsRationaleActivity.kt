@@ -16,7 +16,6 @@ import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.ui.theme.FieldTerminalTheme
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
 
 // Phase G1: Health Connect requires an activity answering
 // androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE (reachable from Health
@@ -40,7 +39,7 @@ class PermissionsRationaleActivity : ComponentActivity() {
                             "hydration and nutrition records to keep them in sync with entries logged in " +
                             "this app's Log tab. Nothing is sent off this device except to this app's own " +
                             "private Supabase project, which only this account can read.",
-                        style = TextStyle(fontFamily = Inter, fontSize = 15.sp),
+                        style = FTType.Body,
                         color = FT.TextSecondary,
                     )
                 }

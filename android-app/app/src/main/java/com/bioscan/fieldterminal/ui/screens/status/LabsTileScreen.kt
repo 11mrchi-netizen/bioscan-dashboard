@@ -20,9 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow
@@ -41,8 +39,6 @@ import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.LabsTab
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalDate
 
 // DAV-74/DAV-87 (First feedback fixes): Labs tile page. Keeps the existing
@@ -129,10 +125,10 @@ private fun BloodworkMarkerRow(m: BloodworkMarkerEvaluation, draws: List<Pair<Lo
     val state = bloodworkTrendMetricState(m.state)
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(m.markerName, style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextPrimary)
+            Text(m.markerName, style = FTType.BodySmall, color = FT.TextPrimary)
             Text(
                 "%.2f%s".format(m.latestValue, m.unit?.let { " $it" } ?: ""),
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp),
+                style = FTType.Value,
                 color = FT.TextPrimary,
             )
         }
@@ -150,13 +146,13 @@ private fun BloodworkMarkerRow(m: BloodworkMarkerEvaluation, draws: List<Pair<Lo
         }
         Text(
             if (m.refLow != null && m.refHigh != null) "range %.2f–%.2f".format(m.refLow, m.refHigh) else "no reference range on file",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            style = FTType.Caption,
             color = FT.TextMuted,
         )
         m.indexOfIndividuality?.takeIf { it < 0.6 }?.let {
             Text(
                 "Individuality %.2f — read against your own history".format(it),
-                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }

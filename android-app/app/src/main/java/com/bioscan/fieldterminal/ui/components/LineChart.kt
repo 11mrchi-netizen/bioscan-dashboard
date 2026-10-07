@@ -21,13 +21,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.domain.TimePoint
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // Phase G5. This app's first general-purpose line/area chart primitive --
 // generalizes the old Step-14 RouteCanvas's bounding-box -> single-scale ->
@@ -88,7 +85,7 @@ fun LineChart(
 
     Column(modifier = modifier.fillMaxWidth()) {
         unit?.let {
-            Text(it.uppercase(), style = FTType.Label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
+            Text(it.uppercase(), style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
         }
         Canvas(
             modifier = Modifier
@@ -132,8 +129,8 @@ fun LineChart(
             }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatElapsed(xRange?.first ?: points.first().offsetSeconds), style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
-            Text(formatElapsed(xRange?.second ?: points.last().offsetSeconds), style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
+            Text(formatElapsed(xRange?.first ?: points.first().offsetSeconds), style = FTType.MonoCaption, color = FT.TextSecondary)
+            Text(formatElapsed(xRange?.second ?: points.last().offsetSeconds), style = FTType.MonoCaption, color = FT.TextSecondary)
         }
     }
 }

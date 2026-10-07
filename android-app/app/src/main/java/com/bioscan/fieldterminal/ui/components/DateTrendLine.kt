@@ -21,13 +21,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -113,7 +110,7 @@ fun DateTrendLine(
 
     Column(modifier = modifier.fillMaxWidth()) {
         unit?.let {
-            Text(it.uppercase(), style = FTType.Label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
+            Text(it.uppercase(), style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
         }
         Canvas(
             modifier = Modifier
@@ -158,8 +155,8 @@ fun DateTrendLine(
             }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(allPoints.minOf { it.first }.format(TREND_DATE_FORMAT), style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
-            Text(allPoints.maxOf { it.first }.format(TREND_DATE_FORMAT), style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextSecondary)
+            Text(allPoints.minOf { it.first }.format(TREND_DATE_FORMAT), style = FTType.MonoCaption, color = FT.TextSecondary)
+            Text(allPoints.maxOf { it.first }.format(TREND_DATE_FORMAT), style = FTType.MonoCaption, color = FT.TextSecondary)
         }
     }
 }

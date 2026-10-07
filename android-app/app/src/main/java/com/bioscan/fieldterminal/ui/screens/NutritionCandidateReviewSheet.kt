@@ -29,10 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.ConfirmedMealItem
 import com.bioscan.fieldterminal.data.MealItemSource
@@ -46,6 +44,7 @@ import com.bioscan.fieldterminal.data.model.FoodServingRow
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
@@ -65,8 +64,8 @@ import java.time.LocalDateTime
 // those stay file-private there (MapScreen.kt independently keeps its own
 // copies too), so this file follows the same established per-file pattern
 // rather than widening visibility across files for a few one-line helpers.
-private val sheetHeaderTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
-private val sheetActionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
+private val sheetHeaderTitleStyle = FTType.SectionTitle
+private val sheetActionLabelStyle = FTType.LabelCaps
 
 @Composable
 private fun SheetBackHeader(label: String, onBack: () -> Unit) {
@@ -164,14 +163,14 @@ fun NutritionCandidateReviewSheet(
             }
 
             saveError?.let {
-                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.Critical)
+                Text(it, style = FTType.BodySmall, color = FT.Critical)
             }
 
             val allResolved = rows.isNotEmpty() && rows.all { confirmed.containsKey(it.first) }
             if (!allResolved) {
                 Text(
                     "Pick a match from the search results for every item before saving.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    style = FTType.Caption,
                     color = FT.TextSecondary,
                 )
             }
@@ -294,7 +293,7 @@ private fun ReviewItemCard(
                 if (seed.ambiguous) {
                     Text(
                         "NEEDS CONFIRMATION",
-                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp, letterSpacing = 0.1f.em),
+                        style = FTType.LabelCaps,
                         color = FT.Warning,
                     )
                 }
@@ -305,8 +304,8 @@ private fun ReviewItemCard(
             val food = matchedFood!!
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
-                    Text(food.name, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp), color = FT.TextPrimary)
-                    food.brand?.let { Text(it, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.TextSecondary) }
+                    Text(food.name, style = FTType.RowTitle, color = FT.TextPrimary)
+                    food.brand?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
                 }
                 Text(
                     "CHANGE",
@@ -329,7 +328,7 @@ private fun ReviewItemCard(
                 ) {
                     Text(
                         food.name + (food.brand?.let { " ($it)" } ?: ""),
-                        style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                        style = FTType.BodySmall,
                         color = FT.TextPrimary,
                     )
                 }
@@ -348,7 +347,7 @@ private fun ReviewItemCard(
         if (seed.quantityLow != null && seed.quantityHigh != null) {
             Text(
                 "Estimated range: ${seed.quantityLow} - ${seed.quantityHigh} $quantityUnit",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
@@ -374,7 +373,7 @@ private fun ReviewItemCard(
                     ) {
                         Text(
                             serving.servingName,
-                            style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                            style = FTType.MonoCaption,
                             color = if (isSelected) FT.DomainLog else FT.TextSecondary,
                         )
                     }
@@ -385,9 +384,9 @@ private fun ReviewItemCard(
         when {
             resolving -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.padding(2.dp))
-                Text("Calculating...", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextSecondary)
+                Text("Calculating...", style = FTType.Caption, color = FT.TextSecondary)
             }
-            resolveError != null -> Text(resolveError!!, style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical)
+            resolveError != null -> Text(resolveError!!, style = FTType.Caption, color = FT.Critical)
             resolved != null -> ResolvedTotalsRow(resolved!!)
         }
 
@@ -419,7 +418,7 @@ private fun ResolvedTotalsRow(resolved: ResolvedMealItem) {
             if (resolved.hydration != null) {
                 Text(
                     "Effective hydration is a modeled estimate (${resolved.hydration.modelVersion}), not a measured value.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+                    style = FTType.Caption,
                     color = FT.TextMuted,
                     modifier = Modifier.padding(top = 4.dp),
                 )
@@ -431,8 +430,8 @@ private fun ResolvedTotalsRow(resolved: ResolvedMealItem) {
 @Composable
 private fun StatChip(label: String, value: String) {
     Column {
-        Text(label, style = TextStyle(fontFamily = RobotoMono, fontSize = 9.5.sp), color = FT.TextSecondary)
-        Text(value, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp), color = FT.TextPrimary)
+        Text(label, style = FTType.Micro, color = FT.TextSecondary)
+        Text(value, style = FTType.Telemetry, color = FT.TextPrimary)
     }
 }
 
@@ -445,7 +444,7 @@ private fun ConfidenceBadge(label: String, confidence: Double) {
     }
     Text(
         "$label ${(confidence * 100).toInt()}%",
-        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp, letterSpacing = 0.1f.em),
+        style = FTType.LabelCaps,
         color = color,
     )
 }

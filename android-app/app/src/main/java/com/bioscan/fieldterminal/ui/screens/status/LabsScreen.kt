@@ -23,11 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.LabsOverview
 import com.bioscan.fieldterminal.data.LabsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -43,10 +39,6 @@ import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.labFlagState
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import com.bioscan.fieldterminal.ui.theme.Inter
 
 // Step 9 (Phase C). Real data from `lab_draws`/`lab_results` -- NOT a port of
 // index.html's Labs panel, which is entirely hardcoded prose with an empty
@@ -80,12 +72,12 @@ fun LabsScreen() {
             CircularProgressIndicator(color = FT.DomainLabs)
         }
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
+            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
         }
         overview?.latestDraw == null -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
             AddResultButtons(onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })
             Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                Text("No lab draws logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
+                Text("No lab draws logged yet.", style = FTType.Body, color = FT.TextSecondary)
             }
         }
         else -> LabsContent(overview!!, onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })
@@ -127,7 +119,7 @@ private fun LabsContent(overview: LabsOverview, onAddClick: () -> Unit, onUpload
         AddResultButtons(onAddClick = onAddClick, onUploadClick = onUploadClick)
         Text(
             text = "BLOODWORK · $drawCount DRAW${if (drawCount == 1) "" else "S"} · ${overview.markers.size} MARKERS",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.08f.em),
+            style = FTType.LabelCaps,
             color = FT.TextSecondary,
             modifier = Modifier.padding(top = 14.dp, bottom = 4.dp),
         )
@@ -139,7 +131,7 @@ private fun LabsContent(overview: LabsOverview, onAddClick: () -> Unit, onUpload
             } else {
                 shortDate(overview.latestDraw!!.drawDate)
             },
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, letterSpacing = 0.1f.em),
+            style = FTType.LabelCaps,
             color = FT.Emerald,
             modifier = Modifier.padding(bottom = 10.dp),
         )
@@ -174,12 +166,12 @@ private fun ThemeGroupHeader(theme: LabMarkerTheme, count: Int, collapsed: Boole
     ) {
         Text(
             "${theme.label} ($count)",
-            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+            style = FTType.RowTitle,
             color = FT.Emerald,
         )
         Text(
             if (collapsed) "▸" else "▾",
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.sp),
+            style = FTType.Value,
             color = FT.Emerald,
         )
     }
@@ -200,10 +192,10 @@ private fun MarkerRow(marker: MarkerComparison) {
         if (marker.refLow != null && marker.refHigh != null && marker.latestValue != null) {
             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(marker.name, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FT.TextPrimary)
+                    Text(marker.name, style = FTType.RowTitle, color = FT.TextPrimary)
                     Text(
                         marker.latestDisplay ?: "—",
-                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 15.5.sp),
+                        style = FTType.Telemetry,
                         color = flagColor(marker.latestFlag),
                     )
                 }
@@ -224,23 +216,23 @@ private fun MarkerRow(marker: MarkerComparison) {
         } else {
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(marker.name, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = FT.TextPrimary)
+                    Text(marker.name, style = FTType.RowTitle, color = FT.TextPrimary)
                     val refText = formatRef(marker.unit, marker.refLow, marker.refHigh)
                     if (refText.isNotEmpty()) {
-                        Text(refText, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
+                        Text(refText, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
                     }
                     FlagLine(marker.latestFlag, Modifier.padding(top = 6.dp))
                 }
                 Text(
                     marker.earlierDisplay ?: "—",
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
+                    style = FTType.Value,
                     color = FT.TextSecondary,
                     modifier = Modifier.width(64.dp),
                     textAlign = androidx.compose.ui.text.style.TextAlign.End,
                 )
                 Text(
                     marker.latestDisplay ?: "—",
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 15.5.sp),
+                    style = FTType.Telemetry,
                     color = flagColor(marker.latestFlag),
                     modifier = Modifier.width(64.dp),
                     textAlign = androidx.compose.ui.text.style.TextAlign.End,
@@ -248,7 +240,7 @@ private fun MarkerRow(marker: MarkerComparison) {
                 Box(modifier = Modifier.width(24.dp), contentAlignment = Alignment.CenterEnd) {
                     Text(
                         directionSymbol(marker.direction),
-                        style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp),
+                        style = FTType.Telemetry,
                         color = flagColor(marker.latestFlag),
                     )
                 }

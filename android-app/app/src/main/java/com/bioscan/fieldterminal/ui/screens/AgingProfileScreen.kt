@@ -22,11 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.AgingProfileRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -43,8 +40,6 @@ import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.ageAccelerationState
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.format.DateTimeFormatter
 
 // DAV-232 (09A Aging Profile, Phase 1). Overview / Dimensions / History /
@@ -137,7 +132,7 @@ private fun DimensionsCard(overview: AgingProfileOverview) {
         overview.cardioAge?.let { ResultLine(it, CARDIO_AGE_HELP) } ?: FTDataState(DataAvailability.Unavailable, "No VO2max reading yet.")
         Text(
             "Molecular and organ-system dimensions arrive in a later pass.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            style = FTType.Caption,
             color = FT.TextMuted,
             modifier = Modifier.padding(top = 6.dp),
         )
@@ -149,14 +144,14 @@ private fun HistoryCard(overview: AgingProfileOverview) {
     FTCard(title = "HISTORY") {
         Text(
             "PhenoAge, by draw",
-            style = TextStyle(fontFamily = Inter, fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+            style = FTType.RowTitle,
             color = FT.TextPrimary,
         )
         val available = overview.phenoAgeHistory.filter { it.isAvailable }
         if (available.size < 2) {
             Text(
                 "Not enough complete draws yet for a trend — shown as points, never connected, until there's real history to connect.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
@@ -171,7 +166,7 @@ private fun HistoryCard(overview: AgingProfileOverview) {
         overview.phenoAgeHistory.filter { !it.isAvailable }.forEach { incomplete ->
             Text(
                 "${incomplete.observedAt.format(DateTimeFormatter.ofPattern("d MMM yyyy"))}: incomplete — ${incomplete.unavailableReason}",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                style = FTType.Caption,
                 color = FT.TextMuted,
                 modifier = Modifier.padding(top = 6.dp),
             )
@@ -186,25 +181,25 @@ private fun HistoryCard(overview: AgingProfileOverview) {
 private fun ResultLine(result: BiologicalAgeResult, help: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(result.model.label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+            Text(result.model.label, style = FTType.Body, color = FT.TextSecondary)
             InfoHelpButton(result.model.label, help)
         }
         Column(horizontalAlignment = Alignment.End) {
             if (result.isAvailable) {
                 Text(
                     "%.1f yr".format(result.biologicalAge),
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
+                    style = FTType.Value,
                     color = FT.TextPrimary,
                 )
                 Text(
                     "%+.1f yr vs. chronological".format(result.ageAcceleration),
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.5.sp),
+                    style = FTType.MonoCaption,
                     color = if (result.ageAcceleration!! < 0) FT.Emerald else FT.Warning,
                 )
             } else {
                 Text(
                     result.unavailableReason ?: "Unavailable",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    style = FTType.Caption,
                     color = FT.TextMuted,
                     textAlign = TextAlign.End,
                 )
@@ -217,19 +212,19 @@ private fun ResultLine(result: BiologicalAgeResult, help: String) {
 private fun StatLineHelp(label: String, value: String, helpTitle: String, helpBody: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+            Text(label, style = FTType.Body, color = FT.TextSecondary)
             InfoHelpButton(helpTitle, helpBody)
         }
         Text(
             value,
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
+            style = FTType.Value,
             color = FT.TextPrimary,
             textAlign = TextAlign.End,
         )
     }
 }
 
-private val sectionLabel = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp)
+private val sectionLabel = FTType.Label
 
 private const val PHENOAGE_HELP =
     "PhenoAge (Levine et al. 2018) is a published formula combining 9 routine blood markers " +

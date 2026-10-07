@@ -10,7 +10,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // The one label/value row (replaces seven private StatLine copies). Label is
 // unweighted so it never shrinks; the value takes the rest of the row and
@@ -22,7 +21,7 @@ fun FTMetricRow(label: String, value: String, modifier: Modifier = Modifier) {
         Text(label, style = FTType.Body, color = FT.TextSecondary)
         Text(
             value,
-            style = FTType.Body.copy(fontFamily = RobotoMono),
+            style = FTType.Value,
             color = FT.TextPrimary,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f).padding(start = 8.dp),

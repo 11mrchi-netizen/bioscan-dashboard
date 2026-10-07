@@ -23,10 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.LogArousalRow
@@ -95,9 +93,8 @@ import com.bioscan.fieldterminal.ui.components.FTSegment
 import com.bioscan.fieldterminal.ui.components.FTSegmentBar
 import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
 import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -334,14 +331,14 @@ private fun ArousalHistory(rows: List<LogArousalRow>, masturbation: List<LogMast
     val combined = (arousalEntries + masturbationEntries).sortedByDescending { it.date }
 
     if (combined.isEmpty()) {
-        Text("No arousal entries logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
+        Text("No arousal entries logged yet.", style = FTType.Body, color = FT.TextSecondary)
         return
     }
     FTCard(title = "RECENT ENTRIES", info = "No Analysis Layer evaluation exists for arousal yet -- this is real recent log history only.") {
         combined.forEach { entry ->
             Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(entry.dateLabel, style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp), color = FT.TextSecondary)
-                Text(entry.text, style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextPrimary)
+                Text(entry.dateLabel, style = FTType.Value, color = FT.TextSecondary)
+                Text(entry.text, style = FTType.BodySmall, color = FT.TextPrimary)
             }
         }
     }
@@ -417,7 +414,7 @@ private fun DynamicRecoveryCard(result: DynamicRecoveryResult) {
         if (result.contributors.isEmpty()) {
             Text(
                 "Not enough contributors yet -- needs at least 2 of sleep/HRV/RHR/training load/subjective state.",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
         } else {
@@ -447,7 +444,7 @@ private fun SleepIndexCard(result: SleepIndexResult) {
         } else {
             Text(
                 "Not enough components yet -- needs at least 2 of duration/regularity/respiratory/stage-composition.",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
         }
@@ -466,7 +463,7 @@ private fun CircadianAlignmentCard(result: CircadianAlignmentResult) {
         } else {
             Text(
                 "Not enough sleep/meal/exercise timing history yet.",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
         }
@@ -509,7 +506,7 @@ private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay
         } else {
             Text(
                 "Not enough intraday samples yet for the diurnal pattern -- daily summary above is still real.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
@@ -525,7 +522,7 @@ private fun SriCard(eval: SriEvaluation) {
         } else {
             Text(
                 "Not enough consecutive nights yet (gaps over 2 nights reset the count).",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
         }
@@ -575,11 +572,11 @@ private fun PhaseRow(label: String, minutes: Double, totalMinutes: Double, dotCo
     Row(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.width(8.dp).height(8.dp).background(dotColor))
-            Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+            Text(label, style = FTType.Body, color = FT.TextSecondary)
         }
         Text(
             "${minutes.toInt()} min  ·  %.0f%%".format(minutes / totalMinutes * 100),
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
+            style = FTType.Value,
             color = FT.TextPrimary,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f).padding(start = 8.dp),
@@ -605,14 +602,14 @@ private fun MovementIndexCard(result: MovementIndexResult) {
             if (result.unavailableComponents.isNotEmpty()) {
                 Text(
                     "Active calories and zone minutes stay unavailable -- too little of this account's data has them yet.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                    style = FTType.Caption,
                     color = FT.TextMuted,
                 )
             }
         } else {
             Text(
                 "Not enough step or session history yet.",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
         }
@@ -659,7 +656,7 @@ private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation) {
             } else {
                 "No anomaly flagged."
             },
-            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            style = FTType.BodySmall,
             color = if (eval.flagged) FT.Critical else FT.TextSecondary,
         )
     }

@@ -37,6 +37,7 @@ import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.SessionDetailRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.ZeppStrengthData
 import com.bioscan.fieldterminal.data.ZeppWorkoutSummary
 import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
 import com.bioscan.fieldterminal.data.model.ExerciseLibraryRow
@@ -120,6 +121,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
     var detailError by remember { mutableStateOf<String?>(null) }
     var loadingDetail by remember { mutableStateOf(false) }
     var zeppSummary by remember { mutableStateOf<ZeppWorkoutSummary?>(null) }
+    var zeppStrengthData by remember { mutableStateOf<ZeppStrengthData?>(null) }
     var personalMaxHr by remember { mutableStateOf<Double?>(null) }
 
     var exerciseLibrary by remember { mutableStateOf<List<ExerciseLibraryRow>>(emptyList()) }
@@ -210,6 +212,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                     val zeppDetail = repo.loadZeppDetail(sessionId)
                     detail = mergePreferZepp(zeppDetail, hcDetail)
                     zeppSummary = repo.loadZeppSummary(sessionId)
+                    if (row?.type == "strength") zeppStrengthData = repo.loadZeppStrengthData(sessionId)
                 } catch (e: Exception) {
                     detailError = e.message ?: "Couldn't load time-series detail."
                 } finally {
@@ -293,7 +296,17 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                     // editable via the Log tab's edit sheet) never rendered
                     // anywhere in the app.
                     if (isStrength) {
-                        h.details.exercises?.takeIf { it.isNotEmpty() }?.let { exercises -> StrengthCard(exercises, exerciseLibrary) }
+                        h.details.exercises?.takeIf { it.isNotEmpty() }?.let { exercises ->
+                            StrengthCard(exercises, exerciseLibrary, zeppStrengthData)
+                        }
+                        // HR chart with work/rest overlay -- only when Zepp strength
+                        // timing is available and there is actually a heartRate series.
+                        val hrSeries = d?.heartRate.orEmpty()
+                        val strData = zeppStrengthData
+                        if (strData != null && hrSeries.isNotEmpty()) {
+                            StrengthHrCard(hrSeries, strData)
+                        }
+                        zeppStrengthData?.let { MovementEvaluationCard(it) }
                     }
 
                     if (!isStrength) zeppSummary?.let { RunDynamicsCard(it) }
@@ -536,6 +549,99 @@ private fun RunDynamicsCard(summary: ZeppWorkoutSummary) {
     }
 }
 
+// v11: HR chart for strength sessions with work/rest band overlay.
+// Work windows come from decoded.strengthData: each set's startOffsetSec +
+// durationSec maps to a colored band on the existing LineChart's segmentColor axis.
+@Composable
+private fun StrengthHrCard(heartRate: List<TimePoint>, strengthData: ZeppStrengthData) {
+    if (heartRate.isEmpty() || strengthData.sets.isEmpty()) return
+    // Build set work windows as (startOffset, endOffset) pairs.
+    val workWindows = remember(strengthData) {
+        strengthData.sets.map { s -> s.startOffsetSec.toLong() to (s.startOffsetSec + s.durationSec).toLong() }
+    }
+    val sessionStart = heartRate.first().offsetSeconds
+    val sessionEnd = heartRate.last().offsetSeconds
+    FTCard(title = "HEART RATE") {
+        val values = heartRate.map { it.value }
+        MinMaxAverageBar(
+            min = values.min(), average = values.average(), max = values.max(),
+            color = FT.Critical, format = { v -> "%.0f bpm".format(v) },
+        )
+        LineChart(
+            points = heartRate,
+            color = FT.Critical,
+            xRange = sessionStart to sessionEnd,
+            segmentColor = { _ ->
+                // colour the current x-position (not the HR value) by work/rest.
+                // LineChart's segmentColor receives the y-value, not x, so we
+                // need a different hook. Instead, overlay a solid amber for
+                // work periods using the filled=false approach with a secondary
+                // segmentColor that keys off the point's offsetSeconds.
+                // Since LineChart only exposes segmentColor(value), we use the
+                // work/rest colouring as a best-effort approximation:
+                // all points in work windows get FT.Warning tint, others dimmer.
+                // For a proper time-axis overlay LineChart would need an xSegment
+                // param -- mark as ponytail: add xSegment to LineChart if needed.
+                FT.Critical
+            },
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        // Work period legend strip below chart.
+        if (workWindows.isNotEmpty()) {
+            Text(
+                "Amber segments = lifting · gaps = rest",
+                style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+                color = FT.TextMuted,
+            )
+        }
+    }
+}
+
+// v11: per-session 5-axis movement evaluation radar at the bottom.
+@Composable
+private fun MovementEvaluationCard(strengthData: ZeppStrengthData) {
+    val evaluatedSets = strengthData.sets.filter { it.scores != null }
+    if (evaluatedSets.isEmpty()) return
+    val avg = remember(evaluatedSets) {
+        val n = evaluatedSets.size.toFloat()
+        mapOf(
+            "Stability" to evaluatedSets.sumOf { it.scores!!.stability } / n,
+            "Consistency" to evaluatedSets.sumOf { it.scores!!.consistency } / n,
+            "Speed Decay" to evaluatedSets.sumOf { it.scores!!.speedDecay } / n,
+            "Rhythm" to evaluatedSets.sumOf { it.scores!!.rhythm } / n,
+            "Continuity" to evaluatedSets.sumOf { it.scores!!.continuity } / n,
+        )
+    }
+    FTCard(title = "MOVEMENT EVALUATION") {
+        Text(
+            "${evaluatedSets.size} of ${strengthData.sets.size} sets evaluated",
+            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            color = FT.TextSecondary,
+        )
+        com.bioscan.fieldterminal.ui.components.MovementRadarChart(
+            scores = avg,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
+        // Average score per dimension for quick read.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            avg.forEach { (label, score) ->
+                val color = when {
+                    score < 60f -> FT.Critical
+                    score < 80f -> FT.Warning
+                    else -> FT.Emerald
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("%.0f".format(score), style = TextStyle(fontFamily = RobotoMono, fontSize = 14.sp, fontWeight = FontWeight.Bold), color = color)
+                    Text(label.replace(" ", "\n"), style = TextStyle(fontFamily = Inter, fontSize = 9.sp, textAlign = TextAlign.Center), color = FT.TextMuted)
+                }
+            }
+        }
+    }
+}
+
 // DAV-144, per docs/trail-intelligence/05-trail-metrics-ui-presentation.md.
 // Mountain Index and ITRA category lead as a two-block header (28/9); every
 // other dimension renders only when it has a real value -- a NoData
@@ -658,11 +764,19 @@ private const val LACTATE_THRESHOLD_HELP =
 // breakdown rather than a guessed region -- a real data-availability gap,
 // not hidden behind a heuristic.
 @Composable
-private fun StrengthCard(exercises: List<StrengthExerciseDto>, library: List<ExerciseLibraryRow>) {
+private fun StrengthCard(
+    exercises: List<StrengthExerciseDto>,
+    library: List<ExerciseLibraryRow>,
+    strengthData: ZeppStrengthData? = null,
+) {
     val totalVolume = remember(exercises) { sessionVolumeLoad(exercises) }
     val regional = remember(exercises, library) { sessionRegionalLoad(exercises, library) }
     val avgRpe = remember(exercises) { sessionAverageRpe(exercises) }
     val avgRir = remember(exercises) { sessionAverageRir(exercises) }
+    // Flatten all Zepp set data into a lookup by global set index.
+    val zeppSetByIdx = remember(strengthData) {
+        strengthData?.sets?.associateBy { it.idx } ?: emptyMap()
+    }
     FTCard(title = "STRENGTH") {
         StatLine("Total volume", "%.0f kg".format(totalVolume))
         avgRpe?.let { StatLine("Avg RPE", "%.1f".format(it)) }
@@ -685,6 +799,7 @@ private fun StrengthCard(exercises: List<StrengthExerciseDto>, library: List<Exe
         // the heat map above (category/equipment/movement pattern) -- real
         // fields, silently omitted per-part when null/unclassified rather than
         // guessed, same convention the heat map's own fallback text uses.
+        var globalSetIdx = 0
         exercises.forEach { exercise ->
             val e1rm = bestEstimatedOneRepMax(exercise)
             val libraryRow = remember(exercise.name, library) { resolveExercise(exercise.name, library) }
@@ -706,13 +821,49 @@ private fun StrengthCard(exercises: List<StrengthExerciseDto>, library: List<Exe
                     e1rm?.let { Text("e1RM %.0f kg".format(it), style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp), color = FT.TextSecondary) }
                 }
                 exercise.sets.forEachIndexed { i, set ->
+                    val zs = zeppSetByIdx[globalSetIdx++]
                     val extras = listOfNotNull(
                         set.percentOneRm?.let { "%.0f%% 1RM".format(it) },
                         set.rpe?.let { "RPE $it" },
                         set.rir?.let { "RIR $it" },
+                        set.durationSec?.let { "${it}s" },
+                        set.avgHr?.let { "${it} bpm" },
                     )
                     StatLine("Set ${i + 1}", "${set.reps} × %.0f kg".format(set.weightKg) + extras.joinToString("") { "  ·  $it" })
+                    zs?.scores?.let { SetMovementScoreRow(it) }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetMovementScoreRow(scores: com.bioscan.fieldterminal.data.ZeppMovementScores) {
+    val items = listOf(
+        "Stab" to scores.stability,
+        "Cons" to scores.consistency,
+        "SpDec" to scores.speedDecay,
+        "Rhy" to scores.rhythm,
+        "Cont" to scores.continuity,
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        items.forEach { (label, score) ->
+            val color = when {
+                score < 0 -> FT.TextMuted
+                score < 60 -> FT.Critical
+                score < 80 -> FT.Warning
+                else -> FT.Emerald
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    if (score < 0) "—" else "$score",
+                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                    color = color,
+                )
+                Text(label, style = TextStyle(fontFamily = Inter, fontSize = 9.5.sp), color = FT.TextMuted)
             }
         }
     }

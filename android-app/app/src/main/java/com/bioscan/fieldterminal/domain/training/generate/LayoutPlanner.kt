@@ -29,6 +29,17 @@ fun suggestLayout(strength: StrengthModuleDef?, protocol: ConditioningProtocolDe
             for (i in 0 until count) cond[free[(i * free.size) / count]] = CondSlot(kind)
         }
     }
+    // Hard conditioning the day after a deadlift session moves to the next free day (the books say to reposition it).
+    if (strength != null) {
+        val hinge = hingeSessions(strength)
+        val hingeDays = strengthByDay.filterValues { it in hinge }.keys
+        for ((day, slot) in cond.toMap()) {
+            if (slot.kind != "hic" || day.minus(1) !in hingeDays) continue
+            val target = (1..6).map { day.plus(it.toLong()) }.takeWhile { startWeekday.gapTo(it) > startWeekday.gapTo(day) }
+                .firstOrNull { it !in cond && it !in strengthByDay && it.minus(1) !in hingeDays }
+            if (target != null) { cond.remove(day); cond[target] = slot }
+        }
+    }
     return (0..6).map { startWeekday.plus(it.toLong()) }.map { d -> DayPlan(d, strengthByDay[d], cond[d]) }
 }
 

@@ -166,4 +166,12 @@ class MergedBlockTest {
         assertTrue(b.sessions.none { it.conditioning != null })
         assertEquals(10, b.sessions.size) // 3 sessions x 3 weeks, plus one inline deload session
     }
+
+    @Test
+    fun theSuggestionMovesHardConditioningOffTheDayAfterADeadlift() {
+        val m = parseDefinition(module.replace("{\"id\":\"D5\",\"label\":\"Five\",\"slots\":[\"A\",\"B\"]}", "{\"id\":\"D5\",\"label\":\"Five\",\"slots\":[\"A\",\"H\"]}")) as StrengthModuleDef
+        val l = suggestLayout(m, black, DayOfWeek.MONDAY)
+        assertEquals(DayOfWeek.SUNDAY, l.single { it.conditioning?.kind == "hic" }.weekday)
+        assertTrue(layoutWarnings(l, m, black).isEmpty())
+    }
 }

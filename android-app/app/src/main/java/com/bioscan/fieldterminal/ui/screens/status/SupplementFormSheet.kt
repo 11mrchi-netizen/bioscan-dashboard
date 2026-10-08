@@ -113,7 +113,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
     }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!com.bioscan.fieldterminal.util.ExternalActivityGuard.active) onDismiss() },
         sheetState = sheetState,
         shape = FT.SheetShape,
         containerColor = FT.Surface,

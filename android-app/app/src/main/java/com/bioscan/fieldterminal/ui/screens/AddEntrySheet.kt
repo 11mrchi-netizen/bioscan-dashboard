@@ -130,7 +130,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     val externalActivityActive = remember { mutableStateOf(false) }
 
     ModalBottomSheet(
-        onDismissRequest = { if (!externalActivityActive.value) onDismiss() },
+        onDismissRequest = { if (!externalActivityActive.value && !com.bioscan.fieldterminal.util.ExternalActivityGuard.active) onDismiss() },
         sheetState = sheetState,
         shape = FT.SheetShape,
         containerColor = FT.Surface,

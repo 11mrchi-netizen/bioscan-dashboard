@@ -8,7 +8,9 @@ import com.bioscan.fieldterminal.data.model.NewBlockDomainRow
 import com.bioscan.fieldterminal.data.model.NewPlannedSessionRow
 import com.bioscan.fieldterminal.data.model.NewTrainingBlockRow
 import com.bioscan.fieldterminal.data.model.NewTrainingDefinitionRow
+import com.bioscan.fieldterminal.data.model.BlockNameRow
 import com.bioscan.fieldterminal.data.model.GeneratedBlockRow
+import com.bioscan.fieldterminal.data.model.PlannedForSessionRow
 import com.bioscan.fieldterminal.data.model.TrainingDefinitionRow
 import com.bioscan.fieldterminal.data.model.UpcomingSessionRow
 import com.bioscan.fieldterminal.data.model.TrainingSettingsRow
@@ -51,6 +53,8 @@ import kotlinx.serialization.json.put
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
+data class PlannedMatch(val row: PlannedForSessionRow, val blockName: String?, val linked: Boolean)
+
 data class DefinitionCatalog(val definitions: List<Definition>, val unreadable: List<String>)
 
 data class ImportFile(val name: String, val text: String)
@@ -68,6 +72,8 @@ data class BlockPlan(
 )
 
 private val json = Json { ignoreUnknownKeys = true }
+
+private val STRENGTH_DOMAINS = setOf("max_strength", "hypertrophy", "strength_endurance", "power")
 
 // DAV-345. Definitions, maxes, settings and block creation for the programming engine. The
 // definitions are the user's private rows (RLS); nothing here ships a program.
@@ -134,6 +140,29 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
             put("weighted_percent_base", s.weightedPercentBase)
             put("updated_at", java.time.Instant.now().toString())
         }) { onConflict = "user_id" }
+    }
+
+    // The planned session a logged workout belongs to: the one already linked to it, else the
+    // unlinked plan on the same day whose kind fits (strength with strength, the rest with the rest).
+    suspend fun loadPlannedFor(sessionId: Long, date: LocalDate, strength: Boolean): PlannedMatch? {
+        val cols = "id,block_id,week_index,title,domain,scheduled_date,status,exercise_session_id,match_status,prescription"
+        val table = supabase.postgrest.from("planned_sessions")
+        val linked = table.select(columns = Columns.list(cols)) { filter { eq("exercise_session_id", sessionId); neq("status", "superseded") } }.decodeList<PlannedForSessionRow>().firstOrNull()
+        val row = linked ?: table.select(columns = Columns.list(cols)) {
+            filter { eq("scheduled_date", date.toString()); eq("status", "planned"); exact("exercise_session_id", null) }
+            order("slot_in_day", Order.ASCENDING)
+        }.decodeList<PlannedForSessionRow>().firstOrNull { (it.domain in STRENGTH_DOMAINS) == strength } ?: return null
+        val name = supabase.postgrest.from("training_blocks").select(columns = Columns.list("name")) { filter { eq("id", row.blockId) } }.decodeList<BlockNameRow>().firstOrNull()?.name
+        return PlannedMatch(row, name, linked != null)
+    }
+
+    suspend fun linkPlanned(plannedId: Long, sessionId: Long) {
+        supabase.postgrest.from("planned_sessions").update({
+            set("exercise_session_id", sessionId)
+            set("match_status", "manual")
+            set("status", "confirmed")
+            set("confirmed_at", java.time.Instant.now().toString())
+        }) { filter { eq("id", plannedId) } }
     }
 
     suspend fun loadSettings(): TrainingSettingsRow =

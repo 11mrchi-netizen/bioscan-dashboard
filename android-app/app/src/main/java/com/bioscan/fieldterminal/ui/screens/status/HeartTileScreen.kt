@@ -90,7 +90,9 @@ import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.HeartTab
+import com.bioscan.fieldterminal.domain.TimePoint
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.LineChart
 import com.bioscan.fieldterminal.ui.components.FTScoreRow
 import com.bioscan.fieldterminal.ui.components.FTSegment
 import com.bioscan.fieldterminal.ui.components.FTSegmentBar
@@ -195,6 +197,15 @@ fun HeartTileScreen(onBack: () -> Unit) {
                         )
                     }
                     EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints, comparison = hrvComparison, timeframe = vitalsTimeframe)
+                    // v12: intraday HR from Zepp band_data. Show for the most
+                    // recent day that has data; silently absent when not yet synced.
+                    val todayHr = w.firstOrNull { it.hrTimeseries?.isNotEmpty() == true }?.hrTimeseries
+                    if (todayHr != null) {
+                        val hrPoints = todayHr.map { TimePoint(it.offsetMinutes * 60L, it.bpm.toDouble()) }
+                        FTCard(title = "DAILY HEART RATE") {
+                            LineChart(points = hrPoints, color = FT.DomainHeart, modifier = androidx.compose.ui.Modifier.fillMaxWidth().height(120.dp), filled = true)
+                        }
+                    }
                     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
                     // Same live comparison wiring as HRV above (DAV-200) --
                     // "resting_heart_rate" is the canonical registry name

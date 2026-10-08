@@ -6,6 +6,9 @@
          uses the modern Photo Picker (ActivityResultContracts.PickVisualMedia),
          which needs no permission at all. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Notification dispatch: required on Android 13+ (API 33+) to post
+         user-visible notifications; silently ignored on older versions. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <!-- Phase G1: Health Connect. Package-visibility declaration required to

@@ -146,8 +146,11 @@ tbody tr:hover td{background:rgba(76,241,255,.03);color:var(--text);}
     <div class="nav-sep"></div>
     <div class="nav-item" data-ws="timeline">TIMELINE</div>
     <div class="nav-item" data-ws="training">TRAINING</div>
+    <div class="nav-item" data-ws="loadmodels">LOAD MODELS</div>
+    <div class="nav-item" data-ws="weather">WEATHER</div>
     <div class="nav-item" data-ws="recovery">RECOVERY</div>
     <div class="nav-item" data-ws="nutrition">NUTRITION</div>
+    <div class="nav-item" data-ws="caffeine">CAFFEINE</div>
     <div class="nav-sep"></div>
     <div class="nav-item" data-ws="comparison">COMPARISON</div>
     <div class="nav-item" data-ws="relationship">RELATIONSHIP LAB</div>
@@ -217,11 +220,53 @@ tbody tr:hover td{background:rgba(76,241,255,.03);color:var(--text);}
           <div class="chart-title">WEEKLY VOLUME · km</div>
           <div id="tr-vol-chart" style="height:160px;"></div>
         </div>
+        <div class="chart-card" style="margin-bottom:14px;">
+          <div class="chart-title">VO2MAX (WEARABLE ESTIMATE) · ml/kg/min</div>
+          <div id="tr-vo2-chart" style="height:160px;"></div>
+        </div>
         <div class="card">
           <div class="card-title">SESSIONS · click ▶ for cleaned per-second charts</div>
           <div class="tbl-wrap" id="tr-table"><div class="loading mono">LOADING…</div></div>
         </div>
         <div id="tr-detail" style="display:none;margin-top:14px;"></div>
+      </div>
+
+      <!-- LOAD MODELS (DAV-175) -->
+      <div class="workspace" id="ws-loadmodels">
+        <div class="ws-title">LOAD MODELS</div>
+        <div class="grid-4" id="lm-kpis" style="margin-bottom:14px;"></div>
+        <div class="chart-card" style="margin-bottom:14px;">
+          <div class="chart-title">CTL — sRPE vs TRIMP · fitness EWMA (τ=42d)</div>
+          <div id="lm-ctl-chart" style="height:220px;"></div>
+        </div>
+        <div class="chart-card" style="margin-bottom:14px;">
+          <div class="chart-title">ATL — sRPE vs TRIMP · fatigue EWMA (τ=7d)</div>
+          <div id="lm-atl-chart" style="height:180px;"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">V1 SELECTION · sRPE (duration_min × RPE)</div>
+          <div class="caveat" style="margin-top:8px;">Selected: sRPE. TRIMP requires avg_hr + max_hr + resting_hr. Both use identical EWMA walk with α = 2/(τ+1) matching Android TrainingLoadEvaluation.kt. Banister impulse-response = EWMA CTL/ATL at this level of approximation — τ_ctl=42d is Banister's adaptation decay, τ_atl=7d is fatigue decay. TRIMP retained as alternative; activate when HR coverage improves.</div>
+        </div>
+      </div>
+
+      <!-- WEATHER CONTEXT (DAV-173) -->
+      <div class="workspace" id="ws-weather">
+        <div class="ws-title">WEATHER CONTEXT</div>
+        <div class="select-row">
+          <span class="select-label">LOCATION</span>
+          <input class="inp" id="wx-lat" placeholder="Latitude" style="width:110px;">
+          <input class="inp" id="wx-lon" placeholder="Longitude" style="width:110px;">
+          <button class="range-btn" onclick="loadWeather(true)">FETCH</button>
+          <span class="select-label" id="wx-status" style="margin-left:8px;"></span>
+        </div>
+        <div class="chart-card" style="margin-bottom:14px;">
+          <div class="chart-title">TEMPERATURE ON EXERCISE DAYS · °C</div>
+          <div id="wx-temp-chart" style="height:180px;"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">SESSIONS WITH WEATHER CONTEXT</div>
+          <div class="tbl-wrap" id="wx-table"><div class="empty mono">Enter coordinates, then click FETCH.</div></div>
+        </div>
       </div>
 
       <!-- RECOVERY -->
@@ -245,6 +290,20 @@ tbody tr:hover td{background:rgba(76,241,255,.03);color:var(--text);}
             <div id="rc-weight-chart" style="height:180px;"></div>
           </div>
         </div>
+        <div class="grid-2" style="margin-top:14px;">
+          <div class="chart-card">
+            <div class="chart-title">SLEEP STAGES · min (deep · REM · light)</div>
+            <div id="rc-stages-chart" style="height:180px;"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">RESPIRATORY RATE · rpm</div>
+            <div id="rc-resp-chart" style="height:180px;"></div>
+          </div>
+        </div>
+        <div class="chart-card" style="margin-top:14px;margin-bottom:14px;">
+          <div class="chart-title">WELLBEING · /10 (energy · mood · stress · soreness)</div>
+          <div id="rc-well-chart" style="height:180px;"></div>
+        </div>
         <div class="card" style="margin-top:14px;">
           <div class="card-title">INJURY LOG</div>
           <div class="tbl-wrap" id="rc-injuries"><div class="loading mono">LOADING…</div></div>
@@ -265,6 +324,24 @@ tbody tr:hover td{background:rgba(76,241,255,.03);color:var(--text);}
         <div class="card">
           <div class="card-title">RECENT MEALS</div>
           <div class="tbl-wrap" id="nu-table"><div class="loading mono">LOADING…</div></div>
+        </div>
+      </div>
+
+      <!-- CAFFEINE WINDOW -->
+      <div class="workspace" id="ws-caffeine">
+        <div class="ws-title">CAFFEINE WINDOW</div>
+        <div class="grid-4" id="caf-kpis" style="margin-bottom:14px;"></div>
+        <div class="chart-card" style="margin-bottom:14px;">
+          <div class="chart-title">TODAY'S PLASMA CURVE · mg residual (5h half-life model)</div>
+          <div id="caf-curve-chart" style="height:200px;"></div>
+        </div>
+        <div class="chart-card" style="margin-bottom:14px;">
+          <div class="chart-title">DAILY CAFFEINE INTAKE · mg</div>
+          <div id="caf-daily-chart" style="height:160px;"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">CAFFEINE LOG</div>
+          <div class="tbl-wrap" id="caf-table"><div class="loading mono">LOADING…</div></div>
         </div>
       </div>
 
@@ -620,7 +697,10 @@ async function loadTimeline(){
 // ─── TRAINING ─────────────────────────────────────────────────────────────────
 async function loadTraining(){
   // Need 180 days for CTL warmup
-  const allRuns = await fetchRuns(daysAgo(180), rangeTo());
+  const [allRuns, vo2daily] = await Promise.all([
+    fetchRuns(daysAgo(180), rangeTo()),
+    fetchRange('wearable_daily', 'date', 'date,vo2max'),
+  ]);
 
   // Daily TSS proxy (using details.run_type if available)
   const tssMap = {};
@@ -707,6 +787,18 @@ async function loadTraining(){
         <td><button class="range-btn" style="padding:3px 8px;font-size:9px;" onclick="loadSessionDetail(${r.id})">▶</button></td>
       </tr>`).join('')}
     </tbody></table>` : '<div class="empty mono">No runs in range.</div>';
+
+  const vo2pts = vo2daily.filter(r => r.vo2max != null && r.date >= rangeFrom());
+  const vv = initChart('tr-vo2-chart');
+  if(vv && vo2pts.length) vv.setOption({ ...chartBase(),
+    grid:{top:8,right:8,bottom:30,left:44},
+    xAxis:{ type:'category', data:vo2pts.map(r=>r.date), ...axisStyle() },
+    yAxis:{ type:'value', min:'dataMin', ...axisStyle() },
+    tooltip:{ trigger:'axis', ...tooltipStyle() },
+    series:[{ type:'line', data:vo2pts.map(r=>r.vo2max), smooth:true, symbol:'circle', symbolSize:4,
+      lineStyle:{color:C.green,width:2}, itemStyle:{color:C.green},
+      areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:C.green+'33'},{offset:1,color:C.green+'00'}]}} }]
+  });
 }
 
 // Per-workout drill-down — fetches zepp_workout_detail and renders cleaned charts
@@ -777,10 +869,11 @@ async function loadSessionDetail(sessionId){
 
 // ─── RECOVERY ─────────────────────────────────────────────────────────────────
 async function loadRecovery(){
-  const [wear, sleep, weight, injuries] = await Promise.all([
+  const [wear, sleep, weight, well, injuries] = await Promise.all([
     fetchRange('wearable_daily','date','date,hrv,rhr'),
-    fetchRange('sleep_daily','date','date,hours'),
+    fetchRange('sleep_daily','date','date,hours,deep_min,rem_min,light_min,respiratory_rate'),
     fetchRange('body_metrics','date','date,weight_kg'),
+    fetchRange('wellbeing_daily','date','date,energy,mood,stress,soreness'),
     sb.from('injuries').select('start_date,end_date,part,notes').order('start_date',{ascending:false}).then(r=>r.data||[]),
   ]);
 
@@ -788,6 +881,31 @@ async function loadRecovery(){
   drawLine('rc-rhr-chart',  wear.map(r=>r.date), [{ data:wear.map(r=>r.rhr||null),  color:C.magenta }]);
   drawLine('rc-sleep-chart', sleep.map(r=>r.date), [{ data:sleep.map(r=>r.hours||null), color:C.purple }]);
   drawLine('rc-weight-chart', weight.map(r=>r.date), [{ data:weight.map(r=>r.weight_kg||null), color:C.amber }]);
+
+  const stageSleep = sleep.filter(r => r.deep_min || r.rem_min || r.light_min);
+  const sc = initChart('rc-stages-chart');
+  if(sc && stageSleep.length) sc.setOption({ ...chartBase(),
+    grid:{top:8,right:8,bottom:30,left:44},
+    xAxis:{ type:'category', data:stageSleep.map(r=>r.date), ...axisStyle() },
+    yAxis:{ type:'value', ...axisStyle() },
+    tooltip:{ trigger:'axis', ...tooltipStyle() },
+    legend:{ textStyle:{ color:C.muted, fontSize:10, fontFamily:'IBM Plex Mono' } },
+    series:[
+      { name:'Deep',  type:'bar', stack:'s', data:stageSleep.map(r=>r.deep_min||null),  itemStyle:{color:C.purple} },
+      { name:'REM',   type:'bar', stack:'s', data:stageSleep.map(r=>r.rem_min||null),   itemStyle:{color:C.cyan} },
+      { name:'Light', type:'bar', stack:'s', data:stageSleep.map(r=>r.light_min||null), itemStyle:{color:'#94a3b8'} },
+    ]
+  });
+
+  const respPts = sleep.filter(r => r.respiratory_rate != null);
+  if(respPts.length) drawLine('rc-resp-chart', respPts.map(r=>r.date), [{ data:respPts.map(r=>r.respiratory_rate), color:C.green }]);
+
+  drawLine('rc-well-chart', well.map(r=>r.date), [
+    { data:well.map(r=>r.energy||null),   color:C.amber,   name:'Energy' },
+    { data:well.map(r=>r.mood||null),     color:C.green,   name:'Mood' },
+    { data:well.map(r=>r.stress||null),   color:C.red,     name:'Stress' },
+    { data:well.map(r=>r.soreness||null), color:C.magenta, name:'Soreness' },
+  ]);
 
   document.getElementById('rc-injuries').innerHTML = injuries.length ?
     `<table><thead><tr><th>START</th><th>END</th><th>PART</th><th>NOTES</th></tr></thead><tbody>
@@ -1016,12 +1134,308 @@ async function runExplorer(){
   </tbody></table>`;
 }
 
+// ─── CAFFEINE WINDOW ──────────────────────────────────────────────────────────
+async function loadCaffeine(){
+  // Fetch meal_items with caffeine > 0, embedding the parent meal's logged_at.
+  const { data: cafItems, error } = await sb
+    .from('meal_items')
+    .select('meal_id, description, caffeine_mg, meal:meals!meal_id(logged_at)')
+    .gt('caffeine_mg', 0);
+  if(error) console.warn('meal_items caffeine', error.message);
+
+  const items = (cafItems || [])
+    .map(r => ({ ...r, logged_at: r.meal?.logged_at }))
+    .filter(r => r.logged_at && r.logged_at >= rangeFrom());
+
+  const todayStr = today();
+  const todayItems = items.filter(r => r.logged_at.slice(0,10) === todayStr);
+
+  const HALF_LIFE_H = 5.0, THRESHOLD = 50, REF_DOSE = 200;
+  function residualAt(evts, atMs){
+    return evts.reduce((s, e) => {
+      const h = (atMs - new Date(e.logged_at).getTime()) / 3_600_000;
+      return h < 0 ? s : s + e.caffeine_mg * Math.pow(0.5, h / HALF_LIFE_H);
+    }, 0);
+  }
+
+  const todayTotal  = todayItems.reduce((s, e) => s + e.caffeine_mg, 0);
+  const now         = Date.now();
+  const residualNow = residualAt(todayItems, now);
+  const bed11       = new Date(); bed11.setHours(23, 0, 0, 0);
+  if(bed11.getTime() <= now) bed11.setDate(bed11.getDate() + 1);
+  const residualBed = residualAt(todayItems, bed11.getTime());
+
+  let cutoffHour = null;
+  if(todayItems.length > 0){
+    const headroom = THRESHOLD - residualBed;
+    if(headroom <= 0)          cutoffHour = 0;
+    else if(headroom >= REF_DOSE) cutoffHour = 23;
+    else cutoffHour = Math.max(0, Math.min(23, Math.floor(23 - HALF_LIFE_H * Math.log2(REF_DOSE / headroom))));
+  }
+
+  // KPI cards
+  const kpiHtml = todayTotal > 0 ? [
+    { label:'TODAY TOTAL',  val: Math.round(todayTotal)+' mg',    sub: todayItems.length+' dose'+(todayItems.length!==1?'s':'') },
+    { label:'RESIDUAL NOW', val:'~'+Math.round(residualNow)+' mg', sub:'decaying' },
+    { label:'AT 11PM',      val:'~'+Math.round(residualBed)+' mg', sub: residualBed > THRESHOLD ? 'above threshold':'below threshold' },
+    cutoffHour !== null ? { label:'LAST DOSE BY', val: cutoffHour===0 ? 'NONE TODAY' : cutoffHour+':00', sub:'200 mg ref' } : null,
+  ].filter(Boolean).map(k =>
+    `<div class="card"><div class="card-title">${k.label}</div><div class="kpi-val">${k.val}</div><div class="kpi-sub">${k.sub}</div></div>`
+  ).join('') :
+  `<div class="card" style="grid-column:1/-1;"><div class="empty mono">No caffeine logged today. Log a caffeinated beverage (e.g. "espresso" or "black coffee") to activate the window.</div></div>`;
+  document.getElementById('caf-kpis').innerHTML = kpiHtml;
+
+  // Plasma curve (today)
+  if(todayItems.length > 0){
+    const startH = 5, endH = 28, step = 0.5;
+    const labels = [], vals = [];
+    const midnight = new Date(); midnight.setHours(0,0,0,0);
+    for(let h = startH; h <= endH; h += step){
+      const ts = midnight.getTime() + h * 3_600_000;
+      labels.push((Math.floor(h)%24) + ':' + (h%1===0.5?'30':'00'));
+      vals.push(parseFloat(residualAt(todayItems, ts).toFixed(1)));
+    }
+    const nowLabel = (new Date().getHours()) + ':00';
+    const cv = initChart('caf-curve-chart');
+    if(cv) cv.setOption({ ...chartBase(),
+      grid:{top:8,right:8,bottom:30,left:44},
+      xAxis:{ type:'category', data:labels, ...axisStyle() },
+      yAxis:{ type:'value', min:0, ...axisStyle() },
+      tooltip:{ trigger:'axis', ...tooltipStyle(), formatter: p => p[0].name+'<br>'+Math.round(p[0].value)+' mg residual' },
+      series:[{ type:'line', data:vals, smooth:true, symbol:'none',
+        lineStyle:{color:C.amber,width:2},
+        areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:C.amber+'55'},{offset:1,color:C.amber+'00'}]}},
+        markLine:{ silent:true, data:[
+          {xAxis:'23:00', label:{formatter:'11PM',position:'insideEndTop',color:C.purple}, lineStyle:{color:C.purple,type:'dashed',width:1}},
+          {yAxis:THRESHOLD, label:{formatter:THRESHOLD+'mg',position:'insideEndTop',color:C.red}, lineStyle:{color:C.red,type:'dotted',width:1}},
+        ]}
+      }]
+    });
+  } else {
+    document.getElementById('caf-curve-chart').innerHTML = '<div class="empty mono" style="padding:50px 0;text-align:center;">No caffeine logged today.</div>';
+  }
+
+  // Daily totals bar
+  const byDate = {};
+  items.forEach(r => { byDate[r.logged_at.slice(0,10)] = (byDate[r.logged_at.slice(0,10)]||0) + r.caffeine_mg; });
+  const allDates = Object.keys(byDate).sort();
+  const dc = initChart('caf-daily-chart');
+  if(dc && allDates.length) dc.setOption({ ...chartBase(),
+    grid:{top:8,right:8,bottom:30,left:44},
+    xAxis:{ type:'category', data:allDates, ...axisStyle() },
+    yAxis:{ type:'value', ...axisStyle() },
+    tooltip:{ trigger:'axis', ...tooltipStyle() },
+    series:[{ type:'bar', data:allDates.map(d=>Math.round(byDate[d])), itemStyle:{color:C.amber, opacity:.8} }]
+  });
+  else if(dc) document.getElementById('caf-daily-chart').innerHTML = '<div class="empty mono" style="padding:40px 0;text-align:center;">No caffeine in range.</div>';
+
+  // Log table
+  const rows = [...items].sort((a,b) => b.logged_at.localeCompare(a.logged_at)).slice(0,50);
+  document.getElementById('caf-table').innerHTML = rows.length ?
+    `<table><thead><tr><th>DATETIME</th><th>ITEM</th><th>CAFFEINE</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td>${r.logged_at?.slice(0,16).replace('T',' ')}</td><td>${r.description||'—'}</td><td>${Math.round(r.caffeine_mg)} mg</td></tr>`).join('')}
+    </tbody></table>` : '<div class="empty mono">No caffeine logged in this period.</div>';
+}
+
+// DAV-175 — competing load models: sRPE-EWMA vs TRIMP-EWMA CTL/ATL
+async function loadLoadModels() {
+  const [sessions, wearable] = await Promise.all([
+    (async () => {
+      const { data, error } = await sb.from('exercise_sessions')
+        .select('start_time,duration_min,rpe,avg_hr,max_hr')
+        .gte('start_time', daysAgo(180))
+        .lte('start_time', rangeTo() + 'T23:59:59')
+        .order('start_time');
+      if(error) console.warn('sessions', error.message);
+      return data || [];
+    })(),
+    fetchRange('wearable_daily', 'date', 'date,resting_heart_rate'),
+  ]);
+
+  const rhrEntries = wearable.filter(r => r.resting_heart_rate != null).map(r => r.resting_heart_rate);
+  const medianRhr = rhrEntries.length
+    ? [...rhrEntries].sort((a,b)=>a-b)[Math.floor(rhrEntries.length/2)]
+    : 55;
+  const rhrMap = {};
+  wearable.forEach(r => { if(r.resting_heart_rate) rhrMap[r.date] = r.resting_heart_rate; });
+
+  const srpeByDate = {}, trimpByDate = {};
+  let totalSessions = 0, srpeN = 0, trimpN = 0;
+  sessions.forEach(r => {
+    if(!r.duration_min) return;
+    totalSessions++;
+    const date = r.start_time.slice(0,10);
+    if(r.rpe != null) {
+      srpeByDate[date] = (srpeByDate[date]||0) + r.duration_min * r.rpe;
+      srpeN++;
+    }
+    const rhr = rhrMap[date] || medianRhr;
+    if(r.avg_hr != null && r.max_hr != null && r.max_hr > rhr + 5) {
+      const hrRatio = (r.avg_hr - rhr) / (r.max_hr - rhr);
+      if(hrRatio > 0.01 && hrRatio < 1) {
+        trimpByDate[date] = (trimpByDate[date]||0) + r.duration_min * hrRatio * 0.64 * Math.exp(1.92 * hrRatio);
+        trimpN++;
+      }
+    }
+  });
+
+  // Same alpha formula as Android Stats.kt dualEwma(): α = 2/(τ+1)
+  const TAU_CTL = 42, TAU_ATL = 7;
+  const aCtl = 2/(TAU_CTL+1), aAtl = 2/(TAU_ATL+1);
+  const dates = [], sCtlArr = [], sAtlArr = [], tCtlArr = [], tAtlArr = [];
+  let sCTL=0, sATL=0, tCTL=0, tATL=0;
+  const cur = new Date(daysAgo(180)), end = new Date(rangeTo());
+  while(cur <= end) {
+    const date = cur.toISOString().slice(0,10);
+    sCTL += aCtl * ((srpeByDate[date]||0) - sCTL);
+    sATL += aAtl * ((srpeByDate[date]||0) - sATL);
+    tCTL += aCtl * ((trimpByDate[date]||0) - tCTL);
+    tATL += aAtl * ((trimpByDate[date]||0) - tATL);
+    if(date >= rangeFrom()) {
+      dates.push(date);
+      sCtlArr.push(+(sCTL.toFixed(1)));
+      sAtlArr.push(+(sATL.toFixed(1)));
+      tCtlArr.push(+(tCTL.toFixed(1)));
+      tAtlArr.push(+(tATL.toFixed(1)));
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+
+  const srpePct = totalSessions ? Math.round(srpeN/totalSessions*100) : 0;
+  const trimpPct = totalSessions ? Math.round(trimpN/totalSessions*100) : 0;
+  document.getElementById('lm-kpis').innerHTML = [
+    { label:'sRPE COVERAGE',  val: srpePct+'%',  sub: srpeN+' / '+totalSessions+' sessions' },
+    { label:'TRIMP COVERAGE', val: trimpPct+'%', sub: trimpN+' / '+totalSessions+' sessions' },
+    { label:'SELECTED V1',    val: 'sRPE',       sub: 'duration × RPE' },
+    { label:'CTL / ATL τ',    val: TAU_CTL+'d / '+TAU_ATL+'d', sub: 'α = 2/(τ+1)' },
+  ].map(k => `<div class="card"><div class="card-title">${k.label}</div><div class="kpi-val">${k.val}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
+
+  const c1 = initChart('lm-ctl-chart');
+  if(c1) c1.setOption({ ...chartBase(),
+    grid:{top:16,right:16,bottom:30,left:44},
+    xAxis:{type:'category',data:dates,...axisStyle()},
+    yAxis:{type:'value',...axisStyle()},
+    tooltip:{trigger:'axis',...tooltipStyle()},
+    legend:{textStyle:{color:C.muted,fontSize:10,fontFamily:'IBM Plex Mono'}},
+    series:[
+      {name:'CTL (sRPE)',  type:'line',data:sCtlArr,smooth:true,symbol:'none',lineStyle:{color:C.cyan,width:2},itemStyle:{color:C.cyan}},
+      {name:'CTL (TRIMP)', type:'line',data:tCtlArr,smooth:true,symbol:'none',lineStyle:{color:C.purple,width:2,type:'dashed'},itemStyle:{color:C.purple}},
+    ]
+  });
+
+  const c2 = initChart('lm-atl-chart');
+  if(c2) c2.setOption({ ...chartBase(),
+    grid:{top:16,right:16,bottom:30,left:44},
+    xAxis:{type:'category',data:dates,...axisStyle()},
+    yAxis:{type:'value',...axisStyle()},
+    tooltip:{trigger:'axis',...tooltipStyle()},
+    legend:{textStyle:{color:C.muted,fontSize:10,fontFamily:'IBM Plex Mono'}},
+    series:[
+      {name:'ATL (sRPE)',  type:'line',data:sAtlArr,smooth:true,symbol:'none',lineStyle:{color:C.red,width:2},itemStyle:{color:C.red}},
+      {name:'ATL (TRIMP)', type:'line',data:tAtlArr,smooth:true,symbol:'none',lineStyle:{color:'#f97316',width:2,type:'dashed'},itemStyle:{color:'#f97316'}},
+    ]
+  });
+}
+
+// DAV-173 — Open-Meteo historical weather context for exercise sessions
+async function loadWeather(forced) {
+  const latEl = document.getElementById('wx-lat');
+  const lonEl = document.getElementById('wx-lon');
+  const stored = JSON.parse(localStorage.getItem('wx_loc') || 'null');
+  if(!forced && stored) { latEl.value = stored.lat; lonEl.value = stored.lon; }
+
+  const lat = parseFloat(latEl.value);
+  const lon = parseFloat(lonEl.value);
+  if(!lat || !lon) return;
+
+  localStorage.setItem('wx_loc', JSON.stringify({lat, lon}));
+  document.getElementById('wx-status').textContent = 'FETCHING…';
+  document.getElementById('wx-table').innerHTML = '<div class="loading mono">LOADING…</div>';
+
+  const { data: sessions } = await sb.from('exercise_sessions')
+    .select('start_time,duration_min,type,distance_km')
+    .gte('start_time', rangeFrom())
+    .lte('start_time', rangeTo() + 'T23:59:59')
+    .order('start_time', {ascending: false});
+
+  if(!sessions?.length) {
+    document.getElementById('wx-status').textContent = '';
+    document.getElementById('wx-table').innerHTML = '<div class="empty mono">No sessions in range.</div>';
+    return;
+  }
+
+  // Open-Meteo archive API — free, no key, historical daily data
+  const wxUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}` +
+    `&start_date=${rangeFrom()}&end_date=${rangeTo()}` +
+    `&daily=temperature_2m_max,temperature_2m_min,weathercode,windspeed_10m_max,precipitation_sum` +
+    `&timezone=auto`;
+
+  let wxByDate = {};
+  try {
+    const resp = await fetch(wxUrl);
+    const body = await resp.json();
+    const d = body.daily;
+    if(d?.time) {
+      d.time.forEach((date, i) => {
+        wxByDate[date] = {
+          tMax: d.temperature_2m_max?.[i],
+          tMin: d.temperature_2m_min?.[i],
+          code: d.weathercode?.[i],
+          wind: d.windspeed_10m_max?.[i],
+          precip: d.precipitation_sum?.[i],
+        };
+      });
+    }
+    document.getElementById('wx-status').textContent = Object.keys(wxByDate).length + ' days';
+  } catch(e) {
+    document.getElementById('wx-status').textContent = 'FETCH ERROR';
+  }
+
+  // Temperature chart on exercise days
+  const exDates = [...new Set(sessions.map(r => r.start_time.slice(0,10)))].sort();
+  const tc = initChart('wx-temp-chart');
+  if(tc) tc.setOption({ ...chartBase(),
+    grid:{top:16,right:16,bottom:30,left:44},
+    xAxis:{type:'category',data:exDates,...axisStyle()},
+    yAxis:{type:'value',name:'°C',...axisStyle()},
+    tooltip:{trigger:'axis',...tooltipStyle()},
+    legend:{textStyle:{color:C.muted,fontSize:10,fontFamily:'IBM Plex Mono'}},
+    series:[
+      {name:'T max',type:'line',data:exDates.map(d=>wxByDate[d]?.tMax??null),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{color:C.red,width:2},itemStyle:{color:C.red}},
+      {name:'T min',type:'line',data:exDates.map(d=>wxByDate[d]?.tMin??null),smooth:true,symbol:'circle',symbolSize:4,lineStyle:{color:C.cyan,width:1.5},itemStyle:{color:C.cyan}},
+    ]
+  });
+
+  // WMO code labels (subset of Weather.kt's weatherCodeLabel)
+  const WX = {0:'Clear',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',51:'Drizzle',53:'Drizzle',55:'Dense drizzle',61:'Rain',63:'Rain',65:'Heavy rain',71:'Snow',73:'Snow',80:'Showers',81:'Showers',82:'Violent showers',95:'Thunderstorm'};
+  const fmtWx = wx => !wx ? '—' :
+    (wx.tMax != null ? Math.round(wx.tMax)+'°' : '—') +
+    (wx.code != null ? ' · ' + (WX[wx.code] || 'Code '+wx.code) : '') +
+    (wx.precip > 0 ? ' · '+wx.precip+'mm' : '') +
+    (wx.wind != null ? ' · '+Math.round(wx.wind)+'km/h wind' : '');
+
+  document.getElementById('wx-table').innerHTML = sessions.length ?
+    `<table><thead><tr><th>DATE</th><th>TYPE</th><th>KM</th><th>MIN</th><th>WEATHER</th></tr></thead><tbody>
+    ${sessions.map(r => `<tr>
+      <td>${r.start_time.slice(0,10)}</td>
+      <td>${r.type||'—'}</td>
+      <td>${r.distance_km != null ? Math.round(r.distance_km*10)/10 : '—'}</td>
+      <td>${r.duration_min != null ? Math.round(r.duration_min) : '—'}</td>
+      <td class="mono" style="font-size:10px;">${fmtWx(wxByDate[r.start_time.slice(0,10)])}</td>
+    </tr>`).join('')}
+    </tbody></table>` :
+    '<div class="empty mono">No sessions in range.</div>';
+}
+
 const wsLoaders = {
   overview:     loadOverview,
   timeline:     loadTimeline,
   training:     loadTraining,
+  loadmodels:   loadLoadModels,
+  weather:      loadWeather,
   recovery:     loadRecovery,
   nutrition:    loadNutrition,
+  caffeine:     loadCaffeine,
   comparison:   loadComparison,
   relationship: loadRelationship,
   explorer:     () => {}, // explorer is on-demand

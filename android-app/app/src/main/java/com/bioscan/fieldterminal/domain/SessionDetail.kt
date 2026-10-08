@@ -31,6 +31,7 @@ data class SessionDetail(
     // a matched Zepp workout exists. Defaulted so the one positional-args
     // call site (SessionDetailRepository.loadTimeSeries) doesn't need touching.
     val cadenceSpm: List<TimePoint> = emptyList(),
+    val verticalRatioPct: List<TimePoint> = emptyList(),
 )
 
 // DAV-115/123: prefer Zepp's real per-second series (heartRate/speedKmh/
@@ -48,6 +49,7 @@ fun mergePreferZepp(zepp: SessionDetail?, healthConnect: SessionDetail): Session
         caloriesKcal = healthConnect.caloriesKcal,
         distanceKm = zepp.distanceKm.ifEmpty { healthConnect.distanceKm },
         cadenceSpm = zepp.cadenceSpm,
+        verticalRatioPct = zepp.verticalRatioPct,
     )
 }
 

@@ -11,7 +11,9 @@ import kotlin.coroutines.suspendCoroutine
 // permission, no camera code here. Returns the raw barcode text, or null when the
 // user cancels or the scanner is unavailable (the typed-barcode field stays as the
 // fallback), and reports why through `onError` when it fails rather than cancels.
-suspend fun scanBarcode(context: Context, onError: (String) -> Unit = {}): String? = suspendCoroutine { cont ->
+suspend fun scanBarcode(context: Context, onError: (String) -> Unit = {}): String? = ExternalActivityGuard.around { scanOnce(context, onError) }
+
+private suspend fun scanOnce(context: Context, onError: (String) -> Unit): String? = suspendCoroutine { cont ->
     val options = GmsBarcodeScannerOptions.Builder()
         .setBarcodeFormats(Barcode.FORMAT_UPC_A, Barcode.FORMAT_UPC_E, Barcode.FORMAT_EAN_13, Barcode.FORMAT_EAN_8)
         .build()

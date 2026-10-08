@@ -24,6 +24,7 @@ data class WearableAnalysisRow(
     // (OxygenSaturationRecord), same as hrv/rhr -- just never read anywhere,
     // added for the Cardio tab's SPO2 card.
     @SerialName("spo2_avg") val spo2: Double? = null,
+    @SerialName("hr_timeseries") val hrTimeseries: List<HrPoint>? = null,
 )
 
 @Serializable

@@ -54,7 +54,7 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         // readiness returned Unknown when only 3 of 10 days had valid HRV,
         // even with 60+ valid days in the DB.
         val wearable = supabase.postgrest.from("wearable_daily")
-            .select(columns = Columns.list("date,rhr,hrv")) {
+            .select(columns = Columns.list("date,rhr,hrv,hr_timeseries")) {
                 order("date", Order.DESCENDING)
                 limit(60)
             }

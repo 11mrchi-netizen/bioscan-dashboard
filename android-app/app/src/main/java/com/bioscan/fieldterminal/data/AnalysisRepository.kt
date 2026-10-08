@@ -38,7 +38,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadWearableDaily(): List<WearableAnalysisRow> =
         supabase.postgrest.from("wearable_daily")
-            .select(columns = Columns.list("date,hrv,rhr,steps,spo2_avg")) {
+            .select(columns = Columns.list("date,hrv,rhr,steps,spo2_avg,hr_timeseries")) {
                 order("date", Order.DESCENDING)
                 limit(200)
             }

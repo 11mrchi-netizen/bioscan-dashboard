@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,14 +33,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
+
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.IngredientInput
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementImpactRepository
+import com.bioscan.fieldterminal.data.SupplementLookupRepository
 import com.bioscan.fieldterminal.data.SupplementsRepository
+import com.bioscan.fieldterminal.util.scanBarcode
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
@@ -82,6 +86,10 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
     var ending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val ingredients = remember { mutableStateListOf<EditableIngredient>() }
+    var scanningBarcode by remember { mutableStateOf(false) }
+    var scanError by remember { mutableStateOf<String?>(null) }
+    var enrichPending by remember { mutableStateOf<List<EditableIngredient>?>(null) }
+    var showEnrichConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(existing?.productId) {
         val pid = existing?.productId ?: return@LaunchedEffect
@@ -105,7 +113,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
     }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!com.bioscan.fieldterminal.util.ExternalActivityGuard.active) onDismiss() },
         sheetState = sheetState,
         shape = FT.SheetShape,
         containerColor = FT.Surface,
@@ -173,6 +181,97 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
             }
 
             IngredientsSection(ingredients)
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    if (scanningBarcode) "SCANNING..." else "SCAN BARCODE TO IMPORT INGREDIENTS",
+                    style = FTType.LabelCaps,
+                    color = if (scanningBarcode) FT.TextMuted else FT.Emerald,
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        enabled = !scanningBarcode,
+                    ) {
+                        scanningBarcode = true
+                        scanError = null
+                        scope.launch {
+                            try {
+                                val barcode = scanBarcode(context) { err -> scanError = err }
+                                if (barcode != null) {
+                                    val lookup = SupplementLookupRepository(SupabaseClientProvider.client).lookupBarcode(barcode)
+                                    val scanned: List<EditableIngredient> = run {
+                                        val dsld = lookup.dsld.value?.labels?.firstOrNull()?.ingredients
+                                            ?.filter { it.name.isNotBlank() && it.amount != null && !it.unit.isNullOrBlank() }
+                                            ?.map { row ->
+                                                EditableIngredient().apply {
+                                                    this.name = row.name
+                                                    compoundAmount = row.amount!!.toString()
+                                                    compoundUnit = row.unit!!
+                                                }
+                                            }
+                                        if (!dsld.isNullOrEmpty()) return@run dsld
+                                        lookup.suppco.value?.products?.firstOrNull()?.ingredients
+                                            ?.filter { it.name.isNotBlank() && it.amount != null && !it.unit.isNullOrBlank() }
+                                            ?.map { row ->
+                                                EditableIngredient().apply {
+                                                    this.name = row.name
+                                                    nutrientKey = row.nutrientId ?: ""
+                                                    compoundAmount = row.amount!!.toString()
+                                                    compoundUnit = row.unit!!
+                                                }
+                                            } ?: emptyList()
+                                    }
+                                    if (scanned.isEmpty()) {
+                                        scanError = "No ingredient data found for this barcode."
+                                    } else {
+                                        val hasExisting = ingredients.any { it.toInputOrNull() != null }
+                                        if (hasExisting) {
+                                            enrichPending = scanned
+                                            showEnrichConfirm = true
+                                        } else {
+                                            ingredients.clear()
+                                            scanned.forEach { ingredients.add(it) }
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                scanError = e.message ?: "Scan failed"
+                            } finally {
+                                scanningBarcode = false
+                            }
+                        }
+                    },
+                )
+                scanError?.let {
+                    Text(it, style = FTType.Caption, color = FT.Critical)
+                }
+            }
+
+            if (showEnrichConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showEnrichConfirm = false; enrichPending = null },
+                    title = { Text("REPLACE INGREDIENTS?", style = FTType.Telemetry) },
+                    text = { Text("Scanned ingredients differ from what you entered. Replace them with the barcode data?", style = FTType.BodySmall) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            enrichPending?.let { pending ->
+                                ingredients.clear()
+                                pending.forEach { ingredients.add(it) }
+                            }
+                            showEnrichConfirm = false
+                            enrichPending = null
+                        }) { Text("REPLACE", style = FTType.LabelCaps, color = FT.Emerald) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showEnrichConfirm = false; enrichPending = null }) {
+                            Text("KEEP MINE", style = FTType.MonoCaption, color = FT.TextSecondary)
+                        }
+                    },
+                    containerColor = FT.Surface,
+                    titleContentColor = FT.TextPrimary,
+                    textContentColor = FT.TextSecondary,
+                )
+            }
 
             existing?.productId?.let { ProductVerifySection(it) }
 

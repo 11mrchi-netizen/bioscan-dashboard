@@ -121,6 +121,8 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
     var zeppSummary by remember { mutableStateOf<ZeppWorkoutSummary?>(null) }
     var zeppStrengthData by remember { mutableStateOf<ZeppStrengthData?>(null) }
     var personalMaxHr by remember { mutableStateOf<Double?>(null) }
+    var planned by remember { mutableStateOf<com.bioscan.fieldterminal.data.PlannedMatch?>(null) }
+    val sessionScope = androidx.compose.runtime.rememberCoroutineScope()
 
     var exerciseLibrary by remember { mutableStateOf<List<ExerciseLibraryRow>>(emptyList()) }
 
@@ -157,6 +159,13 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
         // loaded once per screen open -- independent of this session's own
         // header/detail loads below.
         personalMaxHr = AnalysisRepository(SupabaseClientProvider.client).loadPersonalMaxHr()
+        // What the training block planned for this workout, if anything (DAV-346).
+        if (row != null) {
+            planned = runCatching {
+                com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client)
+                    .loadPlannedFor(sessionId, OffsetDateTime.parse(row.startTime).toLocalDate(), row.type == "strength")
+            }.getOrNull()
+        }
 
         // Real anatomical data (exercise_library's primary/secondary_muscles,
         // 876 rows) for StrengthCard's regional breakdown -- replaces the
@@ -281,6 +290,14 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                     // Live check: h.details.exercises (name + sets, already
                     // editable via the Log tab's edit sheet) never rendered
                     // anywhere in the app.
+                    planned?.let { pm ->
+                        com.bioscan.fieldterminal.ui.screens.training.PlannedSessionCard(pm, h.details.exercises.orEmpty(), h.durationMin) {
+                            sessionScope.launch {
+                                runCatching { com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client).linkPlanned(pm.row.id, sessionId) }
+                                    .onSuccess { planned = pm.copy(linked = true) }
+                            }
+                        }
+                    }
                     if (isStrength) {
                         h.details.exercises?.takeIf { it.isNotEmpty() }?.let { exercises ->
                             StrengthCard(exercises, exerciseLibrary, zeppStrengthData)

@@ -136,3 +136,20 @@ data class GeneratedBlockRow(
     @SerialName("end_date") val endDate: String,
     val status: String = "scheduled",
 )
+
+@Serializable
+data class PlannedForSessionRow(
+    val id: Long,
+    @SerialName("block_id") val blockId: Long,
+    @SerialName("week_index") val weekIndex: Int = 0,
+    val title: String,
+    val domain: String = "",
+    @SerialName("scheduled_date") val scheduledDate: String,
+    val status: String = "planned",
+    @SerialName("exercise_session_id") val exerciseSessionId: Long? = null,
+    @SerialName("match_status") val matchStatus: String = "none",
+    val prescription: kotlinx.serialization.json.JsonElement? = null,
+)
+
+@Serializable
+data class BlockNameRow(val name: String)

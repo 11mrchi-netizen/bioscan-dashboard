@@ -1,5 +1,10 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,10 +25,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.NotificationRulesRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.model.NotificationPrefsRow
+import com.bioscan.fieldterminal.data.model.NotificationRuleRow
 import com.bioscan.fieldterminal.domain.notifications.parseHm
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FTCard
@@ -37,14 +46,31 @@ import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
+private val RULE_LABELS = mapOf(
+    NotificationKind.SUPPLEMENT_DUE to "SUPPLEMENT REMINDERS",
+    NotificationKind.CHECKIN_MORNING to "MORNING CHECK-IN",
+    NotificationKind.CHECKIN_EVENING to "EVENING CHECK-IN",
+)
+
 // Setup > Notifications: single destination, no sub-tabs.
 @Composable
 fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
+    val context = LocalContext.current
     val notificationsRepository = remember { NotificationRulesRepository(SupabaseClientProvider.client) }
     var notifPrefs by remember { mutableStateOf<NotificationPrefsRow?>(null) }
     var notifSaving by remember { mutableStateOf(false) }
     var notifError by remember { mutableStateOf(false) }
     var notifSavedAt by remember { mutableStateOf<String?>(null) }
+    var rules by remember { mutableStateOf<List<NotificationRuleRow>>(emptyList()) }
+    var notifPermissionGranted by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        notifPermissionGranted = granted
+    }
 
     LaunchedEffect(Unit) {
         val zone = ZoneId.systemDefault().id
@@ -54,6 +80,10 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                 notificationsRepository.loadPrefs()
             }
         }.getOrNull() ?: NotificationPrefsRow(timezone = zone)
+        rules = runCatching { notificationsRepository.loadRules() }.getOrElse { emptyList() }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notifPermissionGranted) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
@@ -132,6 +162,45 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                     }
                     notifSavedAt?.let {
                         Text("Saved $it", style = FTType.Caption, color = FT.TextSecondary)
+                    }
+                }
+
+                if (rules.isNotEmpty()) {
+                    FTCard(title = "WHAT TO RECEIVE") {
+                        NotificationKind.ALL.forEach { kind ->
+                            val rule = rules.find { it.kind == kind }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    RULE_LABELS[kind] ?: kind.uppercase(),
+                                    style = FTType.LabelCaps,
+                                    color = FT.TextSecondary,
+                                )
+                                Switch(
+                                    checked = rule?.enabled ?: true,
+                                    onCheckedChange = { enabled ->
+                                        rules = rules.map { if (it.kind == kind) it.copy(enabled = enabled) else it }
+                                        scope.launch { runCatching { notificationsRepository.setRuleEnabled(kind, enabled) } }
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = FT.Emerald,
+                                        checkedTrackColor = FT.Emerald.copy(alpha = 0.3f),
+                                        uncheckedThumbColor = FT.TextSecondary,
+                                        uncheckedTrackColor = FT.GlassFill,
+                                    ),
+                                )
+                            }
+                        }
+                        if (!notifPermissionGranted) {
+                            Text(
+                                "Allow notifications in system settings to receive reminders.",
+                                style = FTType.Caption,
+                                color = FT.Critical,
+                            )
+                        }
                     }
                 }
             }

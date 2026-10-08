@@ -33,7 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
+
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
@@ -185,7 +185,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     if (scanningBarcode) "SCANNING..." else "SCAN BARCODE TO IMPORT INGREDIENTS",
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+                    style = FTType.LabelCaps,
                     color = if (scanningBarcode) FT.TextMuted else FT.Emerald,
                     modifier = Modifier.clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -243,15 +243,15 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                     },
                 )
                 scanError?.let {
-                    Text(it, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.Critical)
+                    Text(it, style = FTType.Caption, color = FT.Critical)
                 }
             }
 
             if (showEnrichConfirm) {
                 AlertDialog(
                     onDismissRequest = { showEnrichConfirm = false; enrichPending = null },
-                    title = { Text("REPLACE INGREDIENTS?", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)) },
-                    text = { Text("Scanned ingredients differ from what you entered. Replace them with the barcode data?", style = TextStyle(fontFamily = Inter, fontSize = 13.sp)) },
+                    title = { Text("REPLACE INGREDIENTS?", style = FTType.Telemetry) },
+                    text = { Text("Scanned ingredients differ from what you entered. Replace them with the barcode data?", style = FTType.BodySmall) },
                     confirmButton = {
                         TextButton(onClick = {
                             enrichPending?.let { pending ->
@@ -260,11 +260,11 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                             }
                             showEnrichConfirm = false
                             enrichPending = null
-                        }) { Text("REPLACE", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp), color = FT.Emerald) }
+                        }) { Text("REPLACE", style = FTType.LabelCaps, color = FT.Emerald) }
                     },
                     dismissButton = {
                         TextButton(onClick = { showEnrichConfirm = false; enrichPending = null }) {
-                            Text("KEEP MINE", style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp), color = FT.TextSecondary)
+                            Text("KEEP MINE", style = FTType.MonoCaption, color = FT.TextSecondary)
                         }
                     },
                     containerColor = FT.Surface,

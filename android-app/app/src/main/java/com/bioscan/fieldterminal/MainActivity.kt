@@ -1,5 +1,8 @@
 package com.bioscan.fieldterminal
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,8 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.data.HealthConnectSyncWorker
+import com.bioscan.fieldterminal.data.NotificationDispatchWorker
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.ZeppSyncWorker
+import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.nav.FieldTerminalNavHost
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -34,6 +39,16 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = getSystemService(NotificationManager::class.java)
+            listOf(
+                Triple(NotificationKind.SUPPLEMENT_DUE, "Supplement Reminders", NotificationManager.IMPORTANCE_DEFAULT),
+                Triple(NotificationKind.CHECKIN_MORNING, "Morning Check-in", NotificationManager.IMPORTANCE_DEFAULT),
+                Triple(NotificationKind.CHECKIN_EVENING, "Evening Check-in", NotificationManager.IMPORTANCE_DEFAULT),
+            ).forEach { (id, name, importance) ->
+                nm.createNotificationChannel(NotificationChannel(id, name, importance))
+            }
+        }
         setContent {
             FieldTerminalTheme {
                 AuthGate()
@@ -68,6 +83,7 @@ private fun AuthGate() {
         if (isAuthenticated) {
             HealthConnectSyncWorker.enqueue(context)
             ZeppSyncWorker.enqueue(context)
+            NotificationDispatchWorker.enqueue(context)
         }
     }
 

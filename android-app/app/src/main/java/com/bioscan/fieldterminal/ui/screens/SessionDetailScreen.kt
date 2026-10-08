@@ -27,11 +27,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.contracts.ExerciseRouteRequestContract
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
@@ -90,7 +87,6 @@ import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime

@@ -97,6 +97,11 @@ class NotificationRulesRepository(private val supabase: SupabaseClient) {
         )
     }
 
+    suspend fun setRuleEnabled(kind: String, enabled: Boolean) {
+        supabase.postgrest.from("notification_rules")
+            .update(buildJsonObject { put("enabled", enabled) }) { filter { eq("kind", kind) } }
+    }
+
     // Used for daily cap / min-gap checks: what was actually shown since `since`.
     suspend fun loadShownSince(since: Instant): List<NotificationLogRow> =
         supabase.postgrest.from("notification_log")

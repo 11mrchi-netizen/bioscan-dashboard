@@ -1982,7 +1982,7 @@ private fun EditableExercise.toDtoOrNull(): StrengthExerciseDto? {
         if (reps == null || weightKg == null) null
         else StrengthSetDto(reps = reps, weightKg = weightKg, rpe = s.rpe.toIntOrNull(), percentOneRm = s.percentOneRm.toDoubleOrNull())
     }
-    return if (validSets.isEmpty()) null else StrengthExerciseDto(name.trim(), validSets)
+    return if (validSets.isEmpty()) null else StrengthExerciseDto(name.trim(), sets = validSets)
 }
 
 // One exercise's editable form: name, its list of sets, and add/remove

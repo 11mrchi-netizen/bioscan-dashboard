@@ -24,12 +24,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.rememberCoroutineScope
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.SuspectedTrailRun
@@ -54,12 +50,11 @@ import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import com.bioscan.fieldterminal.domain.EF_MIN_RUNS_28D
 import com.bioscan.fieldterminal.domain.efficiencyRollingMedian28
-import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.TrendSeries
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -104,7 +99,7 @@ fun TrainingScreen(timeframe: PerformanceTimeframe, onOpenSessionDetail: (Long) 
             CircularProgressIndicator(color = FT.DomainTraining)
         }
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
+            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
         }
         else -> TrainingContent(overview!!, timeframe, onOpenSessionDetail, onMarkTrail)
     }
@@ -130,22 +125,22 @@ private fun TrainingContent(overview: TrainingOverview, timeframe: PerformanceTi
                         unit = if (overview.strengthSessionsThisWeek == 1) "SESSION" else "SESSIONS",
                     ),
                 )
-                StatLine("This week", "${overview.strengthMinutesThisWeek} min")
+                FTMetricRow("This week", "${overview.strengthMinutesThisWeek} min")
                 Text(
                     "Synced from Health Connect. Per-lift/set detail isn't shown here yet.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    style = FTType.Caption,
                     color = FT.TextSecondary,
                 )
             } else {
                 Text(
                     text = "No strength sessions synced yet.",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    style = FTType.RowTitle,
                     color = FT.TextSecondary,
                 )
                 Text(
                     text = "Health Connect is this app's real data source for strength training now — " +
                         "log a workout with any Health-Connect-aware app on your phone and it'll show up here after the next sync.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                    style = FTType.Caption,
                     color = FT.TextSecondary,
                 )
             }
@@ -185,10 +180,10 @@ private fun SessionRow(session: ExerciseSessionRow, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column {
-            Text(session.type.replaceFirstChar { it.uppercase() }, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextPrimary)
-            Text(when_, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.TextSecondary)
+            Text(session.type.replaceFirstChar { it.uppercase() }, style = FTType.Body, color = FT.TextPrimary)
+            Text(when_, style = FTType.Caption, color = FT.TextSecondary)
         }
-        Text(detail, style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp), color = FT.TextSecondary)
+        Text(detail, style = FTType.Value, color = FT.TextSecondary)
     }
 }
 
@@ -201,9 +196,8 @@ private fun SessionRow(session: ExerciseSessionRow, onClick: () -> Unit) {
 // "4-week avg km/wk" is dropped as its own fixed stat since selecting "1M"
 // on the same toggle now covers that; longest run stays all-time (its own
 // label already says so, not something a timeframe toggle should touch).
-// The weekly-volume RangeBar only makes sense at the Week grain -- a fixed
-// 32km ceiling means nothing once the period can be a year, so it's shown
-// only there rather than picking an arbitrary scaled ceiling for the rest.
+// No volume bar: a fixed km ceiling was arbitrary at any period, so the hero
+// value stands alone until a real personal baseline backs a comparison.
 @Composable
 private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimeframe, onMarkTrail: (List<Long>) -> Unit) {
     var period by remember { mutableStateOf(RunningPeriod.Week) }
@@ -211,7 +205,7 @@ private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimefr
 
     FTCard(title = "RUNNING") {
         if (!overview.hasAnyRunning) {
-            Text("No running sessions logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
+            Text("No running sessions logged yet.", style = FTType.Body, color = FT.TextSecondary)
         } else {
             val totalKm = sumDistanceKmSince(overview.runningSessions, today, period.days)
             val avgPace = averagePaceMinPerKmSince(overview.runningSessions, today, period.days)
@@ -222,11 +216,8 @@ private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimefr
 
             SegmentedToggle(options = RunningPeriod.entries, selected = period, labelOf = { it.label }, onSelect = { period = it })
             FTMetricValue(DisplayValue(primary = "%.1f".format(totalKm), unit = "KM"))
-            if (period == RunningPeriod.Week) {
-                RangeBar(value = totalKm, max = 32.0, watchBelow = null, color = FT.Emerald)
-            }
 
-            avgPace?.let { StatLine("Avg pace", formatPace(it)) }
+            avgPace?.let { FTMetricRow("Avg pace", formatPace(it)) }
 
             // DAV-198: pace is genuinely session-shaped (unlike HRV/RHR's
             // daily wearable readings, which have no context to filter on --
@@ -260,7 +251,7 @@ private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimefr
             }
 
             overview.longestRunKm?.let { longest ->
-                StatLine("Longest run (all-time)", "%.2f km".format(longest))
+                FTMetricRow("Longest run (all-time)", "%.2f km".format(longest))
             }
 
             // DAV-144. No per-session list exists on this tab (see
@@ -268,9 +259,9 @@ private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimefr
             // this is the same rollup shape every other figure here uses, only
             // shown when a real trail run happened in the selected period.
             if (trailRuns.isNotEmpty()) {
-                StatLine("Trail runs", "${trailRuns.size}")
+                FTMetricRow("Trail runs", "${trailRuns.size}")
                 trailRuns.mapNotNull { it.elevationGainM }.takeIf { it.isNotEmpty() }?.sum()?.let { gain ->
-                    StatLine("Elevation gained", "${gain.toInt()} m")
+                    FTMetricRow("Elevation gained", "${gain.toInt()} m")
                 }
             }
 
@@ -294,7 +285,7 @@ private fun SectionDivider() {
     Box(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder))
 }
 
-private val sectionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
+private val sectionLabelStyle = FTType.LabelCaps
 
 // Untagged runs that look like trail runs (Zepp said trail, or a steep
 // climb/km) -- collapsed by default, one tap to confirm each or all.
@@ -310,23 +301,23 @@ private fun SuspectedTrailRuns(suspected: List<SuspectedTrailRun>, onMark: (List
     ) {
         Text(
             "SUSPECTED TRAIL RUNS (${suspected.size})",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+            style = FTType.LabelCaps,
             color = FT.Warning,
         )
-        Text(if (expanded) "HIDE" else "REVIEW", style = TextStyle(fontFamily = RobotoMono, fontSize = 11.5.sp), color = FT.TextSecondary)
+        Text(if (expanded) "HIDE" else "REVIEW", style = FTType.MonoCaption, color = FT.TextSecondary)
     }
     if (!expanded) return
     Text(
         "Logged as plain runs, but Zepp called them trail or they climb like one. Nothing changes until you confirm.",
-        style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+        style = FTType.Caption,
         color = FT.TextSecondary,
     )
     suspected.forEach { s ->
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 val date = OffsetDateTime.parse(s.row.startTime).toLocalDate().format(DateTimeFormatter.ofPattern("EEE d MMM"))
-                Text("$date · ${"%.1f".format(s.row.distanceKm ?: 0.0)} km", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextPrimary)
-                Text(s.reason, style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextSecondary)
+                Text("$date · ${"%.1f".format(s.row.distanceKm ?: 0.0)} km", style = FTType.BodySmall, color = FT.TextPrimary)
+                Text(s.reason, style = FTType.Micro, color = FT.TextSecondary)
             }
             TrailMarkButton("MARK") { onMark(s.sessionIds) }
         }
@@ -346,7 +337,7 @@ private fun TrailMarkButton(label: String, modifier: Modifier = Modifier, onClic
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp), color = FT.DomainTraining)
+        Text(label, style = FTType.Label, color = FT.DomainTraining)
     }
 }
 
@@ -364,7 +355,7 @@ private fun RunEfficiencySection(overview: TrainingOverview, timeframe: Performa
     SectionDivider()
     Text("RUN EFFICIENCY", style = sectionLabelStyle, color = FT.TextMuted)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Efficiency factor", style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+        Text("Efficiency factor", style = FTType.Body, color = FT.TextSecondary)
         InfoHelpButton("Efficiency factor", EF_HELP)
     }
     val median = rolling.lastOrNull()?.second
@@ -374,12 +365,12 @@ private fun RunEfficiencySection(overview: TrainingOverview, timeframe: Performa
         val n = overview.efficiencyPoints.count { it.first.isAfter(today.minusDays(28)) }
         Text(
             "Building — needs $EF_MIN_RUNS_28D aerobic runs of 20+ min in 28 days ($n so far).",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            style = FTType.Caption,
             color = FT.TextSecondary,
         )
     }
-    overview.latestGapMinPerKm?.let { StatLine("Latest grade-adjusted pace", formatPace(it)) }
-    overview.latestHrDecouplingPct?.let { StatLine("Latest HR decoupling", "%+.1f%%".format(it)) }
+    overview.latestGapMinPerKm?.let { FTMetricRow("Latest grade-adjusted pace", formatPace(it)) }
+    overview.latestHrDecouplingPct?.let { FTMetricRow("Latest HR decoupling", "%+.1f%%".format(it)) }
 
     val raw = overview.efficiencyPoints.filter { it.first >= cutoff }
     if (raw.size >= 2) {
@@ -389,6 +380,7 @@ private fun RunEfficiencySection(overview: TrainingOverview, timeframe: Performa
                 TrendSeries(rolling.filter { it.first >= cutoff }, FT.Emerald, "28D MEDIAN"),
             ),
             valueFormat = { "%.2f".format(it) },
+            unit = "EF (m/min per bpm)",
         )
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             LegendItem("PER RUN", FT.TextMuted)
@@ -441,10 +433,10 @@ private fun PerformanceSection(overview: TrainingOverview, timeframe: Performanc
     }
     when (selected) {
         PerformanceMetric.VO2MAX -> {
-            FTMetricValue(DisplayValue(primary = "%.1f".format(overview.latestVo2Max)))
+            FTMetricValue(DisplayValue(primary = "%.1f".format(overview.latestVo2Max), unit = "ML/KG/MIN"))
             Text(
                 "Wearable-estimated, not lab-confirmed.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
             vo2maxPersonal?.let { ComparisonStrip(personal = it) }
@@ -461,7 +453,7 @@ private fun PerformanceSection(overview: TrainingOverview, timeframe: Performanc
             )
             Text(
                 "Zepp's own estimate, recomputed per qualifying run.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
@@ -476,6 +468,10 @@ private fun PerformanceSection(overview: TrainingOverview, timeframe: Performanc
             PerformanceMetric.VO2MAX -> { v -> "%.1f".format(v) }
             PerformanceMetric.LACTATE_THRESHOLD -> ::formatPace
         },
+        unit = when (selected) {
+            PerformanceMetric.VO2MAX -> "ml/kg/min"
+            PerformanceMetric.LACTATE_THRESHOLD -> "pace · min:sec per km"
+        },
     )
 }
 
@@ -488,12 +484,13 @@ private fun PerformanceTrendChart(
     series: List<Pair<LocalDate, Double>>,
     timeframe: PerformanceTimeframe,
     valueFormat: (Double) -> String,
+    unit: String,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (series.size < 2) {
             Text(
                 "Not enough readings yet to plot a trend.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
                 modifier = Modifier.padding(vertical = 10.dp),
             )
@@ -509,6 +506,7 @@ private fun PerformanceTrendChart(
                 ),
                 modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 valueFormat = valueFormat,
+                unit = unit,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 LegendItem("RAW", FT.TextMuted)
@@ -518,7 +516,7 @@ private fun PerformanceTrendChart(
         } else {
             Text(
                 "Not enough readings in the last ${timeframe.label.lowercase()} to plot a trend.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
                 modifier = Modifier.padding(vertical = 10.dp),
             )
@@ -536,25 +534,7 @@ private fun LegendItem(label: String, color: androidx.compose.ui.graphics.Color)
                 .width(12.dp)
                 .background(color),
         )
-        Text(label, style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextSecondary)
-    }
-}
-
-// DAV-108: label is unweighted (always a short fixed phrase) so it never
-// shrinks; value takes the rest of the row via weight(1f) so a long value
-// wraps within its own bounded width and stays right-aligned instead of
-// colliding with the label.
-@Composable
-private fun StatLine(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
-        Text(
-            value,
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
-            color = FT.TextPrimary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f).padding(start = 8.dp),
-        )
+        Text(label, style = FTType.Micro, color = FT.TextSecondary)
     }
 }
 

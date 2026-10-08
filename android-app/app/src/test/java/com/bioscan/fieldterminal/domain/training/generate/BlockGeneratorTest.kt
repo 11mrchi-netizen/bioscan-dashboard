@@ -182,4 +182,11 @@ class BlockGeneratorTest {
         assertEquals("Press 3-5 x 5 @ 55 kg (15+2.5 per side)", a.text())
         assertEquals("Example run · 30-60 min", b.sessions.first { it.conditioning != null }.summaryLines().single())
     }
+
+    @Test
+    fun smallBookIncrementsNeverRoundBelowOneStep() {
+        assertEquals(2.5, progressionIncrementKg(com.bioscan.fieldterminal.domain.training.definition.NumRange.of(5), "lb", 2.5), 0.001)
+        assertEquals(2.5, progressionIncrementKg(com.bioscan.fieldterminal.domain.training.definition.NumRange(2.5, 5.0), "lb", 2.5), 0.001)
+        assertEquals(5.0, progressionIncrementKg(com.bioscan.fieldterminal.domain.training.definition.NumRange.of(10), "lb", 2.5), 0.001)
+    }
 }

@@ -1,3 +1,5 @@
+> **SUPERSEDED (visual direction).** This handoff describes the original gunmetal/amber, squared-corner direction. The visual authority is now `FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md` (+ `ANALYTICAL_PRESENTATION_CONTRACT.md`). This file remains only as history for the legacy launch-screen and screen-inventory notes.
+
 # Handoff: Bioscan mobile app — "Field Terminal" direction
 
 ## Overview

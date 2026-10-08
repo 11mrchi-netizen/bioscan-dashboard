@@ -7,48 +7,13 @@ import androidx.compose.ui.text.font.FontWeight
 import com.bioscan.fieldterminal.R
 
 // Bundled font files (res/font/) -- see android-app/licenses/fonts/ for their
-// OFL license text. JetBrains Mono and Saira ship only as variable fonts
-// upstream (no static per-weight files), so each named weight below is one
-// FontVariation.Settings instance over the same underlying file -- this is
-// standard variable-font usage, not a workaround. Saira Condensed ships a
-// static Bold file upstream (matching design/README.md's "weight 700 only"
-// token), so no variation settings are needed there.
-
-private fun jetBrainsMono(weight: FontWeight) = Font(
-    resId = R.font.jetbrains_mono_variable,
-    weight = weight,
-    variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
-)
-
-private fun saira(weight: FontWeight) = Font(
-    resId = R.font.saira_variable,
-    weight = weight,
-    variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
-)
-
-// design/README.md: "JetBrains Mono -- ... Weights 500/600/700."
-val JetBrainsMono = FontFamily(
-    jetBrainsMono(FontWeight.Medium), // 500
-    jetBrainsMono(FontWeight.SemiBold), // 600
-    jetBrainsMono(FontWeight.Bold), // 700
-)
-
-// design/README.md: "Saira -- ... Weights 400/500/600."
-val Saira = FontFamily(
-    saira(FontWeight.Normal), // 400
-    saira(FontWeight.Medium), // 500
-    saira(FontWeight.SemiBold), // 600
-)
-
-// design/README.md: "Saira Condensed -- large numerics only. Weight 700."
-val SairaCondensed = FontFamily(
-    Font(resId = R.font.saira_condensed_bold, weight = FontWeight.Bold),
-)
+// OFL license text. Both families ship as variable fonts upstream (no static
+// per-weight files), so each named weight below is one FontVariation.Settings
+// instance over the same underlying file -- standard variable-font usage, not
+// a workaround.
 
 // design/FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md's typography split: Inter for
-// interface language, Roboto Mono for telemetry. Both ship as variable fonts
-// upstream, same bundled-file + FontVariation.Settings pattern as the three
-// families above -- not a new approach, just two more font files.
+// interface language, Roboto Mono for telemetry.
 private fun inter(weight: FontWeight) = Font(
     resId = R.font.inter_variable,
     weight = weight,

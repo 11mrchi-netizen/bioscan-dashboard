@@ -1,9 +1,11 @@
 package com.bioscan.fieldterminal.ui.nav
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -20,14 +23,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -38,6 +36,9 @@ import com.bioscan.fieldterminal.ui.screens.AgingProfileScreen
 import com.bioscan.fieldterminal.ui.screens.LogScreen
 import com.bioscan.fieldterminal.ui.screens.SessionDetailScreen
 import com.bioscan.fieldterminal.ui.screens.SettingsScreen
+import com.bioscan.fieldterminal.ui.screens.settings.ConnectedServicesScreen
+import com.bioscan.fieldterminal.ui.screens.settings.NotificationsSettingsScreen
+import com.bioscan.fieldterminal.ui.screens.settings.UserSettingsScreen
 import com.bioscan.fieldterminal.ui.screens.TrainingBlocksScreen
 import com.bioscan.fieldterminal.ui.screens.UserProfileScreen
 import com.bioscan.fieldterminal.ui.screens.status.DailyReadinessScreen
@@ -48,8 +49,8 @@ import com.bioscan.fieldterminal.ui.screens.status.LabsTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.PantryScreen
 import com.bioscan.fieldterminal.ui.screens.status.StatusScreen
 import com.bioscan.fieldterminal.ui.screens.status.TrainingTileScreen
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 @Composable
 fun FieldTerminalNavHost() {
@@ -123,8 +124,19 @@ fun FieldTerminalNavHost() {
             composable(TopLevelTab.Log.route) {
                 LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") })
             }
-            composable(TopLevelTab.Setup.route) { SettingsScreen(scope, onOpenTraining = { navController.navigate("settings_training") }) }
-            composable("settings_training") {
+            composable(TopLevelTab.Setup.route) {
+                SettingsScreen(
+                    scope = scope,
+                    onOpenUser = { navController.navigate(SettingsRoute.User.route) },
+                    onOpenNotifications = { navController.navigate(SettingsRoute.Notifications.route) },
+                    onOpenConnectedServices = { navController.navigate(SettingsRoute.ConnectedServices.route) },
+                    onOpenTraining = { navController.navigate(SettingsRoute.Training.route) },
+                )
+            }
+            composable(SettingsRoute.User.route) { UserSettingsScreen(scope = scope, onBack = { navController.popBackStack() }) }
+            composable(SettingsRoute.Notifications.route) { NotificationsSettingsScreen(scope = scope, onBack = { navController.popBackStack() }) }
+            composable(SettingsRoute.ConnectedServices.route) { ConnectedServicesScreen(scope = scope, onBack = { navController.popBackStack() }) }
+            composable(SettingsRoute.Training.route) {
                 com.bioscan.fieldterminal.ui.screens.training.TrainingSettingsScreen(
                     onBack = { navController.popBackStack() },
                     onStart = { key -> navController.navigate("training_planner/$key") },
@@ -151,83 +163,74 @@ fun FieldTerminalNavHost() {
     }
 }
 
-// Custom bottom bar rather than Material3's NavigationBar/NavigationBarItem --
-// their built-in selected-state treatment (a rounded pill indicator) doesn't
-// match this shape (a top border + background tint per cell, square corners
-// throughout), so this recreates that layout directly instead of fighting
-// the default component's styling. DAV-108 follow-up: retinted to the
-// Futuristic Material contract -- solid Level-1 surface, emerald as the
-// primary selected-state signal (not a domain accent; this is the global
-// shell, not a Log-specific surface), Roboto Mono for the compact labels.
+// Floating dock: inset from the screen edges, soft 24dp geometry, glass-border
+// outline, and a rounded selected pill (accent tint + accent outline) instead
+// of the old full-width square bar with a top rule. Custom rather than
+// Material3's NavigationBar so the pill, accent-per-tab and Roboto Mono labels
+// follow the Futuristic Material contract. Selected state is accent color AND
+// the filled pill AND the label, never color alone.
 @Composable
 private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -> Unit) {
-    Row(
+    val dockShape = RoundedCornerShape(FT.RadiusCard)
+    val pillShape = RoundedCornerShape(FT.RadiusModule)
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(78.dp)
-            .background(FT.Surface)
-            .drawBehind {
-                val strokeWidth = 2.dp.toPx()
-                drawLine(
-                    color = FT.GlassBorder,
-                    start = Offset(0f, strokeWidth / 2),
-                    end = Offset(size.width, strokeWidth / 2),
-                    strokeWidth = strokeWidth,
-                )
-            }
-            .padding(bottom = 14.dp),
+            .background(FT.Base)
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 14.dp),
     ) {
-        // A `for` loop, not `.forEach { }` -- `weight()` needs RowScope as its
-        // implicit receiver, and a real build confirmed the Kotlin compiler
-        // doesn't reliably propagate that receiver into a non-inline lambda
-        // passed to `entries.forEach` here. A for-loop body is inlined in
-        // place, so there's no separate lambda for the receiver to fail to
-        // reach.
-        for (tab in TopLevelTab.entries) {
-            val selected = currentRoute == tab.route
-            val accent = tab.domainAccent
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .then(
-                        if (selected) {
-                            Modifier
-                                .padding(top = 1.dp) // net -2dp margin vs the 3dp top border below
-                                .drawBehind {
-                                    drawRect(color = accent.copy(alpha = 0.08f))
-                                    val strokeWidth = 3.dp.toPx()
-                                    drawLine(
-                                        color = accent,
-                                        start = Offset(0f, strokeWidth / 2),
-                                        end = Offset(size.width, strokeWidth / 2),
-                                        strokeWidth = strokeWidth,
-                                    )
-                                }
-                        } else {
-                            Modifier
-                        },
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .clip(dockShape)
+                .background(FT.Surface)
+                .border(FT.BorderWidth, FT.GlassBorder, dockShape)
+                .padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // A `for` loop, not `.forEach { }` -- `weight()` needs RowScope as
+            // its implicit receiver, and a real build confirmed the Kotlin
+            // compiler doesn't reliably propagate that receiver into a
+            // non-inline lambda passed to `entries.forEach` here.
+            for (tab in TopLevelTab.entries) {
+                val selected = currentRoute == tab.route
+                val accent = tab.domainAccent
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(pillShape)
+                        .then(
+                            if (selected) {
+                                Modifier
+                                    .background(accent.copy(alpha = 0.14f), pillShape)
+                                    .border(FT.BorderWidth, accent.copy(alpha = 0.55f), pillShape)
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onTabSelected(tab) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    val tint = if (selected) accent else FT.TextSecondary
+                    Icon(
+                        painter = painterResource(tab.iconRes),
+                        contentDescription = tab.label,
+                        tint = tint,
+                        modifier = Modifier.size(21.dp),
                     )
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onTabSelected(tab) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                val tint = if (selected) accent else FT.TextSecondary
-                Icon(
-                    painter = painterResource(tab.iconRes),
-                    contentDescription = tab.label,
-                    tint = tint,
-                    modifier = Modifier.size(21.dp),
-                )
-                Text(
-                    text = tab.label,
-                    style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.14.em),
-                    color = tint,
-                    modifier = Modifier.padding(top = 5.dp),
-                )
+                    Text(
+                        text = tab.label,
+                        style = FTType.LabelCaps,
+                        color = tint,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
         }
     }

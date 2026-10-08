@@ -32,14 +32,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.IngredientInput
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -50,9 +46,8 @@ import com.bioscan.fieldterminal.util.scanBarcode
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -72,8 +67,8 @@ private val EVERY_N_DAYS_OPTIONS: List<Pair<Int?, String>> = listOf(
     4 to "4 DAYS",
     7 to "WEEKLY",
 )
-private val sheetHeaderTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
-private val sheetActionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
+private val sheetHeaderTitleStyle = FTType.SectionTitle
+private val sheetActionLabelStyle = FTType.LabelCaps
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,7 +115,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RectangleShape,
+        shape = FT.SheetShape,
         containerColor = FT.Surface,
         contentColor = FT.TextPrimary,
     ) {
@@ -153,7 +148,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                         ) {
                             Text(
                                 option.uppercase(),
-                                style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                                style = FTType.MonoCaption,
                                 color = if (selected) FT.Emerald else FT.TextSecondary,
                             )
                         }
@@ -177,7 +172,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                         ) {
                             Text(
                                 label,
-                                style = TextStyle(fontFamily = RobotoMono, fontSize = 10.sp),
+                                style = FTType.Micro,
                                 color = if (selected) FT.Emerald else FT.TextSecondary,
                             )
                         }
@@ -281,7 +276,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
             existing?.productId?.let { ProductVerifySection(it) }
 
             error?.let {
-                Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical)
+                Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical)
             }
 
             val valid = name.isNotBlank() && dose.isNotBlank()
@@ -337,7 +332,7 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
                 Spacer(Modifier.height(4.dp))
                 Text(
                     if (ending) "ENDING..." else "END THIS SUPPLEMENT",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    style = FTType.BodySmall,
                     color = FT.Critical,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -403,7 +398,7 @@ private fun IngredientsSection(ingredients: androidx.compose.runtime.snapshots.S
         ingredients.forEachIndexed { i, ingredient -> IngredientEditor(ingredient) { ingredients.removeAt(i) } }
         Text(
             "+ ADD INGREDIENT",
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+            style = FTType.MonoCaption,
             color = FT.Emerald,
             modifier = Modifier.clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -423,7 +418,7 @@ private fun IngredientEditor(ingredient: EditableIngredient, onRemove: () -> Uni
             FieldTextField(ingredient.name, { ingredient.name = it }, "Ingredient, e.g. Magnesium bisglycinate", modifier = Modifier.weight(1f))
             Text(
                 "REMOVE",
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                style = FTType.MonoCaption,
                 color = FT.Critical,
                 modifier = Modifier
                     .padding(start = 10.dp)
@@ -441,7 +436,7 @@ private fun IngredientEditor(ingredient: EditableIngredient, onRemove: () -> Uni
         }
         Text(
             "Leave elemental blank unless the label states it separately (e.g. \"2000mg magnesium bisglycinate providing 200mg elemental magnesium\") -- never guessed.",
-            style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+            style = FTType.Caption,
             color = FT.TextMuted,
         )
     }

@@ -20,9 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow
@@ -30,14 +28,17 @@ import com.bioscan.fieldterminal.data.model.LabResultAnalysisRow
 import com.bioscan.fieldterminal.domain.BloodworkMarkerEvaluation
 import com.bioscan.fieldterminal.domain.BloodworkTrendState
 import com.bioscan.fieldterminal.domain.evaluateBloodworkMarker
+import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.bloodworkTrendMetricState
+import com.bioscan.fieldterminal.ui.components.metricStateColor
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.components.DotPlot
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.LabsTab
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalDate
 
 // DAV-74/DAV-87 (First feedback fixes): Labs tile page. Keeps the existing
@@ -82,7 +83,7 @@ private fun BloodworkAnalysisSection() {
     val lr = labResults
     if (ld == null || lr == null) {
         Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.Warning)
+            CircularProgressIndicator(color = FT.DomainLabs)
         }
         return
     }
@@ -107,12 +108,10 @@ private fun BloodworkAnalysisSection() {
     if (bloodworkEvals.isEmpty()) return
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp)) {
-        FTCard(title = "BLOODWORK (RCV)") {
-            Text(
-                "~1 draw/year means every comparison here is a single two-point delta against a real, marker-specific noise threshold — never a trend.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-                color = FT.TextSecondary,
-            )
+        FTCard(
+            title = "BLOODWORK (RCV)",
+            info = "~1 draw/year means every comparison here is a single two-point delta against a real, marker-specific noise threshold (RCV) — never a trend.",
+        ) {
             bloodworkEvals.forEach { (m, draws) -> BloodworkMarkerRow(m, draws) }
         }
     }
@@ -123,54 +122,43 @@ private fun BloodworkAnalysisSection() {
 // header comment for why), with the reference band behind them.
 @Composable
 private fun BloodworkMarkerRow(m: BloodworkMarkerEvaluation, draws: List<Pair<LocalDate, Double>>) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    val state = bloodworkTrendMetricState(m.state)
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(m.markerName, style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextPrimary)
+            Text(m.markerName, style = FTType.BodySmall, color = FT.TextPrimary)
             Text(
                 "%.2f%s".format(m.latestValue, m.unit?.let { " $it" } ?: ""),
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp),
+                style = FTType.Value,
                 color = FT.TextPrimary,
             )
         }
-        val rangeText = if (m.refLow != null && m.refHigh != null) {
-            "range %.2f–%.2f".format(m.refLow, m.refHigh)
-        } else {
-            "no reference range on file"
-        }
-        val stateText = if (m.previousValue == null) {
-            "BUILDING (1 draw)"
-        } else if (m.rcv == null || m.deltaPercent == null) {
-            "no RCV citation for this marker"
-        } else {
-            when (m.state) {
-                BloodworkTrendState.Stable -> "STABLE (Δ%+.1f%%, within RCV ±%.1f%%)".format(m.deltaPercent, m.rcv)
-                BloodworkTrendState.ShiftUp -> "SHIFT UP (Δ%+.1f%% exceeds RCV ±%.1f%%)".format(m.deltaPercent, m.rcv)
-                BloodworkTrendState.ShiftDown -> "SHIFT DOWN (Δ%+.1f%% exceeds RCV ±%.1f%%)".format(m.deltaPercent, m.rcv)
-                null -> ""
+        // State as a pill plus a short numeric descriptor, not a sentence.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (m.previousValue == null) {
+                FTStatePill(MetricState.Building)
+                Text("1 draw — nothing to compare yet", style = FTType.Label, color = FT.TextSecondary)
+            } else if (m.rcv == null || m.deltaPercent == null) {
+                Text("No RCV on file for this marker", style = FTType.Label, color = FT.TextSecondary)
+            } else {
+                state?.let { FTStatePill(it) }
+                Text("Δ%+.1f%% · RCV ±%.1f%%".format(m.deltaPercent, m.rcv), style = FTType.Label, color = FT.TextSecondary)
             }
         }
         Text(
-            "$rangeText · $stateText",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-            color = when (m.state) {
-                BloodworkTrendState.ShiftUp, BloodworkTrendState.ShiftDown -> FT.Warning
-                BloodworkTrendState.Stable -> FT.Emerald
-                null -> FT.TextSecondary
-            },
+            if (m.refLow != null && m.refHigh != null) "range %.2f–%.2f".format(m.refLow, m.refHigh) else "no reference range on file",
+            style = FTType.Caption,
+            color = FT.TextMuted,
         )
         m.indexOfIndividuality?.takeIf { it < 0.6 }?.let {
             Text(
-                "Index of Individuality %.2f — population range less informative here; read against your own history.".format(it),
-                style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp),
+                "Individuality %.2f — read against your own history".format(it),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
         val latestValue = draws.maxByOrNull { it.first }?.second
-        val latestColor = when (m.state) {
-            BloodworkTrendState.ShiftUp, BloodworkTrendState.ShiftDown -> FT.Warning
-            BloodworkTrendState.Stable -> FT.Emerald
-            null -> FT.TextSecondary
-        }
+        // Only a real shift beyond RCV earns a signal color on the latest dot.
+        val latestColor = if (state == MetricState.Warning) metricStateColor(MetricState.Warning) else FT.TextPrimary
         DotPlot(
             points = draws,
             refLow = m.refLow,

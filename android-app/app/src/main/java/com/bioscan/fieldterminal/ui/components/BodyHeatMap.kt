@@ -25,13 +25,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.domain.BodyZone
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // Front + back body silhouettes with each muscle zone tinted by its share of
 // the session's load (kg of volume), replacing the old per-region bars. Zones
@@ -91,7 +88,7 @@ fun BodyHeatMap(loads: Map<BodyZone, Double>, modifier: Modifier = Modifier) {
     val maxLoad = loads.values.maxOrNull()?.takeIf { it > 0 } ?: return
     val total = loads.values.sum()
     var selected by remember { mutableStateOf<BodyZone?>(null) }
-    val idle = Color.White.copy(alpha = 0.07f)
+    val idle = FT.GlassFill
 
     fun tint(zone: BodyZone): Color {
         val load = loads[zone] ?: 0.0
@@ -121,35 +118,35 @@ fun BodyHeatMap(loads: Map<BodyZone, Double>, modifier: Modifier = Modifier) {
             listOf(FRONT_SHAPES to size.width / 4f, BACK_SHAPES to size.width * 3f / 4f).forEach { (shapes, cx) ->
                 val ox = cx - 50f * scale
                 fun p(pt: Pair<Float, Float>) = Offset(ox + pt.first * scale, oy + pt.second * scale)
-                drawCircle(Color.White.copy(alpha = 0.18f), radius = 9f * scale, center = p(50f to 13f), style = Stroke(1.5f))
+                drawCircle(FT.GlassBorder, radius = 9f * scale, center = p(50f to 13f), style = Stroke(1.5f))
                 shapes.forEach { s ->
                     val path = Path().apply {
                         s.pts.forEachIndexed { i, pt -> p(pt).let { o -> if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) } }
                         close()
                     }
                     drawPath(path, tint(s.zone))
-                    drawPath(path, Color.White.copy(alpha = if (s.zone == selected) 0.9f else 0.16f), style = Stroke(if (s.zone == selected) 3f else 1f))
+                    drawPath(path, if (s.zone == selected) FT.TextPrimary else FT.GlassBorder, style = Stroke(if (s.zone == selected) 3f else 1f))
                 }
             }
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            Text("FRONT", style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextMuted)
-            Text("BACK", style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextMuted)
+            Text("FRONT", style = FTType.Micro, color = FT.TextMuted)
+            Text("BACK", style = FTType.Micro, color = FT.TextMuted)
         }
         val sel = selected
         Text(
             if (sel != null) "${sel.label} — %.0f kg (%.0f%%)".format(loads[sel] ?: 0.0, (loads[sel] ?: 0.0) / total * 100)
             else "Tap a muscle group for its load.",
-            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+            style = FTType.BodySmall,
             color = if (sel != null) FT.TextPrimary else FT.TextSecondary,
         )
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("0", style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextMuted)
+            Text("0", style = FTType.Micro, color = FT.TextMuted)
             Box(
                 Modifier.width(120.dp).height(6.dp)
                     .background(Brush.horizontalGradient(listOf(idle, FT.DomainTraining))),
             )
-            Text("%.0f kg".format(maxLoad), style = TextStyle(fontFamily = RobotoMono, fontSize = 10.5.sp), color = FT.TextMuted)
+            Text("%.0f kg".format(maxLoad), style = FTType.Micro, color = FT.TextMuted)
         }
     }
 }

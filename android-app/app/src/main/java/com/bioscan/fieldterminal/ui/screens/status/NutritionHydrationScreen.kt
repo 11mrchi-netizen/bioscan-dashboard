@@ -23,12 +23,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.data.DEFAULT_HYDRATION_MAX_ML
+import com.bioscan.fieldterminal.data.DEFAULT_HYDRATION_MIN_ML
 import com.bioscan.fieldterminal.data.NutritionGoals
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.NutritionOverview
@@ -57,12 +55,11 @@ import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.MacroDonutChart
 import com.bioscan.fieldterminal.ui.components.PeriodToggle
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.Inter
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -75,33 +72,25 @@ import kotlin.math.roundToInt
 // convention, ported from index.html's nutrition.cal[length-1], was a real
 // on-device bug: calories/macros never appeared to reset at the new day).
 //
-// The committed mockup (design/Field Terminal Mockups.dc.html, "Status ·
-// Nutrition & hydration") shows every bar against a personal target
-// (2750 kcal, 180g protein, 3.0L water) -- none of these exist anywhere in
-// this project's real data (confirmed by grep; the web dashboard's own
-// Kidneys/Hydration panel explicitly says so: "No stored personal target").
-// Rather than invent numbers the mockup implies but nothing backs, this
-// shows the same generic sanity-range bars the web dashboard actually uses
-// (0-3500 kcal, 0-220g protein, 0-450g carbs, 0-180g fat, 0-4000ml water,
-// same watch-thresholds) with one honest disclosure line instead of a fake
-// "/2750" denominator.
+// Calories and macros are shown against the targets saved in Settings
+// (NutritionGoalsStore, RangeKind.TargetRange); only when a target isn't set
+// does a bar fall back to a generic RangeKind.ReferenceRange (0-3500 kcal,
+// 0-220g protein, 0-450g carbs, 0-180g fat), labelled REFERENCE so it never
+// reads as a personal goal. Hydration is a min-max range (set in Settings,
+// documented default otherwise), never a single hard-coded volume.
 // DAV-72 (First feedback fixes): split into separate public
 // NutritionTabContent/HydrationTabContent -- the Fuel tile page now hosts
 // Nutrition and Hydration as two switchable tabs sharing one
 // NutritionOverview load, instead of one combined screen.
 // DAV-100: calories headline -> macros -> meals logged -> 7-day trend,
 // migrated onto the shared Futuristic Material primitives (DAV-105).
-// RangeKind.ReferenceRange is used throughout (not PersonalRange/TargetRange)
-// because these stay real, generic sanity ranges -- no personal calorie/
-// macro target is stored anywhere in this project (see this file's own
-// long-standing note above); ReferenceRange is the one range kind whose
-// contract doesn't imply a personal history gate or an achieved goal.
 @Composable
 fun NutritionTabContent(overview: NutritionOverview, onOpenNutrientBreakdown: () -> Unit = {}) {
+    val goals = NutritionGoalsStore.getGoals(LocalContext.current)
     val today = overview.today
     if (today == null) {
         Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("No meals logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
+            Text("No meals logged yet.", style = FTType.Body, color = FT.TextSecondary)
         }
         return
     }
@@ -112,19 +101,19 @@ fun NutritionTabContent(overview: NutritionOverview, onOpenNutrientBreakdown: ()
         // Calories headline
         Column {
             FTMetricValue(DisplayValue(primary = today.calories.roundToInt().toString(), unit = "KCAL"))
-            FTRangeIndicator(referenceRange("DAILY REFERENCE RANGE", today.calories, 0.0, 3500.0))
+            FTRangeIndicator(dailyRange("CALORIES", today.calories, goals.caloriesKcal, 3500.0))
             Text(
                 text = "${today.mealCount} MEAL${if (today.mealCount == 1) "" else "S"} LOGGED — ${today.date}",
-                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.14f.em),
+                style = FTType.LabelCaps,
                 color = FT.TextSecondary,
                 modifier = Modifier.padding(top = 6.dp),
             )
         }
 
         FTCard(title = "MACROS") {
-            FTRangeIndicator(referenceRange("PROTEIN (g)", today.proteinG, 0.0, 220.0))
-            FTRangeIndicator(referenceRange("CARBS (g)", today.carbsG, 0.0, 450.0))
-            FTRangeIndicator(referenceRange("FAT (g)", today.fatG, 0.0, 180.0))
+            FTRangeIndicator(dailyRange("PROTEIN (G)", today.proteinG, goals.proteinG, 220.0))
+            FTRangeIndicator(dailyRange("CARBS (G)", today.carbsG, goals.carbsG, 450.0))
+            FTRangeIndicator(dailyRange("FAT (G)", today.fatG, goals.fatG, 180.0))
             NutrientBreakdownButton(onClick = onOpenNutrientBreakdown)
         }
 
@@ -145,12 +134,6 @@ fun NutritionTabContent(overview: NutritionOverview, onOpenNutrientBreakdown: ()
                 CalorieTrendBars(overview.last7Days)
             }
         }
-
-        Text(
-            text = "Ranges shown are general reference points — no personal targets are stored anywhere in this project yet.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
-            color = FT.TextMuted,
-        )
     }
 }
 
@@ -161,17 +144,17 @@ private fun MealRowItem(meal: MealRow) {
         Column(Modifier.weight(1f).padding(end = 10.dp)) {
             Text(
                 meal.description ?: "Meal",
-                style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                style = FTType.BodySmall,
                 color = FT.TextPrimary,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
-            Text(time, style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextMuted)
+            Text(time, style = FTType.MonoCaption, color = FT.TextMuted)
         }
         meal.calories?.let {
             Text(
                 "${it.roundToInt()} kcal",
-                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                style = FTType.Telemetry,
                 color = FT.TextSecondary,
             )
         }
@@ -196,7 +179,7 @@ private fun NutrientBreakdownButton(onClick: () -> Unit) {
     ) {
         Text(
             "VIEW DETAILED NUTRIENT BREAKDOWN",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+            style = FTType.LabelCaps,
             color = FT.DomainFuel,
         )
     }
@@ -210,6 +193,32 @@ private fun referenceRange(label: String, current: Double, lower: Double, upper:
     label = label,
     sufficientHistory = true,
 )
+
+// Saved target when one exists, generic reference range otherwise -- the label
+// says which, so a reference band is never mistaken for a personal goal.
+private fun dailyRange(label: String, current: Double, target: Double?, referenceUpper: Double) =
+    if (target != null) targetRange("$label · TARGET", current, target)
+    else referenceRange("$label · REFERENCE", current, 0.0, referenceUpper)
+
+private fun hydrationRange(totalMl: Double, goals: NutritionGoals, exerciseDemandMl: Double): PersonalRange {
+    val userSet = goals.hasHydrationRange
+    val lower = (goals.hydrationMinMl ?: DEFAULT_HYDRATION_MIN_ML) + exerciseDemandMl
+    val upper = (goals.hydrationMaxMl ?: DEFAULT_HYDRATION_MAX_ML) + exerciseDemandMl
+    val comparison = when {
+        totalMl < lower -> RangeComparison.Below
+        totalMl > upper -> RangeComparison.Above
+        else -> RangeComparison.Within
+    }
+    return PersonalRange(
+        kind = if (userSet) RangeKind.TargetRange else RangeKind.ReferenceRange,
+        lower = lower,
+        upper = upper,
+        current = totalMl,
+        label = if (userSet) "WATER (ML) · TARGET" else "WATER (ML) · REFERENCE",
+        comparison = comparison,
+        sufficientHistory = true,
+    )
+}
 
 // DAV-100 / DAV-181: liters headline combining hydration_daily (plain water)
 // + effective_hydration_ml from beverage meal_items. Each source is shown
@@ -270,31 +279,32 @@ fun HydrationTabContent(overview: NutritionOverview) {
     ) {
         FTCard(title = "HYDRATION") {
             if (!hasAnyHydration) {
-                Text("No hydration logged yet today.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
+                Text("No hydration logged yet today.", style = FTType.Body, color = FT.TextSecondary)
             } else {
                 FTMetricValue(DisplayValue(primary = "%.1f".format(totalMl / 1000.0), unit = "L"))
-                HydrationSegments(totalMl.toInt())
+                FTRangeIndicator(hydrationRange(totalMl, NutritionGoalsStore.getGoals(LocalContext.current), hydrationIntelligence.inferredDemandMl ?: 0.0))
 
                 // Breakdown by source when there are beverage entries alongside
                 // plain water, so the user can see each contribution.
                 if (overview.todayBeverageItems.isNotEmpty()) {
                     Column(modifier = Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         overview.todayHydrationMl?.let { ml ->
-                            StatLine("Water", "${ml} ml")
+                            FTMetricRow("Water", "${ml} ml")
                         }
                         overview.todayBeverageItems.forEach { item ->
                             val hydStr = item.effectiveHydrationMl?.let { "%.0f ml (est.)".format(it) } ?: "—"
-                            StatLine(item.description ?: "Beverage", hydStr)
+                            FTMetricRow(item.description ?: "Beverage", hydStr)
                         }
                     }
                 }
 
-                Text(
-                    "4.0 L reference — no personal hydration target is stored anywhere in this project yet." +
-                        if (overview.todayBeverageItems.isNotEmpty()) " Beverage effective-hydration values are modelled estimates." else "",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-                    color = FT.TextMuted,
-                )
+                if (overview.todayBeverageItems.isNotEmpty()) {
+                    Text(
+                        "Beverage effective-hydration values are modelled estimates.",
+                        style = FTType.Caption,
+                        color = FT.TextMuted,
+                    )
+                }
             }
         }
 
@@ -305,25 +315,25 @@ fun HydrationTabContent(overview: NutritionOverview) {
                 FTMetricValue(DisplayValue(primary = "%.0f".format(todayCaffeineMg), unit = "MG TODAY"))
                 if (caffeineWindow != null) {
                     Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        StatLine("Residual now", "~%.0f mg".format(caffeineWindow.residualNowMg))
+                        FTMetricRow("Residual now", "~%.0f mg".format(caffeineWindow.residualNowMg))
                         caffeineWindow.residualAtBedtimeMg?.let { r ->
-                            StatLine("At 11pm", "~%.0f mg".format(r))
+                            FTMetricRow("At 11pm", "~%.0f mg".format(r))
                         }
                         caffeineWindow.cutoffHour?.let { h ->
                             val label = if (h == 0) "Threshold already met" else "Last dose by %02d:00".format(h)
-                            StatLine("Cutoff", label)
+                            FTMetricRow("Cutoff", label)
                         }
                     }
                     Text(
                         "Half-life 5h model · 200 mg reference dose · not personalized yet",
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                        style = FTType.Caption,
                         color = FT.TextMuted,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 } else {
                     Text(
                         "Total from logged beverages",
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        style = FTType.Caption,
                         color = FT.TextMuted,
                     )
                 }
@@ -338,12 +348,12 @@ fun HydrationTabContent(overview: NutritionOverview) {
                     }
                 } else {
                     explanation?.let { text ->
-                        Text(text, style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextPrimary)
-                    } ?: Text("Explanation unavailable.", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextMuted)
+                        Text(text, style = FTType.BodySmall, color = FT.TextPrimary)
+                    } ?: Text("Explanation unavailable.", style = FTType.BodySmall, color = FT.TextMuted)
                 }
                 Text(
                     "AI interpretation · validated data only · not medical advice",
-                    style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+                    style = FTType.Caption,
                     color = FT.TextMuted,
                     modifier = Modifier.padding(top = 6.dp),
                 )
@@ -366,12 +376,9 @@ private fun NutritionAveragesCard(allDays: List<DailyNutrition>) {
     FTCard(title = "NUTRITION AVERAGES") {
         PeriodToggle(selected = period, onSelect = { period = it })
         FTMetricValue(DisplayValue(primary = (totals.calories / days).roundToInt().toString(), unit = "KCAL/DAY"))
-        StatLine("Protein", "${(totals.proteinG / days).roundToInt()} g/day")
-        StatLine("Carbs", "${(totals.carbsG / days).roundToInt()} g/day")
-        StatLine("Fat", "${(totals.fatG / days).roundToInt()} g/day")
-        StatLine("Fiber", "${(totals.fiberG / days).roundToInt()} g/day")
-        StatLine("Sugar", "${(totals.sugarG / days).roundToInt()} g/day")
-        StatLine("Sodium", "${(totals.sodiumMg / days).roundToInt()} mg/day")
+        FTMetricRow("Fiber", "${(totals.fiberG / days).roundToInt()} g/day")
+        FTMetricRow("Sugar", "${(totals.sugarG / days).roundToInt()} g/day")
+        FTMetricRow("Sodium", "${(totals.sodiumMg / days).roundToInt()} mg/day")
         MacroDonutChart(
             carbsG = totals.carbsG / days,
             proteinG = totals.proteinG / days,
@@ -380,7 +387,7 @@ private fun NutritionAveragesCard(allDays: List<DailyNutrition>) {
         )
         Text(
             "daily average over the last ${period.label.lowercase()} — ${totals.dayCount} day${if (totals.dayCount == 1) "" else "s"} with logged meals",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            style = FTType.Caption,
             color = FT.TextMuted,
         )
     }
@@ -413,7 +420,7 @@ private fun NutritionGoalAdherenceCard(allDays: List<DailyNutrition>) {
         goals.fatG?.let { FTRangeIndicator(targetRange("FAT (G/DAY)", totals.fatG / days, it)) }
         Text(
             "7-day daily average vs. your saved targets",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            style = FTType.Caption,
             color = FT.TextMuted,
         )
     }
@@ -425,10 +432,12 @@ private fun targetRange(label: String, current: Double, target: Double): Persona
         current > target * 1.1 -> RangeComparison.Above
         else -> RangeComparison.Within
     }
+    // The band is the same +/-10% window the Below/Above comparison uses, so
+    // the shaded range and the label always agree.
     return PersonalRange(
         kind = RangeKind.TargetRange,
-        lower = 0.0,
-        upper = target,
+        lower = target * 0.9,
+        upper = target * 1.1,
         current = current,
         label = label,
         comparison = comparison,
@@ -437,63 +446,25 @@ private fun targetRange(label: String, current: Double, target: Double): Persona
 }
 
 @Composable
-// DAV-108: label is unweighted (always a short fixed phrase) so it never
-// shrinks; value takes the rest of the row via weight(1f) so a long value
-// wraps within its own bounded width and stays right-aligned instead of
-// colliding with the label.
-private fun StatLine(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
-        Text(
-            value,
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 14.5.sp),
-            color = FT.TextPrimary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f).padding(start = 8.dp),
-        )
-    }
-}
-
-@Composable
 private fun HydrationIntelligenceCard(result: HydrationIntelligenceResult) {
     FTCard(title = "HYDRATION INTELLIGENCE") {
-        StatLine("Confidence", result.confidence.label)
-        result.measuredIntakeMl?.let { StatLine("Measured intake", "%.0f ml".format(it)) }
-        result.effectiveHydrationMl?.let { StatLine("Effective hydration (modeled)", "%.0f ml".format(it)) }
+        FTConfidenceChip(confidenceLevel(result.confidence))
+        result.measuredIntakeMl?.let { FTMetricRow("Measured intake", "%.0f ml".format(it)) }
+        result.effectiveHydrationMl?.let { FTMetricRow("Effective hydration (modeled)", "%.0f ml".format(it)) }
         if (result.inferredDemandMl != null) {
-            StatLine("Inferred demand from today's exercise", "%.0f ml".format(result.inferredDemandMl))
+            FTMetricRow("Inferred demand from today's exercise", "%.0f ml".format(result.inferredDemandMl))
         } else {
             Text(
                 "No exercise logged today -- no additional demand inferred.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextMuted,
             )
         }
         if (!result.environmentalContextAvailable) {
             Text(
                 "Environmental context (temperature/humidity) isn't available yet -- demand estimate is exercise-only.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                style = FTType.Caption,
                 color = FT.TextMuted,
-            )
-        }
-    }
-}
-
-@Composable
-private fun HydrationSegments(ml: Int) {
-    val segments = 8
-    val genericTargetMl = 4000.0 // same generic reference the web dashboard's hydration panel uses
-    val filledSegments = ((ml / genericTargetMl) * segments).roundToInt().coerceIn(0, segments)
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        repeat(segments) { i ->
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(26.dp)
-                    .then(
-                        if (i < filledSegments) Modifier.background(FT.Emerald)
-                        else Modifier.border(1.dp, FT.GlassBorder),
-                    ),
             )
         }
     }

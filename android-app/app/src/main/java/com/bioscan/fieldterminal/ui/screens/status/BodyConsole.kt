@@ -16,7 +16,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +42,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -50,37 +57,24 @@ import com.bioscan.fieldterminal.data.MapRepository
 import com.bioscan.fieldterminal.data.StatusOverview
 import com.bioscan.fieldterminal.domain.MapEvent
 import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.ReadinessLabel
 import com.bioscan.fieldterminal.domain.parseSessionZonedDateTime
 import com.bioscan.fieldterminal.ui.nav.TileRoute
-import com.bioscan.fieldterminal.ui.theme.FieldColors
-import com.bioscan.fieldterminal.ui.theme.FieldTextStyles
+import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.metricStateColor
+import com.bioscan.fieldterminal.ui.components.metricStateLabel
+import com.bioscan.fieldterminal.ui.components.readinessState
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.JetBrainsMono
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import com.bioscan.fieldterminal.ui.theme.SairaCondensed
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.font.FontWeight
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 
-// design/README.md's "3d — Body console" launch screen (user's pick over 3b/
-// 3c, see ROADMAP.md P8 Step 5). Real data for readiness/HRV/RHR/sleep/health
-// -flag. The Fuel/Water/Supp dial row (DAV-68) was a permanent placeholder --
-// never had real targets/tracking behind it and never will here; that content
-// lives in the Fuel tile page instead (First feedback fixes project).
-//
-// DAV-95: the four system tiles now attach directly under the schematic
-// (SystemTileRow below) instead of sitting in their own section further down
-// the screen -- one body-centered composition per
-// design/FIELD_TERMINAL_IA_CONTRACT.md section 4. The schematic drawing
-// itself keeps its current amber Field Terminal styling on purpose (the
-// issue's own "preserve the current Status shell" direction, and it's
-// explicitly slated for a richer anatomical redraw later) -- only the new
-// tile row adopts the Futuristic Material tokens.
+// The Status hub: a body-centered composition (design/FIELD_TERMINAL_IA_CONTRACT.md
+// section 4). Real data for readiness/HRV/RHR/sleep/health-flag. The hero is
+// the HRV-vs-baseline readiness band (categorical on purpose: no composite
+// 0-100 score exists or is invented), paired with a state pill; the figure's
+// head/chest/legs tint by recovery/cardio/training-load state, and the zone
+// legend under it spells out each zone's state in words so color is never the
+// only signal. Entirely Futuristic Material tokens/fonts.
 @Composable
 fun BodyConsole(overview: StatusOverview?, isLoading: Boolean, onOpenTile: (TileRoute) -> Unit, onOpenDailyReadiness: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -94,145 +88,204 @@ fun BodyConsole(overview: StatusOverview?, isLoading: Boolean, onOpenTile: (Tile
     }
 }
 
-private data class SystemTileSpec(val route: TileRoute, val label: String, val icon: ImageVector, val accent: androidx.compose.ui.graphics.Color)
-
-// Each tile's icon uses its own domain accent (contract section 4) instead
-// of one uniform color -- domain accents exist specifically to identify
-// sections/navigation, and these four tiles are exactly that.
-private val SYSTEM_TILES = listOf(
-    SystemTileSpec(TileRoute.Training, "TRAINING", Icons.Filled.FitnessCenter, FT.DomainTraining),
-    SystemTileSpec(TileRoute.Fuel, "FUEL", Icons.Filled.Restaurant, FT.DomainFuel),
-    SystemTileSpec(TileRoute.Heart, "HEALTH", Icons.Filled.Favorite, FT.DomainHeart),
-    SystemTileSpec(TileRoute.Labs, "LABS", Icons.Filled.Science, FT.DomainLabs),
+private data class SystemTileSpec(
+    val route: TileRoute,
+    val label: String,
+    val icon: ImageVector,
+    val accent: Color,
+    // null = this overview has no state for the tile (Fuel, Labs).
+    val state: (StatusOverview) -> MetricState?,
 )
 
-// Compact state/metric preview per DAV-95's acceptance criteria -- real data
-// only. HEART is the one tile StatusOverview already backs (HRV/RHR, same
-// numbers the schematic itself surfaces) so it gets a real Roboto Mono
-// readout; TRAINING/FUEL/LABS have no summary data at this overview level
-// yet (that's each category's own screen, owned by DAV-98/100/102) so they
-// show a plain "OPEN" affordance rather than a fabricated number -- an
-// honest sparse state, not an oversight.
-private fun previewLine(route: TileRoute, overview: StatusOverview?): String = when (route) {
+// Each tile's icon uses its own domain accent (contract section 4): domain
+// accents identify sections/navigation. The small dot beside the icon is the
+// separate STATE signal (same color table as the pills), shown only where the
+// overview really has a state for that system.
+private val SYSTEM_TILES = listOf(
+    SystemTileSpec(TileRoute.Training, "TRAINING", Icons.Filled.FitnessCenter, FT.DomainTraining) { it.trainingState },
+    SystemTileSpec(TileRoute.Fuel, "FUEL", Icons.Filled.Restaurant, FT.DomainFuel) { null },
+    SystemTileSpec(TileRoute.Heart, "HEALTH", Icons.Filled.Favorite, FT.DomainHeart) { it.cardioState },
+    SystemTileSpec(TileRoute.Labs, "LABS", Icons.Filled.Science, FT.DomainLabs) { null },
+)
+
+// Compact preview lines -- real data only. HEART is backed by HRV/RHR,
+// TRAINING by the 7-day session count; FUEL/LABS have no summary data at this
+// overview level yet, so they show a plain "OPEN" rather than a fabricated
+// number. Two short lines (not one "HRV64·RHR57" string) so each reads alone.
+private fun previewLines(route: TileRoute, overview: StatusOverview?): List<String> = when (route) {
     TileRoute.Heart -> overview?.let {
-        "HRV" + (it.latestHrv?.let { v -> "%.0f".format(v) } ?: "—") + "·RHR" + (it.latestRhr?.let { v -> "%.0f".format(v) } ?: "—")
-    } ?: "OPEN"
-    TileRoute.Training -> overview?.let { if (it.sessionsLast7Days == 1) "1 SESSION" else "${it.sessionsLast7Days} SESSIONS" } ?: "OPEN"
-    else -> "OPEN"
+        listOf(
+            "HRV " + (it.latestHrv?.let { v -> "%.0f".format(v) } ?: "—"),
+            "RHR " + (it.latestRhr?.let { v -> "%.0f".format(v) } ?: "—"),
+        )
+    } ?: listOf("OPEN")
+    TileRoute.Training -> overview?.let {
+        listOf(if (it.sessionsLast7Days == 1) "1 SESSION" else "${it.sessionsLast7Days} SESSIONS", "LAST 7 DAYS")
+    } ?: listOf("OPEN")
+    else -> listOf("OPEN")
 }
 
 @Composable
 private fun SystemTileRow(overview: StatusOverview?, onOpenTile: (TileRoute) -> Unit) {
     Row(
-        // IntrinsicSize.Min + fillMaxHeight on each tile: without it, a
-        // longer preview line (e.g. Heart's real "HRV 64 · RHR 57" wrapping
-        // to two lines) makes that one tile taller than its three siblings --
-        // caught live on-device, not in the mockup where every tile said
-        // "OPEN".
+        // IntrinsicSize.Min + fillMaxHeight on each tile keeps all four the
+        // same height even when one has more preview lines than its siblings.
         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(horizontal = 18.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         SYSTEM_TILES.forEach { tile ->
-            SystemTile(tile, previewLine(tile.route, overview), modifier = Modifier.weight(1f).fillMaxHeight()) { onOpenTile(tile.route) }
+            SystemTile(
+                tile = tile,
+                state = overview?.let { tile.state(it) },
+                preview = previewLines(tile.route, overview),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            ) { onOpenTile(tile.route) }
         }
     }
 }
 
 @Composable
-private fun SystemTile(tile: SystemTileSpec, preview: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun SystemTile(tile: SystemTileSpec, state: MetricState?, preview: List<String>, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(FT.RadiusModule))
             .background(FT.GlassFill)
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(vertical = 14.dp, horizontal = 8.dp),
+            .padding(vertical = 14.dp, horizontal = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(tile.icon, contentDescription = tile.label, tint = tile.accent, modifier = Modifier.height(22.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(tile.icon, contentDescription = tile.label, tint = tile.accent, modifier = Modifier.size(22.dp))
+            state?.let {
+                Spacer(Modifier.width(6.dp))
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(metricStateColor(it))
+                        .semantics { contentDescription = metricStateLabel(it).lowercase() },
+                )
+            }
+        }
         Text(tile.label, style = tileLabelStyle, color = FT.TextPrimary)
-        Text(preview, style = tilePreviewStyle, color = FT.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        preview.forEach { line ->
+            Text(line, style = tilePreviewStyle, color = FT.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
-private val tileLabelStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-private val tilePreviewStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+private val tileLabelStyle = FTType.CaptionStrong
+private val tilePreviewStyle = FTType.Label
 
 @Composable
 private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean, onOpenDailyReadiness: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(FieldColors.Panel)
+            .background(FT.Base)
+            // Contract section 7: an emerald atmospheric wash is allowed behind
+            // a biometric focal visualization (large-area, low opacity).
             .drawBehind {
-                val step = 26.dp.toPx()
-                var x = 0f
-                while (x < size.width) {
-                    drawLine(FieldColors.Amber.copy(alpha = 0.07f), Offset(x, 0f), Offset(x, size.height), 1f)
-                    x += step
-                }
-                var y = 0f
-                while (y < size.height) {
-                    drawLine(FieldColors.Amber.copy(alpha = 0.07f), Offset(0f, y), Offset(size.width, y), 1f)
-                    y += step
-                }
+                drawRect(
+                    Brush.radialGradient(
+                        colors = listOf(FT.EmeraldAtmosphere.copy(alpha = 0.45f), Color.Transparent),
+                        center = Offset(size.width / 2f, size.height * 0.55f),
+                        radius = size.width * 0.9f,
+                    ),
+                )
             },
     ) {
-        // Daily Readiness: the only part of this field adopting the
-        // Futuristic Material tokens (per the user's own "just the top line"
-        // scoping) -- the schematic/footer below keep their amber Field
-        // Terminal look untouched, same as this file's header comment
-        // already explains for the drawing itself.
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpenDailyReadiness)
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = "CONDITION",
-                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14.em),
-                color = FT.TextSecondary,
-            )
-            overview?.let {
-                Text(
-                    text = it.readiness.label.display,
-                    style = TextStyle(fontFamily = SairaCondensed, fontWeight = FontWeight.Bold, fontSize = 26.sp),
-                    color = if (it.readiness.label == ReadinessLabel.Unknown) FT.TextMuted else FT.Emerald,
-                )
-            }
-        }
-
         when {
             isLoading -> CircularProgressIndicator(
-                color = FieldColors.Amber,
+                color = FT.Emerald,
                 modifier = Modifier.align(Alignment.Center),
             )
             overview != null -> {
-                // Inset clears the CONDITION/readiness header and the sleep/flag footer.
-                BodySchematic(overview, modifier = Modifier.fillMaxSize().padding(top = 44.dp, bottom = 40.dp, start = 8.dp, end = 8.dp))
+                val readiness = overview.readiness
+                val conditionState = readinessState(readiness.label)
                 Row(
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
+                        .align(Alignment.TopStart)
                         .fillMaxWidth()
-                        .padding(14.dp),
+                        // Tapping the condition hero opens Daily Readiness.
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpenDailyReadiness)
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.Top,
                 ) {
-                    Text(
-                        text = "SLEEP " + (overview.sleepHours?.let { formatHours(it) } ?: "—"),
-                        style = FieldTextStyles.syncLabel,
-                        color = FieldColors.InkMuted,
-                    )
-                    Text(
-                        text = if (overview.activeHealthEvent) "1 FLAG" else "0 FLAGS",
-                        style = FieldTextStyles.syncLabel,
-                        color = if (overview.activeHealthEvent) FieldColors.Alert else FieldColors.Green,
-                        modifier = Modifier.padding(start = 16.dp),
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("CONDITION", style = FTType.Label, color = FT.TextMuted)
+                        Text(
+                            text = readiness.label.display,
+                            style = FTType.DisplayMetric,
+                            // Neutral/Building/Unavailable stay unaccented: only a
+                            // real favorable/attention state earns a signal color.
+                            color = when (conditionState) {
+                                MetricState.Optimal, MetricState.Warning, MetricState.Critical -> metricStateColor(conditionState)
+                                else -> FT.TextPrimary
+                            },
+                        )
+                        Text(
+                            text = if (conditionState == MetricState.Building) readiness.note.uppercase() else "HRV VS YOUR RECENT BASELINE",
+                            style = FTType.Micro,
+                            color = FT.TextMuted,
+                        )
+                    }
+                    FTStatePill(conditionState)
+                }
+                // Inset clears the hero block above and the legend/footer below.
+                BodySchematic(overview, modifier = Modifier.fillMaxSize().padding(top = 104.dp, bottom = 112.dp, start = 8.dp, end = 8.dp))
+                Column(
+                    modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    ZoneLegend(overview)
+                    Row {
+                        Text(
+                            text = "SLEEP " + (overview.sleepHours?.let { formatHours(it) } ?: "—"),
+                            style = FTType.Label,
+                            color = FT.TextSecondary,
+                        )
+                        Text(
+                            text = if (overview.activeHealthEvent) "1 FLAG" else "0 FLAGS",
+                            style = FTType.Label,
+                            color = if (overview.activeHealthEvent) FT.Critical else FT.TextSecondary,
+                            modifier = Modifier.padding(start = 16.dp),
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+// What each figure zone's color means, in words: head = recovery (sleep),
+// chest = cardio (HRV/RHR), legs = training load. Dot color + state word, so
+// the tint on the figure is never the only signal.
+@Composable
+private fun ZoneLegend(overview: StatusOverview) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ZoneLegendCell("RECOVERY", overview.recoveryState, Modifier.weight(1f))
+        ZoneLegendCell("CARDIO", overview.cardioState, Modifier.weight(1f))
+        ZoneLegendCell("LOAD", overview.trainingState, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun ZoneLegendCell(label: String, state: MetricState, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(FT.RadiusSmall)
+    Column(
+        modifier = modifier
+            .clip(shape)
+            .background(FT.GlassFill)
+            .border(FT.BorderWidth, FT.GlassBorder, shape)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
+        Text(label, style = FTType.Micro, color = FT.TextMuted)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(metricStateColor(state)))
+            Text(metricStateLabel(state), style = FTType.Label, color = FT.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -248,9 +301,10 @@ private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean, 
 // green decoration since they aren't mapped to any of the three systems.
 @Composable
 private fun BodySchematic(overview: StatusOverview, modifier: Modifier = Modifier) {
-    val headColor = zoneColor(overview.recoveryState)
-    val chestColor = zoneColor(overview.cardioState)
-    val legColor = zoneColor(overview.trainingState)
+    val headColor = metricStateColor(overview.recoveryState)
+    val chestColor = metricStateColor(overview.cardioState)
+    val legColor = metricStateColor(overview.trainingState)
+    val armColor = FT.TextMuted
 
     // 25/9 rework: the figure fills whatever height the layout leaves it, so
     // scale (dp per viewBox unit) comes from the tighter of width/height.
@@ -275,75 +329,63 @@ private fun BodySchematic(overview: StatusOverview, modifier: Modifier = Modifie
                 close()
             }
             drawPath(torso, chestColor, style = Stroke(2.4f * s, cap = StrokeCap.Round, join = StrokeJoin.Round))
-            // Arms -- decorative, not mapped to a system
-            drawLine(FieldColors.Amber, p(105f, 58f), p(87f, 92f), 2.4f * s, StrokeCap.Round)
-            drawLine(FieldColors.Amber, p(87f, 92f), p(83f, 124f), 2.4f * s, StrokeCap.Round)
-            drawLine(FieldColors.Amber, p(155f, 58f), p(173f, 92f), 2.4f * s, StrokeCap.Round)
-            drawLine(FieldColors.Amber, p(173f, 92f), p(177f, 124f), 2.4f * s, StrokeCap.Round)
+            // Arms -- decorative (neutral), not mapped to a system
+            drawLine(armColor, p(105f, 58f), p(87f, 92f), 2.4f * s, StrokeCap.Round)
+            drawLine(armColor, p(87f, 92f), p(83f, 124f), 2.4f * s, StrokeCap.Round)
+            drawLine(armColor, p(155f, 58f), p(173f, 92f), 2.4f * s, StrokeCap.Round)
+            drawLine(armColor, p(173f, 92f), p(177f, 124f), 2.4f * s, StrokeCap.Round)
             // Legs -- training load
             drawLine(legColor, p(113f, 104f), p(110f, 146f), 2.4f * s, StrokeCap.Round)
             drawLine(legColor, p(110f, 146f), p(107f, 186f), 2.4f * s, StrokeCap.Round)
             drawLine(legColor, p(147f, 104f), p(150f, 146f), 2.4f * s, StrokeCap.Round)
             drawLine(legColor, p(150f, 146f), p(153f, 186f), 2.4f * s, StrokeCap.Round)
 
-            // Rib lines
-            val rib = FieldColors.Green.copy(alpha = 0.55f)
+            // Rib lines (decorative, neutral)
+            val rib = FT.TextMuted.copy(alpha = 0.6f)
             drawLine(rib, p(117f, 70f), p(143f, 70f), 1.2f * s)
             drawLine(rib, p(117f, 80f), p(143f, 80f), 1.2f * s)
             drawLine(rib, p(117f, 90f), p(135f, 90f), 1.2f * s)
 
-            // Engine pin (HRV/RHR) -- always shown when any wearable data exists
-            drawCircle(FieldColors.Green.copy(alpha = 0.14f), radius = 9f * s, center = p(130f, 78f))
-            drawCircle(FieldColors.Green, radius = 9f * s, center = p(130f, 78f), style = Stroke(1.8f * s))
-            drawLine(FieldColors.Green.copy(alpha = 0.7f), p(120f, 78f), p(58f, 78f), 1.4f * s)
+            // Cardio pin (HRV/RHR) -- same state color as the chest zone
+            drawCircle(chestColor.copy(alpha = 0.14f), radius = 9f * s, center = p(130f, 78f))
+            drawCircle(chestColor, radius = 9f * s, center = p(130f, 78f), style = Stroke(1.8f * s))
+            drawLine(chestColor.copy(alpha = 0.7f), p(120f, 78f), p(58f, 78f), 1.4f * s)
 
             // Health-event pin -- only drawn when something is actually active
             if (overview.activeHealthEvent) {
-                drawCircle(FieldColors.Alert.copy(alpha = 0.18f), radius = 13f * s, center = p(150f, 146f))
-                drawCircle(FieldColors.Alert, radius = 13f * s, center = p(150f, 146f), style = Stroke(2f * s))
-                drawCircle(FieldColors.Alert, radius = 4.4f * s, center = p(150f, 146f))
-                drawLine(FieldColors.Alert, p(164f, 146f), p(204f, 146f), 1.4f * s)
+                drawCircle(FT.Critical.copy(alpha = 0.18f), radius = 13f * s, center = p(150f, 146f))
+                drawCircle(FT.Critical, radius = 13f * s, center = p(150f, 146f), style = Stroke(2f * s))
+                drawCircle(FT.Critical, radius = 4.4f * s, center = p(150f, 146f))
+                drawLine(FT.Critical, p(164f, 146f), p(204f, 146f), 1.4f * s)
             }
         }
 
         // Text overlays -- real Compose Text (own font/theme) rather than
         // Canvas-drawn text, positioned at the same viewBox coordinates.
         LabelAt(x = 54f, y = 62f, scale = scale, align = Alignment.TopEnd) {
-            Text("ENGINE", style = smallLabel, color = FieldColors.Green)
+            Text("CARDIO", style = smallLabel, color = chestColor)
         }
         LabelAt(x = 54f, y = 75f, scale = scale, align = Alignment.TopEnd) {
-            Text("HRV " + (overview.latestHrv?.let { "%.0f".format(it) } ?: "—"), style = smallValue, color = FieldColors.Ink)
+            Text("HRV " + (overview.latestHrv?.let { "%.0f".format(it) } ?: "—"), style = smallValue, color = FT.TextPrimary)
         }
         LabelAt(x = 54f, y = 88f, scale = scale, align = Alignment.TopEnd) {
-            Text("RHR " + (overview.latestRhr?.let { "%.0f".format(it) } ?: "—"), style = smallValue, color = FieldColors.Ink)
+            Text("RHR " + (overview.latestRhr?.let { "%.0f".format(it) } ?: "—"), style = smallValue, color = FT.TextPrimary)
         }
 
         if (overview.activeHealthEvent) {
             LabelAt(x = 208f, y = 135f, scale = scale, align = Alignment.TopStart) {
-                Text("FLAGGED", style = smallLabel, color = FieldColors.Alert)
+                Text("FLAGGED", style = smallLabel, color = FT.Critical)
             }
             LabelAt(x = 208f, y = 161f, scale = scale, align = Alignment.TopStart) {
-                Text("SEE HEALTH", style = smallValue, color = FieldColors.Ink)
+                Text("SEE HEALTH", style = smallValue, color = FT.TextPrimary)
             }
         }
     }
     }
 }
 
-private val smallLabel = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 10.5.sp)
-private val smallValue = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 11.sp)
-
-// DAV-203: same severity palette AnalyticalPresentation.kt's stateTreatment()
-// uses everywhere else (Optimal/Warning/Critical/Building/Unavailable), so a
-// zone's color here always means the same thing it means on every card.
-private fun zoneColor(state: MetricState): androidx.compose.ui.graphics.Color = when (state) {
-    MetricState.Optimal -> FT.Emerald
-    MetricState.Neutral -> FT.TextSecondary
-    MetricState.Warning -> FT.Warning
-    MetricState.Critical -> FT.Critical
-    MetricState.Building -> FT.Analysis
-    MetricState.Unavailable -> FT.TextMuted
-}
+private val smallLabel = FTType.Label
+private val smallValue = FTType.Label
 
 // x/y are viewBox coordinates (0-260, 0-200), same space the Canvas above
 // draws in. TopEnd anchors the text so it ends at x (grows leftward),
@@ -409,7 +451,7 @@ private fun NextUpSection(modifier: Modifier = Modifier) {
             .background(FT.Surface)
             .padding(horizontal = 18.dp, vertical = 14.dp),
     ) {
-        Text(nextUpLabel(state), style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14.em), color = FT.TextSecondary)
+        Text(nextUpLabel(state), style = FTType.LabelCaps, color = FT.TextSecondary)
     }
 }
 

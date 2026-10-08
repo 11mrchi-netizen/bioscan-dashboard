@@ -38,13 +38,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
@@ -74,9 +72,9 @@ import com.bioscan.fieldterminal.domain.weatherCodeSymbol
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -96,8 +94,8 @@ import java.time.temporal.ChronoUnit
 // Shared text styles for this screen's own chrome (sheet titles, compact
 // action/status labels) -- DAV-108 follow-up migration off FieldTextStyles'
 // legacy JetBrainsMono onto the FT contract's Inter/Roboto Mono split.
-private val sheetHeaderTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
-private val sheetActionLabelStyle = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em)
+private val sheetHeaderTitleStyle = FTType.SectionTitle
+private val sheetActionLabelStyle = FTType.LabelCaps
 
 // Phase M1/M2 (Map tab rework, see ROADMAP.md). Replaces Step 14's single
 // "next training session" view with a real multi-pin map of every calendar
@@ -194,7 +192,7 @@ fun MapScreen(focusEventId: String? = null) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(
                             "Grant Calendar and Drive access to see your upcoming events on the map.",
-                            style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp),
+                            style = FTType.Body,
                             color = FT.TextSecondary,
                         )
                         AmberButton(label = "GRANT ACCESS") {
@@ -203,7 +201,7 @@ fun MapScreen(focusEventId: String? = null) {
                     }
                 }
                 is MapState.Error -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
-                    Text(s.message, style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.Critical)
+                    Text(s.message, style = FTType.Body, color = FT.Critical)
                 }
                 is MapState.Ready -> MapReadyContent(s, focusEventId)
             }
@@ -221,7 +219,7 @@ private fun MapReadyContent(state: MapState.Ready, focusEventId: String? = null)
                 } else {
                     "No calendar events in the next 24 hours."
                 },
-                style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp),
+                style = FTType.Body,
                 color = FT.TextSecondary,
             )
         }
@@ -286,7 +284,7 @@ private fun MapReadyContent(state: MapState.Ready, focusEventId: String? = null)
             Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
                 Text(
                     "Add a free CARTO API key in Settings to show the map background (carto.com/basemaps/apikey — no billing).",
-                    style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp),
+                    style = FTType.Body,
                     color = FT.TextSecondary,
                 )
             }
@@ -318,7 +316,7 @@ private fun MapReadyContent(state: MapState.Ready, focusEventId: String? = null)
                                 .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                         ) {
-                            Text(message, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.TextSecondary)
+                            Text(message, style = FTType.Caption, color = FT.TextSecondary)
                         }
                     }
                 }
@@ -469,7 +467,7 @@ private fun PinDetailSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RectangleShape,
+        shape = FT.SheetShape,
         containerColor = FT.Surface,
         contentColor = FT.TextPrimary,
     ) {
@@ -489,20 +487,20 @@ private fun PinDetailSheet(
             )
             Text(
                 text = event.title.trim().ifBlank { "Untitled event" },
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 18.sp),
+                style = FTType.SectionTitle,
                 color = FT.TextPrimary,
             )
             event.description.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp), color = FT.TextSecondary)
+                Text(it, style = FTType.BodySmall, color = FT.TextSecondary)
             }
             Text(
                 text = formatEventMeta(event),
-                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                style = FTType.Value,
                 color = FT.TextSecondary,
             )
             Text(
                 text = if (pin.isHomeFallback) "Pinned at home — this event has no location." else (event.location ?: ""),
-                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
 
@@ -519,31 +517,31 @@ private fun PinDetailSheet(
                         plannedPreview != null -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
                                 plannedRouteSummary(plannedPreview),
-                                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                                style = FTType.Value,
                                 color = FT.DomainTraining,
                             )
                             plannedPreview.confidenceTier?.let { tier ->
                                 val staleSuffix = if (plannedPreview.isStale) " · MAY BE STALE" else ""
                                 Text(
                                     "CONFIDENCE: ${tier.uppercase()}$staleSuffix",
-                                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp),
+                                    style = FTType.MonoCaption,
                                     color = if (plannedPreview.isStale) FT.Warning else FT.TextSecondary,
                                 )
                             }
                         }
                         routeError != null -> Text(
                             "Couldn't load the route (${routeError}).",
-                            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                            style = FTType.BodySmall,
                             color = FT.TextSecondary,
                         )
                         routePoints != null -> Text(
                             routeSummary(routePoints),
-                            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                            style = FTType.Value,
                             color = FT.DomainTraining,
                         )
                         event.gpxLink == null -> Text(
                             "No route file linked to this session.",
-                            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                            style = FTType.Caption,
                             color = FT.TextSecondary,
                         )
                     }
@@ -610,33 +608,33 @@ private fun PartnerSection(event: MapEvent) {
         when (val s = state) {
             PartnerUiState.Loading -> Text(
                 "Checking this event's title for a partner match…",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
             is PartnerUiState.Matched -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     s.person.name,
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+                    style = FTType.RowTitle,
                     color = FT.TextPrimary,
                 )
                 EncounterLogRow(event = event, personId = s.person.id)
             }
             is PartnerUiState.Error -> Text(
                 "Couldn't check for a matching partner (${s.message}).",
-                style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                style = FTType.BodySmall,
                 color = FT.TextSecondary,
             )
             PartnerUiState.NoMatch -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     "No partner matched in this event's title.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
                 FieldTextField(value = query, onValueChange = { query = it }, placeholder = "Search partners…")
                 searchResults.forEach { person ->
                     Text(
                         person.name,
-                        style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                        style = FTType.BodySmall,
                         color = FT.DomainMap,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -684,7 +682,7 @@ private fun EncounterLogRow(event: MapEvent, personId: Long) {
     if (saved) {
         Text(
             "Encounter logged.",
-            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
+            style = FTType.RowTitle,
             color = FT.Emerald,
         )
         return
@@ -695,7 +693,7 @@ private fun EncounterLogRow(event: MapEvent, personId: Long) {
         FieldTextField(value = type, onValueChange = { type = it }, placeholder = "Type (optional) — e.g. date, call, hangout")
         FieldTextField(value = notes, onValueChange = { notes = it }, placeholder = "Notes (optional)", singleLine = false)
         error?.let {
-            Text("Couldn't log this encounter (${it}).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.TextSecondary)
+            Text("Couldn't log this encounter (${it}).", style = FTType.Caption, color = FT.TextSecondary)
         }
         AmberButton(label = if (saving) "SAVING…" else "LOG ENCOUNTER") {
             if (!saving) {
@@ -754,7 +752,7 @@ private fun WeatherSheet(state: WeatherUiState, onDismiss: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RectangleShape,
+        shape = FT.SheetShape,
         containerColor = FT.Surface,
         contentColor = FT.TextPrimary,
     ) {
@@ -768,15 +766,15 @@ private fun WeatherSheet(state: WeatherUiState, onDismiss: () -> Unit) {
                         Column {
                             Text(
                                 text = "%.0f°C".format(w.temperatureC),
-                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 26.sp),
+                                style = FTType.PageTitle,
                                 color = FT.TextPrimary,
                             )
-                            Text(weatherCodeLabel(w.code), style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary)
+                            Text(weatherCodeLabel(w.code), style = FTType.BodySmall, color = FT.TextSecondary)
                         }
                     }
                     Text(
                         text = "Wind %.0f km/h · Precip %.1f mm".format(w.windSpeedKmh, w.precipitationMm),
-                        style = TextStyle(fontFamily = RobotoMono, fontSize = 13.sp),
+                        style = FTType.Value,
                         color = FT.TextSecondary,
                     )
                 }
@@ -785,14 +783,14 @@ private fun WeatherSheet(state: WeatherUiState, onDismiss: () -> Unit) {
                 }
                 is WeatherUiState.Failed -> Text(
                     "Couldn't load the forecast (${state.message}).",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
-                WeatherUiState.Idle -> Text("—", style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp), color = FT.TextSecondary)
+                WeatherUiState.Idle -> Text("—", style = FTType.BodySmall, color = FT.TextSecondary)
             }
             Text(
                 "Forecast, not a guarantee — Open-Meteo, no personal weather station.",
-                style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
             Spacer(Modifier.height(12.dp))

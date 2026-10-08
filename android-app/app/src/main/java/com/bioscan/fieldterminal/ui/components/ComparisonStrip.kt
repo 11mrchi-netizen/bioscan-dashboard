@@ -6,15 +6,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.domain.analysis.ComparisonResult
 import com.bioscan.fieldterminal.domain.comparison.PercentileBand
 import com.bioscan.fieldterminal.domain.comparison.presentComparison
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 
 // DAV-200 (docs/analysis-layer-2/24-comparison-ui-integration.md). One line
 // added to an existing evaluation card, not a new screen -- reuses this
@@ -37,12 +34,12 @@ fun ComparisonStrip(personal: ComparisonResult? = null, population: ComparisonRe
 private fun ComparisonRow(label: String, result: ComparisonResult) {
     val presentation = presentComparison(result)
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp), color = FT.TextMuted)
+        Text(label, style = FTType.MonoCaption, color = FT.TextMuted)
         Text(
             presentation.band?.let { band -> "${percentileBandLabel(band)} · ${result.percentile!!.toInt()}th pct" }
                 ?: result.bandLabel?.let { categoryLabel(it) }
                 ?: presentation.stateLabel,
-            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            style = FTType.Caption,
             color = if (presentation.band != null || result.bandLabel != null) FT.TextPrimary else FT.TextSecondary,
             textAlign = TextAlign.End,
         )

@@ -32,13 +32,9 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.NutrientBreakdownData
 import com.bioscan.fieldterminal.data.NutrientBreakdownRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -47,17 +43,17 @@ import com.bioscan.fieldterminal.domain.NutrientCategory
 import com.bioscan.fieldterminal.domain.NutrientInfo
 import com.bioscan.fieldterminal.domain.nutrientDisplayName
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import kotlin.math.roundToInt
 
 private enum class TimeRange(val label: String, val days: Int) {
-    Today("TODAY", 1),
-    Week("7 DAYS", 7),
-    Month("28 DAYS", 28),
-    Quarter("90 DAYS", 90),
+    Today("1D", 1),
+    Week("7D", 7),
+    Month("28D", 28),
+    Quarter("90D", 90),
 }
 
 private enum class ValueMode(val label: String) {
@@ -84,22 +80,22 @@ fun NutrientBreakdownScreen(onBack: () -> Unit) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp)) {
             Text(
                 "NUTRIENT BREAKDOWN",
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp),
+                style = FTType.SectionTitle,
                 color = FT.TextPrimary,
             )
             Spacer(Modifier.height(12.dp))
 
             SegmentedToggle(
-                items = TimeRange.entries,
+                options = TimeRange.entries,
                 selected = timeRange,
-                label = { it.label },
+                labelOf = { it.label },
                 onSelect = { timeRange = it },
             )
             Spacer(Modifier.height(8.dp))
             SegmentedToggle(
-                items = ValueMode.entries,
+                options = ValueMode.entries,
                 selected = valueMode,
-                label = { it.label },
+                labelOf = { it.label },
                 onSelect = { valueMode = it },
             )
         }
@@ -117,7 +113,7 @@ fun NutrientBreakdownScreen(onBack: () -> Unit) {
                     Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
                         Text(
                             "No nutrient data logged for this period.",
-                            style = TextStyle(fontFamily = Inter, fontSize = 15.sp),
+                            style = FTType.Body,
                             color = FT.TextSecondary,
                         )
                     }
@@ -129,7 +125,7 @@ fun NutrientBreakdownScreen(onBack: () -> Unit) {
                     val modeNote = if (valueMode == ValueMode.Average) "daily average" else "accumulated total"
                     Text(
                         "$modeNote — $periodNote",
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+                        style = FTType.Caption,
                         color = FT.TextMuted,
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
                     )
@@ -149,7 +145,7 @@ fun NutrientBreakdownScreen(onBack: () -> Unit) {
                     Text(
                         "RDA values shown are adult male reference intakes (NASEM DRI). " +
                             "They are general guides, not personal targets.",
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                        style = FTType.Caption,
                         color = FT.TextMuted,
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp),
                     )
@@ -190,7 +186,7 @@ private fun NutrientRow(info: NutrientInfo, amount: Double, rdaMultiplier: Int) 
         ) {
             Text(
                 info.displayName,
-                style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                style = FTType.BodySmall,
                 color = FT.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -199,7 +195,7 @@ private fun NutrientRow(info: NutrientInfo, amount: Double, rdaMultiplier: Int) 
             Spacer(Modifier.width(8.dp))
             Text(
                 formatAmount(amount, info.unit),
-                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 14.sp),
+                style = FTType.Telemetry,
                 color = FT.TextPrimary,
                 textAlign = TextAlign.End,
             )
@@ -216,7 +212,7 @@ private fun NutrientRow(info: NutrientInfo, amount: Double, rdaMultiplier: Int) 
             }
             Text(
                 rangeLabel,
-                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                style = FTType.Caption,
                 color = FT.TextMuted,
             )
             Spacer(Modifier.height(4.dp))
@@ -293,44 +289,6 @@ private fun nutrientsForCategory(
 }
 
 private fun guessCategoryForUnknown(key: String): NutrientCategory = NutrientCategory.Other
-
-@Composable
-private fun <T> SegmentedToggle(
-    items: List<T>,
-    selected: T,
-    label: (T) -> String,
-    onSelect: (T) -> Unit,
-) {
-    val shape = RoundedCornerShape(FT.RadiusSmall)
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        items.forEach { item ->
-            val isSelected = item == selected
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .border(FT.BorderWidth, if (isSelected) FT.Emerald else FT.GlassBorder, shape)
-                    .background(if (isSelected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, shape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onSelect(item) }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    label(item),
-                    style = TextStyle(
-                        fontFamily = RobotoMono,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 11.sp,
-                        letterSpacing = 0.14f.em,
-                    ),
-                    color = if (isSelected) FT.Emerald else FT.TextSecondary,
-                )
-            }
-        }
-    }
-}
 
 private fun formatAmount(value: Double, unit: String): String {
     val formatted = when {

@@ -16,11 +16,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
 import kotlin.math.roundToInt
 
 // DAV-288: carbs/protein/fat as a share of macro grams (not calories -- grams
@@ -68,6 +66,6 @@ private fun MacroLegendRow(label: String, grams: Double, total: Double, color: C
     val pct = if (total > 0) (grams / total * 100).roundToInt() else 0
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(modifier = Modifier.size(10.dp).background(color, CircleShape))
-        Text("$label — ${grams.roundToInt()}g ($pct%)", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = FT.TextSecondary)
+        Text("$label — ${grams.roundToInt()}g ($pct%)", style = FTType.BodySmall, color = FT.TextSecondary)
     }
 }

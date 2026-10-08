@@ -24,9 +24,11 @@ Login, Add Entry (workflow/IA), broad Setup IA (only sync status relocates here 
 calendar-free chronological-feed behavior, and Map's spatial IA. Any issue in this project that
 appears to require touching one of these has scope-crept — stop and re-check against DAV-107.
 
-## 3. Top-level navigation — unchanged
+## 3. Top-level navigation
 
-Four tabs: `STATUS | MAP | LOG | SETUP`. No new top-level tab, no removed one.
+Four tabs: `STATUS | USER | LOG | SETUP`. (DAV-296: USER replaced MAP in the bottom bar; Map's screen stays in the codebase, unmounted.)
+
+> **Update 2026-10:** the tab sets in §6/§7 below were implemented differently — see `TopLevelTab.kt`: `FuelTab` = Nutrition, Digestion; `HeartTab` = Cardio, Recovery, Wellbeing; `TrainingTab` = Load, Injury; `LabsTab` = Bloodwork, Supplements (Hydration and Body folded into Fuel/Nutrition; Supplements moved under Labs; Injury moved under Training — DAV-207/208/209/216). The code is authoritative where it differs.
 
 ## 4. Status IA — Body/Condition as hub
 
@@ -86,6 +88,8 @@ mapping needed here.
 
 Summary → route/map (when route data exists) → one switchable performance chart
 (`[HR] [PACE] [POWER] [CAL]`, only showing signals that exist for that session) → splits/intervals.
+
+> **Update 2026-10:** as built, the switchable chart (`HR / PACE / POWER / CADENCE`) lives inside SUMMARY, the route map was deliberately moved to the bottom (direct user request, 28/9), and CADENCE replaced CAL. The summary leads with one hero value (distance, or duration for strength) with duration and pace as its context line. The code is authoritative.
 Locking this now, even though DAV-106 is a milestone-5 issue, so the chart-switching component built
 for it doesn't get designed twice.
 

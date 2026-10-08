@@ -1,11 +1,12 @@
 package com.bioscan.fieldterminal.ui.theme
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
  * Tokenized Futuristic Material foundation for new and migrated analytical UI.
- * Existing legacy FieldColors stay intact until their owning screens migrate.
+ * The only palette in the app: the legacy amber FieldColors/FieldTextStyles are gone.
  */
 object FuturisticMaterialTokens {
     val Base = Color(0xFF0A0C0E)
@@ -41,6 +42,33 @@ object FuturisticMaterialTokens {
     // since MapScreen.kt stays in the codebase and keeps its accent).
     val DomainUser = Color(0xFF818CF8)
 
+    // Category tier -- "what kind of thing is this" (log entry kind, chart
+    // series, sub-domain). A third tier next to State ("how is it") and
+    // Domain ("which section"); never interchangeable with either. Identity
+    // marks only (dot, rail, icon, chip outline, series stroke): never on
+    // state pills, gauge bands or range tracks. See contract section 4.
+    class CategoryColor(val c300: Color, val c500: Color, val c700: Color, val c900: Color)
+
+    object Category {
+        val Sleep = CategoryColor(Color(0xFF8FA0F0), Color(0xFF4A5FD9), Color(0xFF3141A8), Color(0xFF1B2463))
+        val Activity = CategoryColor(Color(0xFFFFB38A), Color(0xFFFF8040), Color(0xFFC75A22), Color(0xFF6B2E10))
+        val Wellbeing = CategoryColor(Color(0xFF8DCBF3), Color(0xFF3FA9E8), Color(0xFF2578AB), Color(0xFF123E5C))
+        val Arousal = CategoryColor(Color(0xFFF28BB8), Color(0xFFE11D74), Color(0xFFA0124F), Color(0xFF520A28))
+        val Digestion = CategoryColor(Color(0xFFE3D0AE), Color(0xFFC9A876), Color(0xFF8F7549), Color(0xFF4A3B22))
+        val Intake = CategoryColor(Color(0xFFB9F8CF), Color(0xFF7EF2A8), Color(0xFF3FB872), Color(0xFF1E5C3A))
+    }
+
+    // 4 px base scale (contract section 6).
+    object Space {
+        val XS = 4.dp
+        val SM = 8.dp
+        val MD = 12.dp
+        val LG = 16.dp
+        val XL = 20.dp
+        val XXL = 24.dp
+        val Huge = 32.dp
+    }
+
     val GlassFill = Color(0x14FFFFFF)
     val GlassStrongFill = Color(0x1FFFFFFF)
     val GlassBorder = Color(0x1FFFFFFF)
@@ -51,4 +79,7 @@ object FuturisticMaterialTokens {
     val RadiusCard = 24.dp
     val RadiusCardLarge = 28.dp
     val BorderWidth = 1.dp
+
+    // Modal bottom sheets: soft top corners at the primary-card radius.
+    val SheetShape = RoundedCornerShape(topStart = RadiusCard, topEnd = RadiusCard)
 }

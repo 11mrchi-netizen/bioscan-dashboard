@@ -86,8 +86,10 @@ import com.bioscan.fieldterminal.ui.components.RouteMiniMap
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TrailElevationChart
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
 import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.Instant
 import java.time.LocalDate
@@ -238,39 +240,18 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                "BACK",
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp, fontWeight = FontWeight.Bold),
-                color = FT.TextMuted,
-                modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onBack),
-            )
-            Column {
-                Text(
-                    header?.type?.replaceFirstChar { it.uppercase() } ?: "SESSION",
-                    style = TextStyle(fontFamily = Inter, fontSize = 20.sp, fontWeight = FontWeight.Bold),
-                    color = FT.TextPrimary,
-                )
-                header?.let {
-                    Text(
-                        sessionWhen(it.startTime),
-                        style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
-                        color = FT.TextSecondary,
-                    )
-                }
-            }
-        }
+        TileHeader(
+            onBack = onBack,
+            title = header?.type?.replaceFirstChar { it.uppercase() } ?: "SESSION",
+            subtitle = header?.let { sessionWhen(it.startTime) },
+        )
 
         when {
             loadingHeader -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = FT.Emerald)
             }
             header == null -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
-                Text(headerError ?: "Session not found.", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary)
+                Text(headerError ?: "Session not found.", style = FTType.BodySmall, color = FT.TextSecondary)
             }
             else -> {
                 val h = header!!
@@ -353,7 +334,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                                         else ->
                                             "Trail metrics need a recorded route and performance data, not available yet for this session."
                                     },
-                                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                    style = FTType.BodySmall,
                                     color = FT.TextSecondary,
                                 )
                             }
@@ -380,7 +361,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                                 } else {
                                     Text(
                                         "Add a CARTO API key in Settings to see the route map.",
-                                        style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                        style = FTType.BodySmall,
                                         color = FT.TextSecondary,
                                     )
                                 }
@@ -391,14 +372,14 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                             routeAvailability is RouteAvailability.ConsentRequired -> FTCard(title = "ROUTE") {
                                 Text(
                                     "This session has a recorded route. Health Connect requires a one-time, per-session permission to view it.",
-                                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                    style = FTType.BodySmall,
                                     color = FT.TextSecondary,
                                 )
                                 AmberButton(label = "VIEW ROUTE") { routeLauncher.launch(recordId) }
                             }
                             routeError != null -> Text(
                                 "Couldn't check for a recorded route (${routeError}).",
-                                style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                style = FTType.BodySmall,
                                 color = FT.TextSecondary,
                             )
                         }
@@ -412,11 +393,20 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
 }
 
 private enum class PerfSignal(val label: String, val unit: String, val color: Color) {
-    HR("HR", "bpm", FT.Critical),
-    PACE("PACE", "min/km", FT.Emerald),
-    POWER("POWER", "W", FT.Warning),
-    CADENCE("CADENCE", "spm", FT.Info),
+    HR("HR", "bpm", FT.DomainHeart),
+    PACE("PACE", "min/km", FT.Category.Activity.c500),
+    POWER("POWER", "W", FT.Category.Activity.c300),
+    CADENCE("CADENCE", "spm", FT.TextSecondary),
 }
+
+// Pace reads as m:ss /km (not a decimal like 4.8), everything else as value + unit.
+private fun formatSignalValue(signal: PerfSignal, v: Double): String =
+    if (signal == PerfSignal.PACE) {
+        val s = Math.round(v * 60).toInt()
+        "%d:%02d /km".format(s / 60, s % 60)
+    } else {
+        "%.1f %s".format(v, signal.unit)
+    }
 
 // One chart, switchable rather than four stacked ones -- only signals this
 // session actually recorded appear as options. PACE is derived from the
@@ -459,7 +449,7 @@ private fun PerformanceChartSection(d: SessionDetail, personalMaxHr: Double?) {
         average = values.average(),
         max = values.max(),
         color = selected.color,
-        format = { v -> "%.1f %s".format(v, selected.unit) },
+        format = { v -> formatSignalValue(selected, v) },
     )
 
     val showZoneUi = selected == PerfSignal.HR && personalMaxHr != null
@@ -480,11 +470,14 @@ private fun PerformanceChartSection(d: SessionDetail, personalMaxHr: Double?) {
         xRange = sessionStart to sessionEnd,
         segmentColor = if (showZoneUi && colorMode == ChartColorMode.Zones) { hr -> heartRateZoneColor(heartRateZoneFor(hr, personalMaxHr!!)) } else null,
         modifier = Modifier.padding(top = 4.dp),
+        valueFormat = { v -> formatSignalValue(selected, v) },
+        invertY = selected == PerfSignal.PACE,
+        unit = if (selected == PerfSignal.PACE) "pace · min:sec per km" else selected.unit,
     )
     if (points.first().offsetSeconds > sessionStart || points.last().offsetSeconds < sessionEnd) {
         Text(
             "${selected.label} only reported for part of this session.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            style = FTType.Caption,
             color = FT.TextSecondary,
         )
     }
@@ -503,10 +496,10 @@ private fun SplitsCard(splits: List<SessionSplit>) {
         splits.forEach { split ->
             val isFastest = split.km == fastestKm
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("KM ${split.km}", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary)
+                Text("KM ${split.km}", style = FTType.BodySmall, color = FT.TextSecondary)
                 Text(
                     formatSplitPace(split.durationSec) + (split.avgHr?.let { "  ·  %.0f bpm".format(it) } ?: "") + (if (isFastest) "  ★" else ""),
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 14.sp, fontWeight = if (isFastest) FontWeight.Bold else FontWeight.Normal),
+                    style = if (isFastest) FTType.Telemetry else FTType.Value,
                     color = if (isFastest) FT.Emerald else FT.TextPrimary,
                 )
             }
@@ -544,7 +537,7 @@ private fun RunDynamicsCard(summary: ZeppWorkoutSummary) {
 
     FTCard(title = "RUN DYNAMICS") {
         rows.forEach { (label, value, help) ->
-            if (help != null) StatLineHelp(label, value, help.first, help.second) else StatLine(label, value)
+            if (help != null) StatLineHelp(label, value, help.first, help.second) else FTMetricRow(label, value)
         }
     }
 }
@@ -672,7 +665,7 @@ private fun TrailCard(state: SessionStateObject, routePoints: List<RoutePoint>, 
                 if (itra != null) {
                     FTMetricValue(DisplayValue(primary = itra))
                 } else {
-                    Text("—", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 22.sp), color = FT.TextMuted)
+                    Text("—", style = FTType.MetricMedium, color = FT.TextMuted)
                 }
             }
         }
@@ -682,10 +675,10 @@ private fun TrailCard(state: SessionStateObject, routePoints: List<RoutePoint>, 
         }
 
         kmEffort?.let { StatLineHelp("KM-effort", "%.1f".format(it), "KM-effort", KM_EFFORT_HELP) }
-        state.dimensions.getValue(StateDimension.ELEVATION_GAIN_M).value?.let { StatLine("Elevation gain", "${it.toInt()} m") }
-        state.dimensions.getValue(StateDimension.ELEVATION_LOSS_M).value?.let { StatLine("Elevation loss", "${it.toInt()} m") }
+        state.dimensions.getValue(StateDimension.ELEVATION_GAIN_M).value?.let { FTMetricRow("Elevation gain", "${it.toInt()} m") }
+        state.dimensions.getValue(StateDimension.ELEVATION_LOSS_M).value?.let { FTMetricRow("Elevation loss", "${it.toInt()} m") }
         state.dimensions.getValue(StateDimension.AVERAGE_VAM).value?.let { StatLineHelp("Avg VAM", "${it.toInt()} m/h", "VAM", VAM_HELP) }
-        state.dimensions.getValue(StateDimension.UPHILL_RUN_PERCENT).value?.let { StatLine("Uphill run", "%.0f%%".format(it)) }
+        state.dimensions.getValue(StateDimension.UPHILL_RUN_PERCENT).value?.let { FTMetricRow("Uphill run", "%.0f%%".format(it)) }
         state.dimensions.getValue(StateDimension.UPHILL_EFFICIENCY).value?.let { StatLineHelp("Uphill efficiency", "%.2f m/h per bpm".format(it), "Uphill efficiency", GRADE_EFFICIENCY_HELP) }
         state.dimensions.getValue(StateDimension.DOWNHILL_EFFICIENCY).value?.let { StatLineHelp("Downhill efficiency", "%.2f m/h per bpm".format(it), "Downhill efficiency", GRADE_EFFICIENCY_HELP) }
         state.dimensions.getValue(StateDimension.CLIMB_CONSISTENCY).value?.let { StatLineHelp("Climb consistency (CV)", "%.2f".format(it), "Climb consistency", CONSISTENCY_HELP) }
@@ -699,7 +692,7 @@ private fun TrailCard(state: SessionStateObject, routePoints: List<RoutePoint>, 
 @Composable
 private fun TrailHeaderLabel(label: String, helpTitle: String, helpBody: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp), color = FT.TextMuted)
+        Text(label, style = FTType.Label, color = FT.TextMuted)
         InfoHelpButton(helpTitle, helpBody)
     }
 }
@@ -711,11 +704,11 @@ private fun TrailHeaderLabel(label: String, helpTitle: String, helpBody: String)
 @Composable
 private fun StatLineHelp(label: String, value: String, helpTitle: String, helpBody: String) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
+        Text(label, style = FTType.Body, color = FT.TextSecondary)
         InfoHelpButton(helpTitle, helpBody, modifier = Modifier.padding(start = 6.dp))
         Text(
             value,
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
+            style = FTType.Value,
             color = FT.TextPrimary,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f).padding(start = 8.dp),
@@ -778,9 +771,9 @@ private fun StrengthCard(
         strengthData?.sets?.associateBy { it.idx } ?: emptyMap()
     }
     FTCard(title = "STRENGTH") {
-        StatLine("Total volume", "%.0f kg".format(totalVolume))
-        avgRpe?.let { StatLine("Avg RPE", "%.1f".format(it)) }
-        avgRir?.let { StatLine("Avg RIR", "%.1f".format(it)) }
+        FTMetricRow("Total volume", "%.0f kg".format(totalVolume))
+        avgRpe?.let { FTMetricRow("Avg RPE", "%.1f".format(it)) }
+        avgRir?.let { FTMetricRow("Avg RIR", "%.1f".format(it)) }
 
         // Body heat map replaces the old per-region bars (25/9 rework).
         val zones = remember(regional) { zoneLoads(regional) }
@@ -789,7 +782,7 @@ private fun StrengthCard(
         } else if (library.isNotEmpty()) {
             Text(
                 "None of this session's logged exercise names matched the exercise library -- no anatomical breakdown available.",
-                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                style = FTType.Caption,
                 color = FT.TextSecondary,
             )
         }
@@ -815,10 +808,10 @@ private fun StrengthCard(
             Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(exercise.name, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold), color = FT.TextPrimary)
-                        subtitle?.let { Text(it, style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp), color = FT.TextSecondary) }
+                        Text(exercise.name, style = FTType.RowTitle, color = FT.TextPrimary)
+                        subtitle?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
                     }
-                    e1rm?.let { Text("e1RM %.0f kg".format(it), style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp), color = FT.TextSecondary) }
+                    e1rm?.let { Text("e1RM %.0f kg".format(it), style = FTType.MonoCaption, color = FT.TextSecondary) }
                 }
                 exercise.sets.forEachIndexed { i, set ->
                     val zs = zeppSetByIdx[globalSetIdx++]
@@ -829,7 +822,7 @@ private fun StrengthCard(
                         set.durationSec?.let { "${it}s" },
                         set.avgHr?.let { "${it} bpm" },
                     )
-                    StatLine("Set ${i + 1}", "${set.reps} × %.0f kg".format(set.weightKg) + extras.joinToString("") { "  ·  $it" })
+                    FTMetricRow("Set ${i + 1}", "${set.reps} × %.0f kg".format(set.weightKg) + extras.joinToString("") { "  ·  $it" })
                     zs?.scores?.let { SetMovementScoreRow(it) }
                 }
             }
@@ -898,23 +891,44 @@ private fun SummaryCard(
     val isStrength = header.type == "strength"
     val activeCalories = header.caloriesActive ?: detail?.caloriesKcal?.lastOrNull()?.value
 
+    // One dominant value, then supporting rows: distance (with duration and
+    // pace as its context) for runs/rides, duration alone for strength.
+    val heroDistance = header.distanceKm?.takeIf { !isStrength }
+    val hero = if (heroDistance != null) {
+        DisplayValue(
+            primary = "%.2f".format(heroDistance),
+            unit = "KM",
+            secondary = listOfNotNull(
+                header.durationMin?.let { formatDuration(it) },
+                avgPaceMinPerKm?.let { formatSplitPace((it * 60).toLong()) },
+            ).joinToString(" · ").ifBlank { null },
+        )
+    } else {
+        header.durationMin?.let { DisplayValue(primary = formatDuration(it), secondary = "DURATION") }
+    }
+
     FTCard(title = "SUMMARY") {
-        header.durationMin?.let { StatLine("Duration", formatDuration(it)) }
-        header.distanceKm?.let { StatLine("Distance", "%.2f km".format(it)) }
-        header.details.runType?.let { StatLine("Run type", it.replaceFirstChar(Char::uppercase)) }
-        header.details.routeType?.let { StatLine("Route", it.replaceFirstChar(Char::uppercase)) }
-        avgHr?.let { StatLine("Avg heart rate", "${it.toInt()} bpm") }
-        header.maxHr?.let { StatLine("Max heart rate", "${it.toInt()} bpm") }
-        header.elevationGainM?.let { StatLine("Elevation gain", "${it.toInt()} m") }
-        header.avgPowerW?.let { StatLine("Avg power", "${it.toInt()} W") }
-        avgPaceMinPerKm?.let { StatLine("Avg pace", formatSplitPace((it * 60).toLong())) }
-        if (!isStrength) {
-            activeCalories?.let { StatLine("Active calories", "${it.toInt()} kcal") }
-            header.caloriesTotal?.let { StatLine("Total calories", "${it.toInt()} kcal") }
+        hero?.let { FTMetricValue(it) }
+        // With a distance hero, duration and pace ride in its context line.
+        if (heroDistance == null) {
+            header.distanceKm?.let { FTMetricRow("Distance", "%.2f km".format(it)) }
         }
-        header.rpe?.let { StatLine("RPE", "$it/10") }
+        header.details.runType?.let { FTMetricRow("Run type", it.replaceFirstChar(Char::uppercase)) }
+        header.details.routeType?.let { FTMetricRow("Route", it.replaceFirstChar(Char::uppercase)) }
+        avgHr?.let { FTMetricRow("Avg heart rate", "${it.toInt()} bpm") }
+        header.maxHr?.let { FTMetricRow("Max heart rate", "${it.toInt()} bpm") }
+        header.elevationGainM?.let { FTMetricRow("Elevation gain", "${it.toInt()} m") }
+        header.avgPowerW?.let { FTMetricRow("Avg power", "${it.toInt()} W") }
+        if (heroDistance == null) {
+            avgPaceMinPerKm?.let { FTMetricRow("Avg pace", formatSplitPace((it * 60).toLong())) }
+        }
+        if (!isStrength) {
+            activeCalories?.let { FTMetricRow("Active calories", "${it.toInt()} kcal") }
+            header.caloriesTotal?.let { FTMetricRow("Total calories", "${it.toInt()} kcal") }
+        }
+        header.rpe?.let { FTMetricRow("RPE", "$it/10") }
         header.notes?.takeIf { it.isNotBlank() }?.let {
-            Text(it, style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp), color = FT.TextSecondary)
+            Text(it, style = FTType.BodySmall, color = FT.TextSecondary)
         }
 
         // 28/9: HR/PACE/POWER/CADENCE chart folded in here (was its own
@@ -923,7 +937,7 @@ private fun SummaryCard(
             when {
                 !hasHealthConnectRecord -> Text(
                     "No time-series available for sessions logged before Health Connect.",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
                 loadingDetail -> Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
@@ -931,30 +945,12 @@ private fun SummaryCard(
                 }
                 detailError != null -> Text(
                     "Couldn't load time-series detail (${detailError}).",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
                 detail != null -> PerformanceChartSection(detail, personalMaxHr)
             }
         }
-    }
-}
-
-// DAV-108: label is unweighted (always a short fixed phrase) so it never
-// shrinks; value takes the rest of the row via weight(1f) so a long value
-// wraps within its own bounded width and stays right-aligned instead of
-// colliding with the label.
-@Composable
-private fun StatLine(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = FT.TextSecondary)
-        Text(
-            value,
-            style = TextStyle(fontFamily = RobotoMono, fontSize = 14.5.sp),
-            color = FT.TextPrimary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f).padding(start = 8.dp),
-        )
     }
 }
 

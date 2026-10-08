@@ -18,11 +18,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.DSLD_SOURCE_NAME
 import com.bioscan.fieldterminal.data.DsldVerification
@@ -43,15 +41,14 @@ import com.bioscan.fieldterminal.domain.normalizeBarcode
 import com.bioscan.fieldterminal.domain.proposeFacts
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import com.bioscan.fieldterminal.util.scanBarcode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-private val body = TextStyle(fontFamily = Inter, fontSize = 13.sp)
-private val sourceLabel = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.12f.em)
+private val body = FTType.BodySmall
+private val sourceLabel = FTType.LabelCaps
 
 // DAV-359 / DAV-360 / DAV-362. Verify a saved product against NIH DSLD and SuppCo
 // by barcode (scanned, typed, or found by name). Results are shown and stored as
@@ -97,13 +94,13 @@ fun ProductVerifySection(productId: Long) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             "VERIFY WITH NIH DSLD + SUPPCO",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em),
+            style = FTType.LabelCaps,
             color = FT.TextSecondary,
         )
         Text(
             "Scan or type the barcode on the label, or search by name, to compare this product with the NIH label database and SuppCo. " +
                 "Nothing changes until you choose fields to apply; each comparison is saved with its source and date.",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp),
+            style = FTType.Caption,
             color = FT.TextSecondary,
         )
         FieldTextField(barcode, { barcode = it; result = null; error = null; info = null }, "Barcode (UPC)", keyboardType = KeyboardType.Number)
@@ -138,7 +135,7 @@ fun ProductVerifySection(productId: Long) {
             }
         }
         info?.let { Text(it, style = body, color = FT.TextSecondary) }
-        error?.let { Text("Couldn't verify ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical) }
+        error?.let { Text("Couldn't verify ($it).", style = FTType.Caption, color = FT.Critical) }
         candidates?.let { c ->
             CandidateList(c, own?.name ?: "") { code ->
                 barcode = code

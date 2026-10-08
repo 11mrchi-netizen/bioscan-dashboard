@@ -27,11 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.HealthEventsOverview
 import com.bioscan.fieldterminal.data.HealthEventsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -39,9 +35,8 @@ import com.bioscan.fieldterminal.domain.HealthEvent
 import com.bioscan.fieldterminal.domain.HealthEventKind
 import com.bioscan.fieldterminal.domain.daysSince
 import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -81,12 +76,12 @@ fun HealthEventsScreen() {
             CircularProgressIndicator(color = FT.DomainHeart)
         }
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: $error", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.Critical)
+            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
         }
         overview == null || (overview!!.open.isEmpty() && overview!!.resolved.isEmpty()) -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
             AddEventButtons(onAddInjuryClick = { showAddSheet = true }, onAddIllnessClick = { showAddIllnessSheet = true })
             Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                Text("No injuries or illnesses logged yet.", style = TextStyle(fontFamily = Inter, fontSize = 15.5.sp), color = FT.TextSecondary)
+                Text("No injuries or illnesses logged yet.", style = FTType.Body, color = FT.TextSecondary)
             }
         }
         else -> HealthEventsContent(overview!!, onAddInjuryClick = { showAddSheet = true }, onAddIllnessClick = { showAddIllnessSheet = true }, onResolved = { reloadKey++ })
@@ -111,7 +106,7 @@ private fun AddEventButtons(onAddInjuryClick: () -> Unit, onAddIllnessClick: () 
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
         Text(
             "+ ADD ILLNESS",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.08f.em),
+            style = FTType.LabelCaps,
             color = FT.Info,
             modifier = Modifier
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onAddIllnessClick() }
@@ -131,7 +126,7 @@ private fun HealthEventsContent(overview: HealthEventsOverview, onAddInjuryClick
         AddEventButtons(onAddInjuryClick = onAddInjuryClick, onAddIllnessClick = onAddIllnessClick)
         Text(
             text = "${overview.open.size} OPEN · ${overview.resolved.size} RESOLVED",
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.08f.em),
+            style = FTType.LabelCaps,
             color = if (overview.open.isNotEmpty()) FT.Critical else FT.TextSecondary,
         )
 
@@ -157,18 +152,18 @@ private fun HealthEventsContent(overview: HealthEventsOverview, onAddInjuryClick
 @Composable
 private fun SectionLabel(text: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text, style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.14f.em), color = color)
+        Text(text, style = FTType.LabelCaps, color = color)
         Box(Modifier.weight(1f).height(1.dp).background(FT.GlassBorder))
     }
 }
 
 @Composable
 private fun KindBadge(kind: HealthEventKind) {
-    val color = if (kind == HealthEventKind.Injury) FT.Warning else FT.Info
-    Box(modifier = Modifier.background(color).padding(horizontal = 6.dp, vertical = 2.dp)) {
+    // Kind is identity, not state: neutral chip, the text says which kind.
+    Box(modifier = Modifier.background(FT.TextSecondary).padding(horizontal = 6.dp, vertical = 2.dp)) {
         Text(
             kind.name.uppercase(),
-            style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Bold, fontSize = 10.5.sp),
+            style = FTType.Label,
             color = FT.Base,
         )
     }
@@ -201,26 +196,26 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 KindBadge(event.kind)
-                Text(event.status.uppercase(), style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.14f.em), color = FT.Critical)
+                Text(event.status.uppercase(), style = FTType.LabelCaps, color = FT.Critical)
             }
-            Text("DAY $days", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.14f.em), color = FT.TextSecondary)
+            Text("DAY $days", style = FTType.LabelCaps, color = FT.TextSecondary)
         }
         Column(modifier = Modifier.padding(14.dp)) {
-            Text(event.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.5.sp), color = FT.TextPrimary)
+            Text(event.title, style = FTType.SectionTitle, color = FT.TextPrimary)
             event.detail?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = FT.TextSecondary, modifier = Modifier.padding(top = 5.dp))
+                Text(it, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.padding(top = 5.dp))
             }
             if (event.kind == HealthEventKind.Illness) {
                 Text(
                     if (event.doctorSeen) "Doctor seen" else "Doctor not seen",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                    style = FTType.BodySmall,
                     color = if (event.doctorSeen) FT.Emerald else FT.TextSecondary,
                     modifier = Modifier.padding(top = 6.dp),
                 )
                 event.medications.forEach { med ->
                     Text(
                         "${med.name} · ${med.dose} · ${med.frequency}",
-                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                        style = FTType.BodySmall,
                         color = FT.TextSecondary,
                         modifier = Modifier.padding(top = 3.dp),
                     )
@@ -228,13 +223,13 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
             }
             Text(
                 "Reported ${event.startDate}",
-                style = TextStyle(fontFamily = RobotoMono, fontSize = 12.sp),
+                style = FTType.MonoCaption,
                 color = FT.TextSecondary,
                 modifier = Modifier.padding(top = 10.dp),
             )
             Text(
                 if (resolving) "RESOLVING..." else "RESOLVE",
-                style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.14f.em),
+                style = FTType.LabelCaps,
                 color = FT.Emerald,
                 modifier = Modifier
                     .padding(top = 12.dp)
@@ -256,7 +251,7 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
                     },
             )
             resolveError?.let {
-                Text(it, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = FT.Critical, modifier = Modifier.padding(top = 4.dp))
+                Text(it, style = FTType.Caption, color = FT.Critical, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }
@@ -272,17 +267,17 @@ private fun ResolvedRow(event: HealthEvent, today: LocalDate, showDivider: Boole
             Column(modifier = Modifier.weight(1f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     KindBadge(event.kind)
-                    Text(event.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp), color = FT.TextSecondary)
+                    Text(event.title, style = FTType.RowTitle, color = FT.TextSecondary)
                 }
                 Text(
                     "Cleared ${event.endDate ?: "—"}",
-                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                    style = FTType.BodySmall,
                     color = FT.TextSecondary,
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
             event.endDate?.let { end ->
-                Text("${daysSince(end, today)} D AGO", style = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.14f.em), color = FT.TextSecondary)
+                Text("${daysSince(end, today)} D AGO", style = FTType.LabelCaps, color = FT.TextSecondary)
             }
         }
         if (showDivider) {

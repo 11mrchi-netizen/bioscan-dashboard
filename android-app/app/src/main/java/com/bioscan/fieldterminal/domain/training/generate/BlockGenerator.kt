@@ -132,6 +132,7 @@ private class Gen(
             val chosen = choice.exercises[slot.id].orEmpty()
             val names = when {
                 slot.pick != null -> chosen
+                isCluster(m, slot) && chosen.isNotEmpty() -> chosen
                 chosen.isNotEmpty() -> listOf(chosen.first())
                 else -> listOf(slot.standard)
             }
@@ -171,7 +172,8 @@ private class Gen(
         if (!c.projectProgression) return
         val prog = m.progression ?: return
         for (slot in m.slots) {
-            val names = choice.exercises[slot.id].orEmpty().ifEmpty { if (slot.pick == null) listOf(slot.standard) else emptyList() }
+            val names = (if (isCluster(m, slot)) choice.exercises[slot.id].orEmpty() else choice.exercises[slot.id].orEmpty().take(1))
+                .ifEmpty { if (slot.pick == null) listOf(slot.standard) else emptyList() }
             val lower = slot.role == "squat" || slot.role == "hinge"
             for (name in names) {
                 val from = currentOneRm(name) ?: continue
@@ -189,6 +191,10 @@ private class Gen(
         return GeneratedConditioning(def?.key ?: key, label ?: def?.title ?: "Conditioning", def?.category ?: category, params, minutes)
     }
 }
+
+// A slot that holds several exercises: a declared cluster, or any slot of a strength-endurance
+// module (SE trains a circuit of several movements, so one-per-slot would force a single exercise).
+fun isCluster(m: StrengthModuleDef, slot: com.bioscan.fieldterminal.domain.training.definition.SlotDef) = slot.pick != null || m.domain == "strength_endurance"
 
 private fun pickVariant(m: StrengthModuleDef, choice: ModuleChoice) =
     m.variants.firstOrNull { it.key == choice.variant } ?: m.variants.first()
@@ -289,72 +295,99 @@ private fun generateStrengthCell(
     }
 }
 
-// ---- Composed blocks: a strength module and a conditioning protocol ----
+// ---- Merged blocks: a strength module and a conditioning protocol on the lifter's own layout ----
+
+// Kept for callers that only have the two definitions: builds the suggested layout and default timeline.
 fun generateComposedBlock(
     strength: StrengthModuleDef?, protocol: ConditioningProtocolDef?, idx: DefinitionIndex, c: GenChoices,
     eq: GenEquipment = GenEquipment(), maxes: (String) -> MaxEntry? = { null },
 ): GeneratedBlock {
     require(strength != null || protocol != null) { "a composed block needs a strength module or a conditioning protocol" }
-    val g = Gen(idx, c, eq, maxes)
     val total = c.weeks ?: 6
     val choice = strength?.let { c.modules[it.key] ?: ModuleChoice() } ?: ModuleChoice()
     val variant = strength?.let { pickVariant(it, choice) }
     val len = variant?.let { (choice.blockLength ?: it.weeks.size).coerceIn(1, it.weeks.size) } ?: 1
+    val timeline = if (strength != null) defaultTimeline(len, total, deloads = c.deloadAfterBlock) else List(total) { WeekKind.Normal }
+    val bp = BlockBlueprint(strength?.key, protocol?.key, suggestLayout(strength, protocol, c.startDate.dayOfWeek, c.conditioningPerWeek), timeline)
+    return mergeBlock(bp, strength, protocol, idx, c, eq, maxes)
+}
+
+fun generateMergedBlock(
+    bp: BlockBlueprint, idx: DefinitionIndex, c: GenChoices, eq: GenEquipment = GenEquipment(), maxes: (String) -> MaxEntry? = { null },
+): GeneratedBlock {
+    return mergeBlock(bp, bp.strengthKey?.let { idx.strength(it) }, bp.protocolKey?.let { idx.protocol(it) }, idx, c, eq, maxes)
+}
+
+private fun mergeBlock(
+    bp: BlockBlueprint, strength: StrengthModuleDef?, protocol: ConditioningProtocolDef?, idx: DefinitionIndex, c: GenChoices, eq: GenEquipment, maxes: (String) -> MaxEntry?,
+): GeneratedBlock {
+    require(strength != null || protocol != null) { "a block needs a strength module or a conditioning protocol" }
+    val g = Gen(idx, c, eq, maxes)
+    val choice = strength?.let { c.modules[it.key] ?: ModuleChoice() } ?: ModuleChoice()
+    val variant = strength?.let { pickVariant(it, choice) }
+    val len = variant?.let { (choice.blockLength ?: it.weeks.size).coerceIn(1, it.weeks.size) } ?: 1
+    val startDay = c.startDate.dayOfWeek
+    fun position(d: DayOfWeek) = ((d.value - startDay.value + 7) % 7) + 1
+    val strengthDays = bp.layout.filter { it.strengthSession != null }.sortedBy { position(it.weekday) }
+
     var blockPos = 0
+    var skipProgress = false
+    var normalOrdinal = 0
     var counted = 0
-    var blocksDone = 0
     val rotation = mutableMapOf<String, Int>()
-    for (week in 1..total) {
-        val deload = strength != null && c.deloadAfterBlock && blockPos == len
-        if (deload) blockPos = 0
-        val counts = !deload
-        if (counts) counted++
-        val strengthDays = mutableSetOf<Int>()
-        if (strength != null && variant != null) {
-            if (deload) {
-                val day = strength.dayPositions.first()
-                strengthDays += day
-                g.emit(week, false, day, 1, "recovery", "deload", "inline", "Deload week: reduced volume and intensity")
-                g.progress(strength, choice, week)
-                blocksDone++
-            } else {
-                if (!c.deloadAfterBlock && blockPos == len) { blockPos = 0; g.progress(strength, choice, week); blocksDone++ }
+    for ((i, kind) in bp.timeline.withIndex()) {
+        val week = i + 1
+        if (kind.countsTowardBlock) counted++
+        if (kind == WeekKind.Normal) normalOrdinal++
+        if (strength != null && variant != null) when (kind) {
+            WeekKind.Normal -> {
+                if (blockPos == len) { blockPos = 0; if (!skipProgress) g.progress(strength, choice, week) }
+                skipProgress = false
                 val vw = variant.weeks[blockPos]
-                strength.sessions.forEachIndexed { i, sd ->
-                    val ws = vw.sessions.firstOrNull { it.session == sd.id } ?: return@forEachIndexed
-                    val day = strength.dayPositions.getOrElse(i) { i + 1 }
-                    strengthDays += day
+                for (d in strengthDays) {
+                    val sd = strength.sessions.getOrNull(d.strengthSession!!) ?: continue
+                    val ws = vw.sessions.firstOrNull { it.session == sd.id } ?: continue
                     val notes = buildList { ws.note?.let { add(it) }; if (vw.kind == "peak") strength.peak?.note?.let { add(it) } }
-                    g.emit(week, true, day, 1, strength.domain, "progression", "strength:${strength.key}", "${strength.title}: ${sd.label}", items = g.resolveItems(strength, choice, ws.items), notes = notes)
+                    g.emit(week, true, position(d.weekday), 1, strength.domain, "progression", "strength:${strength.key}", "${strength.title}: ${sd.label}", items = g.resolveItems(strength, choice, ws.items), notes = notes)
                 }
                 blockPos++
             }
+            WeekKind.Deload -> strengthDays.firstOrNull()?.let { d ->
+                g.emit(week, false, position(d.weekday), 1, "recovery", "deload", "inline", "Deload week: reduced volume and intensity")
+            }
+            WeekKind.Test -> {
+                skipProgress = true
+                for (d in strengthDays) {
+                    val sd = strength.sessions.getOrNull(d.strengthSession!!) ?: continue
+                    val roles = strength.slots.associateBy { it.id }
+                    val items = sd.slots.mapNotNull { roles[it] }.filter { it.role in TEST_ROLES && !it.optional && it.pick == null }.map { slot ->
+                        GeneratedItem(slot.id, choice.exercises[slot.id]?.firstOrNull() ?: slot.standard, "test", null, null, ResolvedLoad.WorkUp(1, 3), note = "work up to a heavy single or triple and record it")
+                    }
+                    g.emit(week, true, position(d.weekday), 1, "max_strength", "test", "test:one_rm", "Test: ${sd.label}", items = items)
+                }
+            }
         }
-        if (protocol != null) addConditioning(g, protocol, week, counts, deload, strengthDays, rotation)
+        if (protocol != null) addConditioning(g, protocol, bp.layout, ::position, week, kind, normalOrdinal, rotation)
     }
-    return finish(g, c, counted)
+    return finish(g, c, counted, bp.timeline.size)
 }
 
-private fun addConditioning(g: Gen, p: ConditioningProtocolDef, week: Int, counts: Boolean, deload: Boolean, strengthDays: Set<Int>, rotation: MutableMap<String, Int>) {
+private val TEST_ROLES = setOf("press", "squat", "hinge", "pull", "power")
+
+private fun addConditioning(
+    g: Gen, p: ConditioningProtocolDef, layout: List<DayPlan>, position: (DayOfWeek) -> Int, week: Int, kind: WeekKind, normalOrdinal: Int, rotation: MutableMap<String, Int>,
+) {
     val b = p.budget
-    val hicWeek = when {
-        b?.highIntensityPerWeek != null -> b.highIntensityPerWeek.max > 0
-        b?.highIntensityEveryNWeeks != null -> (week - 1) % b.highIntensityEveryNWeeks == 0
-        else -> false
-    }
-    data class Slot(val day: Int, val kind: String, val minutes: NumRange?)
-    val slots: List<Slot> = if (p.defaultLayout.isNotEmpty()) {
-        p.defaultLayout.filter { it.kind == "lic" || it.kind == "hic" || it.kind == "wc" }.filter { it.kind != "hic" || hicWeek }.map { Slot(it.day, it.kind, it.minutes) }
-    } else {
-        val n = (g.c.conditioningPerWeek ?: b?.sessionsPerWeek?.min?.toInt() ?: 1).coerceAtLeast(0)
-        val free = (1..7).filter { it !in strengthDays }
-        val kind = if (p.suggested.hic.isNotEmpty() && p.suggested.lic.isEmpty()) "hic" else "lic"
-        if (n == 0 || free.isEmpty()) emptyList() else List(n.coerceAtMost(free.size)) { i -> Slot(free[(i * free.size) / n.coerceAtMost(free.size)], kind, null) }
-    }
-    val licCount = slots.count { it.kind == "lic" }
+    val normal = kind == WeekKind.Normal
+    val hicWeek = normal && (b?.highIntensityEveryNWeeks?.let { (normalOrdinal - 1) % it == 0 } ?: true)
+    val slots = layout.filter { it.conditioning != null }.sortedBy { position(it.weekday) }
+        .filter { d -> val k = d.conditioning!!.kind; normal && (k != "hic" || hicWeek) || !normal && k == "lic" }
+    val licCount = slots.count { it.conditioning!!.kind == "lic" }
     val adjust = p.weekAdjustments.firstOrNull { it.`when` == if (hicWeek) "week_has_high_intensity" else "week_without_high_intensity" }
     val licBudget = adjust?.lowIntensityMinutesPerWeek ?: b?.lowIntensityMinutesPerWeek
-    for (s in slots) {
+    val minSession = b?.sessionMinMinutes?.toDouble() ?: 0.0
+    for (d in slots) {
+        val s = d.conditioning!!
         val list = g.c.conditioning[s.kind].orEmpty().ifEmpty {
             when (s.kind) { "lic" -> p.suggested.lic; "hic" -> p.suggested.hic; else -> p.suggested.wc }
         }
@@ -362,20 +395,21 @@ private fun addConditioning(g: Gen, p: ConditioningProtocolDef, week: Int, count
         rotation[s.kind] = i + 1
         val key = list.getOrNull(i % list.size.coerceAtLeast(1))
         val share = if (s.kind == "lic" && licBudget != null && licCount > 0) {
-            val minSession = b?.sessionMinMinutes?.toDouble() ?: 0.0
-            NumRange.of(maxOf(minSession, (licBudget.min / licCount).let { kotlin.math.floor(it / 5) * 5 }))
+            val full = maxOf(minSession, kotlin.math.floor(licBudget.min / licCount / 5) * 5)
+            NumRange.of(if (normal) full else maxOf(minSession, kotlin.math.floor(full / 2 / 5) * 5))
         } else null
         val minutes = s.minutes ?: share
         val def = key?.let { g.idx.session(it) }
         val label = def?.title ?: "Choose a ${s.kind.uppercase()} session"
         if (def == null) g.warnings += "Week $week: choose a ${s.kind.uppercase()} session for ${p.title}"
-        g.emit(week, counts, s.day, if (s.day in strengthDays) 2 else 1, def?.let { sessionDomain(it) } ?: categoryDomain(s.kind), if (deload) "deload" else "progression", def?.let { "cond:${it.key}" } ?: "cond:${s.kind}", label,
+        g.emit(week, kind.countsTowardBlock, position(d.weekday), if (d.strengthSession != null) 2 else 1, def?.let { sessionDomain(it) } ?: categoryDomain(s.kind),
+            if (normal) "progression" else "deload", def?.let { "cond:${it.key}" } ?: "cond:${s.kind}", label,
             conditioning = g.conditioningFor(key, label, s.kind, null, minutes))
     }
 }
 
-private fun finish(g: Gen, c: GenChoices, counted: Int): GeneratedBlock {
-    val weeks = g.sessions.maxOfOrNull { it.weekIndex } ?: 0
+private fun finish(g: Gen, c: GenChoices, counted: Int, plannedWeeks: Int? = null): GeneratedBlock {
+    val weeks = plannedWeeks ?: g.sessions.maxOfOrNull { it.weekIndex } ?: 0
     val end = c.startDate.plusDays(7L * weeks.coerceAtLeast(1) - 1)
     return GeneratedBlock(g.sessions.toList(), weeks, counted, end, g.progressions.toList(), g.warnings.distinct())
 }

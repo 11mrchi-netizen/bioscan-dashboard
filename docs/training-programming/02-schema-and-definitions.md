@@ -346,6 +346,8 @@ An ordered or optional list of templates with transition rules (benchmark that g
 }
 ```
 
+A built block also stores its merge in `choices`: `path: "build"`, `layout` (`[{weekday, strength_session?, conditioning?}]`, one entry per weekday, conditioning being `lic`, `hic` or `wc`), `timeline` (`["normal","deload","test",...]`, one per calendar week) and `start_with_test`.
+
 A resolved prescription item (in `planned_sessions.prescription`, frozen):
 
 ```json

@@ -7,7 +7,13 @@ import com.bioscan.fieldterminal.domain.training.generate.GenChoices
 import com.bioscan.fieldterminal.domain.training.generate.MaxEntry
 import com.bioscan.fieldterminal.domain.training.generate.generateTemplateBlock
 import com.bioscan.fieldterminal.domain.training.loadableFor
+import java.time.DayOfWeek
 import java.time.LocalDate
+import com.bioscan.fieldterminal.domain.training.generate.BlockBlueprint
+import com.bioscan.fieldterminal.domain.training.generate.defaultTimeline
+import com.bioscan.fieldterminal.domain.training.generate.generateMergedBlock
+import com.bioscan.fieldterminal.domain.training.generate.layoutWarnings
+import com.bioscan.fieldterminal.domain.training.generate.suggestLayout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -105,6 +111,32 @@ class PrivateBlockReplayTest {
         val report = failures.joinToString(System.lineSeparator())
         File(dir.parentFile, "generator-replay.txt").writeText(report.ifEmpty { "all logged sessions reproduced" })
         assertTrue("generator replay mismatches: $report", failures.isEmpty())
+    }
+
+    // A built block (Operator + a polarized protocol) on the suggested week: three strength days, the
+    // protocol's conditioning days, invisible deloads, and nothing the layout checker objects to.
+    @Test
+    fun aBuiltOperatorBlockHasTheExpectedShape() {
+        val dir = System.getenv("TB_DEFS_DIR")?.let(::File)
+        assumeTrue("TB_DEFS_DIR not set", dir != null && dir.isDirectory)
+        val idx = DefinitionIndex(dir!!.listFiles { f -> f.extension == "json" }!!.map { parseDefinition(it.readText()) })
+        val strength = idx.strength("tb3.operator") ?: return
+        val protocol = idx.protocol("tb3.polarized_black") ?: return
+        val layout = suggestLayout(strength, protocol, DayOfWeek.MONDAY)
+        val problems = layoutWarnings(layout, strength, protocol)
+        val timeline = defaultTimeline(6, 14)
+        val b = generateMergedBlock(BlockBlueprint(strength.key, protocol.key, layout, timeline), idx, GenChoices(startDate = LocalDate.of(2026, 10, 12)))
+        val failures = mutableListOf<String>()
+        if (b.calendarWeeks != 14 || b.countedWeeks != 12) failures += "weeks ${b.calendarWeeks}/${b.countedWeeks}"
+        for (w in 1..14) {
+            val ws = b.sessions.filter { it.weekIndex == w }
+            val deload = timeline[w - 1].key == "deload"
+            val strengthDays = ws.filter { it.moduleRef.startsWith("strength") }.map { it.date.dayOfWeek }
+            if (!deload && strengthDays != listOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY)) failures += "week $w strength days $strengthDays"
+            if (deload && ws.any { it.conditioning?.category == "hic" }) failures += "week $w has HIC in a deload"
+        }
+        File(dir.parentFile, "merged-replay.txt").writeText("layout warnings: $problems | failures: $failures")
+        assertTrue("merged block shape: $failures", failures.isEmpty())
     }
 
     private fun JsonObject.s(k: String) = this[k]!!.jsonPrimitive.content

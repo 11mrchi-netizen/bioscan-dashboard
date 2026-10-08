@@ -59,3 +59,36 @@ fun slotsToChoose(m: StrengthModuleDef): List<SlotDef> {
 
 fun compositionStrengthOptions(c: CompositionDef): List<String> = c.strength.chooseFrom
 fun compositionProtocolOptions(c: CompositionDef): List<String> = c.conditioning.chooseFrom
+
+// The main strength programs a lifter chooses between first; each has several versions chosen
+// afterwards. Groups come from the template key and family, not from a hand-kept list of titles.
+data class StrengthGroup(val id: String, val label: String, val defaultKey: String)
+
+val STRENGTH_GROUPS = listOf(
+    StrengthGroup("operator", "OPERATOR", "tb3.operator"),
+    StrengthGroup("zulu", "ZULU", "tb3.zulu"),
+    StrengthGroup("fighter", "FIGHTER", "tb3.fighter"),
+    StrengthGroup("mass", "MASS", "mass.mt"),
+    StrengthGroup("green", "GREEN", "green.op_pro"),
+    StrengthGroup("more", "MORE", "tb3.breacher"),
+)
+
+fun strengthGroupOf(m: StrengthModuleDef): String {
+    val book = m.key.substringBefore('.')
+    return when {
+        book == "mass" -> "mass"
+        book == "green" -> "green"
+        book == "tb3" && m.family == "operator" -> "operator"
+        book == "tb3" && m.family == "zulu" -> "zulu"
+        book == "tb3" && m.family == "fighter" -> "fighter"
+        else -> "more"
+    }
+}
+
+// The versions inside one group, the group's default first.
+fun versionsOf(group: StrengthGroup, modules: List<StrengthModuleDef>): List<StrengthModuleDef> =
+    modules.filter { strengthGroupOf(it) == group.id }.sortedWith(compareBy({ it.key != group.defaultKey }, { it.title }))
+
+// Conditioning templates worth showing first; the rest sit behind "other templates".
+fun isMainProtocol(p: ConditioningProtocolDef): Boolean =
+    p.key.startsWith("tb3.polarized_") || p.key.startsWith("mass.") || p.key == "tb3.work_capacity"

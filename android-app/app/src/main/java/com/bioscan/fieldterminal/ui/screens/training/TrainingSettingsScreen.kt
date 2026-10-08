@@ -29,7 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
-import com.bioscan.fieldterminal.domain.training.definition.CompositionDef
+import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
+import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
 import com.bioscan.fieldterminal.domain.training.definition.TemplateDef
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FTCard
@@ -74,22 +75,21 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onStart: (String) -> Unit) {
 
 @Composable
 private fun ProgramLibrary(state: TrainingPlannerState, onStart: (String) -> Unit) {
-    val defs = state.catalog?.definitions.orEmpty()
-    val templates = defs.filterIsInstance<TemplateDef>()
-    val compositions = defs.filterIsInstance<CompositionDef>()
-    if (templates.isEmpty() && compositions.isEmpty()) return
+    val templates = state.catalog?.definitions.orEmpty().filterIsInstance<TemplateDef>()
+    val strength = state.catalog?.definitions.orEmpty().count { it is StrengthModuleDef }
+    val protocols = state.catalog?.definitions.orEmpty().count { it is ConditioningProtocolDef }
+    if (templates.isEmpty() && strength == 0) return
     var method by remember { mutableStateOf("all") }
-    val methods = listOf("all") + (templates.map { methodologyOf(it.key) } + compositions.map { methodologyOf(it.key) }).distinct().sorted()
-    FTCard(title = "PROGRAMS") {
-        Body("Tap START to plan a block from a program. Fixed programs are published week-by-day grids; builds pair a strength template with a conditioning protocol.", muted = true)
+    val methods = listOf("all") + templates.map { methodologyOf(it.key) }.distinct().sorted()
+    FTCard(title = "BUILD A BLOCK") {
+        Body("Pick one of $strength strength templates and one of $protocols conditioning templates, then decide the days, the length and the deload weeks.", muted = true)
+        AmberButton("BUILD A BLOCK") { onStart("build") }
+    }
+    FTCard(title = "PUBLISHED PROGRAMS") {
+        Body("Fixed week-by-day programs where strength and conditioning are already placed. Tap START to plan one.", muted = true)
         Chips(methods, setOf(method), { methodologyLabels[it] ?: it.uppercase() }) { method = it }
-        Label("FIXED PROGRAMS")
         templates.filter { method == "all" || methodologyOf(it.key) == method }.sortedBy { it.title }.forEach { t ->
             ProgramRow(t.title, "${t.weeks} weeks") { onStart(t.key) }
-        }
-        Label("BUILDS (STRENGTH + CONDITIONING)")
-        compositions.filter { method == "all" || methodologyOf(it.key) == method }.sortedBy { it.title }.forEach { c ->
-            ProgramRow(c.title, "${c.weeks.min.toInt()}-${c.weeks.max.toInt()} weeks") { onStart(c.key) }
         }
     }
 }

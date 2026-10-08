@@ -27,6 +27,10 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
 import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
 import com.bioscan.fieldterminal.domain.training.generate.CondSlot
+import com.bioscan.fieldterminal.domain.training.generate.STRENGTH_GROUPS
+import com.bioscan.fieldterminal.domain.training.generate.isMainProtocol
+import com.bioscan.fieldterminal.domain.training.generate.strengthGroupOf
+import com.bioscan.fieldterminal.domain.training.generate.versionsOf
 import com.bioscan.fieldterminal.domain.training.generate.WeekKind
 import com.bioscan.fieldterminal.domain.training.generate.countedWeeks
 import com.bioscan.fieldterminal.domain.training.generate.text
@@ -34,6 +38,7 @@ import com.bioscan.fieldterminal.domain.training.generate.weeksForBlocks
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTDropdown
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -60,32 +65,29 @@ private fun budgetSummary(p: ConditioningProtocolDef): String {
     ).joinToString(" · ")
 }
 
-// ---------------- Strength template ----------------
+// ---------------- Strength program ----------------
 @Composable
 internal fun StrengthStep(state: TrainingPlannerState) {
     val modules = state.catalog?.definitions.orEmpty().filterIsInstance<StrengthModuleDef>()
-    var method by remember { mutableStateOf("all") }
-    Label("NAME")
-    FieldTextField(state.name, { state.name = it }, "Block name")
-    Label("STRENGTH TEMPLATE")
-    Body("Pick the lifting program for this block. You choose how it shares the week with conditioning next.", muted = true)
-    val methods = listOf("all") + modules.map { methodologyOf(it.key) }.distinct().sorted()
-    Chips(methods, setOf(method), { methodologyLabels[it] ?: it.uppercase() }) { method = it }
-    modules.filter { method == "all" || methodologyOf(it.key) == method }
-        .sortedWith(compareBy({ methodologyOf(it.key) }, { it.family }, { it.title }))
-        .forEach { m ->
-            val selected = m.key == state.strengthKey
-            ProgramCard(
-                m.title,
-                "${methodologyLabels[methodOf(m)] ?: ""} · ${m.sessionsPerWeek} days/week · ${m.domain.replace('_', ' ')} · blocks of ${m.blockLengths.joinToString("/")} weeks",
-                m.notes.firstOrNull { !it.startsWith("Weighted") && !it.startsWith("Test 1RMs") },
-                selected,
-            ) { state.pickStrength(m.key) }
-            if (selected) ModuleOptions(state, m)
+    Label("STRENGTH PROGRAM")
+    Body("Pick the main program. Its versions, days and options are fine-tuned afterwards.", muted = true)
+    STRENGTH_GROUPS.forEach { g ->
+        val versions = versionsOf(g, modules)
+        if (versions.isEmpty()) return@forEach
+        val selected = state.strengthModule?.let { strengthGroupOf(it) == g.id } == true
+        val days = versions.map { it.sessionsPerWeek }.distinct().sorted().joinToString("-")
+        ProgramCard(
+            g.label.lowercase().replaceFirstChar { it.uppercase() },
+            "${versions.size} version" + (if (versions.size == 1) "" else "s") + " · $days days a week",
+            null, selected,
+        ) { if (!selected) state.pickStrength(versions.first().key) }
+        if (selected) {
+            Label("VERSION")
+            FTDropdown(versions.map { it.key to it.title }, state.strengthKey, "Pick a version") { state.pickStrength(it) }
+            state.strengthModule?.let { Body("${it.sessionsPerWeek} days a week · ${it.domain.replace('_', ' ')}", muted = true) }
         }
+    }
 }
-
-private fun methodOf(m: StrengthModuleDef) = methodologyOf(m.key)
 
 // ---------------- Conditioning template ----------------
 @Composable
@@ -93,16 +95,20 @@ internal fun ProtocolStep(state: TrainingPlannerState) {
     val protocols = state.catalog?.definitions.orEmpty().filterIsInstance<ConditioningProtocolDef>()
     val strength = state.strengthModule
     fun pairs(p: ConditioningProtocolDef) = strength != null && (p.key in strength.compatibleConditioning || strength.key in p.pairsWellWith)
-    Label("CONDITIONING TEMPLATE")
-    Body("The protocol sets the weekly budget of low and high intensity work. Pick none for a strength-only block.", muted = true)
+    val (main, other) = protocols.partition { isMainProtocol(it) }
+    Label("CONDITIONING")
+    Body("The conditioning program sets the weekly budget of easy and hard work. Pick none for a strength-only block.", muted = true)
     ProgramCard("None", "strength only", null, state.protocolKey == null) { state.pickProtocol(null) }
-    protocols.sortedWith(compareByDescending<ConditioningProtocolDef> { pairs(it) }.thenBy { methodologyOf(it.key) }.thenBy { it.title }).forEach { p ->
+    main.sortedWith(compareByDescending<ConditioningProtocolDef> { pairs(it) }.thenBy { methodologyOf(it.key) }.thenBy { it.title }).forEach { p ->
         ProgramCard(
             p.title + if (pairs(p)) "  ·  PAIRS WELL" else "",
             "${methodologyLabels[methodologyOf(p.key)] ?: ""} · ${budgetSummary(p)}",
-            p.notes.firstOrNull(),
-            p.key == state.protocolKey,
+            null, p.key == state.protocolKey,
         ) { state.pickProtocol(p.key) }
+    }
+    if (other.isNotEmpty()) {
+        Label("OTHER TEMPLATES")
+        FTDropdown(other.sortedBy { it.title }.map { it.key to it.title }, state.protocolKey?.takeIf { k -> other.any { it.key == k } }, "Choose another conditioning template") { state.pickProtocol(it) }
     }
 }
 
@@ -111,9 +117,6 @@ internal fun ProtocolStep(state: TrainingPlannerState) {
 internal fun LayoutStep(state: TrainingPlannerState) {
     val strength = state.strengthModule
     val protocol = state.protocol
-    Label("START DATE")
-    DateField("Start", state.startDate) { state.startDate = it; state.resetLayout() }
-    Label("THE WEEK")
     Body("Tap a day to place a strength session or a conditioning session on it. A day with both is a two-a-day.", muted = true)
     val start = state.startDate.dayOfWeek
     val ordered = state.layout.sortedBy { (it.weekday.value - start.value + 7) % 7 }

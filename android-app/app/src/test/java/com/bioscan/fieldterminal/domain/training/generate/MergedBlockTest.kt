@@ -174,4 +174,18 @@ class MergedBlockTest {
         assertEquals(DayOfWeek.SUNDAY, l.single { it.conditioning?.kind == "hic" }.weekday)
         assertTrue(layoutWarnings(l, m, black).isEmpty())
     }
+
+    @Test
+    fun aStrengthEnduranceSlotTakesAWholeClusterOfExercises() {
+        val se = parseDefinition(module.replace("\"domain\":\"max_strength\"", "\"domain\":\"strength_endurance\"")) as StrengthModuleDef
+        val idx2 = DefinitionIndex(listOf(se, black))
+        val c = choices.copy(modules = mapOf(se.key to ModuleChoice(exercises = mapOf("A" to listOf("Push-up", "Dip", "Pike Push-up")))))
+        val b = generateMergedBlock(BlockBlueprint(se.key, null, suggestLayout(se, null, DayOfWeek.MONDAY), defaultTimeline(3, 3)), idx2, c, maxes = lookup)
+        val d1 = b.sessions.first { it.weekIndex == 1 && it.items.isNotEmpty() }
+        assertEquals(listOf("Push-up", "Dip", "Pike Push-up"), d1.items.filter { it.slot == "A" }.map { it.exercise })
+        // a strength module keeps one exercise per slot
+        val one = generateMergedBlock(BlockBlueprint(strength.key, null, suggestLayout(strength, null, DayOfWeek.MONDAY), defaultTimeline(3, 3)), idx,
+            choices.copy(modules = mapOf(strength.key to ModuleChoice(exercises = mapOf("A" to listOf("Push-up", "Dip"))))), maxes = lookup)
+        assertEquals(listOf("Push-up"), one.sessions.first { it.items.isNotEmpty() }.items.filter { it.slot == "A" }.map { it.exercise })
+    }
 }

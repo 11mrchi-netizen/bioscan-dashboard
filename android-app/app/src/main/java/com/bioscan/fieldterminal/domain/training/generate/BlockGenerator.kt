@@ -132,6 +132,7 @@ private class Gen(
             val chosen = choice.exercises[slot.id].orEmpty()
             val names = when {
                 slot.pick != null -> chosen
+                isCluster(m, slot) && chosen.isNotEmpty() -> chosen
                 chosen.isNotEmpty() -> listOf(chosen.first())
                 else -> listOf(slot.standard)
             }
@@ -171,7 +172,8 @@ private class Gen(
         if (!c.projectProgression) return
         val prog = m.progression ?: return
         for (slot in m.slots) {
-            val names = choice.exercises[slot.id].orEmpty().ifEmpty { if (slot.pick == null) listOf(slot.standard) else emptyList() }
+            val names = (if (isCluster(m, slot)) choice.exercises[slot.id].orEmpty() else choice.exercises[slot.id].orEmpty().take(1))
+                .ifEmpty { if (slot.pick == null) listOf(slot.standard) else emptyList() }
             val lower = slot.role == "squat" || slot.role == "hinge"
             for (name in names) {
                 val from = currentOneRm(name) ?: continue
@@ -189,6 +191,10 @@ private class Gen(
         return GeneratedConditioning(def?.key ?: key, label ?: def?.title ?: "Conditioning", def?.category ?: category, params, minutes)
     }
 }
+
+// A slot that holds several exercises: a declared cluster, or any slot of a strength-endurance
+// module (SE trains a circuit of several movements, so one-per-slot would force a single exercise).
+fun isCluster(m: StrengthModuleDef, slot: com.bioscan.fieldterminal.domain.training.definition.SlotDef) = slot.pick != null || m.domain == "strength_endurance"
 
 private fun pickVariant(m: StrengthModuleDef, choice: ModuleChoice) =
     m.variants.firstOrNull { it.key == choice.variant } ?: m.variants.first()

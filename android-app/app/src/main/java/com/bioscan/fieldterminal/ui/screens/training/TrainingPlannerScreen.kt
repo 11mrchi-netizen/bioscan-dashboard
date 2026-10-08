@@ -47,6 +47,7 @@ import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
 import com.bioscan.fieldterminal.domain.training.definition.TemplateDef
 import com.bioscan.fieldterminal.domain.training.generate.GeneratedBlock
 import com.bioscan.fieldterminal.domain.training.generate.deriveBlockDomains
+import com.bioscan.fieldterminal.domain.training.generate.isCluster
 import com.bioscan.fieldterminal.domain.training.generate.slotsToChoose
 import com.bioscan.fieldterminal.domain.training.generate.summaryLines
 import com.bioscan.fieldterminal.domain.training.generate.templateVariables
@@ -54,6 +55,7 @@ import com.bioscan.fieldterminal.domain.training.movementKey
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTMultiDropdown
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabChip
 import com.bioscan.fieldterminal.ui.components.SubTabRow
@@ -272,7 +274,7 @@ internal fun ModuleOptions(state: TrainingPlannerState, m: StrengthModuleDef) {
 
 // ---------------- Step 3: exercises and maxes ----------------
 @Composable
-private fun ExercisesStep(state: TrainingPlannerState) {
+internal fun ExercisesStep(state: TrainingPlannerState) {
     val mods = state.strengthModules
     val ses = (state.index?.let { idx -> (state.program as? Program.Fixed)?.template?.let { t -> com.bioscan.fieldterminal.domain.training.generate.templateModuleKeys(t, state.variables).mapNotNull { idx.se(it) } } }).orEmpty()
     if (mods.isEmpty() && ses.isEmpty()) { Body("No strength work in this program.", muted = true); return }
@@ -283,15 +285,21 @@ private fun ExercisesStep(state: TrainingPlannerState) {
                 val choice = state.choiceFor(m.key)
                 val chosen = choice.exercises[slot.id].orEmpty()
                 Label("${slot.id} · ${slot.role.uppercase()}" + if (slot.optional) " · OPTIONAL" else "")
-                if (slot.pick != null) {
-                    Body("Pick ${slot.pick.min.toInt()}-${slot.pick.max.toInt()} exercises", muted = true)
-                    val options = (slot.alternates + chosen).distinct()
-                    if (options.isNotEmpty()) Chips(options, chosen.toSet()) { n -> state.updateChoice(m.key) { c -> c.copy(exercises = c.exercises + (slot.id to (if (n in chosen) chosen - n else chosen + n))) } }
+                if (isCluster(m, slot)) {
+                    val effective = if (slot.pick != null) chosen else chosen.ifEmpty { listOf(slot.standard) }
+                    Body(
+                        if (slot.pick != null) "Pick ${slot.pick.min.toInt()}-${slot.pick.max.toInt()} exercises"
+                        else "A cluster: add every exercise the circuit uses; each one is done every session.",
+                        muted = true,
+                    )
+                    val options = ((if (slot.pick == null) listOf(slot.standard) else emptyList()) + slot.alternates + effective).distinct()
+                    FTMultiDropdown(options.map { it to it }, effective, "Choose exercises") { next -> state.updateChoice(m.key) { c -> c.copy(exercises = c.exercises + (slot.id to next)) } }
                     var draft by remember(m.key, slot.id) { mutableStateOf("") }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.weight(1f)) { FieldTextField(draft, { draft = it }, "Add an exercise") }
-                        AmberButton("ADD", enabled = draft.isNotBlank()) { val n = draft.trim(); state.updateChoice(m.key) { c -> c.copy(exercises = c.exercises + (slot.id to (chosen + n).distinct())) }; draft = "" }
+                        Box(Modifier.weight(1f)) { FieldTextField(draft, { draft = it }, "Add another exercise") }
+                        AmberButton("ADD", enabled = draft.isNotBlank()) { state.updateChoice(m.key) { c -> c.copy(exercises = c.exercises + (slot.id to (effective + draft.trim()).distinct())) }; draft = "" }
                     }
+                    if (slot.pick == null) effective.forEach { MaxRow(state, it) }
                 } else {
                     val options = (listOf(slot.standard) + slot.alternates).distinct()
                     val current = chosen.firstOrNull() ?: slot.standard
@@ -344,7 +352,7 @@ private fun MaxRow(state: TrainingPlannerState, exercise: String) {
 
 // ---------------- Step 4: conditioning ----------------
 @Composable
-private fun ConditioningStep(state: TrainingPlannerState) {
+internal fun ConditioningStep(state: TrainingPlannerState) {
     val idx = state.index ?: return
     val sessions = state.catalog?.definitions.orEmpty().filterIsInstance<ConditioningSessionDef>()
     when (val p = state.program) {
@@ -355,9 +363,8 @@ private fun ConditioningStep(state: TrainingPlannerState) {
                 Label("${v.name} — PICK ONE OR MORE (THEY ROTATE)")
                 v.note?.let { Body(it, muted = true) }
                 val options = v.options.ifEmpty { sessions.map { it.key } }
-                val current = state.variables[v.name]?.split(',')?.filter { it.isNotBlank() }.orEmpty().toSet()
-                Chips(options, current, { idx.session(it)?.title ?: it }) { k ->
-                    val next = if (k in current) current - k else current + k
+                val current = state.variables[v.name]?.split(',')?.filter { it.isNotBlank() }.orEmpty()
+                FTMultiDropdown(options.map { it to (idx.session(it)?.title ?: it) }, current, "Choose sessions") { next ->
                     if (next.isEmpty()) state.variables.remove(v.name) else state.variables[v.name] = next.joinToString(",")
                 }
             }
@@ -372,7 +379,7 @@ private fun ConditioningStep(state: TrainingPlannerState) {
                 Label(title)
                 val options = (suggested + sessions.filter { it.category == cat }.map { it.key }).distinct()
                 val current = state.conditioningChoices[cat].orEmpty()
-                Chips(options, current.toSet(), { idx.session(it)?.title ?: it }) { k -> state.conditioningChoices[cat] = if (k in current) current - k else current + k }
+                FTMultiDropdown(options.map { it to (idx.session(it)?.title ?: it) }, current, "Choose sessions") { next -> state.conditioningChoices[cat] = next }
             }
         }
         null -> Body("Pick a program first.", muted = true)
@@ -390,19 +397,7 @@ private fun ReviewStep(state: TrainingPlannerState) {
         val domains = deriveBlockDomains(block.sessions)
         if (domains.isNotEmpty()) Body(domains.joinToString(" · ") { "${it.domain.replace('_', ' ')} (${it.role})" }, muted = true)
     }
-    if (state.program is Program.Build) {
-        FTCard(title = "THE WEEK", modifier = Modifier.padding(top = 12.dp)) {
-            val start = state.startDate.dayOfWeek
-            state.layout.sortedBy { (it.weekday.value - start.value + 7) % 7 }.filter { !it.isRest }.forEach { d ->
-                val parts = listOfNotNull(
-                    d.strengthSession?.let { state.strengthModule?.sessions?.getOrNull(it)?.label?.let { l -> "strength: $l" } },
-                    d.conditioning?.kind?.uppercase(),
-                )
-                Text(d.weekday.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).uppercase() + "  " + parts.joinToString(" + "), color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 12.sp)
-            }
-            Text("Weeks: " + state.timeline.joinToString(" ") { it.label.take(1) }, color = FT.TextMuted, fontFamily = RobotoMono, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
-        }
-    }
+    if (state.program is Program.Build) AdjustSections(state)
     if (block.warnings.isNotEmpty()) {
         FTCard(title = "NEEDS ATTENTION", modifier = Modifier.padding(top = 12.dp)) {
             block.warnings.take(12).forEach { Text("! $it", color = FT.Warning, fontFamily = Inter, fontSize = 12.5.sp) }
@@ -430,5 +425,46 @@ private fun ReviewStep(state: TrainingPlannerState) {
                 s.notes.firstOrNull()?.let { Text(it.take(140), color = FT.TextMuted, fontFamily = Inter, fontSize = 11.sp) }
             }
         }
+    }
+}
+
+// ---------------- Fine-tuning, after the defaults ----------------
+@Composable
+private fun AdjustSections(state: TrainingPlannerState) {
+    val start = state.startDate.dayOfWeek
+    val week = state.layout.sortedBy { (it.weekday.value - start.value + 7) % 7 }.filter { !it.isRest }.joinToString(" · ") { d ->
+        d.weekday.getDisplayName(TextStyle.SHORT, Locale.ENGLISH) + " " + listOfNotNull(d.strengthSession?.let { "S${it + 1}" }, d.conditioning?.kind?.uppercase()).joinToString("+")
+    }
+    Label("FINE-TUNE (OPTIONAL)")
+    Body("The block below uses sensible defaults. Open a section to change it.", muted = true)
+    Section(state, "details", "NAME AND START", "${state.name} · from ${state.startDate.format(DateTimeFormatter.ofPattern("d MMM"))}") {
+        FieldTextField(state.name, { state.name = it }, "Block name")
+        DateField("Start", state.startDate) { state.startDate = it; state.resetLayout() }
+        Body("Moving the start date to another weekday re-suggests the week.", muted = true)
+    }
+    Section(state, "week", "THE WEEK", week.ifEmpty { "no days placed" }) { LayoutStep(state) }
+    Section(state, "timeline", "LENGTH AND DELOADS", "${state.timeline.size} weeks · ${state.timeline.count { it == com.bioscan.fieldterminal.domain.training.generate.WeekKind.Deload }} deload") { TimelineStep(state) }
+    state.strengthModule?.let { m ->
+        Section(state, "options", "VERSION OPTIONS", "${m.title}") { ModuleOptions(state, m) }
+        Section(state, "exercises", "EXERCISES AND MAXES", "defaults from the book") { ExercisesStep(state) }
+    }
+    if (state.protocol != null) Section(state, "sessions", "CONDITIONING SESSIONS", "${state.conditioningChoices.values.sumOf { it.size }} chosen, otherwise the protocol's own") { ConditioningStep(state) }
+}
+
+@Composable
+private fun Section(state: TrainingPlannerState, id: String, title: String, summary: String, content: @Composable () -> Unit) {
+    val open = state.openSection == id
+    val shape = RoundedCornerShape(FT.RadiusModule)
+    Column(
+        Modifier.padding(top = 10.dp).fillMaxWidth().border(BorderStroke(FT.BorderWidth, if (open) FT.DomainTraining else FT.GlassBorder), shape).background(FT.GlassFill, shape).padding(14.dp),
+    ) {
+        Row(Modifier.fillMaxWidth().clickable { state.openSection = if (open) null else id }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {
+                Text(title, color = FT.TextPrimary, fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text(summary.take(90), color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 11.sp)
+            }
+            Text(if (open) "^" else "v", color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 14.sp)
+        }
+        if (open) content()
     }
 }

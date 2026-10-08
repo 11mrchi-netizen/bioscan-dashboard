@@ -32,6 +32,7 @@ import com.bioscan.fieldterminal.domain.training.generate.generateTemplateBlock
 import com.bioscan.fieldterminal.domain.training.generate.layoutWarnings
 import com.bioscan.fieldterminal.domain.training.generate.resizeTimeline
 import com.bioscan.fieldterminal.domain.training.generate.suggestLayout
+import com.bioscan.fieldterminal.domain.training.generate.weeksForBlocks
 import com.bioscan.fieldterminal.domain.training.generate.templateDayPositions
 import com.bioscan.fieldterminal.domain.training.generate.templateModuleKeys
 import com.bioscan.fieldterminal.domain.training.movementKey
@@ -101,6 +102,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     var layout by mutableStateOf<List<DayPlan>>(emptyList())
     var timeline by mutableStateOf<List<WeekKind>>(emptyList())
     var weeks by mutableStateOf(8)
+    var openSection by mutableStateOf<String?>(null)
     var startWithTest by mutableStateOf(false)
 
     val index: DefinitionIndex? get() = catalog?.let { DefinitionIndex(it.definitions) }
@@ -108,7 +110,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     // The steps the current path walks through.
     val steps: List<PlannerStep>
         get() = when (program) {
-            is Program.Build -> listOf(PlannerStep.Program, PlannerStep.Strength, PlannerStep.Protocol, PlannerStep.Layout, PlannerStep.Timeline, PlannerStep.Exercises, PlannerStep.Conditioning, PlannerStep.Review)
+            is Program.Build -> listOf(PlannerStep.Program, PlannerStep.Strength, PlannerStep.Protocol, PlannerStep.Review)
             is Program.Fixed -> listOf(PlannerStep.Program, PlannerStep.Modules, PlannerStep.Exercises, PlannerStep.Conditioning, PlannerStep.Review)
             null -> listOf(PlannerStep.Program)
         }
@@ -164,6 +166,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     fun pickStrength(key: String) {
         strengthKey = key
         moduleChoices.remove(key)
+        weeks = weeksForBlocks(2, blockLength())
         resetLayout(); resetTimeline()
     }
 

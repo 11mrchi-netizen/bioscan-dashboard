@@ -127,9 +127,13 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     val scope = rememberCoroutineScope()
     var saving by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
+    // Blocks onDismissRequest while the camera / photo-picker / barcode-scanner
+    // Activity holds foreground -- those launches trigger the sheet's dismiss
+    // callback even though the user hasn't actually dismissed the sheet.
+    val externalActivityActive = remember { mutableStateOf(false) }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!externalActivityActive.value) onDismiss() },
         sheetState = sheetState,
         shape = RectangleShape,
         containerColor = FT.Surface,
@@ -168,7 +172,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 }
                 saveError?.let { Text("Couldn't save ($it).", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = FT.Critical) }
                 when (type) {
-                    AddEntryType.Fuel -> FuelForm(saving, onSubmit, onCanonicalSaved = onSaved)
+                    AddEntryType.Fuel -> FuelForm(saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive)
                     AddEntryType.Encounter -> EncounterForm(
                         saving,
                         onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
@@ -606,7 +610,7 @@ private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
 // SupplementsForm exactly as they'd be used standalone -- only the picker
 // wrapping them is new.
 @Composable
-private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit, onCanonicalSaved: () -> Unit) {
+private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit, onCanonicalSaved: () -> Unit, externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null) {
     var subType by remember { mutableStateOf(FuelSubType.Food) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -631,6 +635,7 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
                 saving,
                 onSave = { dt, desc, cal, p, c, f, fi, su, so -> onSubmit { it.addFood(dt, desc, cal, p, c, f, fi, su, so) } },
                 onCanonicalSaved = onCanonicalSaved,
+                externalActivityActive = externalActivityActive,
             )
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
             FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items, source -> onSubmit { it.addSupplementsTaken(takenAt, items, source) } })
@@ -667,6 +672,7 @@ private fun FoodForm(
     // This is the same "the whole sheet is done" signal AddEntrySheet's own
     // onSaved already is, just reachable from inside this nested form.
     onCanonicalSaved: () -> Unit = {},
+    externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -832,6 +838,7 @@ private fun FoodForm(
     }
 
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        externalActivityActive?.value = false
         if (success) pendingCameraUri?.let { pendingPhotos = pendingPhotos + it }
     }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -839,11 +846,14 @@ private fun FoodForm(
             val uri = createCameraCaptureUri(context)
             pendingCameraUri = uri
             takePictureLauncher.launch(uri)
+            // externalActivityActive stays true: camera is about to take foreground
         } else {
+            externalActivityActive?.value = false
             estimationError = "Camera permission denied"
         }
     }
     val pickPhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+        externalActivityActive?.value = false
         if (uris.isNotEmpty()) pendingPhotos = pendingPhotos + uris
     }
 
@@ -861,6 +871,7 @@ private fun FoodForm(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PhotoActionButton(label = "TAKE PHOTO", modifier = Modifier.weight(1f)) {
                     val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                    externalActivityActive?.value = true
                     if (granted) {
                         val uri = createCameraCaptureUri(context)
                         pendingCameraUri = uri
@@ -870,6 +881,7 @@ private fun FoodForm(
                     }
                 }
                 PhotoActionButton(label = "CHOOSE PHOTOS", modifier = Modifier.weight(1f)) {
+                    externalActivityActive?.value = true
                     pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }
             }

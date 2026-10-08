@@ -198,7 +198,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
         // concurrently is the same reasoning HealthConnectExerciseSyncRepository
         // already applies to its own reads.
         loadingDetail = true
-        if (recordId != null) loadingRoute = true
+        if (row?.type != "strength") loadingRoute = true
         coroutineScope {
             launch {
                 try {
@@ -221,12 +221,21 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                     loadingDetail = false
                 }
             }
-            // Strength sessions have no route -- skip the Health Connect
-            // consent round-trip entirely for them.
-            if (recordId != null && start != null && row.type != "strength") {
+            // Strength sessions have no route. For all others: try HC first,
+            // fall back to Zepp's decoded routePoints (v12) when HC returns
+            // ConsentRequired/NoRoute or the session has no HC record at all.
+            if (row?.type != "strength") {
                 launch {
                     try {
-                        val availability = repo.checkRouteAvailability(recordId, start)
+                        val hcAvailability = if (recordId != null && start != null) {
+                            repo.checkRouteAvailability(recordId, start)
+                        } else RouteAvailability.NoRoute
+                        val availability = if (hcAvailability is RouteAvailability.Available) {
+                            hcAvailability
+                        } else {
+                            val zeppPts = repo.loadZeppRoute(sessionId)
+                            if (zeppPts != null) RouteAvailability.Available(zeppPts) else hcAvailability
+                        }
                         routeAvailability = availability
                         if (availability is RouteAvailability.Available) routePoints = availability.points
                     } catch (e: Exception) {
@@ -397,6 +406,7 @@ private enum class PerfSignal(val label: String, val unit: String, val color: Co
     PACE("PACE", "min/km", FT.Category.Activity.c500),
     POWER("POWER", "W", FT.Category.Activity.c300),
     CADENCE("CADENCE", "spm", FT.TextSecondary),
+    VERTICAL_RATIO("V.RATIO", "%", FT.TextSecondary),
 }
 
 // Pace reads as m:ss /km (not a decimal like 4.8), everything else as value + unit.
@@ -427,6 +437,7 @@ private fun PerformanceChartSection(d: SessionDetail, personalMaxHr: Double?) {
         PerfSignal.PACE to pace,
         PerfSignal.POWER to d.powerW,
         PerfSignal.CADENCE to d.cadenceSpm,
+        PerfSignal.VERTICAL_RATIO to d.verticalRatioPct,
     )
     val available = PerfSignal.entries.filter { seriesBySignal[it]?.isNotEmpty() == true }
     if (available.isEmpty()) return
@@ -522,6 +533,7 @@ private fun RunDynamicsCard(summary: ZeppWorkoutSummary) {
         summary.gapMinPerKm?.let { add(Triple("Grade-adjusted pace", formatSplitPace((it * 60).toLong()), "Grade-adjusted pace" to GAP_HELP)) }
         summary.efficiencyFactor?.let { add(Triple("Efficiency factor", "%.2f".format(it), "Efficiency factor" to EF_SESSION_HELP)) }
         summary.hrDecouplingPct?.let { add(Triple("HR decoupling", "%+.1f%%".format(it), "HR decoupling" to HR_DECOUPLING_HELP)) }
+        summary.smoothedAscentM?.let { add(Triple("Smoothed ascent", "${it.toInt()} m", null)) }
         summary.avgCadenceSpm?.let { add(Triple("Avg cadence", "%.0f spm".format(it), null)) }
         summary.maxCadenceSpm?.let { add(Triple("Max cadence", "%.0f spm".format(it), null)) }
         summary.avgGroundContactMs?.let { add(Triple("Ground contact", "%.0f ms".format(it), "Ground contact time" to GROUND_CONTACT_HELP)) }
@@ -583,7 +595,7 @@ private fun StrengthHrCard(heartRate: List<TimePoint>, strengthData: ZeppStrengt
         if (workWindows.isNotEmpty()) {
             Text(
                 "Amber segments = lifting · gaps = rest",
-                style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+                style = FTType.MonoCaption,
                 color = FT.TextMuted,
             )
         }
@@ -608,7 +620,7 @@ private fun MovementEvaluationCard(strengthData: ZeppStrengthData) {
     FTCard(title = "MOVEMENT EVALUATION") {
         Text(
             "${evaluatedSets.size} of ${strengthData.sets.size} sets evaluated",
-            style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+            style = FTType.Caption,
             color = FT.TextSecondary,
         )
         com.bioscan.fieldterminal.ui.components.MovementRadarChart(
@@ -627,8 +639,8 @@ private fun MovementEvaluationCard(strengthData: ZeppStrengthData) {
                     else -> FT.Emerald
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("%.0f".format(score), style = TextStyle(fontFamily = RobotoMono, fontSize = 14.sp, fontWeight = FontWeight.Bold), color = color)
-                    Text(label.replace(" ", "\n"), style = TextStyle(fontFamily = Inter, fontSize = 9.sp, textAlign = TextAlign.Center), color = FT.TextMuted)
+                    Text("%.0f".format(score), style = FTType.Value, color = color)
+                    Text(label.replace(" ", "\n"), style = FTType.Micro.copy(textAlign = TextAlign.Center), color = FT.TextMuted)
                 }
             }
         }
@@ -853,10 +865,10 @@ private fun SetMovementScoreRow(scores: com.bioscan.fieldterminal.data.ZeppMovem
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     if (score < 0) "—" else "$score",
-                    style = TextStyle(fontFamily = RobotoMono, fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                    style = FTType.MonoCaption,
                     color = color,
                 )
-                Text(label, style = TextStyle(fontFamily = Inter, fontSize = 9.5.sp), color = FT.TextMuted)
+                Text(label, style = FTType.Micro, color = FT.TextMuted)
             }
         }
     }

@@ -80,6 +80,13 @@ data class ZeppStrengthData(
 )
 
 @Serializable
+data class ZeppRoutePoint(
+    val offsetSeconds: Long,
+    val lat: Double,
+    val lon: Double,
+)
+
+@Serializable
 data class ZeppDecodedSeries(
     val heartRate: List<ZeppDecodedPoint> = emptyList(),
     val speedKmh: List<ZeppDecodedPoint> = emptyList(),
@@ -87,6 +94,7 @@ data class ZeppDecodedSeries(
     val distanceKm: List<ZeppDecodedPoint> = emptyList(),
     val cadenceSpm: List<ZeppDecodedPoint> = emptyList(),
     val verticalStrideRatioPct: List<ZeppDecodedPoint> = emptyList(),
+    val routePoints: List<ZeppRoutePoint> = emptyList(),
     val summary: ZeppWorkoutSummary? = null,
     val strengthData: ZeppStrengthData? = null,
 )
@@ -204,6 +212,7 @@ class SessionDetailRepository(
             caloriesKcal = emptyList(),
             distanceKm = toPoints(decoded.distanceKm),
             cadenceSpm = toPoints(decoded.cadenceSpm),
+            verticalRatioPct = toPoints(decoded.verticalStrideRatioPct),
         )
     }
 
@@ -223,6 +232,17 @@ class SessionDetailRepository(
             .select(columns = Columns.list("decoded")) { filter { eq("exercise_session_id", sessionId) } }
             .decodeSingleOrNull<ZeppWorkoutDetailRow>() ?: return null
         return row.decoded?.summary
+    }
+
+    // v12: Zepp GPS route, stored as decoded.routePoints. Used as fallback when
+    // Health Connect returns ConsentRequired/NoRoute or the session has no HC record.
+    suspend fun loadZeppRoute(sessionId: Long): List<RoutePoint>? {
+        val row = supabase.postgrest.from("zepp_workout_detail")
+            .select(columns = Columns.list("decoded")) { filter { eq("exercise_session_id", sessionId) } }
+            .decodeSingleOrNull<ZeppWorkoutDetailRow>() ?: return null
+        val pts = row.decoded?.routePoints?.takeIf { it.isNotEmpty() } ?: return null
+        val altMap = row.decoded?.altitudeM?.associate { it.offsetSeconds to it.value } ?: emptyMap()
+        return pts.map { RoutePoint(it.offsetSeconds, it.lat, it.lon, altMap[it.offsetSeconds]) }
     }
 
     // Phase G5. A session's exercise route isn't covered by this app's bulk

@@ -22,7 +22,7 @@ function json(body: unknown, status: number) {
   });
 }
 
-const EXTRACTOR_VERSION = "11"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
+const EXTRACTOR_VERSION = "12"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
 // 6: write Zepp's own decoded distance back onto exercise_sessions.distance_km, and merge
 // orphaned zepp-sourced placeholder rows created by the Zepp/Health-Connect sync race (DAV-274)
 // 7: fix the "stress" metric's endpoint (was 404ing every attempt -- see METRIC_DEFS) (DAV-246)
@@ -82,8 +82,11 @@ interface DecodedSeries {
   distanceKm: DecodedPoint[];
   cadenceSpm: DecodedPoint[];
   verticalStrideRatioPct: DecodedPoint[];
+  routePoints: RoutePoint[];
   summary: WorkoutSummaryFields;
 }
+
+interface RoutePoint { offsetSeconds: number; lat: number; lon: number; }
 
 function splitEntries(raw: unknown): string[] {
   if (typeof raw !== "string" || raw.length === 0) return [];
@@ -274,12 +277,28 @@ function parseStrengthAssess(assessStr: unknown): Array<{
 // Minetti's cost curve is a running model -- cycling/strength get no GAP/EF.
 const RUN_SPORT_TYPES = new Set(["1", "7"]);
 
+function decodeRoute(raw: unknown): RoutePoint[] {
+  const entries = splitEntries(raw);
+  const out: RoutePoint[] = [];
+  let lat = 0, lon = 0;
+  entries.forEach((entry, i) => {
+    const parts = entry.split(",");
+    const a = Number(parts[0]), b = Number(parts[1]);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return;
+    if (i === 0) { lat = a / 1e8; lon = b / 1e8; }
+    else { lat += a / 1e8; lon += b / 1e8; }
+    out.push({ offsetSeconds: i, lat, lon });
+  });
+  return out;
+}
+
 function decodeWorkoutDetail(detailRawBody: unknown, summary: WorkoutSummaryFields, sportType: string): DecodedSeries | null {
   if (!detailRawBody || typeof detailRawBody !== "object") return null;
   const data = (detailRawBody as Record<string, unknown>).data;
   if (!data || typeof data !== "object") return null;
   const d = data as Record<string, unknown>;
   const { cadenceSpm, verticalStrideRatioPct } = decodeCadenceAndVerticalRatio(d.gait);
+  const routePoints = sportType !== "52" ? decodeRoute(d.longitude_latitude) : [];
   const series = {
     heartRate: decodeHeartRate(d.heart_rate),
     speedKmh: decodeSpeedKmh(d.speed),
@@ -287,6 +306,7 @@ function decodeWorkoutDetail(detailRawBody: unknown, summary: WorkoutSummaryFiel
     distanceKm: decodeDistanceKm(d.longitude_latitude),
     cadenceSpm,
     verticalStrideRatioPct,
+    routePoints,
   };
   const effort = RUN_SPORT_TYPES.has(sportType)
     ? computeEffort({ ...series, lactateThresholdHrBpm: summary.lactateThresholdHrBpm })
@@ -324,6 +344,13 @@ interface WorkoutRef {
   // "current" is whichever run was synced most recently, not a fixed event.
   lactateThresholdHrBpm: number | null;
   lactateThresholdPaceSecPerKm: number | null;
+  // Aggregate fields from the sport_history summary entry -- not in detail.json.
+  avgHrBpm: number | null;
+  maxHrBpm: number | null;
+  calorieKcal: number | null;
+  altitudeAscendM: number | null;
+  avgPaceSecPerKm: number | null;
+  distanceSummaryM: number | null;
   // Real Unix epoch ms for the workout start (endSec - runSec). Used to
   // compute per-set startOffsetSec for strength data (strengthAssess.time is
   // also real epoch ms). Distinct from startTimeIso which is local-labeled-UTC.
@@ -439,6 +466,12 @@ function extractWorkoutRefs(historyResponse: unknown): WorkoutRef[] {
         : null,
       lactateThresholdHrBpm: numOrNull(e.lactateThresholdHr),
       lactateThresholdPaceSecPerKm: numOrNull(e.lactateThresholdPace),
+      avgHrBpm: numOrNull(e.avg_heart_rate),
+      maxHrBpm: numOrNull(e.max_heart_rate),
+      calorieKcal: numOrNull(e.calorie),
+      altitudeAscendM: numOrNull(e.altitude_ascend),
+      avgPaceSecPerKm: numOrNull(e.avg_pace),
+      distanceSummaryM: numOrNull(e.distance),
       realStartMs: hasEnd && hasRun ? (endSec - runSec) * 1000 : 0,
     });
   }
@@ -509,6 +542,8 @@ const METRIC_DEFS: MetricDef[] = [
 // dp/lt/dt fields give deep/light/REM minutes pre-aggregated.
 const SLEEP_MODE_AWAKE = 7;
 
+interface HrMinutePoint { offsetMinutes: number; bpm: number; }
+
 interface BandDataDecoded {
   sleepHours: number | null;
   sleepScore: number | null;
@@ -519,6 +554,7 @@ interface BandDataDecoded {
   lightMin: number | null;
   rhr: number | null;
   steps: number | null;
+  hrTimeseries: HrMinutePoint[] | null;
 }
 
 function decodeBandDataSummary(rawBody: unknown): BandDataDecoded | null {
@@ -584,7 +620,21 @@ function decodeBandDataSummary(rawBody: unknown): BandDataDecoded | null {
   const stepsVal = stp ? Number(stp.ttl) : NaN;
   const steps = Number.isFinite(stepsVal) && stepsVal >= 0 ? stepsVal : null;
 
-  return { sleepHours, sleepScore, bedtimeIso, wakeTimeIso, deepMin, remMin, lightMin, rhr, steps };
+  let hrTimeseries: HrMinutePoint[] | null = null;
+  const hrB64 = entry.data_hr;
+  if (typeof hrB64 === "string" && hrB64) {
+    try {
+      const bytes = atob(hrB64);
+      const pts: HrMinutePoint[] = [];
+      for (let i = 0; i < bytes.length; i++) {
+        const bpm = bytes.charCodeAt(i);
+        if (bpm > 0) pts.push({ offsetMinutes: i, bpm });
+      }
+      if (pts.length > 0) hrTimeseries = pts;
+    } catch { /* invalid base64, skip */ }
+  }
+
+  return { sleepHours, sleepScore, bedtimeIso, wakeTimeIso, deepMin, remMin, lightMin, rhr, steps, hrTimeseries };
 }
 
 function parseDateRange(
@@ -881,6 +931,31 @@ Deno.serve(async (req: Request) => {
         if (distanceUpdateError) throw new Error(`exercise_sessions distance update failed: ${distanceUpdateError.message}`);
       }
 
+      // v12: write Zepp-primary aggregates. Prefer smoothedAscentM (GPS-smoothed
+      // by effort.ts) over the raw altitude_ascend from the summary. "Zepp wins
+      // when > 0" -- skip the update if Zepp has zero/null to avoid clobbering
+      // legitimate HC values. avg_speed_kmh is derived from avg_pace (s/km).
+      if (exerciseSessionId !== null) {
+        const smoothedM = decoded?.summary?.smoothedAscentM ?? 0;
+        const elevationM = smoothedM > 0 ? smoothedM
+          : (ref.altitudeAscendM ?? 0) > 0 ? ref.altitudeAscendM : null;
+
+        const aggregates: Record<string, number> = {};
+        if ((ref.avgHrBpm ?? 0) > 0)       aggregates.avg_hr = ref.avgHrBpm!;
+        if ((ref.maxHrBpm ?? 0) > 0)       aggregates.max_hr = ref.maxHrBpm!;
+        if ((ref.calorieKcal ?? 0) > 0)    aggregates.calories_active = ref.calorieKcal!;
+        if (elevationM !== null)            aggregates.elevation_gain_m = elevationM;
+        if ((ref.avgPaceSecPerKm ?? 0) > 0) aggregates.avg_speed_kmh = (1000 / ref.avgPaceSecPerKm!) * 3.6;
+
+        if (Object.keys(aggregates).length > 0) {
+          const { error: aggUpdateError } = await supabase
+            .from("exercise_sessions")
+            .update(aggregates)
+            .eq("id", exerciseSessionId);
+          if (aggUpdateError) throw new Error(`exercise_sessions aggregate update failed: ${aggUpdateError.message}`);
+        }
+      }
+
       // v11: strength set import for workouts on/after 2026-10-08. Writes
       // decoded.strengthData (per-set timing + movement scores) and, if
       // exercise_sessions.details is currently null, populates it with exercises
@@ -1070,6 +1145,7 @@ Deno.serve(async (req: Request) => {
               let hasWearable = false;
               if (decoded.rhr !== null) { wearableUpdates.rhr = decoded.rhr; hasWearable = true; }
               if (decoded.steps !== null) { wearableUpdates.steps = decoded.steps; hasWearable = true; }
+              if (decoded.hrTimeseries !== null) { wearableUpdates.hr_timeseries = decoded.hrTimeseries; hasWearable = true; }
               if (hasWearable) {
                 const { error: wearErr } = await supabase.from("wearable_daily")
                   .upsert(wearableUpdates, { onConflict: "user_id,date" });

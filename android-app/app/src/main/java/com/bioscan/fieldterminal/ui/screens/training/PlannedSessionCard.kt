@@ -17,7 +17,7 @@ import com.bioscan.fieldterminal.domain.training.PlanVerdict
 import com.bioscan.fieldterminal.domain.training.PlannedLift
 import com.bioscan.fieldterminal.domain.training.compareToPlan
 import com.bioscan.fieldterminal.domain.training.generate.text
-import com.bioscan.fieldterminal.domain.training.movementKey
+import com.bioscan.fieldterminal.domain.training.looseMovementKey
 import com.bioscan.fieldterminal.domain.training.parsePlannedConditioning
 import com.bioscan.fieldterminal.domain.training.parsePlannedLifts
 import com.bioscan.fieldterminal.ui.components.AmberButton
@@ -41,7 +41,7 @@ private fun PlannedLift.targetText(): String = when (loadKind) {
 fun PlannedSessionCard(match: PlannedMatch, logged: List<StrengthExerciseDto>, actualMinutes: Double?, onLink: () -> Unit) {
     val lifts = remember(match) { parsePlannedLifts(match.row.prescription) }
     val cond = remember(match) { parsePlannedConditioning(match.row.prescription) }
-    val loggedByKey = remember(logged) { logged.associateBy { movementKey(it.name) } }
+    val loggedByKey = remember(logged) { logged.associateBy { looseMovementKey(it.name) } }
     FTCard(title = "PLANNED") {
         Text(match.row.title, style = FTType.RowTitle, color = FT.TextPrimary)
         Text(
@@ -49,7 +49,7 @@ fun PlannedSessionCard(match: PlannedMatch, logged: List<StrengthExerciseDto>, a
             style = FTType.Caption, color = FT.TextSecondary,
         )
         lifts.forEach { p ->
-            val sets = loggedByKey[movementKey(p.exercise)]?.sets.orEmpty().map { LoggedSet(it.reps, it.weightKg) }
+            val sets = loggedByKey[looseMovementKey(p.exercise)]?.sets.orEmpty().map { LoggedSet(it.reps, it.weightKg) }
             val verdict = compareToPlan(p, sets)
             Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

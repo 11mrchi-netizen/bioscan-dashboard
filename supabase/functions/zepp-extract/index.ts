@@ -22,7 +22,7 @@ function json(body: unknown, status: number) {
   });
 }
 
-const EXTRACTOR_VERSION = "12"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
+const EXTRACTOR_VERSION = "13"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
 // 6: write Zepp's own decoded distance back onto exercise_sessions.distance_km, and merge
 // orphaned zepp-sourced placeholder rows created by the Zepp/Health-Connect sync race (DAV-274)
 // 7: fix the "stress" metric's endpoint (was 404ing every attempt -- see METRIC_DEFS) (DAV-246)
@@ -227,7 +227,7 @@ interface StrengthSetDecoded {
 // Parse the semicolon-separated lap string into per-set objects.
 // Index map (confirmed from live data 2026-10-08): [0]=idx, [1]=duration_sec,
 // [4]=avg_hr, [15]=IMU_detected_reps, [21]=weight_kg, [22]=target_reps,
-// [26]=status (-1=done, 2=planned/skipped), [28]=exercise_code.
+// [26]=status (-1 or 0=done, 2=planned/skipped), [28]=exercise_code.
 function parseLapSets(lapStr: unknown): Array<{
   idx: number; durationSec: number; avgHr: number; detectedReps: number;
   weightKg: number; targetReps: number; status: number; exerciseCode: number;
@@ -985,7 +985,9 @@ Deno.serve(async (req: Request) => {
       const rawData = ((detailRawBody as Record<string, unknown>).data) as Record<string, unknown> | undefined;
       if (!rawData) return;
 
-      const laps = parseLapSets(rawData.lap).filter(s => s.status === -1);
+      // Done sets carry status -1 (older exports) or 0 (current firmware); 2 is a planned set that was
+      // skipped. Filtering on -1 alone dropped every set from the 2026-10-08 session.
+      const laps = parseLapSets(rawData.lap).filter(s => s.status !== 2 && s.durationSec > 0);
       if (!laps.length) return;
 
       const assess = parseStrengthAssess(rawData.strengthAssess as unknown);

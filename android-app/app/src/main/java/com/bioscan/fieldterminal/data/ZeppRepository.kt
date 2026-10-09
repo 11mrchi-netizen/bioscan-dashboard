@@ -62,6 +62,18 @@ class ZeppRepository(private val supabase: SupabaseClient) {
         }
     }
 
+    // Feasibility check for Zepp's template/schedule cloud API: the server asks the Zepp API read-only
+    // and stores the raw answers in zepp_raw_extracts (metric "training_probe"). Returns the short summary.
+    suspend fun probeTrainingApi(action: String? = null): String = try {
+        val response = supabase.functions.invoke(function = "zepp-training") {
+            contentType(ContentType.Application.Json)
+            setBody(action?.let { """{"action":"$it"}""" } ?: "{}")
+        }
+        response.bodyAsText().take(1500)
+    } catch (e: Exception) {
+        e.message ?: "unknown error"
+    }
+
     suspend fun getSyncStatus(): ZeppSyncStateRow? =
         supabase.postgrest.from("zepp_sync_state")
             .select()

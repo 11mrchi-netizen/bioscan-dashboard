@@ -350,6 +350,16 @@ private fun ZeppCard(scope: CoroutineScope) {
                 }
             }
         }
+        AmberButton(label = if (probing) "CHECKING…" else "TEMPLATE SCHEDULE TEST") {
+            if (!probing) {
+                scope.launch {
+                    probing = true
+                    // Creates a throwaway template and a calendar entry for it, reads both back, deletes both.
+                    probeResult = zeppRepository.probeTrainingApi("schedule_test")
+                    probing = false
+                }
+            }
+        }
         probeResult?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
     }
 }

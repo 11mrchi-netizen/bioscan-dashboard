@@ -24,7 +24,7 @@ function json(body: unknown, status: number) {
   });
 }
 
-const PROBE_VERSION = "t7";
+const PROBE_VERSION = "t12";
 const MAX_STORED_CHARS = 200_000;
 // Read-only: nothing outside these prefixes is ever requested.
 const ALLOWED = [/^\/users\/training\//, /^\/v1\/sport\/shareTrainingTemplate/];
@@ -36,6 +36,23 @@ const TEST_TEMPLATE = strengthTemplate("ZZ TEST cloud", "delete me", [
 ]);
 
 // What a body-less call (the app's check button) requests. Edited here while the real paths are found.
+// The app's TrainingTemplateEntityForCreate: the structure goes in "trainingInterval" (singular).
+function stripExtras(v: unknown) {
+  return JSON.parse(JSON.stringify(v), (k, x) => (k.endsWith("I18nKey") || k === "strengthWeightValue" || k === "strengthWeightUnit" ? undefined : x));
+}
+function createBodyFor(t: typeof TEST_TEMPLATE, title: string) {
+  return {
+    trainingTypeId: t.trainingTypeId,
+    title,
+    description: t.description,
+    trainingInterval: stripExtras(t.trainingIntervals),
+    target: [],
+    difficulty: [],
+    sourceType: 0,
+    modalities: [],
+  };
+}
+
 const DEFAULT_PATHS = [
   "/users/training/templates",
   "/users/training/templates?size=100",
@@ -61,7 +78,8 @@ Deno.serve(async (req: Request) => {
 
     const zeppToken = Deno.env.get("ZEPP_APP_TOKEN");
     const zeppHost = Deno.env.get("ZEPP_API_HOST");
-    if (!zeppToken || !zeppHost) return json({ error: "not_configured" }, 500);
+    const zeppUserId = Deno.env.get("ZEPP_USER_ID");
+    if (!zeppToken || !zeppHost || !zeppUserId) return json({ error: "not_configured" }, 500);
 
     const body = await req.json().catch(() => ({}));
     const paths: string[] = Array.isArray(body?.paths) ? body.paths.filter((p: unknown) => typeof p === "string") : DEFAULT_PATHS;
@@ -130,17 +148,7 @@ Deno.serve(async (req: Request) => {
       // goes in "trainingInterval" (singular), which is why the share-format "trainingIntervals" failed the
       // server's structure check ("Error parameter 'trainingStructureValid'").
       const newId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
-      const strip = (v: unknown) => JSON.parse(JSON.stringify(v), (k, x) => (k.endsWith("I18nKey") || k === "strengthWeightValue" || k === "strengthWeightUnit" ? undefined : x));
-      const createBody = {
-        trainingTypeId: TEST_TEMPLATE.trainingTypeId,
-        title: TEST_TEMPLATE.title,
-        description: TEST_TEMPLATE.description,
-        trainingInterval: strip(TEST_TEMPLATE.trainingIntervals),
-        target: [],
-        difficulty: [],
-        sourceType: 0,
-        modalities: [],
-      };
+      const createBody = createBodyFor(TEST_TEMPLATE, TEST_TEMPLATE.title);
       const attempts: Array<[string, string, unknown]> = [
         ["PUT", "/users/training/templates", createBody],
         ["PUT", "/users/training/templates", { ...createBody, totalTime: 3600 }],
@@ -164,6 +172,90 @@ Deno.serve(async (req: Request) => {
       }
       if (ids.length > 0) await record("list_after_delete", "/users/training/templates", await callZepp("GET", "/users/training/templates"));
       return json({ results, createdIds: ids }, 200);
+    }
+
+    if (body?.action === "schedule_test") {
+      // Create a throwaway template, schedule it, read the schedule back, then delete schedule and template.
+      // The schedule entity's value formats are not known (users/training/plan/schedules takes
+      // {events:[{id,title,description,scheduledStartAt,scheduledEndAt,timezone,isRecurring,icalendarData,
+      // provider,status}]}), so on "Error parameter 'x'" the next candidate for x is tried.
+      const tplTitle = "ZZ TEST sched tpl";
+      const made = await callZepp("PUT", "/users/training/templates", createBodyFor(TEST_TEMPLATE, tplTitle));
+      await record("tpl create", "PUT /users/training/templates", made);
+      let tplId: string | null = null;
+      try { tplId = String(JSON.parse(made.text)?.id ?? ""); } catch { /* keep null */ }
+      try {
+        if (!tplId) return json({ results, error: "template not created" }, 200);
+        const startMs = Date.UTC(2026, 9, 19, 23, 0, 0); // 20 Oct 2026 07:00 Asia/Taipei
+        const endMs = startMs + 3600_000;
+        // Schedule API, read from the app's TrainingScheduleCloudApiImpl: POST users/{uid}/training/calendar adds
+        // one TrainingScheduleEntity (no wrapper): id String, title String, description String, scheduledStartAt
+        // Long, scheduledEndAt Long, timezone String, isRecurring Boolean, icalendarData String, provider String,
+        // status Int. GET lists with startTime/endTime (ms), DELETE .../{id} removes. Values for id/provider/
+        // status are not known, so combinations are tried until one answers 200.
+        const cal = `/users/${zeppUserId}/training/calendar`;
+        const times: Array<(ms: number) => number> = [(ms) => ms, (ms) => Math.floor(ms / 1000)];
+        const provs = ["USER_CUSTOM", "MANUAL_TRAINING_CALENDAR"];
+        const stats = [1, 0];
+        const ids = ["", crypto.randomUUID()];
+        const ics = (uid: string) => [
+          "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Training App//Schedule//EN", "CALSCALE:GREGORIAN", "BEGIN:VEVENT",
+          `UID:${uid}`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`,
+          "DTSTART;TZID=Asia/Taipei:20261020T070000", "DTEND;TZID=Asia/Taipei:20261020T080000",
+          "SUMMARY:ZZ TEST sched", `X-TRAINING-TEMPLATE-ID:${tplId}`, "END:VEVENT", "END:VCALENDAR",
+        ].join("\r\n");
+        let ok: { status: number; text: string } | null = null;
+        let n = 0;
+        const evFor = (id: string, prov: string, status: number, ti: number) => ({
+          id, title: "ZZ TEST sched", description: "delete me",
+          scheduledStartAt: times[ti](startMs), scheduledEndAt: times[ti](endMs),
+          timezone: "Asia/Taipei", isRecurring: false, icalendarData: ics(id || "zz-test"), provider: prov, status,
+        });
+        // POST is 405 here; find the verb that is not.
+        let verb = "";
+        for (const m of ["PUT", "PATCH"]) {
+          const r = await callZepp(m, cal, evFor("", provs[0], stats[0], 0));
+          await record(`verb ${m}`, `${m} ${cal}`, r);
+          if (r.status !== 405) { verb = m; if (r.status === 200) ok = r; break; }
+        }
+        search:
+        for (const id of verb && !ok ? ids : []) {
+          for (const prov of provs) {
+            for (const status of stats) {
+              for (let ti = 0; ti < times.length; ti++) {
+                const r = await callZepp(verb, cal, evFor(id, prov, status, ti));
+                await record(`sched#${n++} ${verb} id=${id ? "uuid" : "''"} prov=${prov || "''"} status=${status} time=${ti === 0 ? "ms" : "s"}`, `${verb} ${cal}`, r);
+                if (r.status === 200) { ok = r; break search; }
+              }
+            }
+          }
+        }
+        if (ok) {
+          let created: string[] = [];
+          try {
+            const j = JSON.parse(ok.text);
+            if (j?.data?.id) created.push(String(j.data.id));
+          } catch { /* look in the list below */ }
+          const q = `${cal}?startTime=${startMs - 86400_000}&endTime=${endMs + 86400_000}&limit=100`;
+          const listed = await callZepp("GET", q);
+          await record("sched list after create", q, listed);
+          try {
+            const arr = JSON.parse(listed.text)?.data?.items ?? [];
+            for (const e of arr) if (e.title === "ZZ TEST sched" && !created.includes(String(e.id))) created.push(String(e.id));
+          } catch { /* none */ }
+          for (const id of created) {
+            const d = await callZepp("DELETE", `${cal}/${id}`);
+            await record(`sched delete ${id}`, `DELETE ${cal}/${id}`, d);
+            if (d.text.includes('"deleted": 0') || d.status !== 200) {
+              await record(`sched delete body ${id}`, `DELETE ${cal} {ids}`, await callZepp("DELETE", cal, { ids: [id] }));
+            }
+          }
+          await record("sched list after delete", q, await callZepp("GET", q));
+        }
+      } finally {
+        if (tplId) await record("tpl delete", `DELETE /users/training/templates/${tplId}`, await callZepp("DELETE", `/users/training/templates/${tplId}`));
+      }
+      return json({ results }, 200);
     }
 
     for (const path of paths) {

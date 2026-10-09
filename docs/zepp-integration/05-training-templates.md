@@ -1,7 +1,7 @@
 # 05 — Zepp training templates: format, cloud API, and what is still open
 
-**Status:** create / list / delete of strength templates verified end to end against the real account
-(2026-10-09). Scheduling not yet tried. Everything here is reverse-engineered from the Zepp Android app
+**Status:** create / list / delete of strength templates, and create / list / delete of calendar entries that
+schedule a template, verified end to end against the real account (2026-10-09). Everything here is reverse-engineered from the Zepp Android app
 (v10.8.7) and from templates shared out of the app; none of it is documented by Zepp and any of it can
 change with an app update.
 
@@ -55,28 +55,59 @@ server's structure check failing, not a missing parameter. Optional fields in th
 
 Ids are client-made in the app (millis * 1000 + 3 digits); the server assigned its own on create.
 
-## 3. Scheduling (open)
+## 3. Scheduling (verified 2026-10-09)
 
-The app's schedule entities, from the serializers in the APK:
+A scheduled workout is a **calendar entry** at `users/{userId}/training/calendar` (`userId` = `ZEPP_USER_ID`),
+read from the app's `TrainingScheduleCloudApiImpl` and confirmed against the real account:
 
-- `TrainingScheduleBody(events)` / `TrainingScheduleEntity`: `id, title, description, scheduledStartAt,
-  scheduledEndAt, timezone, isRecurring, icalendarData, provider, status`, at `users/training/plan/schedules`.
-  Calendar-event shaped: no template id field.
-- Plans: `TrainingPlanDto` (name, startDate, endDate, ...) with `TrainingScheduleDto` (`trainingDate,
-  weekIndex, dayIndex, workoutId, clientWorkoutId, notes, ...`), at `users/training/plan/` (GET is 405, so
-  creating is a write call) and `users/training/plan/{id}/status`.
-- Sync to the watch is Bluetooth, from the Zepp app (`SyncTrainingPlanUseCase`).
+| Call | Result |
+|---|---|
+| `PUT /users/{uid}/training/calendar` | **add**; body = one entity (no wrapper), answer `{"code":1,"data":{...,"id":"<ULID>"},"message":"Created"}`. `POST` here is 405 |
+| `GET /users/{uid}/training/calendar?startTime=<ms>&endTime=<ms>&limit=100` | entries in the window as `data.items` (`next` for paging). Recurring entries appear when a repeat falls in the window |
+| `DELETE /users/{uid}/training/calendar/{id}` | `{"data":{"deleted":1}}` |
 
-Not yet tried: creating a schedule event, creating a plan with dated workouts that point at template ids.
+Entity (Kotlin types from the app's bytecode; all non-null): `id` String (send `""`, the server makes a ULID),
+`title`, `description`, `scheduledStartAt` / `scheduledEndAt` Long (epoch **ms**), `timezone` ("Asia/Taipei"),
+`isRecurring` Boolean, `icalendarData` String, `provider` String, `status` Int.
+
+Values that work, copied from the account's own recurring "Fighter" entry: `provider: "USER_CUSTOM"`,
+`status: 1`. `status: 0` with provider `MANUAL_TRAINING_CALENDAR` is accepted but the entry is not listed
+(inactive), and deleting it reports `deleted: 0`.
+
+The template is linked inside `icalendarData`, an iCalendar text (CRLF or LF lines):
+
+```
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Training App//Schedule//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:<anything>
+DTSTAMP:20260904T151853Z
+DTSTART;TZID=Asia/Taipei:20261020T070000
+DTEND;TZID=Asia/Taipei:20261020T080000
+SUMMARY:<title>
+RRULE:FREQ=WEEKLY;BYDAY=MO,TH        (optional, with isRecurring true)
+X-TRAINING-TEMPLATE-ID:<template id from PUT /users/training/templates>
+END:VEVENT
+END:VCALENDAR
+```
+
+Other schedule-related endpoints in the app, not used: `users/training/plan/schedules` (GET by `startDate`/`endDate`,
+DELETE `{ids}`) and `training/plan/list` + `training/plan/schedules` for official plans; PUT there returns a bare 400
+for the calendar entity, so they are a different service.
+
+Not yet checked: that a scheduled entry shows in the Zepp app's training calendar and reaches the watch after the
+app's own sync.
 
 ## 4. Tools in the repo
 
 - `supabase/functions/zepp-training`: `template.ts` builds a template from a plan (exercise catalog subset,
   warm-up sets, repeat groups, manual rests); `index.ts` is a probe: read-only GETs by default, and
-  `{"action":"write_test"}` runs create > list > delete of a throwaway "ZZ TEST cloud" template. Raw
+  `{"action":"write_test"}` runs create > list > delete of a throwaway "ZZ TEST cloud" template, and `{"action":"schedule_test"}` creates a template, schedules it for 20 Oct, lists, then deletes both. Raw
   answers are stored in `zepp_raw_extracts` (metric `training_probe`). JWT required; uses the same
   `ZEPP_APP_TOKEN` as `zepp-extract`.
-- Settings > Connected services > Zepp: "CHECK TEMPLATE API" and "TEMPLATE WRITE TEST" buttons.
+- Settings > Connected services > Zepp: "CHECK TEMPLATE API", "TEMPLATE WRITE TEST" and "TEMPLATE SCHEDULE TEST" buttons.
 - Deep link that opens a template in the Zepp editor from a file served by the phone itself:
   `amazfit://com.huami.watch.hmwatchmanager/action?name=trainingtemplate_crossfit&target=share&data=<url>`;
   the app fetches `data` directly from the phone (an `adb reverse` localhost URL works).

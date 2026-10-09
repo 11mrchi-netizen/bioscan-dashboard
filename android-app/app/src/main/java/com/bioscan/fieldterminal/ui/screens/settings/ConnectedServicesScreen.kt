@@ -328,5 +328,38 @@ private fun ZeppCard(scope: CoroutineScope) {
                 }
             }
         }
+        // Read-only check of Zepp's workout template/schedule API (zepp-training); answers land in zepp_raw_extracts.
+        var probing by remember { mutableStateOf(false) }
+        var probeResult by remember { mutableStateOf<String?>(null) }
+        AmberButton(label = if (probing) "CHECKING…" else "CHECK TEMPLATE API") {
+            if (!probing) {
+                scope.launch {
+                    probing = true
+                    probeResult = zeppRepository.probeTrainingApi()
+                    probing = false
+                }
+            }
+        }
+        AmberButton(label = if (probing) "CHECKING…" else "TEMPLATE WRITE TEST") {
+            if (!probing) {
+                scope.launch {
+                    probing = true
+                    // Creates one throwaway template in the Zepp account, reads it back and deletes it.
+                    probeResult = zeppRepository.probeTrainingApi("write_test")
+                    probing = false
+                }
+            }
+        }
+        AmberButton(label = if (probing) "CHECKING…" else "TEMPLATE SCHEDULE TEST") {
+            if (!probing) {
+                scope.launch {
+                    probing = true
+                    // Creates a throwaway template and a calendar entry for it, reads both back, deletes both.
+                    probeResult = zeppRepository.probeTrainingApi("schedule_test")
+                    probing = false
+                }
+            }
+        }
+        probeResult?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
     }
 }

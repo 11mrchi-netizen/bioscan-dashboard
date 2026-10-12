@@ -18,6 +18,7 @@ const NAV = [
   { to: 'comparison',     label: 'Comparison' },
   { to: 'data-explorer',  label: 'Data Explorer' },
   { to: 'relationship',   label: 'Relationship Lab' },
+  { to: 'data-quality',   label: 'Data Quality' },
 ]
 
 export function Shell() {

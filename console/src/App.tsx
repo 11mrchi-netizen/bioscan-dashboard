@@ -12,6 +12,7 @@ const Nutrition       = lazy(() => import('./workspaces/Nutrition'))
 const DataExplorer    = lazy(() => import('./workspaces/DataExplorer'))
 const Comparison      = lazy(() => import('./workspaces/Comparison'))
 const RelationshipLab = lazy(() => import('./workspaces/RelationshipLab'))
+const DataQuality     = lazy(() => import('./workspaces/DataQuality'))
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth()
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="comparison"    element={<Comparison />} />
         <Route path="data-explorer" element={<DataExplorer />} />
         <Route path="relationship"  element={<RelationshipLab />} />
+        <Route path="data-quality"  element={<DataQuality />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

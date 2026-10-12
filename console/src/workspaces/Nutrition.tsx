@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRange, useInspect } from '../lib/analysisStore'
+import { dayBounds, localDate, warnOnError } from '../lib/schema'
 import { fetchMetric } from '../lib/metricAdapter'
 import { FTChart } from '../components/shared/FTChart'
 import type { MetricResult } from '../lib/metricAdapter'
@@ -63,13 +64,15 @@ export function Nutrition() {
     Promise.all([
       // Daily macro summary from meals table
       supabase.from('meals')
-        .select('date, calories, protein_g, carbs_g, fat_g')
-        .gte('date', start).lte('date', end)
-        .order('date', { ascending: true })
-        .then(({ data }) => {
-          // Group by date
+        .select('logged_at, calories, protein_g, carbs_g, fat_g')
+        .gte('logged_at', dayBounds(start, end).from).lte('logged_at', dayBounds(start, end).to)
+        .order('logged_at', { ascending: true })
+        .then(({ data, error }) => {
+          warnOnError('nutrition macros', error)
+          // Group by local date (meals have logged_at, not date)
           const map = new Map<string, MacroDay>()
-          for (const r of (data ?? []) as MacroDay[]) {
+          const rows = ((data ?? []) as unknown as Record<string, unknown>[]).map(r => ({ ...r, date: localDate(r.logged_at as string) })) as unknown as MacroDay[]
+          for (const r of rows) {
             const existing = map.get(r.date) ?? { date: r.date, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
             existing.calories = (existing.calories ?? 0) + (r.calories ?? 0)
             existing.protein_g = (existing.protein_g ?? 0) + (r.protein_g ?? 0)
@@ -81,11 +84,17 @@ export function Nutrition() {
         }),
       // Recent meal rows
       supabase.from('meals')
-        .select('id, date, meal_type, description, calories, protein_g')
-        .gte('date', start).lte('date', end)
-        .order('date', { ascending: false })
+        .select('id, logged_at, description, calories, protein_g')
+        .gte('logged_at', dayBounds(start, end).from).lte('logged_at', dayBounds(start, end).to)
+        .order('logged_at', { ascending: false })
         .limit(50)
-        .then(({ data }) => (data ?? []) as MealRow[]),
+        .then(({ data, error }) => {
+          warnOnError('nutrition meals', error)
+          return ((data ?? []) as unknown as Record<string, unknown>[]).map(r => ({
+            id: String(r.id), date: localDate(r.logged_at as string), meal_type: null,
+            description: r.description as string | null, calories: r.calories as number | null, protein_g: r.protein_g as number | null,
+          })) as MealRow[]
+        }),
       // Weight for overlay
       fetchMetric({ table: 'body_metrics', column: 'weight_kg', range, aggregation: 'daily_avg' }),
     ]).then(([macroData, mealData, wt]) => {

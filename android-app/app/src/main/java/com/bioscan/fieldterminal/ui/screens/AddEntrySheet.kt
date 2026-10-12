@@ -37,6 +37,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -603,6 +604,34 @@ private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
+@Composable
+private fun QtyRow(qty: Int, onChange: (Int) -> Unit) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusSmall)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("QTY", style = FTType.LabelCaps, color = FT.TextMuted)
+        for (delta in listOf(-1, 1)) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(shape)
+                    .background(FT.GlassFill, shape)
+                    .border(FT.BorderWidth, FT.GlassBorder, shape)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        val next = qty + delta
+                        if (next >= 1) onChange(next)
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(if (delta < 0) "−" else "+", style = FTType.Telemetry, color = FT.TextSecondary)
+            }
+            if (delta < 0) Text("$qty", style = FTType.Telemetry, color = FT.TextPrimary)
+        }
+    }
+}
+
 // FUEL: one entry point, three sub-tabs. Reuses FoodForm/DrinkForm/
 // SupplementsForm exactly as they'd be used standalone -- only the picker
 // wrapping them is new.
@@ -635,7 +664,7 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
                 externalActivityActive = externalActivityActive,
             )
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
-            FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items, source -> onSubmit { it.addSupplementsTaken(takenAt, items, source) } })
+            FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items, source, quantities -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities) } })
         }
     }
 }
@@ -1130,7 +1159,7 @@ private fun DrinkForm(
 // from the Log feed like any other entry -- no separate "batch" concept
 // needed for "add or remove single items."
 @Composable
-private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String) -> Unit) {
+private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String, quantities: Map<Long, Int>) -> Unit) {
     var dateTime by remember { mutableStateOf(initialDateTime) }
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
     var checkedBundles by remember { mutableStateOf(setOf<String>()) }
@@ -1139,6 +1168,7 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
     var scanned by remember { mutableStateOf<List<SupplementRow>>(emptyList()) }
     var scannedChecked by remember { mutableStateOf(setOf<Long>()) }
     var recentLastTaken by remember { mutableStateOf<Map<Long, LocalDate>>(emptyMap()) }
+    var quantities by remember { mutableStateOf<Map<Long, Int>>(emptyMap()) }
 
     LaunchedEffect(Unit) {
         val repo = SupplementsRepository(SupabaseClientProvider.client)
@@ -1193,11 +1223,15 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
                     FormLabel("SCANNED")
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         scanned.forEach { supp ->
+                            val checked = supp.id in scannedChecked
                             CheckToggleRow(
                                 label = supp.name,
-                                checked = supp.id in scannedChecked,
-                                onToggle = { scannedChecked = if (supp.id in scannedChecked) scannedChecked - supp.id else scannedChecked + supp.id },
+                                checked = checked,
+                                onToggle = { scannedChecked = if (checked) scannedChecked - supp.id else scannedChecked + supp.id },
                             )
+                            if (checked) {
+                                QtyRow(quantities[supp.id] ?: 1) { quantities = quantities + (supp.id to it) }
+                            }
                         }
                     }
                 }
@@ -1212,19 +1246,40 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
                                 checkedBundles = if (timeOfDay in checkedBundles) checkedBundles - timeOfDay else checkedBundles + timeOfDay
                             },
                         )
+                        if (timeOfDay in checkedBundles) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(start = 16.dp),
+                            ) {
+                                itemsInGroup.forEach { supp ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(supp.name, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.weight(1f))
+                                        QtyRow(quantities[supp.id] ?: 1) { quantities = quantities + (supp.id to it) }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 if (asNeeded.isNotEmpty()) {
                     FormLabel("AS NEEDED")
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         asNeeded.forEach { supp ->
+                            val checked = supp.id in checkedAsNeeded
                             CheckToggleRow(
                                 label = supp.name,
-                                checked = supp.id in checkedAsNeeded,
+                                checked = checked,
                                 onToggle = {
-                                    checkedAsNeeded = if (supp.id in checkedAsNeeded) checkedAsNeeded - supp.id else checkedAsNeeded + supp.id
+                                    checkedAsNeeded = if (checked) checkedAsNeeded - supp.id else checkedAsNeeded + supp.id
                                 },
                             )
+                            if (checked) {
+                                QtyRow(quantities[supp.id] ?: 1) { quantities = quantities + (supp.id to it) }
+                            }
                         }
                     }
                 }
@@ -1254,7 +1309,7 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
             }
         }
         SaveButton(saving, selectedItems.isNotEmpty()) {
-            onSave(dateTime.toIsoWithOffset(), selectedItems, source)
+            onSave(dateTime.toIsoWithOffset(), selectedItems, source, quantities)
         }
     }
 }

@@ -3,23 +3,30 @@ package com.bioscan.fieldterminal.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -285,53 +292,83 @@ private fun DayCell(day: Int, selected: Boolean, isToday: Boolean, modifier: Mod
 // ---- Time (12-hour, AM/PM) ----
 
 @Composable
+private fun WheelPicker(
+    count: Int,
+    selected: Int,
+    onSelected: (Int) -> Unit,
+    label: (Int) -> String,
+    modifier: Modifier = Modifier,
+) {
+    val visibleItems = 5
+    val itemHeight = 44.dp
+    val padding = visibleItems / 2
+    val state = rememberLazyListState(
+        initialFirstVisibleItemIndex = (selected + padding).coerceAtLeast(0)
+    )
+    val fling = rememberSnapFlingBehavior(state)
+    val centred by remember { derivedStateOf {
+        (state.firstVisibleItemIndex - padding).coerceIn(0, count - 1)
+    } }
+    LaunchedEffect(centred) { onSelected(centred) }
+
+    Box(modifier = modifier.height(itemHeight * visibleItems)) {
+        // centre-slot highlight
+        Box(
+            Modifier.fillMaxWidth().height(itemHeight).align(Alignment.Center)
+                .background(FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
+        )
+        LazyColumn(state = state, flingBehavior = fling, modifier = Modifier.fillMaxSize()) {
+            items(padding) { Box(Modifier.height(itemHeight).fillMaxWidth()) }
+            items(count) { i ->
+                val active = i == centred
+                Box(Modifier.height(itemHeight).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(
+                        label(i),
+                        style = if (active) FTType.MetricMedium else FTType.BodySmall,
+                        color = if (active) FT.TextPrimary else FT.TextMuted,
+                    )
+                }
+            }
+            items(padding) { Box(Modifier.height(itemHeight).fillMaxWidth()) }
+        }
+    }
+}
+
+@Composable
 private fun TimePanel(time: LocalTime, onChange: (LocalTime) -> Unit) {
-    var unit by remember { mutableStateOf(TimeUnit.Hour) }
     val pm = time.hour >= 12
     val hour12 = if (time.hour % 12 == 0) 12 else time.hour % 12
 
-    // 12-hour -> 24-hour: 12 AM is 00:xx and 12 PM is 12:xx.
     fun build(h12: Int, minute: Int, isPm: Boolean): LocalTime =
         LocalTime.of((h12 % 12) + if (isPm) 12 else 0, minute)
 
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TimeSegment("%02d".format(hour12), active = unit == TimeUnit.Hour) { unit = TimeUnit.Hour }
-            Text(":", style = FTType.DisplayMetric, color = FT.TextMuted)
-            TimeSegment("%02d".format(time.minute), active = unit == TimeUnit.Minute) { unit = TimeUnit.Minute }
-            Spacer(Modifier.weight(1f))
-            SegmentedToggle(
-                options = listOf(false, true),
-                selected = pm,
-                labelOf = { if (it) "PM" else "AM" },
-                onSelect = { onChange(build(hour12, time.minute, it)) },
-                modifier = Modifier.width(128.dp),
-            )
-        }
-
-        if (unit == TimeUnit.Hour) {
-            ButtonGrid(
-                items = (1..12).map { "$it" },
-                selectedIndex = hour12 - 1,
-            ) { index ->
-                onChange(build(index + 1, time.minute, pm))
-                unit = TimeUnit.Minute
-            }
-        } else {
-            ButtonGrid(
-                items = (0..55 step 5).map { "%02d".format(it) },
-                selectedIndex = (time.minute / 5).takeIf { time.minute % 5 == 0 },
-            ) { index -> onChange(build(hour12, index * 5, pm)) }
-            // Exact minutes: a 7:43 meal must be possible, not just 5-minute steps.
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GridButton("−1 MIN", selected = false, modifier = Modifier.weight(1f)) {
-                    onChange(build(hour12, (time.minute - 1).coerceAtLeast(0), pm))
-                }
-                GridButton("+1 MIN", selected = false, modifier = Modifier.weight(1f)) {
-                    onChange(build(hour12, (time.minute + 1).coerceAtMost(59), pm))
-                }
-            }
-        }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        WheelPicker(
+            count = 12,
+            selected = hour12 - 1,
+            onSelected = { onChange(build(it + 1, time.minute, pm)) },
+            label = { "%02d".format(it + 1) },
+            modifier = Modifier.weight(1f),
+        )
+        Text(":", style = FTType.DisplayMetric, color = FT.TextMuted)
+        WheelPicker(
+            count = 60,
+            selected = time.minute,
+            onSelected = { onChange(build(hour12, it, pm)) },
+            label = { "%02d".format(it) },
+            modifier = Modifier.weight(1f),
+        )
+        SegmentedToggle(
+            options = listOf(false, true),
+            selected = pm,
+            labelOf = { if (it) "PM" else "AM" },
+            onSelect = { onChange(build(hour12, time.minute, it)) },
+            modifier = Modifier.width(96.dp),
+        )
     }
 }
 

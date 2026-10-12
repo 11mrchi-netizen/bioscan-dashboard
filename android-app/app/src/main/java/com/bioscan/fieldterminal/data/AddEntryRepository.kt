@@ -167,7 +167,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // other source already uses. `items` is (supplement id, name, roster
     // dose string) triples from whichever bundle(s)/individual as-needed
     // toggles were checked -- each gets its own parsed dose default (DAV-156).
-    suspend fun addSupplementsTaken(takenAt: String, items: List<Triple<Long, String, String>>, source: String = "manual") {
+    suspend fun addSupplementsTaken(takenAt: String, items: List<Triple<Long, String, String>>, source: String = "manual", quantities: Map<Long, Int> = emptyMap()) {
         if (items.isEmpty()) return
         // product_id is optional provenance: a failed roster lookup must never
         // block recording that the supplement was taken.
@@ -177,10 +177,13 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         // scales the ingredient contribution. Missing link row = the default of 1.
         val servingsBySupp = links.mapValues { it.value.servingsPerDose }
         val rows = items.map { (id, name, dose) ->
+            val qty = quantities[id] ?: 1
             val (value, unit) = parseDose(dose)
             NewSupplementLogRow(
-                supplementId = id, supplementName = name, takenAt = takenAt, doseValue = value, doseUnit = unit,
-                productId = productIdBySupp[id], source = source, servingCount = servingsBySupp[id] ?: 1.0,
+                supplementId = id, supplementName = name, takenAt = takenAt,
+                doseValue = value?.let { it * qty }, doseUnit = unit,
+                productId = productIdBySupp[id], source = source,
+                servingCount = (servingsBySupp[id] ?: 1.0) * qty,
             )
         }
         val insertedRows = supabase.postgrest.from("supplement_log")
@@ -188,7 +191,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
             .decodeList<SupplementLogIdRow>()
 
         try {
-            writeSupplementNutrientIntake(takenAt, insertedRows, items, productIdBySupp, servingsBySupp)
+            writeSupplementNutrientIntake(takenAt, insertedRows, items, productIdBySupp, servingsBySupp, quantities)
         } catch (_: Exception) {
             // Best-effort: supplement_log row is the primary record
         }
@@ -215,6 +218,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         items: List<Triple<Long, String, String>>,
         productIdBySupp: Map<Long, Long>,
         servingsBySupp: Map<Long, Double>,
+        quantities: Map<Long, Int> = emptyMap(),
     ) {
         if (logRows.isEmpty()) return
         val supplementIds = logRows.map { it.supplementId }
@@ -227,12 +231,13 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         val suppRepo = SupplementsRepository(supabase)
         val nutrientRows = mutableListOf<NutrientIntakeRow>()
         for (logRow in logRows) {
+            val qty = quantities[logRow.supplementId] ?: 1
             val productId = productIdBySupp[logRow.supplementId]
             val suppProfile = profilesBySupp[logRow.supplementId]
             if (productId != null) {
                 val composition = suppRepo.loadProductComposition(productId)
                 for (productIngredient in composition) {
-                    val contribution = nutrientContribution(productIngredient, servingCount = servingsBySupp[logRow.supplementId] ?: 1.0) ?: continue
+                    val contribution = nutrientContribution(productIngredient, servingCount = (servingsBySupp[logRow.supplementId] ?: 1.0) * qty) ?: continue
                     nutrientRows.add(
                         NutrientIntakeRow(
                             loggedAt = takenAt,
@@ -250,7 +255,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
                         NutrientIntakeRow(
                             loggedAt = takenAt,
                             nutrient = sn.nutrient,
-                            amount = sn.amountPerDose,
+                            amount = sn.amountPerDose * qty,
                             unit = sn.unit,
                             sourceType = "supplement",
                             sourceId = logRow.id,
@@ -267,7 +272,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
                             NutrientIntakeRow(
                                 loggedAt = takenAt,
                                 nutrient = inferredNutrient,
-                                amount = doseValue,
+                                amount = doseValue * qty,
                                 unit = doseUnit,
                                 sourceType = "supplement",
                                 sourceId = logRow.id,

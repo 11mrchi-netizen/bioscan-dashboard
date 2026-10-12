@@ -1,0 +1,24 @@
+.conf { display: flex; flex-direction: column; gap: var(--sp-4); }
+.conf-head { display: flex; align-items: flex-start; gap: var(--sp-4); }
+.conf-note { margin: 0; flex: 1; max-width: 80ch; color: var(--color-text-muted); font-size: 13px; line-height: 1.5; }
+.conf-message { font-size: 12px; color: var(--color-warning); }
+.conf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: var(--sp-4); }
+.conf-card { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); }
+.conf-insufficient { opacity: 0.7; }
+.conf-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.conf-title { font-size: 15px; font-weight: 600; }
+.conf-state { font-size: 10px; letter-spacing: 0.08em; border-radius: 99px; padding: 2px 8px; border: 1px solid var(--color-border, currentColor); white-space: nowrap; }
+.conf-state-supported { color: var(--color-emerald); }
+.conf-state-not_distinguishable { color: var(--color-text-muted); }
+.conf-state-insufficient { color: var(--color-warning); }
+.conf-summary { margin: 0; font-size: 13px; line-height: 1.5; }
+.conf-bar { position: relative; height: 18px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 4px; }
+.conf-bar-mde { position: absolute; top: 0; bottom: 0; background: var(--color-border); opacity: 0.55; }
+.conf-bar-zero { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--color-text-muted); }
+.conf-bar-ci { position: absolute; top: 6px; height: 6px; background: var(--color-emerald); opacity: 0.8; border-radius: 3px; }
+.conf-bar-est { position: absolute; top: 2px; bottom: 2px; width: 3px; margin-left: -1px; background: var(--color-text-primary); }
+.conf-legend { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--color-text-muted); }
+.conf-stats { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: 11px; color: var(--color-text-muted); }
+.conf-footnote { margin: 0; font-size: 11px; line-height: 1.4; color: var(--color-text-muted); }
+.conf-warn { color: var(--color-warning); }
+.conf-foot { font-size: 10px; color: var(--color-text-muted); }

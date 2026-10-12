@@ -30,3 +30,15 @@ If you are developing a production application, we recommend enabling type-aware
 ```
 
 See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+
+## Source entry vs served output
+
+The Vite **source** entry is `app.html` (`npm run dev` opens it). `index.html` in this folder is the **served build output**: the
+deploy workflow (`.github/workflows/deploy-console.yml`) copies `dist/app.html` over it and commits it, together with `assets/`,
+so GitHub Pages can serve `/console/` from `main`. Never edit `index.html` or `assets/` by hand.
+
+Until 2026-10-12 the build used `index.html` as its entry, so each CI run re-bundled the previous build instead of `src/`; none of
+the source changes after 2026-09-30 reached the deployed console.
+
+The Supabase URL and publishable key are public (same values as the root `index.html` and the Android app). `src/lib/supabase.ts`
+uses them as defaults; the `VITE_SUPABASE_*` variables override them when set.

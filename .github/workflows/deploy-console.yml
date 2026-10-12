@@ -43,7 +43,7 @@ jobs:
       - name: Stage built files into console/
         run: |
           rm -rf console/assets
-          cp console/dist/index.html console/index.html
+          cp console/dist/app.html console/index.html
           cp -r console/dist/assets console/assets
           cp console/dist/favicon.svg console/favicon.svg 2>/dev/null || true
           cp console/dist/icons.svg console/icons.svg 2>/dev/null || true

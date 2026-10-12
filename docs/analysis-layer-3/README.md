@@ -1,0 +1,81 @@
+# Analysis Layer 3
+
+Design and status notes for the layer that supersedes the Analysis Layer 2 *contracts* (docs `06`, `19` of `docs/analysis-layer-2`) while keeping the Layer 1 per-metric evaluations (`domain/*Evaluation.kt`) as inputs. Origin: `docs/wellness-project-teardown/14-integration-report-for-field-terminal.md` (what to take from a competitor and why). Approved plan: `C:\Users\ddema\.claude\plans\compiled-moseying-naur.md` (decisions listed there).
+
+## Architecture in one paragraph
+
+A pure TypeScript core in `supabase/functions/_shared/analysis-core/` (erasable TypeScript, so Node 24, Deno and Vite all import it unchanged) holds the statistics and engines. The Edge Function `analysis-run` reads raw rows, runs the core and upserts versioned results into `analysis_results` (service-role writes, own-row reads). The console and the Android app read those rows. Existing on-device Layer 1 evaluations are unchanged; they gain optional `windowStart` parameters so a baseline can restart after a *confirmed* series break.
+
+## Tables (migrations in `supabase/migrations/`, applied 2026-10-12)
+
+| Table | Purpose |
+| -- | -- |
+| `analysis_results` | `(user_id, kind, key, as_of, engine_version)` unique; `state`, `confidence_have/need`, `payload jsonb`, `inputs_hash`, `calculated_at`. Select-only for users. |
+| `daily_field_provenance` | Which origin wrote each daily field. Side table because the Health Connect sync upserts each metric separately. History before 2026-10-12 is `unknown`, not backfilled. |
+| `series_break_decisions` | The user's answer for a break candidate: `source_change` (restarts baselines), `real_change`, `ignore`. |
+| `log_agent_runs` | One row per typed message: utterance, raw model entries, proposals, and (after the app saved) `committed_count`. `unique(user_id, client_turn_id)` makes a retry return the stored proposals. Own rows only, written with the caller's JWT. |
+
+## Status
+
+| Phase | State |
+| -- | -- |
+| 0 Foundations | **Done.** Core stats + fixtures, `test-core.yml` CI, console schema repair (pushed to `main` as `cdfda5e`), `analysis_results`, `analysis-run` deployed (v4). The nightly job `analysis-run-nightly` (20:30 UTC = 04:30 UTC+8) is **live and verified**: a manual `select private.run_analysis()` authenticated, ran for the account and stored 7 results. |
+| 1 Provenance and series breaks | **Code complete and deployed except the Android build.** Core detector/result builder/I-O tested (35 Node tests); `analysis-run` deployed and run live. `zepp-extract` **v14 deployed** (verified byte-identical to the repo file): per-field provenance in `daily_field_provenance`, 2 h sleep floor, on top of the already-live lap-status fix (v13, which had never been committed). Android: `windowStart` on the SWC evaluators and `computeSleepIndex`, wired at every call site through `AnalysisRepository.loadSeriesBreakStarts()` (no effect until a break is confirmed); the Health Connect sync records per-field origin (HRV, RHR, SpO2, VO2max, sleep fields); `IntegrityCategory.SERIES_BREAK`; 421 unit tests pass. **Not yet true on the phone:** the app change is unit-tested and compiles, but no build has been installed, so `daily_field_provenance` stays empty until you install one and sync (Zepp rows will start appearing from the next `zepp-extract` run). Still open: wiring `DataIntegrityValidator` into a Settings card (no production callers today). |
+| 2 Capture layer | **Built (2a-2e); live checks open.** 2a: alcohol is recorded as grams of ethanol (`volume_ml x ABV% / 100 x 0.789`) from a strength field with beer/wine/spirits shortcuts; a drink with no strength is refused. 2b: Edge Function `log-agent` v1 deployed (propose-only, see below). 2c: a "SAY IT" entry in the add-entry sheet shows the proposals for review. 2d: two new reminder kinds, `wellbeing_checkin` (10:00, skipped once any of energy/mood/stress/soreness is logged today) and `evening_log` (19:30, skipped once a "say it" message was saved today); migration `20261012_notification_capture_kinds.sql` widened the kind CHECK and seeded both rules (enabled) for the existing account. 2e: Settings > User > DATA CAPTURE shows days logged in the last 28 per stream. 435 Android unit tests and 49 Node tests pass. **Not yet exercised:** the live model call needs a signed-in user (the function boots and rejects anonymous calls with 401), the screens and notifications need an installed build, and the "~50 utterances" golden run against the real model is still to do. |
+| 7 Methodology as data | **Done (Android wiring partial).** `metric-registry.json` has an entry for every doc-02 metric plus Sleep Index, Dynamic Recovery, alcohol and series break; a Node test fails when a doc-02 row lacks an entry or a field. Android packages it as an asset and `FTCard(methodology = key)` shows it behind the help button: HRV, RHR, sleep duration, Sleep Index, Today's Recovery, SRI, sleep phases, respiratory rate, training load, Today's Readiness. Other cards still use their own help text; the console does not read the registry yet. 438 Android unit tests pass. |
+| 3 Confirmatory relationships | **Done and live.** Engine, nine-hypothesis catalogue v1.0.0, publisher (`analysis-run` v5, nightly), console Relationship Lab "Confirmatory" tab (committed in the console worktree, **not yet pushed to `main`**) and a read-only PATTERNS card on the Android Daily Readiness page. Details and the backtest below. 440 Android unit tests and 66 Node tests pass. |
+| 4–6, 8–9 | Not started. |
+
+## Running the tests
+
+```bash
+node --test "supabase/functions/_shared/analysis-core/*.test.ts" "supabase/functions/_shared/log-core/*.test.ts" "console/src/lib/*.test.ts"
+```
+
+(`node --test <directory>` does not work on Node 24; use the glob.) The golden values in `stats.test.ts` come from the independent Python implementation `docs/wellness-project-teardown/tools/replicate_pattern_engine.py`.
+
+## Deploying `analysis-run`
+
+Via the Supabase MCP `deploy_edge_function` (or the CLI) with the entrypoint `index.ts` plus every file under `../_shared/analysis-core/` that it imports (names relative to the function folder, e.g. `../_shared/analysis-core/stats.ts`). Verified 2026-10-12: shared files bundle and run in Deno; calls without a valid user get 401.
+
+## Series-break detector: what was measured
+
+Method and thresholds are in the header of `seriesBreak.ts`. Calibration on synthetic series with a planted noise break (60 seeds): critical value 6 gives a false-alarm rate of 0.7 % (150 stationary AR(1) series) and power 0.90–0.97 with 30–40 readings after the break. A 7-metric run over a 420-day lookback takes about 0.7 s.
+
+Replays on the real history are run privately and are not recorded here (this repository is public and holds no personal health data). The detector found the regime changes it was built for: an HRV change that coincides with a drop in the share of non-integer readings, and shifts in the sleep-stage minutes.
+
+**Design correction found on real data:** the detector also flags genuine physiological changes, not only device or source changes. So a break is only a **candidate**. It restarts a baseline when confirmed by an origin change in `daily_field_provenance` within ±3 days or by a user decision. Device-sensitive metrics are HRV and the sleep-stage minutes; the others are reported but never auto-confirmed.
+
+## Scheduler authentication (corrected 2026-10-12)
+
+The first design reused a `service_role_key` Vault secret on the assumption that the reminder cron jobs already did; the Vault was in fact **empty** (those jobs have no push subscribers, so they never failed visibly, and still do nothing). The final design needs no human-held secret: migration `20261012_analysis_cron_secret.sql` generates a random secret inside Vault, `private.run_analysis()` sends it in `x-analysis-cron` (plus the public anon key to satisfy the gateway), and `analysis-run` checks it through `public.analysis_cron_secret_ok()` (service role only). No Edge secret was set and none is needed. (Side note: `private.send_daily_reminder` still reads `service_role_key` from the empty Vault, so the daily push reminders would silently skip if they ever had subscribers.)
+
+## Relationship engine (Phase 3)
+
+Replaces scanning every lag of every pair and labelling anything with |r| >= 0.1 "Moderate" (no significance needed). A fixed, versioned catalogue (`hypotheses.ts`, v1.0.0: alcohol to next-day HRV / resting heart rate / sleep, sleep to HRV and to energy, training day to HRV, recovery sessions to HRV, afternoon caffeine to sleep, steps to HRV) is tested once each:
+
+1. Both series are adjusted for day of week (weekday means removed), so a weekly routine cannot pass as an effect. A cause that follows a fixed weekly schedule (for example training on set days) is reported as **not testable**, not as a finding.
+2. p-value: weekly-block permutation (whole weeks of the cause are shuffled, 2,000 times), so day-of-week alignment and within-week dependence survive. Resolution is 1/2001; an exhaustive circular shift cannot get below 1/(n-13), which no correction across a catalogue survives.
+3. Benjamini-Hochberg across the hypotheses that had enough data (family size is stored in the payload).
+4. Effect in natural units (percent for ln-HRV) with a seeded block-bootstrap 95 % interval, plus the smallest effect detectable at 80 % power, so "not distinguishable from noise" says how large an effect had to be to show.
+5. Days without a record are left out, except under each hypothesis's stated exposure model (zero on days with a food log for alcohol and caffeine; zero on days with a watch record for training; zero only after the first logged session for recovery). Sessions are never assumed from a schedule, and illness days (and the day after) are excluded.
+
+Supplement start to outcome is deliberately not in this catalogue: a step exposure against a trending series is confounded by time, so supplements are tested as pre-registered N-of-1 experiments (Phase 5).
+
+**Backtest on synthetic data with planted effects** (`relationship.test.ts` runs a smaller version of this on every push): over 60 planted datasets, alcohol to next-day HRV (true effect about -13 %) was found in 90 % at 61 days and 100 % at 120 days or more, with 92-95 % interval coverage; sleep to HRV 80 % / 100 %; the true +4 ms sauna effect needs far more data (13 % at 61 days, 47 % at 120, 77 % at 240), which is exactly what the reported smallest-detectable effect says; the planted null (alcohol to sleep) was called supported in 0-5 % of datasets (nominal 5 %); the confounded training card (fixed weekly schedule) is not testable. Calibration on autocorrelated nulls: false-positive rate within the nominal 5 %.
+
+Published as `analysis_results` rows of kind `relationship`, one per hypothesis, states `supported` / `not_distinguishable` / `insufficient`. There is no "Moderate" tier anywhere.
+
+## Capture layer: how "say it" works (Phase 2)
+
+1. The app sends one message, a `client_turn_id` and its local clock to `log-agent`. Gemini (flash-lite, key server-side) only **reads** the text into loosely typed entries (drink, meal, wellbeing, supplement taken, recovery).
+2. `_shared/log-core/proposal.ts` turns entries into proposals and enforces the rules: every number must literally occur in the message (numeral or number word) or it is dropped and shown as a field to fill in; alcohol needs a stated strength; dates and times come from the client clock, never the model; supplements are matched to the active roster (ambiguous or unknown = a question).
+3. The app shows the proposals. Nothing is written until SAVE. Ready, un-skipped proposals are written one by one through the same repositories as the forms (`saveBeverageDrink`, `addDrink`, `addSupplementsTaken`, `mergeWellbeing`, `addRecoverySession`); each card shows SAVED or its error. Food opens the normal food form with the text and time filled in (resolver and review unchanged).
+
+Deviations from the plan, on purpose: the commit is client-side through existing repositories (no second write path to keep in sync; `addSupplementsTaken` alone has product links, nutrient intake and pantry effects); one structured model call instead of function-calling; saved/failed state comes from each write succeeding or throwing, not from a read-back. Timestamps: the app stores local wall-clock time labeled UTC, so the proposal's offset is dropped and only its digits are kept (`LogAgent.kt`). Wellbeing is written as a partial merge, so "energy 7" cannot null out mood or arousal already logged for that day.
+
+## Known gaps and cautions
+
+- Source for `zepp-extract` v13/v14, `analysis-run`, the shared core, the migrations and these docs lives on the working branch and is **not yet committed**; the deployed functions are the source of truth until it is.
+- Pre-existing Supabase advisor findings (not touched): two `SECURITY DEFINER` views (`v_conditioning_drills`, `v_training_block_metrics`), three functions with a mutable `search_path`, `pg_trgm` in `public`, leaked-password protection off.
+- The repaired console queries were typechecked and built but not exercised from a signed-in browser by me; the live deploy runs through GitHub Actions on `main`.

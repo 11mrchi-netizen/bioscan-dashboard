@@ -13,7 +13,9 @@ import java.time.ZoneId
 // device's local day," so this fills that gap once, reused across every
 // metric in HealthConnectDailySyncRepository rather than reimplemented per
 // metric.
-data class TimedValue(val at: Instant, val value: Double)
+// `origin` (Analysis Layer 3 / R1) is the Health Connect dataOrigin package that wrote the reading, when the caller
+// knows it; the aggregation helpers below ignore it.
+data class TimedValue(val at: Instant, val value: Double, val origin: String? = null)
 
 private fun groupByLocalDate(values: List<TimedValue>, zone: ZoneId): Map<LocalDate, List<Double>> =
     values.groupBy { it.at.atZone(zone).toLocalDate() }.mapValues { (_, v) -> v.map { it.value } }
@@ -40,3 +42,14 @@ fun sumStageMinutes(stages: List<SleepStageInterval>, stageType: Int): Double? {
     if (matching.isEmpty()) return null
     return matching.sumOf { Duration.ofSeconds(it.endEpochSeconds - it.startEpochSeconds).toMinutes().toDouble() }
 }
+
+// The origin that wrote the most readings on each local date; ties go to the origin of the most recent reading.
+// Readings without a known origin are ignored, so a date with none is absent (never labelled with a guess).
+fun dominantOriginByLocalDate(values: List<TimedValue>, zone: ZoneId = ZoneId.systemDefault()): Map<LocalDate, String> =
+    values.filter { it.origin != null }
+        .groupBy { it.at.atZone(zone).toLocalDate() }
+        .mapValues { (_, day) ->
+            val counts = day.groupingBy { it.origin!! }.eachCount()
+            val top = counts.values.max()
+            day.filter { counts.getValue(it.origin!!) == top }.maxBy { it.at }.origin!!
+        }

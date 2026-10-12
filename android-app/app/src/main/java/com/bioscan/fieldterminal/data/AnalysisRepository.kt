@@ -7,6 +7,8 @@ import com.bioscan.fieldterminal.data.model.MaxHrRow
 import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
+import com.bioscan.fieldterminal.data.model.RelationshipResultRow
+import com.bioscan.fieldterminal.data.model.SeriesBreakResultRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
@@ -14,7 +16,9 @@ import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.EnduranceSessionInput
+import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.aggregateMealsByDay
+import com.bioscan.fieldterminal.domain.seriesBreakStartsFrom
 import com.bioscan.fieldterminal.domain.trimp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -35,6 +39,29 @@ import java.time.OffsetDateTime
 // side date-range filter, consistent with how every other repository in
 // this app reads a daily table.
 class AnalysisRepository(private val supabase: SupabaseClient) {
+
+    // Analysis Layer 3 / R1. The start of each metric's current regime = its last CONFIRMED series break, published by the
+    // analysis-run Edge Function into analysis_results. Optional by design: before the first run, with no confirmed break,
+    // or if the read fails, every baseline behaves exactly as before (NONE), never blocks a screen.
+    suspend fun loadSeriesBreakStarts(): SeriesBreakStarts =
+        try {
+            val rows = supabase.postgrest.from("analysis_results")
+                .select(columns = Columns.list("key,payload")) { filter { eq("kind", "series_break") } }
+                .decodeList<SeriesBreakResultRow>()
+            seriesBreakStartsFrom(rows.associate { it.key to it.payload.lastConfirmed })
+        } catch (e: Exception) {
+            SeriesBreakStarts.NONE
+        }
+
+    // Analysis Layer 3 / Phase 3. The latest published relationship results; empty before the first run or if the read fails.
+    suspend fun loadRelationships(): List<RelationshipResultRow> =
+        try {
+            supabase.postgrest.from("analysis_results")
+                .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "relationship") } }
+                .decodeList<RelationshipResultRow>()
+        } catch (e: Exception) {
+            emptyList()
+        }
 
     suspend fun loadWearableDaily(): List<WearableAnalysisRow> =
         supabase.postgrest.from("wearable_daily")

@@ -36,8 +36,15 @@ private const val MIN_READINGS_PER_WINDOW = 4
 // Generic over any daily-value stream needing the SWC treatment -- takes
 // values already in whatever space they should be compared in (log-space
 // for HRV, raw for RHR and sleep duration).
-fun evaluateSwcStream(dailyValues: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): SwcEvaluation {
-    val past = dailyValues.filter { !it.first.isAfter(asOf) }
+// Analysis Layer 3 / R1: `windowStart` (when given) drops every reading before it, so a baseline restarts after a
+// CONFIRMED series break (a device/source/classifier change, see domain/SeriesBreakStarts.kt) instead of mixing two
+// regimes. The existing 60-day span gate below then reports Building until a new baseline exists. Null = unchanged.
+fun evaluateSwcStream(
+    dailyValues: List<Pair<LocalDate, Double>>,
+    asOf: LocalDate = LocalDate.now(),
+    windowStart: LocalDate? = null,
+): SwcEvaluation {
+    val past = dailyValues.filter { !it.first.isAfter(asOf) && (windowStart == null || !it.first.isBefore(windowStart)) }
     if (past.isEmpty()) return SwcEvaluation(EvalState.NoData, Confidence(0, BASELINE_WINDOW_DAYS), null, null, null, null)
 
     val earliest = past.minOf { it.first }
@@ -93,13 +100,13 @@ private fun cv7dAt(values: List<Pair<LocalDate, Double>>, date: LocalDate): Doub
 }
 
 // Log-transformed per the spec ("log-transform first, always") -- ln(rMSSD).
-fun evaluateHrv(hrvDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): SwcEvaluation =
-    evaluateSwcStream(hrvDaily.filter { it.second > 0 }.map { it.first to ln(it.second) }, asOf)
+fun evaluateHrv(hrvDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now(), windowStart: LocalDate? = null): SwcEvaluation =
+    evaluateSwcStream(hrvDaily.filter { it.second > 0 }.map { it.first to ln(it.second) }, asOf, windowStart)
 
 // Untransformed, per the spec's own "apply the identical structure to
 // resting HR (untransformed -- RHR does not need the log)" instruction.
-fun evaluateRhr(rhrDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): SwcEvaluation =
-    evaluateSwcStream(rhrDaily, asOf)
+fun evaluateRhr(rhrDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now(), windowStart: LocalDate? = null): SwcEvaluation =
+    evaluateSwcStream(rhrDaily, asOf, windowStart)
 
 // Same SWC treatment as RHR (untransformed -- SpO2 is already a bounded
 // percentage, no log-space reason to transform it).

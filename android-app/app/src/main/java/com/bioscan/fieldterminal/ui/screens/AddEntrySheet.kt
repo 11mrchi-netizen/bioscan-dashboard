@@ -83,6 +83,7 @@ import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.AddEntryType
+import com.bioscan.fieldterminal.domain.ethanolGrams
 import com.bioscan.fieldterminal.domain.isSupplementDueToday
 import com.bioscan.fieldterminal.domain.supplementNextDueDate
 import com.bioscan.fieldterminal.domain.FuelSubType
@@ -121,6 +122,9 @@ private val sheetActionLabelStyle = FTType.LabelCaps
 fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedType by remember { mutableStateOf<AddEntryType?>(null) }
+    // Analysis Layer 3 / R2: "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
+    var sayIt by remember { mutableStateOf(false) }
+    var foodPrefill by remember { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
     val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var saving by remember { mutableStateOf(false) }
@@ -144,12 +148,34 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 .verticalScroll(rememberScrollState()),
         ) {
             val type = selectedType
-            if (type == null) {
+            if (sayIt) {
+                SheetBackHeader(label = "SAY IT", onBack = { sayIt = false })
+                Spacer(Modifier.height(16.dp))
+                LogAgentForm(
+                    onSaved = onSaved,
+                    onFoodHandoff = { text, at ->
+                        foodPrefill = text to at
+                        sayIt = false
+                        selectedType = AddEntryType.Fuel
+                    },
+                )
+            } else if (type == null) {
                 Text("LOG NEW ENTRY", style = sheetHeaderTitleStyle, color = FT.DomainLog)
                 Spacer(Modifier.height(16.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(FT.BorderWidth, FT.DomainLog, RoundedCornerShape(FT.RadiusModule))
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { sayIt = true }
+                        .padding(vertical = 18.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("SAY IT", style = sheetActionLabelStyle, color = FT.DomainLog)
+                }
+                Spacer(Modifier.height(10.dp))
                 TypePickerGrid(onSelect = { selectedType = it })
             } else {
-                SheetBackHeader(label = type.label, onBack = { selectedType = null })
+                SheetBackHeader(label = type.label, onBack = { selectedType = null; foodPrefill = null })
                 Spacer(Modifier.height(16.dp))
                 val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
                     saving = true
@@ -170,7 +196,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 }
                 saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
                 when (type) {
-                    AddEntryType.Fuel -> FuelForm(saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive)
+                    AddEntryType.Fuel -> FuelForm(saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill)
                     AddEntryType.Encounter -> EncounterForm(
                         saving,
                         onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
@@ -636,7 +662,7 @@ private fun QtyRow(qty: Int, onChange: (Int) -> Unit) {
 // SupplementsForm exactly as they'd be used standalone -- only the picker
 // wrapping them is new.
 @Composable
-private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit, onCanonicalSaved: () -> Unit, externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null) {
+private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit, onCanonicalSaved: () -> Unit, externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null, foodPrefill: Pair<String, LocalDateTime>? = null) {
     var subType by remember { mutableStateOf(FuelSubType.Food) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -659,6 +685,8 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
         when (subType) {
             FuelSubType.Food -> FoodForm(
                 saving,
+                initialDateTime = foodPrefill?.second ?: LocalDateTime.now(),
+                initialDescription = foodPrefill?.first ?: "",
                 onSave = { dt, desc, cal, p, c, f, fi, su, so -> onSubmit { it.addFood(dt, desc, cal, p, c, f, fi, su, so) } },
                 onCanonicalSaved = onCanonicalSaved,
                 externalActivityActive = externalActivityActive,
@@ -1084,6 +1112,8 @@ private fun FoodForm(
 // go through the meal_items path (non-water). Water stays on the simple
 // hydration_daily path for backward compatibility.
 private val BEVERAGE_CLASSES = listOf("coffee", "tea", "juice", "soda", "milk", "electrolyte", "alcohol")
+// Common strengths, as a shortcut to the ABV field (label to ABV text). Any other strength is typed in.
+private val ALCOHOL_PRESETS = listOf("beer 5" to "5", "wine 12" to "12", "spirits 40" to "40")
 private val BEVERAGE_CLASS_LABELS = mapOf(
     "coffee" to "COFFEE", "tea" to "TEA", "juice" to "JUICE",
     "soda" to "SODA", "milk" to "MILK", "electrolyte" to "ELECTROLYTE", "alcohol" to "ALCOHOL",
@@ -1104,6 +1134,8 @@ private fun DrinkForm(
     var date by remember { mutableStateOf(initialDate) }
     var ml by remember { mutableStateOf(initialMl?.toString() ?: "") }
     var beverageClass by remember { mutableStateOf<String?>(null) }
+    // Analysis Layer 3 / R2: alcohol is stored as grams of ethanol, so it needs the label strength.
+    var abv by remember { mutableStateOf("") }
     var beverageSaving by remember { mutableStateOf(false) }
     var beverageError by remember { mutableStateOf<String?>(null) }
     val mlValue = ml.toIntOrNull()
@@ -1119,6 +1151,22 @@ private fun DrinkForm(
             TextChipRow(BEVERAGE_CLASSES, beverageClass, perRow = 4) { beverageClass = it }
         }
 
+        if (beverageClass == "alcohol") {
+            Column {
+                FormLabel("STRENGTH (ABV %)")
+                FieldTextField(abv, { abv = it }, "e.g. 5", keyboardType = KeyboardType.Decimal)
+            }
+            TextChipRow(ALCOHOL_PRESETS.map { it.first }, ALCOHOL_PRESETS.firstOrNull { it.second == abv }?.first, perRow = 3) { picked ->
+                abv = ALCOHOL_PRESETS.firstOrNull { it.first == picked }?.second ?: ""
+            }
+            val grams = mlValue?.let { v -> abv.toDoubleOrNull()?.let { a -> ethanolGrams(v.toDouble(), a) } }
+            Text(
+                if (grams != null) "= $grams g of pure ethanol" else "Enter volume and strength to record grams of ethanol.",
+                style = FTType.BodySmall,
+                color = FT.TextSecondary,
+            )
+        }
+
         beverageError?.let {
             Text(it, style = FTType.BodySmall, color = FT.Critical)
         }
@@ -1132,13 +1180,18 @@ private fun DrinkForm(
             AmberButton(label = if (beverageSaving) "SAVING..." else "LOG $label") {
                 val vol = mlValue ?: return@AmberButton
                 if (vol <= 0 || beverageSaving) return@AmberButton
+                val abvValue = abv.toDoubleOrNull()
+                if (beverageClass == "alcohol" && ethanolGrams(vol.toDouble(), abvValue ?: 0.0) == null) {
+                    beverageError = "Enter the drink's strength (ABV %, above 0 and at most 100)."
+                    return@AmberButton
+                }
                 beverageSaving = true
                 beverageError = null
                 scope.launch {
                     try {
                         val loggedAt = date.atTime(LocalTime.now()).toIsoWithOffset()
                         NutritionMealSaveRepository(SupabaseClientProvider.client)
-                            .saveBeverageDrink(loggedAt, beverageClass!!, vol.toDouble())
+                            .saveBeverageDrink(loggedAt, beverageClass!!, vol.toDouble(), abvValue.takeIf { beverageClass == "alcohol" })
                         onCanonicalSaved()
                     } catch (e: Exception) {
                         beverageError = e.message ?: "Could not save beverage"
@@ -1975,7 +2028,7 @@ private fun ExerciseDetailsForm(
 // optional (unlike Bristol), so tapping the already-selected chip again
 // clears it back to null rather than always leaving exactly one selected.
 @Composable
-private fun TextChipRow(options: List<String>, selected: String?, perRow: Int = 4, onSelect: (String?) -> Unit) {
+internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int = 4, onSelect: (String?) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         options.chunked(perRow).forEach { rowOptions ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

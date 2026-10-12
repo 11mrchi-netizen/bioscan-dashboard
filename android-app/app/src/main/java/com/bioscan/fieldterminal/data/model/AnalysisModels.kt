@@ -115,3 +115,31 @@ data class LabResultAnalysisRow(
     @SerialName("ref_low") val refLow: Double? = null,
     @SerialName("ref_high") val refHigh: Double? = null,
 )
+
+// Analysis Layer 3 / R1. Read model for analysis_results rows of kind "series_break" (published by the analysis-run Edge
+// Function). Only the field this app needs is decoded: the last CONFIRMED break date, the start of the current regime.
+@Serializable
+data class SeriesBreakResultRow(val key: String, val payload: SeriesBreakPayload = SeriesBreakPayload())
+
+@Serializable
+data class SeriesBreakPayload(val lastConfirmed: String? = null)
+
+// Analysis Layer 3 / Phase 3. Read model for analysis_results rows of kind "relationship": one confirmatory hypothesis each
+// (supabase/functions/_shared/analysis-core/relationship.ts). Every field is defaulted so an older or partial payload still decodes.
+@Serializable
+data class RelationshipResultRow(val key: String, val state: String = "insufficient", val payload: RelationshipPayload = RelationshipPayload())
+
+@Serializable
+data class RelationshipEffect(val value: Double = 0.0, val lo: Double = 0.0, val hi: Double = 0.0, val unit: String = "")
+
+@Serializable
+data class RelationshipPayload(
+    val label: String = "",
+    val summary: String = "",
+    val reason: String? = null,
+    val n: Int = 0,
+    val effect: RelationshipEffect? = null,
+    val mde: Double? = null,
+    val pAdjusted: Double? = null,
+    val notes: List<String> = emptyList(),
+)

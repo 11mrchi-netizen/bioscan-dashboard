@@ -93,6 +93,15 @@ data class NewWellbeingRow(
     @SerialName("arousal_level") val arousalLevel: Int? = null,
 )
 
+// Analysis Layer 3 / R2: recovery_sessions has no form; rows come from the log agent (a confirmed proposal).
+@Serializable
+data class NewRecoverySessionRow(
+    val date: String,
+    val name: String,
+    val category: String,
+    @SerialName("duration_min") val durationMin: Int? = null,
+)
+
 // DAV-156. doseValue/doseUnit default from the roster's own free-text dose
 // string (see parseDose() in AddEntryRepository.kt), populated at insert
 // time so every log carries a real dose without the add flow needing its

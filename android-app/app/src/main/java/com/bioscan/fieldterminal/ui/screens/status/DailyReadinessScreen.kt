@@ -28,13 +28,16 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.ZeppStressRepository
 import com.bioscan.fieldterminal.data.buildTrainingSessionLoads
+import com.bioscan.fieldterminal.data.model.RelationshipResultRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.comparison.METRIC_DIRECTIONALITY
 import com.bioscan.fieldterminal.domain.MetricCategory
+import com.bioscan.fieldterminal.domain.patternsView
 import com.bioscan.fieldterminal.domain.PerformanceTimeframe
+import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.domain.DisplayValue
@@ -77,6 +80,10 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
     var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
     var cycleLoaded by remember { mutableStateOf(false) }
     var nutrition by remember { mutableStateOf<NutritionOverview?>(null) }
+    // Analysis Layer 3 / R1: start of each metric's current regime (last confirmed series break); NONE until loaded.
+    var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
+    // Analysis Layer 3 / Phase 3: published confirmatory relationships (read-only).
+    var relationships by remember { mutableStateOf<List<RelationshipResultRow>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         val repo = AnalysisRepository(SupabaseClientProvider.client)
@@ -88,6 +95,8 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
         activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle()
         cycleLoaded = true
         nutrition = NutritionRepository(SupabaseClientProvider.client).loadOverview()
+        breakStarts = repo.loadSeriesBreakStarts()
+        relationships = repo.loadRelationships()
     }
 
     val s = sessions
@@ -118,6 +127,7 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
         sl.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } },
         sl.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } },
         nights,
+        durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min"),
     )
     val exerciseWindows = s.mapNotNull { session ->
         val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
@@ -129,8 +139,8 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
     val recovery = computeDynamicRecovery(
         sleepIndex = sleepIndexResult,
-        hrvEval = evaluateHrv(hrvPoints),
-        rhrEval = evaluateRhr(rhrPoints),
+        hrvEval = evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")),
+        rhrEval = evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")),
         trainingLoadEval = trainingLoadEval,
         energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
         stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
@@ -194,8 +204,10 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
                 }
             }
 
-            EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints)
-            EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints)
+            EvalCard("HRV", evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).toExpSpace(), "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints)
+            EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")), "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints)
+
+            PatternsCard(patternsView(relationships))
         }
     }
 }

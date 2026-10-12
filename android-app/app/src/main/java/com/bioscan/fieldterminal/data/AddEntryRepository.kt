@@ -24,6 +24,7 @@ import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.NewStoolRow
 import com.bioscan.fieldterminal.data.model.NewSupplementLogRow
+import com.bioscan.fieldterminal.data.model.NewRecoverySessionRow
 import com.bioscan.fieldterminal.data.model.NewWellbeingRow
 import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
 import com.bioscan.fieldterminal.data.model.SupplementLogEditRow
@@ -36,6 +37,8 @@ import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 // Step 12 (Phase D) + the 2026-09-15 follow-up pass: the "+" add-entry
 // flow's writes. Every add*/update* now takes its date/timestamp as an
@@ -150,6 +153,42 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("wellbeing_daily").upsert(
             NewWellbeingRow(date = date, energy = energy, mood = mood, stress = stress, soreness = soreness, morningErectionQuality = morningErectionQuality, arousalLevel = arousalLevel)
         ) { onConflict = "user_id,date" }
+    }
+
+    // Analysis Layer 3 / R2 (log agent). Partial write: only the scores that were stated go to the row, so "energy 7" cannot
+    // null out the mood or arousal already logged for the day (addWellbeing upserts the whole row).
+    suspend fun mergeWellbeing(date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?) {
+        val fields = buildJsonObject {
+            put("date", date)
+            energy?.let { put("energy", it) }
+            mood?.let { put("mood", it) }
+            stress?.let { put("stress", it) }
+            soreness?.let { put("soreness", it) }
+        }
+        val exists = supabase.postgrest.from("wellbeing_daily")
+            .select(columns = Columns.list("id")) { filter { eq("date", date) } }
+            .decodeList<WellbeingIdRow>()
+            .isNotEmpty()
+        if (exists) {
+            supabase.postgrest.from("wellbeing_daily").update(fields) { filter { eq("date", date) } }
+        } else {
+            supabase.postgrest.from("wellbeing_daily").insert(fields)
+        }
+    }
+
+    suspend fun addRecoverySession(date: String, name: String, category: String, durationMin: Int?) {
+        supabase.postgrest.from("recovery_sessions").insert(
+            NewRecoverySessionRow(date = date, name = name, category = category, durationMin = durationMin)
+        )
+    }
+
+    // Same write as the Supplements form for one roster item (dose string, product link, nutrient intake), by roster id.
+    suspend fun addSupplementTakenById(takenAt: String, supplementId: Long, quantity: Int) {
+        val row = supabase.postgrest.from("supplements")
+            .select(columns = Columns.list("id,name,dose")) { filter { eq("id", supplementId) } }
+            .decodeList<SupplementDoseRow>()
+            .firstOrNull() ?: throw IllegalArgumentException("Supplement $supplementId is not in your roster")
+        addSupplementsTaken(takenAt, listOf(Triple(row.id, row.name, row.dose)), quantities = mapOf(row.id to quantity))
     }
 
     // Phase A4 (Category 8). severity_score is a stored generated column --
@@ -498,6 +537,12 @@ private data class SupplementProductLinkRow(
     @SerialName("product_id") val productId: Long? = null,
     @SerialName("servings_per_dose") val servingsPerDose: Double = 1.0,
 )
+
+@kotlinx.serialization.Serializable
+private data class WellbeingIdRow(val id: Long)
+
+@kotlinx.serialization.Serializable
+private data class SupplementDoseRow(val id: Long, val name: String, val dose: String)
 
 @kotlinx.serialization.Serializable
 private data class DetailsJsonRow(val details: JsonObject = JsonObject(emptyMap()))

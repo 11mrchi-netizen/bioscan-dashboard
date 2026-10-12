@@ -1,0 +1,577 @@
+{
+  "registryVersion": "1.0.0",
+  "note": "Methodology as data (Analysis Layer 3, Phase 7). One entry per canonical metric of docs/analysis-layer-2/02-metric-registry.md plus the composites and Layer 3 engines. Read by the Node tests, the console and, copied as an asset, the Android app. kind: raw | derived | modeled | inferred | composite. A modeled/inferred entry needs a reference or productDefined=true; a composite is always productDefined. Citations are primary sources only.",
+  "metrics": [
+    {
+      "key": "heart_rate_instant",
+      "docName": "Heart rate (instantaneous)",
+      "kind": "raw",
+      "methodology": "Per-sample heart rate as reported by the watch. Not stored per sample in the app database; only session-level and daily aggregates are kept.",
+      "limitations": [
+        "Optical heart-rate sensors lose accuracy during high-intensity, irregular-motion and cold-weather activity.",
+        "Not available at sample resolution in this app."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "heart_rate_session_avg",
+      "docName": "Heart rate (session average)",
+      "kind": "raw",
+      "methodology": "Mean heart rate over a recorded exercise session, as reported by Health Connect or the Zepp extract. Never recomputed.",
+      "limitations": [
+        "Depends on the watch's sensor and sampling interval.",
+        "Averages hide interval structure; compare like with like sessions."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "heart_rate_session_max",
+      "docName": "Heart rate (session max)",
+      "kind": "raw",
+      "methodology": "Highest heart rate in a recorded session, as reported by the source. Never recomputed.",
+      "limitations": [
+        "A single optical spike or cadence-lock artefact can set the maximum.",
+        "Often missing for manually entered sessions."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "hrv",
+      "docName": "HRV",
+      "kind": "raw",
+      "methodology": "Daily heart-rate variability as reported by the device. Evaluated elsewhere as ln(HRV): the 7-day rolling mean against your own 60-day baseline, with a band of half the baseline standard deviation (the smallest worthwhile change) and a 7-day coefficient of variation as an instability signal.",
+      "limitations": [
+        "Whether the vendor value is rMSSD or SDNN is not confirmed for every source.",
+        "Vendor algorithms, firmware and sleep-stage classification change over time; a change of device or source can shift the series without any physiological change (see series breaks).",
+        "Single nights are noisy; only the 7-day trend is judged."
+      ],
+      "references": [
+        {
+          "citation": "Plews DJ, Laursen PB, Stanley J, Kilding AE, Buchheit M. Training adaptation and heart rate variability in elite endurance athletes: opening the door to effective monitoring. Sports Med 2013;43(9):773-781.",
+          "doi": "10.1007/s40279-013-0071-8"
+        },
+        {
+          "citation": "Shaffer F, Ginsberg JP. An overview of heart rate variability metrics and norms. Front Public Health 2017;5:258.",
+          "doi": "10.3389/fpubh.2017.00258"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "rhr",
+      "docName": "Resting heart rate",
+      "kind": "raw",
+      "methodology": "Daily resting heart rate as reported by the device. Evaluated with the same band structure as HRV but without the log transform: 7-day mean against your 60-day baseline, band of half the baseline standard deviation.",
+      "limitations": [
+        "Vendors define 'resting' differently (lowest sleeping value, lowest rolling average, quiet-wake value).",
+        "Illness, alcohol, late meals and heat raise it for reasons unrelated to training."
+      ],
+      "references": [
+        {
+          "citation": "Hopkins WG, Marshall SW, Batterham AM, Hanin J. Progressive statistics for studies in sports medicine and exercise science. Med Sci Sports Exerc 2009;41(1):3-13.",
+          "doi": "10.1249/MSS.0b013e31818cb278"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "vo2max",
+      "docName": "VO2max",
+      "kind": "raw",
+      "methodology": "Vendor-estimated maximal oxygen uptake, reported intermittently after qualifying outdoor efforts. Shown as received; the app does not estimate it itself.",
+      "limitations": [
+        "A watch estimate, not a laboratory test; typical error is several ml/kg/min.",
+        "Updates only after suitable efforts, so it lags real changes."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "session_duration",
+      "docName": "Session duration",
+      "kind": "raw",
+      "methodology": "Duration of a recorded or manually logged session in minutes, as stored.",
+      "limitations": [
+        "Auto-paused time may or may not be included depending on the source."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "distance",
+      "docName": "Distance",
+      "kind": "raw",
+      "methodology": "Distance of a session in kilometres, as reported by the source (GPS) or typed in.",
+      "limitations": [
+        "GPS distance is under- or over-estimated in tunnels, dense cover and on tracks with tight turns."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "pace",
+      "docName": "Pace",
+      "kind": "derived",
+      "methodology": "Minutes per kilometre = duration / distance, computed when the source gives no average speed.",
+      "limitations": [
+        "Inherits any error in distance and duration.",
+        "An average hides pacing and stops."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "speed",
+      "docName": "Speed",
+      "kind": "raw",
+      "methodology": "Average speed in km/h as reported by Health Connect, or distance divided by duration for manual entries.",
+      "limitations": [
+        "Same GPS limits as distance."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "power",
+      "docName": "Power",
+      "kind": "raw",
+      "methodology": "Average power in watts from a power meter or the watch's running-power estimate, as reported.",
+      "limitations": [
+        "Vendor running-power models are not comparable across brands.",
+        "Rarely populated in this account's data."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "cadence",
+      "docName": "Cadence",
+      "kind": "raw",
+      "methodology": "Steps or revolutions per minute. Not stored by the app today.",
+      "limitations": [
+        "No ingestion path exists yet."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "elevation_gain",
+      "docName": "Elevation gain",
+      "kind": "raw",
+      "methodology": "Total ascent in metres for a session as reported by the source.",
+      "limitations": [
+        "Barometric and GPS altitude differ; GPS-only ascent is usually overstated."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "rpe",
+      "docName": "RPE",
+      "kind": "raw",
+      "methodology": "Your own rating of perceived exertion for a session on a 0 to 10 scale, entered after the session.",
+      "limitations": [
+        "Subjective and scale-anchoring varies between people and over time.",
+        "Missing for most sessions that were not logged by hand."
+      ],
+      "references": [
+        {
+          "citation": "Foster C, Florhaug JA, Franklin J, et al. A new approach to monitoring exercise training. J Strength Cond Res 2001;15(1):109-115.",
+          "doi": null
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "rir",
+      "docName": "RIR",
+      "kind": "raw",
+      "methodology": "Reps in reserve per set. Not stored today.",
+      "limitations": [
+        "No column exists yet."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "sets_reps_load",
+      "docName": "Sets/reps/load",
+      "kind": "raw",
+      "methodology": "Sets, repetitions and load in kilograms per exercise as typed into a strength session.",
+      "limitations": [
+        "Entered by hand; edit-only after the fact.",
+        "Load does not capture tempo, range of motion or rest."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "sleep_duration",
+      "docName": "Sleep duration",
+      "kind": "raw",
+      "methodology": "Hours of the main sleep period as reported by the source. Evaluated with the same band structure as HRV: 7-day mean against your own 60-day baseline, band of half the baseline standard deviation. Main sleeps under 2 hours are treated as a recording fault, not a night.",
+      "limitations": [
+        "Wrist-worn sleep detection mistakes quiet wakefulness for sleep and may split a night.",
+        "Source changes can alter duration without any change in your sleep."
+      ],
+      "references": [
+        {
+          "citation": "Hirshkowitz M, Whiton K, Albert SM, et al. National Sleep Foundation's sleep time duration recommendations: methodology and results summary. Sleep Health 2015;1(1):40-43.",
+          "doi": "10.1016/j.sleh.2014.12.010"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "sleep_stages",
+      "docName": "Sleep stages (deep/rem/light)",
+      "kind": "raw",
+      "methodology": "Minutes in deep, REM and light sleep as classified by the device. Each stage is evaluated against your own 60-day baseline exactly like sleep duration.",
+      "limitations": [
+        "Wrist devices infer stages from movement and pulse, not brain activity; agreement with polysomnography is moderate and varies by stage.",
+        "A firmware or algorithm update can shift stage minutes abruptly (see series breaks)."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "respiratory_rate_sleep",
+      "docName": "Respiratory rate (sleep)",
+      "kind": "raw",
+      "methodology": "Breaths per minute during sleep as reported by the device. An anomaly flag compares recent nights with your own baseline.",
+      "limitations": [
+        "Estimated from heart-rate and motion signals, not measured at the airway.",
+        "Sparse in this account's data."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "sri",
+      "docName": "Sleep regularity index (SRI)",
+      "kind": "modeled",
+      "methodology": "Probability, rescaled to -100..100, that you are in the same state (asleep or awake) at any clock minute as 24 hours earlier. Computed on 5-minute bins over at least 14 nights; more than 2 missing nights in a row returns 'building' instead of a number.",
+      "limitations": [
+        "Needs consecutive nights; gaps degrade it.",
+        "Treats naps and split sleep as ordinary sleep time."
+      ],
+      "references": [
+        {
+          "citation": "Phillips AJK, Clerx WM, O'Brien CS, et al. Irregular sleep/wake patterns are associated with poorer academic performance and delayed circadian and sleep/wake timing. Sci Rep 2017;7:3216.",
+          "doi": "10.1038/s41598-017-03171-4"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "body_weight",
+      "docName": "Body weight",
+      "kind": "raw",
+      "methodology": "Body mass in kilograms as weighed or imported.",
+      "limitations": [
+        "Day-to-day change is dominated by water, food and bowel contents."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "body_weight_ema",
+      "docName": "Body weight EMA",
+      "kind": "modeled",
+      "methodology": "Exponentially weighted moving average of body weight, time-aware so a skipped day does not distort the trend. The smoothing constant is chosen from how often you weigh in over the last 30 days. A 'stable' call needs at least 10 measurements over 14 days and a slope under 0.15 kg per week.",
+      "limitations": [
+        "Lags a real change by the smoothing time.",
+        "Sparse weigh-ins make the trend unreliable."
+      ],
+      "references": [],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "body_fat_pct",
+      "docName": "Body fat %",
+      "kind": "raw",
+      "methodology": "Body fat percentage from a bioelectrical-impedance reading. Two readings are compared only when at least 30 days apart and the difference exceeds a least significant change.",
+      "limitations": [
+        "Impedance readings vary with hydration, food and time of day; noise can exceed the real change over weeks.",
+        "Not interchangeable with DEXA."
+      ],
+      "references": [
+        {
+          "citation": "Hopkins WG. Measures of reliability in sports medicine and science. Sports Med 2000;30(1):1-15.",
+          "doi": "10.2165/00007256-200030010-00001"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "lean_mass",
+      "docName": "Lean mass",
+      "kind": "raw",
+      "methodology": "Lean mass in kilograms from the same impedance reading, as reported.",
+      "limitations": [
+        "Same hydration sensitivity as body fat %; sparse in this account's data."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "macros",
+      "docName": "Macros (protein/carbs/fat/fiber/sugar/sodium)",
+      "kind": "raw",
+      "methodology": "Nutrient amounts per meal. Amounts for logged foods come from a food database through a deterministic resolver; a model never supplies nutrient values.",
+      "limitations": [
+        "Database entries are averages for a food, not your portion or brand.",
+        "Portion size is the largest source of error."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "hydration",
+      "docName": "Hydration",
+      "kind": "raw",
+      "methodology": "Daily fluid volume in millilitres. Each non-water drink also carries an effective-hydration estimate from a fixed per-beverage retention factor (model v1).",
+      "limitations": [
+        "Counts what you log, not what you drink.",
+        "Retention factors are population values from one study, not personal."
+      ],
+      "references": [
+        {
+          "citation": "Maughan RJ, Watson P, Cordery PAA, et al. A randomized trial to assess the potential of different beverages to affect hydration status: development of a beverage hydration index. Am J Clin Nutr 2016;103(3):717-723.",
+          "doi": "10.3945/ajcn.115.114769"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "alcohol",
+      "docName": null,
+      "kind": "derived",
+      "methodology": "Grams of pure ethanol = volume in ml x strength (ABV %) / 100 x 0.789 g/ml, rounded to 0.1 g. The strength must be stated; a drink without one is not recorded. Never derived from calories.",
+      "limitations": [
+        "Labelled strength can differ from the actual pour.",
+        "Home pours and mixed drinks are estimates."
+      ],
+      "references": [
+        {
+          "citation": "National Institute on Alcohol Abuse and Alcoholism. What is a standard drink? (14 g of pure alcohol in the United States).",
+          "doi": null
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "wellbeing",
+      "docName": "Wellbeing (energy/mood/stress/soreness)",
+      "kind": "raw",
+      "methodology": "Your own 0 to 10 ratings of energy, mood, stress and soreness for a day. Scores are treated as ordered categories, not interval measurements.",
+      "limitations": [
+        "Subjective; the same number can mean different things on different days.",
+        "Only days you logged exist; missing days are not zero."
+      ],
+      "references": [
+        {
+          "citation": "Saw AE, Main LC, Gastin PB. Monitoring the athlete training response: subjective self-reported measures trump commonly used objective measures: a systematic review. Br J Sports Med 2016;50(5):281-291.",
+          "doi": "10.1136/bjsports-2015-094758"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "training_load",
+      "docName": "Training load (CTL/ATL/TSB)",
+      "kind": "modeled",
+      "methodology": "Session load = minutes x RPE, summed per day. Chronic load (CTL) is an exponentially weighted average with a 42-day time constant, acute load (ATL) with a 7-day constant, and form (TSB) is CTL minus ATL. Sessions without an RPE contribute nothing; nothing is imputed. CTL needs 42 days of history.",
+      "limitations": [
+        "Time constants are population conventions, not fitted to you.",
+        "Needs an RPE on each session; unlogged sessions understate load.",
+        "The web dashboard still computes a different ratio (ACWR) from the same sessions."
+      ],
+      "references": [
+        {
+          "citation": "Banister EW, Calvert TW, Savage MV, Bach TM. A systems model of training for athletic performance. Aust J Sports Med 1975;7:57-61.",
+          "doi": null
+        },
+        {
+          "citation": "Foster C, Florhaug JA, Franklin J, et al. A new approach to monitoring exercise training. J Strength Cond Res 2001;15(1):109-115.",
+          "doi": null
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "trimp",
+      "docName": "TRIMP",
+      "kind": "modeled",
+      "methodology": "Heart-rate-reserve weighted training impulse. Specified but not yet implemented in the app.",
+      "limitations": [
+        "Needs per-minute heart rate and a maximum heart rate; not available for most sessions."
+      ],
+      "references": [
+        {
+          "citation": "Banister EW, Calvert TW. Planning for future performance: implications for long term training. Can J Appl Sport Sci 1980;5(3):170-176.",
+          "doi": null
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "threshold_intensity",
+      "docName": "Threshold-relative intensity",
+      "kind": "modeled",
+      "methodology": "Session intensity as a percentage of a personal threshold. Not implemented: no threshold profile exists.",
+      "limitations": [
+        "Requires a measured threshold heart rate, pace or power."
+      ],
+      "references": [],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "srpe_load",
+      "docName": "sRPE load",
+      "kind": "derived",
+      "methodology": "RPE x session minutes.",
+      "limitations": [
+        "Inherits the subjectivity of RPE.",
+        "Does not distinguish a hard short session from an easy long one with the same product."
+      ],
+      "references": [
+        {
+          "citation": "Foster C, Florhaug JA, Franklin J, et al. A new approach to monitoring exercise training. J Strength Cond Res 2001;15(1):109-115.",
+          "doi": null
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "lab_marker",
+      "docName": "Lab marker (generic)",
+      "kind": "raw",
+      "methodology": "A blood or urine result with its unit and the laboratory's reference range. A change between two draws is judged against the marker's reference change value, which combines analytical and within-person biological variation.",
+      "limitations": [
+        "Roughly one draw a year gives two-point comparisons, never a trend.",
+        "Reference ranges are population ranges, not optimal ranges."
+      ],
+      "references": [
+        {
+          "citation": "Fraser CG, Harris EK. Generation and application of data on biological variation in clinical chemistry. Crit Rev Clin Lab Sci 1989;27(5):409-437.",
+          "doi": "10.3109/10408368909106595"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "injury_illness_severity",
+      "docName": "Injury/illness severity",
+      "kind": "raw",
+      "methodology": "Your own 0 to 10 severity rating for a logged injury or illness. Weekly health-problem screening uses the OSTRC questionnaire.",
+      "limitations": [
+        "Self-rated; not a diagnosis."
+      ],
+      "references": [
+        {
+          "citation": "Clarsen B, Ronsen O, Myklebust G, Florenes TW, Bahr R. The Oslo Sports Trauma Research Center questionnaire on health problems: a new approach to prospective monitoring of illness and injury in elite athletes. Br J Sports Med 2014;48(9):754-760.",
+          "doi": "10.1136/bjsports-2012-092087"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "sleep_index",
+      "docName": null,
+      "kind": "composite",
+      "methodology": "A 0 to 100 index that aggregates the existing sleep evaluations (duration, regularity, respiratory anomaly, stages) with named fixed weights. It shows how close your recent week is to your own norm, never a universal target. At least two components are required.",
+      "limitations": [
+        "Product-defined: weights are documented opinions, not fitted or clinically validated.",
+        "Not comparable between people."
+      ],
+      "references": [],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "dynamic_recovery",
+      "docName": null,
+      "kind": "composite",
+      "methodology": "A recovery state built from separate contributors (sleep index, HRV, resting heart rate, training load, optionally Zepp stress). Each keeps its own direction and confidence; they are listed, not blended into one score. At least two contributors are required for a state.",
+      "limitations": [
+        "Product-defined, not clinically validated.",
+        "Direction mapping (for example lower resting heart rate is better) is a convention."
+      ],
+      "references": [],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "series_break",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "A binary-segmentation scan for a lasting change in the level or the spread of a daily series, with an allowance for day-to-day autocorrelation. A detected break is only a candidate: a baseline restarts when the data source changed within 3 days of it or you confirm that the device or source changed.",
+      "limitations": [
+        "Real physiological changes look the same as source changes; that is why confirmation is required.",
+        "Location is only as precise as the data density.",
+        "A critical value of 6 gave a 0.7 % false-alarm rate in simulation; real data may differ."
+      ],
+      "references": [],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "relationship_engine",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "A fixed catalogue of hypotheses (for example alcohol and next-day HRV), each tested once. Both series are adjusted for day of week by subtracting weekday means, so a weekly routine cannot pass as an effect. The p-value comes from a weekly-block permutation test (2,000 shuffles of whole weeks of the cause, which keeps day-of-week alignment and short-range dependence), corrected across the hypotheses that had enough data with Benjamini-Hochberg. The effect is reported in natural units with a block-bootstrap 95% interval and the smallest effect the data could have detected (80% power).",
+      "limitations": [
+        "Observational: a supported link is an association after adjusting for weekday, not proof of cause.",
+        "Days without a record are left out, except where a hypothesis states that absence counts as zero (days with a food log for alcohol and caffeine, days with a watch record for training, days after the first logged recovery session).",
+        "With a few months of data only large effects are detectable; 'not distinguishable from noise' is not evidence of no effect, and the card says how large an effect had to be to be seen.",
+        "Product-defined catalogue: the questions were chosen in advance, not discovered from your data."
+      ],
+      "references": [
+        {
+          "citation": "Benjamini Y, Hochberg Y. Controlling the false discovery rate: a practical and powerful approach to multiple testing. J R Stat Soc B 1995;57(1):289-300.",
+          "doi": "10.1111/j.2517-6161.1995.tb02031.x"
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    }
+  ]
+}

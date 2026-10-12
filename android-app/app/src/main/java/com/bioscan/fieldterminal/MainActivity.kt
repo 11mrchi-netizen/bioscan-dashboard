@@ -45,6 +45,8 @@ class MainActivity : ComponentActivity() {
                 Triple(NotificationKind.SUPPLEMENT_DUE, "Supplement Reminders", NotificationManager.IMPORTANCE_DEFAULT),
                 Triple(NotificationKind.CHECKIN_MORNING, "Morning Check-in", NotificationManager.IMPORTANCE_DEFAULT),
                 Triple(NotificationKind.CHECKIN_EVENING, "Evening Check-in", NotificationManager.IMPORTANCE_DEFAULT),
+                Triple(NotificationKind.WELLBEING_CHECKIN, "Wellbeing Check-in", NotificationManager.IMPORTANCE_DEFAULT),
+                Triple(NotificationKind.EVENING_LOG, "Evening Log", NotificationManager.IMPORTANCE_DEFAULT),
             ).forEach { (id, name, importance) ->
                 nm.createNotificationChannel(NotificationChannel(id, name, importance))
             }

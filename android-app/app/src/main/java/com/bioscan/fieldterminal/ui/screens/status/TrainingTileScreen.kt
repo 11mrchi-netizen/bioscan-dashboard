@@ -54,6 +54,7 @@ import com.bioscan.fieldterminal.domain.TrainingLoadPoint
 import com.bioscan.fieldterminal.domain.trainingLoadSeries
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.ZeppStressRepository
+import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.computeSleepIndex
 import com.bioscan.fieldterminal.domain.evaluateHrv
@@ -237,7 +238,7 @@ private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
 
 @Composable
 internal fun TrainingReadinessCard(result: TrainingReadinessResult) {
-    FTCard(title = "TODAY'S READINESS") {
+    FTCard(title = "TODAY'S READINESS", methodology = "dynamic_recovery") {
         FTStatePill(result.generalState.toMetricState())
         FTConfidenceChip(confidenceLevel(result.confidence))
         result.demandRelative.forEach { (tier, state) ->
@@ -271,6 +272,8 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
     var stressDays by remember { mutableStateOf<List<StressDay>>(emptyList()) }
+    // Analysis Layer 3 / R1: start of each metric's current regime (last confirmed series break); NONE until loaded.
+    var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
 
     LaunchedEffect(Unit) {
         val repo = AnalysisRepository(SupabaseClientProvider.client)
@@ -281,6 +284,7 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
         sleep = repo.loadSleepDaily()
         wellbeing = repo.loadWellbeingDaily()
         stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays()
+        breakStarts = repo.loadSeriesBreakStarts()
     }
 
     val s = sessions
@@ -316,6 +320,7 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
             sl.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } },
             sl.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } },
             nights,
+            durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min"),
         )
         val exerciseWindows = s.mapNotNull { session ->
             val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
@@ -325,8 +330,8 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
         val physiologicalStress = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindows) }
         val recovery = computeDynamicRecovery(
             sleepIndex = sleepIndexResult,
-            hrvEval = evaluateHrv(w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }),
-            rhrEval = evaluateRhr(w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }),
+            hrvEval = evaluateHrv(w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("hrv")),
+            rhrEval = evaluateRhr(w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("rhr")),
             trainingLoadEval = trainingLoadEval,
             energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
             stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
@@ -346,7 +351,7 @@ internal fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTie
     val cutoff = LocalDate.now().minusMonths(timeframe.months)
     val visible = series.filter { it.date >= cutoff }
 
-    FTCard(title = "TRAINING LOAD") {
+    FTCard(title = "TRAINING LOAD", methodology = "training_load") {
         // One banded gauge on the TSB axis replaces the old State pill and
         // "TSB band" row -- the band name IS the state, and the gauge shows
         // where inside the band you sit. Building/NoData has no TSB yet, so

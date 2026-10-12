@@ -58,6 +58,7 @@ fun UserSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
             when (tab) {
                 UserTab.Profile -> ProfileCard(scope)
                 UserTab.NutritionGoals -> NutritionGoalsCard()
+                UserTab.DataCapture -> CaptureCoverageCard()
             }
         }
     }

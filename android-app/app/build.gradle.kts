@@ -59,6 +59,14 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Analysis Layer 3 / Phase 7: the metric methodology registry is shared data (read by the Node tests and the console too),
+    // so it lives next to the shared analysis core and is packaged here as an asset, one source of truth for all three.
+    sourceSets {
+        getByName("main") {
+            assets.srcDir("../../supabase/functions/_shared/metric-registry")
+        }
+    }
 }
 
 dependencies {

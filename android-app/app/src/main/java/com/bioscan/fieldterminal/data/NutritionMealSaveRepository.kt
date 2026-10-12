@@ -4,6 +4,7 @@ import com.bioscan.fieldterminal.data.model.HydrationFactorModelRow
 import com.bioscan.fieldterminal.data.model.MealItemRow
 import com.bioscan.fieldterminal.data.model.NewMealRow
 import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
+import com.bioscan.fieldterminal.domain.ethanolGrams
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -289,7 +290,15 @@ class NutritionMealSaveRepository(
     // most beverages); effective_hydration_ml = volumeMl × the v1 retention
     // factor for that class. caffeine_mg stays null unless a food match is
     // provided (use saveMeal for that richer path).
-    suspend fun saveBeverageDrink(loggedAt: String, beverageClass: String, volumeMl: Double): Long {
+    //
+    // Analysis Layer 3 / R2: an alcohol drink must carry its strength. `abvPercent` is turned into grams of ethanol
+    // (meal_items.alcohol_g) and shown in the description; an alcohol row without a usable strength is refused rather than
+    // stored without grams, because a drink with no grams is invisible to every alcohol analysis.
+    suspend fun saveBeverageDrink(loggedAt: String, beverageClass: String, volumeMl: Double, abvPercent: Double? = null): Long {
+        val alcoholG = if (beverageClass == "alcohol") {
+            ethanolGrams(volumeMl, abvPercent ?: 0.0)
+                ?: throw IllegalArgumentException("Alcohol needs a strength (ABV %) between 0 and 100 so grams of ethanol can be recorded")
+        } else null
         val factors = supabase.postgrest.from("hydration_factor_models")
             .select(columns = Columns.list("model_version,beverage_class,retention_factor")) {
                 filter { eq("model_version", "v1") }
@@ -297,7 +306,8 @@ class NutritionMealSaveRepository(
             .decodeList<HydrationFactorModelRow>()
         val retentionFactor = factors.firstOrNull { it.beverageClass == beverageClass }?.retentionFactor ?: 1.0
         val effectiveHydrationMl = volumeMl * retentionFactor
-        val description = beverageClassDisplayName(beverageClass)
+        val description = beverageClassDisplayName(beverageClass) +
+            if (alcoholG != null) " ${abvPercent!!.toBigDecimal().stripTrailingZeros().toPlainString()}% ABV" else ""
 
         val mealId = supabase.postgrest.from("meals")
             .insert(NewMealRow(loggedAt = loggedAt, description = description)) {
@@ -317,6 +327,7 @@ class NutritionMealSaveRepository(
                     source = "manual",
                     isBeverage = true,
                     waterMl = volumeMl,
+                    alcoholG = alcoholG,
                     effectiveHydrationMl = effectiveHydrationMl,
                     hydrationModelVersion = "v1",
                 ),

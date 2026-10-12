@@ -14,6 +14,8 @@ import androidx.work.WorkerParameters
 import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.model.NotificationOutcome
 import com.bioscan.fieldterminal.domain.notifications.ShownEntry
+import com.bioscan.fieldterminal.domain.notifications.eveningLogNeeded
+import com.bioscan.fieldterminal.domain.notifications.wellbeingCheckinNeeded
 import com.bioscan.fieldterminal.domain.notifications.nextFireTime
 import com.bioscan.fieldterminal.domain.notifications.supplementsDueForBucket
 import com.bioscan.fieldterminal.domain.notifications.withinLimits
@@ -94,6 +96,20 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
 
                 NotificationKind.CHECKIN_EVENING ->
                     "Evening check-in" to "Log how your day went"
+
+                NotificationKind.WELLBEING_CHECKIN -> {
+                    // A failed lookup must not suppress or invent a prompt: skip this run and try again at the next window.
+                    val row = runCatching { repo.loadWellbeingForDate(today.toString()) }.getOrElse { continue }
+                    if (rule.conditions.skipIfLogged && !wellbeingCheckinNeeded(row?.energy, row?.mood, row?.stress, row?.soreness)) continue
+                    "Wellbeing check-in" to "Energy, mood, stress, soreness: 0-10"
+                }
+
+                NotificationKind.EVENING_LOG -> {
+                    val startOfLocalDay = today.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+                    val saved = runCatching { repo.countSavedAgentMessagesSince(startOfLocalDay) }.getOrElse { continue }
+                    if (rule.conditions.skipIfLogged && !eveningLogNeeded(saved)) continue
+                    "Anything to log today?" to "Drinks, supplements, recovery: say it in one message"
+                }
 
                 else -> continue
             }

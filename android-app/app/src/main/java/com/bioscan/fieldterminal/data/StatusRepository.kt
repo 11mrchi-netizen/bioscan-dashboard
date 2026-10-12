@@ -94,10 +94,14 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         val wearableAnalysis = analysis.loadWearableDaily()
         val hrvPoints = wearableAnalysis.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }
         val rhrPoints = wearableAnalysis.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
-        val cardioState = worstOf(evaluateHrv(hrvPoints).state.toMetricState(), evaluateRhr(rhrPoints).state.toMetricState())
+        val breakStarts = analysis.loadSeriesBreakStarts()
+        val cardioState = worstOf(
+            evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).state.toMetricState(),
+            evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")).state.toMetricState(),
+        )
 
         val sleepHoursPoints = analysis.loadSleepDaily().mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } }
-        val recoveryState = evaluateSleepDuration(sleepHoursPoints).state.toMetricState()
+        val recoveryState = evaluateSleepDuration(sleepHoursPoints, windowStart = breakStarts.start("sleep_hours")).state.toMetricState()
 
         // DAV-205: TRIMP-fallback session loads, same shared builder
         // TrainingTileScreen uses -- keeps the figure's leg color and the

@@ -1,6 +1,6 @@
 # 02 — Canonical observation and metric registry
 
-**Linear:** [DAV-53](https://linear.app/biodashboard/issue/DAV-53) · **Version:** 1.0.0 (2026-09-17, first version — supersedes nothing)
+**Linear:** [DAV-53](https://linear.app/biodashboard/issue/DAV-53) · **Version:** 1.0.1 (1.0.0 was 2026-09-17, first version; 1.0.1 adds the methodology registry, see below)
 
 ## Why this exists
 
@@ -115,3 +115,13 @@ This is v1.0.0. Bump the minor version when adding a canonical metric; bump the 
 wording/source-mapping corrections that don't change the contract's shape; bump the major version
 only if an existing canonical name's meaning or unit changes (which should be rare and needs a
 migration note for anything already computed/cached under the old meaning).
+
+## Methodology registry (added 1.0.1, Analysis Layer 3 / Phase 7)
+
+Every row of the table above has a matching entry in `supabase/functions/_shared/metric-registry/metric-registry.json`
+with `methodology`, `limitations`, `references` (primary sources only), `productDefined` and `methodologyVersion`.
+Composites (Sleep Index, Dynamic Recovery) and the series-break detector have entries too and are labelled
+"product-defined, not clinically validated" where that is true. `supabase/functions/_shared/analysis-core/metricRegistry.test.ts`
+fails when a table row has no complete entry, so adding metric #34 means adding its entry in the same change. The Android app
+packages the JSON as an asset (`app/build.gradle.kts`) and shows it behind the help button of a card that passes
+`FTCard(methodology = "<key>")`. Citations were written from memory of the primary papers: check the DOIs before relying on them.

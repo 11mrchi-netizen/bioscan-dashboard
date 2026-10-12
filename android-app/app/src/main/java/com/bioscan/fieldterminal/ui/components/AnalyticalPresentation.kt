@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import com.bioscan.fieldterminal.domain.helpText
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -193,9 +194,16 @@ fun FTCard(
     // Caveats / "what this is" copy lives behind one help button in the title
     // bar instead of a muted paragraph inside the card.
     info: String? = null,
+    // Analysis Layer 3 / Phase 7: a metric-registry key. When set, the help button also shows that metric's methodology,
+    // limits and references (after `info`, if any), so the text comes from the single registry instead of per-screen strings.
+    methodology: String? = null,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(FT.RadiusCard)
+    val registryText = methodology?.let { key ->
+        com.bioscan.fieldterminal.data.MetricRegistryStore.get(androidx.compose.ui.platform.LocalContext.current, key)?.helpText()
+    }
+    val helpBody = listOfNotNull(info, registryText).joinToString("\n\n").ifBlank { null }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -219,7 +227,7 @@ fun FTCard(
                 style = FTType.CardTitle,
                 modifier = Modifier.weight(1f),
             )
-            info?.let { InfoHelpButton(title = title, body = it) }
+            helpBody?.let { InfoHelpButton(title = title, body = it) }
         }
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             content()

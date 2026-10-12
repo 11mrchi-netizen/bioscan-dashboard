@@ -50,6 +50,7 @@ import com.bioscan.fieldterminal.domain.comparison.METRIC_DIRECTIONALITY
 import com.bioscan.fieldterminal.domain.comparison.PopulationContext
 import com.bioscan.fieldterminal.domain.comparison.comparePersonal
 import com.bioscan.fieldterminal.domain.comparison.comparePopulation
+import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.SriEvaluation
 import com.bioscan.fieldterminal.domain.SleepIndexResult
@@ -127,6 +128,8 @@ fun HeartTileScreen(onBack: () -> Unit) {
     var exerciseSessions by remember { mutableStateOf<List<TrainingLoadSessionRow>>(emptyList()) }
     var recentMealsForTiming by remember { mutableStateOf<List<MealRow>>(emptyList()) }
     var stressDays by remember { mutableStateOf<List<StressDay>>(emptyList()) }
+    // Analysis Layer 3 / R1: start of each metric's current regime (last confirmed series break); NONE until loaded.
+    var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
 
     LaunchedEffect(Unit) {
         val repo = AnalysisRepository(SupabaseClientProvider.client)
@@ -151,6 +154,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
         // v8) -- decoded client-side from zepp_raw_extracts, see
         // ZeppStressRepository's own header comment for why no new table.
         stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays()
+        breakStarts = repo.loadSeriesBreakStarts()
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
@@ -196,7 +200,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                             origin = "health_connect",
                         )
                     }
-                    EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints, comparison = hrvComparison, timeframe = vitalsTimeframe)
+                    EvalCard("HRV", evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).toExpSpace(), "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints, comparison = hrvComparison, timeframe = vitalsTimeframe, methodology = "hrv")
                     // v12: intraday HR from Zepp band_data. Show for the most
                     // recent day that has data; silently absent when not yet synced.
                     val todayHr = w.firstOrNull { it.hrTimeseries?.isNotEmpty() == true }?.hrTimeseries
@@ -220,7 +224,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                             origin = "health_connect",
                         )
                     }
-                    EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints, comparison = rhrComparison, timeframe = vitalsTimeframe)
+                    EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")), "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints, comparison = rhrComparison, timeframe = vitalsTimeframe, methodology = "rhr")
                     val spo2Points = w.mapNotNull { row -> row.spo2?.let { LocalDate.parse(row.date) to it } }
                     EvalCard("SPO2", evaluateSpo2(spo2Points), "%", directionality = Directionality.NON_DIRECTIONAL, points = spo2Points, timeframe = vitalsTimeframe)
                     val rrPoints = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
@@ -239,7 +243,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     }
                     val deepPoints = s.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } }
                     val respiratoryForIndex = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
-                    val sleepIndexResult = computeSleepIndex(hoursPoints, deepPoints, respiratoryForIndex, nights)
+                    val sleepIndexResult = computeSleepIndex(hoursPoints, deepPoints, respiratoryForIndex, nights, durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min"))
 
                     // 09.2 Dynamic Recovery: a hero card above everything else
                     // in this tab, same placement pattern AgingCard already
@@ -255,8 +259,8 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     DynamicRecoveryCard(
                         computeDynamicRecovery(
                             sleepIndex = sleepIndexResult,
-                            hrvEval = evaluateHrv(w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }),
-                            rhrEval = evaluateRhr(w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }),
+                            hrvEval = evaluateHrv(w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("hrv")),
+                            rhrEval = evaluateRhr(w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("rhr")),
                             trainingLoadEval = evaluateTrainingLoad(sessionLoadsForRecovery),
                             energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
                             stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
@@ -271,7 +275,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     // component cards below it -- an aggregation layer, never
                     // a replacement (DAV-235's own rule).
                     SleepIndexCard(sleepIndexResult)
-                    EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints), "h", directionality = METRIC_DIRECTIONALITY.getValue("sleep_duration"), points = hoursPoints)
+                    EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints, windowStart = breakStarts.start("sleep_hours")), "h", directionality = METRIC_DIRECTIONALITY.getValue("sleep_duration"), points = hoursPoints, methodology = "sleep_duration")
                     val sriEval = evaluateSri(nights)
                     SriCard(sriEval)
                     SleepPhasesCard(s)
@@ -365,9 +369,10 @@ internal fun EvalCard(
     // Every other EvalCard caller (Sleep Duration, etc.) leaves this null and
     // keeps the original fixed 30-day window unchanged.
     timeframe: VitalsTimeframe? = null,
+    methodology: String? = null,
     modifier: Modifier = Modifier,
 ) {
-    FTCard(title = title, modifier = modifier) {
+    FTCard(title = title, modifier = modifier, methodology = methodology) {
         FTStatePill(eval.state.toMetricState())
         FTConfidenceChip(confidenceLevel(eval.confidence))
         comparison?.let { ComparisonStrip(it) }
@@ -425,7 +430,7 @@ private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<
 
 @Composable
 private fun DynamicRecoveryCard(result: DynamicRecoveryResult) {
-    FTCard(title = "TODAY'S RECOVERY") {
+    FTCard(title = "TODAY'S RECOVERY", methodology = "dynamic_recovery") {
         FTStatePill(result.state.toMetricState())
         FTConfidenceChip(confidenceLevel(result.confidence))
         if (result.contributors.isEmpty()) {
@@ -451,7 +456,7 @@ private fun DynamicRecoveryCard(result: DynamicRecoveryResult) {
 
 @Composable
 private fun SleepIndexCard(result: SleepIndexResult) {
-    FTCard(title = "SLEEP INDEX") {
+    FTCard(title = "SLEEP INDEX", methodology = "sleep_index") {
         FTConfidenceChip(confidenceLevel(result.confidence))
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
@@ -532,7 +537,7 @@ private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay
 
 @Composable
 private fun SriCard(eval: SriEvaluation) {
-    FTCard(title = "SLEEP REGULARITY (SRI)") {
+    FTCard(title = "SLEEP REGULARITY (SRI)", methodology = "sri") {
         FTConfidenceChip(confidenceLevel(eval.confidence))
         if (eval.value != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(eval.value), unit = "/ 100"))
@@ -568,7 +573,7 @@ private fun SleepPhasesCard(nights: List<SleepAnalysisRow>) {
     val avgLight = recent.map { it.lightMin!! }.average()
     val avgTotal = (avgDeep + avgRem + avgLight).takeIf { it > 0 } ?: 1.0
 
-    FTCard(title = "SLEEP PHASES") {
+    FTCard(title = "SLEEP PHASES", methodology = "sleep_stages") {
         FTSegmentBar(
             listOf(
                 FTSegment("Deep", avgDeep, FT.Category.Sleep.c700),
@@ -664,7 +669,7 @@ private fun StepsCard(points: List<Pair<LocalDate, Double>>, benchmarkArtifacts:
 
 @Composable
 private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation) {
-    FTCard(title = "RESPIRATORY RATE") {
+    FTCard(title = "RESPIRATORY RATE", methodology = "respiratory_rate_sleep") {
         FTConfidenceChip(confidenceLevel(eval.confidence))
         eval.baseline?.let { FTMetricRow("14-night baseline", "%.1f breaths/min".format(it)) }
         Text(

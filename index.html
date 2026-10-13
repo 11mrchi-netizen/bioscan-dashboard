@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DAVIDE // BIOSCAN 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script type="importmap">
@@ -1477,10 +1478,17 @@ function create(canvas, kind, opts) {
     renderer.setSize(r.width, r.height, false);
   }
 
-  let raf;
+  // Perf pass: this scene is static (no animation), so it used to re-render a 2048 shadow map every display frame for
+  // nothing. It now renders while something changed (build, kind switch, resize) plus a short tail, then stops.
+  let raf = 0;
+  let activeUntil = 0;
   function loop() {
-    raf = requestAnimationFrame(loop);
     renderer.render(scene, camera);
+    raf = performance.now() < activeUntil ? requestAnimationFrame(loop) : 0;
+  }
+  function kick(ms) {
+    activeUntil = Math.max(activeUntil, performance.now() + (ms || 1500));
+    if (!raf) raf = requestAnimationFrame(loop);
   }
 
   function snapshot(size) {
@@ -1497,10 +1505,12 @@ function create(canvas, kind, opts) {
 
   setKind(kind);
   resize();
-  loop();
+  kick(3000);
 
   return {
-    setKind, resize, snapshot,
+    setKind(k) { setKind(k); kick(); },
+    resize() { resize(); kick(); },
+    snapshot,
     dispose() { cancelAnimationFrame(raf); renderer.dispose(); }
   };
 }
@@ -1519,7 +1529,42 @@ window.Gear3D = { create };
   // Real Supabase project — bioscan-dashboard, ap-southeast-1
   const SUPABASE_URL = 'https://ugfrglbcoivkprjqvjzz.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_GyandyvuVbF0RxZLnugz4A_GlNIstPc';
-  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Perf pass: a request that never answers used to leave "SYNCING..." and every spinner on screen forever. After 30 s it
+  // is aborted and fails like any other error, which the load banner below reports with a RETRY.
+  const REQUEST_TIMEOUT_MS = 30000;
+  function fetchWithTimeout(url, opts){
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS);
+    const o = Object.assign({}, opts);
+    if(o.signal) o.signal.addEventListener('abort', () => ctl.abort());
+    o.signal = ctl.signal;
+    return fetch(url, o).finally(() => clearTimeout(timer));
+  }
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { fetch: fetchWithTimeout } });
+
+  // A failed or partial load is shown, never silent: a bar across the top with what failed and a RETRY that reloads.
+  function showLoadBanner(message, signInAgain){
+    let bar = document.getElementById('load-banner');
+    if(!bar){
+      bar = document.createElement('div');
+      bar.id = 'load-banner';
+      bar.setAttribute('role', 'alert');
+      bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;display:flex;gap:12px;align-items:center;'
+        + 'padding:8px 14px;background:rgba(60,12,12,0.94);color:#f87171;border-bottom:1px solid #ef4444;'
+        + 'font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;letter-spacing:0.03em';
+      document.body.appendChild(bar);
+    }
+    bar.textContent = '';
+    const text = document.createElement('span');
+    text.style.flex = '1';
+    text.textContent = message;
+    const btn = document.createElement('button');
+    btn.textContent = signInAgain ? 'SIGN IN' : 'RETRY';
+    btn.style.cssText = 'background:transparent;color:inherit;border:1px solid currentColor;padding:3px 10px;cursor:pointer;font:inherit';
+    btn.onclick = () => { if(signInAgain) window.location.href = './login.html'; else window.location.reload(); };
+    bar.appendChild(text);
+    bar.appendChild(btn);
+  }
 
 // ============ SUPABASE FETCH + RESHAPE LAYER ============
 // Replaces the old hardcoded DASHBOARD_DATA object. Queries every relevant
@@ -1548,7 +1593,9 @@ async function fetchDashboardData(sb){
   const { data: { session } } = await sb.auth.getSession();
   if(!session){
     window.location.href = './login.html';
-    throw new Error('No session — redirecting to login.');
+    const redirectError = new Error('No session — redirecting to login.');
+    redirectError.redirecting = true;
+    throw redirectError;
   }
 
   // Captures Google's refresh token the one time it's actually present --
@@ -1580,24 +1627,25 @@ async function fetchDashboardData(sb){
   const [
     wearableRes, sleepRes, wellbeingRes, hydrationRes, bodyMetricsRes,
     mealsRes, recoveryRes, restDaysRes, injuriesRes, supplementsRes,
-    labDrawsRes, labResultsRes, runsRes, stoolRes, arousalRes, illnessesRes
+    stoolRes, arousalRes, illnessesRes
   ] = await Promise.all([
-    sb.from('wearable_daily').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
-    sb.from('sleep_daily').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
-    sb.from('wellbeing_daily').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
-    sb.from('hydration_daily').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
-    sb.from('body_metrics').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
-    sb.from('meals').select('*').gte('logged_at', dStart).lte('logged_at', dEnd).order('logged_at'),
-    sb.from('recovery_sessions').select('*').gte('date', dStart).lte('date', dEnd).order('date', {ascending:false}),
-    sb.from('rest_days').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
-    sb.from('injuries').select('*').order('start_date', {ascending:false}),
-    sb.from('supplements').select('*').order('status').order('time_of_day'),
-    sb.from('lab_draws').select('*').order('draw_date'),
-    sb.from('lab_results').select('*'),
-    sb.from('runs').select('*').gte('date', dStart).lte('date', dEnd).order('date', {ascending:false}),
-    sb.from('stool_log').select('*').gte('occurred_at', dStart).lte('occurred_at', dEnd).order('occurred_at', {ascending:false}),
-    sb.from('arousal_daily').select('*').gte('date', dStart).lte('date', dEnd).order('date'),
-    sb.from('illnesses').select('*').order('start_date', {ascending:false})
+    // Perf pass: each query names the columns the reshape below actually reads. wearable_daily alone used to drag the
+    // hr_timeseries JSON (about 50 kB per day) into the page for nothing. The runs, lab_draws and lab_results queries
+    // are gone: their results were reshaped into DASHBOARD_DATA.runs/.labs/.labDraws, which no panel reads (the Labs
+    // and Training panels are static text).
+    sb.from('wearable_daily').select('date,steps,rhr,hrv,vo2max,zone_minutes').gte('date', dStart).lte('date', dEnd).order('date'),
+    sb.from('sleep_daily').select('date,hours,score,respiratory_rate').gte('date', dStart).lte('date', dEnd).order('date'),
+    sb.from('wellbeing_daily').select('date,energy,mood,stress,soreness').gte('date', dStart).lte('date', dEnd).order('date'),
+    sb.from('hydration_daily').select('date,ml').gte('date', dStart).lte('date', dEnd).order('date'),
+    sb.from('body_metrics').select('date,weight_kg,body_fat_pct,lean_mass_kg').gte('date', dStart).lte('date', dEnd).order('date'),
+    sb.from('meals').select('logged_at,calories,protein_g,fat_g,carbs_g').gte('logged_at', dStart).lte('logged_at', dEnd).order('logged_at'),
+    sb.from('recovery_sessions').select('id,name,category,date,duration_min,notes').gte('date', dStart).lte('date', dEnd).order('date', {ascending:false}),
+    sb.from('rest_days').select('date').gte('date', dStart).lte('date', dEnd).order('date'),
+    sb.from('injuries').select('id,part,type,severity,status,start_date,end_date,notes').order('start_date', {ascending:false}),
+    sb.from('supplements').select('id,name,dose,time_of_day,status,start_date,end_date,target,category').order('status').order('time_of_day'),
+    sb.from('stool_log').select('id,occurred_at,bristol_type,discomfort,notes').gte('occurred_at', dStart).lte('occurred_at', dEnd).order('occurred_at', {ascending:false}),
+    sb.from('arousal_daily').select('date,morning_erection_quality,arousal_level').gte('date', dStart).lte('date', dEnd).order('date'),
+    sb.from('illnesses').select('id,name,symptoms,diagnosis,medication,severity,status,start_date,end_date,notes').order('start_date', {ascending:false})
   ]);
 
   // Collect per-table errors instead of failing on the first one.
@@ -1605,13 +1653,19 @@ async function fetchDashboardData(sb){
   for(const [name, res] of Object.entries({
     wearable:wearableRes, sleep:sleepRes, wellbeing:wellbeingRes, hydration:hydrationRes,
     bodyMetrics:bodyMetricsRes, meals:mealsRes, recovery:recoveryRes, restDays:restDaysRes,
-    injuries:injuriesRes, supplements:supplementsRes, labDraws:labDrawsRes,
-    labResults:labResultsRes, runs:runsRes, stool:stoolRes, arousal:arousalRes,
+    injuries:injuriesRes, supplements:supplementsRes, stool:stoolRes, arousal:arousalRes,
     illnesses:illnessesRes
   })){
     if(res.error) fetchErrors.push(`${name}: ${res.error.message}`);
   }
-  if(fetchErrors.length) console.warn('Dashboard fetch errors (non-fatal):', fetchErrors.join('; '));
+  if(fetchErrors.length){
+    console.warn('Dashboard fetch errors (non-fatal):', fetchErrors.join('; '));
+    // Visible, not only in the console: an empty chart must not look like "no data" when the request failed.
+    const expired = fetchErrors.some(e => /jwt|expired|not authenticated|401/i.test(e));
+    showLoadBanner(expired
+      ? 'Your session has expired. Sign in again to load your data.'
+      : 'Some data could not be loaded (' + fetchErrors.map(e => e.split(':')[0]).join(', ') + '). Showing what did load.', expired);
+  }
 
   const wearableRows = wearableRes.data || [];
   const sleepRows = sleepRes.data || [];
@@ -1619,9 +1673,10 @@ async function fetchDashboardData(sb){
   const hydrationRows = hydrationRes.data || [];
   const bodyMetricsRows = bodyMetricsRes.data || [];
   const mealsRows = mealsRes.data || [];
-  const runsRows = runsRes.data || [];
-  const labDrawsRows = labDrawsRes.data || [];
-  const labResultsRows = labResultsRes.data || [];
+  // Not fetched any more (see the query list above); the empty arrays keep DASHBOARD_DATA's shape.
+  const runsRows = [];
+  const labDrawsRows = [];
+  const labResultsRows = [];
 
   // ---- daily time-series tables: rows-of-objects -> parallel arrays ----
   const wearable = {
@@ -1840,11 +1895,29 @@ async function setupPushNotifications(sb, userId){
   }
   tickCountdown(); setInterval(tickCountdown, 60000);
 
+  // Sign-out is wired before anything can fail below (it used to be the last statement of the script, so one early
+  // exception left the button dead).
+  const signoutBtnEarly = document.getElementById('signout-btn');
+  if(signoutBtnEarly){
+    signoutBtnEarly.addEventListener('click', async () => {
+      await sb.auth.signOut();
+      window.location.href = './login.html';
+    });
+  }
+
   // ============ DASHBOARD DATA — fetched live from Supabase ============
   // See fetch-layer logic below: queries every table and reshapes results
   // into this exact structure so every panel render() function downstream
   // works completely unchanged from the original hardcoded-data version.
-  const DASHBOARD_DATA = await fetchDashboardData(sb);
+  let DASHBOARD_DATA;
+  try {
+    DASHBOARD_DATA = await fetchDashboardData(sb);
+  } catch(err) {
+    if(err && err.redirecting) return; // no session: already on its way to the sign-in page
+    console.error('[Dashboard] load failed:', err);
+    showLoadBanner('Could not load your data: ' + ((err && err.message) || err) + '.');
+    return;
+  }
 
   // Fire-and-forget: don't block dashboard render on push setup.
   sb.auth.getSession().then(({ data: { session } }) => {
@@ -3607,10 +3680,15 @@ async function setupPushNotifications(sb, userId){
   window.addEventListener('resize', resizeOutrunCanvas);
   window.addEventListener('orientationchange', ()=> setTimeout(resizeOutrunCanvas, 150));
 
-  function outrunLoop(){
+  let lastOutrunDraw = 0;
+  function outrunLoop(now){
     requestAnimationFrame(outrunLoop);
     if(typeof OutrunScene === 'undefined') return;
     if(outrunCanvas.width < 1 || outrunCanvas.height < 1) return;
+    // Perf pass: the scene is slow ambient motion; drawing it at ~30 fps instead of every display frame halves its cost.
+    now = now || performance.now();
+    if(now - lastOutrunDraw < 33) return;
+    lastOutrunDraw = now;
     const t = (performance.now() - outrunT0) / 1000;
     OutrunScene.draw(outrunCtx, outrunCanvas.width, outrunCanvas.height, currentWeather, t, {dim: 0.12});
   }
@@ -4053,13 +4131,7 @@ async function setupPushNotifications(sb, userId){
   // added after initial launch) requires actually clearing the session first.
   // Without this button there was no way to do that short of manually
   // clearing browser storage.
-  const signoutBtn = document.getElementById('signout-btn');
-  if(signoutBtn){
-    signoutBtn.addEventListener('click', async () => {
-      await sb.auth.signOut();
-      window.location.href = './login.html';
-    });
-  }
+  // (wired near the top of this script now, see "Sign-out is wired before anything can fail")
 
   // ============ TRAINING-DAY GEAR — GROUND LEVEL, BESIDE THE FIGURE ============
   // Real Three.js models via Gear3D.create() (see the <script type="module">
@@ -4102,6 +4174,13 @@ async function setupPushNotifications(sb, userId){
     if(gearViewer) gearViewer.resize();
   }
   initGearViewer();
+  // Perf pass: the page loads its data once. A tab left open for hours showed yesterday's numbers; coming back after
+  // 30 minutes away now reloads it.
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden){ hiddenAt = Date.now(); return; }
+    if(hiddenAt && Date.now() - hiddenAt > 30 * 60 * 1000) window.location.reload();
+  });
   window.addEventListener('resize', resizeGearViewer);
   window.addEventListener('orientationchange', ()=> setTimeout(resizeGearViewer, 150));
 

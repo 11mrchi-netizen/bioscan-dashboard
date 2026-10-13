@@ -41,7 +41,7 @@ const STATE_LABEL: Record<State, string> = {
 const fmt = (v: number, unit: string) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(unit === '%' ? 1 : 2)}${unit === '%' ? '%' : ` ${unit}`}`
 
 // Interval on a number line: the detectable band (±MDE) is shaded, the 95 % interval is the bar, the estimate the tick.
-function IntervalBar({ effect, mde }: { effect: Effect; mde: number }) {
+export function IntervalBar({ effect, mde }: { effect: Effect; mde: number }) {
   const reach = Math.max(Math.abs(effect.lo), Math.abs(effect.hi), mde) * 1.15 || 1
   const pos = (v: number) => `${((v + reach) / (2 * reach)) * 100}%`
   return (

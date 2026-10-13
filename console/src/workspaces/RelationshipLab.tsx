@@ -1,8 +1,9 @@
-// Relationship Lab. Two views:
+// Relationship Lab. Three views:
 //   CONFIRMATORY  published results of a fixed hypothesis catalogue (Analysis Layer 3, Phase 3): weekday-adjusted, tested once,
 //                 corrected across the catalogue, effect sizes with intervals and the smallest detectable effect.
 //   EXPLORATORY   free scatter and a scan of 29 lags between any two metrics. Nothing here is corrected for the 29 looks, so a
 //                 pattern is a lead to test, not a finding.
+//   EXPERIMENTS   pre-registered supplement N-of-1 tests (read-only; plans are registered in the app).
 // Explicit n= and missingness caveats shown on every view.
 
 import { useEffect, useState, useMemo, useRef } from 'react'
@@ -13,6 +14,7 @@ import { pearson, buildPairs } from '../lib/stats'
 import { PALETTE } from '../lib/palette'
 import { METRIC_OPTIONS, type MetricOption } from '../lib/metricOptions'
 import { Confirmatory } from './Confirmatory'
+import { Experiments } from './Experiments'
 import './RelationshipLab.css'
 
 function Exploratory() {
@@ -179,7 +181,7 @@ function Exploratory() {
   )
 }
 
-type Tab = 'confirmatory' | 'exploratory'
+type Tab = 'confirmatory' | 'exploratory' | 'experiments'
 
 export function RelationshipLab() {
   const [tab, setTab] = useState<Tab>('confirmatory')
@@ -187,11 +189,11 @@ export function RelationshipLab() {
     <div className="rlab-shell">
       <div className="rlab-tabs">
         <h2 className="rlab-shell-title">Relationship Lab</h2>
-        {(['confirmatory', 'exploratory'] as const).map(t => (
+        {(['confirmatory', 'exploratory', 'experiments'] as const).map(t => (
           <button key={t} className={`rlab-tab mono ${tab === t ? 'rlab-tab-on' : ''}`} onClick={() => setTab(t)}>{t.toUpperCase()}</button>
         ))}
       </div>
-      {tab === 'confirmatory' ? <div className="rlab"><Confirmatory /></div> : <Exploratory />}
+      {tab === 'confirmatory' ? <div className="rlab"><Confirmatory /></div> : tab === 'experiments' ? <div className="rlab"><Experiments /></div> : <Exploratory />}
     </div>
   )
 }

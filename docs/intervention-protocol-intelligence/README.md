@@ -57,7 +57,7 @@ The Linear issue's entity list, mapped to concrete tables/types:
 | 08.3 `protocols` model | **Done.** Migration `supabase/migrations/20261013_protocols.sql` (applied); lifecycle graph and `generateSchedule` in `supabase/functions/_shared/analysis-core/protocol.ts`, tested in `protocol.test.ts`. |
 | 08.4 Evidence registry generalization | **Done.** No schema change needed (see notes); matching/ranking in `supabase/functions/_shared/analysis-core/evidenceLink.ts`, tested in `evidenceLink.test.ts`. |
 | 08.5 Generalize the N-of-1 engine | **Done.** Migration `supabase/migrations/20261013_experiments_intervention_id.sql` (applied); `runExperiments.ts` reads/publishes `intervention_id` alongside `supplement_id`. `experiment.ts`/`stats.ts` unchanged. |
-| 08.6 Intervention response analysis (observational) | Not started. |
+| 08.6 Intervention response analysis (observational) | **Code complete, not deployed.** `interventionResponse.ts` (pure) + `runInterventionResponse.ts` (I/O), wired into `analysis-run/index.ts`'s source but the Edge Function has not been redeployed (see notes). |
 | 08.7 Adaptive protocol rules | Not started. |
 | 08.8 Protocol audit | Not started. |
 | 08.9 UI (Console + Android) | Not started. |
@@ -95,8 +95,18 @@ What generalizes `experiments` is solely the new nullable `intervention_id` colu
 
 Verified live: schema (`intervention_id uuid null`, FK to `interventions`), the `experiments_has_a_subject` CHECK (rejected a row with neither id set), an insert with only `intervention_id` set, and the lock trigger (rejected changing `intervention_id` after registration). No new `get_advisors` findings.
 
+## 08.6 notes
+
+`analyseInterventionResponse` compares a metric's baseline window (before `started_at`) against its active window (since `started_at`, through `ended_at` or `today` if still ongoing) for any intervention -- no pre-registration, no washout, no ABAB replication check, so it is always reported as weaker evidence than 08.5's engine: verdicts are `signal_observed`/`no_signal`/`insufficient` (never "effect"), and summaries use "an observed signal during intervention... other things that changed over the same period could explain part or all of it" rather than claiming causation, per DAV-336. Because most interventions have no fixed end date, there is deliberately no "complete" stage either -- this is always a rolling, interim read of whatever data exists as of `today`.
+
+The small statistical helpers (`lagOneRho`, `effN`, `groupStats`, `signedText`) are a deliberate, small duplication of `experiment.ts`'s private ones rather than a shared import -- the same convention `relationship.ts` already uses for its own local `signed`/`toNatural`/`round` (each engine file owns its small helpers).
+
+`runInterventionResponse.ts` only analyses outcomes from `interventions.intended_outcomes` that happen to name one of the eight `MetricId`s the shared daily frame actually carries (same vocabulary gap noted in 08.5) -- an intervention naming an outcome the frame can't measure yet (e.g. `vo2max`) is silently skipped for this kind, not an error. It's wired into `analysis-run/index.ts`'s source (a new `intervention_response` result alongside the existing ones) but **the Edge Function has not been redeployed** -- unlike the database migrations in 08.2/08.3/08.5, redeploying a live, cron'd production function is a separate, higher-blast-radius action (the nightly job is the only thing hitting it for the one real account on this project) and is left as an explicit next step rather than done silently in the same pass as everything else.
+
 ## Still open
 
-- 08.6 onward, in the sequence listed above -- each depends on `interventions`/`protocols`/`experiments.intervention_id` existing, nothing on 08.2-08.5 depends on them.
+- Deploy `analysis-run` with `runInterventionResponse.ts` included (via `mcp__Supabase__deploy_edge_function` or the CLI, entrypoint `index.ts` plus every file under `_shared/analysis-core/` it imports, same as `docs/analysis-layer-3/README.md`'s "Deploying `analysis-run`" section) -- not done in this pass, see 08.6 notes.
+
+- 08.7 onward, in the sequence listed above -- each depends on `interventions`/`protocols`/`experiments.intervention_id` existing, nothing on 08.2-08.6 depends on them.
 - Future, separate from this milestone's scope: widening the daily frame (`buildFrame`/`RawInputs`) to carry more outcome series (`vo2max`, `training_load`, `body_weight`, ...) so experiments and relationships can use them -- tracked here, not attempted in 08.5.
 - Three verification test rows could not be deleted via the MCP SQL tool: `interventions` id `4bf314fd-faaf-457a-9ed7-5f07f706b806`, `protocols` id `bae02e05-d807-4380-a574-e8eed14fe313` (cascades to one `protocol_interventions` row), and `experiments` id `d175027b-fc0e-48e7-94da-41dda537ec01`. Every DELETE attempted on this project this session timed out regardless of table, with no lock contention found server-side (`pg_locks`/`pg_stat_activity` both clean) -- looks like a session-level issue with the tool's handling of destructive statements, not a data problem. All three are clearly named "verification test row" / "(verification test row)" and are harmless to leave; delete them from the Supabase dashboard or retry the MCP tool in a fresh session.

@@ -13,12 +13,14 @@
 //                no human-held secret and no service role key is involved
 //
 // Publishes `series_break` (Phase 1), `relationship` (Phase 3, the confirmatory catalogue), `typicality` (Phase 4,
-// "is today typical for you") and `experiment` (Phase 5, pre-registered supplement N-of-1) results. The action
-// `experiment_preview` returns the smallest detectable effect of a planned design for the signed-in user.
+// "is today typical for you"), `experiment` (Phase 5, pre-registered supplement N-of-1) and `intervention_response`
+// (Intervention & Protocol Intelligence 08.6, observational baseline-vs-active for any active intervention) results.
+// The action `experiment_preview` returns the smallest detectable effect of a planned design for the signed-in user.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildPreview, runExperiments } from "../_shared/analysis-core/runExperiments.ts";
+import { runInterventionResponses } from "../_shared/analysis-core/runInterventionResponse.ts";
 import { loadFrame, runRelationships } from "../_shared/analysis-core/runRelationships.ts";
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
 import { runTypicality } from "../_shared/analysis-core/runTypicality.ts";
@@ -115,7 +117,8 @@ Deno.serve(async (req) => {
       const relationships = await runRelationships(admin, id, new Date(), loaded).catch((e) => ({ userId: id, error: String(e) }));
       const typicality = await runTypicality(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const experiments = await runExperiments(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      results.push({ ...breaks, relationships, typicality, experiments });
+      const interventionResponses = await runInterventionResponses(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      results.push({ ...breaks, relationships, typicality, experiments, interventionResponses });
     }
     return json({ coreVersion: CORE_VERSION, results }, 200);
   }

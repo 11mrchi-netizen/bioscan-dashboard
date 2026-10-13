@@ -91,6 +91,22 @@ test('runExperiments analyses a registered experiment, advances its status and p
   assert.ok(admin.deletes.some((d) => d.table === 'analysis_results'))
 })
 
+test('an intervention-linked experiment (no supplement_id) is analysed the same way and carries interventionId in the payload', async () => {
+  const t = tables()
+  ;(t.experiments[0] as Row).supplement_id = null
+  ;(t.experiments[0] as Row).intervention_id = 'iv-1'
+  delete (t as Row).supplement_log // nothing to adjust on: no domain-owned adherence log is wired in for a bare intervention yet
+  t.supplement_log = []
+  const admin = fakeAdmin(t)
+  const now = new Date(`${shift(START, 119)}T20:00:00Z`)
+  const run = await runExperiments(admin, (await loadFrame(admin, USER, now)) as LoadedFrame, now)
+  assert.deepEqual(run.results, [{ id: 'exp-1', stage: 'complete', verdict: 'effect_detected' }])
+  const payload = admin.upserts[0].payload as { interventionId: string | null; supplementId: number | null; adherence: { rate: number | null } }
+  assert.equal(payload.interventionId, 'iv-1')
+  assert.equal(payload.supplementId, null)
+  assert.equal(payload.adherence.rate, 0, 'no adherence log source for a bare intervention yet, so zero logged days rather than a guess')
+})
+
 test('an experiment that has not started publishes its stage only; abandoned ones are skipped', async () => {
   const t = tables()
   ;(t.experiments[0] as Row).protocol = { design: 'AB', phases: [{ label: 'A', start: shift(START, 130), end: shift(START, 157) }, { label: 'B', start: shift(START, 158), end: shift(START, 185) }], washoutDays: 0, minAdherence: 0.7, excludeAlcoholDays: true }

@@ -17,7 +17,7 @@ import { autocorr1, benjaminiHochberg, mean, pFromT, sd, tCritical, weekdayDemea
 import type { Num } from './stats.ts'
 import type { Frame } from './relationship.ts'
 
-export type MetricId = 'hrv' | 'rhr' | 'sleep_hours' | 'deep_rem_min' | 'energy' | 'mood' | 'stress' | 'soreness'
+export type MetricId = 'hrv' | 'rhr' | 'sleep_hours' | 'deep_rem_min' | 'energy' | 'mood' | 'stress' | 'soreness' | 'fueling_carb_rate'
 
 interface MetricInfo {
   label: string
@@ -37,6 +37,11 @@ export const METRIC_INFO: Record<MetricId, MetricInfo> = {
   mood: { label: 'Mood', series: 'mood', ln: false, unit: 'points', breakKeys: [] },
   stress: { label: 'Stress', series: 'stress', ln: false, unit: 'points', breakKeys: [] },
   soreness: { label: 'Soreness', series: 'soreness', ln: false, unit: 'points', breakKeys: [] },
+  // Endurance Fueling (06.3.6): a derived daily series, not a raw table column -- the caller (fuelingExperiment.ts)
+  // builds it from eligible, non-deviated activities' per-hour carb rate (fuelingSummary.ts), null on days with no
+  // qualifying activity. This is the metric-vocabulary widening 08.5's notes flagged as future, separate work --
+  // done now because 06.3.6 is a concrete, real caller, not a speculative one.
+  fueling_carb_rate: { label: 'Carbohydrate rate', series: 'fueling_carb_rate', ln: false, unit: 'g/h', breakKeys: [] },
 }
 
 export const MIN_PHASE_DAYS = 14

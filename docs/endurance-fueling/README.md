@@ -49,7 +49,7 @@ A fueling intake event's actual-consumed nutrients (carbs/fluid/sodium/caffeine)
 | 06.3.1 Audit & architecture | **Done.** This document. |
 | 06.3.2 Versioned fueling products/recipes | **Done.** Migration `supabase/migrations/20261013_fueling_products.sql` (applied); deterministic totals in `supabase/functions/_shared/analysis-core/fuelingRecipe.ts`, tested in `fuelingRecipe.test.ts`. |
 | 06.3.3 Log planned/actual intake | **Done.** Migration `supabase/migrations/20261013_fueling_intake_log.sql` (applied); `scaleRecipeToQuantity` in `fuelingRecipe.ts`, tested. |
-| 06.3.4 Per-activity summaries and timeline | Not started. |
+| 06.3.4 Per-activity summaries and timeline | **Done.** `supabase/functions/_shared/analysis-core/fuelingSummary.ts`, tested in `fuelingSummary.test.ts`. |
 | 06.3.5 Cross-activity pattern analysis | Not started. |
 | 06.3.6 Structured N-of-1 fueling experiments | Not started. |
 | 06.3.7 Console + end-to-end validation | Not started. |
@@ -72,9 +72,13 @@ Retry-safety follows the existing app idiom (`upsert(...).onConflict(naturalKey)
 
 Verified live end to end against a real `exercise_sessions` row: a `consumed` event correctly wrote 3 `nutrient_intake` rows with the right computed `logged_at` (`session.start_time + elapsed_seconds`); editing it (new `carbs_g`, added `fluid_ml`) left exactly the right 4 rows, no stale duplicate; marking it `skipped` zeroed the ledger back to 0 rows; a `planned` row never wrote any; and an `upsert` retry with the same `client_key` resolved to the existing row rather than creating a second one. `get_advisors` shows no new findings.
 
+## 06.3.4 notes
+
+`summariseFueling` is a pure fold over an activity's event list -- no I/O, no table of its own (DAV-383's acceptance criterion: "expose a stable summary contract... rather than calculating metrics independently in multiple screens"). Planned and actual totals are computed and reported separately (never merged); skipped events are counted but excluded from both. Per-hour rates are null whenever duration is zero or unknown, never a misleading number with no real "hour" behind it -- `durationKnown` makes that explicit rather than leaving a caller to infer it from a null. Intake gaps are reported as plain elapsed-time buckets (default 30 min, configurable) with no event in them -- descriptive, not a judgment -- and the boundary case (an event logged at the exact activity end) is handled explicitly so it still closes that bucket's gap rather than appearing as a false gap. De-duplication is deliberately not this function's job: it folds whatever list it's given, trusting `fueling_intake_log`'s own row identity as the single source of truth (tested explicitly, so this is a documented design choice, not an oversight).
+
 ## Still open
 
-- 06.3.4 onward, in the sequence above -- each depends on `fueling_intake_log` existing, nothing on 06.3.1-06.3.3 depends on them.
+- 06.3.5 onward, in the sequence above -- each depends on `fueling_intake_log`/`fuelingSummary.ts` existing, nothing on 06.3.1-06.3.4 depends on them.
 - Verification test rows in the live project: `fueling_products` id `1`, its two `fueling_recipe_versions` rows (ids 1-2), and `fueling_intake_log` rows (ids 2-3) -- harmless, left in place (DELETE unavailable this session, same as milestone 08's leftover rows).
 - No offline-queue/outbox infrastructure exists anywhere in the Android app (confirmed by exploration: no Room entities, no outbox table, no connectivity-aware write queue). 06.3.3's "retry without duplicate submissions" should follow the existing `upsert(...).onConflict(naturalKey)` idiom (e.g. `AddEntryRepository.kt`'s `user_id,date` / `health_connect_record_id` keys), not introduce new sync infrastructure.
 - Android implementation (06.3.3 onward) carries the same caveat milestone 08 documented: this environment has no Android SDK, so any Kotlin written here is unverified until built on a real machine.

@@ -129,6 +129,35 @@ data class SeriesBreakPayload(val lastConfirmed: String? = null)
 @Serializable
 data class RelationshipResultRow(val key: String, val state: String = "insufficient", val payload: RelationshipPayload = RelationshipPayload())
 
+// Analysis Layer 3 / Phase 4. Read model for the "typicality" row (key personal_normal). Every field is defaulted.
+@Serializable
+data class TypicalityResultRow(val key: String, val state: String = "building", val payload: TypicalityPayload = TypicalityPayload())
+
+@Serializable
+data class TypicalityDriver(val signal: String = "", val z: Double = 0.0, val direction: String = "")
+
+@Serializable
+data class TypicalityDay(
+    val date: String = "",
+    val state: String = "insufficient",
+    val strain: Boolean = false,
+    val excluded: Boolean = false,
+    val drivers: List<TypicalityDriver> = emptyList(),
+)
+
+@Serializable
+data class TypicalityLookalike(val date: String = "", val illness: Boolean = false)
+
+@Serializable
+data class TypicalityPayload(
+    val baselineDays: Int = 0,
+    val baselineNeed: Int = 45,
+    val today: TypicalityDay? = null,
+    val suggestIllnessLog: Boolean = false,
+    val lookalikes: List<TypicalityLookalike> = emptyList(),
+    val skipped: List<String> = emptyList(),
+)
+
 @Serializable
 data class RelationshipEffect(val value: Double = 0.0, val lo: Double = 0.0, val hi: Double = 0.0, val unit: String = "")
 

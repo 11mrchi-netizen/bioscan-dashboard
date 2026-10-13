@@ -9,6 +9,7 @@ import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
 import com.bioscan.fieldterminal.data.model.RelationshipResultRow
 import com.bioscan.fieldterminal.data.model.SeriesBreakResultRow
+import com.bioscan.fieldterminal.data.model.TypicalityResultRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
@@ -61,6 +62,17 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
                 .decodeList<RelationshipResultRow>()
         } catch (e: Exception) {
             emptyList()
+        }
+
+    // Analysis Layer 3 / Phase 4. The latest "is today typical for you" result, or null before the first run / on failure.
+    suspend fun loadTypicality(): TypicalityResultRow? =
+        try {
+            supabase.postgrest.from("analysis_results")
+                .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "typicality") } }
+                .decodeList<TypicalityResultRow>()
+                .firstOrNull()
+        } catch (e: Exception) {
+            null
         }
 
     suspend fun loadWearableDaily(): List<WearableAnalysisRow> =

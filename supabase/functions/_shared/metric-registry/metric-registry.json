@@ -572,6 +572,26 @@
       ],
       "productDefined": true,
       "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "typicality",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "Compares today with your own recent typical days across five signals together: ln HRV, resting heart rate, sleep hours, deep + REM minutes and steps. The baseline is up to 120 past days that ends before the 14 days being judged, leaves out logged illness days and starts at the last confirmed series break. Each signal is standardised with a robust centre and spread (median, MAD); the joint pattern is described by a mean and a Ledoit-Wolf shrunk covariance, so correlated signals are judged together. A day's distance is the Mahalanobis distance over the signals it has (at least three) divided by their number, and 'elevated' and 'unusual' mean further out than 90% and 97.5% of your own typical days (leave-one-out). Two such days in a row with resting heart rate up suggest logging an illness. Today's steps are ignored because the day is not over, and a device-sensitive signal (deep + REM) is left out while a detected series break lies inside the window.",
+      "limitations": [
+        "Experimental: on a real 9-month history, replayed one day at a time, it flagged clearly more ordinary days than its nominal 10% (elevated) and 2.5% (unusual), because real signals drift and change regime; on synthetic stationary data it stays near nominal. It is therefore shown as a drill-down and does not feed Today's Recovery.",
+        "A day being atypical is not a problem in itself (an unusually long sleep or a big hike day are atypical too); only the strain flag requires resting heart rate to be up.",
+        "Needs 45 complete days (all five signals) before it says anything.",
+        "Observational and personal: it says nothing about other people or about causes."
+      ],
+      "references": [
+        {
+          "citation": "Ledoit O, Wolf M. A well-conditioned estimator for large-dimensional covariance matrices. J Multivar Anal 2004;88(2):365-411.",
+          "doi": "10.1016/S0047-259X(03)00096-4"
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
     }
   ]
 }

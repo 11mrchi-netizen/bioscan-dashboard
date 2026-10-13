@@ -12,13 +12,14 @@
 //                x-analysis-cron header; it is checked through public.analysis_cron_secret_ok() (service role only), so
 //                no human-held secret and no service role key is involved
 //
-// Publishes `series_break` (Phase 1) and `relationship` (Phase 3, the confirmatory catalogue) results; the typicality and
-// experiment engines plug in here later.
+// Publishes `series_break` (Phase 1), `relationship` (Phase 3, the confirmatory catalogue) and `typicality` (Phase 4,
+// "is today typical for you") results; the experiment engine plugs in here later.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { runRelationships } from "../_shared/analysis-core/runRelationships.ts";
+import { loadFrame, runRelationships } from "../_shared/analysis-core/runRelationships.ts";
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
+import { runTypicality } from "../_shared/analysis-core/runTypicality.ts";
 import { pearson, pFromR } from "../_shared/analysis-core/stats.ts";
 import { CORE_VERSION } from "../_shared/analysis-core/version.ts";
 
@@ -86,9 +87,16 @@ Deno.serve(async (req) => {
     const results = [];
     for (const id of userIds) {
       const breaks = await runSeriesBreaks(admin, id);
-      // One engine failing must not hide the other: each reports its own error.
-      const relationships = await runRelationships(admin, id).catch((e) => ({ userId: id, error: String(e) }));
-      results.push({ ...breaks, relationships });
+      // The frame is read once and shared; one engine failing must not hide the others: each reports its own error.
+      // Typicality runs after the series breaks because it restarts its baseline at the last confirmed one.
+      const loaded = await loadFrame(admin, id).catch((e) => ({ userId: id, error: String(e) }));
+      if ("error" in loaded) {
+        results.push({ ...breaks, relationships: loaded, typicality: loaded });
+        continue;
+      }
+      const relationships = await runRelationships(admin, id, new Date(), loaded).catch((e) => ({ userId: id, error: String(e) }));
+      const typicality = await runTypicality(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      results.push({ ...breaks, relationships, typicality });
     }
     return json({ coreVersion: CORE_VERSION, results }, 200);
   }

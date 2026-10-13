@@ -17,7 +17,7 @@ export const NON_TRAINING_TYPES = ['walk', 'other']
 
 export interface RawInputs {
   wearable: { date: string; hrv: number | null; rhr: number | null; steps: number | null }[]
-  sleep: { date: string; hours: number | null }[]
+  sleep: { date: string; hours: number | null; deep_min?: number | null; rem_min?: number | null }[]
   wellbeing: { date: string; energy: number | null; mood: number | null; stress: number | null; soreness: number | null }[]
   meals: { logged_at: string; meal_items: { alcohol_g: number | null; caffeine_mg: number | null }[] | null }[]
   sessions: { start_time: string; duration_min: number | null; type?: string | null }[]
@@ -46,6 +46,15 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
     sleep_hours: col(raw.sleep, 'hours', 2), // under 2 h is a nap or a fault
     energy: col(raw.wellbeing, 'energy', 0),
   }
+  // Deep + REM minutes, only on nights where both stages were recorded (the typicality engine's fourth signal).
+  series.deep_rem_min = alignToAxis(
+    axis,
+    raw.sleep.map((r) => {
+      const deep = num(r.deep_min)
+      const rem = num(r.rem_min)
+      return { date: r.date, value: deep !== null && rem !== null && deep + rem > 0 ? deep + rem : null }
+    }),
+  )
 
   // Nutrition-derived exposures: zero only on days with a food log.
   const mealDays = new Set<string>()
@@ -100,7 +109,14 @@ export interface RelationshipRun {
   results?: { id: string; state: string; n: number; p: number | null; pAdjusted: number | null }[]
 }
 
-export async function runRelationships(admin: Admin, userId: string, now: Date = new Date()): Promise<RelationshipRun> {
+export interface LoadedFrame {
+  userId: string
+  today: string
+  frame: Frame
+}
+
+/** Reads a user's raw rows once and builds the daily frame; engines that need it share the result. */
+export async function loadFrame(admin: Admin, userId: string, now: Date = new Date()): Promise<LoadedFrame | { userId: string; error: string }> {
   const today = now.toISOString().slice(0, 10)
   const since = shift(today, -(RELATIONSHIP_LOOKBACK_DAYS - 1))
   const sinceStamp = `${since}T00:00:00Z`
@@ -109,7 +125,7 @@ export async function runRelationships(admin: Admin, userId: string, now: Date =
 
   const [wearable, sleep, wellbeing, meals, sessions, recovery, ill] = await Promise.all([
     fetchAll<RawInputs['wearable'][number]>(q('wearable_daily', 'date, hrv, rhr, steps', 'date', since)),
-    fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours', 'date', since)),
+    fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min', 'date', since)),
     fetchAll<RawInputs['wellbeing'][number]>(q('wellbeing_daily', 'date, energy, mood, stress, soreness', 'date', since)),
     fetchAll<RawInputs['meals'][number]>(q('meals', 'logged_at, meal_items(alcohol_g, caffeine_mg)', 'logged_at', sinceStamp)),
     fetchAll<RawInputs['sessions'][number]>(q('exercise_sessions', 'start_time, duration_min, type', 'start_time', sinceStamp)),
@@ -117,7 +133,7 @@ export async function runRelationships(admin: Admin, userId: string, now: Date =
     admin.from('illnesses').select('start_date, end_date').eq('user_id', userId),
   ])
   const failed = [wearable, sleep, wellbeing, meals, sessions, recovery].find((r) => r.error)
-  if (failed) return { userId, error: failed.error }
+  if (failed) return { userId, error: failed.error as string }
   if (ill.error) return { userId, error: ill.error.message }
 
   const frame = buildFrame(
@@ -127,6 +143,13 @@ export async function runRelationships(admin: Admin, userId: string, now: Date =
     },
     today,
   )
+  return { userId, today, frame }
+}
+
+export async function runRelationships(admin: Admin, userId: string, now: Date = new Date(), loaded?: LoadedFrame): Promise<RelationshipRun> {
+  const got = loaded ?? (await loadFrame(admin, userId, now))
+  if ('error' in got) return { userId, error: got.error }
+  const { frame, today } = got
   const outcomes: RelationshipOutcome[] = runCatalogue(HYPOTHESES, frame)
 
   const results: NonNullable<RelationshipRun['results']> = []

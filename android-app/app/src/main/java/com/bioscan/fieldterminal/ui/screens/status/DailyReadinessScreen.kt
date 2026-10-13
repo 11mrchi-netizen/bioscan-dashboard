@@ -29,6 +29,7 @@ import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.ZeppStressRepository
 import com.bioscan.fieldterminal.data.buildTrainingSessionLoads
 import com.bioscan.fieldterminal.data.model.RelationshipResultRow
+import com.bioscan.fieldterminal.data.model.TypicalityResultRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
@@ -36,6 +37,7 @@ import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.comparison.METRIC_DIRECTIONALITY
 import com.bioscan.fieldterminal.domain.MetricCategory
 import com.bioscan.fieldterminal.domain.patternsView
+import com.bioscan.fieldterminal.domain.typicalityView
 import com.bioscan.fieldterminal.domain.PerformanceTimeframe
 import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.SleepNight
@@ -84,6 +86,8 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
     var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
     // Analysis Layer 3 / Phase 3: published confirmatory relationships (read-only).
     var relationships by remember { mutableStateOf<List<RelationshipResultRow>>(emptyList()) }
+    // Analysis Layer 3 / Phase 4: "is today typical for you", a quiet drill-down (not part of Today's Recovery).
+    var typicality by remember { mutableStateOf<TypicalityResultRow?>(null) }
 
     LaunchedEffect(Unit) {
         val repo = AnalysisRepository(SupabaseClientProvider.client)
@@ -97,6 +101,7 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
         nutrition = NutritionRepository(SupabaseClientProvider.client).loadOverview()
         breakStarts = repo.loadSeriesBreakStarts()
         relationships = repo.loadRelationships()
+        typicality = repo.loadTypicality()
     }
 
     val s = sessions
@@ -208,6 +213,7 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
             EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")), "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints)
 
             PatternsCard(patternsView(relationships))
+            TypicalityCard(typicalityView(typicality))
         }
     }
 }

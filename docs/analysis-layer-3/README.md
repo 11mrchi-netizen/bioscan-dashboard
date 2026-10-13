@@ -24,7 +24,8 @@ A pure TypeScript core in `supabase/functions/_shared/analysis-core/` (erasable 
 | 2 Capture layer | **Built (2a-2e); live checks open.** 2a: alcohol is recorded as grams of ethanol (`volume_ml x ABV% / 100 x 0.789`) from a strength field with beer/wine/spirits shortcuts; a drink with no strength is refused. 2b: Edge Function `log-agent` v1 deployed (propose-only, see below). 2c: a "SAY IT" entry in the add-entry sheet shows the proposals for review. 2d: two new reminder kinds, `wellbeing_checkin` (10:00, skipped once any of energy/mood/stress/soreness is logged today) and `evening_log` (19:30, skipped once a "say it" message was saved today); migration `20261012_notification_capture_kinds.sql` widened the kind CHECK and seeded both rules (enabled) for the existing account. 2e: Settings > User > DATA CAPTURE shows days logged in the last 28 per stream. 435 Android unit tests and 49 Node tests pass. **Not yet exercised:** the live model call needs a signed-in user (the function boots and rejects anonymous calls with 401), the screens and notifications need an installed build, and the "~50 utterances" golden run against the real model is still to do. |
 | 7 Methodology as data | **Done (Android wiring partial).** `metric-registry.json` has an entry for every doc-02 metric plus Sleep Index, Dynamic Recovery, alcohol and series break; a Node test fails when a doc-02 row lacks an entry or a field. Android packages it as an asset and `FTCard(methodology = key)` shows it behind the help button: HRV, RHR, sleep duration, Sleep Index, Today's Recovery, SRI, sleep phases, respiratory rate, training load, Today's Readiness. Other cards still use their own help text; the console does not read the registry yet. 438 Android unit tests pass. |
 | 3 Confirmatory relationships | **Done and live.** Engine, nine-hypothesis catalogue v1.0.0, publisher (`analysis-run` v5, nightly), console Relationship Lab "Confirmatory" tab (committed in the console worktree, **not yet pushed to `main`**) and a read-only PATTERNS card on the Android Daily Readiness page. Details and the backtest below. 440 Android unit tests and 66 Node tests pass. |
-| 4–6, 8–9 | Not started. |
+| 4 Personal Normal as typicality | **Engine done and live; gate missed on real data, so it ships as a quiet drill-down.** `typicality.ts` + publisher in `analysis-run` (v7, nightly), tests on synthetic data pass, Android "IS TODAY TYPICAL?" card (read-only, Daily Readiness). It is **not** a Today's Recovery contributor and there is no push prompt, per the plan's fallback. Details below. 445 Android unit tests and 69 Node tests pass. |
+| 5–6, 8–9 | Not started. |
 
 ## Running the tests
 
@@ -65,6 +66,23 @@ Supplement start to outcome is deliberately not in this catalogue: a step exposu
 **Backtest on synthetic data with planted effects** (`relationship.test.ts` runs a smaller version of this on every push): over 60 planted datasets, alcohol to next-day HRV (true effect about -13 %) was found in 90 % at 61 days and 100 % at 120 days or more, with 92-95 % interval coverage; sleep to HRV 80 % / 100 %; the true +4 ms sauna effect needs far more data (13 % at 61 days, 47 % at 120, 77 % at 240), which is exactly what the reported smallest-detectable effect says; the planted null (alcohol to sleep) was called supported in 0-5 % of datasets (nominal 5 %); the confounded training card (fixed weekly schedule) is not testable. Calibration on autocorrelated nulls: false-positive rate within the nominal 5 %.
 
 Published as `analysis_results` rows of kind `relationship`, one per hypothesis, states `supported` / `not_distinguishable` / `insufficient`. There is no "Moderate" tier anywhere.
+
+## Typicality: "is today typical for you?" (Phase 4)
+
+Replaces fixed-threshold personal-normal bands (a competitor's version called a quarter of days unusual against about 9 % expected). `typicality.ts` (+ `linalg.ts`):
+
+1. Five daily signals: ln HRV, resting heart rate, sleep hours, deep + REM minutes, steps (today's steps are ignored, the day is not over).
+2. Baseline = up to 120 past days that **end before the 14 days being judged** (so an illness in progress cannot make itself look normal), skip logged illness days, start at the last confirmed series break, and need 45 complete days.
+3. Robust standardisation (median, MAD), a mean and a Ledoit-Wolf shrunk covariance, so correlated signals are judged jointly and a short history still gives an invertible matrix.
+4. Distance = Mahalanobis over the signals present (at least three) divided by their number. Thresholds are the person's own **leave-one-out** distance quantiles (90 % = elevated, 97.5 % = unusual), not a chi-square.
+5. Attribution: up to three signals with |z| >= 1. Strain = elevated or worse with resting heart rate up (and HRV down); two strain days in a row with no illness logged set `suggestIllnessLog`. Lookalikes: the three past days nearest to today, illness days included.
+6. A device-sensitive signal (deep + REM) is left out while a detected series break for it lies inside the window, and the result says so.
+
+**Gate on synthetic data** (`typicality.test.ts`, 300 simulated 200-day histories): on stationary data 3.8 % of judged days are unusual (nominal 2.5 %) and 11.5 % are elevated or worse (nominal 10 %), and a false "log an illness" suggestion appears in 0.7 % of histories; a planted illness (resting heart rate +8 bpm, HRV -30 %, steps halved) is flagged on 99.8 % of its days and prompts in 96 % of histories (it cannot prompt on its first day).
+
+**Gate on the real history (private rolling-origin replay, figures not recorded here): missed.** Replaying the engine one day at a time over the real months, the share of ordinary days flagged was far above the nominal share, and the share of logged illness days flagged was only moderate. Real signals drift and change regime (a sensor change in HRV noise, sleep-stage classifier shifts), which a window of the recent past cannot absorb; leaving out deep + REM helped but not enough. Per the plan's rule ("if specificity misses, ship as quiet drill-down only") the card is a drill-down labelled experimental, it does not feed Today's Recovery, and no notification is attached.
+
+To revisit: a regime-aware baseline (restart on unconfirmed but detected breaks), robust per-signal dispersion models, or per-signal one-sided tests; re-run the replay before promoting it.
 
 ## Capture layer: how "say it" works (Phase 2)
 

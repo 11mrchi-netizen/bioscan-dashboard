@@ -69,6 +69,15 @@ android {
     }
 }
 
+// Performance pass: ./gradlew :app:assembleDebug -PcomposeReports writes stability/skippability reports to
+// app/build/compose_compiler (off by default, it slows the build).
+if (project.hasProperty("composeReports")) {
+    composeCompiler {
+        reportsDestination.set(layout.buildDirectory.dir("compose_compiler"))
+        metricsDestination.set(layout.buildDirectory.dir("compose_compiler"))
+    }
+}
+
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.08.00"))
     implementation("androidx.compose.ui:ui")

@@ -6,6 +6,7 @@ import com.bioscan.fieldterminal.domain.averagePaceMinPerKmSince
 import com.bioscan.fieldterminal.domain.lactateThresholdPaceMinPerKmSeries
 import com.bioscan.fieldterminal.domain.latestNonNullVo2Max
 import com.bioscan.fieldterminal.domain.longestRunKm
+import com.bioscan.fieldterminal.domain.runClusterIds
 import com.bioscan.fieldterminal.domain.dedupeRunSessions
 import com.bioscan.fieldterminal.domain.sumDistanceKmSince
 import com.bioscan.fieldterminal.domain.suspectedTrailReason
@@ -203,12 +204,9 @@ class TrainingRepository(private val supabase: SupabaseClient) {
             latestGapMinPerKm = latestRunDynamics?.gapMinPerKm,
             latestHrDecouplingPct = latestRunDynamics?.hrDecouplingPct,
             suspectedTrailRuns = running.mapNotNull { r ->
-                val cluster = sessions.filter { s ->
-                    s.type == "run" && s.id != r.id &&
-                        kotlin.math.abs(java.time.Duration.between(OffsetDateTime.parse(s.startTime), OffsetDateTime.parse(r.startTime)).toMinutes()) <= 5
-                } + r
-                val zeppCode = cluster.firstNotNullOfOrNull { zeppSportBySession[it.id] }
-                suspectedTrailReason(r, zeppCode)?.let { SuspectedTrailRun(r, it, cluster.map { c -> c.id }) }
+                val clusterIds = runClusterIds(sessions, r)
+                val zeppCode = clusterIds.firstNotNullOfOrNull { zeppSportBySession[it] }
+                suspectedTrailReason(r, zeppCode)?.let { SuspectedTrailRun(r, it, clusterIds) }
             },
         )
     }

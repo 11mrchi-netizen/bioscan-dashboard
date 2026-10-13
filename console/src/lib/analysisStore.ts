@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { loadRange, saveRange } from './rangeStore'
 import {
   defaultContext,
   type AnalysisContext,
@@ -21,8 +22,10 @@ interface AnalysisStore extends AnalysisContext {
 
 export const useAnalysisStore = create<AnalysisStore>()((set) => ({
   ...defaultContext(),
+  // the range chosen last time (a preset stays relative to today)
+  primaryRange: loadRange() ?? defaultContext().primaryRange,
 
-  setRange: (range) => set({ primaryRange: range }),
+  setRange: (range) => { saveRange(range); set({ primaryRange: range }) },
   setComparisonRange: (range) => set({ comparisonRange: range }),
   setSelectedDate: (date) => set({ selectedDate: date }),
   setSelectedEvent: (event) => set({ selectedEvent: event }),

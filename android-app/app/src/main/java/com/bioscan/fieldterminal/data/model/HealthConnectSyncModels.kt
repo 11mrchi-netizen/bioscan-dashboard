@@ -66,3 +66,14 @@ data class SleepUpsertRow(
 
 @Serializable
 data class RespiratoryRateUpsertRow(val date: String, @SerialName("respiratory_rate") val respiratoryRate: Double)
+
+// Analysis Layer 3 / R1: which origin wrote a daily field (side table, one row per user/date/field; user_id is filled
+// by the column default like every other upsert row here).
+@Serializable
+data class DailyFieldProvenanceRow(
+    val date: String,
+    val field: String,
+    val origin: String,
+    val writer: String,
+    @SerialName("written_at") val writtenAt: String,
+)

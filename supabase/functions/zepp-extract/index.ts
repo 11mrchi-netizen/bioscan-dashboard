@@ -22,7 +22,7 @@ function json(body: unknown, status: number) {
   });
 }
 
-const EXTRACTOR_VERSION = "12"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
+const EXTRACTOR_VERSION = "14"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude is cm, drop no-fix samples;
 // 6: write Zepp's own decoded distance back onto exercise_sessions.distance_km, and merge
 // orphaned zepp-sourced placeholder rows created by the Zepp/Health-Connect sync race (DAV-274)
 // 7: fix the "stress" metric's endpoint (was 404ing every attempt -- see METRIC_DEFS) (DAV-246)
@@ -43,7 +43,33 @@ const EXTRACTOR_VERSION = "12"; // 4: GAP/EF/decoupling (DAV-272); 5: altitude i
 // sleep stages, resting HR, sleep score, and steps, then upsert into
 // sleep_daily and wearable_daily. Stage mode mapping confirmed against a
 // real response: 4=light, 5=deep, 7=awake, 8=REM.
+// 13: done lap sets carry status -1 (older exports) or 0 (current firmware); 2 is a planned set that was skipped.
+// 14: Analysis Layer 3 R1 -- record the origin of every daily field this function writes in
+// daily_field_provenance (origin 'zepp', writer 'zepp-extract'), because sleep_daily/wearable_daily rows are shared with
+// the Health Connect sync (same user_id,date upsert key, different fields) and the row-level `source` column cannot
+// say who wrote which field; and apply the same 2 h plausibility floor the Health Connect path uses so a nap/blip never
+// becomes a night (live data had 0.08 h and 0.13 h nights).
 
+
+// Same floor as HealthConnectDailySyncRepository.MIN_PLAUSIBLE_SLEEP_HOURS (DAV-212): a date whose longest sleep is
+// shorter than this gets no sleep row instead of a fabricated near-zero night.
+const MIN_PLAUSIBLE_SLEEP_HOURS = 2.0;
+
+// Records which origin wrote each field of a daily row. Best effort: provenance must never fail the data write.
+// deno-lint-ignore no-explicit-any
+async function recordFieldProvenance(supabase: any, userId: string, date: string, fields: string[]): Promise<void> {
+  if (fields.length === 0) return;
+  const rows = fields.map((field) => ({
+    user_id: userId,
+    date,
+    field,
+    origin: "zepp",
+    writer: "zepp-extract",
+    written_at: new Date().toISOString(),
+  }));
+  const { error } = await supabase.from("daily_field_provenance").upsert(rows, { onConflict: "user_id,date,field" });
+  if (error) console.warn(`daily_field_provenance upsert failed for ${date}: ${error.message}`);
+}
 
 // DAV-115/123: decode detail.json's per-second fields into plain TimePoint-
 // shaped series the Android app already knows how to render (see
@@ -227,7 +253,7 @@ interface StrengthSetDecoded {
 // Parse the semicolon-separated lap string into per-set objects.
 // Index map (confirmed from live data 2026-10-08): [0]=idx, [1]=duration_sec,
 // [4]=avg_hr, [15]=IMU_detected_reps, [21]=weight_kg, [22]=target_reps,
-// [26]=status (-1=done, 2=planned/skipped), [28]=exercise_code.
+// [26]=status (-1 or 0=done, 2=planned/skipped), [28]=exercise_code.
 function parseLapSets(lapStr: unknown): Array<{
   idx: number; durationSec: number; avgHr: number; detectedReps: number;
   weightKg: number; targetReps: number; status: number; exerciseCode: number;
@@ -985,7 +1011,9 @@ Deno.serve(async (req: Request) => {
       const rawData = ((detailRawBody as Record<string, unknown>).data) as Record<string, unknown> | undefined;
       if (!rawData) return;
 
-      const laps = parseLapSets(rawData.lap).filter(s => s.status === -1);
+      // Done sets carry status -1 (older exports) or 0 (current firmware); 2 is a planned set that was
+      // skipped. Filtering on -1 alone dropped every set from the 2026-10-08 session.
+      const laps = parseLapSets(rawData.lap).filter(s => s.status !== 2 && s.durationSec > 0);
       if (!laps.length) return;
 
       const assess = parseStrengthAssess(rawData.strengthAssess as unknown);
@@ -1125,7 +1153,7 @@ Deno.serve(async (req: Request) => {
           try {
             const decoded = decodeBandDataSummary(rawBody);
             if (decoded) {
-              if (decoded.sleepHours !== null && decoded.bedtimeIso && decoded.wakeTimeIso) {
+              if (decoded.sleepHours !== null && decoded.sleepHours >= MIN_PLAUSIBLE_SLEEP_HOURS && decoded.bedtimeIso && decoded.wakeTimeIso) {
                 const sleepRow: Record<string, unknown> = {
                   user_id: user.id,
                   date,
@@ -1140,6 +1168,7 @@ Deno.serve(async (req: Request) => {
                 const { error: sleepErr } = await supabase.from("sleep_daily")
                   .upsert(sleepRow, { onConflict: "user_id,date" });
                 if (sleepErr) throw new Error(`sleep_daily upsert: ${sleepErr.message}`);
+                await recordFieldProvenance(supabase, user.id, date, Object.keys(sleepRow).filter((k) => k !== "user_id" && k !== "date").map((k) => `sleep_daily.${k}`));
               }
               const wearableUpdates: Record<string, unknown> = { user_id: user.id, date };
               let hasWearable = false;
@@ -1150,6 +1179,7 @@ Deno.serve(async (req: Request) => {
                 const { error: wearErr } = await supabase.from("wearable_daily")
                   .upsert(wearableUpdates, { onConflict: "user_id,date" });
                 if (wearErr) throw new Error(`wearable_daily upsert: ${wearErr.message}`);
+                await recordFieldProvenance(supabase, user.id, date, Object.keys(wearableUpdates).filter((k) => k !== "user_id" && k !== "date").map((k) => `wearable_daily.${k}`));
               }
               results.push({ metric: "band_data_decode", date, status: 200, stored: true });
             }

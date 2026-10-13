@@ -60,9 +60,11 @@ fun computeSleepIndex(
     nights: List<SleepNight>,
     zone: ZoneId = ZoneId.systemDefault(),
     asOf: LocalDate = LocalDate.now(),
+    durationWindowStart: LocalDate? = null,
+    stageWindowStart: LocalDate? = null,
 ): SleepIndexResult {
-    val duration = evaluateSleepDuration(hoursDaily, asOf)
-    val stage = evaluateSleepStage(deepMinutesDaily, asOf)
+    val duration = evaluateSleepDuration(hoursDaily, asOf, durationWindowStart)
+    val stage = evaluateSleepStage(deepMinutesDaily, asOf, stageWindowStart)
     val sri = evaluateSri(nights, zone, asOf)
     val respiratory = evaluateRespiratoryAnomaly(respiratoryDaily, asOf)
 

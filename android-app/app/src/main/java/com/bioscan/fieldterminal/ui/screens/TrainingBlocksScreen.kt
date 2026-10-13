@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,8 +44,9 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun TrainingBlocksScreen(onBack: () -> Unit) {
     var blocks by remember { mutableStateOf<List<TrainingBlockSummaryRow>?>(null) }
-    LaunchedEffect(Unit) {
-        blocks = TrainingCyclesRepository(SupabaseClientProvider.client).loadBlockSummaries()
+    val guard = rememberLoadGuard()
+    LaunchedEffect(guard.attempt) {
+        guard.run { blocks = TrainingCyclesRepository(SupabaseClientProvider.client).loadBlockSummaries() }
     }
 
     val b = blocks
@@ -52,7 +55,9 @@ fun TrainingBlocksScreen(onBack: () -> Unit) {
         contentPadding = PaddingValues(bottom = 24.dp),
     ) {
         item { TileHeader(onBack = onBack) }
-        if (b == null) {
+        if (b == null && guard.error != null) {
+            item { LoadErrorCard(guard) }
+        } else if (b == null) {
             item {
                 Box(
                     Modifier.fillMaxWidth().padding(vertical = 48.dp),

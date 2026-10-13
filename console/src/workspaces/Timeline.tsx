@@ -2,7 +2,9 @@
 // Events: runs, sleep, wellbeing, meals, injuries, illnesses, rest_days.
 // All driven by AnalysisContext primaryRange + filters.
 
-import { useEffect, useState, useMemo } from 'react'
+import { LoadBanner } from '../components/shared/LoadBanner'
+import { useLoadEffect } from '../lib/useLoadEffect'
+import { useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRange, useInspect } from '../lib/analysisStore'
 import { NOTABLE_SESSION_TYPES, dayBounds, localDate, warnOnError } from '../lib/schema'
@@ -101,22 +103,17 @@ export function Timeline() {
   const range = useRange()
   const inspect = useInspect()
   const [events, setEvents] = useState<TimelineEvent[]>([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    setLoading(true)
+  const { loading, error, retry } = useLoadEffect(async (isCurrent) => {
     const { start, end } = range
-    Promise.all([
+    const batches = await Promise.all([
       fetchRuns(start, end),
       fetchSleep(start, end),
       fetchInjuries(start, end),
       fetchIllnesses(start, end),
       fetchRestDays(start, end),
-    ]).then(batches => {
-      const all = batches.flat().sort((a, b) => b.date.localeCompare(a.date))
-      setEvents(all)
-      setLoading(false)
-    })
+    ])
+    if (isCurrent()) setEvents(batches.flat().sort((a, b) => b.date.localeCompare(a.date)))
   }, [range])
 
   // Group by date for sticky headers
@@ -131,6 +128,7 @@ export function Timeline() {
   }, [events])
 
   if (loading) return <div className="state-loading mono">LOADING TIMELINE…</div>
+  if (error) return <LoadBanner error={error} onRetry={retry} />
   if (events.length === 0) return <div className="state-empty mono">NO EVENTS IN RANGE</div>
 
   return (

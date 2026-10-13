@@ -16,6 +16,15 @@ import java.time.Duration
 // as real WorkManager background work rather than a plain LaunchedEffect-scoped coroutine.
 class HealthConnectSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        // Perf pass: the app enqueues this on every start (and every Activity recreation, e.g. rotation). A full sync plus the
+        // write-back's delete-and-reinsert is wasted work right after a successful one, so a run within MIN_INTERVAL of the
+        // last success is skipped. Anything logged in that gap is picked up by the next run (the watermark is unchanged).
+        val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val sinceLast = System.currentTimeMillis() - prefs.getLong(KEY_LAST_SUCCESS, 0L)
+        if (sinceLast in 0 until MIN_INTERVAL_MS) {
+            android.util.Log.d("HealthConnectSyncWorker", "skipped: last success ${sinceLast / 1000}s ago")
+            return Result.success()
+        }
         val syncCoordinator = HealthConnectSyncCoordinator(applicationContext, SupabaseClientProvider.client)
         val readResult = syncCoordinator.syncAll()
         HealthConnectSyncStatus.record(readResult)
@@ -33,12 +42,18 @@ class HealthConnectSyncWorker(context: Context, params: WorkerParameters) : Coro
             readResult is HealthConnectSyncResult.Unavailable || readResult is HealthConnectSyncResult.NotGranted -> {
                 Result.failure()
             }
-            else -> Result.success()
+            else -> {
+                prefs.edit().putLong(KEY_LAST_SUCCESS, System.currentTimeMillis()).apply()
+                Result.success()
+            }
         }
     }
 
     companion object {
         private const val UNIQUE_WORK_NAME = "health_connect_sync"
+        private const val PREFS = "ft_sync"
+        private const val KEY_LAST_SUCCESS = "hc_last_success"
+        private const val MIN_INTERVAL_MS = 10 * 60_000L
 
         fun enqueue(context: Context) {
             val request = OneTimeWorkRequestBuilder<HealthConnectSyncWorker>()

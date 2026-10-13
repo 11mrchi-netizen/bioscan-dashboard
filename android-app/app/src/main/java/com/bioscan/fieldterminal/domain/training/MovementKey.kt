@@ -15,6 +15,8 @@ private val PHRASE_MAP = listOf(
     "chest press" to "bench press",
     "bent over row" to "row",
     "bent over barbell row" to "row",
+    // Zepp's exercise catalog calls the strict standing barbell press this.
+    "standing barbell press" to "overhead press",
 )
 
 fun movementKey(name: String): String {
@@ -26,3 +28,8 @@ fun movementKey(name: String): String {
     // "Bench Press" = "Barbell Bench Press"; "Squat" = "Barbell Squat". Order never matters.
     return tokens.distinct().sorted().joinToString(" ")
 }
+
+// Plan-versus-logged matching: a watch logs the set as "Pull Up" with a load, the plan says
+// "Weighted Pull-up". Same lift for comparing a session with its plan; still a different key for maxes.
+fun looseMovementKey(name: String): String =
+    movementKey(name).split(' ').filter { it != "weighted" }.joinToString(" ")

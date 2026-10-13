@@ -54,7 +54,7 @@ private data class ImageEstimateResponse(
 data class NutritionImageEstimateResult(val estimateId: Long, val estimate: NutritionMealEstimate)
 
 class NutritionImageEstimateRepository(private val supabase: SupabaseClient) {
-    companion object { private val client = HttpClient(Android) }
+    companion object { private val client = functionsClient(60_000) }
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun estimate(images: List<ByteArray>, mimeType: String = "image/jpeg"): NutritionImageEstimateResult {

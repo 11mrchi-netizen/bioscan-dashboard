@@ -2,6 +2,7 @@
 // experiment. A plan is registered in the Android app (Supplements > TEST IT) and cannot be changed afterwards; this view is
 // read-only. While an experiment runs its numbers are interim and carry no verdict.
 
+import { LoadBanner } from '../components/shared/LoadBanner'
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { warnOnError } from '../lib/schema'
@@ -52,13 +53,27 @@ export function Experiments() {
   const [running, setRunning] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const loadInner = useCallback(async () => {
     const { data, error } = await supabase.from('analysis_results').select('key, as_of, state, calculated_at, payload').eq('kind', 'experiment')
     warnOnError('experiments', error)
     const list = ((data ?? []) as unknown as Row[]).sort((a, b) => (b.payload.protocol?.phases[0]?.start ?? '').localeCompare(a.payload.protocol?.phases[0]?.start ?? ''))
     setRows(list)
     setLoading(false)
   }, [])
+
+  const load = useCallback(async () => {
+    try {
+      await loadInner()
+      setLoadError(null)
+    } catch (e) {
+      console.error('[BioScan] load failed:', e)
+      setLoadError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [loadInner])
 
   useEffect(() => { void load() }, [load])
 
@@ -72,6 +87,7 @@ export function Experiments() {
   }, [load])
 
   if (loading) return <div className="state-loading mono">LOADING EXPERIMENTS…</div>
+  if (loadError) return <LoadBanner error={loadError} onRetry={() => { setLoading(true); void load() }} />
 
   return (
     <div className="conf">

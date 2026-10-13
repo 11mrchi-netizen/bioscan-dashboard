@@ -2,7 +2,9 @@
 // CTL/ATL/TSB computed from runs using duration-based TSS proxy.
 // VO2max estimated from best recent pace via Daniels VDOT.
 
-import { useEffect, useState, useMemo } from 'react'
+import { LoadBanner } from '../components/shared/LoadBanner'
+import { useLoadEffect } from '../lib/useLoadEffect'
+import { useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRange, useInspect } from '../lib/analysisStore'
 import { ENDURANCE_TYPES, dayBounds, localDate, warnOnError } from '../lib/schema'
@@ -32,12 +34,10 @@ interface TrainingData {
   sessions: RunRow[]
 }
 
-function useTrainingData(start: string, end: string): { data: TrainingData | null; loading: boolean } {
+function useTrainingData(start: string, end: string): { data: TrainingData | null; loading: boolean; error: string | null; retry: () => void } {
   const [data, setData] = useState<TrainingData | null>(null)
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    setLoading(true)
+  const status = useLoadEffect(async (isCurrent) => {
     // Pull 90 days before start for CTL warm-up
     const warmupStart = new Date(start)
     warmupStart.setDate(warmupStart.getDate() - 90)
@@ -46,13 +46,14 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
     // exercise_sessions replaced the old `runs` table; only endurance types feed this run-based load model
     // (4,000+ auto-detected walks would otherwise dominate the TSS proxy).
     const { from, to } = dayBounds(warmupStr, end)
-    supabase.from('exercise_sessions')
+    const { data: rows, error } = await supabase.from('exercise_sessions')
       .select('id, start_time, distance_km, duration_min, type, avg_hr, source')
       .in('type', ENDURANCE_TYPES)
       .gte('start_time', from).lte('start_time', to)
       .order('start_time', { ascending: true })
-      .then(({ data: rows, error }) => {
+    {
         warnOnError('training sessions', error)
+        if (error) throw new Error(error.message)
         const runs: RunRow[] = (rows ?? []).map((r: Record<string, unknown>) => ({
           id: String(r.id),
           date: localDate(r.start_time as string),
@@ -94,12 +95,11 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
           vo2maxFromPace(r.distance_km ?? 0, r.duration_minutes ?? 0)
         )
 
-        setData({ dates: visibleDates, ctl, atl, tsb, vo2maxDates, vo2maxValues, sessions: visibleRuns.slice().reverse() })
-        setLoading(false)
-      })
+        if (isCurrent()) setData({ dates: visibleDates, ctl, atl, tsb, vo2maxDates, vo2maxValues, sessions: visibleRuns.slice().reverse() })
+    }
   }, [start, end])
 
-  return { data, loading }
+  return { data, loading: status.loading, error: status.error, retry: status.retry }
 }
 
 function makeStressSpec(id: string, title: string, unit: string, kind: ChartSpec['kind']): ChartSpec {
@@ -119,7 +119,7 @@ function toMetricResult(dates: string[], values: (number | null)[], metricId: st
 export function Training() {
   const range = useRange()
   const inspect = useInspect()
-  const { data, loading } = useTrainingData(range.start, range.end)
+  const { data, loading, error, retry } = useTrainingData(range.start, range.end)
 
   const ctlSpec = useMemo(() => makeStressSpec('training.ctl', 'CTL', 'AU', 'area'), [])
   const atlSpec = useMemo(() => makeStressSpec('training.atl', 'ATL', 'AU', 'line'), [])
@@ -132,6 +132,7 @@ export function Training() {
   const vo2Result  = useMemo(() => data ? toMetricResult(data.vo2maxDates, data.vo2maxValues, 'training.vo2max') : null, [data])
 
   if (loading) return <div className="state-loading mono">LOADING TRAINING…</div>
+  if (error) return <LoadBanner error={error} onRetry={retry} />
   if (!data) return <div className="state-error mono">LOAD FAILED</div>
 
   return (

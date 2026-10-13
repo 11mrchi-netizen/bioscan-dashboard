@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.data.model.HrPoint
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow
 import com.bioscan.fieldterminal.data.model.LabResultAnalysisRow
@@ -7,6 +8,9 @@ import com.bioscan.fieldterminal.data.model.MaxHrRow
 import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
+import com.bioscan.fieldterminal.data.model.RelationshipResultRow
+import com.bioscan.fieldterminal.data.model.SeriesBreakResultRow
+import com.bioscan.fieldterminal.data.model.TypicalityResultRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
@@ -14,7 +18,9 @@ import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.EnduranceSessionInput
+import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.aggregateMealsByDay
+import com.bioscan.fieldterminal.domain.seriesBreakStartsFrom
 import com.bioscan.fieldterminal.domain.trimp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -36,16 +42,84 @@ import java.time.OffsetDateTime
 // this app reads a daily table.
 class AnalysisRepository(private val supabase: SupabaseClient) {
 
-    suspend fun loadWearableDaily(): List<WearableAnalysisRow> =
+    // Analysis Layer 3 / R1. The start of each metric's current regime = its last CONFIRMED series break, published by the
+    // analysis-run Edge Function into analysis_results. Optional by design: before the first run, with no confirmed break,
+    // or if the read fails, every baseline behaves exactly as before (NONE), never blocks a screen.
+    suspend fun loadSeriesBreakStarts(): SeriesBreakStarts =
+        try {
+            ReadCache.get("analysis.series_break") {
+                val rows = supabase.postgrest.from("analysis_results")
+                    .select(columns = Columns.list("key,payload")) { filter { eq("kind", "series_break") } }
+                    .decodeList<SeriesBreakResultRow>()
+                seriesBreakStartsFrom(rows.associate { it.key to it.payload.lastConfirmed })
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            SeriesBreakStarts.NONE
+        }
+
+    // Analysis Layer 3 / Phase 3. The latest published relationship results; empty before the first run or if the read fails.
+    suspend fun loadRelationships(): List<RelationshipResultRow> =
+        try {
+            ReadCache.get("analysis.relationships") {
+                supabase.postgrest.from("analysis_results")
+                    .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "relationship") } }
+                    .decodeList<RelationshipResultRow>()
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+    // Analysis Layer 3 / Phase 4. The latest "is today typical for you" result, or null before the first run / on failure.
+    suspend fun loadTypicality(): TypicalityResultRow? =
+        try {
+            ReadCache.get("analysis.typicality") {
+                supabase.postgrest.from("analysis_results")
+                    .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "typicality") } }
+                    .decodeList<TypicalityResultRow>()
+                    .firstOrNull()
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+
+    suspend fun loadWearableDaily(): List<WearableAnalysisRow> = ReadCache.get("analysis.WearableDaily") { fetchWearableDaily() }
+
+    private suspend fun fetchWearableDaily(): List<WearableAnalysisRow> =
         supabase.postgrest.from("wearable_daily")
-            .select(columns = Columns.list("date,hrv,rhr,steps,spo2_avg,hr_timeseries")) {
+            .select(columns = Columns.list("date,hrv,rhr,steps,spo2_avg")) {
                 order("date", Order.DESCENDING)
                 limit(200)
             }
             .decodeList<WearableAnalysisRow>()
             .reversed()
 
-    suspend fun loadSleepDaily(): List<SleepAnalysisRow> =
+    // The intraday heart-rate series of the day the Heart tab charts: the OLDEST day in the 200-row wearable window that
+    // has one (that is what `firstOrNull` on the ascending list always picked; kept unchanged, see HeartTileScreen).
+    // Fetched on its own because the column is ~50 kB of JSON per day and the other five screens never read it.
+    suspend fun loadHeartRateDay(windowStart: String?): List<HrPoint>? = ReadCache.get("analysis.hr_day.$windowStart") {
+        supabase.postgrest.from("wearable_daily")
+            .select(columns = Columns.list("date,hr_timeseries")) {
+                filter {
+                    if (windowStart != null) gte("date", windowStart)
+                    filterNot("hr_timeseries", io.github.jan.supabase.postgrest.query.filter.FilterOperator.IS, "null")
+                }
+                order("date", Order.ASCENDING)
+                limit(5)
+            }
+            .decodeList<HrDayRow>()
+            .firstOrNull { it.hrTimeseries?.isNotEmpty() == true }
+            ?.hrTimeseries
+    }
+
+    suspend fun loadSleepDaily(): List<SleepAnalysisRow> = ReadCache.get("analysis.SleepDaily") { fetchSleepDaily() }
+
+    private suspend fun fetchSleepDaily(): List<SleepAnalysisRow> =
         supabase.postgrest.from("sleep_daily")
             .select(columns = Columns.list("date,hours,bedtime,wake_time,respiratory_rate,deep_min,rem_min,light_min")) {
                 order("date", Order.DESCENDING)
@@ -54,7 +128,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<SleepAnalysisRow>()
             .reversed()
 
-    suspend fun loadBodyMetrics(): List<BodyMetricsAnalysisRow> =
+    suspend fun loadBodyMetrics(): List<BodyMetricsAnalysisRow> = ReadCache.get("analysis.BodyMetrics") { fetchBodyMetrics() }
+
+    private suspend fun fetchBodyMetrics(): List<BodyMetricsAnalysisRow> =
         supabase.postgrest.from("body_metrics")
             .select(columns = Columns.list("date,weight_kg,body_fat_pct")) {
                 order("date", Order.DESCENDING)
@@ -72,7 +148,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // account's own highest-ever recorded max_hr across every session, not
     // limited to the 400-day Training Load window above -- a real measured
     // ceiling, not an age-formula guess.
-    suspend fun loadPersonalMaxHr(): Double? =
+    suspend fun loadPersonalMaxHr(): Double? = ReadCache.get("analysis.PersonalMaxHr") { fetchPersonalMaxHr() }
+
+    private suspend fun fetchPersonalMaxHr(): Double? =
         supabase.postgrest.from("exercise_sessions")
             .select(columns = Columns.list("max_hr")) {
                 // gt(0) rather than an is-not-null filter -- excludes nulls the
@@ -87,7 +165,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .firstOrNull()
             ?.maxHr
 
-    suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> =
+    suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> = ReadCache.get("analysis.ExerciseSessionsForTrainingLoad") { fetchExerciseSessionsForTrainingLoad() }
+
+    private suspend fun fetchExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> =
         supabase.postgrest.from("exercise_sessions")
             .select(columns = Columns.list("start_time,duration_min,rpe,avg_hr,max_hr")) {
                 // 25/9 rework: the Load tab charts up to 1Y of CTL/ATL/TSB, and a
@@ -103,7 +183,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Phase A4 (Category 3). 30-day baseline gate, same margin reasoning as
     // everything else here.
-    suspend fun loadWellbeingDaily(): List<WellbeingAnalysisRow> =
+    suspend fun loadWellbeingDaily(): List<WellbeingAnalysisRow> = ReadCache.get("analysis.WellbeingDaily") { fetchWellbeingDaily() }
+
+    private suspend fun fetchWellbeingDaily(): List<WellbeingAnalysisRow> =
         supabase.postgrest.from("wellbeing_daily")
             .select(columns = Columns.list("date,energy,mood,stress,soreness,morning_erection_quality,arousal_level")) {
                 order("date", Order.DESCENDING)
@@ -128,7 +210,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Phase A4 (Category 8, Bristol half). Same generous margin as every
     // other read here.
-    suspend fun loadStoolLog(): List<StoolAnalysisRow> =
+    suspend fun loadStoolLog(): List<StoolAnalysisRow> = ReadCache.get("analysis.StoolLog") { fetchStoolLog() }
+
+    private suspend fun fetchStoolLog(): List<StoolAnalysisRow> =
         supabase.postgrest.from("stool_log")
             .select(columns = Columns.list("occurred_at,bristol_type")) {
                 order("occurred_at", Order.DESCENDING)
@@ -139,7 +223,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Arousal folded into wellbeing_daily -- see loadWellbeingDaily() above;
     // morning-wood/arousal history now reads from the same wellbeing rows.
-    suspend fun loadSexualActivityDaily(): List<LogSexualActivityRow> =
+    suspend fun loadSexualActivityDaily(): List<LogSexualActivityRow> = ReadCache.get("analysis.SexualActivityDaily") { fetchSexualActivityDaily() }
+
+    private suspend fun fetchSexualActivityDaily(): List<LogSexualActivityRow> =
         supabase.postgrest.from("sexual_activity_daily")
             .select(columns = Columns.list("id,date,activity_type,instances,notes")) {
                 order("date", Order.DESCENDING)
@@ -149,7 +235,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .reversed()
 
     // Phase A4 (Category 8, OSTRC-H2 half).
-    suspend fun loadOstrcCheckins(): List<OstrcAnalysisRow> =
+    suspend fun loadOstrcCheckins(): List<OstrcAnalysisRow> = ReadCache.get("analysis.OstrcCheckins") { fetchOstrcCheckins() }
+
+    private suspend fun fetchOstrcCheckins(): List<OstrcAnalysisRow> =
         supabase.postgrest.from("ostrc_checkins")
             .select(columns = Columns.list("check_date,body_area,severity_score")) {
                 order("check_date", Order.DESCENDING)
@@ -161,7 +249,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Phase A4 (Category 9). Two small real tables (2 draws, 77 results
     // today) -- no server-side date filtering needed at this account's real
     // volume, same "generous margin" reasoning as everywhere else here.
-    suspend fun loadLabDraws(): List<LabDrawAnalysisRow> =
+    suspend fun loadLabDraws(): List<LabDrawAnalysisRow> = ReadCache.get("analysis.LabDraws") { fetchLabDraws() }
+
+    private suspend fun fetchLabDraws(): List<LabDrawAnalysisRow> =
         supabase.postgrest.from("lab_draws")
             .select(columns = Columns.list("id,draw_date")) {
                 order("draw_date", Order.DESCENDING)
@@ -170,7 +260,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<LabDrawAnalysisRow>()
             .reversed()
 
-    suspend fun loadLabResults(): List<LabResultAnalysisRow> =
+    suspend fun loadLabResults(): List<LabResultAnalysisRow> = ReadCache.get("analysis.LabResults") { fetchLabResults() }
+
+    private suspend fun fetchLabResults(): List<LabResultAnalysisRow> =
         supabase.postgrest.from("lab_results")
             .select(columns = Columns.list("draw_id,marker_name,value,unit,ref_low,ref_high")) {
                 limit(500)
@@ -198,3 +290,9 @@ fun buildTrainingSessionLoads(sessions: List<TrainingLoadSessionRow>, latestRest
             ?: return@mapNotNull null
         date to load
     }
+
+@kotlinx.serialization.Serializable
+private data class HrDayRow(
+    val date: String,
+    @kotlinx.serialization.SerialName("hr_timeseries") val hrTimeseries: List<HrPoint>? = null,
+)

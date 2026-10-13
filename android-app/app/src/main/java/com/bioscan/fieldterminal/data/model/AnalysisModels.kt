@@ -115,3 +115,60 @@ data class LabResultAnalysisRow(
     @SerialName("ref_low") val refLow: Double? = null,
     @SerialName("ref_high") val refHigh: Double? = null,
 )
+
+// Analysis Layer 3 / R1. Read model for analysis_results rows of kind "series_break" (published by the analysis-run Edge
+// Function). Only the field this app needs is decoded: the last CONFIRMED break date, the start of the current regime.
+@Serializable
+data class SeriesBreakResultRow(val key: String, val payload: SeriesBreakPayload = SeriesBreakPayload())
+
+@Serializable
+data class SeriesBreakPayload(val lastConfirmed: String? = null)
+
+// Analysis Layer 3 / Phase 3. Read model for analysis_results rows of kind "relationship": one confirmatory hypothesis each
+// (supabase/functions/_shared/analysis-core/relationship.ts). Every field is defaulted so an older or partial payload still decodes.
+@Serializable
+data class RelationshipResultRow(val key: String, val state: String = "insufficient", val payload: RelationshipPayload = RelationshipPayload())
+
+// Analysis Layer 3 / Phase 4. Read model for the "typicality" row (key personal_normal). Every field is defaulted.
+@Serializable
+data class TypicalityResultRow(val key: String, val state: String = "building", val payload: TypicalityPayload = TypicalityPayload())
+
+@Serializable
+data class TypicalityDriver(val signal: String = "", val z: Double = 0.0, val direction: String = "")
+
+@Serializable
+data class TypicalityDay(
+    val date: String = "",
+    val state: String = "insufficient",
+    val strain: Boolean = false,
+    val excluded: Boolean = false,
+    val drivers: List<TypicalityDriver> = emptyList(),
+)
+
+@Serializable
+data class TypicalityLookalike(val date: String = "", val illness: Boolean = false)
+
+@Serializable
+data class TypicalityPayload(
+    val baselineDays: Int = 0,
+    val baselineNeed: Int = 45,
+    val today: TypicalityDay? = null,
+    val suggestIllnessLog: Boolean = false,
+    val lookalikes: List<TypicalityLookalike> = emptyList(),
+    val skipped: List<String> = emptyList(),
+)
+
+@Serializable
+data class RelationshipEffect(val value: Double = 0.0, val lo: Double = 0.0, val hi: Double = 0.0, val unit: String = "")
+
+@Serializable
+data class RelationshipPayload(
+    val label: String = "",
+    val summary: String = "",
+    val reason: String? = null,
+    val n: Int = 0,
+    val effect: RelationshipEffect? = null,
+    val mde: Double? = null,
+    val pAdjusted: Double? = null,
+    val notes: List<String> = emptyList(),
+)

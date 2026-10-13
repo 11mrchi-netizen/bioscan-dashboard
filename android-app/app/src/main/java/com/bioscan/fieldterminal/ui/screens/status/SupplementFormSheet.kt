@@ -44,6 +44,9 @@ import com.bioscan.fieldterminal.data.SupplementLookupRepository
 import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.util.scanBarcode
 import com.bioscan.fieldterminal.data.model.SupplementRow
+import com.bioscan.fieldterminal.domain.InteractionRecord
+import com.bioscan.fieldterminal.domain.RosterItem
+import com.bioscan.fieldterminal.domain.detectInteractions
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -72,7 +75,14 @@ private val sheetActionLabelStyle = FTType.LabelCaps
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved: () -> Unit) {
+fun SupplementFormSheet(
+    existing: SupplementRow?,
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit,
+    // Phase 6: the active roster and the interaction registry, to check this item against while it is edited.
+    roster: List<RosterItem> = emptyList(),
+    interactions: List<InteractionRecord> = emptyList(),
+) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val repo = remember { SupplementsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
@@ -181,6 +191,21 @@ fun SupplementFormSheet(existing: SupplementRow?, onDismiss: () -> Unit, onSaved
             }
 
             IngredientsSection(ingredients)
+
+            // The edited item against everyone else; only pairs that involve it. A new item has no id yet.
+            val draftId = existing?.id ?: -1L
+            val mine = detectInteractions(
+                roster.filter { it.id != draftId } + RosterItem(
+                    id = draftId,
+                    name = name,
+                    timeOfDay = timeOfDay,
+                    everyNDays = everyNDays,
+                    ingredientKeys = roster.firstOrNull { it.id == draftId }?.ingredientKeys.orEmpty(),
+                    ingredientNames = ingredients.map { it.name },
+                ),
+                interactions,
+            ).filter { it.a.id == draftId || it.b?.id == draftId }
+            if (name.isNotBlank()) InteractionNotice(mine)
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(

@@ -7,7 +7,10 @@ object NotificationKind {
     const val SUPPLEMENT_DUE = "supplement_due"
     const val CHECKIN_MORNING = "checkin_morning"
     const val CHECKIN_EVENING = "checkin_evening"
-    val ALL = listOf(SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING)
+    // Analysis Layer 3 / R2: prompts that feed the sparsest capture streams (wellbeing scores; drinks, supplements, recovery).
+    const val WELLBEING_CHECKIN = "wellbeing_checkin"
+    const val EVENING_LOG = "evening_log"
+    val ALL = listOf(SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG)
 }
 
 object NotificationOutcome {

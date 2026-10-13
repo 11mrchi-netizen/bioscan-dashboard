@@ -6,6 +6,8 @@
 //   EXPERIMENTS   pre-registered supplement N-of-1 tests (read-only; plans are registered in the app).
 // Explicit n= and missingness caveats shown on every view.
 
+import { LoadBanner } from '../components/shared/LoadBanner'
+import { useLoadEffect } from '../lib/useLoadEffect'
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useChart } from '../lib/useChart'
 import { useRange } from '../lib/analysisStore'
@@ -15,6 +17,8 @@ import { PALETTE } from '../lib/palette'
 import { METRIC_OPTIONS, type MetricOption } from '../lib/metricOptions'
 import { Confirmatory } from './Confirmatory'
 import { Experiments } from './Experiments'
+import { Interventions } from './Interventions'
+import { Fueling } from './Fueling'
 import './RelationshipLab.css'
 
 function Exploratory() {
@@ -24,19 +28,18 @@ function Exploratory() {
   const [lag, setLag]         = useState(0)
   const [resultX, setResultX] = useState<MetricResult | null>(null)
   const [resultY, setResultY] = useState<MetricResult | null>(null)
-  const [loading, setLoading] = useState(false)
 
   const scatterRef = useRef<HTMLDivElement>(null)
   const lagRef     = useRef<HTMLDivElement>(null)
   const scatterChart = useChart(scatterRef)
   const lagChart     = useChart(lagRef)
 
-  useEffect(() => {
-    setLoading(true)
-    Promise.all([
+  const { loading, error: loadError, retry } = useLoadEffect(async (isCurrent) => {
+    const [rx, ry] = await Promise.all([
       fetchMetric({ table: metricX.table, column: metricX.column, range, aggregation: 'daily_avg' }),
       fetchMetric({ table: metricY.table, column: metricY.column, range, aggregation: 'daily_avg' }),
-    ]).then(([rx, ry]) => { setResultX(rx); setResultY(ry); setLoading(false) })
+    ])
+    if (isCurrent()) { setResultX(rx); setResultY(ry) }
   }, [metricX, metricY, range])
 
   // Scatter chart
@@ -164,6 +167,7 @@ function Exploratory() {
       <div className="rlab-caveat mono">{caveatStr}</div>
 
       {loading && <div className="state-loading mono">LOADING…</div>}
+      {loadError && <LoadBanner error={loadError} onRetry={retry} />}
 
       <div className="card rlab-chart-card" style={{ visibility: loading ? 'hidden' : 'visible' }}>
         <div className="rlab-chart-label mono">SCATTER  {metricX.label} → {metricY.label}</div>
@@ -181,7 +185,7 @@ function Exploratory() {
   )
 }
 
-type Tab = 'confirmatory' | 'exploratory' | 'experiments'
+type Tab = 'confirmatory' | 'exploratory' | 'experiments' | 'interventions' | 'fueling'
 
 export function RelationshipLab() {
   const [tab, setTab] = useState<Tab>('confirmatory')
@@ -189,11 +193,15 @@ export function RelationshipLab() {
     <div className="rlab-shell">
       <div className="rlab-tabs">
         <h2 className="rlab-shell-title">Relationship Lab</h2>
-        {(['confirmatory', 'exploratory', 'experiments'] as const).map(t => (
+        {(['confirmatory', 'exploratory', 'experiments', 'interventions', 'fueling'] as const).map(t => (
           <button key={t} className={`rlab-tab mono ${tab === t ? 'rlab-tab-on' : ''}`} onClick={() => setTab(t)}>{t.toUpperCase()}</button>
         ))}
       </div>
-      {tab === 'confirmatory' ? <div className="rlab"><Confirmatory /></div> : tab === 'experiments' ? <div className="rlab"><Experiments /></div> : <Exploratory />}
+      {tab === 'confirmatory' ? <div className="rlab"><Confirmatory /></div>
+        : tab === 'experiments' ? <div className="rlab"><Experiments /></div>
+        : tab === 'interventions' ? <div className="rlab"><Interventions /></div>
+        : tab === 'fueling' ? <div className="rlab"><Fueling /></div>
+        : <Exploratory />}
     </div>
   )
 }

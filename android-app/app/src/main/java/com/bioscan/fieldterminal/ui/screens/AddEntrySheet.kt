@@ -1,5 +1,8 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -37,6 +40,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -56,6 +60,7 @@ import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.NutritionTextEstimateRepository
+import com.bioscan.fieldterminal.data.functionErrorMessage
 import java.time.LocalTime
 import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -77,11 +82,13 @@ import com.bioscan.fieldterminal.data.model.SexualActivityInstance
 import com.bioscan.fieldterminal.data.PeopleRepository
 import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
 import com.bioscan.fieldterminal.data.model.MealRow
+import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.AddEntryType
+import com.bioscan.fieldterminal.domain.ethanolGrams
 import com.bioscan.fieldterminal.domain.isSupplementDueToday
 import com.bioscan.fieldterminal.domain.supplementNextDueDate
 import com.bioscan.fieldterminal.domain.FuelSubType
@@ -120,6 +127,12 @@ private val sheetActionLabelStyle = FTType.LabelCaps
 fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedType by remember { mutableStateOf<AddEntryType?>(null) }
+    // Daily-use shortcut: the type logged last time is one tap away (the picker is otherwise FAB -> grid -> type).
+    val addPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("ft_ui", android.content.Context.MODE_PRIVATE)
+    val lastType = remember { addPrefs.getString("last_add_type", null)?.let { name -> AddEntryType.entries.firstOrNull { it.name == name } } }
+    // Analysis Layer 3 / R2: "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
+    var sayIt by remember { mutableStateOf(false) }
+    var foodPrefill by remember { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
     val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var saving by remember { mutableStateOf(false) }
@@ -143,12 +156,41 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 .verticalScroll(rememberScrollState()),
         ) {
             val type = selectedType
-            if (type == null) {
+            if (sayIt) {
+                SheetBackHeader(label = "SAY IT", onBack = { sayIt = false })
+                Spacer(Modifier.height(16.dp))
+                LogAgentForm(
+                    onSaved = onSaved,
+                    onFoodHandoff = { text, at ->
+                        foodPrefill = text to at
+                        sayIt = false
+                        selectedType = AddEntryType.Fuel
+                    },
+                )
+            } else if (type == null) {
                 Text("LOG NEW ENTRY", style = sheetHeaderTitleStyle, color = FT.DomainLog)
                 Spacer(Modifier.height(16.dp))
-                TypePickerGrid(onSelect = { selectedType = it })
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(FT.BorderWidth, FT.DomainLog, RoundedCornerShape(FT.RadiusModule))
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { sayIt = true }
+                        .padding(vertical = 18.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("SAY IT", style = sheetActionLabelStyle, color = FT.DomainLog)
+                }
+                Spacer(Modifier.height(10.dp))
+                lastType?.let { last ->
+                    AmberButton(label = "LAST: ${last.label}") { selectedType = last }
+                    Spacer(Modifier.height(10.dp))
+                }
+                TypePickerGrid(onSelect = { picked ->
+                    addPrefs.edit().putString("last_add_type", picked.name).apply()
+                    selectedType = picked
+                })
             } else {
-                SheetBackHeader(label = type.label, onBack = { selectedType = null })
+                SheetBackHeader(label = type.label, onBack = { selectedType = null; foodPrefill = null })
                 Spacer(Modifier.height(16.dp))
                 val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
                     saving = true
@@ -169,7 +211,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 }
                 saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
                 when (type) {
-                    AddEntryType.Fuel -> FuelForm(saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive)
+                    AddEntryType.Fuel -> FuelForm(saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill)
                     AddEntryType.Encounter -> EncounterForm(
                         saving,
                         onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
@@ -181,6 +223,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
                     AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
                     AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
+                    AddEntryType.Grip -> GripForm(saving, onSave = { occurredAt, hand, kg -> onSubmit { it.addGrip(occurredAt, hand, kg) } })
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -263,7 +306,7 @@ fun EntryActionSheet(
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                 if (!deleting) {
                                     deleting = true
-                                    scope.launch {
+                                    scope.launchSafe(onDone = { deleting = false }) {
                                         repo.deleteEntry(entry.source, entry.id)
                                         deleting = false
                                         onDeleted()
@@ -296,11 +339,13 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
     var loaded by remember { mutableStateOf<Any?>(null) }
 
     LaunchedEffect(entry.id) {
-        loaded = when (entry.source) {
+        try {
+            loaded = when (entry.source) {
             LogSource.Meal -> repo.fetchMeal(entry.id)
             LogSource.Hydration -> repo.fetchHydration(entry.id)
             LogSource.Encounter -> repo.fetchEncounter(entry.id)
             LogSource.Stool -> repo.fetchStool(entry.id)
+            LogSource.Grip -> repo.fetchGrip(entry.id)
             LogSource.Note -> repo.fetchNote(entry.id)
             LogSource.Wellbeing -> repo.fetchWellbeing(entry.id)
             LogSource.Exercise -> repo.fetchExerciseSession(entry.id)
@@ -308,6 +353,11 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Masturbation -> repo.fetchSexualActivity(entry.id)
             LogSource.Supplement -> repo.fetchSupplementTaken(entry.id)
             LogSource.Sleep -> null // no edit form; EntryActionSheet never offers EDIT for this
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            saveError = "Couldn't load this entry (${describeLoadFailure(e)})"
         }
     }
 
@@ -390,6 +440,13 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialDiscomfort = row.discomfort,
                     onSave = { occurredAt, bt, d -> onSubmit { it.updateStool(row.id, occurredAt, bt, d) } },
                 )
+                is LogGripRow -> GripForm(
+                    saving,
+                    initialDateTime = parseIsoToLocalDateTime(row.occurredAt),
+                    initialHand = row.hand,
+                    initialKg = row.kg,
+                    onSave = { occurredAt, hand, kg -> onSubmit { it.updateGrip(row.id, occurredAt, hand, kg) } },
+                )
                 is LogSexualActivityRow -> SexualActivityForm(
                     saving,
                     lockedActivityType = row.activityType,
@@ -460,7 +517,7 @@ fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
     var row by remember { mutableStateOf<LogSleepDetailRow?>(null) }
 
     LaunchedEffect(entryId) {
-        row = AddEntryRepository(SupabaseClientProvider.client).fetchSleepDetail(entryId)
+        row = softLoad { AddEntryRepository(SupabaseClientProvider.client).fetchSleepDetail(entryId) }
     }
 
     ModalBottomSheet(
@@ -603,11 +660,39 @@ private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
+@Composable
+private fun QtyRow(qty: Int, onChange: (Int) -> Unit) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusSmall)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("QTY", style = FTType.LabelCaps, color = FT.TextMuted)
+        for (delta in listOf(-1, 1)) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(shape)
+                    .background(FT.GlassFill, shape)
+                    .border(FT.BorderWidth, FT.GlassBorder, shape)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        val next = qty + delta
+                        if (next >= 1) onChange(next)
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(if (delta < 0) "−" else "+", style = FTType.Telemetry, color = FT.TextSecondary)
+            }
+            if (delta < 0) Text("$qty", style = FTType.Telemetry, color = FT.TextPrimary)
+        }
+    }
+}
+
 // FUEL: one entry point, three sub-tabs. Reuses FoodForm/DrinkForm/
 // SupplementsForm exactly as they'd be used standalone -- only the picker
 // wrapping them is new.
 @Composable
-private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit, onCanonicalSaved: () -> Unit, externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null) {
+private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit, onCanonicalSaved: () -> Unit, externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null, foodPrefill: Pair<String, LocalDateTime>? = null) {
     var subType by remember { mutableStateOf(FuelSubType.Food) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -630,12 +715,15 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
         when (subType) {
             FuelSubType.Food -> FoodForm(
                 saving,
+                initialDateTime = foodPrefill?.second ?: LocalDateTime.now(),
+                initialDescription = foodPrefill?.first ?: "",
                 onSave = { dt, desc, cal, p, c, f, fi, su, so -> onSubmit { it.addFood(dt, desc, cal, p, c, f, fi, su, so) } },
                 onCanonicalSaved = onCanonicalSaved,
                 externalActivityActive = externalActivityActive,
             )
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
-            FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items, source -> onSubmit { it.addSupplementsTaken(takenAt, items, source) } })
+            FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items, source, quantities -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities) } })
+            FuelSubType.Endurance -> EnduranceFuelForm(onSaved = onCanonicalSaved)
         }
     }
 }
@@ -721,6 +809,8 @@ private fun FoodForm(
                 mealEstimateId = result.estimateId
                 mealEstimate = result.estimate
                 pendingPhotos = emptyList()
+                // The Gemini estimate is usable now; the Cronometer lookup below must not keep the spinner running.
+                estimating = false
 
                 enriching = true
                 try {
@@ -732,7 +822,7 @@ private fun FoodForm(
                     enriching = false
                 }
             } catch (e: Exception) {
-                estimationError = e.message ?: "Estimation failed"
+                estimationError = e.functionErrorMessage()
             } finally {
                 estimating = false
             }
@@ -764,7 +854,7 @@ private fun FoodForm(
                 )
                 mealEstimateId = null
             } catch (e: Exception) {
-                estimationError = e.message ?: "Estimation failed"
+                estimationError = e.functionErrorMessage()
             } finally {
                 enriching = false
                 estimating = false
@@ -827,7 +917,7 @@ private fun FoodForm(
                     }
                 }
             } catch (e: Exception) {
-                barcodeError = e.message ?: "Lookup failed"
+                barcodeError = e.functionErrorMessage()
             } finally {
                 barcodeLooking = false
             }
@@ -1055,6 +1145,8 @@ private fun FoodForm(
 // go through the meal_items path (non-water). Water stays on the simple
 // hydration_daily path for backward compatibility.
 private val BEVERAGE_CLASSES = listOf("coffee", "tea", "juice", "soda", "milk", "electrolyte", "alcohol")
+// Common strengths, as a shortcut to the ABV field (label to ABV text). Any other strength is typed in.
+private val ALCOHOL_PRESETS = listOf("beer 5" to "5", "wine 12" to "12", "spirits 40" to "40")
 private val BEVERAGE_CLASS_LABELS = mapOf(
     "coffee" to "COFFEE", "tea" to "TEA", "juice" to "JUICE",
     "soda" to "SODA", "milk" to "MILK", "electrolyte" to "ELECTROLYTE", "alcohol" to "ALCOHOL",
@@ -1075,6 +1167,8 @@ private fun DrinkForm(
     var date by remember { mutableStateOf(initialDate) }
     var ml by remember { mutableStateOf(initialMl?.toString() ?: "") }
     var beverageClass by remember { mutableStateOf<String?>(null) }
+    // Analysis Layer 3 / R2: alcohol is stored as grams of ethanol, so it needs the label strength.
+    var abv by remember { mutableStateOf("") }
     var beverageSaving by remember { mutableStateOf(false) }
     var beverageError by remember { mutableStateOf<String?>(null) }
     val mlValue = ml.toIntOrNull()
@@ -1090,6 +1184,22 @@ private fun DrinkForm(
             TextChipRow(BEVERAGE_CLASSES, beverageClass, perRow = 4) { beverageClass = it }
         }
 
+        if (beverageClass == "alcohol") {
+            Column {
+                FormLabel("STRENGTH (ABV %)")
+                FieldTextField(abv, { abv = it }, "e.g. 5", keyboardType = KeyboardType.Decimal)
+            }
+            TextChipRow(ALCOHOL_PRESETS.map { it.first }, ALCOHOL_PRESETS.firstOrNull { it.second == abv }?.first, perRow = 3) { picked ->
+                abv = ALCOHOL_PRESETS.firstOrNull { it.first == picked }?.second ?: ""
+            }
+            val grams = mlValue?.let { v -> abv.toDoubleOrNull()?.let { a -> ethanolGrams(v.toDouble(), a) } }
+            Text(
+                if (grams != null) "= $grams g of pure ethanol" else "Enter volume and strength to record grams of ethanol.",
+                style = FTType.BodySmall,
+                color = FT.TextSecondary,
+            )
+        }
+
         beverageError?.let {
             Text(it, style = FTType.BodySmall, color = FT.Critical)
         }
@@ -1103,13 +1213,18 @@ private fun DrinkForm(
             AmberButton(label = if (beverageSaving) "SAVING..." else "LOG $label") {
                 val vol = mlValue ?: return@AmberButton
                 if (vol <= 0 || beverageSaving) return@AmberButton
+                val abvValue = abv.toDoubleOrNull()
+                if (beverageClass == "alcohol" && ethanolGrams(vol.toDouble(), abvValue ?: 0.0) == null) {
+                    beverageError = "Enter the drink's strength (ABV %, above 0 and at most 100)."
+                    return@AmberButton
+                }
                 beverageSaving = true
                 beverageError = null
                 scope.launch {
                     try {
                         val loggedAt = date.atTime(LocalTime.now()).toIsoWithOffset()
                         NutritionMealSaveRepository(SupabaseClientProvider.client)
-                            .saveBeverageDrink(loggedAt, beverageClass!!, vol.toDouble())
+                            .saveBeverageDrink(loggedAt, beverageClass!!, vol.toDouble(), abvValue.takeIf { beverageClass == "alcohol" })
                         onCanonicalSaved()
                     } catch (e: Exception) {
                         beverageError = e.message ?: "Could not save beverage"
@@ -1130,7 +1245,7 @@ private fun DrinkForm(
 // from the Log feed like any other entry -- no separate "batch" concept
 // needed for "add or remove single items."
 @Composable
-private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String) -> Unit) {
+private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String, quantities: Map<Long, Int>) -> Unit) {
     var dateTime by remember { mutableStateOf(initialDateTime) }
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
     var checkedBundles by remember { mutableStateOf(setOf<String>()) }
@@ -1139,13 +1254,22 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
     var scanned by remember { mutableStateOf<List<SupplementRow>>(emptyList()) }
     var scannedChecked by remember { mutableStateOf(setOf<Long>()) }
     var recentLastTaken by remember { mutableStateOf<Map<Long, LocalDate>>(emptyMap()) }
+    var quantities by remember { mutableStateOf<Map<Long, Int>>(emptyMap()) }
 
     LaunchedEffect(Unit) {
-        val repo = SupplementsRepository(SupabaseClientProvider.client)
-        val active = repo.loadOverview().active
-        supplements = active
-        if (active.any { it.everyNDays != null }) {
-            recentLastTaken = repo.loadRecentTakenDates(active.map { it.id })
+        try {
+            val repo = SupplementsRepository(SupabaseClientProvider.client)
+            val active = repo.loadOverview().active
+            supplements = active
+            if (active.any { it.everyNDays != null }) {
+                recentLastTaken = repo.loadRecentTakenDates(active.map { it.id })
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Offline: show an empty list instead of crashing the sheet.
+            android.util.Log.w("AddEntry", "supplement list load failed", e)
+            if (supplements == null) supplements = emptyList()
         }
     }
 
@@ -1193,11 +1317,15 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
                     FormLabel("SCANNED")
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         scanned.forEach { supp ->
+                            val checked = supp.id in scannedChecked
                             CheckToggleRow(
                                 label = supp.name,
-                                checked = supp.id in scannedChecked,
-                                onToggle = { scannedChecked = if (supp.id in scannedChecked) scannedChecked - supp.id else scannedChecked + supp.id },
+                                checked = checked,
+                                onToggle = { scannedChecked = if (checked) scannedChecked - supp.id else scannedChecked + supp.id },
                             )
+                            if (checked) {
+                                QtyRow(quantities[supp.id] ?: 1) { quantities = quantities + (supp.id to it) }
+                            }
                         }
                     }
                 }
@@ -1212,19 +1340,40 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
                                 checkedBundles = if (timeOfDay in checkedBundles) checkedBundles - timeOfDay else checkedBundles + timeOfDay
                             },
                         )
+                        if (timeOfDay in checkedBundles) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(start = 16.dp),
+                            ) {
+                                itemsInGroup.forEach { supp ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(supp.name, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.weight(1f))
+                                        QtyRow(quantities[supp.id] ?: 1) { quantities = quantities + (supp.id to it) }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 if (asNeeded.isNotEmpty()) {
                     FormLabel("AS NEEDED")
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         asNeeded.forEach { supp ->
+                            val checked = supp.id in checkedAsNeeded
                             CheckToggleRow(
                                 label = supp.name,
-                                checked = supp.id in checkedAsNeeded,
+                                checked = checked,
                                 onToggle = {
-                                    checkedAsNeeded = if (supp.id in checkedAsNeeded) checkedAsNeeded - supp.id else checkedAsNeeded + supp.id
+                                    checkedAsNeeded = if (checked) checkedAsNeeded - supp.id else checkedAsNeeded + supp.id
                                 },
                             )
+                            if (checked) {
+                                QtyRow(quantities[supp.id] ?: 1) { quantities = quantities + (supp.id to it) }
+                            }
                         }
                     }
                 }
@@ -1254,7 +1403,7 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
             }
         }
         SaveButton(saving, selectedItems.isNotEmpty()) {
-            onSave(dateTime.toIsoWithOffset(), selectedItems, source)
+            onSave(dateTime.toIsoWithOffset(), selectedItems, source, quantities)
         }
     }
 }
@@ -1414,6 +1563,31 @@ private fun EncounterForm(
                 myRating,
                 notes.trim().ifBlank { null },
             )
+        }
+    }
+}
+
+// Handgrip strength: the best of the attempts on a hand dynamometer, one row per hand. Logged for the record; it is shown on the
+// Healthspan card but not scored until a cited norm table exists.
+@Composable
+private fun GripForm(
+    saving: Boolean,
+    initialDateTime: LocalDateTime = LocalDateTime.now(),
+    initialHand: String? = null,
+    initialKg: Double? = null,
+    onSave: (occurredAt: String, hand: String, kg: Double) -> Unit,
+) {
+    var dateTime by remember { mutableStateOf(initialDateTime) }
+    var hand by remember { mutableStateOf(initialHand) }
+    var kg by remember { mutableStateOf(initialKg?.toString() ?: "") }
+    val value = kg.replace(',', '.').toDoubleOrNull()?.takeIf { it in 5.0..120.0 }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DateTimeField("WHEN", dateTime, { dateTime = it })
+        Column { FormLabel("HAND"); TextChipRow(listOf("right", "left"), hand, perRow = 2) { hand = it } }
+        Column { FormLabel("BEST OF 3, KG (DYNAMOMETER, 5-120)"); FieldTextField(kg, { kg = it }, "e.g. 46.5", keyboardType = KeyboardType.Decimal) }
+        SaveButton(saving, hand != null && value != null) {
+            onSave(dateTime.toIsoWithOffset(), hand!!, value!!)
         }
     }
 }
@@ -1920,7 +2094,7 @@ private fun ExerciseDetailsForm(
 // optional (unlike Bristol), so tapping the already-selected chip again
 // clears it back to null rather than always leaving exactly one selected.
 @Composable
-private fun TextChipRow(options: List<String>, selected: String?, perRow: Int = 4, onSelect: (String?) -> Unit) {
+internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int = 4, onSelect: (String?) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         options.chunked(perRow).forEach { rowOptions ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

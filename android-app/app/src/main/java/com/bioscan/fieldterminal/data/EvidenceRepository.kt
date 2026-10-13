@@ -34,10 +34,9 @@ private data class EvidenceClaimRow(
 // joins, this project's convention -- no Postgrest embedding).
 class EvidenceRepository(private val supabase: SupabaseClient) {
 
-    // supplement id -> expected-outcome text. A supplement with no linked
-    // product, no keyed ingredient or no matching evidence is simply absent.
-    suspend fun outcomeTextBySupplement(supplements: List<SupplementRow>): Map<Long, String> {
-        val productIds = supplements.mapNotNull { it.productId }.distinct()
+    // product id -> canonical ingredient keys. Products with no keyed ingredient
+    // are absent. Shared with InteractionRepository.
+    suspend fun ingredientKeysByProduct(productIds: List<Long>): Map<Long, Set<String>> {
         if (productIds.isEmpty()) return emptyMap()
 
         val links = supabase.postgrest.from("supplement_product_ingredients")
@@ -55,8 +54,15 @@ class EvidenceRepository(private val supabase: SupabaseClient) {
             .mapNotNull { row -> row.canonicalKey?.let { row.id to it } }
             .toMap()
 
-        val keysByProduct = links.groupBy { it.productId }
+        return links.groupBy { it.productId }
             .mapValues { (_, rows) -> rows.mapNotNull { keyByIngredient[it.ingredientId] }.toSet() }
+            .filterValues { it.isNotEmpty() }
+    }
+
+    // supplement id -> expected-outcome text. A supplement with no linked
+    // product, no keyed ingredient or no matching evidence is simply absent.
+    suspend fun outcomeTextBySupplement(supplements: List<SupplementRow>): Map<Long, String> {
+        val keysByProduct = ingredientKeysByProduct(supplements.mapNotNull { it.productId }.distinct())
         val allKeys = keysByProduct.values.flatten().toSet()
         if (allKeys.isEmpty()) return emptyMap()
 

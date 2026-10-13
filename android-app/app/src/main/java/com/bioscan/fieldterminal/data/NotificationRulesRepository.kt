@@ -20,6 +20,12 @@ import kotlinx.serialization.json.put
 import java.time.Instant
 
 @Serializable
+data class WellbeingScoresRow(val energy: Int? = null, val mood: Int? = null, val stress: Int? = null, val soreness: Int? = null)
+
+@Serializable
+private data class AgentRunIdRow(val id: String)
+
+@Serializable
 private data class NewNotificationPrefsRow(
     val timezone: String?,
     @SerialName("master_enabled") val masterEnabled: Boolean = true,
@@ -46,6 +52,20 @@ private val DEFAULT_RULES = listOf(
         schedule = NotificationSchedule(times = listOf("21:00")),
         conditions = NotificationConditions(skipIfLogged = true),
         limits = NotificationLimits(maxPerDay = 2, minGapMin = 120, snoozeMin = 60),
+    ),
+    NewNotificationRuleRow(
+        kind = NotificationKind.WELLBEING_CHECKIN,
+        enabled = true,
+        schedule = NotificationSchedule(times = listOf("10:00")),
+        conditions = NotificationConditions(skipIfLogged = true),
+        limits = NotificationLimits(maxPerDay = 1, minGapMin = 120, snoozeMin = 60),
+    ),
+    NewNotificationRuleRow(
+        kind = NotificationKind.EVENING_LOG,
+        enabled = true,
+        schedule = NotificationSchedule(times = listOf("19:30")),
+        conditions = NotificationConditions(skipIfLogged = true),
+        limits = NotificationLimits(maxPerDay = 1, minGapMin = 120, snoozeMin = 60),
     ),
 )
 
@@ -101,6 +121,25 @@ class NotificationRulesRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("notification_rules")
             .update(buildJsonObject { put("enabled", enabled) }) { filter { eq("kind", kind) } }
     }
+
+    // Today's scores, for the wellbeing check-in's skip-if-logged test (null row = nothing logged today).
+    suspend fun loadWellbeingForDate(date: String): WellbeingScoresRow? =
+        supabase.postgrest.from("wellbeing_daily")
+            .select(columns = Columns.list("energy,mood,stress,soreness")) { filter { eq("date", date) } }
+            .decodeList<WellbeingScoresRow>()
+            .firstOrNull()
+
+    // Messages the person saved through "say it" since `since` (log_agent_runs.committed_at is a real timestamptz).
+    suspend fun countSavedAgentMessagesSince(since: Instant): Int =
+        supabase.postgrest.from("log_agent_runs")
+            .select(columns = Columns.list("id")) {
+                filter {
+                    gte("committed_at", since.toString())
+                    gt("committed_count", 0)
+                }
+            }
+            .decodeList<AgentRunIdRow>()
+            .size
 
     // Used for daily cap / min-gap checks: what was actually shown since `since`.
     suspend fun loadShownSince(since: Instant): List<NotificationLogRow> =

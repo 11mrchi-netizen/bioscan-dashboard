@@ -10,6 +10,10 @@ import java.time.LocalDate
 // it needs are ported here; SessionLoadVector/RollingStateSeries/
 // PerformanceAnchor belong to the tickets that first need them (DAV-56/59/61).
 
+// Analysis Layer 3: the contract this file belongs to, including the server-published results read through
+// data/model/AnalysisModels.kt. Additive changes keep the major version (docs/analysis-layer-3/contract-v3.md).
+const val ANALYSIS_CONTRACT_VERSION = "3.0.0"
+
 data class Provenance(val origin: String, val algorithm: String?, val algorithmVersion: String?)
 
 enum class CompletenessTier { MINIMAL, PARTIAL, FULL }

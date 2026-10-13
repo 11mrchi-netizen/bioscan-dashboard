@@ -1,6 +1,8 @@
 // Comparison workspace — side-by-side overlay of any two metrics over the primary range.
 // Both series on a shared x-axis; optional second y-axis for different units.
 
+import { LoadBanner } from '../components/shared/LoadBanner'
+import { useLoadEffect } from '../lib/useLoadEffect'
 import { useEffect, useRef, useState } from 'react'
 import { useChart } from '../lib/useChart'
 import { useRange } from '../lib/analysisStore'
@@ -20,16 +22,15 @@ export function Comparison() {
   const [metricB, setMetricB] = useState<MetricOption>(METRIC_OPTIONS[2])
   const [resultA, setResultA] = useState<MetricResult | null>(null)
   const [resultB, setResultB] = useState<MetricResult | null>(null)
-  const [loading, setLoading] = useState(false)
   const chartRef = useRef<HTMLDivElement>(null)
   const chartInstance = useChart(chartRef)
 
-  useEffect(() => {
-    setLoading(true)
-    Promise.all([
+  const { loading, error: loadError, retry } = useLoadEffect(async (isCurrent) => {
+    const [a, b] = await Promise.all([
       fetchMetric({ table: metricA.table, column: metricA.column, range, aggregation: 'daily_avg' }),
       fetchMetric({ table: metricB.table, column: metricB.column, range, aggregation: 'daily_avg' }),
-    ]).then(([a, b]) => { setResultA(a); setResultB(b); setLoading(false) })
+    ])
+    if (isCurrent()) { setResultA(a); setResultB(b) }
   }, [metricA, metricB, range])
 
   // Update chart when data arrives
@@ -136,6 +137,7 @@ export function Comparison() {
 
       <div className="card comparison-chart-card">
         {loading && <div className="state-loading mono">LOADING…</div>}
+        {loadError && <LoadBanner error={loadError} onRetry={retry} />}
         <div ref={chartRef} style={{ width: '100%', height: 360, visibility: loading ? 'hidden' : 'visible' }} />
       </div>
 

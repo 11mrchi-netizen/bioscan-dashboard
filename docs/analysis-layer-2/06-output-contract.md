@@ -2,6 +2,8 @@
 
 **Linear:** [DAV-67](https://linear.app/biodashboard/issue/DAV-67) · **Version:** 1.0.0 (2026-09-17) · **Contract only — no implementation here**
 
+> **Partly superseded by [Analysis contract v3](../analysis-layer-3/contract-v3.md) (2026-10-13).** The four shapes below remain the contract for on-device Layer 1 outputs. Results that need a shared statistics core or many days of data (series breaks, relationships, typicality, experiments) are published server-side into `analysis_results` under v3, and personal baselines restart at a confirmed series break.
+
 ## Why this exists
 
 DAV-56 through DAV-63 are about to produce a real load vector, a time-dynamics engine, performance

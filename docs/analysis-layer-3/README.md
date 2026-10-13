@@ -2,6 +2,8 @@
 
 Design and status notes for the layer that supersedes the Analysis Layer 2 *contracts* (docs `06`, `19` of `docs/analysis-layer-2`) while keeping the Layer 1 per-metric evaluations (`domain/*Evaluation.kt`) as inputs. Origin: `docs/wellness-project-teardown/14-integration-report-for-field-terminal.md` (what to take from a competitor and why). Approved plan: `C:\Users\ddema\.claude\plans\compiled-moseying-naur.md` (decisions listed there).
 
+Documents: [contract-v3.md](contract-v3.md) (the published result shapes), [interaction-registry.md](interaction-registry.md), [healthspan.md](healthspan.md). The engines are described below.
+
 ## Architecture in one paragraph
 
 A pure TypeScript core in `supabase/functions/_shared/analysis-core/` (erasable TypeScript, so Node 24, Deno and Vite all import it unchanged) holds the statistics and engines. The Edge Function `analysis-run` reads raw rows, runs the core and upserts versioned results into `analysis_results` (service-role writes, own-row reads). The console and the Android app read those rows. Existing on-device Layer 1 evaluations are unchanged; they gain optional `windowStart` parameters so a baseline can restart after a *confirmed* series break.
@@ -30,7 +32,7 @@ A pure TypeScript core in `supabase/functions/_shared/analysis-core/` (erasable 
 | 5 Supplement N-of-1 experiments | **Done and live; not yet used.** `experiments` table with a trigger that locks the pre-registered protocol, `experiment.ts` + publisher in `analysis-run` (v8, nightly) and an `experiment_preview` action, Android "TEST IT (EXPERIMENT)" on each active supplement (registers the plan and shows what the design could detect first) and an EXPERIMENTS card, console Relationship Lab "Experiments" tab (committed in the console worktree, **not pushed**). No experiment has been registered yet, so nothing has run end to end on a device. Details below. 450 Android unit tests and 95 Node tests pass. |
 | 6 Interaction registry | **Done and live; every entry still unreviewed.** `interaction_records` seeded with 11 cited pairs (applied 2026-10-13), pure `detectInteractions` (same slot, too close, spaced, any timing, missing partner, as-needed, helpful pairing), an INTERACTIONS card on the Supplements screen and a live check in the add/edit sheet. The app prints "(unreviewed)" beside every effect until you mark a row reviewed. Citations and what to decide: `interaction-registry.md`. 464 Android unit tests and 95 Node tests pass. |
 | 8 Healthspan grade | **Built; Android build not installed.** `Healthspan.kt` (eight factors, trust gate, provisional letter bands), `HealthspanRepository`, a HEALTHSPAN card at the top of the User profile page, and a test that no other screen may use it. The profile page's sample data is gone: the running level is now the real VO2max placement, the other domains read "Not enough data yet", achievements are real only. Strength is the median level of your main barbell lifts over six months (lifter standards, labelled as such); handgrip is a loggable entry (GRIP) shown but not scored. Cut-offs, sources, gate and deviations (TyG dropped): `healthspan.md`. 481 Android unit tests and 77 core Node tests pass. |
-| 9 Supersede and retire | Not started. |
+| 9 Supersede and retire | **Done for what is gated; the rest is listed below.** Contract v3 written (`contract-v3.md`), docs `06` and `19` carry a "partly superseded" note, the Layer 2 README points here, and the table below says what is retired, demoted, kept or still to do. |
 
 ## Running the tests
 
@@ -108,8 +110,26 @@ A supplement is tested on you, pre-registered:
 
 Deviations from the plan, on purpose: the commit is client-side through existing repositories (no second write path to keep in sync; `addSupplementsTaken` alone has product links, nutrient intake and pantry effects); one structured model call instead of function-calling; saved/failed state comes from each write succeeding or throwing, not from a read-back. Timestamps: the app stores local wall-clock time labeled UTC, so the proposal's offset is dropped and only its digits are kept (`LogAgent.kt`). Wellbeing is written as a partial merge, so "energy 7" cannot null out mood or arousal already logged for that day.
 
+## Retired, demoted, kept (Phase 9)
+
+| Old path | Replacement | State |
+| -- | -- | -- |
+| Plain trailing-window baselines for HRV, RHR, sleep duration and stages, SRI | The same evaluators with `windowStart` at the last confirmed series break | **Replaced**, with no visible effect until a break is confirmed. Layer 1 evaluations themselves are kept as inputs |
+| Unadjusted 29-lag scan in the console Relationship Lab | Confirmatory tab (weekday-adjusted, family-corrected, minimum detectable effect, "not distinguishable" as a first-class result) | **Demoted, not removed.** It stays under the EXPLORATORY tab, labelled uncorrected. The confirmatory catalogue currently supports no relationship on the real history, so the scan is still the only way to browse pairs. Remove it when the catalogue covers the pairs you browse for, or when you say so; removing it is a console change that deploys on a push to `main` |
+| Sample domain levels and sample achievements on the User profile page | Real VO2max placement for running; real achievements; other domains read "Not enough data yet" | **Retired** (Phase 8) |
+| Hard-coded outcome claims on supplements | `evidence_records` and `interaction_records`, each with a `reviewed` flag | **Replaced** earlier for outcomes; interactions are new and unreviewed |
+| Single-metric "score" everywhere vs one cross-metric grade | One Healthspan grade, profile page only, enforced by a test | **Decision implemented** |
+| Web `index.html` ACWR vs Android CTL/ATL load | A load series published from the core | **Not done.** Follow-up: the two still use different formulas |
+| Hand-rolled windowed statistics in the `domain/*Evaluation.kt` files | `PersonalBaseline.kt` | **Not done.** Migrate opportunistically, not as a project |
+
+## Still open
+
+- **Needs you:** install an Android build and exercise SAY IT, PATTERNS, IS TODAY TYPICAL, reminders, TEST IT, the new INTERACTIONS card, GRIP and the HEALTHSPAN card; run the golden set of about 50 utterances against `log-agent` with a signed-in session; read the sources and mark `interaction_records` rows reviewed; decide when to push this branch.
+- **Data:** alcohol, caffeine and recovery sessions are barely logged, so those hypotheses cannot be tested yet; the Healthspan labs expire after 365 days.
+- **Method:** typicality missed its specificity gate on real history and ships as a quiet drill-down (a regime-aware baseline is the next try); Healthspan cut-offs and letter bands are provisional; grip needs a cited norm table before it can be scored; `CORE_VERSION` is still an alpha.
+
 ## Known gaps and cautions
 
-- Source for `zepp-extract` v13/v14, `analysis-run`, the shared core, the migrations and these docs lives on the working branch and is **not yet committed**; the deployed functions are the source of truth until it is.
+- Everything is committed on the local branch `feat/analysis-layer-3` and **not pushed**. The deployed Edge Functions (`analysis-run`, `log-agent`, `zepp-extract` v14) were verified against the repo files when they were deployed; diff the deployed source against git before redeploying any of them.
 - Pre-existing Supabase advisor findings (not touched): two `SECURITY DEFINER` views (`v_conditioning_drills`, `v_training_block_metrics`), three functions with a mutable `search_path`, `pg_trgm` in `public`, leaked-password protection off.
 - The repaired console queries were typechecked and built but not exercised from a signed-in browser by me; the live deploy runs through GitHub Actions on `main`.

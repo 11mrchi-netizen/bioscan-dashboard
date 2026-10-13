@@ -10,6 +10,8 @@ These are contract/design documents, not implementation — each is scoped to ex
 issue's acceptance criteria. Where a doc surfaces a gap that isn't this project's own job to fix,
 it's filed as a separate follow-up issue (linked inline) rather than solved here.
 
+**Superseded in part (2026-10-13):** [Analysis Layer 3](../analysis-layer-3/README.md) adds server-published results and break-aware baselines on top of these contracts. Docs 06 and 19 carry a note saying exactly what changed; the Layer 1 evaluations and the shapes in the other docs stand.
+
 | Doc | Linear issue | Answers |
 |---|---|---|
 | [01-data-inventory.md](01-data-inventory.md) | [DAV-52](https://linear.app/biodashboard/issue/DAV-52) | What fields exist, how much real data backs each, what overlaps/duplicates |

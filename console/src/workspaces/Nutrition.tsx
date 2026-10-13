@@ -1,7 +1,9 @@
 // DAV-316: Nutrition workspace.
 // Macros bar chart, fluid/caffeine, meals table, weight + TDEE overlay.
 
-import { useEffect, useState } from 'react'
+import { LoadBanner } from '../components/shared/LoadBanner'
+import { useLoadEffect } from '../lib/useLoadEffect'
+import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRange, useInspect } from '../lib/analysisStore'
 import { dayBounds, localDate, warnOnError } from '../lib/schema'
@@ -56,12 +58,10 @@ export function Nutrition() {
   const [macros, setMacros] = useState<MacroDay[]>([])
   const [meals, setMeals] = useState<MealRow[]>([])
   const [weightResult, setWeightResult] = useState<MetricResult | null>(null)
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    setLoading(true)
+  const { loading, error, retry } = useLoadEffect(async (isCurrent) => {
     const { start, end } = range
-    Promise.all([
+    const [macroData, mealData, wt] = await Promise.all([
       // Daily macro summary from meals table
       supabase.from('meals')
         .select('logged_at, calories, protein_g, carbs_g, fat_g')
@@ -97,15 +97,15 @@ export function Nutrition() {
         }),
       // Weight for overlay
       fetchMetric({ table: 'body_metrics', column: 'weight_kg', range, aggregation: 'daily_avg' }),
-    ]).then(([macroData, mealData, wt]) => {
-      setMacros(macroData)
-      setMeals(mealData)
-      setWeightResult(wt)
-      setLoading(false)
-    })
+    ])
+    if (!isCurrent()) return
+    setMacros(macroData)
+    setMeals(mealData)
+    setWeightResult(wt)
   }, [range])
 
   if (loading) return <div className="state-loading mono">LOADING NUTRITION…</div>
+  if (error) return <LoadBanner error={error} onRetry={retry} />
 
   const calResult  = toResult(macros, 'calories',  'nutrition.calories')
   const protResult = toResult(macros, 'protein_g', 'nutrition.protein')

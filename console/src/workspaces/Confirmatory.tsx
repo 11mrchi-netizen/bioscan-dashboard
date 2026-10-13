@@ -3,6 +3,7 @@
 // supported after correction, not distinguishable from noise (with the smallest effect the data could have detected), or
 // not testable yet (with the reason).
 
+import { LoadBanner } from '../components/shared/LoadBanner'
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { warnOnError } from '../lib/schema'
@@ -60,7 +61,9 @@ export function Confirmatory() {
   const [running, setRunning] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const loadInner = useCallback(async () => {
     const { data, error } = await supabase
       .from('analysis_results')
       .select('key, as_of, state, calculated_at, payload')
@@ -70,6 +73,18 @@ export function Confirmatory() {
     setRows(list)
     setLoading(false)
   }, [])
+
+  const load = useCallback(async () => {
+    try {
+      await loadInner()
+      setLoadError(null)
+    } catch (e) {
+      console.error('[BioScan] load failed:', e)
+      setLoadError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [loadInner])
 
   useEffect(() => { void load() }, [load])
 
@@ -83,6 +98,7 @@ export function Confirmatory() {
   }, [load])
 
   if (loading) return <div className="state-loading mono">LOADING RELATIONSHIPS…</div>
+  if (loadError) return <LoadBanner error={loadError} onRetry={() => { setLoading(true); void load() }} />
 
   const tested = rows.filter(r => r.state !== 'insufficient').length
   const first = rows[0]?.payload

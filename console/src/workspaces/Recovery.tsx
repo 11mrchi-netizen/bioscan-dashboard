@@ -2,9 +2,12 @@
 // Small-multiples: sleep, HRV, RHR, wellbeing, body metrics, injury periods.
 // Injury bands overlay on HRV chart via annotation bands.
 
-import { useEffect, useMemo, useState } from 'react'
+import { LoadBanner } from '../components/shared/LoadBanner'
+import { useLoadEffect } from '../lib/useLoadEffect'
+import { useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRange } from '../lib/analysisStore'
+import { warnOnError } from '../lib/schema'
 import { fetchMetric, METRICS } from '../lib/metricAdapter'
 import { CHART_SPECS } from '../lib/chartSpec'
 import { FTChart } from '../components/shared/FTChart'
@@ -30,12 +33,10 @@ export function Recovery() {
   const range = useRange()
   const [results, setResults] = useState<Record<string, MetricResult>>({})
   const [injuries, setInjuries] = useState<InjuryBand[]>([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    setLoading(true)
+  const { loading, error, retry } = useLoadEffect(async (isCurrent) => {
     const { start, end } = range
-    Promise.all([
+    const [metricEntries, bodyEntry, injuryData] = await Promise.all([
       Promise.all(
         RECOVERY_METRICS.map(m =>
           fetchMetric({ ...m, range, aggregation: 'daily_avg' })
@@ -47,16 +48,13 @@ export function Recovery() {
       supabase.from('injuries')
         .select('start_date, end_date, part')
         .lte('start_date', end).or(`end_date.gte.${start},end_date.is.null`)
-        .then(({ data }) => data ?? []),
-    ]).then(([metricEntries, bodyEntry, injuryData]) => {
-      setResults(Object.fromEntries([...metricEntries, [bodyEntry[0], bodyEntry[1]]]))
-      setInjuries((injuryData as unknown as { start_date: string; end_date: string | null; part: string | null }[])
-        .map(i => ({ start_date: i.start_date, end_date: i.end_date, body_part: i.part })))
-      setLoading(false)
-    })
+        .then(({ data, error: injuryError }) => { warnOnError('recovery injuries', injuryError); return data ?? [] }),
+    ])
+    if (!isCurrent()) return
+    setResults(Object.fromEntries([...metricEntries, [bodyEntry[0], bodyEntry[1]]]))
+    setInjuries((injuryData as unknown as { start_date: string; end_date: string | null; part: string | null }[])
+      .map(i => ({ start_date: i.start_date, end_date: i.end_date, body_part: i.part })))
   }, [range])
-
-  if (loading) return <div className="state-loading mono">LOADING RECOVERY…</div>
 
   const hrvMetricId = `${METRICS.HRV.table}.${METRICS.HRV.column}`
 
@@ -68,6 +66,10 @@ export function Recovery() {
     }))
     return { ...CHART_SPECS[hrvMetricId], bands: bands.length ? bands : undefined }
   }, [injuries, hrvMetricId])
+
+  // After every hook (it used to return before the useMemo above, which crashed the workspace when data arrived).
+  if (loading) return <div className="state-loading mono">LOADING RECOVERY…</div>
+  if (error && Object.keys(results).length === 0) return <LoadBanner error={error} onRetry={retry} />
 
   return (
     <div className="recovery">

@@ -1,7 +1,9 @@
 // DAV-310 / DAV-313: Overview workspace — synchronized multi-chart canvas.
 // Proves: AnalysisContext drives 4+ independent components; cursor syncs across all.
 
-import { useEffect, useState } from 'react'
+import { LoadBanner } from '../components/shared/LoadBanner'
+import { useLoadEffect } from '../lib/useLoadEffect'
+import { useState } from 'react'
 import { useRange, useSelectedDate, useSetSelectedDate, useClearInspection } from '../lib/analysisStore'
 import { fetchMetric, METRICS, type MetricResult } from '../lib/metricAdapter'
 import { CHART_SPECS } from '../lib/chartSpec'
@@ -23,22 +25,21 @@ export function Overview() {
   const setSelectedDate = useSetSelectedDate()
   const clearInspection = useClearInspection()
   const [results, setResults] = useState<Record<string, MetricResult>>({})
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    setLoading(true)
-    Promise.all(
+  // Old results stay on screen while a new range loads; a failure shows a banner with RETRY.
+  const { loading, error, retry } = useLoadEffect(async (isCurrent) => {
+    const entries = await Promise.all(
       OVERVIEW_METRICS.map(m =>
         fetchMetric({ ...m, range, aggregation: 'daily_avg' })
           .then(r => [r.metricId, r] as const)
       )
-    ).then(entries => {
-      setResults(Object.fromEntries(entries))
-      setLoading(false)
-    })
+    )
+    if (isCurrent()) setResults(Object.fromEntries(entries))
   }, [range])
 
   if (loading) return <div className="state-loading mono">LOADING OVERVIEW…</div>
+  const failed = Object.values(results).filter(r => r.error)
+  const banner = error ?? (failed.length > 0 ? `${failed.length} of ${OVERVIEW_METRICS.length} metrics failed: ${failed[0].error}` : null)
 
   return (
     <div className="overview">
@@ -51,6 +52,8 @@ export function Overview() {
           </div>
         )}
       </div>
+
+      {banner && <LoadBanner error={banner} onRetry={retry} />}
 
       <div className="overview-grid">
         {OVERVIEW_METRICS.map(m => {

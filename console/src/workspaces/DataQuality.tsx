@@ -2,6 +2,7 @@
 // series-break results. A detected break is only a candidate; here the user says whether it was a device/source change
 // (restarts personal baselines) or a real physiological change (dismissed). Decisions go to series_break_decisions.
 
+import { LoadBanner } from '../components/shared/LoadBanner'
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { warnOnError } from '../lib/schema'
@@ -43,7 +44,9 @@ export function DataQuality() {
   const [running, setRunning] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const loadInner = useCallback(async () => {
     const { data, error } = await supabase
       .from('analysis_results')
       .select('key, as_of, state, confidence_have, confidence_need, calculated_at, payload')
@@ -53,6 +56,18 @@ export function DataQuality() {
     setRows((data ?? []) as unknown as ResultRow[])
     setLoading(false)
   }, [])
+
+  const load = useCallback(async () => {
+    try {
+      await loadInner()
+      setLoadError(null)
+    } catch (e) {
+      console.error('[BioScan] load failed:', e)
+      setLoadError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [loadInner])
 
   useEffect(() => { void load() }, [load])
 
@@ -76,6 +91,7 @@ export function DataQuality() {
   }, [run])
 
   if (loading) return <div className="state-loading mono">LOADING DATA QUALITY…</div>
+  if (loadError) return <LoadBanner error={loadError} onRetry={() => { setLoading(true); void load() }} />
 
   return (
     <div className="dq">

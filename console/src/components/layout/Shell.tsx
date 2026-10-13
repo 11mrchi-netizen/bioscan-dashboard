@@ -1,7 +1,7 @@
 // Three-zone shell: left rail · central canvas · right inspector
 // IA.md §3.2 — inspector visibility driven by AnalysisContext.inspectionTarget
 import { Suspense, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useInspection, useClearInspection } from '../../lib/analysisStore'
 import { ErrorBoundary } from '../shared/ErrorBoundary'
@@ -23,6 +23,7 @@ const NAV = [
 
 export function Shell() {
   const { user, signOut } = useAuth()
+  const location = useLocation()
   const inspectionTarget = useInspection()
   const clearInspection = useClearInspection()
   const [railCollapsed, setRailCollapsed] = useState(false)
@@ -53,7 +54,8 @@ export function Shell() {
         </nav>
 
         <main className="shell-canvas">
-          <ErrorBoundary level="workspace">
+          {/* keyed by route: leaving a crashed workspace and coming back mounts it fresh instead of staying on the error screen */}
+          <ErrorBoundary level="workspace" key={location.pathname}>
             <Suspense fallback={<div className="state-loading mono">LOADING…</div>}>
               <Outlet />
             </Suspense>

@@ -42,6 +42,22 @@ class PerfGoldenTest {
         assertEquals(listOf(6L), runClusterIds(sessions, sessions[5]))
     }
 
+    @Test
+    fun batchClustersEqualTheOneByOneClustersOnRandomData() {
+        val rnd = java.util.Random(20261013)
+        val base = java.time.OffsetDateTime.of(2026, 3, 1, 6, 0, 0, 0, ZoneOffset.UTC)
+        val sessions = (0 until 400).map { i ->
+            // runs bunched in 0-8 minute clusters (the HC/Zepp duplicates), a few non-runs, mixed offsets
+            val at = base.plusMinutes((i / 3) * 90L + rnd.nextInt(9)).plusSeconds(rnd.nextInt(60).toLong())
+                .withOffsetSameInstant(ZoneOffset.ofHours(if (i % 5 == 0) 8 else 0))
+            run(i + 1L, at.toString(), type = if (i % 11 == 0) "walk" else "run")
+        }.shuffled(rnd)
+        val targets = sessions.filter { it.type == "run" }
+        val one = targets.map { runClusterIds(sessions, it) }
+        val batch = runClusterIdsBatch(sessions, targets)
+        assertEquals(one, batch)
+    }
+
     // ---------- computeHrvReadinessSeries ----------
 
     @Test
@@ -193,8 +209,11 @@ class PerfGoldenTest {
         val sessions = (0 until 300).map { i -> run(i + 1L, base.plusHours(i * 7L).toString()) }
         runClusterIds(sessions, sessions[0])
         val ms = bestOf(3) { sessions.forEach { runClusterIds(sessions, it) } }
-        println("PERF runClusterIds 300 runs (all clusters): best of 3 = ${"%.1f".format(ms)} ms")
-        assertTrue(ms < 20_000.0)
+        println("PERF runClusterIds 300 runs (all clusters, one by one): best of 3 = ${"%.1f".format(ms)} ms")
+        runClusterIdsBatch(sessions, sessions)
+        val batchMs = bestOf(3) { runClusterIdsBatch(sessions, sessions) }
+        println("PERF runClusterIdsBatch 300 runs (all clusters): best of 3 = ${"%.1f".format(batchMs)} ms")
+        assertTrue(ms < 20_000.0 && batchMs < 20_000.0)
     }
 
     companion object {

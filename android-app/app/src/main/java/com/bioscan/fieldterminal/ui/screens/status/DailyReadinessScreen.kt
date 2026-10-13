@@ -134,41 +134,45 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
         return
     }
 
-    val sessionLoads = buildTrainingSessionLoads(s, w.lastOrNull()?.rhr)
-    val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
-
-    val nights = sl.mapNotNull { row ->
-        val bedtime = row.bedtime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-        val wake = row.wakeTime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-        if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
-    }
-    val sleepIndexResult = computeSleepIndex(
-        sl.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } },
-        sl.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } },
-        sl.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } },
-        nights,
-        durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min"),
-    )
-    val exerciseWindows = s.mapNotNull { session ->
-        val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
-        val durationMin = session.durationMin ?: return@mapNotNull null
-        start to start.plusSeconds((durationMin * 60).toLong())
-    }
-    val physiologicalStress = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindows) }
     val hrvPoints = w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }
     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
-    val recovery = computeDynamicRecovery(
-        sleepIndex = sleepIndexResult,
-        hrvEval = evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")),
-        rhrEval = evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")),
-        trainingLoadEval = trainingLoadEval,
-        energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-        stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-        sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-        physiologicalStress = physiologicalStress,
-        morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-        arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-    )
+    // Perf pass: pure functions of the loaded rows, computed once per load instead of on every recomposition.
+    val (sessionLoads, trainingLoadEval, recovery) = remember(s, w, sl, wb, stressDays, breakStarts) {
+        val sessionLoads = buildTrainingSessionLoads(s, w.lastOrNull()?.rhr)
+        val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
+
+        val nights = sl.mapNotNull { row ->
+            val bedtime = row.bedtime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+            val wake = row.wakeTime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+            if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
+        }
+        val sleepIndexResult = computeSleepIndex(
+            sl.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } },
+            sl.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } },
+            sl.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } },
+            nights,
+            durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min"),
+        )
+        val exerciseWindows = s.mapNotNull { session ->
+            val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
+            val durationMin = session.durationMin ?: return@mapNotNull null
+            start to start.plusSeconds((durationMin * 60).toLong())
+        }
+        val physiologicalStress = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindows) }
+        val recovery = computeDynamicRecovery(
+            sleepIndex = sleepIndexResult,
+            hrvEval = evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")),
+            rhrEval = evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")),
+            trainingLoadEval = trainingLoadEval,
+            energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            physiologicalStress = physiologicalStress,
+            morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+        )
+        Triple(sessionLoads, trainingLoadEval, recovery)
+    }
 
     val waterMl = nut.todayHydrationMl?.toDouble() ?: 0.0
     val beverageMl = nut.todayBeverageItems.mapNotNull { it.effectiveHydrationMl }.sum()

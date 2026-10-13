@@ -110,6 +110,7 @@ private fun AuthGate() {
         when (sessionStatus) {
             is SessionStatus.Authenticated -> FieldTerminalNavHost()
             is SessionStatus.NotAuthenticated -> {
+                androidx.compose.runtime.LaunchedEffect(Unit) { com.bioscan.fieldterminal.data.ReadCache.invalidateAll() } // nothing of the last user survives sign-out
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     AmberButton(label = "SIGN IN WITH GOOGLE") {
                         scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }

@@ -126,6 +126,8 @@ fun HeartTileScreen(onBack: () -> Unit) {
     var tab by remember { mutableStateOf(HeartTab.Cardio) }
 
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
+    // Intraday HR of the one day the DAILY HEART RATE card charts; loaded apart from the daily list (it is ~50 kB per day).
+    var hrDay by remember { mutableStateOf<List<com.bioscan.fieldterminal.data.model.HrPoint>?>(null) }
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
     var sexualActivity by remember { mutableStateOf<List<LogSexualActivityRow>?>(null) }
@@ -143,7 +145,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
             guard.run {
                 val repo = AnalysisRepository(SupabaseClientProvider.client)
                 parallel(
-                    { wearable = repo.loadWearableDaily() },
+                    { wearable = repo.loadWearableDaily().also { hrDay = repo.loadHeartRateDay(it.firstOrNull()?.date) } },
                     { sleep = repo.loadSleepDaily() },
                     { wellbeing = repo.loadWellbeingDaily() },
                     // Arousal folded into wellbeing_daily -- see `wellbeing` above.
@@ -212,7 +214,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     EvalCard("HRV", evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).toExpSpace(), "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints, comparison = hrvComparison, timeframe = vitalsTimeframe, methodology = "hrv")
                     // v12: intraday HR from Zepp band_data. Show for the most
                     // recent day that has data; silently absent when not yet synced.
-                    val todayHr = w.firstOrNull { it.hrTimeseries?.isNotEmpty() == true }?.hrTimeseries
+                    val todayHr = hrDay
                     if (todayHr != null) {
                         val hrPoints = todayHr.map { TimePoint(it.offsetMinutes * 60L, it.bpm.toDouble()) }
                         FTCard(title = "DAILY HEART RATE") {
@@ -252,40 +254,42 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     }
                     val deepPoints = s.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } }
                     val respiratoryForIndex = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
-                    val sleepIndexResult = computeSleepIndex(hoursPoints, deepPoints, respiratoryForIndex, nights, durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min"))
+                    // Perf pass: pure functions of the loaded rows, computed once per load, not on every recomposition.
+                    val sleepIndexResult = remember(s, breakStarts) { computeSleepIndex(hoursPoints, deepPoints, respiratoryForIndex, nights, durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min")) }
 
                     // 09.2 Dynamic Recovery: a hero card above everything else
                     // in this tab, same placement pattern AgingCard already
                     // uses atop UserProfileScreen.kt -- reuses every
                     // contributor's existing evaluation, recomputes nothing.
-                    val exerciseWindowsForRecovery = exerciseSessions.mapNotNull { session ->
-                        val start = runCatching { OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
-                        val durationMin = session.durationMin ?: return@mapNotNull null
-                        start to start.plusSeconds((durationMin * 60).toLong())
-                    }
-                    val physiologicalStressForRecovery = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindowsForRecovery) }
-                    val sessionLoadsForRecovery = buildTrainingSessionLoads(exerciseSessions, w.lastOrNull()?.rhr)
-                    DynamicRecoveryCard(
-                        computeDynamicRecovery(
-                            sleepIndex = sleepIndexResult,
-                            hrvEval = evaluateHrv(w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("hrv")),
-                            rhrEval = evaluateRhr(w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("rhr")),
-                            trainingLoadEval = evaluateTrainingLoad(sessionLoadsForRecovery),
-                            energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                            stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                            sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                            physiologicalStress = physiologicalStressForRecovery,
-                            morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                            arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                        ),
+                    val dynamicRecovery = remember(s, w, wb, exerciseSessions, stressDays, breakStarts, sleepIndexResult) {
+                        val exerciseWindowsForRecovery = exerciseSessions.mapNotNull { session ->
+                            val start = runCatching { OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
+                            val durationMin = session.durationMin ?: return@mapNotNull null
+                            start to start.plusSeconds((durationMin * 60).toLong())
+                        }
+                        val physiologicalStressForRecovery = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindowsForRecovery) }
+                        val sessionLoadsForRecovery = buildTrainingSessionLoads(exerciseSessions, w.lastOrNull()?.rhr)
+                    computeDynamicRecovery(
+                        sleepIndex = sleepIndexResult,
+                        hrvEval = evaluateHrv(w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("hrv")),
+                        rhrEval = evaluateRhr(w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("rhr")),
+                        trainingLoadEval = evaluateTrainingLoad(sessionLoadsForRecovery),
+                        energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+                        stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+                        sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+                        physiologicalStress = physiologicalStressForRecovery,
+                        morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+                        arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
                     )
+                    }
+                    DynamicRecoveryCard(dynamicRecovery)
 
                     // 09.1 Sleep Index: a headline aggregate above the same
                     // component cards below it -- an aggregation layer, never
                     // a replacement (DAV-235's own rule).
                     SleepIndexCard(sleepIndexResult)
                     EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints, windowStart = breakStarts.start("sleep_hours")), "h", directionality = METRIC_DIRECTIONALITY.getValue("sleep_duration"), points = hoursPoints, methodology = "sleep_duration")
-                    val sriEval = evaluateSri(nights)
+                    val sriEval = remember(s) { evaluateSri(nights) }
                     SriCard(sriEval)
                     SleepPhasesCard(s)
                     // 09.6 Circadian Alignment: sleep timing reuses the same

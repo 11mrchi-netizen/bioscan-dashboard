@@ -30,7 +30,11 @@ object SupabaseClientProvider {
             install(Postgrest)
             install(Functions)
             // Debug-only request log (util/Perf.kt); a no-op when Perf.enabled is false.
-            httpConfig { install(PerfHttpLog) }
+            httpConfig {
+                install(PerfHttpLog)
+                // Any write through this client clears data/ReadCache, so cached reads never outlive a write.
+                install(CacheInvalidation)
+            }
         }
     }
 }

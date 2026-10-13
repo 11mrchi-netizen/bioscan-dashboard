@@ -38,6 +38,23 @@ Notes on the numbers:
 - The JVM timings are not phone timings (a phone is several times slower), but the ratio holds because the change is algorithmic.
 - The browser pane throttles animation frames, so frame rates were not measured; the loop counts and the draw cost per frame (2.1 ms of script per background draw, unchanged) were.
 
+## Measured on the phone (Pixel 9, 2026-10-13, branch head, real account)
+
+| Check | Result |
+| -- | -- |
+| Cold start, debug build (`am start -W`, 3 runs) | 1,116 / 1,034 / 1,030 ms |
+| Cold start, release build (R8 + baseline profile, 3 runs) | 161 / 105 / 145 ms |
+| Home screen first load | 7 requests started together (sleep, wearable, sessions, series breaks, injuries, illnesses, recent sessions); the screen renders with real data |
+| Training tile load | 1,027 ms for 9 parallel requests |
+| Heart tile load after the home screen | 610 ms, 4 requests (the shared lists came from the cache) |
+| Injury tab after the Training tile | 3 requests instead of 7 (sessions, wearable, wellbeing served from the cache) |
+| Offline cold start (wifi and data off) | no crash, no "session expired"; home shows "No connection to the server (offline or timed out). Your data is safe." with RETRY; User and Log tabs likewise; RETRY works once the network is back |
+| Rotation with a half-filled GRIP form | right hand and 46.5 kept after landscape and back; same process, no restart |
+| GRIP entry and "LAST: GRIP" shortcut | both shown; nothing was saved (the table has 0 rows) |
+| Release build, every tab and sub-tab, all four Setup pages, the add sheet | no crash; User tab shows the same Healthspan grade as debug |
+
+A first release build **crashed on launch**: R8 stripped the generated WorkManager database constructor (`NoSuchMethodException: WorkDatabase_Impl.<init>`). That is what the on-device smoke test was for; the keep rules in `app/proguard-rules.pro` now cover Room and WorkManager and the second release build runs.
+
 ## What changed, by stage
 
 1. **Measurement and safety net.** Debug-only logcat tag `perf` (a marker per screen, one line per Supabase request with method, path, ms, bytes), `Perf.timed`, Compose compiler reports behind `-PcomposeReports`, `PerfGoldenTest` pinning the health functions, a web harness in `scripts/perf`.

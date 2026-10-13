@@ -60,6 +60,7 @@ import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.NutritionTextEstimateRepository
+import com.bioscan.fieldterminal.data.functionErrorMessage
 import java.time.LocalTime
 import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -722,6 +723,7 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
             )
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
             FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items, source, quantities -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities) } })
+            FuelSubType.Endurance -> EnduranceFuelForm(onSaved = onCanonicalSaved)
         }
     }
 }
@@ -807,6 +809,8 @@ private fun FoodForm(
                 mealEstimateId = result.estimateId
                 mealEstimate = result.estimate
                 pendingPhotos = emptyList()
+                // The Gemini estimate is usable now; the Cronometer lookup below must not keep the spinner running.
+                estimating = false
 
                 enriching = true
                 try {
@@ -818,7 +822,7 @@ private fun FoodForm(
                     enriching = false
                 }
             } catch (e: Exception) {
-                estimationError = e.message ?: "Estimation failed"
+                estimationError = e.functionErrorMessage()
             } finally {
                 estimating = false
             }
@@ -850,7 +854,7 @@ private fun FoodForm(
                 )
                 mealEstimateId = null
             } catch (e: Exception) {
-                estimationError = e.message ?: "Estimation failed"
+                estimationError = e.functionErrorMessage()
             } finally {
                 enriching = false
                 estimating = false
@@ -913,7 +917,7 @@ private fun FoodForm(
                     }
                 }
             } catch (e: Exception) {
-                barcodeError = e.message ?: "Lookup failed"
+                barcodeError = e.functionErrorMessage()
             } finally {
                 barcodeLooking = false
             }

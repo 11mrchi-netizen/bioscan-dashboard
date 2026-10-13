@@ -74,7 +74,7 @@ data class CronometerEnrichment(
 
 class NutritionCronometerLookupRepository(private val supabase: SupabaseClient) {
     companion object {
-        private val client = HttpClient(Android)
+        private val client = functionsClient(30_000)
     }
 
     private val json = Json { ignoreUnknownKeys = true }

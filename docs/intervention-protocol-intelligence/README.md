@@ -59,7 +59,7 @@ The Linear issue's entity list, mapped to concrete tables/types:
 | 08.5 Generalize the N-of-1 engine | **Done.** Migration `supabase/migrations/20261013_experiments_intervention_id.sql` (applied); `runExperiments.ts` reads/publishes `intervention_id` alongside `supplement_id`. `experiment.ts`/`stats.ts` unchanged. |
 | 08.6 Intervention response analysis (observational) | **Code complete, not deployed.** `interventionResponse.ts` (pure) + `runInterventionResponse.ts` (I/O), wired into `analysis-run/index.ts`'s source but the Edge Function has not been redeployed (see notes). |
 | 08.7 Adaptive protocol rules | **Done.** `protocolRules.ts` (pure, tested in `protocolRules.test.ts`) + `protocol_adjustment_proposals` migration (applied). Nothing calls it yet -- no I/O wiring into `analysis-run` in this pass (see notes). |
-| 08.8 Protocol audit | Not started. |
+| 08.8 Protocol audit | **Pure engine done.** `protocolAudit.ts`, tested in `protocolAudit.test.ts`. No new table (publishes as `analysis_results` kind `protocol_audit`, same generic envelope, no schema change); no I/O wiring in this pass (see notes). |
 | 08.9 UI (Console + Android) | Not started. |
 | 08.10 Validation | Not started. |
 
@@ -111,9 +111,18 @@ The small statistical helpers (`lagOneRho`, `effN`, `groupStats`, `signedText`) 
 
 Nothing calls `proposeProtocolAction` yet and nothing writes to `protocol_adjustment_proposals` outside this verification -- wiring it into `analysis-run` (reading the latest `experiment`/`intervention_response`/`relationship` rows, an intervention's `burden_cost_risk`, and `evidenceForIntervention`'s strongest tier per outcome to build `ProtocolRuleInputs`) is follow-up work, tracked below rather than done in this pass given how much of 08.6's I/O-wiring risk discussion already applies here too.
 
+## 08.8 notes
+
+`auditProtocol` returns findings only, never a score, matching DAV-338 literally -- a dedicated test (`auditProtocol never emits a numeric score`) asserts no finding ever carries one. Its same-outcome clustering finding reproduces the issue's own example almost verbatim ("Attribution quality is low because N interventions affecting X were started within the same 10-day window").
+
+Pair-level findings (shared mechanisms/ingredients, timing conflicts) are **not recomputed here**: the module takes already-computed `PrecomputedInteraction` rows as input (from `interaction_records` + `domain/SupplementInteractions.kt`'s pairing/timing logic, or its generalized successor) and only decides whether both sides of a pair belong to the protocol being audited -- this is what DAV-338's "integrate with Supplement Intelligence... without duplicating stack-analysis logic" asks for.
+
+No new table: findings publish as another `analysis_results` kind (`protocol_audit`), the same generic envelope `experiment`/`intervention_response` already use, so no migration was needed. No I/O layer yet -- same reasoning as 08.6/08.7 (an I/O wiring pass into `analysis-run` needs the other two engines' outputs plus a live interaction lookup, better done together with their own wiring than ahead of it).
+
 ## Still open
 
 - Wire `proposeProtocolAction` into an I/O layer (own `runProtocolRules.ts`, mirroring `runExperiments.ts`/`runInterventionResponse.ts`) that builds `ProtocolRuleInputs` from the latest relevant `analysis_results` rows and an intervention/protocol's own columns, and writes new `protocol_adjustment_proposals` rows -- not done in this pass (08.7 notes).
+- Wire `auditProtocol` into an I/O layer that gathers a protocol's interventions, reads evidence/interaction rows and publishes `analysis_results` kind `protocol_audit` -- not done in this pass (08.8 notes).
 
 - Deploy `analysis-run` with `runInterventionResponse.ts` included (via `mcp__Supabase__deploy_edge_function` or the CLI, entrypoint `index.ts` plus every file under `_shared/analysis-core/` it imports, same as `docs/analysis-layer-3/README.md`'s "Deploying `analysis-run`" section) -- not done in this pass, see 08.6 notes.
 

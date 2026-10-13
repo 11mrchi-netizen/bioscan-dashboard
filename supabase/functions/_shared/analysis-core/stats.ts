@@ -356,3 +356,23 @@ export function blockPermutationP(
   }
   return (hits + 1) / (reps + 1)
 }
+
+// ---- Analysis Layer 3 / Phase 5: Student t helpers for the N-of-1 experiments ----
+
+// Two-sided p for a t statistic with (possibly fractional) df degrees of freedom.
+export function pFromT(t: number, df: number): number {
+  if (!(df > 0) || !Number.isFinite(t)) return 1
+  return pFromR(t / Math.sqrt(t * t + df), df + 2)
+}
+
+// Two-sided critical value: the t for which pFromT(t, df) = alpha (bisection; df >= 1).
+export function tCritical(df: number, alpha = 0.05): number {
+  let lo = 0
+  let hi = 200
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2
+    if (pFromT(mid, df) > alpha) lo = mid
+    else hi = mid
+  }
+  return (lo + hi) / 2
+}

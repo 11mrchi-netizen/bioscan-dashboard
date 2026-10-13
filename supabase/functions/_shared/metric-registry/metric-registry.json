@@ -592,6 +592,27 @@
       ],
       "productDefined": true,
       "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "supplement_experiment",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "A pre-registered N-of-1 test of one supplement: a phase without it (A) and a phase with it (B), once or twice (AB or ABAB), with the dates, the one primary outcome (at most three secondary) and the rules fixed before the first day; the database refuses later changes to the plan. The B days are compared with the A days by phase (intention to treat), after removing illness days, alcohol days and the morning after (when the plan says so) and any washout days, and adjusting for day of week. The difference of means is reported in natural units with a 95% interval that uses the effective sample size implied by day-to-day autocorrelation (small-sample corrected) and a Student t, together with the smallest difference the design could detect at 80% power. While the experiment runs the numbers are labelled interim and carry no verdict. Adherence is counted from the real supplement log, never assumed.",
+      "limitations": [
+        "Not randomised or blinded: the person knows which phase they are in, so expectation, season, training and life events can move an outcome in step with the phases.",
+        "A drifting outcome in the without-phase is checked and flagged, but cannot be fully separated from an effect in a single AB design; ABAB shows whether the effect repeats.",
+        "With a few weeks per phase only large differences can be seen; \"no detectable effect\" is not evidence of no effect, and the result states the smallest difference the design could have seen.",
+        "Supplements with slow onset (weeks) need longer phases or a washout than the defaults; outcomes with a recent device or source change are less reliable.",
+        "Applies to this person only and says nothing about other people."
+      ],
+      "references": [
+        {
+          "citation": "Guyatt GH, Keller JL, Jaeschke R, Rosenbloom D, Adachi JD, Newhouse MT. The n-of-1 randomized controlled trial: clinical usefulness. Our three-year experience. Ann Intern Med 1990;112(4):293-299.",
+          "doi": "10.7326/0003-4819-112-4-293"
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
     }
   ]
 }

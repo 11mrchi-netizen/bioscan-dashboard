@@ -25,6 +25,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.data.ExperimentResultRow
+import com.bioscan.fieldterminal.data.ExperimentRow
+import com.bioscan.fieldterminal.data.ExperimentsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsOverview
 import com.bioscan.fieldterminal.data.SupplementsRepository
@@ -56,6 +59,10 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     var reloadKey by remember { mutableIntStateOf(0) }
     var editing by remember { mutableStateOf<SupplementRow?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
+    // Analysis Layer 3 / Phase 5: supplement N-of-1 experiments.
+    var experimenting by remember { mutableStateOf<SupplementRow?>(null) }
+    var experiments by remember { mutableStateOf<List<ExperimentRow>>(emptyList()) }
+    var experimentResults by remember { mutableStateOf<Map<String, ExperimentResultRow>>(emptyMap()) }
 
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -68,6 +75,9 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
             // Evidence is enrichment: a failed lookup must not hide the roster.
             outcomes = runCatching { EvidenceRepository(SupabaseClientProvider.client).outcomeTextBySupplement(loaded.active) }
                 .getOrDefault(emptyMap())
+            val expRepo = ExperimentsRepository(SupabaseClientProvider.client)
+            experiments = expRepo.loadExperiments()
+            experimentResults = expRepo.loadResults()
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
         }
@@ -87,6 +97,9 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
             onAddClick = { showAddSheet = true },
             onOpenPantry = onOpenPantry,
             onSupplementClick = { editing = it },
+            onExperiment = { experimenting = it },
+            experiments = experiments,
+            experimentResults = experimentResults,
         )
     }
 
@@ -95,6 +108,14 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
             existing = null,
             onDismiss = { showAddSheet = false },
             onSaved = { showAddSheet = false; reloadKey++ },
+        )
+    }
+    experimenting?.let { row ->
+        ExperimentSheet(
+            supplementId = row.id,
+            supplementName = row.name,
+            onDismiss = { experimenting = null },
+            onRegistered = { experimenting = null; reloadKey++ },
         )
     }
     editing?.let { row ->
@@ -107,7 +128,16 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
 }
 
 @Composable
-private fun SupplementsContent(overview: SupplementsOverview, outcomes: Map<Long, String>, onAddClick: () -> Unit, onOpenPantry: () -> Unit, onSupplementClick: (SupplementRow) -> Unit) {
+private fun SupplementsContent(
+    overview: SupplementsOverview,
+    outcomes: Map<Long, String>,
+    onAddClick: () -> Unit,
+    onOpenPantry: () -> Unit,
+    onSupplementClick: (SupplementRow) -> Unit,
+    onExperiment: (SupplementRow) -> Unit,
+    experiments: List<ExperimentRow>,
+    experimentResults: Map<String, ExperimentResultRow>,
+) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -144,13 +174,15 @@ private fun SupplementsContent(overview: SupplementsOverview, outcomes: Map<Long
                         Text(timeOfDay.uppercase(), style = sectionLabelStyle, color = FT.TextSecondary)
                         Column(modifier = Modifier.fillMaxWidth().background(FT.GlassFill)) {
                             items.forEachIndexed { i, s ->
-                                ActiveRow(s, outcomes[s.id].orEmpty(), showDivider = i < items.lastIndex, onClick = { onSupplementClick(s) })
+                                ActiveRow(s, outcomes[s.id].orEmpty(), showDivider = i < items.lastIndex, onClick = { onSupplementClick(s) }, onExperiment = { onExperiment(s) })
                             }
                         }
                     }
                 }
             }
         }
+
+        ExperimentsSection(experiments, experimentResults)
 
         if (overview.ended.isNotEmpty()) {
             SectionLabel("ENDED", FT.TextSecondary)
@@ -172,7 +204,7 @@ private fun SectionLabel(text: String, color: androidx.compose.ui.graphics.Color
 }
 
 @Composable
-private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Boolean, onClick: () -> Unit) {
+private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Boolean, onClick: () -> Unit, onExperiment: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -196,6 +228,14 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
                         modifier = Modifier.padding(top = 3.dp),
                     )
                 }
+                Text(
+                    "TEST IT (EXPERIMENT)",
+                    style = FTType.MonoCaption,
+                    color = FT.DomainLog,
+                    modifier = Modifier
+                        .padding(top = 6.dp)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onExperiment),
+                )
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(s.dose, style = FTType.Telemetry, color = FT.TextPrimary)

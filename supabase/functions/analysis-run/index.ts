@@ -12,11 +12,13 @@
 //                x-analysis-cron header; it is checked through public.analysis_cron_secret_ok() (service role only), so
 //                no human-held secret and no service role key is involved
 //
-// Publishes `series_break` (Phase 1), `relationship` (Phase 3, the confirmatory catalogue) and `typicality` (Phase 4,
-// "is today typical for you") results; the experiment engine plugs in here later.
+// Publishes `series_break` (Phase 1), `relationship` (Phase 3, the confirmatory catalogue), `typicality` (Phase 4,
+// "is today typical for you") and `experiment` (Phase 5, pre-registered supplement N-of-1) results. The action
+// `experiment_preview` returns the smallest detectable effect of a planned design for the signed-in user.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { buildPreview, runExperiments } from "../_shared/analysis-core/runExperiments.ts";
 import { loadFrame, runRelationships } from "../_shared/analysis-core/runRelationships.ts";
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
 import { runTypicality } from "../_shared/analysis-core/runTypicality.ts";
@@ -39,7 +41,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { action?: string; user_id?: string } = {};
+  let body: { action?: string; user_id?: string; planned_a?: number; planned_b?: number } = {};
   try {
     body = await req.json();
   } catch {
@@ -53,6 +55,22 @@ Deno.serve(async (req) => {
       p_r0253_n61: Number(pFromR(0.253, 61).toFixed(6)),
       pearson_1_10: Number(pearson([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [2.1, 1.9, 3.5, 3.9, 5.2, 5.8, 7.7, 7.9, 9.4, 9.6]).toFixed(12)),
     }, 200);
+  }
+
+  if (body.action === "experiment_preview") {
+    // Pre-registration preview for the signed-in user: what could a design with these phase lengths detect on their own data?
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const userClient = createClient(url, anon, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } });
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) return json({ error: "unauthorized" }, 401);
+    const plannedA = Math.round(body.planned_a ?? 28);
+    const plannedB = Math.round(body.planned_b ?? 28);
+    if (!(plannedA >= 7 && plannedA <= 120 && plannedB >= 7 && plannedB <= 120)) return json({ error: "bad_request", message: "planned_a and planned_b must be 7 to 120 days" }, 400);
+    const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const loaded = await loadFrame(admin, user.id);
+    if ("error" in loaded) return json({ error: "load_failed", message: loaded.error }, 500);
+    return json(await buildPreview(admin, loaded, plannedA, plannedB), 200);
   }
 
   if (body.action === "run") {
@@ -91,12 +109,13 @@ Deno.serve(async (req) => {
       // Typicality runs after the series breaks because it restarts its baseline at the last confirmed one.
       const loaded = await loadFrame(admin, id).catch((e) => ({ userId: id, error: String(e) }));
       if ("error" in loaded) {
-        results.push({ ...breaks, relationships: loaded, typicality: loaded });
+        results.push({ ...breaks, relationships: loaded, typicality: loaded, experiments: loaded });
         continue;
       }
       const relationships = await runRelationships(admin, id, new Date(), loaded).catch((e) => ({ userId: id, error: String(e) }));
       const typicality = await runTypicality(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      results.push({ ...breaks, relationships, typicality });
+      const experiments = await runExperiments(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      results.push({ ...breaks, relationships, typicality, experiments });
     }
     return json({ coreVersion: CORE_VERSION, results }, 200);
   }

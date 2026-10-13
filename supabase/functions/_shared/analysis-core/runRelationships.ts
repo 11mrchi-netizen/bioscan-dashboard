@@ -45,6 +45,9 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
     steps: col(raw.wearable, 'steps', 0),
     sleep_hours: col(raw.sleep, 'hours', 2), // under 2 h is a nap or a fault
     energy: col(raw.wellbeing, 'energy', 0),
+    mood: col(raw.wellbeing, 'mood', 0),
+    stress: col(raw.wellbeing, 'stress', 0),
+    soreness: col(raw.wellbeing, 'soreness', 0),
   }
   // Deep + REM minutes, only on nights where both stages were recorded (the typicality engine's fourth signal).
   series.deep_rem_min = alignToAxis(

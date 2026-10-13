@@ -1,7 +1,7 @@
 # 05 — Zepp training templates: format, cloud API, and what is still open
 
 **Status:** create / list / delete of strength templates, and create / list / delete of calendar entries that
-schedule a template, verified end to end against the real account (2026-10-09). Everything here is reverse-engineered from the Zepp Android app
+schedule a template (those entries are not shown by the phone, section 3.1), verified end to end against the real account (2026-10-09). Everything here is reverse-engineered from the Zepp Android app
 (v10.8.7) and from templates shared out of the app; none of it is documented by Zepp and any of it can
 change with an app update.
 
@@ -97,8 +97,32 @@ Other schedule-related endpoints in the app, not used: `users/training/plan/sche
 DELETE `{ids}`) and `training/plan/list` + `training/plan/schedules` for official plans; PUT there returns a bare 400
 for the calendar entity, so they are a different service.
 
-Not yet checked: that a scheduled entry shows in the Zepp app's training calendar and reaches the watch after the
-app's own sync.
+### 3.1 Cloud-made calendar entries never reach the phone (verified 2026-10-09..13)
+
+Entries made with the calls above are accepted, listed back and deletable, but the Zepp app never shows them
+and the watch never gets them. Ruled out: CRLF vs LF, empty vs random `UID`, the app's local-id lines
+(`X-TRAINING-LOCAL-ID` = `UID`, `X-TRAINING-TEMPLATE-LOCAL-ID`), the template (an app-made one and a cloud-made
+one), the `description` key (the app's own entry omits it). Cause, read from the app's code
+(`TrainingScheduleRepositoryImpl`): the cloud calendar is pulled **once per login**. A stored flag
+`training.schedule.fetch.success` gates the pull, and the log line "login schedule fetch skipped for boot login"
+shows an app restart does not redo it. Entries made in the app are written locally and pushed up, which is why
+the account's own entries show. The schedule screens (`AddScheduleActivity` ...) are not exported, so another app
+cannot open them.
+
+Templates are different: a template created through the cloud API appears in the phone's custom-workout list
+with every detail (warm-ups, rests, loops) and reaches the watch. So the working design is: no Zepp calendar
+entries; one template per upcoming strength session, named with its date, and the plan's calendar stays in our app.
+
+## 3.2 Block -> Zepp push (built 2026-10-13)
+
+`zepp-training` action `push_templates` takes `{templates:[{key,title,description,lifts:[{movement,sets,reps,kg,
+warmups:[[reps,kg]]}]}], deleteIds:[...]}`, creates one template each and answers `{created:[{key,id}], unmapped,
+failed, deleted}`. `movement` is the app's movement key (`MovementKey.kt`); `BY_MOVEMENT` in `template.ts` maps it to a
+Zepp exercise, and a lift without an entry is skipped and reported. The app side is
+`ZeppRepository.pushUpcoming()`: strength sessions of the next 7 days, ids/hash stored on
+`planned_sessions.zepp_template_id / zepp_pushed_hash / zepp_pushed_at`, unchanged sessions skipped, changed ones
+replaced, past ones deleted. It runs from Settings > Connected services > Zepp ("SEND NEXT 7 DAYS TO ZEPP") and after
+every on-open sync. Warm-ups: `domain/training/WarmUp.kt`.
 
 ## 4. Tools in the repo
 
@@ -107,7 +131,7 @@ app's own sync.
   `{"action":"write_test"}` runs create > list > delete of a throwaway "ZZ TEST cloud" template, and `{"action":"schedule_test"}` creates a template, schedules it for 20 Oct, lists, then deletes both. Raw
   answers are stored in `zepp_raw_extracts` (metric `training_probe`). JWT required; uses the same
   `ZEPP_APP_TOKEN` as `zepp-extract`.
-- Settings > Connected services > Zepp: "CHECK TEMPLATE API", "TEMPLATE WRITE TEST" and "TEMPLATE SCHEDULE TEST" buttons.
+- Settings > Connected services > Zepp: probe buttons (check API, write / schedule / bulk / variants / iCal / reference iCal tests, calendar dump, bulk cleanup) and "SEND NEXT 7 DAYS TO ZEPP".
 - Deep link that opens a template in the Zepp editor from a file served by the phone itself:
   `amazfit://com.huami.watch.hmwatchmanager/action?name=trainingtemplate_crossfit&target=share&data=<url>`;
   the app fetches `data` directly from the phone (an `adb reverse` localhost URL works).

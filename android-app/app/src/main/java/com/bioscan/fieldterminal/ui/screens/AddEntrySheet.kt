@@ -126,6 +126,9 @@ private val sheetActionLabelStyle = FTType.LabelCaps
 fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedType by remember { mutableStateOf<AddEntryType?>(null) }
+    // Daily-use shortcut: the type logged last time is one tap away (the picker is otherwise FAB -> grid -> type).
+    val addPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("ft_ui", android.content.Context.MODE_PRIVATE)
+    val lastType = remember { addPrefs.getString("last_add_type", null)?.let { name -> AddEntryType.entries.firstOrNull { it.name == name } } }
     // Analysis Layer 3 / R2: "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
     var sayIt by remember { mutableStateOf(false) }
     var foodPrefill by remember { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
@@ -177,7 +180,14 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     Text("SAY IT", style = sheetActionLabelStyle, color = FT.DomainLog)
                 }
                 Spacer(Modifier.height(10.dp))
-                TypePickerGrid(onSelect = { selectedType = it })
+                lastType?.let { last ->
+                    AmberButton(label = "LAST: ${last.label}") { selectedType = last }
+                    Spacer(Modifier.height(10.dp))
+                }
+                TypePickerGrid(onSelect = { picked ->
+                    addPrefs.edit().putString("last_add_type", picked.name).apply()
+                    selectedType = picked
+                })
             } else {
                 SheetBackHeader(label = type.label, onBack = { selectedType = null; foodPrefill = null })
                 Spacer(Modifier.height(16.dp))

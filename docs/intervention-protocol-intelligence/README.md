@@ -55,7 +55,7 @@ The Linear issue's entity list, mapped to concrete tables/types:
 | 08.1 Audit & architecture | **Done.** This document. |
 | 08.2 Canonical `interventions` model + lifecycle | **Done.** Migration `supabase/migrations/20261013_interventions.sql` (applied to the live project); lifecycle graph in `supabase/functions/_shared/analysis-core/intervention.ts`, tested in `intervention.test.ts`. |
 | 08.3 `protocols` model | **Done.** Migration `supabase/migrations/20261013_protocols.sql` (applied); lifecycle graph and `generateSchedule` in `supabase/functions/_shared/analysis-core/protocol.ts`, tested in `protocol.test.ts`. |
-| 08.4 Evidence registry generalization | Not started. |
+| 08.4 Evidence registry generalization | **Done.** No schema change needed (see notes); matching/ranking in `supabase/functions/_shared/analysis-core/evidenceLink.ts`, tested in `evidenceLink.test.ts`. |
 | 08.5 Generalize the N-of-1 engine | Not started. |
 | 08.6 Intervention response analysis (observational) | Not started. |
 | 08.7 Adaptive protocol rules | Not started. |
@@ -80,6 +80,12 @@ Verified live against the Supabase project: schema, RLS (owner-only on `interven
 `generateSchedule` (acceptance: "a protocol can be instantiated for a user, generate an actionable schedule") computes baseline/washout/active dates and slices the active window into sequential groups by `sequence_order`, with steps sharing an order running concurrently -- pure and tested, no I/O.
 
 Verified live: schema, RLS (owner-only on `protocols`; parent-ownership-scoped on `protocol_interventions`/`protocol_state_history`, with the `protocol_interventions` insert policy also requiring the linked intervention to belong to the same user), all 6 `protocol_templates` rows seeded correctly, the lifecycle trigger (`proposed -> active` logged one history row), and a `protocol_interventions` insert linking a real intervention. No new `get_advisors` findings.
+
+## 08.4 notes
+
+Confirmed live: `evidence_records.subject_type`/`subject_key`/`outcome_key` have no CHECK constraint (just `text not null`) and today hold only `subject_type = 'ingredient'` rows (15, all from Supplement Intelligence, all with `evidence_tier`/`study_design` still null). So an intervention's own `(subject_type, subject_key)` -- already meant to share this vocabulary by convention, not a foreign key, per the 08.2 migration's comment -- is already a valid lookup key with no migration needed; this phase is the matching logic, not a schema change.
+
+`evidenceForIntervention` in `evidenceLink.ts` is pure (the caller fetches the rows, same join-in-the-app-layer convention `EvidenceRepository.kt` already uses) and does exactly what DAV-334 asks: groups evidence per outcome instead of collapsing it into one score, since the same subject can have different evidence strength for different outcomes, and ranks by tier (meta-analysis/systematic-review and controlled-human first, the person's own N-of-1 result last -- "did it work for me" is never mixed into "how well-established is this"). Unreviewed rows are kept, matching `interaction_records`' "(unreviewed)" convention, just ordered after a reviewed row of the same tier.
 
 ## Still open
 

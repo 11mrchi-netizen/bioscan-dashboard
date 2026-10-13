@@ -1,5 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.util.Perf
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.parallel
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -139,12 +143,19 @@ private fun InjuryTab() {
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
     var ostrc by remember { mutableStateOf<List<OstrcAnalysisRow>?>(null) }
 
-    LaunchedEffect(Unit) {
-        val repo = AnalysisRepository(SupabaseClientProvider.client)
-        sessions = repo.loadExerciseSessionsForTrainingLoad()
-        wearable = repo.loadWearableDaily()
-        wellbeing = repo.loadWellbeingDaily()
-        ostrc = repo.loadOstrcCheckins()
+    val guard = rememberLoadGuard()
+    LaunchedEffect(guard.attempt) {
+        Perf.timed("InjuryTab.load") {
+            guard.run {
+                val repo = AnalysisRepository(SupabaseClientProvider.client)
+                parallel(
+                    { sessions = repo.loadExerciseSessionsForTrainingLoad() },
+                    { wearable = repo.loadWearableDaily() },
+                    { wellbeing = repo.loadWellbeingDaily() },
+                    { ostrc = repo.loadOstrcCheckins() },
+                )
+            }
+        }
     }
 
     val s = sessions
@@ -152,8 +163,12 @@ private fun InjuryTab() {
     val wb = wellbeing
     val os = ostrc
     if (s == null || w == null || wb == null || os == null) {
-        Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.DomainTraining)
+        if (guard.error != null) {
+            LoadErrorCard(guard)
+        } else {
+            Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = FT.DomainTraining)
+            }
         }
         return
     }
@@ -275,16 +290,22 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
     // Analysis Layer 3 / R1: start of each metric's current regime (last confirmed series break); NONE until loaded.
     var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
 
-    LaunchedEffect(Unit) {
-        val repo = AnalysisRepository(SupabaseClientProvider.client)
-        sessions = repo.loadExerciseSessionsForTrainingLoad()
-        wearable = repo.loadWearableDaily()
-        activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle()
-        cycleLoaded = true
-        sleep = repo.loadSleepDaily()
-        wellbeing = repo.loadWellbeingDaily()
-        stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays()
-        breakStarts = repo.loadSeriesBreakStarts()
+    val loadGuard = rememberLoadGuard()
+    LaunchedEffect(loadGuard.attempt) {
+        Perf.timed("TrainingLoad.load") {
+            loadGuard.run {
+                val repo = AnalysisRepository(SupabaseClientProvider.client)
+                parallel(
+                    { sessions = repo.loadExerciseSessionsForTrainingLoad() },
+                    { wearable = repo.loadWearableDaily() },
+                    { activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle(); cycleLoaded = true },
+                    { sleep = repo.loadSleepDaily() },
+                    { wellbeing = repo.loadWellbeingDaily() },
+                    { stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays() },
+                    { breakStarts = repo.loadSeriesBreakStarts() },
+                )
+            }
+        }
     }
 
     val s = sessions
@@ -292,8 +313,12 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
     val sl = sleep
     val wb = wellbeing
     if (s == null || w == null || !cycleLoaded || sl == null || wb == null) {
-        Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.DomainTraining)
+        if (loadGuard.error != null) {
+            LoadErrorCard(loadGuard)
+        } else {
+            Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = FT.DomainTraining)
+            }
         }
         return
     }

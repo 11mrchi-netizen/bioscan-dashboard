@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.ui.components.softLoad
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -158,7 +159,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
         // HR zone breakdown: this account's own highest-ever recorded max_hr,
         // loaded once per screen open -- independent of this session's own
         // header/detail loads below.
-        personalMaxHr = AnalysisRepository(SupabaseClientProvider.client).loadPersonalMaxHr()
+        personalMaxHr = softLoad { AnalysisRepository(SupabaseClientProvider.client).loadPersonalMaxHr() }
         // What the training block planned for this workout, if anything (DAV-346).
         if (row != null) {
             planned = runCatching {
@@ -174,7 +175,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
         // in here instead. Only fetched for a strength session with logged
         // exercises -- no point pulling 876 rows otherwise.
         if (row?.type == "strength" && row.details.exercises?.isNotEmpty() == true) {
-            exerciseLibrary = ExerciseLibraryRepository(SupabaseClientProvider.client).fetchAll()
+            exerciseLibrary = softLoad { ExerciseLibraryRepository(SupabaseClientProvider.client).fetchAll() } ?: exerciseLibrary
         }
 
         val recordId = row?.healthConnectRecordId

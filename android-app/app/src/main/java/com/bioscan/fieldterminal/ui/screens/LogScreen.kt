@@ -68,6 +68,8 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
         error = null
         try {
             allEntries = LogRepository(SupabaseClientProvider.client).loadAllEntries()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
         }

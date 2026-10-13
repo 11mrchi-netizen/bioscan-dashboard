@@ -1,5 +1,14 @@
 package com.bioscan.fieldterminal
 
+import androidx.compose.runtime.remember
+import io.github.jan.supabase.auth.status.RefreshFailureCause
+import com.bioscan.fieldterminal.ui.theme.FTType
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
@@ -66,6 +75,7 @@ private fun AuthGate() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sessionStatus by SupabaseClientProvider.client.auth.sessionStatus.collectAsState()
+    var signInError by remember { mutableStateOf<String?>(null) }
     val isAuthenticated = sessionStatus is SessionStatus.Authenticated
 
     // Phase G2: auto-sync once per app open, replacing the old manual/
@@ -100,18 +110,30 @@ private fun AuthGate() {
         when (sessionStatus) {
             is SessionStatus.Authenticated -> FieldTerminalNavHost()
             is SessionStatus.NotAuthenticated -> {
-                AmberButton(label = "SIGN IN WITH GOOGLE") {
-                    scope.launch { GoogleAuthManager.signIn(context) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AmberButton(label = "SIGN IN WITH GOOGLE") {
+                        scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
+                    }
+                    signInError?.let { Text("Sign-in failed: $it", style = FTType.Caption, color = FT.Critical) }
                 }
             }
             is SessionStatus.Initializing -> CircularProgressIndicator(color = FT.Emerald)
             is SessionStatus.RefreshFailure -> {
-                // Mirrors the web dashboard's own handling of a dead
-                // refresh token (see ROADMAP.md's Google token-refresh
-                // section) -- treat it as needing a fresh sign-in rather
-                // than silently retrying forever.
-                AmberButton(label = "SESSION EXPIRED — SIGN IN AGAIN") {
-                    scope.launch { GoogleAuthManager.signIn(context) }
+                // supabase-kt keeps retrying the refresh by itself when the cause is the network, so an offline phone
+                // with an expired access token is not a lost session: say so instead of demanding a sign-in. Only a
+                // real auth failure (revoked or dead refresh token, mirrors the web dashboard's own handling) asks to sign in.
+                if ((sessionStatus as SessionStatus.RefreshFailure).cause is RefreshFailureCause.NetworkError) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CircularProgressIndicator(color = FT.Emerald)
+                        Text("Offline. Reconnecting when the network is back.", style = FTType.BodySmall, color = FT.TextSecondary)
+                    }
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AmberButton(label = "SESSION EXPIRED — SIGN IN AGAIN") {
+                            scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
+                        }
+                        signInError?.let { Text("Sign-in failed: $it", style = FTType.Caption, color = FT.Critical) }
+                    }
                 }
             }
         }

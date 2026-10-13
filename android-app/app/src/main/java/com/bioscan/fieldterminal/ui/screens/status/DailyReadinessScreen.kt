@@ -1,5 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.util.Perf
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.parallel
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -89,19 +93,26 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
     // Analysis Layer 3 / Phase 4: "is today typical for you", a quiet drill-down (not part of Today's Recovery).
     var typicality by remember { mutableStateOf<TypicalityResultRow?>(null) }
 
-    LaunchedEffect(Unit) {
-        val repo = AnalysisRepository(SupabaseClientProvider.client)
-        sessions = repo.loadExerciseSessionsForTrainingLoad()
-        wearable = repo.loadWearableDaily()
-        sleep = repo.loadSleepDaily()
-        wellbeing = repo.loadWellbeingDaily()
-        stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays()
-        activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle()
-        cycleLoaded = true
-        nutrition = NutritionRepository(SupabaseClientProvider.client).loadOverview()
-        breakStarts = repo.loadSeriesBreakStarts()
-        relationships = repo.loadRelationships()
-        typicality = repo.loadTypicality()
+    val guard = rememberLoadGuard()
+    LaunchedEffect(guard.attempt) {
+        // Perf pass: the eleven loads are independent, so they run together (was one after another).
+        Perf.timed("DailyReadiness.load") {
+            guard.run {
+                val repo = AnalysisRepository(SupabaseClientProvider.client)
+                parallel(
+                    { sessions = repo.loadExerciseSessionsForTrainingLoad() },
+                    { wearable = repo.loadWearableDaily() },
+                    { sleep = repo.loadSleepDaily() },
+                    { wellbeing = repo.loadWellbeingDaily() },
+                    { stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays() },
+                    { activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle(); cycleLoaded = true },
+                    { nutrition = NutritionRepository(SupabaseClientProvider.client).loadOverview() },
+                    { breakStarts = repo.loadSeriesBreakStarts() },
+                    { relationships = repo.loadRelationships() },
+                    { typicality = repo.loadTypicality() },
+                )
+            }
+        }
     }
 
     val s = sessions
@@ -112,8 +123,12 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
     if (s == null || w == null || sl == null || wb == null || !cycleLoaded || nut == null) {
         Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
             TileHeader(onBack = onBack)
-            Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FT.Emerald)
+            if (guard.error != null) {
+                LoadErrorCard(guard)
+            } else {
+                Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = FT.Emerald)
+                }
             }
         }
         return

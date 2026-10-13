@@ -1,5 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.util.Perf
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.parallel
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -132,30 +136,30 @@ fun HeartTileScreen(onBack: () -> Unit) {
     // Analysis Layer 3 / R1: start of each metric's current regime (last confirmed series break); NONE until loaded.
     var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
 
-    LaunchedEffect(Unit) {
-        val repo = AnalysisRepository(SupabaseClientProvider.client)
-        wearable = repo.loadWearableDaily()
-        sleep = repo.loadSleepDaily()
-        wellbeing = repo.loadWellbeingDaily()
-        // Arousal folded into wellbeing_daily -- see `wellbeing` above.
-        sexualActivity = repo.loadSexualActivityDaily()
-        // DAV-196: first real population artifact (Tudor-Locke & Bassett's
-        // steps/day categories) -- see docs/analysis-layer-2/25-population-benchmark-engine.md.
-        stepsBenchmark = BenchmarkArtifactRepository(SupabaseClientProvider.client).loadArtifacts("steps")
-        // 09.3 Movement Index: reuses the exact same session query the Load
-        // tab's own CTL/ATL/TSB already uses -- no second exercise-session
-        // read path.
-        exerciseSessions = repo.loadExerciseSessionsForTrainingLoad()
-        // 09.6 Circadian Alignment: same "generous margin" limit convention
-        // this app's other 60-90 day lookbacks already use, not the
-        // 10-row default loadRecentMeals() ships with for its usual
-        // "repeat a recent meal" caller.
-        recentMealsForTiming = NutritionRepository(SupabaseClientProvider.client).loadRecentMeals(limit = 200)
-        // 05.1 Stress Rhythm: real payload confirmed 2026-09-30 (extractor
-        // v8) -- decoded client-side from zepp_raw_extracts, see
-        // ZeppStressRepository's own header comment for why no new table.
-        stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays()
-        breakStarts = repo.loadSeriesBreakStarts()
+    val guard = rememberLoadGuard()
+    LaunchedEffect(guard.attempt) {
+        // Perf pass: the nine loads are independent, so they run together (was one after another).
+        Perf.timed("HeartTile.load") {
+            guard.run {
+                val repo = AnalysisRepository(SupabaseClientProvider.client)
+                parallel(
+                    { wearable = repo.loadWearableDaily() },
+                    { sleep = repo.loadSleepDaily() },
+                    { wellbeing = repo.loadWellbeingDaily() },
+                    // Arousal folded into wellbeing_daily -- see `wellbeing` above.
+                    { sexualActivity = repo.loadSexualActivityDaily() },
+                    // DAV-196: first real population artifact (Tudor-Locke & Bassett's steps/day categories).
+                    { stepsBenchmark = BenchmarkArtifactRepository(SupabaseClientProvider.client).loadArtifacts("steps") },
+                    // 09.3 Movement Index: the same session query the Load tab's CTL/ATL/TSB uses.
+                    { exerciseSessions = repo.loadExerciseSessionsForTrainingLoad() },
+                    // 09.6 Circadian Alignment: a 200-meal lookback, not the 10-row default.
+                    { recentMealsForTiming = NutritionRepository(SupabaseClientProvider.client).loadRecentMeals(limit = 200) },
+                    // 05.1 Stress Rhythm: decoded client-side from zepp_raw_extracts (see ZeppStressRepository).
+                    { stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays() },
+                    { breakStarts = repo.loadSeriesBreakStarts() },
+                )
+            }
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
@@ -167,8 +171,12 @@ fun HeartTileScreen(onBack: () -> Unit) {
         val wb = wellbeing
         val sa = sexualActivity
         if (w == null || s == null || wb == null || sa == null) {
-            Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FT.DomainHeart)
+            if (guard.error != null) {
+                LoadErrorCard(guard)
+            } else {
+                Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = FT.DomainHeart)
+                }
             }
             return@Column
         }

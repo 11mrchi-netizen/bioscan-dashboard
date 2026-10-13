@@ -1,5 +1,8 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -292,7 +295,7 @@ fun EntryActionSheet(
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                 if (!deleting) {
                                     deleting = true
-                                    scope.launch {
+                                    scope.launchSafe(onDone = { deleting = false }) {
                                         repo.deleteEntry(entry.source, entry.id)
                                         deleting = false
                                         onDeleted()
@@ -325,7 +328,8 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
     var loaded by remember { mutableStateOf<Any?>(null) }
 
     LaunchedEffect(entry.id) {
-        loaded = when (entry.source) {
+        try {
+            loaded = when (entry.source) {
             LogSource.Meal -> repo.fetchMeal(entry.id)
             LogSource.Hydration -> repo.fetchHydration(entry.id)
             LogSource.Encounter -> repo.fetchEncounter(entry.id)
@@ -338,6 +342,11 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Masturbation -> repo.fetchSexualActivity(entry.id)
             LogSource.Supplement -> repo.fetchSupplementTaken(entry.id)
             LogSource.Sleep -> null // no edit form; EntryActionSheet never offers EDIT for this
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            saveError = "Couldn't load this entry (${describeLoadFailure(e)})"
         }
     }
 
@@ -497,7 +506,7 @@ fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
     var row by remember { mutableStateOf<LogSleepDetailRow?>(null) }
 
     LaunchedEffect(entryId) {
-        row = AddEntryRepository(SupabaseClientProvider.client).fetchSleepDetail(entryId)
+        row = softLoad { AddEntryRepository(SupabaseClientProvider.client).fetchSleepDetail(entryId) }
     }
 
     ModalBottomSheet(
@@ -1234,11 +1243,19 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
     var quantities by remember { mutableStateOf<Map<Long, Int>>(emptyMap()) }
 
     LaunchedEffect(Unit) {
-        val repo = SupplementsRepository(SupabaseClientProvider.client)
-        val active = repo.loadOverview().active
-        supplements = active
-        if (active.any { it.everyNDays != null }) {
-            recentLastTaken = repo.loadRecentTakenDates(active.map { it.id })
+        try {
+            val repo = SupplementsRepository(SupabaseClientProvider.client)
+            val active = repo.loadOverview().active
+            supplements = active
+            if (active.any { it.everyNDays != null }) {
+                recentLastTaken = repo.loadRecentTakenDates(active.map { it.id })
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Offline: show an empty list instead of crashing the sheet.
+            android.util.Log.w("AddEntry", "supplement list load failed", e)
+            if (supplements == null) supplements = emptyList()
         }
     }
 

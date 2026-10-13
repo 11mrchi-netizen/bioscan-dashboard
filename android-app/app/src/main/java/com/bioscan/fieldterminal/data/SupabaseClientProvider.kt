@@ -5,6 +5,7 @@ import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
+import kotlin.time.Duration.Companion.seconds
 import com.bioscan.fieldterminal.util.PerfHttpLog
 
 // Same Supabase project the web dashboard (index.html) already talks to --
@@ -22,6 +23,9 @@ object SupabaseClientProvider {
             supabaseUrl = SUPABASE_URL,
             supabaseKey = SUPABASE_ANON_KEY,
         ) {
+            // The default 10 s covers the whole request, which is too short for a 1,000-row read on a slow link and for the
+            // zepp-extract edge function. A genuinely dead connection still fails (and now shows a RETRY card) within this.
+            requestTimeout = 45.seconds
             install(Auth)
             install(Postgrest)
             install(Functions)

@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -49,8 +51,9 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun AgingProfileScreen(onBack: () -> Unit) {
     var overview by remember { mutableStateOf<AgingProfileOverview?>(null) }
-    LaunchedEffect(Unit) {
-        overview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview()
+    val guard = rememberLoadGuard()
+    LaunchedEffect(guard.attempt) {
+        guard.run { overview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview() }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
@@ -58,6 +61,7 @@ fun AgingProfileScreen(onBack: () -> Unit) {
 
         val current = overview
         when {
+            current == null && guard.error != null -> LoadErrorCard(guard)
             current == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = FT.Emerald)
             }

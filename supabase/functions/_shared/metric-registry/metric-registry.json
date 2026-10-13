@@ -613,6 +613,22 @@
       ],
       "productDefined": true,
       "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "supplement_interactions",
+      "docName": null,
+      "kind": "derived",
+      "methodology": "A lookup against a small, hand-curated registry of supplement and drug pairs, each with a mechanism, an effect, advice, a minimum gap in hours where timing matters, and a primary citation (PubMed ID or DOI, or a product label). A roster item takes part in a pair when its product's ingredient keys match, or when a whole word of its name or ingredient names matches the registry's aliases. Pairs are unordered. Each pair is placed on your roster's time slots (morning 08:00, afternoon 13:00, night 21:00, the clock taken the short way round) and reported as same slot, too close, spaced, applies whenever both are taken, or a missing partner; as-needed items have no slot and are reported as unknown timing. A helpful pairing is shown only when both items share a slot. Entries whose citations nobody has checked yet are labelled \"(unreviewed)\" next to the effect text.",
+      "limitations": [
+        "Not medical advice and not a complete list: only the pairs in the registry are checked, and an absence of a flag does not mean a combination is safe.",
+        "Slots are nominal clock times; the real gap depends on when you actually take each item. Advised gaps marked as a precaution in the entry are not figures from the cited study.",
+        "Doses are not compared (the roster stores free-text doses), so an entry about high total intake, such as long-term zinc without copper, appears whenever the pair is present, whatever the dose.",
+        "A single product that contains both sides of a pair is not flagged against itself.",
+        "Where a prescription medicine is involved, the product label and your prescriber decide; the registry only prompts the question."
+      ],
+      "references": [],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
     }
   ]
 }

@@ -33,6 +33,11 @@ import com.bioscan.fieldterminal.data.SupplementsOverview
 import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.data.EvidenceRepository
+import com.bioscan.fieldterminal.data.InteractionRepository
+import com.bioscan.fieldterminal.domain.DetectedInteraction
+import com.bioscan.fieldterminal.domain.InteractionRecord
+import com.bioscan.fieldterminal.domain.RosterItem
+import com.bioscan.fieldterminal.domain.detectInteractions
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -64,6 +69,11 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     var experiments by remember { mutableStateOf<List<ExperimentRow>>(emptyList()) }
     var experimentResults by remember { mutableStateOf<Map<String, ExperimentResultRow>>(emptyMap()) }
 
+    // Phase 6: curated interaction registry checked against the active roster.
+    var interactionRecords by remember { mutableStateOf<List<InteractionRecord>>(emptyList()) }
+    var rosterItems by remember { mutableStateOf<List<RosterItem>>(emptyList()) }
+    val detections = remember(interactionRecords, rosterItems) { detectInteractions(rosterItems, interactionRecords) }
+
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(reloadKey) {
@@ -75,6 +85,12 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
             // Evidence is enrichment: a failed lookup must not hide the roster.
             outcomes = runCatching { EvidenceRepository(SupabaseClientProvider.client).outcomeTextBySupplement(loaded.active) }
                 .getOrDefault(emptyMap())
+            // Enrichment too: no registry or a failed lookup just hides the card.
+            runCatching {
+                val interactionRepo = InteractionRepository(SupabaseClientProvider.client)
+                interactionRecords = interactionRepo.loadRecords()
+                rosterItems = interactionRepo.rosterItems(loaded.active)
+            }.onFailure { interactionRecords = emptyList(); rosterItems = emptyList() }
             val expRepo = ExperimentsRepository(SupabaseClientProvider.client)
             experiments = expRepo.loadExperiments()
             experimentResults = expRepo.loadResults()
@@ -100,12 +116,15 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
             onExperiment = { experimenting = it },
             experiments = experiments,
             experimentResults = experimentResults,
+            detections = detections,
         )
     }
 
     if (showAddSheet) {
         SupplementFormSheet(
             existing = null,
+            roster = rosterItems,
+            interactions = interactionRecords,
             onDismiss = { showAddSheet = false },
             onSaved = { showAddSheet = false; reloadKey++ },
         )
@@ -121,6 +140,8 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     editing?.let { row ->
         SupplementFormSheet(
             existing = row,
+            roster = rosterItems,
+            interactions = interactionRecords,
             onDismiss = { editing = null },
             onSaved = { editing = null; reloadKey++ },
         )
@@ -137,6 +158,7 @@ private fun SupplementsContent(
     onExperiment: (SupplementRow) -> Unit,
     experiments: List<ExperimentRow>,
     experimentResults: Map<String, ExperimentResultRow>,
+    detections: List<DetectedInteraction>,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
@@ -181,6 +203,8 @@ private fun SupplementsContent(
                 }
             }
         }
+
+        InteractionsSection(detections)
 
         ExperimentsSection(experiments, experimentResults)
 

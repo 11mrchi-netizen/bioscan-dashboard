@@ -14,6 +14,7 @@ A pure TypeScript core in `supabase/functions/_shared/analysis-core/` (erasable 
 | `daily_field_provenance` | Which origin wrote each daily field. Side table because the Health Connect sync upserts each metric separately. History before 2026-10-12 is `unknown`, not backfilled. |
 | `series_break_decisions` | The user's answer for a break candidate: `source_change` (restarts baselines), `real_change`, `ignore`. |
 | `experiments` | A pre-registered supplement N-of-1 plan (supplement, primary and at most three secondary outcomes, design, phases, washout, minimum adherence, the preview shown at registration). Own rows only; a trigger blocks changes to everything except `status`. |
+| `interaction_records` | Curated supplement and drug pairs (mechanism, effect, advice, minimum gap, severity, citation, `review_status`). Read-only for signed-in users; a CHECK refuses `reviewed` without a citation. See `interaction-registry.md`. |
 | `log_agent_runs` | One row per typed message: utterance, raw model entries, proposals, and (after the app saved) `committed_count`. `unique(user_id, client_turn_id)` makes a retry return the stored proposals. Own rows only, written with the caller's JWT. |
 
 ## Status
@@ -27,7 +28,8 @@ A pure TypeScript core in `supabase/functions/_shared/analysis-core/` (erasable 
 | 3 Confirmatory relationships | **Done and live.** Engine, nine-hypothesis catalogue v1.0.0, publisher (`analysis-run` v5, nightly), console Relationship Lab "Confirmatory" tab (committed in the console worktree, **not yet pushed to `main`**) and a read-only PATTERNS card on the Android Daily Readiness page. Details and the backtest below. 440 Android unit tests and 66 Node tests pass. |
 | 4 Personal Normal as typicality | **Engine done and live; gate missed on real data, so it ships as a quiet drill-down.** `typicality.ts` + publisher in `analysis-run` (v7, nightly), tests on synthetic data pass, Android "IS TODAY TYPICAL?" card (read-only, Daily Readiness). It is **not** a Today's Recovery contributor and there is no push prompt, per the plan's fallback. Details below. 445 Android unit tests and 69 Node tests pass. |
 | 5 Supplement N-of-1 experiments | **Done and live; not yet used.** `experiments` table with a trigger that locks the pre-registered protocol, `experiment.ts` + publisher in `analysis-run` (v8, nightly) and an `experiment_preview` action, Android "TEST IT (EXPERIMENT)" on each active supplement (registers the plan and shows what the design could detect first) and an EXPERIMENTS card, console Relationship Lab "Experiments" tab (committed in the console worktree, **not pushed**). No experiment has been registered yet, so nothing has run end to end on a device. Details below. 450 Android unit tests and 95 Node tests pass. |
-| 6, 8–9 | Not started. |
+| 6 Interaction registry | **Done and live; every entry still unreviewed.** `interaction_records` seeded with 11 cited pairs (applied 2026-10-13), pure `detectInteractions` (same slot, too close, spaced, any timing, missing partner, as-needed, helpful pairing), an INTERACTIONS card on the Supplements screen and a live check in the add/edit sheet. The app prints "(unreviewed)" beside every effect until you mark a row reviewed. Citations and what to decide: `interaction-registry.md`. 464 Android unit tests and 95 Node tests pass. |
+| 8–9 | Not started. |
 
 ## Running the tests
 

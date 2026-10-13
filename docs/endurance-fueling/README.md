@@ -52,7 +52,7 @@ A fueling intake event's actual-consumed nutrients (carbs/fluid/sodium/caffeine)
 | 06.3.4 Per-activity summaries and timeline | **Done.** `supabase/functions/_shared/analysis-core/fuelingSummary.ts`, tested in `fuelingSummary.test.ts`. |
 | 06.3.5 Cross-activity pattern analysis | **Deferred, documented only.** See notes -- the codebase's own stated policy argues against writing this now. |
 | 06.3.6 Structured N-of-1 fueling experiments | **Done.** `supabase/functions/_shared/analysis-core/fuelingExperiment.ts`, tested in `fuelingExperiment.test.ts`. One additive metric (`fueling_carb_rate`) added to `experiment.ts`'s `METRIC_INFO`, no regression in the 188-test suite. |
-| 06.3.7 Console + end-to-end validation | Not started. |
+| 06.3.7 Console + end-to-end validation | **Done.** New FUELING tab in the Relationship Lab (`console/src/workspaces/Fueling.tsx`), build-verified; real-data check against live rows from 06.3.3's verification. |
 
 ## 06.3.2 notes
 
@@ -96,10 +96,20 @@ Reuses the Intervention & Protocol Intelligence lifecycle exactly as planned: a 
 
 **Verdict vocabulary** (DAV-385: "return keep / modify / stop / inconclusive... not an automatic medical directive"). `fuelingVerdict` is a thin label over 08.7's existing `proposeProtocolAction` -- `maintain`->keep, `increase`/`decrease`/`pause`->modify, `terminate`->stop, `extend_evaluation`/`reassess`->inconclusive -- and always returns the full underlying proposal (action, rationale, source inputs) alongside the label, so the review surface loses nothing. This satisfies "no duplicated generic experiment lifecycle is created" literally: there is exactly one decision engine, labeled two different ways for two different review contexts.
 
+## 06.3.7 notes
+
+`Fueling.tsx` lists products/recipes (latest version per product) and, for a selected run/hike/ride, its logged intake timeline alongside the computed summary -- read-only, same pattern `Interventions.tsx` (08.9) already established. The summary is **not recalculated client-side**: `Fueling.tsx` imports `summariseFueling` directly from `supabase/functions/_shared/analysis-core/fuelingSummary.ts` across the console/Supabase-functions boundary, the same cross-import `docs/analysis-layer-3/README.md` already documents as supported ("Node 24, Deno and Vite all import it unchanged") but that no console file had actually exercised yet -- confirmed empirically rather than assumed: `tsc -b` resolves it, and the production `vite build`'s `RelationshipLab` chunk grew (19.37kB -> 26.72kB) and visibly bundles `fuelingSummary.ts`'s logic in, not an orphaned file tree-shaken away. This is the single-stable-contract principle (06.3.4) actually holding across languages and build tools, not just within one file.
+
+**Real-data validation** (DAV-386's own acceptance criterion): queried the live `fueling_intake_log` rows created during 06.3.3's verification (`id=2`, status `skipped`; `id=3`, status `planned`) with the exact column list `Fueling.tsx` selects, and hand-checked them against `summariseFueling`'s documented behavior -- both correctly contribute nothing to `actualTotals` (neither is `consumed`/`partial`), only the planned row's `carbsG=25` appears in `plannedTotals`. This confirms the real schema and the real function agree, not just synthetic fixtures.
+
+Verified: `tsc -b` (clean), `oxlint` (same warning class as sibling files, nothing new), production `vite build` (succeeds). **Not verified:** a live, authenticated browser session (same limitation as 08.9's Interventions tab -- no test credentials, no component-test harness in this repo).
+
 ## Still open
 
 - 06.3.5: revisit once there is a concrete, settled outcome variable and a specific comparison to build -- not attempted in this pass, for the reasons above.
-- 06.3.7 onward, in the sequence above -- depends on `fueling_intake_log`/`fuelingSummary.ts`/`fuelingExperiment.ts` existing, nothing on 06.3.1-06.3.4/06.3.6 depends on 06.3.5.
+- Android: no mobile logging UI was attempted for 06.3 (products/recipes, intake logging, N-of-1 registration all need a Compose screen and, per 06.3.1's own note, this environment has no Android SDK to verify any of it). The schema and pure logic are ready for it whenever that's picked up.
+- Wiring `fuelingExperiment.ts` into an I/O layer (a `runFuelingExperiments.ts` publishing `analysis_results`, mirroring `runInterventionResponse.ts`) and deploying it alongside `analysis-run` -- not attempted in this pass, consistent with 08.6/08.7/08.8 leaving their own I/O wiring as follow-up work rather than redeploying the live cron'd function repeatedly within one session.
+- A live, authenticated check of the new FUELING console tab -- build-verified only, same caveat as 08.9.
 - Verification test rows in the live project: `fueling_products` id `1`, its two `fueling_recipe_versions` rows (ids 1-2), and `fueling_intake_log` rows (ids 2-3) -- harmless, left in place (DELETE unavailable this session, same as milestone 08's leftover rows).
 - No offline-queue/outbox infrastructure exists anywhere in the Android app (confirmed by exploration: no Room entities, no outbox table, no connectivity-aware write queue). 06.3.3's "retry without duplicate submissions" should follow the existing `upsert(...).onConflict(naturalKey)` idiom (e.g. `AddEntryRepository.kt`'s `user_id,date` / `health_connect_record_id` keys), not introduce new sync infrastructure.
 - Android implementation (06.3.3 onward) carries the same caveat milestone 08 documented: this environment has no Android SDK, so any Kotlin written here is unverified until built on a real machine.

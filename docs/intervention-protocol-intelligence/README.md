@@ -46,7 +46,7 @@ The Linear issue's entity list, mapped to concrete tables/types:
 | `protocol_interventions` | Join table: which interventions belong to a protocol, in what role/sequence. | 08.3 (done) |
 | `protocol_state_history` | Append-only log of protocol lifecycle transitions, written by a trigger. | 08.3 (done) |
 | `protocol_templates` | Shared, read-only reference: descriptive starting points (sleep optimization, aerobic base, strength, recovery, metabolic health, micronutrient sufficiency), seeded by migration like `benchmark_artifacts`. | 08.3 (done) |
-| `protocol_adjustment_proposals` | Mutable proposal rows from the adaptive-rules engine (`proposed`/`accepted`/`rejected`/`modified`). | 08.7 |
+| `protocol_adjustment_proposals` | Mutable proposal rows from the adaptive-rules engine (`proposed`/`accepted`/`rejected`/`modified`). | 08.7 (done) |
 
 ## Status
 
@@ -58,7 +58,7 @@ The Linear issue's entity list, mapped to concrete tables/types:
 | 08.4 Evidence registry generalization | **Done.** No schema change needed (see notes); matching/ranking in `supabase/functions/_shared/analysis-core/evidenceLink.ts`, tested in `evidenceLink.test.ts`. |
 | 08.5 Generalize the N-of-1 engine | **Done.** Migration `supabase/migrations/20261013_experiments_intervention_id.sql` (applied); `runExperiments.ts` reads/publishes `intervention_id` alongside `supplement_id`. `experiment.ts`/`stats.ts` unchanged. |
 | 08.6 Intervention response analysis (observational) | **Code complete, not deployed.** `interventionResponse.ts` (pure) + `runInterventionResponse.ts` (I/O), wired into `analysis-run/index.ts`'s source but the Edge Function has not been redeployed (see notes). |
-| 08.7 Adaptive protocol rules | Not started. |
+| 08.7 Adaptive protocol rules | **Done.** `protocolRules.ts` (pure, tested in `protocolRules.test.ts`) + `protocol_adjustment_proposals` migration (applied). Nothing calls it yet -- no I/O wiring into `analysis-run` in this pass (see notes). |
 | 08.8 Protocol audit | Not started. |
 | 08.9 UI (Console + Android) | Not started. |
 | 08.10 Validation | Not started. |
@@ -103,10 +103,20 @@ The small statistical helpers (`lagOneRho`, `effN`, `groupStats`, `signedText`) 
 
 `runInterventionResponse.ts` only analyses outcomes from `interventions.intended_outcomes` that happen to name one of the eight `MetricId`s the shared daily frame actually carries (same vocabulary gap noted in 08.5) -- an intervention naming an outcome the frame can't measure yet (e.g. `vo2max`) is silently skipped for this kind, not an error. It's wired into `analysis-run/index.ts`'s source (a new `intervention_response` result alongside the existing ones) but **the Edge Function has not been redeployed** -- unlike the database migrations in 08.2/08.3/08.5, redeploying a live, cron'd production function is a separate, higher-blast-radius action (the nightly job is the only thing hitting it for the one real account on this project) and is left as an explicit next step rather than done silently in the same pass as everything else.
 
+## 08.7 notes
+
+`proposeProtocolAction` is a deterministic, ordered rule set, not a model: the first matching rule wins, every branch is a named, commented reason, and every proposal echoes the exact `sourceInputs` that produced it -- there is no weighted score anywhere underneath, per DAV-337's "without becoming an opaque recommendation engine". It treats 08.5's pre-registered vocabulary (`effect_detected`/`no_detectable_effect`) and 08.6's observational one (`signal_observed`/`no_signal`) as equivalent for deciding an *action*, since they differ in how strong a causal claim the evidence supports, not in what should happen next.
+
+`protocol_adjustment_proposals` is deliberately its own table rather than another `analysis_results` kind: a proposal's `status` must be writable by the owning user (accepting/rejecting/modifying is the entire point), whereas `analysis_results` has no user-write policies at all. Its engine-produced columns (`action`/`rationale`/`source_inputs`/`engine_version`/`protocol_id`/`intervention_id`) are locked by `protocol_adjustment_proposals_lock_output` the same way `experiments_lock_protocol` locks a pre-registered protocol -- verified live: a `status`/`decided_at` update succeeds, a direct `action` rewrite is rejected.
+
+Nothing calls `proposeProtocolAction` yet and nothing writes to `protocol_adjustment_proposals` outside this verification -- wiring it into `analysis-run` (reading the latest `experiment`/`intervention_response`/`relationship` rows, an intervention's `burden_cost_risk`, and `evidenceForIntervention`'s strongest tier per outcome to build `ProtocolRuleInputs`) is follow-up work, tracked below rather than done in this pass given how much of 08.6's I/O-wiring risk discussion already applies here too.
+
 ## Still open
+
+- Wire `proposeProtocolAction` into an I/O layer (own `runProtocolRules.ts`, mirroring `runExperiments.ts`/`runInterventionResponse.ts`) that builds `ProtocolRuleInputs` from the latest relevant `analysis_results` rows and an intervention/protocol's own columns, and writes new `protocol_adjustment_proposals` rows -- not done in this pass (08.7 notes).
 
 - Deploy `analysis-run` with `runInterventionResponse.ts` included (via `mcp__Supabase__deploy_edge_function` or the CLI, entrypoint `index.ts` plus every file under `_shared/analysis-core/` it imports, same as `docs/analysis-layer-3/README.md`'s "Deploying `analysis-run`" section) -- not done in this pass, see 08.6 notes.
 
-- 08.7 onward, in the sequence listed above -- each depends on `interventions`/`protocols`/`experiments.intervention_id` existing, nothing on 08.2-08.6 depends on them.
+- 08.8 onward, in the sequence listed above -- each depends on `interventions`/`protocols`/`experiments.intervention_id` existing, nothing on 08.2-08.7 depends on them.
 - Future, separate from this milestone's scope: widening the daily frame (`buildFrame`/`RawInputs`) to carry more outcome series (`vo2max`, `training_load`, `body_weight`, ...) so experiments and relationships can use them -- tracked here, not attempted in 08.5.
-- Three verification test rows could not be deleted via the MCP SQL tool: `interventions` id `4bf314fd-faaf-457a-9ed7-5f07f706b806`, `protocols` id `bae02e05-d807-4380-a574-e8eed14fe313` (cascades to one `protocol_interventions` row), and `experiments` id `d175027b-fc0e-48e7-94da-41dda537ec01`. Every DELETE attempted on this project this session timed out regardless of table, with no lock contention found server-side (`pg_locks`/`pg_stat_activity` both clean) -- looks like a session-level issue with the tool's handling of destructive statements, not a data problem. All three are clearly named "verification test row" / "(verification test row)" and are harmless to leave; delete them from the Supabase dashboard or retry the MCP tool in a fresh session.
+- Four verification test rows could not be deleted via the MCP SQL tool: `interventions` id `4bf314fd-faaf-457a-9ed7-5f07f706b806`, `protocols` id `bae02e05-d807-4380-a574-e8eed14fe313` (cascades to one `protocol_interventions` row), `experiments` id `d175027b-fc0e-48e7-94da-41dda537ec01`, and `protocol_adjustment_proposals` id `791c6ce1-1434-4434-b405-13176b04b4f4`. Every DELETE attempted on this project this session timed out regardless of table, with no lock contention found server-side (`pg_locks`/`pg_stat_activity` both clean) -- looks like a session-level issue with the tool's handling of destructive statements, not a data problem. All four are clearly named "verification test row" / "(verification test row)" and are harmless to leave; delete them from the Supabase dashboard or retry the MCP tool in a fresh session.

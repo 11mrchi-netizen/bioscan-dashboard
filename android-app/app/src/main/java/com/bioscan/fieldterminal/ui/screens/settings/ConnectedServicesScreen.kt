@@ -360,6 +360,73 @@ private fun ZeppCard(scope: CoroutineScope) {
                 }
             }
         }
+        AmberButton(label = if (probing) "CHECKING…" else "BULK SCHEDULE TEST (KEEPS ENTRIES)") {
+            if (!probing) {
+                scope.launch {
+                    probing = true
+                    // 3 templates + 13 calendar entries over 4 weeks and January, left in place to look at in Zepp.
+                    probeResult = zeppRepository.probeTrainingApi("bulk_test")
+                    probing = false
+                }
+            }
+        }
+        AmberButton(label = if (probing) "CHECKING…" else "STRUCTURE VARIANTS TEST") {
+            if (!probing) {
+                scope.launch {
+                    probing = true
+                    // The same session written 3 ways, scheduled for tomorrow; BULK CLEANUP removes them.
+                    probeResult = zeppRepository.probeTrainingApi("variant_test")
+                    probing = false
+                }
+            }
+        }
+        AmberButton(label = if (probing) "CHECKING…" else "ICAL FORMAT TEST") {
+            if (!probing) {
+                scope.launch {
+                    probing = true
+                    // Two calendar entries for tomorrow, written the way the Zepp app writes its own.
+                    probeResult = zeppRepository.probeTrainingApi("ical_test")
+                    probing = false
+                }
+            }
+        }
+        AmberButton(label = if (probing) "SENDING…" else "SEND NEXT 7 DAYS TO ZEPP") {
+            if (!probing) {
+                scope.launch {
+                    probing = true
+                    probeResult = zeppRepository.pushUpcoming()
+                    probing = false
+                }
+            }
+        }
+        AmberButton(label = if (probing) "CHECKING…" else "REFERENCE ICAL TEST") {
+            if (!probing) {
+                scope.launch {
+                    probing = true
+                    // Three entries for tomorrow afternoon, copying the app's local-id iCalendar lines.
+                    probeResult = zeppRepository.probeTrainingApi("ref_test")
+                    probing = false
+                }
+            }
+        }
+        AmberButton(label = if (probing) "CHECKING…" else "CALENDAR DUMP") {
+            if (!probing) {
+                scope.launch {
+                    probing = true
+                    probeResult = zeppRepository.probeTrainingApi("calendar_dump")
+                    probing = false
+                }
+            }
+        }
+        AmberButton(label = if (probing) "CHECKING…" else "BULK CLEANUP") {
+            if (!probing) {
+                scope.launch {
+                    probing = true
+                    probeResult = zeppRepository.probeTrainingApi("bulk_cleanup")
+                    probing = false
+                }
+            }
+        }
         probeResult?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
     }
 }

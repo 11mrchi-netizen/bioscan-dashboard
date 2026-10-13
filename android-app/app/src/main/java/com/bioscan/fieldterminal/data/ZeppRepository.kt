@@ -3,6 +3,8 @@ package com.bioscan.fieldterminal.data
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -10,6 +12,21 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import com.bioscan.fieldterminal.domain.training.movementKey
+import com.bioscan.fieldterminal.domain.training.parsePlannedLifts
+import com.bioscan.fieldterminal.domain.training.warmupSets
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import java.time.LocalDate
 
 // Zepp integration plan (docs/zepp-integration/). First real client-side call
@@ -24,6 +41,17 @@ data class ZeppSyncStateRow(
     @SerialName("last_synced_at") val lastSyncedAt: String? = null,
     @SerialName("last_error") val lastError: String? = null,
     @SerialName("last_error_at") val lastErrorAt: String? = null,
+)
+
+@Serializable
+private data class ZeppPlannedRow(
+    val id: Long,
+    val title: String,
+    @SerialName("scheduled_date") val scheduledDate: String,
+    @SerialName("week_index") val weekIndex: Int = 0,
+    val prescription: JsonElement? = null,
+    @SerialName("zepp_template_id") val zeppTemplateId: String? = null,
+    @SerialName("zepp_pushed_hash") val zeppPushedHash: String? = null,
 )
 
 sealed class ZeppSyncResult {
@@ -73,6 +101,96 @@ class ZeppRepository(private val supabase: SupabaseClient) {
     } catch (e: Exception) {
         e.message ?: "unknown error"
     }
+
+    // Block -> Zepp. Every strength session planned in the next `days` days becomes a custom workout in the
+    // Zepp cloud (sets, reps, loads and warm-ups from the frozen prescription); the phone pulls templates by
+    // itself, calendar entries it does not, so the day lives in the template's name and in this app.
+    // An unchanged session is not pushed again (hash); a changed one replaces its old template; templates of
+    // days already past are removed so the watch list stays short.
+    suspend fun pushUpcoming(days: Long = 7): String { return try {
+        val today = LocalDate.now()
+        val table = supabase.postgrest.from("planned_sessions")
+        val cols = Columns.list("id,title,scheduled_date,week_index,prescription,zepp_template_id,zepp_pushed_hash")
+        val upcoming = table.select(columns = cols) {
+            filter { gte("scheduled_date", today.toString()); lte("scheduled_date", today.plusDays(days).toString()) }
+            order("scheduled_date", Order.ASCENDING)
+        }.decodeList<ZeppPlannedRow>()
+        val past = table.select(columns = cols) {
+            filter { lt("scheduled_date", today.toString()); neq("zepp_template_id", "") }
+        }.decodeList<ZeppPlannedRow>()
+
+        val deleteIds = past.mapNotNull { it.zeppTemplateId }.toMutableList()
+        val specs = mutableMapOf<Long, Pair<String, JsonObject>>() // planned id -> (hash, template json)
+        for (row in upcoming) {
+            val lifts = parsePlannedLifts(row.prescription)
+            if (lifts.isEmpty()) continue
+            val spec = buildJsonObject {
+                put("key", row.id.toString())
+                put("title", "${row.scheduledDate.substring(5)} W${row.weekIndex} ${row.title}".take(60))
+                put("description", "planned session ${row.id}")
+                putJsonArray("lifts") {
+                    for (p in lifts) add(buildJsonObject {
+                        val kg = p.targetKg ?: 0.0
+                        put("movement", movementKey(p.exercise))
+                        put("sets", p.sets?.max?.toInt() ?: 1)
+                        put("reps", p.reps?.min?.toInt() ?: 1)
+                        put("kg", kg)
+                        putJsonArray("warmups") {
+                            val ramp = when (p.loadKind) {
+                                "pct_1rm", "fixed" -> warmupSets(kg)
+                                "added" -> warmupSets(kg, bodyweight = true)
+                                else -> emptyList()
+                            }
+                            for ((r, w) in ramp) add(buildJsonArray { add(JsonPrimitive(r)); add(JsonPrimitive(w)) })
+                        }
+                    })
+                }
+            }
+            val hash = spec.toString().hashCode().toString()
+            if (row.zeppTemplateId != null && row.zeppPushedHash == hash) continue
+            row.zeppTemplateId?.let { deleteIds += it }
+            specs[row.id] = hash to spec
+        }
+        if (specs.isEmpty() && deleteIds.isEmpty()) return "Zepp templates up to date"
+
+        val response = supabase.functions.invoke(function = "zepp-training") {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("action", "push_templates")
+                putJsonArray("templates") { specs.values.forEach { add(it.second) } }
+                putJsonArray("deleteIds") { deleteIds.forEach { add(JsonPrimitive(it)) } }
+            }.toString())
+        }
+        if (!response.status.isSuccess()) return "Zepp push failed: HTTP ${response.status.value}"
+        val answer = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        val now = java.time.Instant.now().toString()
+        for (c in answer["created"]?.jsonArray.orEmpty()) {
+            val key = c.jsonObject["key"]!!.jsonPrimitive.content.toLong()
+            table.update({
+                set("zepp_template_id", c.jsonObject["id"]!!.jsonPrimitive.content)
+                set("zepp_pushed_hash", specs[key]!!.first)
+                set("zepp_pushed_at", now)
+            }) { filter { eq("id", key) } }
+        }
+        // Sessions whose old template was deleted but whose new one failed would keep a dead id: clear it.
+        val createdKeys = answer["created"]?.jsonArray.orEmpty().map { it.jsonObject["key"]!!.jsonPrimitive.content.toLong() }.toSet()
+        val cleared = upcoming.filter { it.zeppTemplateId != null && it.id in specs && it.id !in createdKeys } + past
+        for (row in cleared) {
+            table.update({
+                set("zepp_template_id", null as String?)
+                set("zepp_pushed_hash", null as String?)
+            }) { filter { eq("id", row.id) } }
+        }
+        val unmapped = answer["unmapped"]?.jsonArray.orEmpty().map { it.jsonObject["movement"]!!.jsonPrimitive.content }.distinct()
+        val failed = answer["failed"]?.jsonArray?.size ?: 0
+        buildString {
+            append("Zepp: ${createdKeys.size} template(s) sent, ${answer["deleted"]?.jsonPrimitive?.content ?: "0"} removed")
+            if (failed > 0) append(", $failed failed")
+            if (unmapped.isNotEmpty()) append(". No Zepp exercise for: ${unmapped.joinToString()}")
+        }
+    } catch (e: Exception) {
+        "Zepp push failed: ${e.message ?: "unknown error"}"
+    } }
 
     suspend fun getSyncStatus(): ZeppSyncStateRow? =
         supabase.postgrest.from("zepp_sync_state")

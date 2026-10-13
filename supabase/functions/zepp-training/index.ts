@@ -10,7 +10,8 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { EXERCISES, liftBlock, strengthTemplate } from "./template.ts";
+import { BY_MOVEMENT, type BlockOptions, EXERCISES, liftBlock, strengthTemplate } from "./template.ts";
+import { addDays, calendarEntry, dayWindowMs } from "./calendar.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,7 +25,7 @@ function json(body: unknown, status: number) {
   });
 }
 
-const PROBE_VERSION = "t12";
+const PROBE_VERSION = "t18";
 const MAX_STORED_CHARS = 200_000;
 // Read-only: nothing outside these prefixes is ever requested.
 const ALLOWED = [/^\/users\/training\//, /^\/v1\/sport\/shareTrainingTemplate/];
@@ -255,6 +256,214 @@ Deno.serve(async (req: Request) => {
       } finally {
         if (tplId) await record("tpl delete", `DELETE /users/training/templates/${tplId}`, await callZepp("DELETE", `/users/training/templates/${tplId}`));
       }
+      return json({ results }, 200);
+    }
+
+    if (body?.action === "bulk_test") {
+      // Three templates and 13 calendar entries (4 weeks of Mon/Wed/Fri from 2026-10-12, plus one in January),
+      // all titled "ZZ BULK ...". Nothing is deleted: the entries are meant to be looked at in the Zepp app.
+      // action "bulk_cleanup" removes them.
+      const cal = `/users/${zeppUserId}/training/calendar`;
+      const plans: Array<{ sets: number; reps: number; loads: [number, number, number] }> = [
+        { sets: 3, reps: 5, loads: [42.5, 62.5, 20] },
+        { sets: 3, reps: 8, loads: [35, 50, 15] },
+        { sets: 4, reps: 3, loads: [47.5, 70, 25] },
+      ];
+      const tplIds: string[] = [];
+      for (let i = 0; i < plans.length; i++) {
+        const p = plans[i];
+        const t = strengthTemplate(`ZZ BULK Day ${i + 1}`, "bulk schedule test, delete me", [
+          ...liftBlock(EXERCISES.standing_barbell_press, p.sets, p.reps, p.loads[0], [[10, 20]]),
+          ...liftBlock(EXERCISES.barbell_front_squat, p.sets, p.reps, p.loads[1], [[10, 20]]),
+          ...liftBlock(EXERCISES.pull_up, p.sets, p.reps, p.loads[2], [[10, 0]]),
+        ]);
+        const r = await callZepp("PUT", "/users/training/templates", createBodyFor(t, t.title));
+        await record(`bulk tpl ${i + 1}`, "PUT /users/training/templates", r);
+        try { tplIds.push(String(JSON.parse(r.text)?.id ?? "")); } catch { tplIds.push(""); }
+      }
+      if (tplIds.some((x) => !x)) return json({ results, error: "template creation failed" }, 200);
+
+      const days: Array<[string, number]> = [];
+      for (let wk = 0; wk < 4; wk++) for (const [off, di] of [[0, 0], [2, 1], [4, 2]] as Array<[number, number]>) days.push([addDays("2026-10-12", wk * 7 + off), di]);
+      days.push(["2027-01-11", 0]);
+      const entryIds: string[] = [];
+      const failures: Array<Record<string, unknown>> = [];
+      for (let i = 0; i < days.length; i++) {
+        const [date, di] = days[i];
+        const wk = Math.floor(i / 3) + 1;
+        const title = i === days.length - 1 ? "ZZ BULK Jan Day 1" : `ZZ BULK W${wk} D${di + 1}`;
+        const r = await callZepp("PUT", cal, calendarEntry(title, "bulk schedule test, delete me", tplIds[di], date, 7, 60));
+        try {
+          const id = JSON.parse(r.text)?.data?.id;
+          if (r.status === 200 && id) entryIds.push(String(id)); else failures.push({ title, date, status: r.status, text: r.text.slice(0, 200) });
+        } catch { failures.push({ title, date, status: r.status, text: r.text.slice(0, 200) }); }
+      }
+      await record("bulk summary", "bulk_test", { status: failures.length === 0 ? 200 : 207, text: JSON.stringify({ templates: tplIds, entriesCreated: entryIds.length, entryIds, failures }) });
+      const [from, to] = dayWindowMs("2026-10-11", "2027-01-31");
+      let total = 0;
+      let next = "";
+      for (let page = 0; page < 5; page++) {
+        const q = `${cal}?startTime=${from}&endTime=${to}&limit=100${next ? `&next=${next}` : ""}`;
+        const l = await callZepp("GET", q);
+        try {
+          const j = JSON.parse(l.text);
+          total += (j?.data?.items ?? []).filter((e: { title?: string }) => (e.title ?? "").startsWith("ZZ BULK")).length;
+          next = j?.data?.next ?? "";
+        } catch { next = ""; }
+        if (page === 0) await record("bulk list", q, l);
+        if (!next) break;
+      }
+      await record("bulk listed count", "bulk_test", { status: 200, text: JSON.stringify({ listedZzBulk: total }) });
+      return json({ results }, 200);
+    }
+
+    if (body?.action === "variant_test") {
+      // Same 3x5 session written three ways, scheduled for 2026-10-10 at 07:00 / 08:00 / 09:00, to see which
+      // structure the Zepp app and watch show in full. Titles start "ZZ VAR"; bulk_cleanup removes them.
+      const cal = `/users/${zeppUserId}/training/calendar`;
+      const variants: Array<[string, BlockOptions]> = [
+        ["ZZ VAR A flat", { flat: true }],
+        ["ZZ VAR B timed rest", { restSec: 90 }],
+        ["ZZ VAR C warmup as training", { warmupAsTraining: true }],
+      ];
+      for (let i = 0; i < variants.length; i++) {
+        const [title, o] = variants[i];
+        const t = strengthTemplate(title, "structure variant test, delete me", [
+          ...liftBlock(EXERCISES.standing_barbell_press, 3, 5, 42.5, [[10, 20]], o),
+          ...liftBlock(EXERCISES.barbell_front_squat, 3, 5, 62.5, [[10, 20]], o),
+          ...liftBlock(EXERCISES.pull_up, 3, 5, 20, [[10, 0]], o),
+        ]);
+        const made = await callZepp("PUT", "/users/training/templates", createBodyFor(t, title));
+        await record(`variant tpl ${i + 1}`, "PUT /users/training/templates", made);
+        let id = "";
+        try { id = String(JSON.parse(made.text)?.id ?? ""); } catch { /* empty */ }
+        if (!id) continue;
+        const r = await callZepp("PUT", cal, calendarEntry(title, "structure variant test, delete me", id, "2026-10-10", 7 + i, 60));
+        await record(`variant entry ${i + 1}`, `PUT ${cal}`, r);
+      }
+      return json({ results }, 200);
+    }
+
+    if (body?.action === "ical_test") {
+      // The app showed none of the bulk/variant entries (built with CRLF and a random UID) but shows its own.
+      // Two entries on 2026-10-10 for the template "ZZ VAR A flat": A copies the app's iCalendar text exactly
+      // (LF, empty UID), B is LF with a random UID. Titles start "ZZ LF"; bulk_cleanup removes them.
+      const cal = `/users/${zeppUserId}/training/calendar`;
+      const tl = await callZepp("GET", "/users/training/templates");
+      let tplId = "";
+      try { tplId = String((JSON.parse(tl.text)?.items ?? []).find((t: { title?: string }) => t.title === "ZZ VAR A flat")?.id ?? ""); } catch { /* none */ }
+      await record("ical template", "/users/training/templates", { status: tl.status, text: JSON.stringify({ tplId }) });
+      if (!tplId) return json({ results, error: "template ZZ VAR A flat not found" }, 200);
+      const styles: Array<[string, { crlf?: boolean; uid?: string }, number]> = [
+        ["ZZ LF A app-exact", {}, 10],
+        ["ZZ LF B random uid", { uid: crypto.randomUUID() }, 11],
+      ];
+      for (const [title, style, hour] of styles) {
+        const r = await callZepp("PUT", cal, calendarEntry(title, "ical format test, delete me", tplId, "2026-10-10", hour, 60, style));
+        await record(`ical ${title}`, `PUT ${cal}`, r);
+      }
+      return json({ results }, 200);
+    }
+
+    if (body?.action === "ref_test") {
+      // The dump showed the app's own entry carries UID = X-TRAINING-LOCAL-ID and an X-TRAINING-TEMPLATE-LOCAL-ID,
+      // and points at a template the phone itself made. Three entries on 2026-10-10 tell which part matters:
+      // A = our plain text on the app-made "Fighter" template, B = A plus the app's local-id lines,
+      // C = B on a cloud-made template ("ZZ VAR A flat"). Titles start "ZZ LF"; bulk_cleanup removes them.
+      const cal = `/users/${zeppUserId}/training/calendar`;
+      const tl = await callZepp("GET", "/users/training/templates");
+      let items: Array<{ id?: unknown; title?: string }> = [];
+      try { items = JSON.parse(tl.text)?.items ?? []; } catch { /* none */ }
+      await record("ref templates", "/users/training/templates", { status: tl.status, text: JSON.stringify(items.map((t) => ({ id: t.id, title: t.title }))) });
+      const idOf = (title: string) => String(items.find((t) => t.title === title)?.id ?? "");
+      const fighter = idOf("Fighter"), zz = idOf("ZZ VAR A flat");
+      const mk = () => crypto.randomUUID();
+      const plan: Array<[string, string, number, { uid?: string; localId?: string; tplLocalId?: string }]> = [];
+      if (fighter) {
+        plan.push(["ZZ LF REF A plain", fighter, 16, {}]);
+        const u = mk();
+        plan.push(["ZZ LF REF B local ids", fighter, 17, { uid: u, localId: u, tplLocalId: "1791522934626649" }]);
+      }
+      if (zz) {
+        const u = mk();
+        plan.push(["ZZ LF REF C cloud template", zz, 18, { uid: u, localId: u, tplLocalId: String(Date.now() * 1000 + 123) }]);
+      }
+      for (const [title, tid, hour, style] of plan) {
+        const r = await callZepp("PUT", cal, calendarEntry(title, "", tid, "2026-10-10", hour, 60, style));
+        await record(`ref ${title}`, `PUT ${cal}`, r);
+      }
+      return json({ results }, 200);
+    }
+
+    if (body?.action === "push_templates") {
+      // The app's block -> Zepp push. body.templates = [{ key, title, description, lifts: [{ movement, sets, reps,
+      // kg, warmups: [[reps, kg], ...] }] }]; body.deleteIds = old template ids to remove (replaced or past).
+      // Each template is created in the cloud (the phone pulls templates on its own, calendar entries it does not),
+      // and the answer maps each key to the new id. Lifts with no Zepp exercise are skipped and reported.
+      const created: Array<{ key: string; id: string }> = [];
+      const unmapped: Array<{ key: string; movement: string }> = [];
+      const failed: Array<{ key: string; status: number; text: string }> = [];
+      for (const t of Array.isArray(body.templates) ? body.templates : []) {
+        const children: Parameters<typeof strengthTemplate>[2] = [];
+        for (const l of Array.isArray(t.lifts) ? t.lifts : []) {
+          const ex = BY_MOVEMENT[String(l.movement)];
+          if (!ex) { unmapped.push({ key: String(t.key), movement: String(l.movement) }); continue; }
+          const warmups = (Array.isArray(l.warmups) ? l.warmups : []).map((w: number[]) => [Number(w[0]), Number(w[1])] as [number, number]);
+          children.push(...liftBlock(ex, Number(l.sets) || 1, Number(l.reps) || 1, Number(l.kg) || 0, warmups, { flat: false }));
+        }
+        if (children.length === 0) continue;
+        const r = await callZepp("PUT", "/users/training/templates", createBodyFor(strengthTemplate(String(t.title), String(t.description ?? ""), children), String(t.title)));
+        let id = "";
+        try { id = String(JSON.parse(r.text)?.id ?? ""); } catch { /* none */ }
+        if (r.status === 200 && id) created.push({ key: String(t.key), id }); else failed.push({ key: String(t.key), status: r.status, text: r.text.slice(0, 200) });
+      }
+      let deleted = 0;
+      for (const id of Array.isArray(body.deleteIds) ? body.deleteIds : []) {
+        if (!/^\d{10,20}$/.test(String(id))) continue;
+        if ((await callZepp("DELETE", `/users/training/templates/${id}`)).status === 200) deleted++;
+      }
+      await record("push templates", "push_templates", { status: failed.length ? 207 : 200, text: JSON.stringify({ created: created.length, deleted, unmapped, failed }) });
+      return json({ created, unmapped, failed, deleted }, 200);
+    }
+
+    if (body?.action === "calendar_dump") {
+      // Raw calendar entries for 2026-10-09 .. 2026-10-13, to compare entries made in the Zepp app with ours.
+      const cal = `/users/${zeppUserId}/training/calendar`;
+      const [from, to] = dayWindowMs("2026-10-09", "2026-10-13");
+      const q = `${cal}?startTime=${from}&endTime=${to}&limit=100`;
+      const l = await callZepp("GET", q);
+      await record("calendar dump", q, l);
+      return json({ results }, 200);
+    }
+
+    if (body?.action === "bulk_cleanup") {
+      const cal = `/users/${zeppUserId}/training/calendar`;
+      const [from, to] = dayWindowMs("2026-01-01", "2027-12-31");
+      const found: string[] = [];
+      let next = "";
+      for (let page = 0; page < 10; page++) {
+        const q = `${cal}?startTime=${from}&endTime=${to}&limit=100${next ? `&next=${next}` : ""}`;
+        const l = await callZepp("GET", q);
+        try {
+          const j = JSON.parse(l.text);
+          for (const e of j?.data?.items ?? []) if (/^ZZ (BULK|VAR|LF)/.test(e.title ?? "")) found.push(String(e.id));
+          next = j?.data?.next ?? "";
+        } catch { next = ""; }
+        if (!next) break;
+      }
+      let deleted = 0;
+      for (const id of found) {
+        const d = await callZepp("DELETE", `${cal}/${id}`);
+        if (d.status === 200) deleted++;
+      }
+      const tl = await callZepp("GET", "/users/training/templates");
+      let tplDeleted = 0;
+      try {
+        for (const t of JSON.parse(tl.text)?.items ?? []) {
+          if (/^ZZ (BULK|VAR|LF)/.test(String(t.title ?? "")) && (await callZepp("DELETE", `/users/training/templates/${t.id}`)).status === 200) tplDeleted++;
+        }
+      } catch { /* none */ }
+      await record("bulk cleanup", "bulk_cleanup", { status: 200, text: JSON.stringify({ entriesFound: found.length, entriesDeleted: deleted, templatesDeleted: tplDeleted }) });
       return json({ results }, 200);
     }
 

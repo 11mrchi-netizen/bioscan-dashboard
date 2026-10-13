@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.domain
 import com.bioscan.fieldterminal.data.model.ExerciseLibraryRow
 import com.bioscan.fieldterminal.data.model.StrengthExerciseDto
 import com.bioscan.fieldterminal.data.model.StrengthSetDto
+import com.bioscan.fieldterminal.domain.training.movementKey
 
 // DAV-57 (Analysis Layer 2, milestone 2). Strength-specific load
 // calculations from DAV-54's structured `details.exercises[].sets[]` shape.
@@ -20,8 +21,12 @@ import com.bioscan.fieldterminal.data.model.StrengthSetDto
 // Pull Ups", "Standing Military Press"), so exact match is the honest
 // default; a name with no exact match resolves to no regional/
 // movement-pattern data rather than a guessed fuzzy one.
+// Names from the Zepp exercise catalog ("Standing Barbell Press", "Barbell Front Squat", "Pull Up") are
+// not the library's spellings, so after the exact match the same movement key that folds max names
+// is tried. An exact match always wins; two library rows sharing a key are muscle-equivalent.
 fun resolveExercise(name: String, library: List<ExerciseLibraryRow>): ExerciseLibraryRow? =
     library.find { it.name.equals(name, ignoreCase = true) }
+        ?: movementKey(name).takeIf { it.isNotEmpty() }?.let { key -> library.find { movementKey(it.name) == key } }
 
 // Standard tonnage -- reps x load. The one universally-agreed strength
 // volume metric; every other output here builds on it.

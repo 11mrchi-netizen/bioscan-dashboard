@@ -5,7 +5,7 @@ import { LoadBanner } from '../components/shared/LoadBanner'
 import { useLoadEffect } from '../lib/useLoadEffect'
 import { useState } from 'react'
 import { useRange, useSelectedDate, useSetSelectedDate, useClearInspection } from '../lib/analysisStore'
-import { fetchMetric, METRICS, type MetricResult } from '../lib/metricAdapter'
+import { fetchMetrics, METRICS, type MetricResult } from '../lib/metricAdapter'
 import { CHART_SPECS } from '../lib/chartSpec'
 import { FTChart } from '../components/shared/FTChart'
 import './Overview.css'
@@ -28,13 +28,9 @@ export function Overview() {
 
   // Old results stay on screen while a new range loads; a failure shows a banner with RETRY.
   const { loading, error, retry } = useLoadEffect(async (isCurrent) => {
-    const entries = await Promise.all(
-      OVERVIEW_METRICS.map(m =>
-        fetchMetric({ ...m, range, aggregation: 'daily_avg' })
-          .then(r => [r.metricId, r] as const)
-      )
-    )
-    if (isCurrent()) setResults(Object.fromEntries(entries))
+    // Perf pass: metrics in the same table share one query (6 requests -> 4).
+    const fetched = await fetchMetrics(OVERVIEW_METRICS.map(m => ({ ...m, range, aggregation: 'daily_avg' as const })))
+    if (isCurrent()) setResults(Object.fromEntries(fetched.map(r => [r.metricId, r] as const)))
   }, [range])
 
   if (loading) return <div className="state-loading mono">LOADING OVERVIEW…</div>

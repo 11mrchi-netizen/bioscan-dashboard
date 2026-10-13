@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRange } from '../lib/analysisStore'
 import { warnOnError } from '../lib/schema'
-import { fetchMetric, METRICS } from '../lib/metricAdapter'
+import { fetchMetrics, METRICS } from '../lib/metricAdapter'
 import { CHART_SPECS } from '../lib/chartSpec'
 import { FTChart } from '../components/shared/FTChart'
 import type { MetricResult } from '../lib/metricAdapter'
@@ -36,22 +36,16 @@ export function Recovery() {
 
   const { loading, error, retry } = useLoadEffect(async (isCurrent) => {
     const { start, end } = range
-    const [metricEntries, bodyEntry, injuryData] = await Promise.all([
-      Promise.all(
-        RECOVERY_METRICS.map(m =>
-          fetchMetric({ ...m, range, aggregation: 'daily_avg' })
-            .then(r => [r.metricId, r] as const)
-        )
-      ),
-      fetchMetric({ table: 'body_metrics', column: 'weight_kg', range, aggregation: 'daily_avg' })
-        .then(r => [r.metricId, r] as const),
+    // Perf pass: the recovery series and the weight overlay go out together; same-table metrics share one query.
+    const [fetched, injuryData] = await Promise.all([
+      fetchMetrics([...RECOVERY_METRICS, { table: 'body_metrics', column: 'weight_kg' }].map(m => ({ ...m, range, aggregation: 'daily_avg' as const }))),
       supabase.from('injuries')
         .select('start_date, end_date, part')
         .lte('start_date', end).or(`end_date.gte.${start},end_date.is.null`)
         .then(({ data, error: injuryError }) => { warnOnError('recovery injuries', injuryError); return data ?? [] }),
     ])
     if (!isCurrent()) return
-    setResults(Object.fromEntries([...metricEntries, [bodyEntry[0], bodyEntry[1]]]))
+    setResults(Object.fromEntries(fetched.map(r => [r.metricId, r] as const)))
     setInjuries((injuryData as unknown as { start_date: string; end_date: string | null; part: string | null }[])
       .map(i => ({ start_date: i.start_date, end_date: i.end_date, body_part: i.part })))
   }, [range])

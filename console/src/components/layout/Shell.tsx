@@ -1,6 +1,6 @@
 // Three-zone shell: left rail · central canvas · right inspector
 // IA.md §3.2 — inspector visibility driven by AnalysisContext.inspectionTarget
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useInspection, useClearInspection } from '../../lib/analysisStore'
@@ -24,6 +24,15 @@ const NAV = [
 export function Shell() {
   const { user, signOut } = useAuth()
   const location = useLocation()
+
+  // Perf pass: the 600 kB charting chunk used to start downloading only after the first workspace had loaded. Fetch it as
+  // soon as the browser is idle after sign-in, so the first chart does not wait for it (an import of an already-loaded
+  // module is free).
+  useEffect(() => {
+    const idle = (globalThis as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+    const t = idle ? idle(() => { void import('../../lib/echarts') }) : window.setTimeout(() => { void import('../../lib/echarts') }, 1500)
+    return () => { if (!idle) window.clearTimeout(t) }
+  }, [])
   const inspectionTarget = useInspection()
   const clearInspection = useClearInspection()
   const [railCollapsed, setRailCollapsed] = useState(false)

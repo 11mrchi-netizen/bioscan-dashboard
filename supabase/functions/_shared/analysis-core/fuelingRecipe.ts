@@ -71,6 +71,23 @@ export function resolveIngredientTotals(ingredient: RecipeIngredient, nutrients:
   }
 }
 
+const scaleOne = (v: number | null, quantity: number): number | null => (v === null ? null : v * quantity)
+
+/**
+ * Actual-consumed totals for a logged quantity of servings of a recipe version (06.3.3), e.g. 0.5 for half a gel.
+ * The caller freezes this result onto the intake-log row at log time -- it is never recomputed later if the
+ * recipe is revised, since `fueling_recipe_versions` is itself append-only (a later edit is a new version, this
+ * log keeps pointing at the version it actually used).
+ */
+export function scaleRecipeToQuantity(perServing: RecipeTotals, quantity: number): RecipeTotals {
+  return {
+    carbsG: scaleOne(perServing.carbsG, quantity),
+    fluidMl: scaleOne(perServing.fluidMl, quantity),
+    sodiumMg: scaleOne(perServing.sodiumMg, quantity),
+    caffeineMg: scaleOne(perServing.caffeineMg, quantity),
+  }
+}
+
 /**
  * Deterministic totals for a whole recipe (or one serving of it, depending on what quantities `ingredients`
  * represent) from its ingredient list, each ingredient's food_nutrients rows, and the food_servings rows any

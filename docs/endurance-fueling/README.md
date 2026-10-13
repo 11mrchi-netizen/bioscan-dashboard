@@ -48,7 +48,7 @@ A fueling intake event's actual-consumed nutrients (carbs/fluid/sodium/caffeine)
 | -- | -- |
 | 06.3.1 Audit & architecture | **Done.** This document. |
 | 06.3.2 Versioned fueling products/recipes | **Done.** Migration `supabase/migrations/20261013_fueling_products.sql` (applied); deterministic totals in `supabase/functions/_shared/analysis-core/fuelingRecipe.ts`, tested in `fuelingRecipe.test.ts`. |
-| 06.3.3 Log planned/actual intake | Not started. |
+| 06.3.3 Log planned/actual intake | **Done.** Migration `supabase/migrations/20261013_fueling_intake_log.sql` (applied); `scaleRecipeToQuantity` in `fuelingRecipe.ts`, tested. |
 | 06.3.4 Per-activity summaries and timeline | Not started. |
 | 06.3.5 Cross-activity pattern analysis | Not started. |
 | 06.3.6 Structured N-of-1 fueling experiments | Not started. |
@@ -60,9 +60,21 @@ A fueling intake event's actual-consumed nutrients (carbs/fluid/sodium/caffeine)
 
 `fueling_recipe_versions` is append-only, structurally rather than by convention: `fueling_recipe_versions_immutable()` rejects every `UPDATE` and `DELETE` outright (not a column-subset lock like `experiments_lock_protocol` -- nothing about a published version may change). Verified live: a product + two versions inserted, an `UPDATE` on version 1 rejected with the expected error, version 2 still insertable afterward, both versions intact. `DELETE` also triggered the same session-wide MCP-tool timeout seen throughout milestone 08's verification (not a trigger failure -- a follow-up `select` confirmed both rows untouched, and the `UPDATE` case already proves the trigger function itself works for both operations it's attached to). `get_advisors` shows no new findings beyond the four pre-existing ones.
 
+## 06.3.3 notes
+
+`fueling_intake_log` holds one row per event (planned, consumed, skipped or partial), edited in place as it actually happens -- not two separate planned/actual tables -- matching "post-run correction" naturally (mark a planned row consumed, or correct its values, after the run). Ordering is by `elapsed_seconds` (elapsed time since `exercise_sessions.start_time`), never by `logged_at`, so missing/inconsistent device timestamps can't reorder events.
+
+**Single-counting is enforced by a trigger, not app-layer code** -- a deliberate departure from how `meal_items`/`supplement_log` do it (their own Kotlin repositories dual-write into `nutrient_intake`, no DB trigger). Two reasons: this environment cannot build or run the Android app, so a trigger is the only version of this logic actually testable here; and delete-then-reinsert on every `INSERT`/`UPDATE`/`DELETE` structurally guarantees correctness after an edit, rather than depending on every future client reimplementing the dual-write correctly. `fueling_intake_log_sync_nutrient_intake()` only ever writes rows for `status in ('consumed','partial')`; `planned`/`skipped` never reach the ledger.
+
+Retry-safety follows the existing app idiom (`upsert(...).onConflict(naturalKey)`, e.g. `health_connect_record_id`) rather than new sync infrastructure: a client-generated `client_key` (`unique(user_id, client_key)`) means retrying a failed submit resolves to the same row instead of creating a duplicate.
+
+**A real bug found and fixed during verification:** `nutrient_intake.source_type`'s CHECK constraint only allowed `'meal_item'`/`'supplement'` -- not documented anywhere in this repo's migrations (the constraint predates them), only discovered because the trigger's first live insert was rejected by it. Fixed additively in `supabase/migrations/20261013_nutrient_intake_fueling_source.sql` (widens the CHECK to add `'fueling_intake'`; existing rows unaffected).
+
+Verified live end to end against a real `exercise_sessions` row: a `consumed` event correctly wrote 3 `nutrient_intake` rows with the right computed `logged_at` (`session.start_time + elapsed_seconds`); editing it (new `carbs_g`, added `fluid_ml`) left exactly the right 4 rows, no stale duplicate; marking it `skipped` zeroed the ledger back to 0 rows; a `planned` row never wrote any; and an `upsert` retry with the same `client_key` resolved to the existing row rather than creating a second one. `get_advisors` shows no new findings.
+
 ## Still open
 
-- 06.3.3 onward, in the sequence above -- each depends on `fueling_recipe_versions` existing, nothing on 06.3.2 depends on them.
-- Verification test rows in the live project: `fueling_products` id `1` ("Maurten Gel 100 (verification test row)") and its two `fueling_recipe_versions` rows (ids 1 and 2) -- harmless, left in place for the same reason as milestone 08's leftover rows (DELETE unavailable this session).
+- 06.3.4 onward, in the sequence above -- each depends on `fueling_intake_log` existing, nothing on 06.3.1-06.3.3 depends on them.
+- Verification test rows in the live project: `fueling_products` id `1`, its two `fueling_recipe_versions` rows (ids 1-2), and `fueling_intake_log` rows (ids 2-3) -- harmless, left in place (DELETE unavailable this session, same as milestone 08's leftover rows).
 - No offline-queue/outbox infrastructure exists anywhere in the Android app (confirmed by exploration: no Room entities, no outbox table, no connectivity-aware write queue). 06.3.3's "retry without duplicate submissions" should follow the existing `upsert(...).onConflict(naturalKey)` idiom (e.g. `AddEntryRepository.kt`'s `user_id,date` / `health_connect_record_id` keys), not introduce new sync infrastructure.
 - Android implementation (06.3.3 onward) carries the same caveat milestone 08 documented: this environment has no Android SDK, so any Kotlin written here is unverified until built on a real machine.

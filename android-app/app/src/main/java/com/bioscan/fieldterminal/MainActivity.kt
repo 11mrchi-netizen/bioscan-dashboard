@@ -50,18 +50,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Perf.enabled = BuildConfig.DEBUG // logcat tag "perf"; see util/Perf.kt
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = getSystemService(NotificationManager::class.java)
-            listOf(
-                Triple(NotificationKind.SUPPLEMENT_DUE, "Supplement Reminders", NotificationManager.IMPORTANCE_DEFAULT),
-                Triple(NotificationKind.CHECKIN_MORNING, "Morning Check-in", NotificationManager.IMPORTANCE_DEFAULT),
-                Triple(NotificationKind.CHECKIN_EVENING, "Evening Check-in", NotificationManager.IMPORTANCE_DEFAULT),
-                Triple(NotificationKind.WELLBEING_CHECKIN, "Wellbeing Check-in", NotificationManager.IMPORTANCE_DEFAULT),
-                Triple(NotificationKind.EVENING_LOG, "Evening Log", NotificationManager.IMPORTANCE_DEFAULT),
-            ).forEach { (id, name, importance) ->
-                nm.createNotificationChannel(NotificationChannel(id, name, importance))
-            }
-        }
+        // Notification channels, the Supabase client and the metric registry are warmed on a background thread by FieldTerminalApp.
         setContent {
             FieldTerminalTheme {
                 AuthGate()

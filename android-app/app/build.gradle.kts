@@ -42,7 +42,13 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Perf pass: shrink + optimise (R8) and drop unused resources. Signed with the debug keystore on purpose: the
+            // Google sign-in client is registered against that SHA-1, so a release build signs in like the debug one. This
+            // is a personal build, not a store upload. The daily driver stays debug until the release build has had a
+            // tab-by-tab smoke test (R8 is the one change here that can only fail at runtime).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -144,6 +150,9 @@ dependencies {
     // survives that (and even process death), and retries on failure with
     // its own backoff instead of requiring the user to babysit the app.
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+    // Perf pass: installs the baseline profile (src/main/baseline-prof.txt) so release builds start precompiled.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 
     testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")

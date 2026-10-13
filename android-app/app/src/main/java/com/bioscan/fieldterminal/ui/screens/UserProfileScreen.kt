@@ -67,6 +67,7 @@ import com.bioscan.fieldterminal.domain.levels.mountainLevel
 import com.bioscan.fieldterminal.domain.levels.runningLevel
 import com.bioscan.fieldterminal.domain.levels.strengthLevel
 import com.bioscan.fieldterminal.domain.progressFraction
+import com.bioscan.fieldterminal.domain.strengthThresholds
 import com.bioscan.fieldterminal.ui.components.ComparisonStrip
 import com.bioscan.fieldterminal.ui.components.ageAccelerationState
 import com.bioscan.fieldterminal.ui.components.confidenceLevel
@@ -596,27 +597,8 @@ private enum class StrTier(val label: String) {
 
 private data class TierResult(val tier: StrTier, val barFraction: Double, val tierColor: androidx.compose.ui.graphics.Color, val nextLabel: String?)
 
-// bodyweight multiples: [novice, intermediate, advanced, elite]
-private val BW_STANDARDS = mapOf(
-    "barbell_deadlift"         to doubleArrayOf(1.0, 1.5, 2.0, 2.5),
-    "barbell_squat"            to doubleArrayOf(0.75, 1.25, 1.75, 2.25),
-    "front_barbell_squat"      to doubleArrayOf(0.6, 1.0, 1.4, 1.8),
-    "chest_press"              to doubleArrayOf(0.5, 0.75, 1.25, 1.5),
-    "inclined_chest_press_icp" to doubleArrayOf(0.45, 0.7, 1.1, 1.4),
-    "military_press"           to doubleArrayOf(0.35, 0.55, 0.8, 1.0),
-    "clean_and_press"          to doubleArrayOf(0.5, 0.7, 0.9, 1.2),
-    "bent_over_barbell_row"    to doubleArrayOf(0.5, 0.75, 1.0, 1.3),
-)
-// absolute added-weight thresholds for weighted pull-ups
-private val ABS_STANDARDS = mapOf(
-    "pull_up_weighted"  to doubleArrayOf(10.0, 25.0, 45.0, 70.0),
-    "weighted_pull_ups" to doubleArrayOf(10.0, 25.0, 45.0, 70.0),
-)
-
 private fun strengthTier(slug: String, e1rmKg: Double, bodyWeightKg: Double?): TierResult? {
-    val thresholds = bodyWeightKg?.let { bw -> BW_STANDARDS[slug]?.let { m -> DoubleArray(4) { m[it] * bw } } }
-        ?: ABS_STANDARDS[slug]
-        ?: return null
+    val thresholds = strengthThresholds(slug, bodyWeightKg) ?: return null
     val tiers = listOf(StrTier.Novice, StrTier.Intermediate, StrTier.Advanced, StrTier.Elite)
     val idx = thresholds.indexOfLast { e1rmKg >= it }
     val tier = if (idx < 0) StrTier.Untrained else tiers[idx]

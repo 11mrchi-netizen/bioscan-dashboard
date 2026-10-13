@@ -1,5 +1,10 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
+import com.bioscan.fieldterminal.domain.LiftSet
+import com.bioscan.fieldterminal.domain.bestLifts
+import com.bioscan.fieldterminal.domain.aging.GripReading
+import com.bioscan.fieldterminal.domain.aging.latestGrip
 import com.bioscan.fieldterminal.domain.analysis.ComparisonResult
 import com.bioscan.fieldterminal.domain.analysis.ComparisonState
 import com.bioscan.fieldterminal.domain.aging.DatedValue
@@ -16,10 +21,12 @@ import com.bioscan.fieldterminal.domain.evaluateSri
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
 
 @Serializable
 private data class HsDrawRow(val id: Long, @SerialName("draw_date") val drawDate: String)
@@ -31,6 +38,9 @@ private data class HsResultRow(
     val value: Double? = null,
     val unit: String? = null,
 )
+
+@Serializable
+private data class HsGripRow(@SerialName("occurred_at") val occurredAt: String, val hand: String, val kg: Double)
 
 data class HealthspanBundle(
     val summary: HealthspanSummary,
@@ -93,6 +103,33 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
             comparePopulation("steps", it, PopulationContext(age, sex, null), benchmarks.loadArtifacts("steps")).bandLabel
         }
 
+        // Strength: best estimated 1RM per lift over about six months, the latest body weight, the latest logged grip.
+        val liftSets = supabase.postgrest.from("exercise_sessions")
+            .select(columns = Columns.list("id,type,start_time,source,details")) {
+                filter {
+                    eq("type", "strength")
+                    gte("start_time", asOf.minusDays(183).toString())
+                }
+                limit(1000)
+            }
+            .decodeList<ExerciseSessionRow>()
+            .flatMap { session ->
+                val date = runCatching { OffsetDateTime.parse(session.startTime).toLocalDate() }.getOrNull() ?: return@flatMap emptyList()
+                session.details.exercises.orEmpty().flatMap { ex -> ex.sets.map { LiftSet(ex.name, it.weightKg, it.reps, date) } }
+            }
+        val bodyWeight = analysis.loadBodyMetrics()
+            .filter { it.weightKg != null }
+            .maxByOrNull { LocalDate.parse(it.date) }
+        val grip = latestGrip(
+            supabase.postgrest.from("grip_strength_log")
+                .select(columns = Columns.list("occurred_at,hand,kg")) {
+                    order("occurred_at", Order.DESCENDING)
+                    limit(20)
+                }
+                .decodeList<HsGripRow>()
+                .mapNotNull { r -> runCatching { OffsetDateTime.parse(r.occurredAt).toLocalDate() }.getOrNull()?.let { GripReading(r.kg, r.hand, it) } },
+        )
+
         val labs = loadLabObservations()
         fun lab(vararg names: String) = latestLab(labs) { m -> names.any { m.equals(it, ignoreCase = true) } }
         return HealthspanBundle(
@@ -103,6 +140,9 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
                     vo2max = vo2?.let { DatedValue(it.second, it.first, "mL/kg/min") },
                     vo2Percentile = vo2Comparison?.percentile,
                     phenoAge = aging.phenoAge,
+                    lifts = bestLifts(liftSets),
+                    bodyWeightKg = bodyWeight?.let { DatedValue(it.weightKg!!, LocalDate.parse(it.date), "kg") },
+                    grip = grip,
                     waistCm = lab("Waistline"),
                     heightCm = lab("Body Height"),
                     sleepMeanHours = hours.takeIf { it.isNotEmpty() }?.average(),

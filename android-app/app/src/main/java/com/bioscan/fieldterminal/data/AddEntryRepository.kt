@@ -24,6 +24,8 @@ import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.NewStoolRow
 import com.bioscan.fieldterminal.data.model.NewSupplementLogRow
+import com.bioscan.fieldterminal.data.model.LogGripRow
+import com.bioscan.fieldterminal.data.model.NewGripRow
 import com.bioscan.fieldterminal.data.model.NewRecoverySessionRow
 import com.bioscan.fieldterminal.data.model.NewWellbeingRow
 import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
@@ -137,6 +139,10 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("stool_log").insert(
             NewStoolRow(occurredAt = occurredAt, bristolType = bristolType, discomfort = discomfort)
         )
+    }
+
+    suspend fun addGrip(occurredAt: String, hand: String, kg: Double) {
+        supabase.postgrest.from("grip_strength_log").insert(NewGripRow(occurredAt = occurredAt, hand = hand, kg = kg))
     }
 
     suspend fun addSexualActivity(date: String, activityType: String, instances: List<SexualActivityInstance>, notes: String?) {
@@ -414,6 +420,12 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
+    suspend fun updateGrip(id: Long, occurredAt: String, hand: String, kg: Double) {
+        supabase.postgrest.from("grip_strength_log").update(
+            NewGripRow(occurredAt = occurredAt, hand = hand, kg = kg)
+        ) { filter { eq("id", id) } }
+    }
+
     suspend fun updateSexualActivity(id: Long, date: String, activityType: String, instances: List<SexualActivityInstance>, notes: String?) {
         supabase.postgrest.from("sexual_activity_daily").update(
             NewSexualActivityRow(date = date, activityType = activityType, instances = instances, notes = notes)
@@ -487,6 +499,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         id,
     )
     suspend fun fetchStool(id: Long) = fetchById<LogStoolRow>("stool_log", "id,occurred_at,bristol_type,discomfort", id)
+    suspend fun fetchGrip(id: Long) = fetchById<LogGripRow>("grip_strength_log", "id,occurred_at,hand,kg", id)
     suspend fun fetchNote(id: Long) = fetchById<LogNoteRow>("notes", "id,occurred_at,text", id)
     suspend fun fetchWellbeing(id: Long) = fetchById<LogWellbeingRow>("wellbeing_daily", "id,date,energy,mood,stress,soreness,morning_erection_quality,arousal_level", id)
     suspend fun fetchExerciseSession(id: Long) = fetchById<FullExerciseSessionRow>("exercise_sessions", "id,type,rpe,notes,details", id)

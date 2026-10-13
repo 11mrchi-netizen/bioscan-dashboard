@@ -12,7 +12,7 @@ Each factor ends as **favorable**, **neutral**, **opportunity**, or **not assess
 | -- | -- | -- | -- | -- | -- |
 | Cardio fitness | Latest VO2max, placed against the age- and sex-matched table in `benchmark_artifacts` | percentile 50 or above | 25 to under 50 | under 25 | Mandsager 2018 groups fitness by age/sex percentile; the cut points are product-defined |
 | Biological age | PhenoAge acceleration (biological minus calendar age) | 2 years younger or more | between | 2 years older or more | Levine 2018; the plus and minus 2 years are product-defined |
-| Strength | Needs a strength benchmark | not assessed until one is installed | | | none exists in `benchmark_artifacts` |
+| Strength | Median level of your main barbell lifts: best estimated 1RM per lift over the last 183 days against bodyweight multiples (`domain/StrengthStandards.kt`); needs 3 lifts that have a standard and a body weight from the last 90 days | median Intermediate or better | median Novice | median Untrained | Lifter standards (gym convention), **not** population percentiles and not adjusted for sex or age; the card says so. With an even count the weaker middle lift decides |
 | Body composition | Waist-to-height ratio from lab entries | under 0.50 | 0.50 to under 0.60 | 0.60 or more | Ashwell 2012 (0.5 boundary); 0.6 is product-defined |
 | Sleep | Mean duration, last 30 days, and the regularity index (SRI) | at least 7 h and SRI 80 or more | one of the two | neither | Watson 2015 (7 h); Windred 2024 shows regularity matters; SRI 80 is product-defined |
 | Activity | Median daily steps, last 30 days (0-step days dropped as watch-off) | "active" or "highly active" | "somewhat active" | "low active" or "sedentary" | Tudor-Locke and Bassett 2004 categories, the artifact already in the database |
@@ -31,7 +31,7 @@ Share of **assessed** factors that are favorable. With at least 5 of the 8 asses
 
 - **TyG replaced.** The plan listed a triglyceride-glucose index. There is no widely agreed cut-off to cite for it, so the lipid factor uses the harmonised guideline thresholds for triglycerides and HDL, and glucose uses the ADA categories. TyG can be added if a defensible threshold is chosen.
 - **HbA1c** is accepted but the account has none today; fasting glucose is used.
-- **Strength** is always "not assessed" because no strength benchmark is installed.
+- **Strength** uses lifter standards, not a population benchmark (none is installed). Handgrip is logged (GRIP in the add-entry picker, one row per hand, best of the attempts in kg, table `grip_strength_log`) and shown under the strength factor, but **not scored**: that needs a cited age- and sex-matched norm table, which has not been added. Alternative names of one lift (for example "standing military press" and "standing barbell press") are merged so a lift counts once.
 - **Mock data removed.** The profile screen used to render sample domain levels and sample achievements while real ones loaded. That is gone: the running level now comes from the real VO2max placement, the other three domains read "Not enough data yet" until benchmarks exist, and achievements show only real ones.
 
 ## What it cannot say

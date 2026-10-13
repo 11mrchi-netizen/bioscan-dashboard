@@ -65,6 +65,13 @@ data class NewStoolRow(
     val discomfort: Int? = null,
 )
 
+@Serializable
+data class NewGripRow(
+    @SerialName("occurred_at") val occurredAt: String,
+    val hand: String,
+    val kg: Double,
+)
+
 // Replaces NewMasturbationRow (DAV-91) -- one upsert row per (date,
 // activityType) against sexual_activity_daily, instances carrying the real
 // per-instance detail.

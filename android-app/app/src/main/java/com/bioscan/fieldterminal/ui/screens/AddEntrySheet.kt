@@ -78,6 +78,7 @@ import com.bioscan.fieldterminal.data.model.SexualActivityInstance
 import com.bioscan.fieldterminal.data.PeopleRepository
 import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
 import com.bioscan.fieldterminal.data.model.MealRow
+import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
@@ -208,6 +209,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
                     AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
                     AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
+                    AddEntryType.Grip -> GripForm(saving, onSave = { occurredAt, hand, kg -> onSubmit { it.addGrip(occurredAt, hand, kg) } })
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -328,6 +330,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Hydration -> repo.fetchHydration(entry.id)
             LogSource.Encounter -> repo.fetchEncounter(entry.id)
             LogSource.Stool -> repo.fetchStool(entry.id)
+            LogSource.Grip -> repo.fetchGrip(entry.id)
             LogSource.Note -> repo.fetchNote(entry.id)
             LogSource.Wellbeing -> repo.fetchWellbeing(entry.id)
             LogSource.Exercise -> repo.fetchExerciseSession(entry.id)
@@ -416,6 +419,13 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialBristolType = row.bristolType,
                     initialDiscomfort = row.discomfort,
                     onSave = { occurredAt, bt, d -> onSubmit { it.updateStool(row.id, occurredAt, bt, d) } },
+                )
+                is LogGripRow -> GripForm(
+                    saving,
+                    initialDateTime = parseIsoToLocalDateTime(row.occurredAt),
+                    initialHand = row.hand,
+                    initialKg = row.kg,
+                    onSave = { occurredAt, hand, kg -> onSubmit { it.updateGrip(row.id, occurredAt, hand, kg) } },
                 )
                 is LogSexualActivityRow -> SexualActivityForm(
                     saving,
@@ -1522,6 +1532,31 @@ private fun EncounterForm(
                 myRating,
                 notes.trim().ifBlank { null },
             )
+        }
+    }
+}
+
+// Handgrip strength: the best of the attempts on a hand dynamometer, one row per hand. Logged for the record; it is shown on the
+// Healthspan card but not scored until a cited norm table exists.
+@Composable
+private fun GripForm(
+    saving: Boolean,
+    initialDateTime: LocalDateTime = LocalDateTime.now(),
+    initialHand: String? = null,
+    initialKg: Double? = null,
+    onSave: (occurredAt: String, hand: String, kg: Double) -> Unit,
+) {
+    var dateTime by remember { mutableStateOf(initialDateTime) }
+    var hand by remember { mutableStateOf(initialHand) }
+    var kg by remember { mutableStateOf(initialKg?.toString() ?: "") }
+    val value = kg.replace(',', '.').toDoubleOrNull()?.takeIf { it in 5.0..120.0 }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DateTimeField("WHEN", dateTime, { dateTime = it })
+        Column { FormLabel("HAND"); TextChipRow(listOf("right", "left"), hand, perRow = 2) { hand = it } }
+        Column { FormLabel("BEST OF 3, KG (DYNAMOMETER, 5-120)"); FieldTextField(kg, { kg = it }, "e.g. 46.5", keyboardType = KeyboardType.Decimal) }
+        SaveButton(saving, hand != null && value != null) {
+            onSave(dateTime.toIsoWithOffset(), hand!!, value!!)
         }
     }
 }

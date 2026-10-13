@@ -8,6 +8,7 @@ import com.bioscan.fieldterminal.data.model.LogMealRow
 import com.bioscan.fieldterminal.data.model.LogNoteRow
 import com.bioscan.fieldterminal.data.model.LogOstrcRow
 import com.bioscan.fieldterminal.data.model.LogSleepRow
+import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
@@ -114,10 +115,17 @@ class LogRepository(private val supabase: SupabaseClient) {
                     limit(FETCH_LIMIT_PER_SOURCE)
                 }.decodeList<LogSexualActivityRow>()
         }
+        val grip = async {
+            supabase.postgrest.from("grip_strength_log")
+                .select(columns = Columns.list("id,occurred_at,hand,kg")) {
+                    order("occurred_at", Order.DESCENDING)
+                    limit(FETCH_LIMIT_PER_SOURCE)
+                }.decodeList<LogGripRow>()
+        }
         buildLogEntries(
             meals.await(), exerciseSessions.await(), sleep.await(),
             stool.await(), encounters.await(), notes.await(), hydration.await(),
-            wellbeing.await(), supplementsTaken.await(), ostrc.await(), sexualActivity.await(),
+            wellbeing.await(), supplementsTaken.await(), ostrc.await(), sexualActivity.await(), grip.await(),
         )
     }
 }

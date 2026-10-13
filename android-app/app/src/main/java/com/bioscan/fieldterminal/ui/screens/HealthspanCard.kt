@@ -73,6 +73,7 @@ private fun FactorRow(f: HealthspanFactor) {
         if (f.missingInputs.isNotEmpty()) {
             Text("Needs: " + f.missingInputs.joinToString("; "), style = FTType.Caption, color = FT.TextMuted)
         }
+        f.notes.forEach { Text(it, style = FTType.Caption, color = FT.TextMuted) }
         f.action?.let { Text(it, style = FTType.Caption, color = if (f.status == FactorStatus.OPPORTUNITY) FT.Warning else FT.TextMuted) }
     }
 }

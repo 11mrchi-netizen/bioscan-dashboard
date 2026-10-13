@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.domain.aging
 
 import com.bioscan.fieldterminal.domain.Confidence
+import com.bioscan.fieldterminal.domain.LiftReading
 import com.bioscan.fieldterminal.domain.SriEvaluation
 import com.bioscan.fieldterminal.domain.analysis.Provenance
 import java.io.File
@@ -177,9 +178,72 @@ class HealthspanTest {
         assertEquals(FactorStatus.UNASSESSED, healthspanSummary(good().copy(phenoAge = pheno(-3.0, observed = today.minusDays(400)))).of(HealthspanFactorId.BIOLOGICAL_AGE).status)
     }
 
+    // 80 kg lifter. squat: novice 60, intermediate 100, advanced 140. deadlift: 80, 120, 160. chest_press: 40, 60, 100.
+    private fun lift(slug: String, e1rm: Double, age: Long = 20) = LiftReading(slug, e1rm, today.minusDays(age))
+    private fun strengthOf(i: HealthspanInputs) = healthspanSummary(i).of(HealthspanFactorId.STRENGTH)
+    private val bw80 = DatedValue(80.0, today.minusDays(10), "kg")
+
     @Test
-    fun strengthPathExistsOnceABenchmarkDoes() {
-        assertEquals(FactorStatus.FAVORABLE, healthspanSummary(good().copy(strengthPercentile = 80.0)).of(HealthspanFactorId.STRENGTH).status)
+    fun strengthIsTheMedianLiftLevel() {
+        val fav = strengthOf(good().copy(bodyWeightKg = bw80, lifts = listOf(lift("barbell_squat", 150.0), lift("barbell_deadlift", 130.0), lift("chest_press", 70.0))))
+        assertEquals(FactorStatus.FAVORABLE, fav.status) // advanced, intermediate, intermediate
+        val neutral = strengthOf(good().copy(bodyWeightKg = bw80, lifts = listOf(lift("barbell_squat", 70.0), lift("barbell_deadlift", 90.0), lift("chest_press", 45.0))))
+        assertEquals(FactorStatus.NEUTRAL, neutral.status)
+        val opp = strengthOf(good().copy(bodyWeightKg = bw80, lifts = listOf(lift("barbell_squat", 50.0), lift("barbell_deadlift", 60.0), lift("chest_press", 30.0))))
+        assertEquals(FactorStatus.OPPORTUNITY, opp.status)
+        assertEquals(8, healthspanSummary(good().copy(bodyWeightKg = bw80, lifts = listOf(lift("barbell_squat", 150.0), lift("barbell_deadlift", 130.0), lift("chest_press", 70.0)))).assessed)
+    }
+
+    @Test
+    fun evenCountUsesTheLowerMiddleLift() {
+        // advanced, intermediate, novice, novice -> lower median is novice
+        val f = strengthOf(good().copy(bodyWeightKg = bw80, lifts = listOf(
+            lift("barbell_squat", 150.0), lift("barbell_deadlift", 130.0), lift("chest_press", 45.0), lift("military_press", 30.0),
+        )))
+        assertEquals(FactorStatus.NEUTRAL, f.status)
+    }
+
+    @Test
+    fun strengthNeedsThreeRecentLiftsWithAStandardAndAFreshBodyWeight() {
+        val three = listOf(lift("barbell_squat", 150.0), lift("barbell_deadlift", 130.0), lift("chest_press", 70.0))
+        assertEquals(FactorStatus.UNASSESSED, strengthOf(good().copy(bodyWeightKg = bw80, lifts = three.take(2))).status)
+        // a lift older than ~6 months does not count
+        assertEquals(FactorStatus.UNASSESSED, strengthOf(good().copy(bodyWeightKg = bw80, lifts = three.take(2) + lift("chest_press", 70.0, age = 200))).status)
+        // a lift with no standard does not count
+        assertEquals(FactorStatus.UNASSESSED, strengthOf(good().copy(bodyWeightKg = bw80, lifts = three.take(2) + lift("cable_fly", 70.0))).status)
+        val noWeight = strengthOf(good().copy(bodyWeightKg = null, lifts = three))
+        assertEquals(FactorStatus.UNASSESSED, noWeight.status)
+        assertTrue(noWeight.missingInputs.any { it.startsWith("body weight") })
+        val staleWeight = strengthOf(good().copy(bodyWeightKg = DatedValue(80.0, today.minusDays(120), "kg"), lifts = three))
+        assertEquals(FactorStatus.UNASSESSED, staleWeight.status)
+        assertTrue(staleWeight.missingInputs.any { it.startsWith("body weight from the last 90 days") })
+    }
+
+    @Test
+    fun strengthAlwaysSaysThatTheStandardsAreLifterStandards() {
+        val f = strengthOf(good())
+        assertEquals(FactorStatus.UNASSESSED, f.status)
+        assertTrue(f.notes.first().startsWith("Lifter standards"))
+    }
+
+    @Test
+    fun gripIsShownButNeverScored() {
+        val without = healthspanSummary(good())
+        val with = healthspanSummary(good().copy(grip = GripReading(46.5, "right", today.minusDays(3))))
+        assertEquals(without.assessed, with.assessed)
+        assertEquals(without.grade, with.grade)
+        val note = with.of(HealthspanFactorId.STRENGTH).notes.last()
+        assertTrue(note.startsWith("Latest grip: ") && note.contains("does not change the grade"))
+    }
+
+    @Test
+    fun latestGripIsTheStrongerHandOnTheLatestDate() {
+        val d1 = today.minusDays(10)
+        val d2 = today.minusDays(2)
+        val g = latestGrip(listOf(GripReading(50.0, "right", d1), GripReading(44.0, "left", d2), GripReading(46.0, "right", d2)))!!
+        assertEquals(46.0, g.kg, 0.0)
+        assertEquals(d2, g.date)
+        assertNull(latestGrip(emptyList()))
     }
 
     @Test

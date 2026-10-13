@@ -1,6 +1,9 @@
 package com.bioscan.fieldterminal.domain.aging
 
+import com.bioscan.fieldterminal.domain.LiftReading
 import com.bioscan.fieldterminal.domain.SriEvaluation
+import com.bioscan.fieldterminal.domain.StrengthLevel
+import com.bioscan.fieldterminal.domain.strengthLevelFor
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
@@ -42,8 +45,11 @@ data class HealthspanInputs(
     // Placement against an age- and sex-matched table; null when none fits (never a nearest-table guess).
     val vo2Percentile: Double? = null,
     val phenoAge: BiologicalAgeResult? = null,
-    // No strength benchmark is installed, so this is null today; the path exists for when one is.
-    val strengthPercentile: Double? = null,
+    // Best estimated 1RM per lift from the last 6 months, and the latest body weight (kg).
+    val lifts: List<LiftReading> = emptyList(),
+    val bodyWeightKg: DatedValue? = null,
+    // Logged by hand; shown, not scored (no cited norm table yet).
+    val grip: GripReading? = null,
     val waistCm: DatedValue? = null,
     val heightCm: DatedValue? = null,
     val sleepMeanHours: Double? = null,
@@ -58,12 +64,15 @@ data class HealthspanInputs(
     val fastingGlucoseMgDl: DatedValue? = null,
 )
 
+data class GripReading(val kg: Double, val hand: String, val date: LocalDate)
+
 data class HealthspanFactor(
     val id: HealthspanFactorId,
     val status: FactorStatus,
     val reading: String?, // what was measured, with its date where it matters
     val missingInputs: List<String>,
     val action: String?, // one thing: how to get it assessed, or the main lever
+    val notes: List<String> = emptyList(), // caveats that belong to this factor
 )
 
 data class HealthspanSummary(
@@ -84,6 +93,9 @@ private const val LAB_MAX_AGE_DAYS = 365L
 private const val VO2_MAX_AGE_DAYS = 90L
 private const val MIN_NIGHTS = 14
 private const val MIN_STEP_DAYS = 14
+private const val STRENGTH_WINDOW_DAYS = 183L // about 6 months
+private const val MIN_LIFTS = 3
+private const val BODY_WEIGHT_MAX_AGE_DAYS = 90L
 
 private const val PERCENTILE_FAVORABLE = 50.0 // at or above the age/sex median (Mandsager 2018 groups by percentile)
 private const val PERCENTILE_NEUTRAL = 25.0 // below this is the lowest-fitness group in that study
@@ -100,6 +112,12 @@ private const val HBA1C_NEUTRAL = 5.7 // ADA Standards of Care
 private const val HBA1C_OPPORTUNITY = 6.5
 private const val GLUCOSE_NEUTRAL = 100.0
 private const val GLUCOSE_OPPORTUNITY = 126.0
+
+// The grip reading to show: among the readings on the most recent date, the stronger hand's value.
+fun latestGrip(readings: List<GripReading>): GripReading? {
+    val latest = readings.map { it.date }.reduceOrNull { a, b -> if (b.isAfter(a)) b else a } ?: return null
+    return readings.filter { it.date == latest }.maxByOrNull { it.kg }
+}
 
 // Last value of a marker across draws. Flags a conflict when the latest date holds more than one different value.
 data class LabObservation(val marker: String, val value: Double, val unit: String?, val date: LocalDate)
@@ -118,11 +136,14 @@ private class Gate(val asOf: LocalDate) {
     val missing = mutableListOf<String>()
 
     // The value when it passes every check; otherwise records why not and returns null.
-    fun lab(v: DatedValue?, name: String, unit: String): Double? {
+    fun lab(v: DatedValue?, name: String, unit: String, maxAgeDays: Long = LAB_MAX_AGE_DAYS): Double? {
         if (v == null) { missing += name; return null }
         if (v.conflicting) { missing += "$name (conflicting values on ${v.date})"; return null }
         if (v.unit == null || !v.unit.equals(unit, ignoreCase = true)) { missing += "$name in $unit (recorded as ${v.unit ?: "no unit"})"; return null }
-        if (ChronoUnit.DAYS.between(v.date, asOf) > LAB_MAX_AGE_DAYS) { missing += "$name from the last year (latest ${v.date})"; return null }
+        if (ChronoUnit.DAYS.between(v.date, asOf) > maxAgeDays) {
+            missing += "$name from " + (if (maxAgeDays == LAB_MAX_AGE_DAYS) "the last year" else "the last $maxAgeDays days") + " (latest ${v.date})"
+            return null
+        }
         return v.value
     }
 }
@@ -195,9 +216,30 @@ private fun biologicalAge(i: HealthspanInputs): HealthspanFactor {
 
 private fun strength(i: HealthspanInputs): HealthspanFactor {
     val id = HealthspanFactorId.STRENGTH
-    val p = i.strengthPercentile
-        ?: return factor(id, FactorStatus.UNASSESSED, null, listOf("a strength benchmark (none is installed, so lifts cannot be placed yet)"), "", "Stays unassessed until a strength benchmark is added.")
-    return factor(id, percentileStatus(p), "Strength placed at the ${ordinal(p)} percentile", emptyList(), "Progressive loading on the main lifts moves this.", "")
+    val howTo = "Log barbell lifts (squat, deadlift, presses, row) and a body weight."
+    val notes = mutableListOf("Lifter standards (bodyweight multiples), not population percentiles; not adjusted for sex or age.")
+    i.grip?.let {
+        notes += "Latest grip: %.1f kg (%s hand, %s). Logged only: there is no cited norm table yet, so it does not change the grade.".format(it.kg, it.hand, it.date)
+    }
+    val g = Gate(i.asOf)
+    val bw = g.lab(i.bodyWeightKg, "body weight", "kg", BODY_WEIGHT_MAX_AGE_DAYS)
+    val levels = i.lifts
+        .filter { ChronoUnit.DAYS.between(it.date, i.asOf) in 0..STRENGTH_WINDOW_DAYS }
+        .mapNotNull { lift -> strengthLevelFor(lift.slug, lift.e1rmKg, bw)?.let { lift.slug to it } }
+    if (levels.size < MIN_LIFTS) {
+        g.missing += "$MIN_LIFTS lifts from the last 6 months that have a standard (have ${levels.size})"
+        return factor(id, FactorStatus.UNASSESSED, null, g.missing, "", howTo).copy(notes = notes)
+    }
+    // Lower median: with an even count the weaker middle lift decides.
+    val sorted = levels.sortedBy { it.second.ordinal }
+    val median = sorted[(sorted.size - 1) / 2].second
+    val status = when {
+        median >= StrengthLevel.INTERMEDIATE -> FactorStatus.FAVORABLE
+        median == StrengthLevel.NOVICE -> FactorStatus.NEUTRAL
+        else -> FactorStatus.OPPORTUNITY
+    }
+    val detail = sorted.joinToString(", ") { (slug, level) -> "${slug.replace('_', ' ')} ${level.label.lowercase()}" }
+    return factor(id, status, "Median ${median.label.lowercase()} across ${levels.size} lifts ($detail)", emptyList(), "Progressive loading on the weakest main lift moves this.", howTo).copy(notes = notes)
 }
 
 private fun bodyComposition(i: HealthspanInputs): HealthspanFactor {

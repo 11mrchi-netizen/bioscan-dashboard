@@ -49,6 +49,15 @@ data class LogStoolRow(
     val discomfort: Int? = null,
 )
 
+// Handgrip dynamometer reading (best of the attempts, kg), one hand per row.
+@Serializable
+data class LogGripRow(
+    val id: Long,
+    @SerialName("occurred_at") val occurredAt: String,
+    val hand: String,
+    val kg: Double,
+)
+
 // One instance within a sexual_activity_daily row's `instances` array --
 // watchedPorn/loadSize are masturbation-specific and stay null for
 // intercourse instances rather than getting their own intercourse-only type.

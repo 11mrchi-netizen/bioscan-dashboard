@@ -11,6 +11,7 @@ import { CORE_VERSION } from './version.ts'
 interface ExperimentRow {
   id: string
   supplement_id: number | null
+  intervention_id: string | null
   name: string
   primary_metric: MetricId
   secondary_metrics: MetricId[] | null
@@ -30,7 +31,7 @@ export async function runExperiments(admin: Admin, loaded: LoadedFrame, now: Dat
   const { userId, frame, today } = loaded
   const { data, error } = await admin
     .from('experiments')
-    .select('id, supplement_id, name, primary_metric, secondary_metrics, protocol, status, preregistered_at, mde_preview')
+    .select('id, supplement_id, intervention_id, name, primary_metric, secondary_metrics, protocol, status, preregistered_at, mde_preview')
     .eq('user_id', userId)
     .order('preregistered_at')
   if (error) return { userId, error: error.message }
@@ -40,6 +41,8 @@ export async function runExperiments(admin: Admin, loaded: LoadedFrame, now: Dat
   for (const row of rows) {
     const first = row.protocol?.phases?.[0]?.start
     if (!first) continue
+    // Adherence logging stays domain-owned (08.1): supplement_log is the only wired-in source today, so an
+    // intervention-only experiment (no supplement_id) reports zero logged days rather than guessing at adherence.
     let taken = new Set<string>()
     if (row.supplement_id !== null) {
       const log = await admin.from('supplement_log').select('taken_at').eq('user_id', userId).eq('supplement_id', row.supplement_id).gte('taken_at', `${first}T00:00:00Z`)
@@ -68,7 +71,7 @@ export async function runExperiments(admin: Admin, loaded: LoadedFrame, now: Dat
         state,
         confidence_have: primary.n1,
         confidence_need: MIN_PHASE_DAYS,
-        payload: { ...result, status: nextStatus, supplementId: row.supplement_id, protocol: row.protocol, preregisteredAt: row.preregistered_at, mdePreview: row.mde_preview },
+        payload: { ...result, status: nextStatus, supplementId: row.supplement_id, interventionId: row.intervention_id, protocol: row.protocol, preregisteredAt: row.preregistered_at, mdePreview: row.mde_preview },
         calculated_at: now.toISOString(),
       },
       { onConflict: 'user_id,kind,key,as_of,engine_version' },

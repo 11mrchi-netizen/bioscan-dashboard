@@ -14,7 +14,7 @@ This milestone is substantially a **generalization** of machinery `docs/analysis
 
 | Reused as-is | Generalized | New |
 | -- | -- | -- |
-| `analysis_results` envelope | `experiments` (add `intervention_id`, widen the metric whitelist to the metric registry) | `interventions`, `intervention_state_history` |
+| `analysis_results` envelope | `experiments` (add `intervention_id`) | `interventions`, `intervention_state_history` |
 | `evidence_records` (`subject_type`/`subject_key`/`outcome_key` already generic) | N-of-1 metric whitelist | `protocols`, `protocol_interventions` |
 | `experiment.ts` / `stats.ts` core | `domain/SupplementInteractions.kt` -> `protocolAudit.ts` | `protocol_adjustment_proposals` |
 | `interaction_records` pattern (pair matching) | | `interventionResponse.ts`, `protocolRules.ts` |
@@ -56,7 +56,7 @@ The Linear issue's entity list, mapped to concrete tables/types:
 | 08.2 Canonical `interventions` model + lifecycle | **Done.** Migration `supabase/migrations/20261013_interventions.sql` (applied to the live project); lifecycle graph in `supabase/functions/_shared/analysis-core/intervention.ts`, tested in `intervention.test.ts`. |
 | 08.3 `protocols` model | **Done.** Migration `supabase/migrations/20261013_protocols.sql` (applied); lifecycle graph and `generateSchedule` in `supabase/functions/_shared/analysis-core/protocol.ts`, tested in `protocol.test.ts`. |
 | 08.4 Evidence registry generalization | **Done.** No schema change needed (see notes); matching/ranking in `supabase/functions/_shared/analysis-core/evidenceLink.ts`, tested in `evidenceLink.test.ts`. |
-| 08.5 Generalize the N-of-1 engine | Not started. |
+| 08.5 Generalize the N-of-1 engine | **Done.** Migration `supabase/migrations/20261013_experiments_intervention_id.sql` (applied); `runExperiments.ts` reads/publishes `intervention_id` alongside `supplement_id`. `experiment.ts`/`stats.ts` unchanged. |
 | 08.6 Intervention response analysis (observational) | Not started. |
 | 08.7 Adaptive protocol rules | Not started. |
 | 08.8 Protocol audit | Not started. |
@@ -87,7 +87,16 @@ Confirmed live: `evidence_records.subject_type`/`subject_key`/`outcome_key` have
 
 `evidenceForIntervention` in `evidenceLink.ts` is pure (the caller fetches the rows, same join-in-the-app-layer convention `EvidenceRepository.kt` already uses) and does exactly what DAV-334 asks: groups evidence per outcome instead of collapsing it into one score, since the same subject can have different evidence strength for different outcomes, and ranks by tier (meta-analysis/systematic-review and controlled-human first, the person's own N-of-1 result last -- "did it work for me" is never mixed into "how well-established is this"). Unreviewed rows are kept, matching `interaction_records`' "(unreviewed)" convention, just ordered after a reviewed row of the same tier.
 
+## 08.5 notes
+
+`experiment.ts`/`stats.ts` needed **no change**: the N-of-1 statistics already operate on arbitrary metric series from the shared daily frame and never encode supplement semantics. The original plan for this phase ("widen the metric whitelist to the canonical metric registry") turned out to be based on a false premise once checked against `buildFrame` in `runRelationships.ts` -- the frame only ever carries eight series (`hrv`, `rhr`, `sleep_hours`, `deep_rem_min`, `energy`, `mood`, `stress`, `soreness`), which don't line up 1:1 with `metric-registry.json`'s keys (e.g. `sleep_duration` there vs. `sleep_hours` here; per-wellbeing-component keys don't exist there at all). Forcing alignment would have meant renaming live, already-deployed metric keys or fabricating series the frame doesn't build (`vo2max`, `training_load`, `body_weight`, ...), which is a materially bigger, riskier change than this phase needs -- those eight outcomes were already domain-agnostic biometric/wellbeing signals, not supplement-specific, so no widening was actually required for generalization. Adding new selectable outcomes (which would need new `RawInputs` fields and loader queries, not just a whitelist edit) is real future work, tracked here rather than silently bundled into 08.5.
+
+What generalizes `experiments` is solely the new nullable `intervention_id` column alongside `supplement_id` (a `CHECK` requires at least one of the two), locked by `experiments_lock_protocol` the same as every other protocol column. `runExperiments.ts` reads and publishes it; adherence logging stays domain-owned (`supplement_log` is the only wired-in source today, so a bare intervention with no supplement reports zero logged days rather than a guess -- not wrong, just less informative, same as any other source-less adherence would be).
+
+Verified live: schema (`intervention_id uuid null`, FK to `interventions`), the `experiments_has_a_subject` CHECK (rejected a row with neither id set), an insert with only `intervention_id` set, and the lock trigger (rejected changing `intervention_id` after registration). No new `get_advisors` findings.
+
 ## Still open
 
-- 08.4 onward, in the sequence listed above -- each depends on `interventions`/`protocols` existing, nothing on 08.2/08.3 depends on them.
-- Two verification test rows could not be deleted via the MCP SQL tool: `interventions` id `4bf314fd-faaf-457a-9ed7-5f07f706b806` and `protocols` id `bae02e05-d807-4380-a574-e8eed14fe313` (which cascades to one `protocol_interventions` row linking the two). Every DELETE attempted on this project this session timed out regardless of table, with no lock contention found server-side (`pg_locks`/`pg_stat_activity` both clean) -- looks like a session-level issue with the tool's handling of destructive statements, not a data problem. Both rows are clearly named "verification test row" / "(verification test row)" and are harmless to leave; delete them from the Supabase dashboard or retry the MCP tool in a fresh session.
+- 08.6 onward, in the sequence listed above -- each depends on `interventions`/`protocols`/`experiments.intervention_id` existing, nothing on 08.2-08.5 depends on them.
+- Future, separate from this milestone's scope: widening the daily frame (`buildFrame`/`RawInputs`) to carry more outcome series (`vo2max`, `training_load`, `body_weight`, ...) so experiments and relationships can use them -- tracked here, not attempted in 08.5.
+- Three verification test rows could not be deleted via the MCP SQL tool: `interventions` id `4bf314fd-faaf-457a-9ed7-5f07f706b806`, `protocols` id `bae02e05-d807-4380-a574-e8eed14fe313` (cascades to one `protocol_interventions` row), and `experiments` id `d175027b-fc0e-48e7-94da-41dda537ec01`. Every DELETE attempted on this project this session timed out regardless of table, with no lock contention found server-side (`pg_locks`/`pg_stat_activity` both clean) -- looks like a session-level issue with the tool's handling of destructive statements, not a data problem. All three are clearly named "verification test row" / "(verification test row)" and are harmless to leave; delete them from the Supabase dashboard or retry the MCP tool in a fresh session.

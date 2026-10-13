@@ -42,8 +42,10 @@ The Linear issue's entity list, mapped to concrete tables/types:
 | -- | -- | -- |
 | `interventions` | Canonical intervention, any domain, with lifecycle state. | 08.2 (done) |
 | `intervention_state_history` | Append-only log of lifecycle transitions, written by a trigger. | 08.2 (done) |
-| `protocols` | An objective-driven grouping of interventions with baseline/active/washout/evaluation windows. | 08.3 |
-| `protocol_interventions` | Join table: which interventions belong to a protocol, in what role/sequence. | 08.3 |
+| `protocols` | An objective-driven grouping of interventions with baseline/active/washout/evaluation windows. | 08.3 (done) |
+| `protocol_interventions` | Join table: which interventions belong to a protocol, in what role/sequence. | 08.3 (done) |
+| `protocol_state_history` | Append-only log of protocol lifecycle transitions, written by a trigger. | 08.3 (done) |
+| `protocol_templates` | Shared, read-only reference: descriptive starting points (sleep optimization, aerobic base, strength, recovery, metabolic health, micronutrient sufficiency), seeded by migration like `benchmark_artifacts`. | 08.3 (done) |
 | `protocol_adjustment_proposals` | Mutable proposal rows from the adaptive-rules engine (`proposed`/`accepted`/`rejected`/`modified`). | 08.7 |
 
 ## Status
@@ -52,7 +54,7 @@ The Linear issue's entity list, mapped to concrete tables/types:
 | -- | -- |
 | 08.1 Audit & architecture | **Done.** This document. |
 | 08.2 Canonical `interventions` model + lifecycle | **Done.** Migration `supabase/migrations/20261013_interventions.sql` (applied to the live project); lifecycle graph in `supabase/functions/_shared/analysis-core/intervention.ts`, tested in `intervention.test.ts`. |
-| 08.3 `protocols` model | Not started. |
+| 08.3 `protocols` model | **Done.** Migration `supabase/migrations/20261013_protocols.sql` (applied); lifecycle graph and `generateSchedule` in `supabase/functions/_shared/analysis-core/protocol.ts`, tested in `protocol.test.ts`. |
 | 08.4 Evidence registry generalization | Not started. |
 | 08.5 Generalize the N-of-1 engine | Not started. |
 | 08.6 Intervention response analysis (observational) | Not started. |
@@ -69,7 +71,17 @@ Domain pointers (e.g. `supplement_id`) are nullable FK columns added one per dom
 
 Verified live against the Supabase project: schema, RLS (owner-only on `interventions`; parent-ownership-scoped select/insert on `intervention_state_history`), the lifecycle trigger (a `proposed -> baseline` transition correctly wrote one history row and bumped `version`), and the `lifecycle_state` CHECK constraint (rejected an invalid value). `get_advisors` reported no new findings beyond the four pre-existing ones already listed in `docs/analysis-layer-3/README.md`.
 
+## 08.3 notes
+
+`protocols` groups interventions (via `protocol_interventions`) around one `objective_outcome_key`. Its lifecycle is coarser than an intervention's (`proposed -> active -> evaluating -> completed|stopped`, no separate `baseline` state at the protocol level -- baseline is just the first window of the generated schedule, not a stage the whole protocol moves through) and is audited into `protocol_state_history` the same way `interventions_log_lifecycle_change` works, with the transition graph enforced by `isValidProtocolTransition` in `protocol.ts`.
+
+`protocol_templates` are descriptive starting points, not prescriptive rules the app applies automatically -- `suggested_structure` is read by the UI (08.9) as a pre-fill suggestion, nothing reads or branches on it server-side. Six seeded: sleep optimization, aerobic base development, strength development, recovery, metabolic health, micronutrient sufficiency; `objective_outcome_key` uses the canonical `metric-registry.json` key where one already exists (`sleep_duration`, `vo2max`, `hrv`) and a reasonable free-text key otherwise (`strength_level`, `hba1c`, `ferritin` have no metric-registry entry yet -- `evidence_records.outcome_key`/`interventions.intended_outcomes` are likewise unconstrained text, so this doesn't block anything, but 08.4/08.5 should reconcile the vocabulary once the registry is widened).
+
+`generateSchedule` (acceptance: "a protocol can be instantiated for a user, generate an actionable schedule") computes baseline/washout/active dates and slices the active window into sequential groups by `sequence_order`, with steps sharing an order running concurrently -- pure and tested, no I/O.
+
+Verified live: schema, RLS (owner-only on `protocols`; parent-ownership-scoped on `protocol_interventions`/`protocol_state_history`, with the `protocol_interventions` insert policy also requiring the linked intervention to belong to the same user), all 6 `protocol_templates` rows seeded correctly, the lifecycle trigger (`proposed -> active` logged one history row), and a `protocol_interventions` insert linking a real intervention. No new `get_advisors` findings.
+
 ## Still open
 
-- 08.3 onward, in the sequence listed above -- each depends on `interventions` existing, nothing on 08.2 depends on them.
-- A single verification test row in `interventions` (id `4bf314fd-faaf-457a-9ed7-5f07f706b806`, name contains "verification test row") could not be deleted via the MCP SQL tool (repeated timeouts on the DELETE specifically, no lock contention found server-side) and needs manual cleanup or a retry.
+- 08.4 onward, in the sequence listed above -- each depends on `interventions`/`protocols` existing, nothing on 08.2/08.3 depends on them.
+- Two verification test rows could not be deleted via the MCP SQL tool: `interventions` id `4bf314fd-faaf-457a-9ed7-5f07f706b806` and `protocols` id `bae02e05-d807-4380-a574-e8eed14fe313` (which cascades to one `protocol_interventions` row linking the two). Every DELETE attempted on this project this session timed out regardless of table, with no lock contention found server-side (`pg_locks`/`pg_stat_activity` both clean) -- looks like a session-level issue with the tool's handling of destructive statements, not a data problem. Both rows are clearly named "verification test row" / "(verification test row)" and are harmless to leave; delete them from the Supabase dashboard or retry the MCP tool in a fresh session.

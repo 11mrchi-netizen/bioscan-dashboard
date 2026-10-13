@@ -15,6 +15,7 @@ import { PALETTE } from '../lib/palette'
 import { METRIC_OPTIONS, type MetricOption } from '../lib/metricOptions'
 import { Confirmatory } from './Confirmatory'
 import { Experiments } from './Experiments'
+import { Interventions } from './Interventions'
 import './RelationshipLab.css'
 
 function Exploratory() {
@@ -181,7 +182,7 @@ function Exploratory() {
   )
 }
 
-type Tab = 'confirmatory' | 'exploratory' | 'experiments'
+type Tab = 'confirmatory' | 'exploratory' | 'experiments' | 'interventions'
 
 export function RelationshipLab() {
   const [tab, setTab] = useState<Tab>('confirmatory')
@@ -189,11 +190,14 @@ export function RelationshipLab() {
     <div className="rlab-shell">
       <div className="rlab-tabs">
         <h2 className="rlab-shell-title">Relationship Lab</h2>
-        {(['confirmatory', 'exploratory', 'experiments'] as const).map(t => (
+        {(['confirmatory', 'exploratory', 'experiments', 'interventions'] as const).map(t => (
           <button key={t} className={`rlab-tab mono ${tab === t ? 'rlab-tab-on' : ''}`} onClick={() => setTab(t)}>{t.toUpperCase()}</button>
         ))}
       </div>
-      {tab === 'confirmatory' ? <div className="rlab"><Confirmatory /></div> : tab === 'experiments' ? <div className="rlab"><Experiments /></div> : <Exploratory />}
+      {tab === 'confirmatory' ? <div className="rlab"><Confirmatory /></div>
+        : tab === 'experiments' ? <div className="rlab"><Experiments /></div>
+        : tab === 'interventions' ? <div className="rlab"><Interventions /></div>
+        : <Exploratory />}
     </div>
   )
 }

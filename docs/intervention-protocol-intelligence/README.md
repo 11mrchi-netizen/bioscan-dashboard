@@ -60,7 +60,7 @@ The Linear issue's entity list, mapped to concrete tables/types:
 | 08.6 Intervention response analysis (observational) | **Code complete, not deployed.** `interventionResponse.ts` (pure) + `runInterventionResponse.ts` (I/O), wired into `analysis-run/index.ts`'s source but the Edge Function has not been redeployed (see notes). |
 | 08.7 Adaptive protocol rules | **Done.** `protocolRules.ts` (pure, tested in `protocolRules.test.ts`) + `protocol_adjustment_proposals` migration (applied). Nothing calls it yet -- no I/O wiring into `analysis-run` in this pass (see notes). |
 | 08.8 Protocol audit | **Pure engine done.** `protocolAudit.ts`, tested in `protocolAudit.test.ts`. No new table (publishes as `analysis_results` kind `protocol_audit`, same generic envelope, no schema change); no I/O wiring in this pass (see notes). |
-| 08.9 UI (Console + Android) | Not started. |
+| 08.9 UI (Console + Android) | **Console: done, build-verified.** New INTERVENTIONS tab in the Relationship Lab (`console/src/workspaces/Interventions.tsx`). **Android: domain mirrors only, unverified.** See notes -- no screen/nav wiring. |
 | 08.10 Validation | Not started. |
 
 ## 08.2 notes
@@ -119,10 +119,18 @@ Pair-level findings (shared mechanisms/ingredients, timing conflicts) are **not 
 
 No new table: findings publish as another `analysis_results` kind (`protocol_audit`), the same generic envelope `experiment`/`intervention_response` already use, so no migration was needed. No I/O layer yet -- same reasoning as 08.6/08.7 (an I/O wiring pass into `analysis-run` needs the other two engines' outputs plus a live interaction lookup, better done together with their own wiring than ahead of it).
 
+## 08.9 notes
+
+**Console.** A new INTERVENTIONS tab in the Relationship Lab (`console/src/workspaces/Interventions.tsx`, wired into `RelationshipLab.tsx`'s tab bar alongside `confirmatory`/`exploratory`/`experiments`) lists the signed-in user's `interventions` and `protocols`, their latest `intervention_response`/`protocol_audit` `analysis_results` rows when present, and nothing (not an error) when absent -- reuses `Confirmatory.tsx`'s `IntervalBar` and `conf-*` CSS classes exactly as `Experiments.tsx` already does, same read-only, direct-Supabase-read pattern. Verified: `tsc -b` (clean), `oxlint` (no new warnings beyond the same `set-state-in-effect`/`exhaustive-deps` class already present on sibling files), `vite build` (succeeds, bundles into the `RelationshipLab` chunk). **Not verified:** rendered in a live, authenticated browser session -- that needs real account credentials this session doesn't have, and the console has no component-test harness (only `node --test` on pure-function `lib/*.test.ts` files) to render around the auth gate.
+
+**Android.** `domain/Intervention.kt` and `domain/Protocol.kt` are client-side mirrors of `intervention.ts`/`protocol.ts`'s lifecycle graphs (the same role `Experiment.kt` plays for experiment protocols), with JUnit tests (`InterventionTest.kt`, `ProtocolTest.kt`) mirroring the TS tests' exhaustive-pair style, following the existing enum/`.entries` idiom used elsewhere in the app (`TopLevelTab.kt`, `PeriodToggle.kt`, ...). **None of this could be compiled or run**: this environment has no Android SDK at all (`ANDROID_HOME` unset, nothing under `~/Android`/`~/.android`), so not even a JVM-only unit-test task could execute -- these files are hand-written to match the codebase's conventions as closely as possible, but are unverified in the literal sense (never compiled). No Compose screen or navigation wiring was attempted: `TopLevelTab.kt`'s own comments show tab/screen placement here is a deliberate, mockup-backed IA decision (see its DAV-70/96/97/209/216 history), not something to invent unilaterally without a design pass, and Compose UI code has far more surface area to get wrong than the two small enums/maps above with zero ability to verify any of it. This mirrors the file's own `MapScreen.kt` precedent: a screen can exist in the codebase, written and ready, without being referenced from the nav host.
+
 ## Still open
 
 - Wire `proposeProtocolAction` into an I/O layer (own `runProtocolRules.ts`, mirroring `runExperiments.ts`/`runInterventionResponse.ts`) that builds `ProtocolRuleInputs` from the latest relevant `analysis_results` rows and an intervention/protocol's own columns, and writes new `protocol_adjustment_proposals` rows -- not done in this pass (08.7 notes).
 - Wire `auditProtocol` into an I/O layer that gathers a protocol's interventions, reads evidence/interaction rows and publishes `analysis_results` kind `protocol_audit` -- not done in this pass (08.8 notes).
+- Android: an actual Compose screen and its navigation placement, once there is a mockup/IA decision for where interventions/protocols live in the app (Labs? A new top-level tab? Something else?) -- and a real Android build/emulator to verify `Intervention.kt`/`Protocol.kt` actually compile, which this session never had (08.9 notes).
+- Console: a live, authenticated-session check of the new INTERVENTIONS tab (08.9 notes) -- build-verified only.
 
 - Deploy `analysis-run` with `runInterventionResponse.ts` included (via `mcp__Supabase__deploy_edge_function` or the CLI, entrypoint `index.ts` plus every file under `_shared/analysis-core/` it imports, same as `docs/analysis-layer-3/README.md`'s "Deploying `analysis-run`" section) -- not done in this pass, see 08.6 notes.
 

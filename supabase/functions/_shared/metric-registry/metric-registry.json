@@ -629,6 +629,55 @@
       "references": [],
       "productDefined": true,
       "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "healthspan",
+      "docName": null,
+      "kind": "composite",
+      "methodology": "A general grade shown only on the User profile page. Eight factors are each placed as favorable, neutral or opportunity, or left unassessed: cardio fitness (VO2max percentile for your age and sex), biological age (PhenoAge versus calendar age), strength (needs a benchmark that is not installed, so it is currently never assessed), body composition (waist-to-height ratio), sleep (average duration over the last 30 days with the sleep regularity index), activity (median daily steps over the last 30 days against the Tudor-Locke and Bassett categories), blood lipids (triglycerides and HDL against the harmonised metabolic syndrome criteria) and blood glucose (HbA1c, or fasting glucose when there is no valid HbA1c, against the American Diabetes Association categories). A factor is assessed only when every input passes a trust gate: present, recent (labs within a year, VO2max within 90 days), enough days of data, confidence met, a known matching unit, no conflicting values for the same marker on the same date, and nothing assumed; sleep and steps restart at a confirmed series break. The grade is the share of assessed factors that are favorable, shown as a letter (A at 80% or more, B at 60%, C at 40%, otherwise D) only when at least five factors are assessed; below that it is labelled preliminary. The cut-offs for cardio fitness, biological age, the regularity index and the letter bands are product-defined.",
+      "limitations": [
+        "Product-defined and provisional, not clinically validated: the cut-offs, the letter bands and the minimum of five assessed factors have not been tested against outcomes, and with only a few lab draws they cannot yet be checked on your own history.",
+        "A factor that cannot be assessed is left out, not scored as bad, so the grade describes only the factors you have data for and can move a lot when one more becomes assessable.",
+        "Blood pressure, family history, smoking, diet and many other determinants of healthspan are not inputs; a favorable grade does not mean low risk.",
+        "Long sleep is not penalised (only under 7 hours counts against duration), and a single panel or reading is treated as current for a year.",
+        "Lab values come from the panels you entered and are as accurate as that entry; the grade does not replace a clinician's reading of them."
+      ],
+      "references": [
+        {
+          "citation": "Mandsager K, Harb S, Cremer P, et al. Association of cardiorespiratory fitness with long-term mortality among adults undergoing exercise treadmill testing. JAMA Netw Open 2018;1(6):e183605.",
+          "doi": "10.1001/jamanetworkopen.2018.3605"
+        },
+        {
+          "citation": "Levine ME, Lu AT, Quach A, et al. An epigenetic biomarker of aging for lifespan and healthspan. Aging (Albany NY) 2018;10(4):573-591.",
+          "doi": "10.18632/aging.101414"
+        },
+        {
+          "citation": "Ashwell M, Gunn P, Gibson S. Waist-to-height ratio is a better screening tool than waist circumference and BMI for adult cardiometabolic risk factors: systematic review and meta-analysis. Obes Rev 2012;13(3):275-286.",
+          "doi": "10.1111/j.1467-789X.2011.00952.x"
+        },
+        {
+          "citation": "Watson NF, Badr MS, Belenky G, et al. Recommended amount of sleep for a healthy adult: a joint consensus statement of the American Academy of Sleep Medicine and Sleep Research Society. Sleep 2015;38(6):843-844.",
+          "doi": "10.5665/sleep.4716"
+        },
+        {
+          "citation": "Windred DP, Burns AC, Lane JM, et al. Sleep regularity is a stronger predictor of mortality risk than sleep duration: a prospective cohort study. Sleep 2024;47(1):zsad253.",
+          "doi": "10.1093/sleep/zsad253"
+        },
+        {
+          "citation": "Tudor-Locke C, Bassett DR Jr. How many steps/day are enough? Preliminary pedometer indices for public health. Sports Med 2004;34(1):1-8.",
+          "doi": "10.2165/00007256-200434010-00001"
+        },
+        {
+          "citation": "Alberti KGMM, Eckel RH, Grundy SM, et al. Harmonizing the metabolic syndrome: a joint interim statement of the IDF Task Force on Epidemiology and Prevention; NHLBI; AHA; WHF; IAS; and IASO. Circulation 2009;120:1640-1645.",
+          "doi": "10.1161/CIRCULATIONAHA.109.192644"
+        },
+        {
+          "citation": "American Diabetes Association Professional Practice Committee. 2. Diagnosis and classification of diabetes: Standards of Care in Diabetes-2025. Diabetes Care 2025;48(Suppl 1):S27-S49.",
+          "doi": "10.2337/dc25-S002"
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
     }
   ]
 }

@@ -27,6 +27,8 @@ data class AgingProfileOverview(
     val phenoAge: BiologicalAgeResult?,
     val phenoAgeHistory: List<BiologicalAgeResult>,
     val cardioAge: BiologicalAgeResult?,
+    // Latest VO2max reading and its date; feeds the Healthspan fitness factor.
+    val latestVo2Max: Pair<LocalDate, Double>? = null,
 )
 
 @kotlinx.serialization.Serializable
@@ -110,6 +112,6 @@ class AgingProfileRepository(private val supabase: SupabaseClient) {
             cardioFunctionalAge(vo2max, profile.sex, chronologicalAgeYears(dateOfBirth, asOf = date).toDouble(), date, Provenance("wearable_daily", null, null))
         }
 
-        return AgingProfileOverview(chronoAge, phenoAge, phenoAgeHistory, cardioAge)
+        return AgingProfileOverview(chronoAge, phenoAge, phenoAgeHistory, cardioAge, latestVo2Max)
     }
 }

@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.AchievementsRepository
 import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.AgingProfileRepository
+import com.bioscan.fieldterminal.data.HealthspanBundle
+import com.bioscan.fieldterminal.data.HealthspanRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
@@ -85,26 +87,32 @@ import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.launch
 
-data class UserProfileData(
-    val domainLevels: Map<AchievementDomain, DomainLevel>,
-    val achievements: Map<AchievementDomain, List<Achievement>>,
-    val activeCycle: TrainingCycle?,
-    val activeCycleCurrentValue: Double?,
-    val cycleHistory: List<TrainingCycle>,
-)
-
 @Composable
 fun UserProfileScreen(
-    data: UserProfileData? = null,
     onOpenAging: () -> Unit = {},
     onOpenTrainingBlocks: () -> Unit = {},
 ) {
-    val profile = data ?: remember { mockUserProfileData() }
-
     var agingOverview by remember { mutableStateOf<AgingProfileOverview?>(null) }
     LaunchedEffect(Unit) {
         agingOverview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview()
     }
+
+    // Analysis Layer 3 / Phase 8: the Healthspan grade and the VO2max placement behind the running level.
+    var healthspan by remember { mutableStateOf<HealthspanBundle?>(null) }
+    var healthspanFailed by remember { mutableStateOf(false) }
+    LaunchedEffect(agingOverview) {
+        val overview = agingOverview ?: return@LaunchedEffect
+        healthspanFailed = false
+        healthspan = runCatching { HealthspanRepository(SupabaseClientProvider.client).load(overview) }
+            .onFailure { healthspanFailed = true }
+            .getOrNull()
+    }
+    val domainLevels = mapOf(
+        AchievementDomain.RUNNING to runningLevel(listOfNotNull(healthspan?.vo2Comparison)),
+        AchievementDomain.STRENGTH to strengthLevel(emptyList()),
+        AchievementDomain.CONDITIONING to conditioningLevel(emptyList()),
+        AchievementDomain.MOUNTAIN to mountainLevel(emptyList()),
+    )
 
     var cycles by remember { mutableStateOf<List<TrainingCycle>?>(null) }
     var blockSummaries by remember { mutableStateOf<List<TrainingBlockSummaryRow>?>(null) }
@@ -139,6 +147,11 @@ fun UserProfileScreen(
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         ) {
+            // -- Healthspan (the only place a cross-metric grade appears) --
+            HealthspanCard(healthspan?.summary, healthspanFailed)
+
+            Spacer(Modifier.height(24.dp))
+
             // -- Aging --
             AgingCard(agingOverview, onOpenAging)
 
@@ -147,13 +160,13 @@ fun UserProfileScreen(
             // -- Domain Levels --
             FTCard(title = "DOMAIN LEVELS") {
                 AchievementDomain.entries.forEach { domain ->
-                    DomainLevelRow(domain, profile.domainLevels[domain])
+                    DomainLevelRow(domain, domainLevels[domain])
                 }
                 Text(
                     if (realAchievements == null)
                         "Loading achievements from your training history…"
                     else
-                        "Domain levels require population benchmarks and are not yet live.",
+                        "Running comes from your VO2max against an age- and sex-matched table. The other domains need population benchmarks that are not installed yet.",
                     style = FTType.Caption,
                     color = FT.TextMuted,
                 )
@@ -162,7 +175,7 @@ fun UserProfileScreen(
             Spacer(Modifier.height(24.dp))
 
             // -- Achievements (only domains that have data) --
-            val achievements = realAchievements ?: profile.achievements
+            val achievements = realAchievements.orEmpty()
             val populatedDomains = AchievementDomain.entries.filter { achievements[it].orEmpty().isNotEmpty() }
             populatedDomains.forEachIndexed { i, domain ->
                 if (domain == AchievementDomain.STRENGTH) {
@@ -686,66 +699,4 @@ private fun formatAchievementValue(achievement: Achievement): String =
 private fun Achievement.displayValue(): String = when (unit) {
     "sec" -> value.toLong().let { "%d:%02d".format(it / 60, it % 60) }
     else -> "${formatAchievementValue(this)} $unit"
-}
-
-// ---- Mock data ----
-
-private fun mockUserProfileData(): UserProfileData {
-    fun comparison(metric: String, percentile: Double, have: Int) = ComparisonResult(
-        metric = metric, comparisonType = ComparisonType.POPULATION, state = ComparisonState.OK,
-        rawValue = null, normalizedValue = null, referenceValue = null, delta = null, standardizedDelta = null,
-        percentile = percentile, rank = null, rankDenominator = null, directionality = Directionality.HIGHER_BETTER,
-        referenceIdentity = "population_v1", referenceVersion = "1", confidence = Confidence(have, 14),
-        breadth = InputCompleteness(emptySet(), emptySet()), provenance = Provenance("wearable", "population_comparison", "1"),
-    )
-
-    val levels = mapOf(
-        AchievementDomain.RUNNING to runningLevel(listOf(comparison("vo2max", 78.0, 18))),
-        AchievementDomain.STRENGTH to strengthLevel(listOf(comparison("estimated_1rm_deadlift", 92.0, 20))),
-        AchievementDomain.CONDITIONING to conditioningLevel(emptyList()),
-        AchievementDomain.MOUNTAIN to mountainLevel(listOf(comparison("km_effort", 55.0, 9))),
-    )
-
-    fun achievement(domain: AchievementDomain, metric: String, value: Double, unit: String, daysAgo: Long, context: String? = null, confidence: Double? = null) = Achievement(
-        domain = domain, metric = metric, activityRef = null, value = value, unit = unit,
-        occurredAt = OffsetDateTime.now().minusDays(daysAgo),
-        provenance = Provenance("zepp", null, null), comparisonContext = context, confidence = confidence,
-    )
-
-    val achievements = mapOf(
-        AchievementDomain.RUNNING to listOf(
-            achievement(AchievementDomain.RUNNING, "fastest_1km", 232.0, "sec", 14, "Top 10% of last 90 days"),
-            achievement(AchievementDomain.RUNNING, "longest_run_km", 32.4, "km", 40),
-        ),
-        AchievementDomain.STRENGTH to listOf(
-            achievement(AchievementDomain.STRENGTH, "heaviest_squat_kg", 100.0, "kg", 21),
-            achievement(AchievementDomain.STRENGTH, "best_estimated_1rm_deadlift_kg", 140.0, "kg", 7, "Epley estimate", confidence = 0.75),
-        ),
-        AchievementDomain.MOUNTAIN to listOf(
-            achievement(AchievementDomain.MOUNTAIN, "highest_single_run_gain_m", 1850.0, "m", 60),
-        ),
-    )
-
-    val activeCycle = TrainingCycle(
-        startDate = LocalDate.now().minusWeeks(4),
-        endDate = LocalDate.now().plusWeeks(4),
-        focus = listOf(FocusEntry(FocusQuality.RaceSpecificEndurance, 1.0, FocusRole.Primary)),
-        goalMetric = "5k_time_sec",
-        startingValue = 1500.0,
-        targetValue = 1320.0,
-    )
-    val activeCycleCurrentValue = 1410.0
-
-    val history = listOf(
-        TrainingCycle(
-            startDate = LocalDate.now().minusMonths(4), endDate = LocalDate.now().minusWeeks(4),
-            focus = listOf(FocusEntry(FocusQuality.AerobicBase, 1.0, FocusRole.Primary)),
-        ),
-        TrainingCycle(
-            startDate = LocalDate.now().minusMonths(7), endDate = LocalDate.now().minusMonths(4),
-            focus = listOf(FocusEntry(FocusQuality.Hypertrophy, 0.7, FocusRole.Primary), FocusEntry(FocusQuality.AerobicBase, 0.3, FocusRole.Maintained)),
-        ),
-    )
-
-    return UserProfileData(levels, achievements, activeCycle, activeCycleCurrentValue, history)
 }

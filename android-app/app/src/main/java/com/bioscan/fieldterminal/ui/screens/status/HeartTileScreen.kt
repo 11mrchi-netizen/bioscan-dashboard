@@ -45,6 +45,7 @@ import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
 import com.bioscan.fieldterminal.data.BenchmarkArtifactRepository
 import com.bioscan.fieldterminal.domain.analysis.ComparisonResult
 import com.bioscan.fieldterminal.domain.analysis.Directionality
+import com.bioscan.fieldterminal.domain.analysis.pearsonCorrelation
 import com.bioscan.fieldterminal.domain.comparison.BenchmarkArtifact
 import com.bioscan.fieldterminal.domain.comparison.METRIC_DIRECTIONALITY
 import com.bioscan.fieldterminal.domain.comparison.PopulationContext
@@ -294,16 +295,14 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     // card's existing DateTrendLine (SubjectiveCard already
                     // rendered one) gets the full width instead of being
                     // squeezed to half-screen.
+                    // Morning wood/arousal moved to the SEXUAL HEALTH tab
+                    // below (own qualitative card there) -- no longer
+                    // duplicated here.
                     val dimensions = listOf(
                         "ENERGY" to wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } },
                         "MOOD" to wb.mapNotNull { row -> row.mood?.let { LocalDate.parse(row.date) to it.toDouble() } },
                         "STRESS" to wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } },
                         "SORENESS" to wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } },
-                        // Arousal fold-in: morning-wood/arousal are now part
-                        // of the same daily wellness survey, shown the same
-                        // way as the other four dimensions here.
-                        "MORNING WOOD" to wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } },
-                        "AROUSAL" to wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } },
                     )
                     dimensions.forEach { (title, points) -> SubjectiveCard(title, points, modifier = Modifier.fillMaxWidth()) }
                     // 05.1 Stress Rhythm: labeled distinctly from the
@@ -317,31 +316,177 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     stressDays.firstOrNull()?.let { today ->
                         PhysiologicalStressCard(analyzeStressDay(today, stressDays.drop(1), exerciseWindows), today)
                     }
-                    SexualActivityHistory(sa)
+                }
+                HeartTab.SexualHealth -> {
+                    SexualHealthOccurrencesCard(sa)
+                    SexualHealthFrequencyCard(sa)
+                    SexualHealthHeatmapCard(sa)
+                    SexualHealthQualitativeCard(wb, sa)
+                    SexualHealthCorrelationsCard(wb, sa, w, s)
                 }
             }
         }
     }
 }
 
-// Arousal folded into the wellbeing_daily SubjectiveCards above (DAV-215's
-// original arousal_daily rows are gone) -- this history is masturbation/
-// intercourse-only now, reading sexual_activity_daily's per-instance detail.
+// Sexual Health tab -- self-quantification only, never a proxy for anything
+// clinical (explicit user directive). All five cards read sa/wb, already
+// loaded for Wellbeing above; no new repository call.
+
 @Composable
-private fun SexualActivityHistory(rows: List<LogSexualActivityRow>) {
-    if (rows.isEmpty()) {
-        Text("No entries logged yet.", style = FTType.Body, color = FT.TextSecondary)
+private fun SexualHealthOccurrencesCard(sa: List<LogSexualActivityRow>) {
+    val intercourseDays = sa.count { it.activityType == "intercourse" }
+    val masturbationDays = sa.count { it.activityType == "masturbation" }
+    val totalOrgasms = sa.sumOf { row -> row.instances.count { it.orgasm } }
+    val activeDays = sa.map { it.date }.distinct().size
+    val totalDays = sa.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
+        .let { dates -> if (dates.isEmpty()) 0 else ChronoUnit.DAYS.between(dates.min(), dates.max()).toInt() + 1 }
+    FTCard(title = "OCCURRENCES", info = "Raw counts over the logged window. Self-quantification only -- no clinical significance implied.") {
+        FTMetricRow("Intercourse days", "$intercourseDays")
+        FTMetricRow("Masturbation days", "$masturbationDays")
+        FTMetricRow("Total orgasms", "$totalOrgasms")
+        if (totalDays > 0) FTMetricRow("Active days", "$activeDays / $totalDays")
+    }
+}
+
+@Composable
+private fun SexualHealthFrequencyCard(sa: List<LogSexualActivityRow>) {
+    val dates = sa.mapNotNull { row -> runCatching { LocalDate.parse(row.date) }.getOrNull()?.let { it to row.activityType } }
+    if (dates.isEmpty()) {
+        FTCard(title = "FREQUENCY") { Text("No entries logged yet.", style = FTType.BodySmall, color = FT.TextSecondary) }
         return
     }
-    val sorted = rows.sortedByDescending { it.date }
-    FTCard(title = "RECENT ENTRIES", info = "No Analysis Layer evaluation exists for this yet -- this is real recent log history only.") {
-        sorted.forEach { row ->
-            val orgasmCount = row.instances.count { it.orgasm }
-            val text = "${row.activityType.replaceFirstChar { it.uppercase() }} · ${row.instances.size} instance${if (row.instances.size == 1) "" else "s"}" +
-                if (orgasmCount > 0) " · $orgasmCount with orgasm" else ""
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(row.date, style = FTType.Value, color = FT.TextSecondary)
-                Text(text, style = FTType.BodySmall, color = FT.TextPrimary)
+    val today = LocalDate.now()
+    val weeks = (0 until 8).map { w -> today.minusDays((w * 7 + 6).toLong()) to today.minusDays((w * 7).toLong()) }.reversed()
+    val weeklyCounts = weeks.map { (start, end) ->
+        val inWeek = dates.filter { (d, _) -> !d.isBefore(start) && !d.isAfter(end) }
+        inWeek.count { it.second == "intercourse" } to inWeek.count { it.second == "masturbation" }
+    }
+    val maxCount = weeklyCounts.maxOfOrNull { (i, m) -> i + m }?.coerceAtLeast(1) ?: 1
+    val sortedDates = dates.map { it.first }.distinct().sorted()
+    val gaps = sortedDates.zipWithNext { a, b -> ChronoUnit.DAYS.between(a, b) }
+    val avgGap = gaps.takeIf { it.isNotEmpty() }?.average()
+
+    FTCard(title = "FREQUENCY", info = "Weekly counts, last 8 weeks. Self-quantification only.") {
+        Row(modifier = Modifier.fillMaxWidth().height(80.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            weeklyCounts.forEach { (i, m) ->
+                Column(modifier = Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Bottom) {
+                    val iFrac = i.toFloat() / maxCount
+                    val mFrac = m.toFloat() / maxCount
+                    if (i > 0) Box(Modifier.fillMaxWidth().fillMaxHeight(iFrac).background(FT.Category.Arousal.c500))
+                    if (m > 0) Box(Modifier.fillMaxWidth().fillMaxHeight(mFrac).background(FT.Category.Wellbeing.c500))
+                    if (i == 0 && m == 0) Box(Modifier.fillMaxWidth().height(2.dp).background(FT.GlassFill))
+                }
+            }
+        }
+        avgGap?.let { FTMetricRow("Average gap between sessions", "%.1f days".format(it)) }
+    }
+}
+
+@Composable
+private fun SexualHealthHeatmapCard(sa: List<LogSexualActivityRow>) {
+    val byDate = sa.mapNotNull { row -> runCatching { LocalDate.parse(row.date) }.getOrNull()?.let { it to row.activityType } }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, types) ->
+            com.bioscan.fieldterminal.ui.components.DayActivity(
+                intercourseCount = types.count { it == "intercourse" },
+                masturbationCount = types.count { it == "masturbation" },
+            )
+        }
+    FTCard(title = "ACTIVITY HEATMAP", info = "Last 12 weeks. Red = intercourse, blue = masturbation, darker = more that day.") {
+        com.bioscan.fieldterminal.ui.components.ActivityHeatmap(byDate)
+    }
+}
+
+@Composable
+private fun SexualHealthQualitativeCard(wb: List<WellbeingAnalysisRow>, sa: List<LogSexualActivityRow>) {
+    SubjectiveCard("MORNING ERECTION QUALITY", wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }, modifier = Modifier.fillMaxWidth())
+    SubjectiveCard("AROUSAL", wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }, modifier = Modifier.fillMaxWidth())
+
+    val intensities = sa.flatMap { it.instances }.mapNotNull { it.orgasmIntensity }
+    val loadSizes = sa.flatMap { it.instances }.mapNotNull { it.loadSize }
+    if (intensities.isNotEmpty() || loadSizes.isNotEmpty()) {
+        FTCard(title = "INTENSITY & LOAD DISTRIBUTION", info = "Self-reported only -- no validated biomarker link to either field.") {
+            if (intensities.isNotEmpty()) {
+                Text("ORGASM INTENSITY", style = FTType.Label, color = FT.TextMuted)
+                val buckets = listOf("0-2" to (0..2), "3-4" to (3..4), "5-6" to (5..6), "7-8" to (7..8), "9-10" to (9..10))
+                FTSegmentBar(
+                    segments = buckets.mapIndexed { i, (label, range) ->
+                        FTSegment(label, intensities.count { it in range }.toDouble(), shadeForIndex(FT.Category.Arousal, i, buckets.size))
+                    },
+                    modifier = Modifier.padding(top = 6.dp, bottom = 12.dp),
+                )
+            }
+            if (loadSizes.isNotEmpty()) {
+                Text("LOAD SIZE", style = FTType.Label, color = FT.TextMuted)
+                FTSegmentBar(
+                    segments = (1..5).mapIndexed { i, size ->
+                        FTSegment("$size", loadSizes.count { it == size }.toDouble(), shadeForIndex(FT.Category.Wellbeing, i, 5))
+                    },
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+        }
+    }
+}
+
+private fun shadeForIndex(category: com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens.CategoryColor, index: Int, total: Int): androidx.compose.ui.graphics.Color {
+    val step = (index.toFloat() / (total - 1).coerceAtLeast(1))
+    return when {
+        step < 0.25f -> category.c300
+        step < 0.5f -> category.c500
+        step < 0.75f -> category.c700
+        else -> category.c900
+    }
+}
+
+@Composable
+private fun SexualHealthCorrelationsCard(wb: List<WellbeingAnalysisRow>, sa: List<LogSexualActivityRow>, w: List<WearableAnalysisRow>, s: List<SleepAnalysisRow>) {
+    val wbByDate = wb.mapNotNull { row -> runCatching { LocalDate.parse(row.date) }.getOrNull()?.let { it to row } }.toMap()
+    val sByDate = s.mapNotNull { row -> runCatching { LocalDate.parse(row.date) }.getOrNull()?.let { it to row } }.toMap()
+    val wByDate = w.mapNotNull { row -> runCatching { LocalDate.parse(row.date) }.getOrNull()?.let { it to row } }.toMap()
+
+    fun pairs(x: (LocalDate) -> Double?, y: (LocalDate) -> Double?): List<Pair<Double, Double>> {
+        val dates = wbByDate.keys + sByDate.keys + wByDate.keys
+        return dates.mapNotNull { d -> val xv = x(d); val yv = y(d); if (xv != null && yv != null) xv to yv else null }
+    }
+
+    val erectionVsSleepHours = pearsonCorrelation(pairs({ wbByDate[it]?.morningErectionQuality?.toDouble() }, { sByDate[it]?.hours }))
+    val erectionVsDeepSleep = pearsonCorrelation(pairs({ wbByDate[it]?.morningErectionQuality?.toDouble() }, { sByDate[it]?.deepMin }))
+    val arousalVsHrv = pearsonCorrelation(pairs({ wbByDate[it]?.arousalLevel?.toDouble() }, { wByDate[it]?.hrv }))
+    val arousalVsRhr = pearsonCorrelation(pairs({ wbByDate[it]?.arousalLevel?.toDouble() }, { wByDate[it]?.rhr }))
+
+    val gapByDate: Map<LocalDate, Double> = run {
+        val sorted = sa.mapNotNull { row -> runCatching { LocalDate.parse(row.date) }.getOrNull() }.distinct().sorted()
+        sorted.zipWithNext { a, b -> b to ChronoUnit.DAYS.between(a, b).toDouble() }.toMap()
+    }
+    val intensityByDate: Map<LocalDate, Double> = sa.mapNotNull { row ->
+        runCatching { LocalDate.parse(row.date) }.getOrNull()?.let { date ->
+            row.instances.mapNotNull { it.orgasmIntensity }.maxOrNull()?.let { date to it.toDouble() }
+        }
+    }.toMap()
+    val intensityVsGap = pearsonCorrelation(gapByDate.keys.mapNotNull { d -> intensityByDate[d]?.let { it to gapByDate.getValue(d) } })
+
+    val rows = listOfNotNull(
+        erectionVsSleepHours?.let { Triple("Morning erection quality × sleep duration", it, "research-supported pairing") },
+        erectionVsDeepSleep?.let { Triple("Morning erection quality × deep sleep", it, "research-supported pairing") },
+        arousalVsHrv?.let { Triple("Arousal × HRV", it, "observed in your data only") },
+        arousalVsRhr?.let { Triple("Arousal × resting heart rate", it, "observed in your data only") },
+        intensityVsGap?.let { Triple("Orgasm intensity × days since last activity", it, "observed in your data only") },
+    )
+
+    FTCard(title = "CORRELATIONS", info = "Pearson r, minimum 7 paired days. Only morning erection quality × sleep has real supporting research -- everything else is observed in your own data, not a validated link.") {
+        if (rows.isEmpty()) {
+            Text("Not enough paired history yet (need 7+ overlapping days per pair).", style = FTType.BodySmall, color = FT.TextSecondary)
+        } else {
+            rows.forEach { (label, result, caption) ->
+                Column(modifier = Modifier.padding(top = 10.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(label, style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f))
+                        Text("r = %.2f".format(result.r), style = FTType.Value, color = FT.TextSecondary)
+                    }
+                    Text("${result.strength} · n=${result.n} · $caption", style = FTType.Caption, color = FT.TextMuted)
+                }
             }
         }
     }

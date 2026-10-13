@@ -61,6 +61,7 @@ enum class HeartTab(val label: String) {
     Cardio("CARDIO"),
     Recovery("RECOVERY"),
     Wellbeing("WELLBEING"),
+    SexualHealth("SEXUAL HEALTH"),
 }
 
 // DAV-209 (24/9 fixes): Labs had no subtab structure; Supplements moves here

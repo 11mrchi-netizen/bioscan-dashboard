@@ -11,7 +11,7 @@ import type { EventRef, MetricPointInspection } from '../../types/analysis'
 import './Inspector.css'
 
 const EVENT_TABLE: Record<EventRef['kind'], string> = {
-  session:   'runs',
+  session:   'exercise_sessions',
   meal:      'meals',
   sleep:     'sleep_daily',
   lab_draw:  'lab_draws',

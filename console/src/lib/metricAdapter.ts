@@ -2,6 +2,7 @@
 // Components request metrics through this; no component queries Supabase directly.
 
 import { supabase } from './supabase'
+import { TABLES_WITH_SOURCE } from './schema'
 import type { DateRange, Source } from '../types/analysis'
 
 export type Aggregation = 'latest' | 'daily_avg' | 'daily_sum' | 'raw'
@@ -47,9 +48,11 @@ export async function fetchMetric(req: MetricRequest): Promise<MetricResult> {
   const dateCol = req.dateColumn ?? 'date'
   const metricId = `${req.table}.${req.column}`
 
+  // No table has `confidence` or `provenance` columns (see lib/schema.ts); only select `source` where it exists.
+  const hasSource = TABLES_WITH_SOURCE.has(req.table)
   let query = supabase
     .from(req.table)
-    .select(`${dateCol}, ${req.column}, source, confidence, provenance`)
+    .select(hasSource ? `${dateCol}, ${req.column}, source` : `${dateCol}, ${req.column}`)
     .gte(dateCol, req.range.start)
     .lte(dateCol, req.range.end)
     .order(dateCol)
@@ -70,8 +73,8 @@ export async function fetchMetric(req: MetricRequest): Promise<MetricResult> {
     date: row[dateCol] as string,
     value: row[req.column] as number | null,
     source: (row['source'] as string | null) ?? null,
-    confidence: (row['confidence'] as string | null) ?? null,
-    provenance: (row['provenance'] as string | null) ?? null,
+    confidence: null,
+    provenance: null,
   }))
 
   const rangeLength = daysBetween(req.range.start, req.range.end)
@@ -91,17 +94,5 @@ function daysBetween(a: string, b: string): number {
   return Math.max(1, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000))
 }
 
-// Well-known metric IDs for type-safe usage across workspaces.
-export const METRICS = {
-  HRV:              { table: 'wearable_daily',   column: 'hrv_rmssd_ms' },
-  RHR:              { table: 'wearable_daily',   column: 'resting_hr_bpm' },
-  STEPS:            { table: 'wearable_daily',   column: 'steps' },
-  SLEEP_DURATION:   { table: 'sleep_daily',      column: 'total_sleep_minutes' },
-  SLEEP_EFFICIENCY: { table: 'sleep_daily',      column: 'sleep_efficiency_pct' },
-  BODY_WEIGHT:      { table: 'body_metrics',     column: 'weight_kg' },
-  KCAL_TOTAL:       { table: 'wellbeing_daily',  column: 'energy_level' },   // placeholder
-  ENERGY_LEVEL:     { table: 'wellbeing_daily',  column: 'energy_level' },
-  MOOD:             { table: 'wellbeing_daily',  column: 'mood' },
-  STRESS:           { table: 'wellbeing_daily',  column: 'stress_level' },
-  SORENESS:         { table: 'wellbeing_daily',  column: 'muscle_soreness' },
-} as const
+// Well-known metric IDs live in ./schema (importable without a Supabase client).
+export { METRICS } from './schema'

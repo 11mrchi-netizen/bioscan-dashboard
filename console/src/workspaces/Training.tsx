@@ -5,6 +5,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRange, useInspect } from '../lib/analysisStore'
+import { ENDURANCE_TYPES, dayBounds, localDate, warnOnError } from '../lib/schema'
 import { tss, vo2maxFromPace, ema } from '../lib/training'
 import { FTChart } from '../components/shared/FTChart'
 import type { MetricResult } from '../lib/metricAdapter'
@@ -42,12 +43,25 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
     warmupStart.setDate(warmupStart.getDate() - 90)
     const warmupStr = warmupStart.toISOString().slice(0, 10)
 
-    supabase.from('runs')
-      .select('id, date, distance_km, duration_minutes, activity_type, avg_hr, source')
-      .gte('date', warmupStr).lte('date', end)
-      .order('date', { ascending: true })
-      .then(({ data: rows }) => {
-        const runs = (rows ?? []) as RunRow[]
+    // exercise_sessions replaced the old `runs` table; only endurance types feed this run-based load model
+    // (4,000+ auto-detected walks would otherwise dominate the TSS proxy).
+    const { from, to } = dayBounds(warmupStr, end)
+    supabase.from('exercise_sessions')
+      .select('id, start_time, distance_km, duration_min, type, avg_hr, source')
+      .in('type', ENDURANCE_TYPES)
+      .gte('start_time', from).lte('start_time', to)
+      .order('start_time', { ascending: true })
+      .then(({ data: rows, error }) => {
+        warnOnError('training sessions', error)
+        const runs: RunRow[] = (rows ?? []).map((r: Record<string, unknown>) => ({
+          id: String(r.id),
+          date: localDate(r.start_time as string),
+          distance_km: r.distance_km as number | null,
+          duration_minutes: r.duration_min as number | null,
+          activity_type: r.type as string | null,
+          avg_hr: r.avg_hr as number | null,
+          source: r.source as string | null,
+        }))
 
         // Build daily TSS map over full range (warmup + visible)
         const allDates: string[] = []

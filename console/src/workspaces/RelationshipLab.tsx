@@ -1,4 +1,9 @@
-// Relationship Lab — scatter plot and lag-correlation between two metrics.
+// Relationship Lab. Three views:
+//   CONFIRMATORY  published results of a fixed hypothesis catalogue (Analysis Layer 3, Phase 3): weekday-adjusted, tested once,
+//                 corrected across the catalogue, effect sizes with intervals and the smallest detectable effect.
+//   EXPLORATORY   free scatter and a scan of 29 lags between any two metrics. Nothing here is corrected for the 29 looks, so a
+//                 pattern is a lead to test, not a finding.
+//   EXPERIMENTS   pre-registered supplement N-of-1 tests (read-only; plans are registered in the app).
 // Explicit n= and missingness caveats shown on every view.
 
 import { useEffect, useState, useMemo, useRef } from 'react'
@@ -8,9 +13,11 @@ import { fetchMetric, type MetricResult } from '../lib/metricAdapter'
 import { pearson, buildPairs } from '../lib/stats'
 import { PALETTE } from '../lib/palette'
 import { METRIC_OPTIONS, type MetricOption } from '../lib/metricOptions'
+import { Confirmatory } from './Confirmatory'
+import { Experiments } from './Experiments'
 import './RelationshipLab.css'
 
-export function RelationshipLab() {
+function Exploratory() {
   const range = useRange()
   const [metricX, setMetricX] = useState<MetricOption>(METRIC_OPTIONS[3]) // Sleep
   const [metricY, setMetricY] = useState<MetricOption>(METRIC_OPTIONS[0]) // HRV
@@ -124,12 +131,12 @@ export function RelationshipLab() {
   }, [lagCorrs])
 
   const r = isNaN(pearson(xs, ys)) ? null : pearson(xs, ys)
-  const caveatStr = `n=${xs.length}  ·  lag=${lag}d  ·  r=${r !== null ? r.toFixed(3) : '—'}  ·  observational only`
+  const caveatStr = `EXPLORATORY · 29 lags scanned, no correction for multiple comparisons · n=${xs.length}  ·  lag=${lag}d  ·  r=${r !== null ? r.toFixed(3) : '—'}  ·  observational only`
 
   return (
     <div className="rlab">
       <div className="rlab-header">
-        <h2 className="rlab-title">Relationship Lab</h2>
+        <h2 className="rlab-title">Exploratory scan</h2>
         <div className="rlab-selectors">
           <div className="rlab-selector-group">
             <span className="rlab-selector-label mono">X</span>
@@ -167,9 +174,26 @@ export function RelationshipLab() {
         <div className="rlab-chart-label mono">LAG CORRELATION  −14d to +14d</div>
         <div ref={lagRef} style={{ width: '100%', height: 200 }} />
         <p className="rlab-footnote mono">
-          Pearson r per lag window · each bar's n may differ · correlation ≠ causation
+          Pearson r per lag window · each bar's n may differ · uncorrected for 29 looks, so a tall bar is a lead, not a finding · correlation ≠ causation
         </p>
       </div>
+    </div>
+  )
+}
+
+type Tab = 'confirmatory' | 'exploratory' | 'experiments'
+
+export function RelationshipLab() {
+  const [tab, setTab] = useState<Tab>('confirmatory')
+  return (
+    <div className="rlab-shell">
+      <div className="rlab-tabs">
+        <h2 className="rlab-shell-title">Relationship Lab</h2>
+        {(['confirmatory', 'exploratory', 'experiments'] as const).map(t => (
+          <button key={t} className={`rlab-tab mono ${tab === t ? 'rlab-tab-on' : ''}`} onClick={() => setTab(t)}>{t.toUpperCase()}</button>
+        ))}
+      </div>
+      {tab === 'confirmatory' ? <div className="rlab"><Confirmatory /></div> : tab === 'experiments' ? <div className="rlab"><Experiments /></div> : <Exploratory />}
     </div>
   )
 }

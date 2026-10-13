@@ -45,12 +45,13 @@ export function Recovery() {
       fetchMetric({ table: 'body_metrics', column: 'weight_kg', range, aggregation: 'daily_avg' })
         .then(r => [r.metricId, r] as const),
       supabase.from('injuries')
-        .select('start_date, end_date, body_part')
+        .select('start_date, end_date, part')
         .lte('start_date', end).or(`end_date.gte.${start},end_date.is.null`)
         .then(({ data }) => data ?? []),
     ]).then(([metricEntries, bodyEntry, injuryData]) => {
       setResults(Object.fromEntries([...metricEntries, [bodyEntry[0], bodyEntry[1]]]))
-      setInjuries(injuryData as InjuryBand[])
+      setInjuries((injuryData as unknown as { start_date: string; end_date: string | null; part: string | null }[])
+        .map(i => ({ start_date: i.start_date, end_date: i.end_date, body_part: i.part })))
       setLoading(false)
     })
   }, [range])

@@ -6,25 +6,37 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
+import { dayBounds } from '../lib/schema'
 import './DataExplorer.css'
 
+// `runs` was replaced by exercise_sessions; meals and sessions are timestamped, lab draws use draw_date (lib/schema.ts).
 const KNOWN_TABLES = [
-  'runs', 'sleep_daily', 'wearable_daily', 'wellbeing_daily',
+  'exercise_sessions', 'sleep_daily', 'wearable_daily', 'wellbeing_daily',
   'meals', 'body_metrics', 'injuries', 'illnesses', 'rest_days', 'lab_draws',
 ]
 
 const DATE_COLUMN: Record<string, string> = {
-  runs: 'date', sleep_daily: 'date', wearable_daily: 'date',
-  wellbeing_daily: 'date', meals: 'date', body_metrics: 'date',
+  exercise_sessions: 'start_time', sleep_daily: 'date', wearable_daily: 'date',
+  wellbeing_daily: 'date', meals: 'logged_at', body_metrics: 'date',
   injuries: 'start_date', illnesses: 'start_date', rest_days: 'date',
-  lab_draws: 'date',
+  lab_draws: 'draw_date',
 }
+
+const TIMESTAMP_COLUMNS = new Set(['start_time', 'logged_at'])
 
 type Row = Record<string, unknown>
 
 async function fetchRows(table: string, dateFilter: string | null): Promise<Row[]> {
   let q = supabase.from(table).select('*').order(DATE_COLUMN[table] ?? 'id', { ascending: false }).limit(500)
-  if (dateFilter) q = q.eq(DATE_COLUMN[table] ?? 'date', dateFilter)
+  if (dateFilter) {
+    const col = DATE_COLUMN[table] ?? 'date'
+    if (TIMESTAMP_COLUMNS.has(col)) {
+      const { from, to } = dayBounds(dateFilter, dateFilter)
+      q = q.gte(col, from).lte(col, to)
+    } else {
+      q = q.eq(col, dateFilter)
+    }
+  }
   const { data, error } = await q
   if (error) throw error
   return (data ?? []) as Row[]

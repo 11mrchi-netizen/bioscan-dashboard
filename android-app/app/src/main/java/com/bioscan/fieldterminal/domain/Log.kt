@@ -69,6 +69,10 @@ data class LogEntry(
     val timestamp: LocalDateTime,
     val headline: String,
     val detail: String?,
+    // Raw numbers behind the headline, for the collapsed day summary (domain/LogDays.kt). Null where the kind has none.
+    val kcal: Double? = null,
+    val ml: Int? = null,
+    val minutes: Double? = null,
 )
 
 // `sleep_daily`/`hydration_daily`/`wellbeing_daily` only store a `date`, no
@@ -117,6 +121,7 @@ fun buildLogEntries(
             timestamp = parseTimestamp(m.loggedAt),
             headline = m.description?.takeIf { it.isNotBlank() } ?: "Meal",
             detail = listOfNotNull(m.calories?.let { "${it.toInt()} kcal" }, macros.takeIf { it.isNotEmpty() }).joinToString(" · "),
+            kcal = m.calories,
         )
     }
 
@@ -133,6 +138,7 @@ fun buildLogEntries(
             timestamp = parseTimestamp(e.startTime),
             headline = headline,
             detail = e.avgHr?.let { "avg ${it.toInt()} bpm" },
+            minutes = e.durationMin,
         )
     }
 
@@ -145,6 +151,7 @@ fun buildLogEntries(
             timestamp = LocalDateTime.of(LocalDate.parse(s.date), SLEEP_NOMINAL_TIME),
             headline = formatDuration(hours * 60),
             detail = s.score?.let { "Score $it" },
+            minutes = hours * 60,
         )
     }
 
@@ -201,6 +208,7 @@ fun buildLogEntries(
             timestamp = LocalDateTime.of(LocalDate.parse(h.date), DRINK_NOMINAL_TIME),
             headline = "$ml ml (day total)",
             detail = null,
+            ml = ml,
         )
     }
 
@@ -310,7 +318,7 @@ private fun formatDose(value: Double?, unit: String?): String? = when {
     else -> unit
 }
 
-private fun parseTimestamp(iso: String): LocalDateTime =
+internal fun parseTimestamp(iso: String): LocalDateTime =
     try {
         OffsetDateTime.parse(iso).toLocalDateTime()
     } catch (_: Exception) {

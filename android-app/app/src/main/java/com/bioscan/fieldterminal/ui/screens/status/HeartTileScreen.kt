@@ -597,7 +597,7 @@ private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<
 }
 
 @Composable
-private fun DynamicRecoveryCard(result: DynamicRecoveryResult) {
+internal fun DynamicRecoveryCard(result: DynamicRecoveryResult) {
     FTCard(title = "TODAY'S RECOVERY", methodology = "dynamic_recovery") {
         FTStatePill(result.state.toMetricState())
         FTConfidenceChip(confidenceLevel(result.confidence))

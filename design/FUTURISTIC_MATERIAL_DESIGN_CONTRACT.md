@@ -328,9 +328,10 @@ Confidence/state treatment must remain subordinate to the metric and must never 
 
 ### Freshness (A5, 2026-10)
 A hero or header that shows synced data carries a freshness line in `Micro`: when the reading is from (TODAY, YESTERDAY,
-or a date) and its source, plus the last sync time when the app knows it (`AS OF 07:42`). When the reading is older than
-the sync layer's stale threshold (`STALE_AFTER_DAYS` in the data layer, documented there), the line turns Warning and
-says STALE. The UI never invents the threshold. This replaces the always-"SYNCED" pill removed in DAV-94 with a real signal.
+or a date) and its source, plus the last sync time when the app knows it, e.g. `TODAY'S READING · WEARABLE · SYNCED 07:42`.
+When the reading is older than the sync layer's stale threshold (`STALE_AFTER_DAYS` in `data/StatusRepository.kt`,
+documented there), the line turns Warning and starts with STALE. The UI never invents the threshold; the wording lives in
+`domain/Freshness.kt`. This replaces the always-"SYNCED" pill removed in DAV-94 with a real signal.
 
 ## 12. Interaction and motion
 

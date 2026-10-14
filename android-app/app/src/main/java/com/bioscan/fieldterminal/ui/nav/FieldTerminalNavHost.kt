@@ -52,13 +52,13 @@ import com.bioscan.fieldterminal.ui.screens.user.ConditioningSkillScreen
 import com.bioscan.fieldterminal.ui.screens.user.RunningSkillScreen
 import com.bioscan.fieldterminal.ui.screens.user.Skill
 import com.bioscan.fieldterminal.ui.screens.user.StrengthSkillScreen
-import com.bioscan.fieldterminal.ui.screens.status.DailyReadinessScreen
 import com.bioscan.fieldterminal.ui.screens.status.FuelTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.HeartTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.NutrientBreakdownScreen
 import com.bioscan.fieldterminal.ui.screens.status.LabsTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.PantryScreen
 import com.bioscan.fieldterminal.ui.screens.status.StatusScreen
+import com.bioscan.fieldterminal.ui.screens.status.TodayScreen
 import com.bioscan.fieldterminal.ui.screens.status.TrainingTileScreen
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -124,14 +124,25 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             composable(TopLevelTab.Status.route) {
                 StatusScreen(
                     onOpenTile = { tile -> navController.navigate(tile.route) },
-                    onOpenDailyReadiness = { navController.navigate("daily_readiness") },
+                    onOpenToday = { navController.navigate("today") },
                     onOpenInjury = {
                         trainingRequestedTab = TrainingTab.Injury
                         navController.navigate(TileRoute.Training.route) { launchSingleTop = true }
                     },
                 )
             }
-            composable("daily_readiness") { DailyReadinessScreen(onBack = { navController.popBackStack() }) }
+            // UX review P6: the Today page (was Daily Readiness) links to the cards it no longer repeats.
+            composable("today") {
+                TodayScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenTrainingLoad = {
+                        trainingRequestedTab = TrainingTab.Load
+                        navController.navigate(TileRoute.Training.route) { launchSingleTop = true }
+                    },
+                    // Cardio is the Health tile's first tab, where a freshly pushed page opens.
+                    onOpenCardio = { navController.navigate(TileRoute.Heart.route) { launchSingleTop = true } },
+                )
+            }
             // DAV-70 (First feedback fixes): the 4 tile pages, pushed routes
             // like session_detail rather than nested inside Status's own
             // NavHost entry -- keeps their own back stack entries so

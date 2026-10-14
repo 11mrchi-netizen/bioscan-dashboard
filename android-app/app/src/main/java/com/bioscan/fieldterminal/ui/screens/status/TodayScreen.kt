@@ -1,15 +1,21 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.util.Perf
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -21,29 +27,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.ZeppStressRepository
 import com.bioscan.fieldterminal.data.buildTrainingSessionLoads
 import com.bioscan.fieldterminal.data.model.RelationshipResultRow
-import com.bioscan.fieldterminal.data.model.TypicalityResultRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
+import com.bioscan.fieldterminal.data.model.TypicalityResultRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
-import com.bioscan.fieldterminal.domain.comparison.METRIC_DIRECTIONALITY
-import com.bioscan.fieldterminal.domain.MetricCategory
-import com.bioscan.fieldterminal.domain.patternsView
-import com.bioscan.fieldterminal.domain.typicalityView
-import com.bioscan.fieldterminal.domain.PerformanceTimeframe
+import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.SleepNight
-import com.bioscan.fieldterminal.domain.TrainingCycle
-import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.computeDynamicRecovery
 import com.bioscan.fieldterminal.domain.computeSleepIndex
 import com.bioscan.fieldterminal.domain.computeTrainingReadiness
@@ -51,40 +54,41 @@ import com.bioscan.fieldterminal.domain.evaluateHrv
 import com.bioscan.fieldterminal.domain.evaluateRhr
 import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
-import com.bioscan.fieldterminal.domain.resolveTier
+import com.bioscan.fieldterminal.domain.patternsView
 import com.bioscan.fieldterminal.domain.stress.StressDay
 import com.bioscan.fieldterminal.domain.stress.analyzeStressDay
-import com.bioscan.fieldterminal.domain.trainingLoadSeries
+import com.bioscan.fieldterminal.domain.toMetricState
+import com.bioscan.fieldterminal.domain.typicalityView
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.HydrationSourceDonutChart
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.MacroDonutChart
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.metricStateLabel
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import com.bioscan.fieldterminal.util.Perf
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
-// Daily Readiness page: Training Load, Today's Readiness, a Fuel breakdown
-// and Cardio Health in one place, reached from the condition bar on Status.
-// Every section below reuses the exact domain chain + render card its own
-// tile screen already uses (TrainingLoadSection/TrainingReadinessCard in
-// TrainingTileScreen.kt, EvalCard in HeartTileScreen.kt, the hydration/
-// macro totals in NutritionHydrationScreen.kt) -- this screen just composes
-// them, loading its own data independently per this app's established
-// per-screen-loader convention.
+// The Today page (UX review P6; was Daily Readiness), reached from TODAY › on the Status hero. One vocabulary for "how am I
+// today": TODAY'S RECOVERY leads, READY FOR follows (it is built on recovery), then today's fuel, then patterns and
+// typicality. Training load and HRV / resting HR are linked (Training › Load, Health › Cardio) instead of repeated here.
+// Every section reuses the exact domain chain + render card its own tile screen already uses (DynamicRecoveryCard in
+// HeartTileScreen.kt, TrainingReadinessCard in TrainingTileScreen.kt, the hydration/macro totals in
+// NutritionHydrationScreen.kt) -- this screen just composes them, loading its own data independently per this app's
+// established per-screen-loader convention.
 @Composable
-fun DailyReadinessScreen(onBack: () -> Unit) {
+fun TodayScreen(onBack: () -> Unit, onOpenTrainingLoad: () -> Unit, onOpenCardio: () -> Unit) {
     var sessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
     var stressDays by remember { mutableStateOf<List<StressDay>>(emptyList()) }
-    var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
-    var cycleLoaded by remember { mutableStateOf(false) }
     var nutrition by remember { mutableStateOf<NutritionOverview?>(null) }
     // Analysis Layer 3 / R1: start of each metric's current regime (last confirmed series break); NONE until loaded.
     var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
@@ -95,8 +99,8 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
 
     val guard = rememberLoadGuard()
     LaunchedEffect(guard.attempt) {
-        // Perf pass: the eleven loads are independent, so they run together (was one after another).
-        Perf.timed("DailyReadiness.load") {
+        // Perf pass: the loads are independent, so they run together (was one after another).
+        Perf.timed("Today.load") {
             guard.run {
                 val repo = AnalysisRepository(SupabaseClientProvider.client)
                 parallel(
@@ -105,7 +109,6 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
                     { sleep = repo.loadSleepDaily() },
                     { wellbeing = repo.loadWellbeingDaily() },
                     { stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays() },
-                    { activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle(); cycleLoaded = true },
                     { nutrition = NutritionRepository(SupabaseClientProvider.client).loadOverview() },
                     { breakStarts = repo.loadSeriesBreakStarts() },
                     { relationships = repo.loadRelationships() },
@@ -120,7 +123,7 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
     val sl = sleep
     val wb = wellbeing
     val nut = nutrition
-    if (s == null || w == null || sl == null || wb == null || !cycleLoaded || nut == null) {
+    if (s == null || w == null || sl == null || wb == null || nut == null) {
         Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
             TileHeader(onBack = onBack, title = "TODAY", subtitle = todayContextLine())
             if (guard.error != null) {
@@ -137,7 +140,7 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
     val hrvPoints = w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }
     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
     // Perf pass: pure functions of the loaded rows, computed once per load instead of on every recomposition.
-    val (sessionLoads, trainingLoadEval, recovery) = remember(s, w, sl, wb, stressDays, breakStarts) {
+    val (trainingLoadEval, recovery) = remember(s, w, sl, wb, stressDays, breakStarts) {
         val sessionLoads = buildTrainingSessionLoads(s, w.lastOrNull()?.rhr)
         val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
 
@@ -171,7 +174,7 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
             morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
             arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
         )
-        Triple(sessionLoads, trainingLoadEval, recovery)
+        trainingLoadEval to recovery
     }
 
     val waterMl = nut.todayHydrationMl?.toDouble() ?: 0.0
@@ -184,13 +187,27 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            TrainingLoadCard(
-                trainingLoadEval,
-                resolveTier(MetricCategory.TrainingLoad, activeCycle),
-                trainingLoadSeries(sessionLoads),
-                PerformanceTimeframe.ThreeMonths,
-            )
+            DynamicRecoveryCard(recovery)
             TrainingReadinessCard(computeTrainingReadiness(recovery))
+            // The inputs behind recovery and READY FOR, one tap away instead of repeated on this page.
+            Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                val tsb = trainingLoadEval.tsb
+                LinkTile(
+                    title = "TRAINING LOAD",
+                    value = trainingLoadEval.tsbBand?.uppercase()?.let { band -> if (tsb != null) "$band · TSB " + "%+.0f".format(tsb) else band }
+                        ?: metricStateLabel(trainingLoadEval.state.toMetricState()),
+                    accent = FT.DomainTraining,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    onClick = onOpenTrainingLoad,
+                )
+                LinkTile(
+                    title = "CARDIO",
+                    value = "HRV " + (w.lastOrNull()?.hrv?.let { "%.0f".format(it) } ?: "—") + " · RHR " + (w.lastOrNull()?.rhr?.let { "%.0f".format(it) } ?: "—"),
+                    accent = FT.DomainHeart,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    onClick = onOpenCardio,
+                )
+            }
 
             // Stacked full-width, not side-by-side -- MacroDonutChart/
             // HydrationSourceDonutChart's fixed 110dp canvas + legend row is
@@ -228,12 +245,31 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
                 }
             }
 
-            EvalCard("HRV", evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).toExpSpace(), "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints)
-            EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")), "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints)
-
             PatternsCard(patternsView(relationships))
             TypicalityCard(typicalityView(typicality))
         }
+    }
+}
+
+// A titled link to the tile page that holds the full card: section accent dot, title, the one value that matters here.
+@Composable
+private fun LinkTile(title: String, value: String, accent: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(FT.RadiusModule)
+    Column(
+        modifier = modifier
+            .clip(shape)
+            .background(FT.GlassFill)
+            .border(FT.BorderWidth, FT.GlassBorder, shape)
+            .ftClickable(shape = shape, role = Role.Button, onClick = onClick)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
+            Text(title, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("›", style = FTType.LabelCaps, color = FT.TextSecondary)
+        }
+        Text(value, style = FTType.Label, color = FT.TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 

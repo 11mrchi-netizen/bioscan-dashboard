@@ -80,6 +80,7 @@ import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
+import com.bioscan.fieldterminal.domain.AddEntryStart
 import com.bioscan.fieldterminal.domain.AddEntryType
 import com.bioscan.fieldterminal.domain.ethanolGrams
 import com.bioscan.fieldterminal.domain.isSupplementDueToday
@@ -122,14 +123,17 @@ private val sheetActionLabelStyle = FTType.LabelCaps
 // Supplements share one FUEL entry point with a three-way sub-picker.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
+fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntryStart? = null) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedType by remember { mutableStateOf<AddEntryType?>(null) }
+    // UX review P1: the Status quick-log row opens the sheet on the right form; back from it still leads to the picker.
+    var selectedType by remember { mutableStateOf(if (start is AddEntryStart.Fuel) AddEntryType.Fuel else null) }
+    // Cleared on back, so picking FUEL again from the picker opens on FOOD as usual.
+    var fuelStart by remember { mutableStateOf(start as? AddEntryStart.Fuel) }
     // Daily-use shortcut: the type logged last time is one tap away (the picker is otherwise FAB -> grid -> type).
     val addPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("ft_ui", android.content.Context.MODE_PRIVATE)
     val lastType = remember { addPrefs.getString("last_add_type", null)?.let { name -> AddEntryType.entries.firstOrNull { it.name == name } } }
     // Analysis Layer 3 / R2: "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
-    var sayIt by remember { mutableStateOf(false) }
+    var sayIt by remember { mutableStateOf(start is AddEntryStart.SayIt) }
     var foodPrefill by remember { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
     val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
@@ -188,7 +192,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     selectedType = picked
                 })
             } else {
-                SheetBackHeader(label = type.label, onBack = { selectedType = null; foodPrefill = null })
+                SheetBackHeader(label = type.label, onBack = { selectedType = null; foodPrefill = null; fuelStart = null })
                 Spacer(Modifier.height(16.dp))
                 val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
                     saving = true
@@ -209,7 +213,11 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 }
                 saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
                 when (type) {
-                    AddEntryType.Fuel -> FuelForm(saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill)
+                    AddEntryType.Fuel -> FuelForm(
+                        saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill,
+                        initialSubType = fuelStart?.subType ?: FuelSubType.Food,
+                        supplementBundle = fuelStart?.supplementBundle,
+                    )
                     AddEntryType.Encounter -> EncounterForm(
                         saving,
                         onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
@@ -687,8 +695,17 @@ private fun QtyRow(qty: Int, onChange: (Int) -> Unit) {
 // SupplementsForm exactly as they'd be used standalone -- only the picker
 // wrapping them is new.
 @Composable
-private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit, onCanonicalSaved: () -> Unit, externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null, foodPrefill: Pair<String, LocalDateTime>? = null) {
-    var subType by remember { mutableStateOf(FuelSubType.Food) }
+private fun FuelForm(
+    saving: Boolean,
+    onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit,
+    onCanonicalSaved: () -> Unit,
+    externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null,
+    foodPrefill: Pair<String, LocalDateTime>? = null,
+    initialSubType: FuelSubType = FuelSubType.Food,
+    supplementBundle: String? = null,
+) {
+    // A "say it" food hand-off always lands on FOOD, whatever the sheet was opened on.
+    var subType by remember { mutableStateOf(if (foodPrefill != null) FuelSubType.Food else initialSubType) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -717,7 +734,7 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
                 externalActivityActive = externalActivityActive,
             )
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
-            FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items, source, quantities -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities) } })
+            FuelSubType.Supplements -> SupplementsForm(saving, preselectBundle = supplementBundle, onSave = { takenAt, items, source, quantities -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities) } })
             FuelSubType.Endurance -> EnduranceFuelForm(onSaved = onCanonicalSaved)
         }
     }
@@ -1240,10 +1257,16 @@ private fun DrinkForm(
 // from the Log feed like any other entry -- no separate "batch" concept
 // needed for "add or remove single items."
 @Composable
-private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String, quantities: Map<Long, Int>) -> Unit) {
+private fun SupplementsForm(
+    saving: Boolean,
+    initialDateTime: LocalDateTime = LocalDateTime.now(),
+    // The bundle the Status hub's + SUPPS found still due now; ticked on open, untick to change.
+    preselectBundle: String? = null,
+    onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String, quantities: Map<Long, Int>) -> Unit,
+) {
     var dateTime by remember { mutableStateOf(initialDateTime) }
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
-    var checkedBundles by remember { mutableStateOf(setOf<String>()) }
+    var checkedBundles by remember { mutableStateOf(setOfNotNull(preselectBundle)) }
     var checkedAsNeeded by remember { mutableStateOf(setOf<Long>()) }
     // DAV-362: items picked by barcode are selected one by one, never as a time-of-day bundle.
     var scanned by remember { mutableStateOf<List<SupplementRow>>(emptyList()) }

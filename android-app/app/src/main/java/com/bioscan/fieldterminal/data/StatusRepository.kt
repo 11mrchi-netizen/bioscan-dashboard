@@ -1,10 +1,13 @@
 package com.bioscan.fieldterminal.data
 
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.HealthEventRow
 import com.bioscan.fieldterminal.domain.dedupeRunSessions
+import java.time.Instant
+import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
 import com.bioscan.fieldterminal.data.model.SleepDailyRow
@@ -12,7 +15,10 @@ import com.bioscan.fieldterminal.data.model.WearableDailyRow
 import com.bioscan.fieldterminal.domain.HealthFlag
 import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.ReadinessBand
+import com.bioscan.fieldterminal.domain.SupplementsToday
+import com.bioscan.fieldterminal.domain.computeHydrationIntelligence
 import com.bioscan.fieldterminal.domain.pickHealthFlag
+import com.bioscan.fieldterminal.domain.supplementsToday
 import com.bioscan.fieldterminal.domain.computeHrvReadinessSeries
 import com.bioscan.fieldterminal.domain.evaluateHrv
 import com.bioscan.fieldterminal.domain.evaluateRhr
@@ -46,6 +52,36 @@ data class StatusOverview(
     // Opening-page Training tile: distinct sessions in the last 7 days. Runs go
     // through dedupeRunSessions so a Health Connect + manual/Zepp pair counts once.
     val sessionsLast7Days: Int,
+    // Contract A5 freshness line under the hero: the day of the HRV reading the band is based on, and the last Health
+    // Connect sync the app recorded (null when it never synced or the read failed).
+    val hrvReadingDate: LocalDate? = null,
+    val lastSyncAt: Instant? = null,
+    // The TRAINING tile's load word (TSB band from the same evaluation as trainingState, e.g. "Loaded").
+    val trainingLoadBand: String? = null,
+)
+
+// Contract A5. A nightly reading (HRV, resting HR, sleep) is dated the day it was recorded, and before the phone's
+// morning sync the latest one is yesterday's. Anything older means at least one night never arrived (watch, phone,
+// Health Connect or the sync stalled), so the Status hero marks it STALE instead of presenting it as today's condition.
+const val STALE_AFTER_DAYS = 1L
+
+// UX review P1: the FUEL and LABS tile previews. Each part loads on its own and is null when it could not load, so a slow
+// or failed read shows that line as missing instead of taking the whole hub down.
+data class TodayPreviews(
+    val fuel: FuelToday? = null,
+    val supplements: SupplementsToday? = null,
+    // The latest lab draw's date; null when there is none or the read failed (labDrawsLoaded tells the two apart).
+    val lastLabDraw: LocalDate? = null,
+    val labDrawsLoaded: Boolean = false,
+)
+
+data class FuelToday(
+    // Calories logged today; null when no meal is logged yet.
+    val kcal: Double?,
+    // Plain water plus beverages' effective hydration, as the Fuel tile adds them; null when nothing is logged yet.
+    val waterMl: Double?,
+    // Today's inferred sweat loss, which the Fuel tile adds to the hydration range (hydrationBoundsMl).
+    val exerciseDemandMl: Double,
 )
 
 // No user_id filter anywhere here -- RLS already scopes every query to the
@@ -71,6 +107,7 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         val illnessesD = async(Dispatchers.Default) {
             supabase.postgrest.from("illnesses").select(columns = Columns.list("status,end_date,name,start_date")).decodeList<HealthEventRow>()
         }
+        val lastSyncD = async(Dispatchers.Default) { softly { loadLastHealthConnectSync(supabase) } }
         // Small dedicated fetch (10 days of margin, filtered to 7 by date below)
         // rather than reusing TrainingLoadSessionRow, which carries no type/source.
         val recentD = async(Dispatchers.Default) {
@@ -120,7 +157,8 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         // DAV-205: TRIMP-fallback session loads, same shared builder TrainingTileScreen uses -- keeps the figure's leg
         // color and the Training tab's own Load card from ever disagreeing.
         val sessionLoads = buildTrainingSessionLoads(loadSessionsD.await(), wearableAnalysis.lastOrNull()?.rhr)
-        val trainingState = evaluateTrainingLoad(sessionLoads).state.toMetricState()
+        val trainingLoad = evaluateTrainingLoad(sessionLoads)
+        val trainingState = trainingLoad.state.toMetricState()
 
         val recentSessions = recentD.await()
             .filter { ChronoUnit.DAYS.between(OffsetDateTime.parse(it.startTime).toLocalDate(), today) < 7 }
@@ -139,8 +177,56 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
             trainingState = trainingState,
             recoveryState = recoveryState,
             sessionsLast7Days = sessionsLast7Days,
+            hrvReadingDate = wearableAnalysis.lastOrNull { it.hrv != null }?.let { runCatching { LocalDate.parse(it.date) }.getOrNull() },
+            lastSyncAt = lastSyncD.await(),
+            trainingLoadBand = trainingLoad.tsbBand,
         )
     }
+
+    // The FUEL and LABS previews, read in parallel with loadOverview(). Same sources and math as the tiles themselves:
+    // NutritionRepository's today totals, the Fuel tile's exercise-demand rule, the reminder's supplements-due rule.
+    suspend fun loadTodayPreviews(): TodayPreviews = kotlinx.coroutines.coroutineScope {
+        val analysis = AnalysisRepository(supabase)
+        val today = LocalDate.now()
+        val fuelD = async(Dispatchers.Default) {
+            softly {
+                val nutrition = NutritionRepository(supabase).loadOverview()
+                val exerciseMinutes = analysis.loadExerciseSessionsForTrainingLoad()
+                    .filter { runCatching { OffsetDateTime.parse(it.startTime).toLocalDate() == today }.getOrDefault(false) }
+                    .sumOf { it.durationMin ?: 0.0 }
+                val anyWater = nutrition.todayHydrationMl != null || nutrition.todayBeverageItems.isNotEmpty()
+                FuelToday(
+                    kcal = nutrition.today?.calories,
+                    waterMl = if (!anyWater) null else (nutrition.todayHydrationMl ?: 0) + nutrition.todayBeverageItems.mapNotNull { it.effectiveHydrationMl }.sum(),
+                    exerciseDemandMl = computeHydrationIntelligence(null, null, exerciseMinutes).inferredDemandMl ?: 0.0,
+                )
+            }
+        }
+        val supplementsD = async(Dispatchers.Default) {
+            softly {
+                val repo = SupplementsRepository(supabase)
+                val active = repo.loadOverview().active
+                supplementsToday(active, repo.loadRecentTakenDates(active.map { it.id }), today, LocalTime.now())
+            }
+        }
+        val drawsD = async(Dispatchers.Default) { softly { analysis.loadLabDraws() } }
+        val draws = drawsD.await()
+        TodayPreviews(
+            fuel = fuelD.await(),
+            supplements = supplementsD.await(),
+            lastLabDraw = draws?.lastOrNull()?.let { runCatching { LocalDate.parse(it.drawDate.take(10)) }.getOrNull() },
+            labDrawsLoaded = draws != null,
+        )
+    }
+}
+
+// A preview or enrichment that cannot load is shown as missing; cancellation still propagates.
+private suspend fun <T> softly(block: suspend () -> T): T? = try {
+    block()
+} catch (e: CancellationException) {
+    throw e
+} catch (e: Exception) {
+    null
 }
 
 private fun MetricState.severity(): Int = when (this) {

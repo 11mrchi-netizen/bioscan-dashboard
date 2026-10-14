@@ -10,6 +10,11 @@ import android.content.SharedPreferences
 const val DEFAULT_HYDRATION_MIN_ML = 2500.0
 const val DEFAULT_HYDRATION_MAX_ML = 3500.0
 
+// The day's fluid range: the saved range (or the generic reference above) plus today's inferred exercise sweat loss. One
+// definition for the Fuel tile's hydration card and the Status hub's FUEL preview, so the two never disagree.
+fun hydrationBoundsMl(goals: NutritionGoals, exerciseDemandMl: Double): ClosedFloatingPointRange<Double> =
+    ((goals.hydrationMinMl ?: DEFAULT_HYDRATION_MIN_ML) + exerciseDemandMl)..((goals.hydrationMaxMl ?: DEFAULT_HYDRATION_MAX_ML) + exerciseDemandMl)
+
 // DAV-286: one daily calorie/macro target profile. Values are stored as
 // strings (not Float), same precision-safe convention MapSettingsStore
 // already uses for coordinates -- fields are independently settable/clearable

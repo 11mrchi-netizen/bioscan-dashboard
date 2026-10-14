@@ -282,7 +282,9 @@ private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
 
 @Composable
 internal fun TrainingReadinessCard(result: TrainingReadinessResult) {
-    FTCard(title = "TODAY'S READINESS", methodology = "dynamic_recovery") {
+    // UX review P6: "READY FOR" (was "TODAY'S READINESS"): readiness per kind of session, built on Today's Recovery; one name
+    // for each of the three "how am I today" states (CONDITION on Status, TODAY'S RECOVERY, READY FOR).
+    FTCard(title = "READY FOR", methodology = "dynamic_recovery") {
         FTStatePill(result.generalState.toMetricState())
         FTConfidenceChip(confidenceLevel(result.confidence))
         result.demandRelative.forEach { (tier, state) ->

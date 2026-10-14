@@ -23,3 +23,11 @@ enum class AddEntryType(val label: String) {
 enum class FuelSubType(val label: String) {
     Food("FOOD"), Drink("DRINK"), Supplements("SUPPS"), Endurance("RUN FUEL"),
 }
+
+// Where the add sheet opens when it is not opened on its type picker (UX review P1: the Status hub's quick-log row).
+// SayIt opens the one-message form; Fuel opens that Fuel form directly, optionally with one supplement time-of-day bundle
+// already ticked (SupplementsToday.suggestedBucket).
+sealed interface AddEntryStart {
+    data object SayIt : AddEntryStart
+    data class Fuel(val subType: FuelSubType, val supplementBundle: String? = null) : AddEntryStart
+}

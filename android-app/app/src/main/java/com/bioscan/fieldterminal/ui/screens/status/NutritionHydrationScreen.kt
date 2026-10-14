@@ -23,8 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.DEFAULT_HYDRATION_MAX_ML
-import com.bioscan.fieldterminal.data.DEFAULT_HYDRATION_MIN_ML
 import com.bioscan.fieldterminal.data.NutritionGoals
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.NutritionOverview
@@ -32,6 +30,7 @@ import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HydrationExplanationRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.hydrationBoundsMl
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.domain.CaffeineEvent
 import com.bioscan.fieldterminal.domain.computeCaffeineWindow
@@ -197,8 +196,9 @@ private fun dailyRange(label: String, current: Double, target: Double?, referenc
 
 private fun hydrationRange(totalMl: Double, goals: NutritionGoals, exerciseDemandMl: Double): PersonalRange {
     val userSet = goals.hasHydrationRange
-    val lower = (goals.hydrationMinMl ?: DEFAULT_HYDRATION_MIN_ML) + exerciseDemandMl
-    val upper = (goals.hydrationMaxMl ?: DEFAULT_HYDRATION_MAX_ML) + exerciseDemandMl
+    val bounds = hydrationBoundsMl(goals, exerciseDemandMl)
+    val lower = bounds.start
+    val upper = bounds.endInclusive
     val comparison = when {
         totalMl < lower -> RangeComparison.Below
         totalMl > upper -> RangeComparison.Above

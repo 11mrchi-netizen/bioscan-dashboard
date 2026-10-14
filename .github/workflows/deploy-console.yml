@@ -31,8 +31,11 @@ jobs:
       - name: Build
         working-directory: console
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Public by design (same values as index.html and the Android app; RLS is the real gate). They were read from
+          # repository secrets that never existed (the repo only has SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY), so every
+          # deployed build showed "Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY".
+          VITE_SUPABASE_URL: https://ugfrglbcoivkprjqvjzz.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_GyandyvuVbF0RxZLnugz4A_GlNIstPc
         run: npm run build
 
       # Copy built output into console/ in-place so GitHub Pages (main branch) serves it.
@@ -40,7 +43,7 @@ jobs:
       - name: Stage built files into console/
         run: |
           rm -rf console/assets
-          cp console/dist/index.html console/index.html
+          cp console/dist/app.html console/index.html
           cp -r console/dist/assets console/assets
           cp console/dist/favicon.svg console/favicon.svg 2>/dev/null || true
           cp console/dist/icons.svg console/icons.svg 2>/dev/null || true

@@ -6,28 +6,48 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
+import { dayBounds, LIVE_COLUMNS } from '../lib/schema'
 import './DataExplorer.css'
 
+// `runs` was replaced by exercise_sessions; meals and sessions are timestamped, lab draws use draw_date (lib/schema.ts).
 const KNOWN_TABLES = [
-  'runs', 'sleep_daily', 'wearable_daily', 'wellbeing_daily',
+  'exercise_sessions', 'sleep_daily', 'wearable_daily', 'wellbeing_daily',
   'meals', 'body_metrics', 'injuries', 'illnesses', 'rest_days', 'lab_draws',
 ]
 
 const DATE_COLUMN: Record<string, string> = {
-  runs: 'date', sleep_daily: 'date', wearable_daily: 'date',
-  wellbeing_daily: 'date', meals: 'date', body_metrics: 'date',
+  exercise_sessions: 'start_time', sleep_daily: 'date', wearable_daily: 'date',
+  wellbeing_daily: 'date', meals: 'logged_at', body_metrics: 'date',
   injuries: 'start_date', illnesses: 'start_date', rest_days: 'date',
-  lab_draws: 'date',
+  lab_draws: 'draw_date',
 }
+
+const TIMESTAMP_COLUMNS = new Set(['start_time', 'logged_at'])
 
 type Row = Record<string, unknown>
 
+// Large JSON columns (about 50 kB per day for hr_timeseries) are not worth shipping to a 500-row table view that truncates
+// them in the cell anyway. For a table whose columns are known, list them minus the heavy ones; otherwise select everything.
+const HEAVY_COLUMNS = new Set(['hr_timeseries', 'raw_body', 'details'])
+function explorerColumns(table: string): string {
+  const known = LIVE_COLUMNS[table]
+  return known ? known.filter(c => !HEAVY_COLUMNS.has(c)).join(', ') : '*'
+}
+
 async function fetchRows(table: string, dateFilter: string | null): Promise<Row[]> {
-  let q = supabase.from(table).select('*').order(DATE_COLUMN[table] ?? 'id', { ascending: false }).limit(500)
-  if (dateFilter) q = q.eq(DATE_COLUMN[table] ?? 'date', dateFilter)
+  let q = supabase.from(table).select(explorerColumns(table)).order(DATE_COLUMN[table] ?? 'id', { ascending: false }).limit(500)
+  if (dateFilter) {
+    const col = DATE_COLUMN[table] ?? 'date'
+    if (TIMESTAMP_COLUMNS.has(col)) {
+      const { from, to } = dayBounds(dateFilter, dateFilter)
+      q = q.gte(col, from).lte(col, to)
+    } else {
+      q = q.eq(col, dateFilter)
+    }
+  }
   const { data, error } = await q
   if (error) throw error
-  return (data ?? []) as Row[]
+  return (data ?? []) as unknown as Row[]
 }
 
 export function DataExplorer() {

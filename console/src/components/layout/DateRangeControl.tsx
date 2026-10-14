@@ -1,5 +1,6 @@
 // Header date-range picker — broadcasts to AnalysisContext
 import { useRange, useSetRange } from '../../lib/analysisStore'
+import { localDaysAgo as daysAgo, localToday as today } from '../../lib/dates'
 import './DateRangeControl.css'
 
 const PRESETS = [
@@ -8,14 +9,6 @@ const PRESETS = [
   { label: '90D', days: 90 },
   { label: '1Y',  days: 365 },
 ]
-
-function daysAgo(n: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
-}
-
-const today = () => new Date().toISOString().slice(0, 10)
 
 export function DateRangeControl() {
   const range = useRange()

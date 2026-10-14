@@ -3,7 +3,6 @@ package com.bioscan.fieldterminal.domain.levels
 import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.comparison.PercentileBand
 import com.bioscan.fieldterminal.domain.comparison.percentileBand
-import com.bioscan.fieldterminal.domain.healthspan.cardioAxisScore
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -12,15 +11,15 @@ import java.time.temporal.ChronoUnit
 // which one it is (`basis`), and is marked `provisional` while the evidence is thin. A level appears
 // from the first usable data point instead of waiting for a benchmark that does not exist:
 //
-//   AGE_NORM  - Running: VO2max against the FRIEND/ACSM age-and-sex medians (via Cardio Age).
-//   STANDARD  - Strength: estimated 1RM against the app-reference bodyweight-multiple ladder.
+//   AGE_NORM  - Running: VO2max placed against the age- and sex-matched benchmark table (a population percentile).
+//   STANDARD  - Strength: estimated 1RM against the lifter bodyweight-multiple ladder (domain/StrengthStandards.kt).
 //   PERSONAL  - anything else: the person's own history ("vs you"), always provisional.
 //
 // Position is a 0-100 number cut with the same thresholds as percentile bands (comparison/ComparisonBands.kt),
 // so labels line up with the rest of the app. Levels are never aggregated across skills.
 enum class LevelBasis(val chip: String) {
-    AGE_NORM("VS AGE NORM"),
-    STANDARD("VS APP REFERENCE"),
+    AGE_NORM("VS AGE/SEX TABLE"),
+    STANDARD("VS LIFTER STANDARDS"),
     PERSONAL("VS YOU"),
 }
 
@@ -54,20 +53,20 @@ private fun available(position: Double, basis: LevelBasis, provisional: Boolean,
     return SkillLevel(levelLabel(p, basis), p, basis, provisional, headline, null, confidence)
 }
 
-// Running: VO2max vs the age-and-sex norm when sex and date of birth are known (ageAccelerationYears is
-// cardioFunctionalAge's output); otherwise the best recent road pace against the person's own run history.
-// Lower pace is better. `paceHistoryMinPerKm` is road, comparable runs only (the caller filters trail and
-// implausible paces); `recentPaceMinPerKm` is the person's current best-recent pace.
+// Running: VO2max percentile against the age- and sex-matched table when one fits (population percentile, the same placement the
+// Healthspan cardio factor uses); otherwise the best recent road pace against the person's own run history, marked PROVISIONAL.
+// Lower pace is better. `paceHistoryMinPerKm` is road, comparable runs only (the caller filters trail and implausible paces);
+// `recentPaceMinPerKm` is the person's current best-recent pace.
 private const val MIN_PACE_HISTORY = 3
 fun runningSkillLevel(
     vo2max: Double?,
-    ageAccelerationYears: Double?,
+    vo2Percentile: Double?,
     recentPaceMinPerKm: Double?,
     paceHistoryMinPerKm: List<Double>,
 ): SkillLevel {
-    if (vo2max != null && ageAccelerationYears != null) {
+    if (vo2max != null && vo2Percentile != null) {
         return available(
-            position = cardioAxisScore(ageAccelerationYears),
+            position = vo2Percentile,
             basis = LevelBasis.AGE_NORM,
             provisional = false,
             headline = "VO2max ${"%.0f".format(vo2max)}",
@@ -80,7 +79,7 @@ fun runningSkillLevel(
         return available(position, LevelBasis.PERSONAL, true, "Pace ${formatPace(recentPaceMinPerKm)}", Confidence(paceHistoryMinPerKm.size, MIN_PACE_HISTORY))
     }
     val reason = when {
-        vo2max != null -> "Set sex and date of birth (Setup > User) to rate VO2max against an age norm"
+        vo2max != null -> "No age/sex table fits yet: set sex and date of birth (Setup > User) to place VO2max"
         else -> "Needs a VO2max reading, or $MIN_PACE_HISTORY road runs with distance"
     }
     return unavailable(reason, paceHistoryMinPerKm.size, MIN_PACE_HISTORY)
@@ -91,18 +90,19 @@ fun formatPace(minPerKm: Double): String {
     return "%d:%02d /km".format(totalSec / 60, totalSec % 60)
 }
 
-// Strength: mean ladder position over every lift that has a standard and a usable e1RM. One lift is
-// enough to show a level; under three lifts it is provisional.
+// Strength: median ladder position over every lift that has a standard and a usable e1RM (with an even count the weaker middle lift
+// decides, like the Healthspan strength factor). One lift is enough to show a level; under three lifts it is provisional.
 private const val STRENGTH_FULL_EVIDENCE_LIFTS = 3
 fun strengthSkillLevel(rated: List<LiftTierResult>, bodyWeightMissing: Boolean): SkillLevel {
     if (rated.isEmpty()) {
         val reason = if (bodyWeightMissing) "Add a body weight (Log) so lifts can be rated against bodyweight standards"
-        else "Log sets for a standard lift (squat, deadlift, bench, press, row, weighted pull-up)"
+        else "Log sets for a standard lift (squat, deadlift, chest press, military press, row, weighted pull-up)"
         return unavailable(reason, 0, 1)
     }
-    val position = rated.map { it.ladderFraction }.average() * 100.0
+    val sorted = rated.map { it.ladderFraction }.sorted()
+    val median = sorted[(sorted.size - 1) / 2]
     return available(
-        position, LevelBasis.STANDARD, rated.size < STRENGTH_FULL_EVIDENCE_LIFTS,
+        median * 100.0, LevelBasis.STANDARD, rated.size < STRENGTH_FULL_EVIDENCE_LIFTS,
         "${rated.size} ${if (rated.size == 1) "lift" else "lifts"} rated", Confidence(rated.size, STRENGTH_FULL_EVIDENCE_LIFTS),
     )
 }

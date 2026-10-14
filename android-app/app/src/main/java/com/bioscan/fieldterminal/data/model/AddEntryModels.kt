@@ -65,6 +65,13 @@ data class NewStoolRow(
     val discomfort: Int? = null,
 )
 
+@Serializable
+data class NewGripRow(
+    @SerialName("occurred_at") val occurredAt: String,
+    val hand: String,
+    val kg: Double,
+)
+
 // Replaces NewMasturbationRow (DAV-91) -- one upsert row per (date,
 // activityType) against sexual_activity_daily, instances carrying the real
 // per-instance detail.
@@ -91,6 +98,15 @@ data class NewWellbeingRow(
     val soreness: Int? = null,
     @SerialName("morning_erection_quality") val morningErectionQuality: Int? = null,
     @SerialName("arousal_level") val arousalLevel: Int? = null,
+)
+
+// Analysis Layer 3 / R2: recovery_sessions has no form; rows come from the log agent (a confirmed proposal).
+@Serializable
+data class NewRecoverySessionRow(
+    val date: String,
+    val name: String,
+    val category: String,
+    @SerialName("duration_min") val durationMin: Int? = null,
 )
 
 // DAV-156. doseValue/doseUnit default from the roster's own free-text dose

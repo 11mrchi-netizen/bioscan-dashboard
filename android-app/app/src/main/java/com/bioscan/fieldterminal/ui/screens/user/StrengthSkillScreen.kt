@@ -26,7 +26,9 @@ import com.bioscan.fieldterminal.domain.levels.LiftTierResult
 import com.bioscan.fieldterminal.domain.levels.StandardKind
 import com.bioscan.fieldterminal.domain.levels.ratedLifts
 import com.bioscan.fieldterminal.domain.levels.strengthSkillLevel
+import com.bioscan.fieldterminal.domain.exerciseSlug
 import com.bioscan.fieldterminal.domain.liftE1rmSeries
+import com.bioscan.fieldterminal.domain.standardKey
 import com.bioscan.fieldterminal.domain.trailingWeeklyAverage
 import com.bioscan.fieldterminal.domain.weeklyStrengthDays
 import com.bioscan.fieldterminal.domain.weeklyTonnageKg
@@ -64,8 +66,9 @@ private fun StrengthContent(history: StrengthHistory) {
 
     SkillHeroCard(
         Skill.STRENGTH, level,
-        info = "Mean ladder position of your best estimated 1RM (last 12 months) for each lift that has a standard. The standards are " +
-            "the app's own bodyweight-multiple reference, not a published table and not adjusted for sex. One lift is enough to show a level; under three lifts it stays PROVISIONAL.",
+        info = "Median ladder position of your best estimated 1RM (last 6 months) over the lifts that have a standard, like the Healthspan " +
+            "strength factor. The standards are lifter conventions (bodyweight multiples), not population percentiles and not adjusted for sex or age. " +
+            "One lift is enough to show a level; under three lifts it stays PROVISIONAL.",
     ) {
         ratioRows(rated, history.bodyWeightKg).forEach { (label, value) -> FTMetricRow(label, value) }
     }
@@ -88,23 +91,20 @@ private fun StrengthContent(history: StrengthHistory) {
 }
 
 private fun ratioRows(rated: List<LiftTierResult>, bodyWeightKg: Double?): List<Pair<String, String>> {
-    // e1RM in kg for a lift standard, back-computed from the rated value.
-    fun kg(name: String): Double? = rated.firstOrNull { it.standard.name == name }?.let {
-        if (it.standard.kind == StandardKind.BODYWEIGHT_MULTIPLE) it.value * (bodyWeightKg ?: return null) else it.value
-    }
-    val squat = kg("Squat")
-    val dead = kg("Deadlift")
+    fun kg(slug: String): Double? = rated.firstOrNull { standardKey(exerciseSlug(it.name)) == slug }?.e1rmKg
+    val squat = kg("barbell_squat")
+    val dead = kg("barbell_deadlift")
     return buildList {
         if (squat != null && dead != null && squat > 0) add("Deadlift / squat" to "%.2f".format(dead / squat))
         if (squat != null && bodyWeightKg != null && bodyWeightKg > 0) add("Squat / bodyweight" to "%.2f×".format(squat / bodyWeightKg))
         if (dead != null && bodyWeightKg != null && bodyWeightKg > 0) add("Deadlift / bodyweight" to "%.2f×".format(dead / bodyWeightKg))
-        kg("Weighted Pull-up")?.let { add("Weighted pull-up" to "+%.0f kg".format(it)) }
+        kg("pull_up_weighted")?.let { add("Weighted pull-up" to "+%.0f kg".format(it)) }
     }
 }
 
 @Composable
 private fun StandardsCard(rated: List<LiftTierResult>, bodyWeightKg: Double?) {
-    FTCard(title = "STANDARDS", info = "Each lift's best estimated 1RM over the last 12 months against the app reference ladder (Novice, Intermediate, Advanced, Elite). Bodyweight-multiple lifts need a body weight; weighted pull-ups use added load.") {
+    FTCard(title = "STANDARDS", info = "Each lift's best estimated 1RM over the last 6 months against the lifter-standards ladder (Novice, Intermediate, Advanced, Elite). Bodyweight-multiple lifts need a body weight; weighted pull-ups use added load.") {
         if (rated.isEmpty()) {
             FTDataState(DataAvailability.Building, if (bodyWeightKg == null) "Add a body weight to rate lifts against bodyweight standards." else "No logged lift has a standard yet.")
             return@FTCard
@@ -113,7 +113,7 @@ private fun StandardsCard(rated: List<LiftTierResult>, bodyWeightKg: Double?) {
             rated.sortedByDescending { it.ladderFraction }.forEach { r ->
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(r.standard.name, style = FTType.RowTitle, color = FT.TextPrimary, modifier = Modifier.weight(1f))
+                        Text(r.name, style = FTType.RowTitle, color = FT.TextPrimary, modifier = Modifier.weight(1f))
                         Text(tierText(r), style = FTType.Label, color = skillColor(Skill.STRENGTH))
                     }
                     FTTierLadder(r.ladderFraction.toFloat(), TIER_LABELS, r.tier.ordinal.coerceAtMost(4), skillColor(Skill.STRENGTH))
@@ -127,18 +127,19 @@ private fun StandardsCard(rated: List<LiftTierResult>, bodyWeightKg: Double?) {
 private fun tierText(r: LiftTierResult): String = r.tier.label.uppercase()
 
 private fun nextText(r: LiftTierResult, bodyWeightKg: Double?): String {
-    val valueText = when (r.standard.kind) {
-        StandardKind.BODYWEIGHT_MULTIPLE -> "${"%.2f".format(r.value)}× bodyweight" + (bodyWeightKg?.let { " · ${"%.0f".format(r.value * it)} kg e1RM" } ?: "")
-        StandardKind.ADDED_LOAD_KG -> "+${"%.0f".format(r.value)} kg added"
+    val valueText = when (r.kind) {
+        StandardKind.BODYWEIGHT_MULTIPLE ->
+            (bodyWeightKg?.takeIf { it > 0 }?.let { "${"%.2f".format(r.e1rmKg / it)}× bodyweight · " } ?: "") + "${"%.0f".format(r.e1rmKg)} kg e1RM"
+        StandardKind.ADDED_LOAD_KG -> "+${"%.0f".format(r.e1rmKg)} kg added"
     }
     val next = r.nextTier
-    val threshold = r.nextThreshold
-    if (next == null || threshold == null) return "$valueText · top of the ladder"
-    val target = when (r.standard.kind) {
-        StandardKind.BODYWEIGHT_MULTIPLE -> "${"%.2f".format(threshold)}×" + (bodyWeightKg?.let { " (${"%.0f".format(threshold * it)} kg)" } ?: "")
-        StandardKind.ADDED_LOAD_KG -> "+${"%.0f".format(threshold)} kg"
+    val target = r.nextKg
+    if (next == null || target == null) return "$valueText · top of the ladder"
+    val targetText = when (r.kind) {
+        StandardKind.BODYWEIGHT_MULTIPLE -> "${"%.0f".format(target)} kg"
+        StandardKind.ADDED_LOAD_KG -> "+${"%.0f".format(target)} kg"
     }
-    return "$valueText · next: ${next.label} at $target"
+    return "$valueText · next: ${next.label} at $targetText"
 }
 
 @Composable

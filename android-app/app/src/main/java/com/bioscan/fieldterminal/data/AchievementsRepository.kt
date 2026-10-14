@@ -4,6 +4,8 @@ import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.domain.achievement.Achievement
 import com.bioscan.fieldterminal.domain.achievement.AchievementDomain
 import com.bioscan.fieldterminal.domain.analysis.Provenance
+import com.bioscan.fieldterminal.domain.estimatedOneRepMaxKg
+import com.bioscan.fieldterminal.domain.exerciseSlug
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -46,8 +48,7 @@ class AchievementsRepository(private val supabase: SupabaseClient) {
                 counts[exercise.name] = (counts[exercise.name] ?: 0) + 1
                 exercise.sets.forEach { set ->
                     if (set.weightKg > 0 && set.reps > 0) {
-                        // ponytail: direct 1-rep measure skips Epley; reps > 30 would invert the formula so cap there
-                        val e1rm = if (set.reps >= 30) set.weightKg else set.weightKg * (1.0 + set.reps / 30.0)
+                        val e1rm = estimatedOneRepMaxKg(set.weightKg, set.reps)
                         val cur = bests[exercise.name]
                         if (cur == null) {
                             bests[exercise.name] = BestSet(e1rm, set.weightKg, set.reps, session.id, session.startTime, session.source)
@@ -64,7 +65,7 @@ class AchievementsRepository(private val supabase: SupabaseClient) {
             .sortedByDescending { (name, _) -> counts[name] ?: 0 }
             .take(6)
             .map { (name, best) ->
-                val slug = name.lowercase().replace(Regex("[^a-z0-9]+"), "_").trimEnd('_')
+                val slug = exerciseSlug(name)
                 val prev = prevBests[name]
                 Achievement(
                     domain = AchievementDomain.STRENGTH,

@@ -19,6 +19,8 @@ class ZeppSyncWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val result = repo.sync()
 
         android.util.Log.d("ZeppSyncWorker", "Zepp sync: $result")
+        // Keep the Zepp workout list in step with the plan; a failure here never fails the data sync.
+        android.util.Log.d("ZeppSyncWorker", repo.pushUpcoming())
 
         return when (result) {
             is ZeppSyncResult.Failed -> if (runAttemptCount < 5) Result.retry() else Result.failure()

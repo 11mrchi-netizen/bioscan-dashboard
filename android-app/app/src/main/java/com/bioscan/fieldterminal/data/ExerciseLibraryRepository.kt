@@ -24,7 +24,9 @@ class ExerciseLibraryRepository(private val supabase: SupabaseClient) {
     // DAV-65: the whole library at once, for domain/RegionalLoad.kt's
     // anatomical mapping -- 876 rows is small enough to fetch in full rather
     // than resolving one exercise name at a time per logged set.
-    suspend fun fetchAll(): List<ExerciseLibraryRow> =
+    suspend fun fetchAll(): List<ExerciseLibraryRow> = ReadCache.get("exercise_library.all", ReadCache.LONG_TTL_MS) { fetchAllFresh() }
+
+    private suspend fun fetchAllFresh(): List<ExerciseLibraryRow> =
         supabase.postgrest.from("exercise_library")
             .select(columns = Columns.list("id,name,category,force,mechanic,equipment,primary_muscles,secondary_muscles"))
             .decodeList<ExerciseLibraryRow>()

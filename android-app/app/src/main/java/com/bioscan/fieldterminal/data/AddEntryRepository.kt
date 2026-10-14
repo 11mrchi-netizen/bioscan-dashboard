@@ -24,6 +24,9 @@ import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.NewStoolRow
 import com.bioscan.fieldterminal.data.model.NewSupplementLogRow
+import com.bioscan.fieldterminal.data.model.LogGripRow
+import com.bioscan.fieldterminal.data.model.NewGripRow
+import com.bioscan.fieldterminal.data.model.NewRecoverySessionRow
 import com.bioscan.fieldterminal.data.model.NewWellbeingRow
 import com.bioscan.fieldterminal.data.model.NutrientIntakeRow
 import com.bioscan.fieldterminal.data.model.SupplementLogEditRow
@@ -36,6 +39,8 @@ import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 // Step 12 (Phase D) + the 2026-09-15 follow-up pass: the "+" add-entry
 // flow's writes. Every add*/update* now takes its date/timestamp as an
@@ -136,6 +141,10 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         )
     }
 
+    suspend fun addGrip(occurredAt: String, hand: String, kg: Double) {
+        supabase.postgrest.from("grip_strength_log").insert(NewGripRow(occurredAt = occurredAt, hand = hand, kg = kg))
+    }
+
     suspend fun addSexualActivity(date: String, activityType: String, instances: List<SexualActivityInstance>, notes: String?) {
         supabase.postgrest.from("sexual_activity_daily").upsert(
             NewSexualActivityRow(date = date, activityType = activityType, instances = instances, notes = notes)
@@ -150,6 +159,42 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("wellbeing_daily").upsert(
             NewWellbeingRow(date = date, energy = energy, mood = mood, stress = stress, soreness = soreness, morningErectionQuality = morningErectionQuality, arousalLevel = arousalLevel)
         ) { onConflict = "user_id,date" }
+    }
+
+    // Analysis Layer 3 / R2 (log agent). Partial write: only the scores that were stated go to the row, so "energy 7" cannot
+    // null out the mood or arousal already logged for the day (addWellbeing upserts the whole row).
+    suspend fun mergeWellbeing(date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?) {
+        val fields = buildJsonObject {
+            put("date", date)
+            energy?.let { put("energy", it) }
+            mood?.let { put("mood", it) }
+            stress?.let { put("stress", it) }
+            soreness?.let { put("soreness", it) }
+        }
+        val exists = supabase.postgrest.from("wellbeing_daily")
+            .select(columns = Columns.list("id")) { filter { eq("date", date) } }
+            .decodeList<WellbeingIdRow>()
+            .isNotEmpty()
+        if (exists) {
+            supabase.postgrest.from("wellbeing_daily").update(fields) { filter { eq("date", date) } }
+        } else {
+            supabase.postgrest.from("wellbeing_daily").insert(fields)
+        }
+    }
+
+    suspend fun addRecoverySession(date: String, name: String, category: String, durationMin: Int?) {
+        supabase.postgrest.from("recovery_sessions").insert(
+            NewRecoverySessionRow(date = date, name = name, category = category, durationMin = durationMin)
+        )
+    }
+
+    // Same write as the Supplements form for one roster item (dose string, product link, nutrient intake), by roster id.
+    suspend fun addSupplementTakenById(takenAt: String, supplementId: Long, quantity: Int) {
+        val row = supabase.postgrest.from("supplements")
+            .select(columns = Columns.list("id,name,dose")) { filter { eq("id", supplementId) } }
+            .decodeList<SupplementDoseRow>()
+            .firstOrNull() ?: throw IllegalArgumentException("Supplement $supplementId is not in your roster")
+        addSupplementsTaken(takenAt, listOf(Triple(row.id, row.name, row.dose)), quantities = mapOf(row.id to quantity))
     }
 
     // Phase A4 (Category 8). severity_score is a stored generated column --
@@ -167,7 +212,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // other source already uses. `items` is (supplement id, name, roster
     // dose string) triples from whichever bundle(s)/individual as-needed
     // toggles were checked -- each gets its own parsed dose default (DAV-156).
-    suspend fun addSupplementsTaken(takenAt: String, items: List<Triple<Long, String, String>>, source: String = "manual") {
+    suspend fun addSupplementsTaken(takenAt: String, items: List<Triple<Long, String, String>>, source: String = "manual", quantities: Map<Long, Int> = emptyMap()) {
         if (items.isEmpty()) return
         // product_id is optional provenance: a failed roster lookup must never
         // block recording that the supplement was taken.
@@ -177,10 +222,13 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         // scales the ingredient contribution. Missing link row = the default of 1.
         val servingsBySupp = links.mapValues { it.value.servingsPerDose }
         val rows = items.map { (id, name, dose) ->
+            val qty = quantities[id] ?: 1
             val (value, unit) = parseDose(dose)
             NewSupplementLogRow(
-                supplementId = id, supplementName = name, takenAt = takenAt, doseValue = value, doseUnit = unit,
-                productId = productIdBySupp[id], source = source, servingCount = servingsBySupp[id] ?: 1.0,
+                supplementId = id, supplementName = name, takenAt = takenAt,
+                doseValue = value?.let { it * qty }, doseUnit = unit,
+                productId = productIdBySupp[id], source = source,
+                servingCount = (servingsBySupp[id] ?: 1.0) * qty,
             )
         }
         val insertedRows = supabase.postgrest.from("supplement_log")
@@ -188,7 +236,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
             .decodeList<SupplementLogIdRow>()
 
         try {
-            writeSupplementNutrientIntake(takenAt, insertedRows, items, productIdBySupp, servingsBySupp)
+            writeSupplementNutrientIntake(takenAt, insertedRows, items, productIdBySupp, servingsBySupp, quantities)
         } catch (_: Exception) {
             // Best-effort: supplement_log row is the primary record
         }
@@ -215,6 +263,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         items: List<Triple<Long, String, String>>,
         productIdBySupp: Map<Long, Long>,
         servingsBySupp: Map<Long, Double>,
+        quantities: Map<Long, Int> = emptyMap(),
     ) {
         if (logRows.isEmpty()) return
         val supplementIds = logRows.map { it.supplementId }
@@ -227,12 +276,13 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         val suppRepo = SupplementsRepository(supabase)
         val nutrientRows = mutableListOf<NutrientIntakeRow>()
         for (logRow in logRows) {
+            val qty = quantities[logRow.supplementId] ?: 1
             val productId = productIdBySupp[logRow.supplementId]
             val suppProfile = profilesBySupp[logRow.supplementId]
             if (productId != null) {
                 val composition = suppRepo.loadProductComposition(productId)
                 for (productIngredient in composition) {
-                    val contribution = nutrientContribution(productIngredient, servingCount = servingsBySupp[logRow.supplementId] ?: 1.0) ?: continue
+                    val contribution = nutrientContribution(productIngredient, servingCount = (servingsBySupp[logRow.supplementId] ?: 1.0) * qty) ?: continue
                     nutrientRows.add(
                         NutrientIntakeRow(
                             loggedAt = takenAt,
@@ -250,7 +300,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
                         NutrientIntakeRow(
                             loggedAt = takenAt,
                             nutrient = sn.nutrient,
-                            amount = sn.amountPerDose,
+                            amount = sn.amountPerDose * qty,
                             unit = sn.unit,
                             sourceType = "supplement",
                             sourceId = logRow.id,
@@ -267,7 +317,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
                             NutrientIntakeRow(
                                 loggedAt = takenAt,
                                 nutrient = inferredNutrient,
-                                amount = doseValue,
+                                amount = doseValue * qty,
                                 unit = doseUnit,
                                 sourceType = "supplement",
                                 sourceId = logRow.id,
@@ -370,6 +420,12 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
+    suspend fun updateGrip(id: Long, occurredAt: String, hand: String, kg: Double) {
+        supabase.postgrest.from("grip_strength_log").update(
+            NewGripRow(occurredAt = occurredAt, hand = hand, kg = kg)
+        ) { filter { eq("id", id) } }
+    }
+
     suspend fun updateSexualActivity(id: Long, date: String, activityType: String, instances: List<SexualActivityInstance>, notes: String?) {
         supabase.postgrest.from("sexual_activity_daily").update(
             NewSexualActivityRow(date = date, activityType = activityType, instances = instances, notes = notes)
@@ -443,6 +499,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         id,
     )
     suspend fun fetchStool(id: Long) = fetchById<LogStoolRow>("stool_log", "id,occurred_at,bristol_type,discomfort", id)
+    suspend fun fetchGrip(id: Long) = fetchById<LogGripRow>("grip_strength_log", "id,occurred_at,hand,kg", id)
     suspend fun fetchNote(id: Long) = fetchById<LogNoteRow>("notes", "id,occurred_at,text", id)
     suspend fun fetchWellbeing(id: Long) = fetchById<LogWellbeingRow>("wellbeing_daily", "id,date,energy,mood,stress,soreness,morning_erection_quality,arousal_level", id)
     suspend fun fetchExerciseSession(id: Long) = fetchById<FullExerciseSessionRow>("exercise_sessions", "id,type,rpe,notes,details", id)
@@ -493,6 +550,12 @@ private data class SupplementProductLinkRow(
     @SerialName("product_id") val productId: Long? = null,
     @SerialName("servings_per_dose") val servingsPerDose: Double = 1.0,
 )
+
+@kotlinx.serialization.Serializable
+private data class WellbeingIdRow(val id: Long)
+
+@kotlinx.serialization.Serializable
+private data class SupplementDoseRow(val id: Long, val name: String, val dose: String)
 
 @kotlinx.serialization.Serializable
 private data class DetailsJsonRow(val details: JsonObject = JsonObject(emptyMap()))

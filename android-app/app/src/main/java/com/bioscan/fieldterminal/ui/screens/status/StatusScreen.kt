@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,9 +29,10 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenDailyReadiness: () -> Unit) {
     var overview by remember { mutableStateOf<StatusOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    val guard = rememberLoadGuard()
 
-    LaunchedEffect(Unit) {
-        overview = StatusRepository(SupabaseClientProvider.client).loadOverview()
+    LaunchedEffect(guard.attempt) {
+        guard.run { overview = StatusRepository(SupabaseClientProvider.client).loadOverview() }
         isLoading = false
     }
 
@@ -42,6 +45,7 @@ fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenDailyReadiness: () -> Un
     // ponytail: no scroll fallback if this page's content ever grows past
     // one screen (e.g. very large system font) -- revisit if that happens.
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        BodyConsole(overview = overview, isLoading = isLoading, onOpenTile = onOpenTile, onOpenDailyReadiness = onOpenDailyReadiness)
+        if (guard.error != null && overview == null) LoadErrorCard(guard)
+        else BodyConsole(overview = overview, isLoading = isLoading, onOpenTile = onOpenTile, onOpenDailyReadiness = onOpenDailyReadiness)
     }
 }

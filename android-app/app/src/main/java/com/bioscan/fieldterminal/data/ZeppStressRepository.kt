@@ -48,7 +48,9 @@ private data class ZeppStressSamplePoint(val time: Long, val value: Int)
 class ZeppStressRepository(private val supabase: SupabaseClient) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun loadStressDays(limit: Int = 60): List<StressDay> {
+    suspend fun loadStressDays(limit: Int = 60): List<StressDay> = ReadCache.get("zepp.stress.$limit") { fetchStressDays(limit) }
+
+    private suspend fun fetchStressDays(limit: Int): List<StressDay> {
         val rows = supabase.postgrest.from("zepp_raw_extracts")
             .select(columns = Columns.list("query_date,raw_body")) {
                 filter {

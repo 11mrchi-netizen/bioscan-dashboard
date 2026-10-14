@@ -53,6 +53,39 @@ data class ZeppWorkoutSummary(
     val smoothedAscentM: Double? = null,
 )
 
+// v11: per-set movement evaluation scores from strengthAssess.eq[].
+// Positional order (eq[0..4]) confirmed against Zepp app radar 2026-10-08;
+// clockwise from top = Stability, Consistency, Speed Decay, Rhythm, Continuity.
+@Serializable
+data class ZeppMovementScores(
+    val stability: Int,
+    val consistency: Int,
+    val speedDecay: Int,
+    val rhythm: Int,
+    val continuity: Int,
+)
+
+@Serializable
+data class ZeppStrengthSetData(
+    val idx: Int,
+    val startOffsetSec: Int,
+    val durationSec: Int,
+    val exerciseCode: Int,
+    val scores: ZeppMovementScores? = null,
+)
+
+@Serializable
+data class ZeppStrengthData(
+    val sets: List<ZeppStrengthSetData> = emptyList(),
+)
+
+@Serializable
+data class ZeppRoutePoint(
+    val offsetSeconds: Long,
+    val lat: Double,
+    val lon: Double,
+)
+
 @Serializable
 data class ZeppDecodedSeries(
     val heartRate: List<ZeppDecodedPoint> = emptyList(),
@@ -61,7 +94,9 @@ data class ZeppDecodedSeries(
     val distanceKm: List<ZeppDecodedPoint> = emptyList(),
     val cadenceSpm: List<ZeppDecodedPoint> = emptyList(),
     val verticalStrideRatioPct: List<ZeppDecodedPoint> = emptyList(),
+    val routePoints: List<ZeppRoutePoint> = emptyList(),
     val summary: ZeppWorkoutSummary? = null,
+    val strengthData: ZeppStrengthData? = null,
 )
 
 @Serializable
@@ -177,7 +212,16 @@ class SessionDetailRepository(
             caloriesKcal = emptyList(),
             distanceKm = toPoints(decoded.distanceKm),
             cadenceSpm = toPoints(decoded.cadenceSpm),
+            verticalRatioPct = toPoints(decoded.verticalStrideRatioPct),
         )
+    }
+
+    // v11: per-set strength data (timing + movement scores) from decoded.strengthData.
+    suspend fun loadZeppStrengthData(sessionId: Long): ZeppStrengthData? {
+        val row = supabase.postgrest.from("zepp_workout_detail")
+            .select(columns = Columns.list("decoded")) { filter { eq("exercise_session_id", sessionId) } }
+            .decodeSingleOrNull<ZeppWorkoutDetailRow>() ?: return null
+        return row.decoded?.strengthData
     }
 
     // Workout-level averages (cadence, ground contact, stride length,
@@ -188,6 +232,17 @@ class SessionDetailRepository(
             .select(columns = Columns.list("decoded")) { filter { eq("exercise_session_id", sessionId) } }
             .decodeSingleOrNull<ZeppWorkoutDetailRow>() ?: return null
         return row.decoded?.summary
+    }
+
+    // v12: Zepp GPS route, stored as decoded.routePoints. Used as fallback when
+    // Health Connect returns ConsentRequired/NoRoute or the session has no HC record.
+    suspend fun loadZeppRoute(sessionId: Long): List<RoutePoint>? {
+        val row = supabase.postgrest.from("zepp_workout_detail")
+            .select(columns = Columns.list("decoded")) { filter { eq("exercise_session_id", sessionId) } }
+            .decodeSingleOrNull<ZeppWorkoutDetailRow>() ?: return null
+        val pts = row.decoded?.routePoints?.takeIf { it.isNotEmpty() } ?: return null
+        val altMap = row.decoded?.altitudeM?.associate { it.offsetSeconds to it.value } ?: emptyMap()
+        return pts.map { RoutePoint(it.offsetSeconds, it.lat, it.lon, altMap[it.offsetSeconds]) }
     }
 
     // Phase G5. A session's exercise route isn't covered by this app's bulk

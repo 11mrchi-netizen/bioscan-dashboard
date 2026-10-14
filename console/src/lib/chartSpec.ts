@@ -32,32 +32,28 @@ export interface ChartSpec {
 
 // Default specs for well-known metrics.
 export const CHART_SPECS: Record<string, ChartSpec> = {
-  'wearable_daily.hrv_rmssd_ms': {
-    specVersion: 1, kind: 'area', metricId: 'wearable_daily.hrv_rmssd_ms',
+  'wearable_daily.hrv': {
+    specVersion: 1, kind: 'area', metricId: 'wearable_daily.hrv',
     title: 'HRV (RMSSD)', unit: 'ms', yAxisLabel: 'ms', smooth: true,
   },
-  'wearable_daily.resting_hr_bpm': {
-    specVersion: 1, kind: 'line', metricId: 'wearable_daily.resting_hr_bpm',
+  'wearable_daily.rhr': {
+    specVersion: 1, kind: 'line', metricId: 'wearable_daily.rhr',
     title: 'Resting HR', unit: 'bpm', smooth: true,
   },
   'wearable_daily.steps': {
     specVersion: 1, kind: 'bar', metricId: 'wearable_daily.steps',
     title: 'Steps', unit: 'steps',
   },
-  'sleep_daily.total_sleep_minutes': {
-    specVersion: 1, kind: 'bar', metricId: 'sleep_daily.total_sleep_minutes',
-    title: 'Sleep Duration', unit: 'min',
-  },
-  'sleep_daily.sleep_efficiency_pct': {
-    specVersion: 1, kind: 'line', metricId: 'sleep_daily.sleep_efficiency_pct',
-    title: 'Sleep Efficiency', unit: '%', smooth: true,
+  'sleep_daily.hours': {
+    specVersion: 1, kind: 'bar', metricId: 'sleep_daily.hours',
+    title: 'Sleep Duration', unit: 'h',
   },
   'body_metrics.weight_kg': {
     specVersion: 1, kind: 'line', metricId: 'body_metrics.weight_kg',
     title: 'Body Weight', unit: 'kg', smooth: true,
   },
-  'wellbeing_daily.energy_level': {
-    specVersion: 1, kind: 'area', metricId: 'wellbeing_daily.energy_level',
+  'wellbeing_daily.energy': {
+    specVersion: 1, kind: 'area', metricId: 'wellbeing_daily.energy',
     title: 'Energy Level', unit: '/10', smooth: true,
   },
   'wellbeing_daily.mood': {

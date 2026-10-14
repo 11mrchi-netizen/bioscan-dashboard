@@ -14,14 +14,14 @@ import kotlin.math.abs
 // respiratory-rate anomaly are their own real algorithms below.
 
 // Duration: 7-day rolling mean vs personal 60-day baseline +/- SWC.
-fun evaluateSleepDuration(hoursDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): SwcEvaluation =
-    evaluateSwcStream(hoursDaily, asOf)
+fun evaluateSleepDuration(hoursDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now(), windowStart: LocalDate? = null): SwcEvaluation =
+    evaluateSwcStream(hoursDaily, asOf, windowStart)
 
 // DAV-60: stage minutes (deep/rem/light) reuse the identical SWC machinery
 // as duration -- same treatment, different stream. Caller passes whichever
 // stage's daily minutes.
-fun evaluateSleepStage(minutesDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): SwcEvaluation =
-    evaluateSwcStream(minutesDaily, asOf)
+fun evaluateSleepStage(minutesDaily: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now(), windowStart: LocalDate? = null): SwcEvaluation =
+    evaluateSwcStream(minutesDaily, asOf, windowStart)
 
 // One real night's sleep window, as absolute instants (not local-date-only)
 // since the SRI algorithm needs real clock-time-of-day, and a night's

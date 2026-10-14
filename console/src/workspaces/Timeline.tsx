@@ -2,9 +2,12 @@
 // Events: runs, sleep, wellbeing, meals, injuries, illnesses, rest_days.
 // All driven by AnalysisContext primaryRange + filters.
 
-import { useEffect, useState, useMemo } from 'react'
+import { LoadBanner } from '../components/shared/LoadBanner'
+import { useLoadEffect } from '../lib/useLoadEffect'
+import { useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRange, useInspect } from '../lib/analysisStore'
+import { NOTABLE_SESSION_TYPES, dayBounds, localDate, warnOnError } from '../lib/schema'
 import type { EventRef } from '../types/analysis'
 import './Timeline.css'
 
@@ -19,46 +22,52 @@ interface TimelineEvent {
 
 // One fetcher per domain — returns normalized TimelineEvents
 async function fetchRuns(start: string, end: string): Promise<TimelineEvent[]> {
-  const { data } = await supabase.from('runs')
-    .select('id, date, distance_km, duration_minutes, activity_type, source')
-    .gte('date', start).lte('date', end).order('date', { ascending: false })
+  const { from, to } = dayBounds(start, end)
+  const { data, error } = await supabase.from('exercise_sessions')
+    .select('id, start_time, distance_km, duration_min, type, source')
+    .in('type', NOTABLE_SESSION_TYPES)
+    .gte('start_time', from).lte('start_time', to).order('start_time', { ascending: false })
+  warnOnError('timeline sessions', error)
   return (data ?? []).map((r: Record<string, unknown>) => ({
-    id: String(r.id), date: String(r.date), kind: 'session' as const,
-    headline: `${r.activity_type ?? 'Run'} · ${Number(r.distance_km ?? 0).toFixed(1)} km`,
-    sub: `${Math.round(Number(r.duration_minutes ?? 0))} min`,
+    id: String(r.id), date: localDate(r.start_time as string), kind: 'session' as const,
+    headline: `${r.type ?? 'Session'} · ${Number(r.distance_km ?? 0).toFixed(1)} km`,
+    sub: `${Math.round(Number(r.duration_min ?? 0))} min`,
     source: r.source as string | null,
   }))
 }
 
 async function fetchSleep(start: string, end: string): Promise<TimelineEvent[]> {
-  const { data } = await supabase.from('sleep_daily')
-    .select('id, date, total_sleep_minutes, sleep_efficiency_pct, source')
+  const { data, error } = await supabase.from('sleep_daily')
+    .select('id, date, hours, deep_min, rem_min, source')
     .gte('date', start).lte('date', end).order('date', { ascending: false })
+  warnOnError('timeline sleep', error)
   return (data ?? []).map((r: Record<string, unknown>) => ({
     id: String(r.id ?? r.date), date: String(r.date), kind: 'sleep' as const,
-    headline: `Sleep · ${Math.round(Number(r.total_sleep_minutes ?? 0) / 60 * 10) / 10} h`,
-    sub: r.sleep_efficiency_pct ? `${r.sleep_efficiency_pct}% efficiency` : '',
+    headline: `Sleep · ${Math.round(Number(r.hours ?? 0) * 10) / 10} h`,
+    sub: r.deep_min != null && r.rem_min != null ? `deep ${r.deep_min} · REM ${r.rem_min} min` : '',
     source: r.source as string | null,
   }))
 }
 
 
 async function fetchInjuries(start: string, end: string): Promise<TimelineEvent[]> {
-  const { data } = await supabase.from('injuries')
-    .select('id, start_date, body_part, description, status')
+  const { data, error } = await supabase.from('injuries')
+    .select('id, start_date, part, type, notes, status')
     .gte('start_date', start).lte('start_date', end).order('start_date', { ascending: false })
+  warnOnError('timeline injuries', error)
   return (data ?? []).map((r: Record<string, unknown>) => ({
     id: String(r.id), date: String(r.start_date), kind: 'injury' as const,
-    headline: `Injury · ${r.body_part ?? '—'}`,
-    sub: String(r.description ?? r.status ?? ''),
+    headline: `Injury · ${r.part ?? '—'}`,
+    sub: String(r.notes ?? r.type ?? r.status ?? ''),
     source: null,
   }))
 }
 
 async function fetchIllnesses(start: string, end: string): Promise<TimelineEvent[]> {
-  const { data } = await supabase.from('illnesses')
+  const { data, error } = await supabase.from('illnesses')
     .select('id, start_date, name, severity')
     .gte('start_date', start).lte('start_date', end).order('start_date', { ascending: false })
+  warnOnError('timeline illnesses', error)
   return (data ?? []).map((r: Record<string, unknown>) => ({
     id: String(r.id), date: String(r.start_date), kind: 'illness' as const,
     headline: `Illness · ${r.name ?? '—'}`,
@@ -68,13 +77,14 @@ async function fetchIllnesses(start: string, end: string): Promise<TimelineEvent
 }
 
 async function fetchRestDays(start: string, end: string): Promise<TimelineEvent[]> {
-  const { data } = await supabase.from('rest_days')
-    .select('id, date, reason')
+  const { data, error } = await supabase.from('rest_days')
+    .select('id, date, source')
     .gte('date', start).lte('date', end).order('date', { ascending: false })
+  warnOnError('timeline rest days', error)
   return (data ?? []).map((r: Record<string, unknown>) => ({
     id: String(r.id ?? r.date), date: String(r.date), kind: 'rest_day' as const,
     headline: 'Rest Day',
-    sub: String(r.reason ?? ''),
+    sub: String(r.source ?? ''),
     source: null,
   }))
 }
@@ -93,22 +103,17 @@ export function Timeline() {
   const range = useRange()
   const inspect = useInspect()
   const [events, setEvents] = useState<TimelineEvent[]>([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    setLoading(true)
+  const { loading, error, retry } = useLoadEffect(async (isCurrent) => {
     const { start, end } = range
-    Promise.all([
+    const batches = await Promise.all([
       fetchRuns(start, end),
       fetchSleep(start, end),
       fetchInjuries(start, end),
       fetchIllnesses(start, end),
       fetchRestDays(start, end),
-    ]).then(batches => {
-      const all = batches.flat().sort((a, b) => b.date.localeCompare(a.date))
-      setEvents(all)
-      setLoading(false)
-    })
+    ])
+    if (isCurrent()) setEvents(batches.flat().sort((a, b) => b.date.localeCompare(a.date)))
   }, [range])
 
   // Group by date for sticky headers
@@ -123,6 +128,7 @@ export function Timeline() {
   }, [events])
 
   if (loading) return <div className="state-loading mono">LOADING TIMELINE…</div>
+  if (error) return <LoadBanner error={error} onRetry={retry} />
   if (events.length === 0) return <div className="state-empty mono">NO EVENTS IN RANGE</div>
 
   return (

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -77,6 +78,8 @@ fun TrainingScreen(
     LaunchedEffect(Unit) {
         try {
             overview = TrainingRepository(SupabaseClientProvider.client).loadOverview()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
         }
@@ -86,7 +89,7 @@ fun TrainingScreen(
     // Tags every copy (HC/manual/Zepp) of each run as trail, then reloads so the
     // RUNNING card's trail count/elevation and the suspected list update.
     val onMarkTrail: (List<Long>) -> Unit = { ids ->
-        scope.launch {
+        scope.launchSafe {
             val repo = AddEntryRepository(SupabaseClientProvider.client)
             ids.forEach { repo.updateRouteType(it, "trail") }
             overview = TrainingRepository(SupabaseClientProvider.client).loadOverview()

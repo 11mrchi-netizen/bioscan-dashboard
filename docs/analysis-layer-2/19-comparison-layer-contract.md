@@ -2,6 +2,8 @@
 
 **Linear:** [DAV-192](https://linear.app/biodashboard/issue/DAV-192) · **Version:** 1.0.0 · **Contract only**
 
+> **Partly superseded by [Analysis contract v3](../analysis-layer-3/contract-v3.md) (2026-10-13).** The `ComparisonResult` shape below is unchanged. What v3 changes: a personal baseline window restarts at the last confirmed series break (`windowStart`), and relationship, typicality and experiment results are their own published kinds, not `ComparisonResult`s.
+
 ## Why this exists
 
 Milestone 10A ("Comparison & Benchmarking") formally consumes milestone 09's validated evaluation

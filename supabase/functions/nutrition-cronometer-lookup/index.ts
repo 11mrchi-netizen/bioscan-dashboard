@@ -48,6 +48,31 @@ interface CronoSession {
 
 let cachedSession: CronoSession | null = null;
 
+// Every outbound call has a deadline: one stalled Cronometer or Gemini request must not hold the whole lookup open.
+async function fetchT(url: string, init: RequestInit, ms = 15000): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "TimeoutError") {
+      throw new Error(`timed out after ${ms / 1000}s calling ${new URL(url).host}`);
+    }
+    throw e;
+  }
+}
+
+// Run fn over items with at most `limit` in flight; results keep the input order.
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  }));
+  return out;
+}
+
 function authBlock(session: CronoSession) {
   return {
     userId: session.userId,
@@ -62,7 +87,7 @@ function authBlock(session: CronoSession) {
 async function cronoLogin(email: string, password: string): Promise<CronoSession> {
   if (cachedSession && Date.now() < cachedSession.expiresAt) return cachedSession;
 
-  const res = await fetch(`${CRONO_BASE}/api/v2/login`, {
+  const res = await fetchT(`${CRONO_BASE}/api/v2/login`, {
     method: "POST",
     headers: CRONO_HEADERS,
     body: JSON.stringify({
@@ -107,7 +132,7 @@ interface CronoFoodSearchResult {
 }
 
 async function cronoFindFood(session: CronoSession, query: string): Promise<CronoFoodSearchResult[]> {
-  const res = await fetch(`${CRONO_BASE}/api/v2/find_food`, {
+  const res = await fetchT(`${CRONO_BASE}/api/v2/find_food`, {
     method: "POST",
     headers: CRONO_HEADERS,
     body: JSON.stringify({
@@ -147,7 +172,7 @@ interface CronoFoodDetail {
 }
 
 async function cronoGetFood(session: CronoSession, foodId: number): Promise<CronoFoodDetail | null> {
-  const res = await fetch(`${CRONO_BASE}/api/v2/get_food`, {
+  const res = await fetchT(`${CRONO_BASE}/api/v2/get_food`, {
     method: "POST",
     headers: CRONO_HEADERS,
     body: JSON.stringify({
@@ -266,11 +291,52 @@ function resolveNutrients(food: CronoFoodDetail, quantityG: number): {
   return { per100g, forPortion };
 }
 
-function estimateGramsFromDescription(description: string, measure?: CronoMeasure): number {
-  // If we have a default measure, use its gram weight
-  if (measure && measure.value > 0) return measure.value;
-  // Fallback: 100g (per-100g basis)
-  return 100;
+// "one banana", "2 eggs", "150 g rice", "a cup of oats": the leading count/unit is the portion, the rest is the food.
+const COUNT_WORDS: Record<string, number> = {
+  a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, half: 0.5,
+};
+const WEIGHT_UNIT_GRAMS: Record<string, number> = { g: 1, gram: 1, kg: 1000, oz: 28.35, ounce: 28.35 };
+
+interface Portion {
+  count: number;
+  unit: string | null; // lower-case, singular; null when the count is of the food itself ("2 eggs")
+  rest: string;
+}
+
+function parsePortion(desc: string): Portion | null {
+  const m = desc.trim().match(
+    /^(\d+(?:[.,]\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|half)\s*(g|grams?|kg|oz|ounces?|ml|cups?|tbsp|tablespoons?|tsp|teaspoons?|slices?|pieces?|scoops?|servings?|bowls?|glass(?:es)?|bottles?|cans?)?\b\s*(?:of\s+)?(.+)$/i,
+  );
+  if (!m) return null;
+  const raw = m[1].toLowerCase();
+  const count = COUNT_WORDS[raw] ?? Number(raw.replace(",", "."));
+  const rest = m[3].trim();
+  if (!Number.isFinite(count) || count <= 0 || !rest) return null;
+  const u = m[2]?.toLowerCase();
+  const unit = u ? (u.startsWith("glass") ? "glass" : u.replace(/s$/, "")) : null;
+  return { count, unit, rest };
+}
+
+const UNIT_ALIASES: Record<string, string[]> = {
+  tbsp: ["tbsp", "tablespoon"], tablespoon: ["tbsp", "tablespoon"], tsp: ["tsp", "teaspoon"], teaspoon: ["tsp", "teaspoon"],
+};
+
+const PLAIN_WEIGHT_MEASURE = /^\s*[\d.]*\s*(g|gram|grams|oz|ounce|ounces|ml)\s*$/i;
+
+// Grams for the portion from the food's own serving sizes. Null when nothing trustworthy is known (caller then uses 100 g).
+function portionGrams(food: CronoFoodDetail, portion: Portion): { grams: number; label: string } | null {
+  const usable = food.measures.filter((m) => m.value > 0 && !PLAIN_WEIGHT_MEASURE.test(m.name));
+  let measure: CronoMeasure | undefined;
+  if (portion.unit && portion.unit !== "serving") {
+    const names = UNIT_ALIASES[portion.unit] ?? [portion.unit];
+    measure = usable.find((m) => names.some((n) => m.name.toLowerCase().includes(n)));
+  } else {
+    measure = usable.find((m) => m.id === food.defaultMeasureId) ?? usable[0];
+  }
+  if (!measure) return null;
+  const grams = portion.count * measure.value;
+  if (!(grams >= 1 && grams <= 3000)) return null;
+  return { grams: Math.round(grams * 10) / 10, label: `${portion.count} x ${measure.name}` };
 }
 
 // Words that describe cooking/preparation but not the food itself.
@@ -283,6 +349,8 @@ const MODIFIER_WORDS = new Set([
   "with", "and", "in", "on", "of", "the", "a", "an",
   "salted", "unsalted", "seasoned", "plain", "flavored",
   "lean", "boneless", "skinless",
+  "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "half", "couple",
+  "small", "medium", "large", "piece", "pieces", "slice", "slices",
 ]);
 
 function extractFoodNouns(text: string): string[] {
@@ -293,12 +361,37 @@ function extractFoodNouns(text: string): string[] {
     .filter((w) => w.length > 1 && !MODIFIER_WORDS.has(w));
 }
 
+// Preparation words that change what the food is (raw is the baseline, so it is not here).
+const PREP_WORDS = new Set([
+  "cooked", "frozen", "dried", "dry", "canned", "grilled", "baked", "fried", "deep-fried", "pan-fried", "stir-fried",
+  "roasted", "steamed", "boiled", "poached", "smoked", "braised", "sauteed", "sautéed", "blanched", "seared", "pan-seared",
+  "mashed", "salted", "seasoned", "flavored",
+]);
+
+function words(text: string): string[] {
+  return text.toLowerCase().replace(/[,()]/g, " ").split(/\s+/).filter(Boolean);
+}
+
+// How far the name strays from the query: food words the query did not ask for ("cream", "pie" for "banana") plus
+// preparation words it did not ask for ("fried"), so plain "Bananas, raw" beats "Banana cream pie" and "Banana, fried".
+function extraNounCount(query: string, foodName: string): number {
+  const queryNouns = extractFoodNouns(query);
+  const extraNouns = extractFoodNouns(foodName).filter((nw) =>
+    !queryNouns.some((qw) => nw === qw || nw.includes(qw) || qw.includes(nw))
+  ).length;
+  const queryWords = new Set(words(query));
+  const extraPrep = words(foodName).filter((w) => PREP_WORDS.has(w) && !queryWords.has(w)).length;
+  return extraNouns + extraPrep;
+}
+
 function assessMatchQuality(query: string, foodName: string, score?: number): "exact" | "good" | "weak" | "none" {
   const q = query.toLowerCase().trim();
   const n = foodName.toLowerCase().trim();
 
-  // Exact substring match
-  if (q === n || n.includes(q)) return "exact";
+  // Exact match: the name is the query, or contains it without adding other foods ("Bananas, raw" for "banana", but not
+  // "Banana cream pie").
+  if (q === n) return "exact";
+  if (n.includes(q)) return extraNounCount(q, n) === 0 ? "exact" : "good";
 
   const queryNouns = extractFoodNouns(q);
   const nameNouns = extractFoodNouns(n);
@@ -338,14 +431,16 @@ function sourceRank(source: string): number {
 }
 
 function isBetterMatch(
-  candidate: { quality: "exact" | "good" | "weak" | "none"; source: string; nutrientCount: number },
-  current: { quality: "exact" | "good" | "weak" | "none"; source: string; nutrientCount: number },
+  candidate: { quality: "exact" | "good" | "weak" | "none"; source: string; nutrientCount: number; extra: number },
+  current: { quality: "exact" | "good" | "weak" | "none"; source: string; nutrientCount: number; extra: number },
 ): boolean {
   const qDiff = qualityRank(candidate.quality) - qualityRank(current.quality);
   if (qDiff !== 0) return qDiff > 0;
   // Same match quality — prefer generic USDA sources over branded
   const sDiff = sourceRank(candidate.source) - sourceRank(current.source);
   if (sDiff !== 0) return sDiff > 0;
+  // Same source tier — the plainer entry wins ("Bananas, raw" over "Banana nut bread")
+  if (candidate.extra !== current.extra) return candidate.extra < current.extra;
   // Same source tier — prefer the entry with more nutrients populated
   return candidate.nutrientCount > current.nutrientCount;
 }
@@ -354,36 +449,30 @@ async function tryLookup(
   session: CronoSession,
   query: string,
   quantityG: number,
+  portion?: Portion,
 ): Promise<ResolvedItem | null> {
   const searchResults = await cronoFindFood(session, query);
   if (searchResults.length === 0) return null;
 
-  // Check top 5 results for best match, preferring USDA sources over branded
-  let bestMatch: { food: CronoFoodDetail; searchResult: CronoFoodSearchResult; quality: "exact" | "good" | "weak" | "none" } | null = null;
+  // Check the top 5 results for the best match (USDA sources over branded). Details are fetched together, not one by one.
+  let bestMatch: { food: CronoFoodDetail; searchResult: CronoFoodSearchResult; quality: "exact" | "good" | "weak" | "none"; extra: number } | null = null;
 
-  for (const candidate of searchResults.slice(0, 5)) {
-    const quality = assessMatchQuality(query, candidate.name, candidate.score ?? undefined);
-    if (quality === "none") continue;
+  const candidates = searchResults.slice(0, 5)
+    .map((candidate) => ({ candidate, quality: assessMatchQuality(query, candidate.name, candidate.score ?? undefined) }))
+    .filter((c) => c.quality !== "none");
+  const details = await Promise.all(candidates.map((c) => cronoGetFood(session, c.candidate.id).catch(() => null)));
 
-    const candidateSource = candidate.source;
-    if (bestMatch) {
-      const dominated = isBetterMatch(
-        { quality, source: candidateSource, nutrientCount: 0 },
-        { quality: bestMatch.quality, source: bestMatch.searchResult.source, nutrientCount: bestMatch.food.nutrients.length },
-      );
-      // If same quality and current is already a preferred source, skip fetching details
-      if (!dominated && qualityRank(quality) <= qualityRank(bestMatch.quality)) continue;
-    }
-
-    const food = await cronoGetFood(session, candidate.id);
+  for (let idx = 0; idx < candidates.length; idx++) {
+    const { candidate, quality } = candidates[idx];
+    const food = details[idx];
     if (!food) continue;
-
     const nutrientCount = food.nutrients.filter((n) => n.amount > 0).length;
+    const extra = extraNounCount(query, candidate.name);
     if (!bestMatch || isBetterMatch(
-      { quality, source: candidateSource, nutrientCount },
-      { quality: bestMatch.quality, source: bestMatch.searchResult.source, nutrientCount: bestMatch.food.nutrients.filter((n) => n.amount > 0).length },
+      { quality, source: candidate.source, nutrientCount, extra },
+      { quality: bestMatch.quality, source: bestMatch.searchResult.source, nutrientCount: bestMatch.food.nutrients.filter((n) => n.amount > 0).length, extra: bestMatch.extra },
     )) {
-      bestMatch = { food, searchResult: candidate, quality };
+      bestMatch = { food, searchResult: candidate, quality, extra };
     }
   }
 
@@ -407,7 +496,9 @@ async function tryLookup(
 
   const { food, searchResult, quality } = bestMatch;
   const defaultMeasure = food.measures.find((m) => m.id === food.defaultMeasureId);
-  const { per100g, forPortion } = resolveNutrients(food, quantityG);
+  const resolved = portion ? portionGrams(food, portion) : null;
+  const grams = resolved?.grams ?? quantityG;
+  const { per100g, forPortion } = resolveNutrients(food, grams);
 
   return {
     query,
@@ -415,8 +506,8 @@ async function tryLookup(
     cronometer_food_name: food.name,
     cronometer_source: food.source,
     search_score: searchResult.score ?? null,
-    quantity_g: quantityG,
-    serving_used: defaultMeasure?.name ?? "100g",
+    quantity_g: grams,
+    serving_used: resolved?.label ?? defaultMeasure?.name ?? "100g",
     nutrients_per_100g: per100g,
     nutrients_for_portion: forPortion,
     all_measures: food.measures.map((m) => ({ name: m.name, grams: m.value })),
@@ -440,17 +531,18 @@ async function lookupItem(
   session: CronoSession,
   description: string,
   quantityG?: number,
+  portion?: Portion,
 ): Promise<ResolvedItem> {
   const effectiveG = quantityG ?? 100;
 
   // First attempt: full query
-  let result = await tryLookup(session, description, effectiveG);
+  let result = await tryLookup(session, description, effectiveG, portion);
 
   // If no good match, try simplified query (strip modifiers)
   if (!result || result.match_quality === "none") {
     const simplified = simplifyQuery(description);
     if (simplified) {
-      const retry = await tryLookup(session, simplified, effectiveG);
+      const retry = await tryLookup(session, simplified, effectiveG, portion);
       if (retry && qualityRank(retry.match_quality) > qualityRank(result?.match_quality ?? "none")) {
         retry.query = description; // keep original query for context
         result = retry;
@@ -477,7 +569,8 @@ async function lookupItem(
 // Gemini decomposition — split an aggregate meal description into items
 // ---------------------------------------------------------------------------
 
-const DECOMPOSE_MODEL = "gemini-3.5-flash-lite";
+// Same two flash-lite tiers as nutrition-estimate-text/-image: the second answers when the first is overloaded or slow.
+const DECOMPOSE_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
 
 const DECOMPOSE_PROMPT = `You are given a description of a meal (possibly from a photo). Break it down into individual food items with estimated gram weights.
 
@@ -541,30 +634,34 @@ async function decomposeMealDescription(
   apiKey: string,
   description: string,
 ): Promise<DecomposedItem[]> {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${DECOMPOSE_MODEL}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: DECOMPOSE_PROMPT + description.trim() + '"""' }] }],
-        generationConfig: {
-          response_mime_type: "application/json",
-          response_schema: DECOMPOSE_SCHEMA,
-        },
-      }),
+  const requestBody = JSON.stringify({
+    contents: [{ parts: [{ text: DECOMPOSE_PROMPT + description.trim() + '"""' }] }],
+    generationConfig: {
+      response_mime_type: "application/json",
+      response_schema: DECOMPOSE_SCHEMA,
     },
-  );
+  });
 
-  const body = await res.json();
-  const text = body?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) return [];
-  try {
-    const parsed = JSON.parse(text);
-    return Array.isArray(parsed.items) ? parsed.items : [];
-  } catch {
-    return [];
+  for (const model of DECOMPOSE_MODELS) {
+    try {
+      const res = await fetchT(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: requestBody },
+        20000,
+      );
+      if (!res.ok) {
+        console.log(`decompose ${model}: HTTP ${res.status}`);
+        continue;
+      }
+      const body = await res.json();
+      const text = body?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const parsed = text ? JSON.parse(text) : null;
+      if (Array.isArray(parsed?.items) && parsed.items.length > 0) return parsed.items;
+    } catch (e) {
+      console.log(`decompose ${model}: ${String(e)}`);
+    }
   }
+  return [];
 }
 
 // ---------------------------------------------------------------------------
@@ -635,11 +732,8 @@ Deno.serve(async (req: Request) => {
 
     // Mode 1: direct item lookup
     if (body.items && Array.isArray(body.items) && body.items.length > 0) {
-      const results: ResolvedItem[] = [];
-      for (const item of body.items) {
-        if (!item.description?.trim()) continue;
-        results.push(await lookupItem(session, item.description, item.quantity_g));
-      }
+      const wanted = body.items.filter((item) => item.description?.trim());
+      const results = await mapLimit(wanted, 4, (item) => lookupItem(session, item.description, item.quantity_g));
 
       const { totals, nutrient_units, included, skipped } = sumNutrients(results);
       return json({ mode: "direct", results, totals, nutrient_units, items_included: included, items_skipped: skipped }, 200);
@@ -652,7 +746,10 @@ Deno.serve(async (req: Request) => {
       // Simple descriptions (single food item) go through direct lookup
       // to avoid Gemini inflating portions with decomposition guesses.
       if (!looksCompound(desc)) {
-        const result = await lookupItem(session, desc);
+        // "one banana": look up "banana" and size the portion from its own serving data, not a flat 100 g.
+        const portion = parsePortion(desc);
+        const weightG = portion?.unit && WEIGHT_UNIT_GRAMS[portion.unit] ? portion.count * WEIGHT_UNIT_GRAMS[portion.unit] : undefined;
+        const result = await lookupItem(session, portion?.rest ?? desc, weightG, weightG === undefined && portion ? portion : undefined);
         const results = [result];
         const { totals, nutrient_units, included, skipped } = sumNutrients(results);
         return json({
@@ -675,13 +772,10 @@ Deno.serve(async (req: Request) => {
 
       const decomposed = await decomposeMealDescription(geminiKey, desc);
       if (decomposed.length === 0) {
-        return json({ error: "decomposition_failed", description: desc }, 502);
+        return json({ error: "decomposition_failed", message: "Could not split the meal into foods (Gemini did not answer in time).", description: desc }, 502);
       }
 
-      const results: ResolvedItem[] = [];
-      for (const item of decomposed) {
-        results.push(await lookupItem(session, item.description, item.quantity_g));
-      }
+      const results = await mapLimit(decomposed, 4, (item) => lookupItem(session, item.description, item.quantity_g));
 
       const { totals, nutrient_units, included, skipped } = sumNutrients(results);
       return json({

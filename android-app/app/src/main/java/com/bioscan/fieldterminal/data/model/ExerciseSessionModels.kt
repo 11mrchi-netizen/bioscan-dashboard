@@ -63,6 +63,7 @@ data class ExerciseSessionDetails(
 @Serializable
 data class StrengthExerciseDto(
     val name: String,
+    @SerialName("exercise_code") val exerciseCode: Int? = null,
     val sets: List<StrengthSetDto>,
 )
 
@@ -73,6 +74,10 @@ data class StrengthSetDto(
     val rpe: Int? = null,
     val rir: Int? = null,
     @SerialName("percent_1rm") val percentOneRm: Double? = null,
+    // Zepp-sourced fields — null for manual imports
+    @SerialName("duration_sec") val durationSec: Int? = null,
+    @SerialName("avg_hr") val avgHr: Int? = null,
+    @SerialName("detected_reps") val detectedReps: Int? = null,
 )
 
 // Phase G4: the full row for SessionDetailScreen's summary card, plus

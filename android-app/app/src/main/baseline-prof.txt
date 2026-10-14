@@ -1,0 +1,10 @@
+# Hand-written baseline profile (no Macrobenchmark module in this project): ask ART to precompile the app's own code and
+# the Compose runtime paths it uses at startup, instead of interpreting them on first launch. Wildcards are intentional;
+# the app is small and single-user, so over-inclusion costs a little install time and nothing else.
+HSPLcom/bioscan/fieldterminal/**;->**(**)**
+Lcom/bioscan/fieldterminal/**;
+HSPLandroidx/compose/runtime/**;->**(**)**
+HSPLandroidx/compose/ui/**;->**(**)**
+HSPLandroidx/compose/foundation/**;->**(**)**
+HSPLandroidx/compose/material3/**;->**(**)**
+HSPLandroidx/navigation/**;->**(**)**

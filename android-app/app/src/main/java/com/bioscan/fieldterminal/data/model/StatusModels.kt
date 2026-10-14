@@ -8,10 +8,17 @@ import kotlinx.serialization.Serializable
 // selected in the queries that decode these, not full-table shapes.
 
 @Serializable
+data class HrPoint(
+    @SerialName("offsetMinutes") val offsetMinutes: Int,
+    val bpm: Int,
+)
+
+@Serializable
 data class WearableDailyRow(
     val date: String, // ISO date, e.g. "2026-09-15"
     val rhr: Double? = null,
     val hrv: Double? = null,
+    @SerialName("hr_timeseries") val hrTimeseries: List<HrPoint>? = null,
 )
 
 @Serializable

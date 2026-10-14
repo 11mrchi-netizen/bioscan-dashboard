@@ -26,12 +26,13 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
-// One spoke of the radar. `value` is already a 0..100 score supplied upstream; null means the axis could
-// not be scored -- it is drawn as a dashed spoke with a hollow marker and left OUT of the polygon (never
-// plotted at zero, which would read as a bad score instead of a missing one).
-data class RadarAxis(val label: String, val value: Double?, val color: Color)
+// One spoke of the radar. `value` is already a 0..100 radius supplied upstream; null means the axis could
+// not be assessed -- it is drawn as a dashed spoke with a hollow marker and left OUT of the polygon (never
+// plotted at zero, which would read as a bad result instead of a missing one). `valueLabel`, when set,
+// replaces the number in the axis label (for axes whose radius is a position, not a score).
+data class RadarAxis(val label: String, val value: Double?, val color: Color, val valueLabel: String? = null)
 
-// N-gon radar (the User tab's Healthspan heptagon). Rings at 25/50/75/100, an accent-filled polygon through
+// N-gon radar (the User tab's Healthspan factors). Rings at 25/50/75/100, an accent-filled polygon through
 // the scored axes, a coloured vertex per axis, tap an axis to select it. Generic in N; knows nothing about
 // Healthspan. Labels are drawn on the canvas with FTType so they stay inside the design scale.
 @Composable
@@ -124,7 +125,11 @@ fun FTRadarChart(
 private fun DrawScope.drawAxisLabel(measurer: TextMeasurer, axis: RadarAxis, selected: Boolean, tip: Offset, center: Offset, pad: Float) {
     val style = (if (selected) FTType.CaptionStrong else FTType.Micro)
         .copy(color = if (axis.value == null) FT.TextMuted else if (selected) FT.TextPrimary else FT.TextSecondary)
-    val text = if (axis.value != null) "${axis.label}  ${"%.0f".format(axis.value)}" else axis.label
+    val text = when {
+        axis.valueLabel != null -> "${axis.label}  ${axis.valueLabel}"
+        axis.value != null -> "${axis.label}  ${"%.0f".format(axis.value)}"
+        else -> axis.label
+    }
     val layout = measurer.measure(text, style)
     // Push the label outward along the spoke, keeping it on the canvas.
     val dx = tip.x - center.x

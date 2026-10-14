@@ -3,13 +3,11 @@ package com.bioscan.fieldterminal.ui.screens.user
 import com.bioscan.fieldterminal.data.AgingProfileOverview
 import com.bioscan.fieldterminal.data.AgingProfileRepository
 import com.bioscan.fieldterminal.data.ConditioningHistory
-import com.bioscan.fieldterminal.data.HealthspanInputsRepository
 import com.bioscan.fieldterminal.data.RunningHistory
 import com.bioscan.fieldterminal.data.SkillHistoryRepository
 import com.bioscan.fieldterminal.data.StrengthHistory
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.domain.healthspan.HealthspanAxis
-import com.bioscan.fieldterminal.domain.healthspan.HealthspanAxisInput
+import com.bioscan.fieldterminal.data.vo2Placement
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -31,7 +29,7 @@ object UserDataCache {
     private var running: Entry<RunningHistory>? = null
     private var strength: Entry<StrengthHistory>? = null
     private var conditioning: Entry<ConditioningHistory>? = null
-    private var healthspan: Entry<Map<HealthspanAxis, HealthspanAxisInput>>? = null
+    private var vo2: Entry<Double?>? = null
 
     private suspend fun <T> cached(read: () -> Entry<T>?, write: (Entry<T>) -> Unit, force: Boolean, load: suspend () -> T): T =
         mutex.withLock {
@@ -52,21 +50,10 @@ object UserDataCache {
     suspend fun conditioning(force: Boolean = false): ConditioningHistory =
         cached({ conditioning }, { conditioning = it }, force) { skills.loadConditioning() }
 
-    // Replays a fresh cached set of axes immediately; otherwise loads them, reporting each axis as it resolves.
-    suspend fun loadHealthspan(calorieGoalKcal: Double?, onAxis: (HealthspanAxisInput) -> Unit) {
-        val hit = healthspan
-        if (hit != null && hit.fresh()) {
-            hit.value.values.forEach(onAxis)
-            return
-        }
-        val collected = mutableMapOf<HealthspanAxis, HealthspanAxisInput>()
-        HealthspanInputsRepository(client).load(
-            aging = { runCatching { aging() }.getOrNull() },
-            calorieGoalKcal = calorieGoalKcal,
-        ) { input ->
-            collected[input.axis] = input
-            onAxis(input)
-        }
-        healthspan = Entry(System.currentTimeMillis(), collected.toMap())
+    // VO2max percentile against the age- and sex-matched table (null when no table fits); the Running level's population basis.
+    suspend fun vo2Percentile(force: Boolean = false): Double? {
+        // Read aging first, outside the cache lock: the mutex is not reentrant.
+        val overview = aging(force)
+        return cached({ vo2 }, { vo2 = it }, force) { vo2Placement(client, overview)?.percentile }
     }
 }

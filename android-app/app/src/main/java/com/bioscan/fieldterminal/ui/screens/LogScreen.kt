@@ -68,6 +68,8 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
         error = null
         try {
             allEntries = LogRepository(SupabaseClientProvider.client).loadAllEntries()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
         }
@@ -281,7 +283,7 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
 @Composable
 private fun TypeChip(kind: LogEntryKind) {
     val color = when (kind) {
-        LogEntryKind.Exercise -> FT.Category.Activity.c500
+        LogEntryKind.Exercise, LogEntryKind.Grip -> FT.Category.Activity.c500
         LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> FT.Category.Intake.c500
         LogEntryKind.Sleep -> FT.Category.Sleep.c500
         LogEntryKind.Encounter, LogEntryKind.Masturbation, LogEntryKind.Intercourse -> FT.Category.Arousal.c500

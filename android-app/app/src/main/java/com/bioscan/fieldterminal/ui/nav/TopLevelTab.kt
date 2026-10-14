@@ -61,6 +61,7 @@ enum class HeartTab(val label: String) {
     Cardio("CARDIO"),
     Recovery("RECOVERY"),
     Wellbeing("WELLBEING"),
+    SexualHealth("SEXUAL HEALTH"),
 }
 
 // DAV-209 (24/9 fixes): Labs had no subtab structure; Supplements moves here
@@ -91,6 +92,7 @@ enum class SettingsRoute(val route: String) {
 enum class UserTab(val label: String) {
     Profile("PROFILE"),
     NutritionGoals("NUTRITION GOALS"),
+    DataCapture("DATA CAPTURE"),
 }
 
 enum class ConnectedServicesTab(val label: String) {

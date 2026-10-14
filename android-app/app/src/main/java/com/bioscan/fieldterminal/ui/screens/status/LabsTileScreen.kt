@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,8 +53,20 @@ import java.time.LocalDate
 // DAV-209 (24/9 fixes): Supplements moved in from Fuel as a second subtab --
 // SupplementsScreen() itself is reused unchanged.
 @Composable
-fun LabsTileScreen(onBack: () -> Unit, onOpenPantry: () -> Unit = {}) {
-    var tab by remember { mutableStateOf(LabsTab.Bloodwork) }
+fun LabsTileScreen(
+    onBack: () -> Unit,
+    onOpenPantry: () -> Unit = {},
+    // Set by a notification tap (supplement reminder -> SUPPLEMENTS); applied once, then cleared via the callback.
+    requestedTab: LabsTab? = null,
+    onRequestedTabConsumed: () -> Unit = {},
+) {
+    var tab by remember { mutableStateOf(requestedTab ?: LabsTab.Bloodwork) }
+    LaunchedEffect(requestedTab) {
+        if (requestedTab != null) {
+            tab = requestedTab
+            onRequestedTabConsumed()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
         TileHeader(onBack = onBack)
@@ -73,17 +87,24 @@ private fun BloodworkAnalysisSection() {
     var labDraws by remember { mutableStateOf<List<LabDrawAnalysisRow>?>(null) }
     var labResults by remember { mutableStateOf<List<LabResultAnalysisRow>?>(null) }
 
-    LaunchedEffect(Unit) {
-        val repo = AnalysisRepository(SupabaseClientProvider.client)
-        labDraws = repo.loadLabDraws()
-        labResults = repo.loadLabResults()
+    val guard = rememberLoadGuard()
+    LaunchedEffect(guard.attempt) {
+        guard.run {
+            val repo = AnalysisRepository(SupabaseClientProvider.client)
+            labDraws = repo.loadLabDraws()
+            labResults = repo.loadLabResults()
+        }
     }
 
     val ld = labDraws
     val lr = labResults
     if (ld == null || lr == null) {
-        Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.DomainLabs)
+        if (guard.error != null) {
+            LoadErrorCard(guard)
+        } else {
+            Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = FT.DomainLabs)
+            }
         }
         return
     }

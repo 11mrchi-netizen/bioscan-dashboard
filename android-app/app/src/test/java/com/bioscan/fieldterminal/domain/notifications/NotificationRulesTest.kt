@@ -228,4 +228,29 @@ class NotificationRulesTest {
         assertFalse(checkinNeeded(NotificationKind.CHECKIN_EVENING, morningWood = null, arousal = 7))
         assertFalse(checkinNeeded(NotificationKind.SUPPLEMENT_DUE, null, null))
     }
+
+    // -------------------------------------------------------------------
+    // Analysis Layer 3 / R2 capture prompts
+    // -------------------------------------------------------------------
+
+    @Test
+    fun wellbeingCheckinSkippedOnceAnyScoreIsLoggedToday() {
+        assertTrue(wellbeingCheckinNeeded(null, null, null, null))
+        assertFalse(wellbeingCheckinNeeded(7, null, null, null))
+        assertFalse(wellbeingCheckinNeeded(null, null, null, 0)) // a logged 0 is still a score
+    }
+
+    @Test
+    fun eveningLogSkippedOnceAMessageWasSavedToday() {
+        assertTrue(eveningLogNeeded(0))
+        assertFalse(eveningLogNeeded(1))
+    }
+
+    @Test
+    fun captureKindsAreInTheKindListAndScheduleFromTimes() {
+        assertTrue(NotificationKind.WELLBEING_CHECKIN in NotificationKind.ALL)
+        assertTrue(NotificationKind.EVENING_LOG in NotificationKind.ALL)
+        val rule = NotificationRuleRow(kind = NotificationKind.EVENING_LOG, schedule = NotificationSchedule(times = listOf("19:30")))
+        assertEquals(listOf(java.time.LocalTime.of(19, 30)), scheduledTimes(rule))
+    }
 }

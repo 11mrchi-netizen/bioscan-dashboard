@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.domain
 
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogExerciseRow
+import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
 import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.LogMealRow
@@ -21,7 +22,7 @@ enum class LogEntryKind(val label: String) {
     Exercise("EXERCISE"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
     Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
     Wellness("WELL"), Supplement("SUPP"), Ostrc("OSTRC"), Masturbation("MASTURBATION"),
-    Intercourse("INTERCOURSE"),
+    Intercourse("INTERCOURSE"), Grip("GRIP"),
 }
 
 // DAV-219 (24/9 fixes): a few named groups the Log page clusters same-day
@@ -41,7 +42,7 @@ val LogEntryKind.category: LogCategory
     get() = when (this) {
         LogEntryKind.Food, LogEntryKind.Drink, LogEntryKind.Supplement -> LogCategory.Intake
         LogEntryKind.Exercise, LogEntryKind.Ostrc -> LogCategory.Activity
-        LogEntryKind.Sleep, LogEntryKind.Wellness, LogEntryKind.Stool, LogEntryKind.Masturbation, LogEntryKind.Intercourse -> LogCategory.Body
+        LogEntryKind.Sleep, LogEntryKind.Wellness, LogEntryKind.Stool, LogEntryKind.Masturbation, LogEntryKind.Intercourse, LogEntryKind.Grip -> LogCategory.Body
         LogEntryKind.Note, LogEntryKind.Encounter -> LogCategory.Notes
     }
 
@@ -58,7 +59,7 @@ enum class LogSource(val table: String) {
     Meal("meals"), Exercise("exercise_sessions"), Sleep("sleep_daily"),
     Stool("stool_log"), Encounter("encounters"), Note("notes"), Hydration("hydration_daily"),
     Wellbeing("wellbeing_daily"), Supplement("supplement_log"), Ostrc("ostrc_checkins"),
-    Masturbation("sexual_activity_daily"),
+    Masturbation("sexual_activity_daily"), Grip("grip_strength_log"),
 }
 
 data class LogEntry(
@@ -99,6 +100,7 @@ fun buildLogEntries(
     supplementsTaken: List<LogSupplementTakenRow> = emptyList(),
     ostrc: List<LogOstrcRow> = emptyList(),
     sexualActivity: List<LogSexualActivityRow> = emptyList(),
+    grip: List<LogGripRow> = emptyList(),
 ): List<LogEntry> {
     val entries = mutableListOf<LogEntry>()
 
@@ -154,6 +156,17 @@ fun buildLogEntries(
             timestamp = parseTimestamp(s.occurredAt),
             headline = "Bristol ${s.bristolType}",
             detail = s.discomfort?.let { "Discomfort $it/10" },
+        )
+    }
+
+    grip.forEach { g ->
+        entries += LogEntry(
+            id = g.id,
+            source = LogSource.Grip,
+            kind = LogEntryKind.Grip,
+            timestamp = parseTimestamp(g.occurredAt),
+            headline = "Grip ${g.hand} · %.1f kg".format(g.kg),
+            detail = null,
         )
     }
 

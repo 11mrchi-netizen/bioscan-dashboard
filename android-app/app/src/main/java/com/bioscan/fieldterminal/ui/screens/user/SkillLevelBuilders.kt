@@ -3,7 +3,6 @@ package com.bioscan.fieldterminal.ui.screens.user
 import com.bioscan.fieldterminal.data.ConditioningHistory
 import com.bioscan.fieldterminal.data.RunningHistory
 import com.bioscan.fieldterminal.data.StrengthHistory
-import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
 import com.bioscan.fieldterminal.domain.levels.SkillLevel
 import com.bioscan.fieldterminal.domain.levels.conditioningSkillLevel
 import com.bioscan.fieldterminal.domain.levels.ratedLifts
@@ -20,12 +19,12 @@ import java.time.temporal.ChronoUnit
 private const val MIN_PACE_RUN_KM = 3.0
 private const val RECENT_DAYS = 28L
 
-fun runningLevelOf(history: RunningHistory, cardioAge: BiologicalAgeResult?, asOf: LocalDate = LocalDate.now()): SkillLevel {
+fun runningLevelOf(history: RunningHistory, vo2Percentile: Double?, asOf: LocalDate = LocalDate.now()): SkillLevel {
     val road = history.roadRuns.filter { it.distanceKm >= MIN_PACE_RUN_KM && !it.date.isAfter(asOf) }
     val (recent, older) = road.partition { ChronoUnit.DAYS.between(it.date, asOf) < RECENT_DAYS }
     return runningSkillLevel(
         vo2max = history.latestVo2Max,
-        ageAccelerationYears = cardioAge?.ageAcceleration,
+        vo2Percentile = vo2Percentile,
         recentPaceMinPerKm = recent.minOfOrNull { it.paceMinPerKm },
         paceHistoryMinPerKm = older.map { it.paceMinPerKm },
     )

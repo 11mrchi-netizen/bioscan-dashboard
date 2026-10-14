@@ -16,6 +16,18 @@ class MovementKeyTest {
         assertEquals(movementKey("Incline Bench Press"), movementKey("Inclined Chest Press (ICP)"))
     }
 
+    // Names the Zepp watch writes (its own exercise catalog) against the spellings used elsewhere.
+    @Test
+    fun zeppCatalogNamesFoldOntoLibraryAndPlanNames() {
+        assertEquals(movementKey("Standing Military Press"), movementKey("Standing Barbell Press"))
+        assertEquals(movementKey("Overhead Press"), movementKey("Standing Barbell Press"))
+        assertEquals(movementKey("Front Barbell Squat"), movementKey("Barbell Front Squat"))
+        assertEquals(movementKey("Pullups"), movementKey("Pull Up"))
+        // The watch logs the weighted pull-up as "Pull Up" with a load; the plan names it weighted.
+        assertEquals(looseMovementKey("Weighted Pull-up"), looseMovementKey("Pull Up"))
+        assertNotEquals(movementKey("Weighted Pull-up"), movementKey("Pull Up"))
+    }
+
     @Test
     fun differentMovementsKeepSeparateKeys() {
         assertNotEquals(movementKey("Squat"), movementKey("Front Squat"))

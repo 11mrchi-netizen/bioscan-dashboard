@@ -1,5 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.util.Perf
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.parallel
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,13 +32,18 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.ZeppStressRepository
 import com.bioscan.fieldterminal.data.buildTrainingSessionLoads
+import com.bioscan.fieldterminal.data.model.RelationshipResultRow
+import com.bioscan.fieldterminal.data.model.TypicalityResultRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.comparison.METRIC_DIRECTIONALITY
 import com.bioscan.fieldterminal.domain.MetricCategory
+import com.bioscan.fieldterminal.domain.patternsView
+import com.bioscan.fieldterminal.domain.typicalityView
 import com.bioscan.fieldterminal.domain.PerformanceTimeframe
+import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.domain.DisplayValue
@@ -77,17 +86,33 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
     var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
     var cycleLoaded by remember { mutableStateOf(false) }
     var nutrition by remember { mutableStateOf<NutritionOverview?>(null) }
+    // Analysis Layer 3 / R1: start of each metric's current regime (last confirmed series break); NONE until loaded.
+    var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
+    // Analysis Layer 3 / Phase 3: published confirmatory relationships (read-only).
+    var relationships by remember { mutableStateOf<List<RelationshipResultRow>>(emptyList()) }
+    // Analysis Layer 3 / Phase 4: "is today typical for you", a quiet drill-down (not part of Today's Recovery).
+    var typicality by remember { mutableStateOf<TypicalityResultRow?>(null) }
 
-    LaunchedEffect(Unit) {
-        val repo = AnalysisRepository(SupabaseClientProvider.client)
-        sessions = repo.loadExerciseSessionsForTrainingLoad()
-        wearable = repo.loadWearableDaily()
-        sleep = repo.loadSleepDaily()
-        wellbeing = repo.loadWellbeingDaily()
-        stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays()
-        activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle()
-        cycleLoaded = true
-        nutrition = NutritionRepository(SupabaseClientProvider.client).loadOverview()
+    val guard = rememberLoadGuard()
+    LaunchedEffect(guard.attempt) {
+        // Perf pass: the eleven loads are independent, so they run together (was one after another).
+        Perf.timed("DailyReadiness.load") {
+            guard.run {
+                val repo = AnalysisRepository(SupabaseClientProvider.client)
+                parallel(
+                    { sessions = repo.loadExerciseSessionsForTrainingLoad() },
+                    { wearable = repo.loadWearableDaily() },
+                    { sleep = repo.loadSleepDaily() },
+                    { wellbeing = repo.loadWellbeingDaily() },
+                    { stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays() },
+                    { activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle(); cycleLoaded = true },
+                    { nutrition = NutritionRepository(SupabaseClientProvider.client).loadOverview() },
+                    { breakStarts = repo.loadSeriesBreakStarts() },
+                    { relationships = repo.loadRelationships() },
+                    { typicality = repo.loadTypicality() },
+                )
+            }
+        }
     }
 
     val s = sessions
@@ -98,47 +123,56 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
     if (s == null || w == null || sl == null || wb == null || !cycleLoaded || nut == null) {
         Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
             TileHeader(onBack = onBack)
-            Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FT.Emerald)
+            if (guard.error != null) {
+                LoadErrorCard(guard)
+            } else {
+                Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = FT.Emerald)
+                }
             }
         }
         return
     }
 
-    val sessionLoads = buildTrainingSessionLoads(s, w.lastOrNull()?.rhr)
-    val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
-
-    val nights = sl.mapNotNull { row ->
-        val bedtime = row.bedtime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-        val wake = row.wakeTime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-        if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
-    }
-    val sleepIndexResult = computeSleepIndex(
-        sl.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } },
-        sl.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } },
-        sl.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } },
-        nights,
-    )
-    val exerciseWindows = s.mapNotNull { session ->
-        val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
-        val durationMin = session.durationMin ?: return@mapNotNull null
-        start to start.plusSeconds((durationMin * 60).toLong())
-    }
-    val physiologicalStress = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindows) }
     val hrvPoints = w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }
     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
-    val recovery = computeDynamicRecovery(
-        sleepIndex = sleepIndexResult,
-        hrvEval = evaluateHrv(hrvPoints),
-        rhrEval = evaluateRhr(rhrPoints),
-        trainingLoadEval = trainingLoadEval,
-        energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-        stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-        sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-        physiologicalStress = physiologicalStress,
-        morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-        arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-    )
+    // Perf pass: pure functions of the loaded rows, computed once per load instead of on every recomposition.
+    val (sessionLoads, trainingLoadEval, recovery) = remember(s, w, sl, wb, stressDays, breakStarts) {
+        val sessionLoads = buildTrainingSessionLoads(s, w.lastOrNull()?.rhr)
+        val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
+
+        val nights = sl.mapNotNull { row ->
+            val bedtime = row.bedtime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+            val wake = row.wakeTime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+            if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
+        }
+        val sleepIndexResult = computeSleepIndex(
+            sl.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } },
+            sl.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } },
+            sl.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } },
+            nights,
+            durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min"),
+        )
+        val exerciseWindows = s.mapNotNull { session ->
+            val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
+            val durationMin = session.durationMin ?: return@mapNotNull null
+            start to start.plusSeconds((durationMin * 60).toLong())
+        }
+        val physiologicalStress = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindows) }
+        val recovery = computeDynamicRecovery(
+            sleepIndex = sleepIndexResult,
+            hrvEval = evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")),
+            rhrEval = evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")),
+            trainingLoadEval = trainingLoadEval,
+            energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            physiologicalStress = physiologicalStress,
+            morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+        )
+        Triple(sessionLoads, trainingLoadEval, recovery)
+    }
 
     val waterMl = nut.todayHydrationMl?.toDouble() ?: 0.0
     val beverageMl = nut.todayBeverageItems.mapNotNull { it.effectiveHydrationMl }.sum()
@@ -194,8 +228,11 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
                 }
             }
 
-            EvalCard("HRV", evaluateHrv(hrvPoints).toExpSpace(), "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints)
-            EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints), "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints)
+            EvalCard("HRV", evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).toExpSpace(), "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints)
+            EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")), "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints)
+
+            PatternsCard(patternsView(relationships))
+            TypicalityCard(typicalityView(typicality))
         }
     }
 }

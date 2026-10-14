@@ -53,13 +53,14 @@ fun RunningSkillScreen(onBack: () -> Unit) {
 private fun RunningContent(history: RunningHistory) {
     var timeframe by remember { mutableStateOf(PerformanceTimeframe.ThreeMonths) }
     val aging by produceState<AgingProfileOverview?>(initialValue = null) { value = runCatching { UserDataCache.aging() }.getOrNull() }
-    val level = remember(history, aging) { runningLevelOf(history, aging?.cardioAge) }
+    val vo2Percentile by produceState<Double?>(initialValue = null) { value = runCatching { UserDataCache.vo2Percentile() }.getOrNull() }
+    val level = remember(history, vo2Percentile) { runningLevelOf(history, vo2Percentile) }
     val today = remember { LocalDate.now() }
     val from = today.minusMonths(timeframe.months)
 
     SkillHeroCard(
         Skill.RUNNING, level,
-        info = "Rated from your VO2max against the age-and-sex norm (Cardio Age) when sex and date of birth are set; otherwise " +
+        info = "Your VO2max placed against the age- and sex-matched benchmark table (a population percentile) when one fits; otherwise " +
             "your best recent road pace against your own run history, marked PROVISIONAL. Trail runs and implausible paces are excluded.",
     ) {
         aging?.cardioAge?.biologicalAge?.let { FTMetricRow("Cardio age", "%.0f yrs".format(it)) }

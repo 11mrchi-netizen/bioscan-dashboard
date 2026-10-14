@@ -35,9 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.ImportFile
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
@@ -60,9 +58,8 @@ import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabChip
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -93,7 +90,7 @@ fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit, initialProg
         TileHeader(onBack = { if (state.creating || !state.back()) onBack() })
         Text(
             "STEP ${state.steps.indexOf(state.step) + 1} OF ${state.steps.size} · ${state.step.label}",
-            color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 11.sp, letterSpacing = 1.sp,
+            color = FT.TextSecondary, style = FTType.LabelCaps,
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
         )
         Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
@@ -111,7 +108,7 @@ fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit, initialProg
                     PlannerStep.Review -> ReviewStep(state)
                 }
             }
-            state.error?.let { Text(it, color = FT.Critical, fontFamily = Inter, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp)) }
+            state.error?.let { Text(it, color = FT.Critical, style = FTType.BodySmall, modifier = Modifier.padding(vertical = 8.dp)) }
             Spacer(Modifier.height(24.dp))
         }
         if (!state.loading) {
@@ -130,10 +127,10 @@ fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit, initialProg
 }
 
 @Composable
-internal fun Label(text: String) = Text(text, color = FT.TextMuted, fontFamily = RobotoMono, fontSize = 10.5.sp, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
+internal fun Label(text: String) = Text(text, color = FT.TextMuted, style = FTType.LabelCaps, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
 
 @Composable
-internal fun Body(text: String, muted: Boolean = false) = Text(text, color = if (muted) FT.TextSecondary else FT.TextPrimary, fontFamily = Inter, fontSize = 13.5.sp)
+internal fun Body(text: String, muted: Boolean = false) = Text(text, color = if (muted) FT.TextSecondary else FT.TextPrimary, style = FTType.BodySmall)
 
 @Composable
 internal fun Chips(options: List<String>, selected: Set<String>, label: (String) -> String = { it }, onToggle: (String) -> Unit) {
@@ -181,9 +178,9 @@ internal fun ProgramCard(title: String, meta: String, note: String?, selected: B
             .clickable { onClick() }.padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(title, color = FT.TextPrimary, fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-        Text(meta, color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 11.sp)
-        note?.let { Text(it.take(160), color = FT.TextMuted, fontFamily = Inter, fontSize = 12.sp) }
+        Text(title, color = FT.TextPrimary, style = FTType.RowTitle)
+        Text(meta, color = FT.TextSecondary, style = FTType.MonoCaption)
+        note?.let { Text(it.take(160), color = FT.TextMuted, style = FTType.Caption) }
     }
 }
 
@@ -249,7 +246,7 @@ private fun ModulesStep(state: TrainingPlannerState) {
     Label("TRAINING DAYS")
     Body("Each day of the programme's week lands on the weekday you choose.", muted = true)
     state.dayPositions.forEach { pos ->
-        Text("DAY $pos", color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+        Text("DAY $pos", color = FT.TextSecondary, style = FTType.MonoCaption, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
         Chips(DayOfWeek.entries.map { it.name }, setOf(state.weekdayFor(pos).name), { DayOfWeek.valueOf(it).getDisplayName(TextStyle.SHORT, Locale.ENGLISH).uppercase() }) { state.weekdays[pos] = DayOfWeek.valueOf(it) }
     }
     Label("PROGRESSION")
@@ -263,12 +260,12 @@ internal fun ModuleOptions(state: TrainingPlannerState, m: StrengthModuleDef) {
         Chips(m.variants.map { it.key }, setOf(state.choiceFor(m.key).variant ?: m.variants.first().key), { k -> m.variants.first { it.key == k }.title.take(40) }) { k -> state.updateChoice(m.key) { it.copy(variant = k) } }
     }
     if (m.blockLengths.size > 1) {
-        Text("BLOCK LENGTH", color = FT.TextMuted, fontFamily = RobotoMono, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+        Text("BLOCK LENGTH", color = FT.TextMuted, style = FTType.Micro, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
         val current = (state.choiceFor(m.key).blockLength ?: m.blockLengths.last()).toString()
         Chips(m.blockLengths.map { it.toString() }, setOf(current), { "$it WEEKS" }) { k -> state.updateChoice(m.key) { it.copy(blockLength = k.toInt()) } }
     }
     if (m.options.isNotEmpty()) {
-        m.options.take(4).forEach { o -> Text("${o.title}: ${o.description}".take(200), color = FT.TextMuted, fontFamily = Inter, fontSize = 11.5.sp, modifier = Modifier.padding(top = 4.dp)) }
+        m.options.take(4).forEach { o -> Text("${o.title}: ${o.description}".take(200), color = FT.TextMuted, style = FTType.Caption, modifier = Modifier.padding(top = 4.dp)) }
     }
 }
 
@@ -340,9 +337,9 @@ private fun MaxRow(state: TrainingPlannerState, exercise: String) {
         Column(Modifier.weight(1f)) {
             Text(
                 if (kg != null) "MAX ${"%.1f".format(kg)} kg" else "NO MAX YET",
-                color = if (kg != null) FT.TextPrimary else FT.Warning, fontFamily = RobotoMono, fontSize = 12.sp,
+                color = if (kg != null) FT.TextPrimary else FT.Warning, style = FTType.Value,
             )
-            Text(if (manual != null) "entered here" else resolved?.basedOn ?: "enter a tested or estimated max", color = FT.TextMuted, fontFamily = Inter, fontSize = 11.sp)
+            Text(if (manual != null) "entered here" else resolved?.basedOn ?: "enter a tested or estimated max", color = FT.TextMuted, style = FTType.Caption)
         }
         Box(Modifier.width(110.dp)) {
             FieldTextField(text, { text = it; it.toDoubleOrNull()?.takeIf { v -> v > 0 }?.let { v -> state.manualMaxes[key] = v } ?: state.manualMaxes.remove(key) }, "kg", keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal)
@@ -400,14 +397,14 @@ private fun ReviewStep(state: TrainingPlannerState) {
     if (state.program is Program.Build) AdjustSections(state)
     if (block.warnings.isNotEmpty()) {
         FTCard(title = "NEEDS ATTENTION", modifier = Modifier.padding(top = 12.dp)) {
-            block.warnings.take(12).forEach { Text("! $it", color = FT.Warning, fontFamily = Inter, fontSize = 12.5.sp) }
+            block.warnings.take(12).forEach { Text("! $it", color = FT.Warning, style = FTType.Caption) }
             if (block.warnings.size > 12) Body("and ${block.warnings.size - 12} more", muted = true)
         }
     }
     if (block.progressions.isNotEmpty()) {
         FTCard(title = "PROJECTED MAX INCREASES", modifier = Modifier.padding(top = 12.dp)) {
             block.progressions.groupBy { it.weekIndex }.forEach { (week, list) ->
-                Text("Week $week: " + list.joinToString(", ") { "${it.exercise} ${"%.1f".format(it.fromKg)} → ${"%.1f".format(it.toKg)} kg" }, color = FT.TextSecondary, fontFamily = Inter, fontSize = 12.sp)
+                Text("Week $week: " + list.joinToString(", ") { "${it.exercise} ${"%.1f".format(it.fromKg)} → ${"%.1f".format(it.toKg)} kg" }, color = FT.TextSecondary, style = FTType.Caption)
             }
             Body("Projections only: confirm each increase when its block ends.", muted = true)
         }
@@ -418,11 +415,11 @@ private fun ReviewStep(state: TrainingPlannerState) {
             list.forEach { s ->
                 Text(
                     s.date.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)).uppercase() + (s.startTime?.let { " · $it" } ?: "") + if (s.slotInDay > 1) " · 2ND SESSION" else "",
-                    color = FT.DomainTraining, fontFamily = RobotoMono, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp),
+                    color = FT.DomainTraining, style = FTType.MonoCaption, modifier = Modifier.padding(top = 8.dp),
                 )
-                Text(s.title, color = FT.TextPrimary, fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                s.summaryLines().forEach { Text(it, color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 11.5.sp) }
-                s.notes.firstOrNull()?.let { Text(it.take(140), color = FT.TextMuted, fontFamily = Inter, fontSize = 11.sp) }
+                Text(s.title, color = FT.TextPrimary, style = FTType.RowTitle)
+                s.summaryLines().forEach { Text(it, color = FT.TextSecondary, style = FTType.MonoCaption) }
+                s.notes.firstOrNull()?.let { Text(it.take(140), color = FT.TextMuted, style = FTType.Caption) }
             }
         }
     }
@@ -460,10 +457,10 @@ private fun Section(state: TrainingPlannerState, id: String, title: String, summ
     ) {
         Row(Modifier.fillMaxWidth().clickable { state.openSection = if (open) null else id }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) {
-                Text(title, color = FT.TextPrimary, fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                Text(summary.take(90), color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 11.sp)
+                Text(title, color = FT.TextPrimary, style = FTType.RowTitle)
+                Text(summary.take(90), color = FT.TextSecondary, style = FTType.MonoCaption)
             }
-            Text(if (open) "^" else "v", color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 14.sp)
+            Text(if (open) "^" else "v", color = FT.TextSecondary, style = FTType.Value)
         }
         if (open) content()
     }

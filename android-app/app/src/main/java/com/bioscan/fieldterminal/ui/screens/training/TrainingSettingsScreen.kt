@@ -26,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
 import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
@@ -37,9 +36,8 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.TimeField
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalTime
 
 private val PLATE_CHOICES = listOf(0.5, 1.25, 2.5, 5.0, 10.0, 15.0, 20.0, 25.0)
@@ -58,11 +56,11 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onStart: (String) -> Unit) {
     Column(Modifier.fillMaxSize().background(FT.Base)) {
         TileHeader(onBack = onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("TRAINING PROGRAMS", color = FT.TextPrimary, fontFamily = RobotoMono, fontSize = 15.sp, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 8.dp))
+            Text("TRAINING PROGRAMS", color = FT.TextPrimary, style = FTType.LabelCaps, modifier = Modifier.padding(top = 8.dp))
             if (state.loading) {
                 Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.DomainTraining) }
             } else {
-                state.error?.let { Text(it, color = FT.Critical, fontFamily = Inter, fontSize = 13.sp) }
+                state.error?.let { Text(it, color = FT.Critical, style = FTType.BodySmall) }
                 ImportCard(state)
                 ProgramLibrary(state, onStart)
                 EquipmentCard(state)
@@ -98,8 +96,8 @@ private fun ProgramLibrary(state: TrainingPlannerState, onStart: (String) -> Uni
 private fun ProgramRow(title: String, meta: String, onStart: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = FT.TextPrimary, fontFamily = Inter, fontSize = 14.sp)
-            Text(meta, color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 11.sp)
+            Text(title, color = FT.TextPrimary, style = FTType.BodySmall)
+            Text(meta, color = FT.TextSecondary, style = FTType.MonoCaption)
         }
         AmberButton("START", onClick = onStart)
     }

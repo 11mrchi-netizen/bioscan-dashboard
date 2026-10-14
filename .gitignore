@@ -4,3 +4,4 @@ console/dist/
 console/.env
 *.local
 .DS_Store
+perf-harness/

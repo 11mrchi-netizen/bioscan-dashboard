@@ -14,8 +14,10 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import java.time.Duration
 import java.time.Instant
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.supervisorScope
 
 sealed interface HealthConnectSyncResult {
     data object Unavailable : HealthConnectSyncResult
@@ -62,32 +64,47 @@ class HealthConnectSyncCoordinator(private val context: Context, private val sup
             // table/column using onConflict upserts, so there is zero
             // contention between them. Total time = max(slowest type) instead
             // of sum(all types), which matters most on the 90-day first sync.
-            val counts = coroutineScope {
-                val dSteps        = async { daily.syncSteps(since, until).also            { Log.d(TAG, "steps: $it") } }
-                val dActiveCal    = async { daily.syncActiveCalories(since, until).also   { Log.d(TAG, "active_calories: $it") } }
-                val dTotalCal     = async { daily.syncTotalCalories(since, until).also    { Log.d(TAG, "total_calories: $it") } }
-                val dVo2max       = async { daily.syncVo2Max(since, until).also           { Log.d(TAG, "vo2max: $it") } }
-                val dBmr          = async { daily.syncBmr(since, until).also             { Log.d(TAG, "bmr: $it") } }
-                val dBodyComp     = async { daily.syncBodyComposition(since, until).also  { Log.d(TAG, "body_composition: $it") } }
-                val dVitals       = async { daily.syncVitals(since, until).also           { Log.d(TAG, "vitals: $it") } }
-                val dSleep        = async { daily.syncSleep(since, until).also            { Log.d(TAG, "sleep: $it") } }
-                val dExercise     = async { exercise.syncSessions(since, until).also      { Log.d(TAG, "exercise_sessions: $it") } }
-                linkedMapOf(
-                    "steps"              to dSteps.await(),
-                    "active_calories"    to dActiveCal.await(),
-                    "total_calories"     to dTotalCal.await(),
-                    "vo2max"             to dVo2max.await(),
-                    "bmr"                to dBmr.await(),
-                    "body_composition"   to dBodyComp.await(),
-                    "vitals"             to dVitals.await(),
-                    "sleep"              to dSleep.await(),
-                    "exercise_sessions"  to dExercise.await(),
-                )
+            // Perf pass: a failing record type no longer cancels its siblings. Each step reports its own outcome, the others
+            // still finish and write (all upserts are idempotent), and the watermark only advances when every step succeeded,
+            // so a failed type is re-read from the same window on the next run.
+            val outcomes = linkedMapOf<String, Deferred<Result<Int>>>()
+            supervisorScope {
+                fun step(name: String, block: suspend () -> Int) {
+                    outcomes[name] = async {
+                        try {
+                            Result.success(block().also { Log.d(TAG, "$name: $it") })
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e(TAG, "$name failed", e)
+                            Result.failure(e)
+                        }
+                    }
+                }
+                step("steps") { daily.syncSteps(since, until) }
+                step("active_calories") { daily.syncActiveCalories(since, until) }
+                step("total_calories") { daily.syncTotalCalories(since, until) }
+                step("vo2max") { daily.syncVo2Max(since, until) }
+                step("bmr") { daily.syncBmr(since, until) }
+                step("body_composition") { daily.syncBodyComposition(since, until) }
+                step("vitals") { daily.syncVitals(since, until) }
+                step("sleep") { daily.syncSleep(since, until) }
+                step("exercise_sessions") { exercise.syncSessions(since, until) }
             }
+            val results = outcomes.mapValues { it.value.await() }
+            val failedSteps = results.filterValues { it.isFailure }
+            if (failedSteps.isNotEmpty()) {
+                val first = failedSteps.values.first().exceptionOrNull()
+                Log.e(TAG, "syncAll incomplete, failed: ${failedSteps.keys}")
+                return HealthConnectSyncResult.Failed("Health Connect sync incomplete (${failedSteps.keys.joinToString()}): ${first?.message ?: "error"}")
+            }
+            val counts = results.mapValues { it.value.getOrThrow() }
 
             writeWatermark(until, counts)
             Log.d(TAG, "syncAll succeeded: $counts")
             HealthConnectSyncResult.Success(counts)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "syncAll failed", e)
             HealthConnectSyncResult.Failed(e.message ?: "Health Connect sync failed.")

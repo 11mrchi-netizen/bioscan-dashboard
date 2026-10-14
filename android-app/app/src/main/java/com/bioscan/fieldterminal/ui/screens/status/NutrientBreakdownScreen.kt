@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,9 +70,10 @@ fun NutrientBreakdownScreen(onBack: () -> Unit) {
     var data by remember { mutableStateOf<NutrientBreakdownData?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(timeRange) {
+    val guard = rememberLoadGuard()
+    LaunchedEffect(timeRange, guard.attempt) {
         isLoading = true
-        data = NutrientBreakdownRepository(SupabaseClientProvider.client).loadNutrients(timeRange.days)
+        guard.run { data = NutrientBreakdownRepository(SupabaseClientProvider.client).loadNutrients(timeRange.days) }
         isLoading = false
     }
 
@@ -101,6 +104,7 @@ fun NutrientBreakdownScreen(onBack: () -> Unit) {
         }
 
         when {
+            guard.error != null && !isLoading -> LoadErrorCard(guard)
             isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = FT.DomainFuel)
             }

@@ -13,8 +13,8 @@ class SkillLevelTest {
     private val asOf = LocalDate.of(2026, 10, 14)
 
     @Test
-    fun runningUsesTheAgeNormWhenAccelerationIsKnown() {
-        val level = runningSkillLevel(vo2max = 52.0, ageAccelerationYears = -10.0, recentPaceMinPerKm = null, paceHistoryMinPerKm = emptyList())
+    fun runningUsesTheAgeSexTablePercentileWhenOneFits() {
+        val level = runningSkillLevel(vo2max = 52.0, vo2Percentile = 75.0, recentPaceMinPerKm = null, paceHistoryMinPerKm = emptyList())
         assertEquals(75.0, level.position!!, 1e-9)
         assertEquals("Strong", level.label)
         assertEquals(LevelBasis.AGE_NORM, level.basis)
@@ -24,7 +24,7 @@ class SkillLevelTest {
     @Test
     fun runningFallsBackToOwnHistoryAndIsProvisional() {
         val history = listOf(6.0, 5.8, 5.6, 5.4)
-        val level = runningSkillLevel(vo2max = null, ageAccelerationYears = null, recentPaceMinPerKm = 5.5, paceHistoryMinPerKm = history)
+        val level = runningSkillLevel(vo2max = null, vo2Percentile = null, recentPaceMinPerKm = 5.5, paceHistoryMinPerKm = history)
         // 3 of 4 historical runs were slower than 5.5 min/km.
         assertEquals(75.0, level.position!!, 1e-9)
         assertEquals(LevelBasis.PERSONAL, level.basis)
@@ -42,16 +42,25 @@ class SkillLevelTest {
 
     @Test
     fun strengthShowsFromOneLiftAndIsProvisionalUnderThree() {
-        val one = listOfNotNull(liftTier("Squat", 120.0, 80.0))
+        val one = listOfNotNull(liftTier("Barbell Squat", 120.0, 80.0))
         val level = strengthSkillLevel(one, bodyWeightMissing = false)
         assertNotNull(level.position)
         assertTrue(level.provisional)
         assertEquals(LevelBasis.STANDARD, level.basis)
 
         val three = listOfNotNull(
-            liftTier("Squat", 120.0, 80.0), liftTier("Deadlift", 160.0, 80.0), liftTier("Bench Press", 80.0, 80.0),
+            liftTier("Barbell Squat", 120.0, 80.0), liftTier("Barbell Deadlift", 160.0, 80.0), liftTier("Chest Press", 80.0, 80.0),
         )
         assertFalse(strengthSkillLevel(three, false).provisional)
+    }
+
+    @Test
+    fun strengthLevelIsTheMedianLiftAndTheWeakerMiddleDecidesWhenEven() {
+        // ladder fractions: squat 1.5x = 0.55, deadlift 1.0x = 0.25, chest press 1.0x = 0.5+ ... pick two lifts for the even case.
+        val squat = liftTier("Barbell Squat", 120.0, 80.0)!!        // 1.5x  -> between intermediate and advanced
+        val deadlift = liftTier("Barbell Deadlift", 80.0, 80.0)!!   // 1.0x  -> novice
+        val level = strengthSkillLevel(listOf(squat, deadlift), bodyWeightMissing = false)
+        assertEquals(deadlift.ladderFraction * 100.0, level.position!!, 1e-9)
     }
 
     @Test

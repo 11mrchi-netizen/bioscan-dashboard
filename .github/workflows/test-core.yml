@@ -1,0 +1,36 @@
+name: Test analysis core
+
+on:
+  push:
+    paths:
+      - 'supabase/functions/_shared/**'
+      - 'console/src/lib/**'
+      - 'docs/analysis-layer-2/02-metric-registry.md'
+      - '.github/workflows/test-core.yml'
+  pull_request:
+    paths:
+      - 'supabase/functions/_shared/**'
+      - 'console/src/lib/**'
+      - 'docs/analysis-layer-2/02-metric-registry.md'
+      - '.github/workflows/test-core.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24 strips TypeScript types natively; the core is written in erasable TypeScript so
+      # the same files run here, in Deno (Edge Functions) and in Vite (console).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Analysis core tests
+        run: node --test "supabase/functions/_shared/analysis-core/*.test.ts"
+
+      - name: Log-agent core tests
+        run: node --test "supabase/functions/_shared/log-core/*.test.ts"
+
+      - name: Console schema tests
+        run: node --test "console/src/lib/*.test.ts"

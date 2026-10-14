@@ -5,6 +5,7 @@
 // 06.3.4's "a single, stable contract... rather than calculating metrics independently in multiple screens."
 // Same read-only, direct-Supabase-read pattern as Interventions.tsx (08.9).
 
+import { LoadBanner } from '../components/shared/LoadBanner'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { warnOnError } from '../lib/schema'
@@ -66,6 +67,7 @@ export function Fueling() {
   const [events, setEvents] = useState<IntakeLogRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingEvents, setLoadingEvents] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const loadProducts = useCallback(async () => {
     const [prodRes, verRes] = await Promise.all([
@@ -95,9 +97,15 @@ export function Fueling() {
     if (rows.length > 0) setSelectedSessionId(rows[0].id)
   }, [])
 
-  useEffect(() => {
-    void Promise.all([loadProducts(), loadSessions()]).then(() => setLoading(false))
+  const loadAll = useCallback(() => {
+    setLoading(true)
+    setLoadError(null)
+    void Promise.all([loadProducts(), loadSessions()])
+      .catch((e: unknown) => { console.error('[BioScan] load failed:', e); setLoadError(e instanceof Error ? e.message : String(e)) })
+      .finally(() => setLoading(false))
   }, [loadProducts, loadSessions])
+
+  useEffect(() => { loadAll() }, [loadAll])
 
   useEffect(() => {
     if (selectedSessionId === null) return
@@ -110,6 +118,10 @@ export function Fueling() {
       .then((res) => {
         warnOnError('fueling_intake_log', res.error)
         setEvents((res.data ?? []) as unknown as IntakeLogRow[])
+        setLoadingEvents(false)
+      }, (e: unknown) => {
+        console.error('[BioScan] intake log load failed:', e)
+        setEvents([])
         setLoadingEvents(false)
       })
   }, [selectedSessionId])
@@ -127,6 +139,7 @@ export function Fueling() {
   }, [events, selectedSession])
 
   if (loading) return <div className="state-loading mono">LOADING FUELING DATA…</div>
+  if (loadError) return <LoadBanner error={loadError} onRetry={loadAll} />
 
   return (
     <div className="conf">

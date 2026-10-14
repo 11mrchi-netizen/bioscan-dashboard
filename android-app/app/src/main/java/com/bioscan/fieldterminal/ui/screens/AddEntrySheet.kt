@@ -1,5 +1,8 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -57,6 +60,7 @@ import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.NutritionTextEstimateRepository
+import com.bioscan.fieldterminal.data.functionErrorMessage
 import java.time.LocalTime
 import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -123,6 +127,9 @@ private val sheetActionLabelStyle = FTType.LabelCaps
 fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedType by remember { mutableStateOf<AddEntryType?>(null) }
+    // Daily-use shortcut: the type logged last time is one tap away (the picker is otherwise FAB -> grid -> type).
+    val addPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("ft_ui", android.content.Context.MODE_PRIVATE)
+    val lastType = remember { addPrefs.getString("last_add_type", null)?.let { name -> AddEntryType.entries.firstOrNull { it.name == name } } }
     // Analysis Layer 3 / R2: "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
     var sayIt by remember { mutableStateOf(false) }
     var foodPrefill by remember { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
@@ -174,7 +181,14 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     Text("SAY IT", style = sheetActionLabelStyle, color = FT.DomainLog)
                 }
                 Spacer(Modifier.height(10.dp))
-                TypePickerGrid(onSelect = { selectedType = it })
+                lastType?.let { last ->
+                    AmberButton(label = "LAST: ${last.label}") { selectedType = last }
+                    Spacer(Modifier.height(10.dp))
+                }
+                TypePickerGrid(onSelect = { picked ->
+                    addPrefs.edit().putString("last_add_type", picked.name).apply()
+                    selectedType = picked
+                })
             } else {
                 SheetBackHeader(label = type.label, onBack = { selectedType = null; foodPrefill = null })
                 Spacer(Modifier.height(16.dp))
@@ -292,7 +306,7 @@ fun EntryActionSheet(
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                 if (!deleting) {
                                     deleting = true
-                                    scope.launch {
+                                    scope.launchSafe(onDone = { deleting = false }) {
                                         repo.deleteEntry(entry.source, entry.id)
                                         deleting = false
                                         onDeleted()
@@ -325,7 +339,8 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
     var loaded by remember { mutableStateOf<Any?>(null) }
 
     LaunchedEffect(entry.id) {
-        loaded = when (entry.source) {
+        try {
+            loaded = when (entry.source) {
             LogSource.Meal -> repo.fetchMeal(entry.id)
             LogSource.Hydration -> repo.fetchHydration(entry.id)
             LogSource.Encounter -> repo.fetchEncounter(entry.id)
@@ -338,6 +353,11 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Masturbation -> repo.fetchSexualActivity(entry.id)
             LogSource.Supplement -> repo.fetchSupplementTaken(entry.id)
             LogSource.Sleep -> null // no edit form; EntryActionSheet never offers EDIT for this
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            saveError = "Couldn't load this entry (${describeLoadFailure(e)})"
         }
     }
 
@@ -497,7 +517,7 @@ fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
     var row by remember { mutableStateOf<LogSleepDetailRow?>(null) }
 
     LaunchedEffect(entryId) {
-        row = AddEntryRepository(SupabaseClientProvider.client).fetchSleepDetail(entryId)
+        row = softLoad { AddEntryRepository(SupabaseClientProvider.client).fetchSleepDetail(entryId) }
     }
 
     ModalBottomSheet(
@@ -703,6 +723,7 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
             )
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
             FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items, source, quantities -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities) } })
+            FuelSubType.Endurance -> EnduranceFuelForm(onSaved = onCanonicalSaved)
         }
     }
 }
@@ -788,6 +809,8 @@ private fun FoodForm(
                 mealEstimateId = result.estimateId
                 mealEstimate = result.estimate
                 pendingPhotos = emptyList()
+                // The Gemini estimate is usable now; the Cronometer lookup below must not keep the spinner running.
+                estimating = false
 
                 enriching = true
                 try {
@@ -799,7 +822,7 @@ private fun FoodForm(
                     enriching = false
                 }
             } catch (e: Exception) {
-                estimationError = e.message ?: "Estimation failed"
+                estimationError = e.functionErrorMessage()
             } finally {
                 estimating = false
             }
@@ -831,7 +854,7 @@ private fun FoodForm(
                 )
                 mealEstimateId = null
             } catch (e: Exception) {
-                estimationError = e.message ?: "Estimation failed"
+                estimationError = e.functionErrorMessage()
             } finally {
                 enriching = false
                 estimating = false
@@ -894,7 +917,7 @@ private fun FoodForm(
                     }
                 }
             } catch (e: Exception) {
-                barcodeError = e.message ?: "Lookup failed"
+                barcodeError = e.functionErrorMessage()
             } finally {
                 barcodeLooking = false
             }
@@ -1234,11 +1257,19 @@ private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = Lo
     var quantities by remember { mutableStateOf<Map<Long, Int>>(emptyMap()) }
 
     LaunchedEffect(Unit) {
-        val repo = SupplementsRepository(SupabaseClientProvider.client)
-        val active = repo.loadOverview().active
-        supplements = active
-        if (active.any { it.everyNDays != null }) {
-            recentLastTaken = repo.loadRecentTakenDates(active.map { it.id })
+        try {
+            val repo = SupplementsRepository(SupabaseClientProvider.client)
+            val active = repo.loadOverview().active
+            supplements = active
+            if (active.any { it.everyNDays != null }) {
+                recentLastTaken = repo.loadRecentTakenDates(active.map { it.id })
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Offline: show an empty list instead of crashing the sheet.
+            android.util.Log.w("AddEntry", "supplement list load failed", e)
+            if (supplements == null) supplements = emptyList()
         }
     }
 

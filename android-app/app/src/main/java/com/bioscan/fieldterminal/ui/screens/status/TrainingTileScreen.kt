@@ -1,5 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.util.Perf
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.parallel
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -139,12 +143,19 @@ private fun InjuryTab() {
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
     var ostrc by remember { mutableStateOf<List<OstrcAnalysisRow>?>(null) }
 
-    LaunchedEffect(Unit) {
-        val repo = AnalysisRepository(SupabaseClientProvider.client)
-        sessions = repo.loadExerciseSessionsForTrainingLoad()
-        wearable = repo.loadWearableDaily()
-        wellbeing = repo.loadWellbeingDaily()
-        ostrc = repo.loadOstrcCheckins()
+    val guard = rememberLoadGuard()
+    LaunchedEffect(guard.attempt) {
+        Perf.timed("InjuryTab.load") {
+            guard.run {
+                val repo = AnalysisRepository(SupabaseClientProvider.client)
+                parallel(
+                    { sessions = repo.loadExerciseSessionsForTrainingLoad() },
+                    { wearable = repo.loadWearableDaily() },
+                    { wellbeing = repo.loadWellbeingDaily() },
+                    { ostrc = repo.loadOstrcCheckins() },
+                )
+            }
+        }
     }
 
     val s = sessions
@@ -152,8 +163,12 @@ private fun InjuryTab() {
     val wb = wellbeing
     val os = ostrc
     if (s == null || w == null || wb == null || os == null) {
-        Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.DomainTraining)
+        if (guard.error != null) {
+            LoadErrorCard(guard)
+        } else {
+            Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = FT.DomainTraining)
+            }
         }
         return
     }
@@ -275,16 +290,22 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
     // Analysis Layer 3 / R1: start of each metric's current regime (last confirmed series break); NONE until loaded.
     var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
 
-    LaunchedEffect(Unit) {
-        val repo = AnalysisRepository(SupabaseClientProvider.client)
-        sessions = repo.loadExerciseSessionsForTrainingLoad()
-        wearable = repo.loadWearableDaily()
-        activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle()
-        cycleLoaded = true
-        sleep = repo.loadSleepDaily()
-        wellbeing = repo.loadWellbeingDaily()
-        stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays()
-        breakStarts = repo.loadSeriesBreakStarts()
+    val loadGuard = rememberLoadGuard()
+    LaunchedEffect(loadGuard.attempt) {
+        Perf.timed("TrainingLoad.load") {
+            loadGuard.run {
+                val repo = AnalysisRepository(SupabaseClientProvider.client)
+                parallel(
+                    { sessions = repo.loadExerciseSessionsForTrainingLoad() },
+                    { wearable = repo.loadWearableDaily() },
+                    { activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle(); cycleLoaded = true },
+                    { sleep = repo.loadSleepDaily() },
+                    { wellbeing = repo.loadWellbeingDaily() },
+                    { stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays() },
+                    { breakStarts = repo.loadSeriesBreakStarts() },
+                )
+            }
+        }
     }
 
     val s = sessions
@@ -292,8 +313,12 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
     val sl = sleep
     val wb = wellbeing
     if (s == null || w == null || !cycleLoaded || sl == null || wb == null) {
-        Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.DomainTraining)
+        if (loadGuard.error != null) {
+            LoadErrorCard(loadGuard)
+        } else {
+            Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = FT.DomainTraining)
+            }
         }
         return
     }
@@ -304,42 +329,47 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
     ) {
         // DAV-205 (24/9 fixes): TRIMP fallback for sessions with no RPE --
         // see AnalysisRepository.buildTrainingSessionLoads()'s own comment.
-        val sessionLoads = buildTrainingSessionLoads(s, w.lastOrNull()?.rhr)
-        val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
+        // Perf pass: these evaluations are pure functions of the loaded rows; compute them once per load, not on every
+        // recomposition (timeframe taps, tab changes).
+        val (sessionLoads, trainingLoadEval, recovery) = remember(s, w, sl, wb, stressDays, breakStarts) {
+            val sessionLoads = buildTrainingSessionLoads(s, w.lastOrNull()?.rhr)
+            val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
 
-        // 09.4 Training Readiness: consumes Dynamic Recovery (09.2) directly,
-        // never recomputes CTL/ATL/TSB itself (DAV-250's own rule) -- the
-        // same trainingLoadEval the card below already renders.
-        val nights = sl.mapNotNull { row ->
-            val bedtime = row.bedtime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-            val wake = row.wakeTime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-            if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
+            // 09.4 Training Readiness: consumes Dynamic Recovery (09.2) directly,
+            // never recomputes CTL/ATL/TSB itself (DAV-250's own rule) -- the
+            // same trainingLoadEval the card below already renders.
+            val nights = sl.mapNotNull { row ->
+                val bedtime = row.bedtime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+                val wake = row.wakeTime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+                if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
+            }
+            val sleepIndexResult = computeSleepIndex(
+                sl.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } },
+                sl.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } },
+                sl.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } },
+                nights,
+                durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min"),
+            )
+            val exerciseWindows = s.mapNotNull { session ->
+                val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
+                val durationMin = session.durationMin ?: return@mapNotNull null
+                start to start.plusSeconds((durationMin * 60).toLong())
+            }
+            val physiologicalStress = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindows) }
+            val recovery = computeDynamicRecovery(
+                sleepIndex = sleepIndexResult,
+                hrvEval = evaluateHrv(w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("hrv")),
+                rhrEval = evaluateRhr(w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("rhr")),
+                trainingLoadEval = trainingLoadEval,
+                energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+                stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+                sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+                physiologicalStress = physiologicalStress,
+                morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+                arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
+            )
+            Triple(sessionLoads, trainingLoadEval, recovery)
         }
-        val sleepIndexResult = computeSleepIndex(
-            sl.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } },
-            sl.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } },
-            sl.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } },
-            nights,
-            durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min"),
-        )
-        val exerciseWindows = s.mapNotNull { session ->
-            val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
-            val durationMin = session.durationMin ?: return@mapNotNull null
-            start to start.plusSeconds((durationMin * 60).toLong())
-        }
-        val physiologicalStress = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindows) }
-        val recovery = computeDynamicRecovery(
-            sleepIndex = sleepIndexResult,
-            hrvEval = evaluateHrv(w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("hrv")),
-            rhrEval = evaluateRhr(w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("rhr")),
-            trainingLoadEval = trainingLoadEval,
-            energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-            stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-            sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-            physiologicalStress = physiologicalStress,
-            morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-            arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-        )
         TrainingReadinessCard(computeTrainingReadiness(recovery))
 
         TrainingLoadCard(trainingLoadEval, resolveTier(MetricCategory.TrainingLoad, activeCycle), trainingLoadSeries(sessionLoads), timeframe)

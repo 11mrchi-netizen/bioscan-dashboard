@@ -1,5 +1,8 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -94,8 +97,11 @@ fun UserProfileScreen(
     onOpenTrainingBlocks: () -> Unit = {},
 ) {
     var agingOverview by remember { mutableStateOf<AgingProfileOverview?>(null) }
-    LaunchedEffect(Unit) {
-        agingOverview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview()
+    val agingGuard = rememberLoadGuard()
+    val cyclesGuard = rememberLoadGuard()
+    val achievementsGuard = rememberLoadGuard()
+    LaunchedEffect(agingGuard.attempt) {
+        agingGuard.run { agingOverview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview() }
     }
 
     // Analysis Layer 3 / Phase 8: the Healthspan grade and the VO2max placement behind the running level.
@@ -119,23 +125,27 @@ fun UserProfileScreen(
     var blockSummaries by remember { mutableStateOf<List<TrainingBlockSummaryRow>?>(null) }
     val cyclesRepo = remember { TrainingCyclesRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) {
-        cycles = cyclesRepo.loadCycles()
-        blockSummaries = cyclesRepo.loadBlockSummaries()
+    LaunchedEffect(cyclesGuard.attempt) {
+        cyclesGuard.run {
+            cycles = cyclesRepo.loadCycles()
+            blockSummaries = cyclesRepo.loadBlockSummaries()
+        }
     }
 
     var realAchievements by remember { mutableStateOf<Map<AchievementDomain, List<Achievement>>?>(null) }
     var bodyWeightKg by remember { mutableStateOf<Double?>(null) }
     val achievementsRepo = remember { AchievementsRepository(SupabaseClientProvider.client) }
-    LaunchedEffect(Unit) {
-        val (strength, running) = achievementsRepo.loadAchievements()
-        bodyWeightKg = achievementsRepo.loadBodyWeight()
-        realAchievements = mapOf(
-            AchievementDomain.STRENGTH to strength,
-            AchievementDomain.RUNNING to running,
-            AchievementDomain.CONDITIONING to emptyList(),
-            AchievementDomain.MOUNTAIN to emptyList(),
-        )
+    LaunchedEffect(achievementsGuard.attempt) {
+        achievementsGuard.run {
+            val (strength, running) = achievementsRepo.loadAchievements()
+            bodyWeightKg = achievementsRepo.loadBodyWeight()
+            realAchievements = mapOf(
+                AchievementDomain.STRENGTH to strength,
+                AchievementDomain.RUNNING to running,
+                AchievementDomain.CONDITIONING to emptyList(),
+                AchievementDomain.MOUNTAIN to emptyList(),
+            )
+        }
     }
     val activeCycle = cycles?.firstOrNull { it.isActiveOn(LocalDate.now()) }
     val cycleHistory = cycles.orEmpty().filter { it.id != activeCycle?.id }
@@ -148,6 +158,11 @@ fun UserProfileScreen(
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         ) {
+            // Any of the three page loads failing shows one error card; RETRY re-runs all of them.
+            listOf(agingGuard, cyclesGuard, achievementsGuard).firstOrNull { it.error != null }?.let { failed ->
+                LoadErrorCard(failed, onRetry = { agingGuard.retry(); cyclesGuard.retry(); achievementsGuard.retry() })
+            }
+
             // -- Healthspan (the only place a cross-metric grade appears) --
             HealthspanCard(healthspan?.summary, healthspanFailed)
 
@@ -208,7 +223,7 @@ fun UserProfileScreen(
             onSaved = {
                 addingCycle = false
                 editingCycle = null
-                scope.launch {
+                scope.launchSafe {
                     cycles = cyclesRepo.loadCycles()
                     blockSummaries = cyclesRepo.loadBlockSummaries()
                 }

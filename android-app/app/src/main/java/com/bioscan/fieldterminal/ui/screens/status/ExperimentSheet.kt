@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ExperimentsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.EXPERIMENT_METRICS
+import com.bioscan.fieldterminal.domain.ExperimentProtocol
 import com.bioscan.fieldterminal.domain.MdePreviewRow
 import com.bioscan.fieldterminal.domain.buildProtocol
 import com.bioscan.fieldterminal.domain.experimentProblems
@@ -43,9 +44,18 @@ import java.time.LocalDate
 // primary and the dates are fixed when REGISTER is pressed (the database refuses later changes). The sheet shows, for every
 // outcome, the smallest difference this design could detect on the person's own data, so an outcome the design cannot
 // resolve is not chosen blindly.
+const val SUPPLEMENT_EXPERIMENT_INTRO =
+    "Phase A: you do not take it. Phase B: you take it as usual. Day 1 of A is today. You pick the one outcome now and the plan is locked once registered, so the result cannot be re-chosen after seeing the data. It compares phases, adjusted for day of week, and says plainly when it can see no difference."
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExperimentSheet(supplementId: Long, supplementName: String, onDismiss: () -> Unit, onRegistered: () -> Unit) {
+fun ExperimentSheet(
+    subjectName: String,
+    intro: String = SUPPLEMENT_EXPERIMENT_INTRO,
+    register: suspend (name: String, primary: String, protocol: ExperimentProtocol, preview: List<MdePreviewRow>) -> Unit,
+    onDismiss: () -> Unit,
+    onRegistered: () -> Unit,
+) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val repo = remember { ExperimentsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
@@ -83,12 +93,8 @@ fun ExperimentSheet(supplementId: Long, supplementName: String, onDismiss: () ->
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text("N-OF-1 EXPERIMENT", style = FTType.SectionTitle, color = FT.DomainLog)
-            Text(supplementName, style = FTType.RowTitle, color = FT.TextPrimary)
-            Text(
-                "Phase A: you do not take it. Phase B: you take it as usual. Day 1 of A is today. You pick the one outcome now and the plan is locked once registered, so the result cannot be re-chosen after seeing the data. It compares phases, adjusted for day of week, and says plainly when it can see no difference.",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
+            Text(subjectName, style = FTType.RowTitle, color = FT.TextPrimary)
+            Text(intro, style = FTType.BodySmall, color = FT.TextSecondary)
 
             Label("DESIGN")
             TextChipRow(listOf("ONE CYCLE (A, B)", "TWO CYCLES (A, B, A, B)"), if (design == "AB") "ONE CYCLE (A, B)" else "TWO CYCLES (A, B, A, B)", perRow = 1) {
@@ -130,7 +136,7 @@ fun ExperimentSheet(supplementId: Long, supplementName: String, onDismiss: () ->
                 saving = true
                 scope.launch {
                     try {
-                        repo.register(supplementId, "$supplementName ${LocalDate.now()}", primary!!, emptyList(), buildProtocol(LocalDate.now(), design, days, washout), preview)
+                        register("$subjectName ${LocalDate.now()}", primary!!, buildProtocol(LocalDate.now(), design, days, washout), preview)
                         onRegistered()
                     } catch (e: CancellationException) {
                         throw e

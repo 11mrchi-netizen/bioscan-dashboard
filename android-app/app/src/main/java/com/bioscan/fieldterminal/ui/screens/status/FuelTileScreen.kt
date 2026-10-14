@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,9 +85,12 @@ fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {})
     var stool by remember { mutableStateOf<List<StoolAnalysisRow>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(Unit) {
-        overview = NutritionRepository(SupabaseClientProvider.client).loadOverview()
-        stool = AnalysisRepository(SupabaseClientProvider.client).loadStoolLog()
+    val guard = rememberLoadGuard()
+    LaunchedEffect(guard.attempt) {
+        guard.run {
+            overview = NutritionRepository(SupabaseClientProvider.client).loadOverview()
+            stool = AnalysisRepository(SupabaseClientProvider.client).loadStoolLog()
+        }
         isLoading = false
     }
 
@@ -94,6 +99,7 @@ fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {})
         SubTabRow(items = FuelTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
 
         when {
+            guard.error != null && !isLoading -> LoadErrorCard(guard)
             isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = FT.DomainFuel)
             }
@@ -170,13 +176,17 @@ private fun bristolPatternLabel(p: BristolPattern): String = when (p) {
 @Composable
 private fun BodyTab(allDays: List<DailyNutrition>) {
     var bodyMetrics by remember { mutableStateOf<List<BodyMetricsAnalysisRow>?>(null) }
+    val bodyGuard = rememberLoadGuard()
 
-    LaunchedEffect(Unit) {
-        bodyMetrics = AnalysisRepository(SupabaseClientProvider.client).loadBodyMetrics()
+    LaunchedEffect(bodyGuard.attempt) {
+        bodyGuard.run { bodyMetrics = AnalysisRepository(SupabaseClientProvider.client).loadBodyMetrics() }
     }
 
     val b = bodyMetrics
-    if (b == null) {
+    if (b == null && bodyGuard.error != null) {
+        LoadErrorCard(bodyGuard)
+        return
+    } else if (b == null) {
         Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FT.DomainFuel)
         }

@@ -200,8 +200,10 @@ fun FTCard(
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(FT.RadiusCard)
-    val registryText = methodology?.let { key ->
-        com.bioscan.fieldterminal.data.MetricRegistryStore.get(androidx.compose.ui.platform.LocalContext.current, key)?.helpText()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // remembered: the help text is a pure function of the key, so it is built once, not on every recomposition of the card
+    val registryText = androidx.compose.runtime.remember(methodology) {
+        methodology?.let { key -> com.bioscan.fieldterminal.data.MetricRegistryStore.get(context, key)?.helpText() }
     }
     val helpBody = listOfNotNull(info, registryText).joinToString("\n\n").ifBlank { null }
     Column(

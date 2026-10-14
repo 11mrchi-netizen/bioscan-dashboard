@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -74,9 +75,16 @@ private fun ProfileCard(scope: CoroutineScope) {
     var profileSavedAt by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        val profile = userProfileRepository.loadProfile()
-        dobInput = profile?.dateOfBirth ?: ""
-        selectedSex = profile?.sex
+        try {
+            val profile = userProfileRepository.loadProfile()
+            dobInput = profile?.dateOfBirth ?: ""
+            selectedSex = profile?.sex
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Offline: leave the form empty; saving later surfaces its own error.
+            android.util.Log.w("UserSettings", "profile load failed", e)
+        }
     }
 
     FTCard(title = "PROFILE") {
@@ -109,7 +117,7 @@ private fun ProfileCard(scope: CoroutineScope) {
                 profileError = true
             } else {
                 profileError = false
-                scope.launch {
+                scope.launchSafe(onError = { profileError = true }, onDone = { profileSaving = false }) {
                     profileSaving = true
                     userProfileRepository.saveProfile(dob, selectedSex)
                     profileSaving = false

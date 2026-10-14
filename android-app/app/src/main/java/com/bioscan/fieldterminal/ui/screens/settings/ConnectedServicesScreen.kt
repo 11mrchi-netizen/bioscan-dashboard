@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -287,7 +288,14 @@ private fun ZeppCard(scope: CoroutineScope) {
     var zeppSyncing by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        zeppStatus = zeppRepository.getSyncStatus()
+        // Offline must not crash the settings page: an unreadable status just stays "not loaded".
+        try {
+            zeppStatus = zeppRepository.getSyncStatus()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("ConnectedServices", "zepp status load failed", e)
+        }
         zeppStatusLoaded = true
     }
 
@@ -320,7 +328,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         }
         AmberButton(label = if (zeppSyncing) "SYNCING…" else "SYNC NOW") {
             if (!zeppSyncing) {
-                scope.launch {
+                scope.launchSafe(onDone = { zeppSyncing = false }) {
                     zeppSyncing = true
                     zeppRepository.sync(daysBack = 30)
                     zeppStatus = zeppRepository.getSyncStatus()
@@ -333,7 +341,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         var probeResult by remember { mutableStateOf<String?>(null) }
         AmberButton(label = if (probing) "CHECKING…" else "CHECK TEMPLATE API") {
             if (!probing) {
-                scope.launch {
+                scope.launchSafe(onDone = { probing = false }) {
                     probing = true
                     probeResult = zeppRepository.probeTrainingApi()
                     probing = false
@@ -342,7 +350,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         }
         AmberButton(label = if (probing) "CHECKING…" else "TEMPLATE WRITE TEST") {
             if (!probing) {
-                scope.launch {
+                scope.launchSafe(onDone = { probing = false }) {
                     probing = true
                     // Creates one throwaway template in the Zepp account, reads it back and deletes it.
                     probeResult = zeppRepository.probeTrainingApi("write_test")
@@ -352,7 +360,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         }
         AmberButton(label = if (probing) "CHECKING…" else "TEMPLATE SCHEDULE TEST") {
             if (!probing) {
-                scope.launch {
+                scope.launchSafe(onDone = { probing = false }) {
                     probing = true
                     // Creates a throwaway template and a calendar entry for it, reads both back, deletes both.
                     probeResult = zeppRepository.probeTrainingApi("schedule_test")
@@ -362,7 +370,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         }
         AmberButton(label = if (probing) "CHECKING…" else "BULK SCHEDULE TEST (KEEPS ENTRIES)") {
             if (!probing) {
-                scope.launch {
+                scope.launchSafe(onDone = { probing = false }) {
                     probing = true
                     // 3 templates + 13 calendar entries over 4 weeks and January, left in place to look at in Zepp.
                     probeResult = zeppRepository.probeTrainingApi("bulk_test")
@@ -372,7 +380,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         }
         AmberButton(label = if (probing) "CHECKING…" else "STRUCTURE VARIANTS TEST") {
             if (!probing) {
-                scope.launch {
+                scope.launchSafe(onDone = { probing = false }) {
                     probing = true
                     // The same session written 3 ways, scheduled for tomorrow; BULK CLEANUP removes them.
                     probeResult = zeppRepository.probeTrainingApi("variant_test")
@@ -382,7 +390,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         }
         AmberButton(label = if (probing) "CHECKING…" else "ICAL FORMAT TEST") {
             if (!probing) {
-                scope.launch {
+                scope.launchSafe(onDone = { probing = false }) {
                     probing = true
                     // Two calendar entries for tomorrow, written the way the Zepp app writes its own.
                     probeResult = zeppRepository.probeTrainingApi("ical_test")
@@ -392,7 +400,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         }
         AmberButton(label = if (probing) "SENDING…" else "SEND NEXT 7 DAYS TO ZEPP") {
             if (!probing) {
-                scope.launch {
+                scope.launchSafe(onDone = { probing = false }) {
                     probing = true
                     probeResult = zeppRepository.pushUpcoming()
                     probing = false
@@ -401,7 +409,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         }
         AmberButton(label = if (probing) "CHECKING…" else "REFERENCE ICAL TEST") {
             if (!probing) {
-                scope.launch {
+                scope.launchSafe(onDone = { probing = false }) {
                     probing = true
                     // Three entries for tomorrow afternoon, copying the app's local-id iCalendar lines.
                     probeResult = zeppRepository.probeTrainingApi("ref_test")
@@ -411,7 +419,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         }
         AmberButton(label = if (probing) "CHECKING…" else "CALENDAR DUMP") {
             if (!probing) {
-                scope.launch {
+                scope.launchSafe(onDone = { probing = false }) {
                     probing = true
                     probeResult = zeppRepository.probeTrainingApi("calendar_dump")
                     probing = false
@@ -420,7 +428,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         }
         AmberButton(label = if (probing) "CHECKING…" else "BULK CLEANUP") {
             if (!probing) {
-                scope.launch {
+                scope.launchSafe(onDone = { probing = false }) {
                     probing = true
                     probeResult = zeppRepository.probeTrainingApi("bulk_cleanup")
                     probing = false

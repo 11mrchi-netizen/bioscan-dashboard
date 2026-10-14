@@ -5,6 +5,7 @@
 // runInterventionResponse.ts wired in (docs/intervention-protocol-intelligence/README.md's "Still open") -- until
 // then this tab correctly shows interventions/protocols with no response/audit section, not an error.
 
+import { LoadBanner } from '../components/shared/LoadBanner'
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { warnOnError } from '../lib/schema'
@@ -61,7 +62,9 @@ export function Interventions() {
   const [audits, setAudits] = useState<Map<string, AuditRow>>(new Map())
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async () => {
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const loadInner = useCallback(async () => {
     const [ivRes, protoRes, respRes, auditRes] = await Promise.all([
       supabase.from('interventions').select('id, domain, name, lifecycle_state, baseline_started_at, started_at, ended_at, intended_outcomes').order('created_at', { ascending: false }),
       supabase.from('protocols').select('id, name, objective_outcome_key, lifecycle_state, template_key').order('created_at', { ascending: false }),
@@ -88,12 +91,24 @@ export function Interventions() {
       if (!existing || r.calculated_at > existing.calculated_at) auditByKey.set(r.key, r)
     }
     setAudits(auditByKey)
-    setLoading(false)
   }, [])
+
+  const load = useCallback(async () => {
+    try {
+      await loadInner()
+      setLoadError(null)
+    } catch (e) {
+      console.error('[BioScan] load failed:', e)
+      setLoadError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [loadInner])
 
   useEffect(() => { void load() }, [load])
 
   if (loading) return <div className="state-loading mono">LOADING INTERVENTIONS…</div>
+  if (loadError) return <LoadBanner error={loadError} onRetry={() => { setLoading(true); void load() }} />
 
   return (
     <div className="conf">

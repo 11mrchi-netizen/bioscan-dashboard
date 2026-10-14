@@ -81,6 +81,15 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
         onNotificationHandled()
     }
 
+    // Perf pass: a marker line per screen change so the http lines that follow can be attributed to it.
+    androidx.compose.runtime.DisposableEffect(navController) {
+        val listener = androidx.navigation.NavController.OnDestinationChangedListener { _, destination, _ ->
+            com.bioscan.fieldterminal.util.Perf.mark(destination.route ?: "?")
+        }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose { navController.removeOnDestinationChangedListener(listener) }
+    }
+
     Scaffold(
         containerColor = FT.Base,
         bottomBar = {

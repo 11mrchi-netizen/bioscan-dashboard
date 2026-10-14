@@ -131,8 +131,10 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     }
     experimenting?.let { row ->
         ExperimentSheet(
-            supplementId = row.id,
-            supplementName = row.name,
+            subjectName = row.name,
+            register = { name, primary, protocol, preview ->
+                ExperimentsRepository(SupabaseClientProvider.client).register(supplementId = row.id, name = name, primary = primary, secondary = emptyList(), protocol = protocol, preview = preview)
+            },
             onDismiss = { experimenting = null },
             onRegistered = { experimenting = null; reloadKey++ },
         )

@@ -1,3 +1,5 @@
+import { localDaysAgo, localToday } from '../lib/dates'
+
 // AnalysisContext — shared state that drives every analytical surface.
 // Defined in IA.md §5.2 and DAV-308.
 
@@ -72,14 +74,8 @@ export interface AnalysisContext {
 
 // Default context — 90-day rolling window, no comparison, IANA timezone.
 export function defaultContext(): AnalysisContext {
-  const end = new Date()
-  const start = new Date(end)
-  start.setDate(start.getDate() - 90)
   return {
-    primaryRange: {
-      start: start.toISOString().slice(0, 10),
-      end: end.toISOString().slice(0, 10),
-    },
+    primaryRange: { start: localDaysAgo(90), end: localToday() },
     inspectionTarget: null,
     comparisonRange: null,
     selectedDate: null,

@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -85,17 +87,24 @@ private fun BloodworkAnalysisSection() {
     var labDraws by remember { mutableStateOf<List<LabDrawAnalysisRow>?>(null) }
     var labResults by remember { mutableStateOf<List<LabResultAnalysisRow>?>(null) }
 
-    LaunchedEffect(Unit) {
-        val repo = AnalysisRepository(SupabaseClientProvider.client)
-        labDraws = repo.loadLabDraws()
-        labResults = repo.loadLabResults()
+    val guard = rememberLoadGuard()
+    LaunchedEffect(guard.attempt) {
+        guard.run {
+            val repo = AnalysisRepository(SupabaseClientProvider.client)
+            labDraws = repo.loadLabDraws()
+            labResults = repo.loadLabResults()
+        }
     }
 
     val ld = labDraws
     val lr = labResults
     if (ld == null || lr == null) {
-        Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.DomainLabs)
+        if (guard.error != null) {
+            LoadErrorCard(guard)
+        } else {
+            Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = FT.DomainLabs)
+            }
         }
         return
     }

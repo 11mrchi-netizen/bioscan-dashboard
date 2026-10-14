@@ -52,7 +52,7 @@ private data class LogAgentResponse(
 data class LogAgentResult(val runId: String, val proposals: List<LogProposal>, val unparsed: List<UnparsedEntry>)
 
 class LogAgentRepository(private val supabase: SupabaseClient) {
-    companion object { private val client = HttpClient(Android) }
+    companion object { private val client = functionsClient(45_000) }
     private val json = Json { ignoreUnknownKeys = true }
 
     // One clientTurnId per typed message: a retry of the same turn returns the stored proposals instead of calling the model again.

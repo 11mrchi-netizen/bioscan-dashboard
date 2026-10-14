@@ -1,5 +1,14 @@
 package com.bioscan.fieldterminal
 
+import androidx.compose.runtime.remember
+import io.github.jan.supabase.auth.status.RefreshFailureCause
+import com.bioscan.fieldterminal.ui.theme.FTType
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
@@ -32,6 +41,7 @@ import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.nav.FieldTerminalNavHost
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.FieldTerminalTheme
+import com.bioscan.fieldterminal.util.Perf
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.launch
@@ -53,21 +63,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Only on a fresh launch: after rotation/process restore the same intent is redelivered and would re-navigate.
+        Perf.enabled = BuildConfig.DEBUG // logcat tag "perf"; see util/Perf.kt
+        // Notification channels, the Supabase client and the metric registry are warmed on a background thread by FieldTerminalApp.
+        // Only on a fresh launch: after process restore the same intent is redelivered and would re-navigate.
         if (savedInstanceState == null) {
             pendingNotificationKind = intent?.getStringExtra(NotificationActionReceiver.EXTRA_KIND)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = getSystemService(NotificationManager::class.java)
-            listOf(
-                Triple(NotificationKind.SUPPLEMENT_DUE, "Supplement Reminders", NotificationManager.IMPORTANCE_DEFAULT),
-                Triple(NotificationKind.CHECKIN_MORNING, "Morning Check-in", NotificationManager.IMPORTANCE_DEFAULT),
-                Triple(NotificationKind.CHECKIN_EVENING, "Evening Check-in", NotificationManager.IMPORTANCE_DEFAULT),
-                Triple(NotificationKind.WELLBEING_CHECKIN, "Wellbeing Check-in", NotificationManager.IMPORTANCE_DEFAULT),
-                Triple(NotificationKind.EVENING_LOG, "Evening Log", NotificationManager.IMPORTANCE_DEFAULT),
-            ).forEach { (id, name, importance) ->
-                nm.createNotificationChannel(NotificationChannel(id, name, importance))
-            }
         }
         setContent {
             FieldTerminalTheme {
@@ -85,6 +85,7 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sessionStatus by SupabaseClientProvider.client.auth.sessionStatus.collectAsState()
+    var signInError by remember { mutableStateOf<String?>(null) }
     val isAuthenticated = sessionStatus is SessionStatus.Authenticated
 
     // Phase G2: auto-sync once per app open, replacing the old manual/
@@ -122,18 +123,31 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
                 onNotificationHandled = onNotificationHandled,
             )
             is SessionStatus.NotAuthenticated -> {
-                AmberButton(label = "SIGN IN WITH GOOGLE") {
-                    scope.launch { GoogleAuthManager.signIn(context) }
+                androidx.compose.runtime.LaunchedEffect(Unit) { com.bioscan.fieldterminal.data.ReadCache.invalidateAll() } // nothing of the last user survives sign-out
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AmberButton(label = "SIGN IN WITH GOOGLE") {
+                        scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
+                    }
+                    signInError?.let { Text("Sign-in failed: $it", style = FTType.Caption, color = FT.Critical) }
                 }
             }
             is SessionStatus.Initializing -> CircularProgressIndicator(color = FT.Emerald)
             is SessionStatus.RefreshFailure -> {
-                // Mirrors the web dashboard's own handling of a dead
-                // refresh token (see ROADMAP.md's Google token-refresh
-                // section) -- treat it as needing a fresh sign-in rather
-                // than silently retrying forever.
-                AmberButton(label = "SESSION EXPIRED — SIGN IN AGAIN") {
-                    scope.launch { GoogleAuthManager.signIn(context) }
+                // supabase-kt keeps retrying the refresh by itself when the cause is the network, so an offline phone
+                // with an expired access token is not a lost session: say so instead of demanding a sign-in. Only a
+                // real auth failure (revoked or dead refresh token, mirrors the web dashboard's own handling) asks to sign in.
+                if ((sessionStatus as SessionStatus.RefreshFailure).cause is RefreshFailureCause.NetworkError) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CircularProgressIndicator(color = FT.Emerald)
+                        Text("Offline. Reconnecting when the network is back.", style = FTType.BodySmall, color = FT.TextSecondary)
+                    }
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AmberButton(label = "SESSION EXPIRED — SIGN IN AGAIN") {
+                            scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
+                        }
+                        signInError?.let { Text("Sign-in failed: $it", style = FTType.Caption, color = FT.Critical) }
+                    }
                 }
             }
         }

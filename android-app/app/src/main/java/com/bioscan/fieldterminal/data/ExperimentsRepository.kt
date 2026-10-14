@@ -31,7 +31,8 @@ private data class PreviewResponse(val previews: List<MdePreviewRow> = emptyList
 
 @Serializable
 private data class NewExperimentRow(
-    @SerialName("supplement_id") val supplementId: Long,
+    @SerialName("supplement_id") val supplementId: Long? = null,
+    @SerialName("intervention_id") val interventionId: String? = null,
     val name: String,
     @SerialName("primary_metric") val primaryMetric: String,
     @SerialName("secondary_metrics") val secondaryMetrics: List<String>,
@@ -99,17 +100,20 @@ class ExperimentsRepository(private val supabase: SupabaseClient) {
         return parsed.previews
     }
 
-    // Registers the experiment. The database locks every field written here, so this is the pre-registration.
+    // Registers the experiment. The database locks every field written here, so this is the pre-registration. The subject is
+    // a supplement or an intervention (a fueling experiment); the database requires one of the two.
     suspend fun register(
-        supplementId: Long,
+        supplementId: Long? = null,
+        interventionId: String? = null,
         name: String,
         primary: String,
         secondary: List<String>,
         protocol: ExperimentProtocol,
         preview: List<MdePreviewRow>,
     ) {
+        require(supplementId != null || interventionId != null) { "An experiment needs a supplement or an intervention" }
         supabase.postgrest.from("experiments").insert(
-            NewExperimentRow(supplementId, name, primary, secondary.take(3), protocol.design, protocol, preview),
+            NewExperimentRow(supplementId, interventionId, name, primary, secondary.take(3), protocol.design, protocol, preview),
         )
     }
 

@@ -17,9 +17,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
 import com.bioscan.fieldterminal.data.model.GeneratedBlockRow
+import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
 import com.bioscan.fieldterminal.data.model.UpcomingSessionRow
+import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
@@ -29,6 +32,7 @@ import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.screens.TrainingBlockFormSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -38,30 +42,51 @@ import java.util.Locale
 // DAV-345. The PLAN tab: start a block, see the generated blocks and what is coming up.
 // UX review F8: a failed load shows COULDN'T LOAD + RETRY instead of reading as "nothing planned", and DELETE asks first
 // (it removes the block and every planned session in it) and says when it failed.
+// UX review P5 / F6: the one home of the training block. The current block (edited here, moved from the User tab), PLAN A
+// NEW BLOCK, what is coming up, the planned blocks and the history (moved from the User tab) all live on this tab; the
+// User tab keeps a compact card that opens it, and Setup keeps only equipment and session times.
 @Composable
-fun TrainingPlanTab(onOpenPlanner: () -> Unit) {
+fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {}) {
     val repo = remember { TrainingProgramRepository(SupabaseClientProvider.client) }
+    val cyclesRepo = remember { TrainingCyclesRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var blocks by remember { mutableStateOf<List<GeneratedBlockRow>?>(null) }
     var upcoming by remember { mutableStateOf<List<UpcomingSessionRow>>(emptyList()) }
+    var cycles by remember { mutableStateOf<List<TrainingCycle>?>(null) }
+    var history by remember { mutableStateOf<List<TrainingBlockSummaryRow>?>(null) }
     var confirmingDelete by remember { mutableStateOf<Long?>(null) }
     var deleting by remember { mutableStateOf(false) }
     var deleteError by remember { mutableStateOf<String?>(null) }
+    var editingCycle by remember { mutableStateOf<TrainingCycle?>(null) }
+    var addingCycle by remember { mutableStateOf(false) }
     val guard = rememberLoadGuard()
     LaunchedEffect(guard.attempt) {
         guard.run {
             parallel(
                 { blocks = repo.loadGeneratedBlocks() },
                 { upcoming = repo.loadUpcoming(LocalDate.now()) },
+                { cycles = cyclesRepo.loadCycles() },
+                { history = cyclesRepo.loadBlockSummaries() },
             )
         }
     }
+    val activeCycle = cycles?.firstOrNull { it.isActiveOn(LocalDate.now()) }
+
     Column(Modifier.padding(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        FTButton("PLAN A NEW BLOCK", onClick = onOpenPlanner, emphasis = FTButtonEmphasis.Primary)
         if (guard.error != null) {
+            FTButton("PLAN A NEW BLOCK", onClick = onOpenPlanner, emphasis = FTButtonEmphasis.Primary)
             LoadErrorCard(guard)
             return@Column
         }
+        if (cycles != null) {
+            CurrentBlockCard(
+                cycle = activeCycle,
+                currentValue = null,
+                onEdit = { editingCycle = activeCycle },
+                onAdd = { addingCycle = true },
+            )
+        }
+        FTButton("PLAN A NEW BLOCK", onClick = onOpenPlanner, emphasis = FTButtonEmphasis.Primary)
         FTCard(title = "UPCOMING") {
             if (upcoming.isEmpty()) Text("No planned sessions yet.", color = FT.TextSecondary, style = FTType.BodySmall)
             upcoming.forEach { s ->
@@ -110,5 +135,18 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit) {
                 }
             }
         }
+        BlockHistoryCard(history, onViewAll = onOpenAllBlocks)
+    }
+
+    if (addingCycle || editingCycle != null) {
+        TrainingBlockFormSheet(
+            cycle = editingCycle,
+            onDismiss = { addingCycle = false; editingCycle = null },
+            onSaved = {
+                addingCycle = false
+                editingCycle = null
+                guard.retry()
+            },
+        )
     }
 }

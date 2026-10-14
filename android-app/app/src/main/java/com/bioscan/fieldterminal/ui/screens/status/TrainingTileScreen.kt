@@ -113,6 +113,7 @@ fun TrainingTileScreen(
     onOpenPlanner: () -> Unit = {},
     onOpenRunning: () -> Unit = {},
     onOpenStrength: () -> Unit = {},
+    onOpenTrainingBlocks: () -> Unit = {},
     // Set by a deep link (Status's injury flag -> INJURY); applied once, then cleared via the callback.
     requestedTab: TrainingTab? = null,
     onRequestedTabConsumed: () -> Unit = {},
@@ -157,7 +158,7 @@ fun TrainingTileScreen(
                 TrainingLoadSection(timeframe, onTimeframeChange = { timeframe = it }, glance = glance)
                 TrainingScreen(timeframe, onOpenSessionDetail, onOpenRunning, onOpenStrength, glance = glance)
             }
-            TrainingTab.Plan -> com.bioscan.fieldterminal.ui.screens.training.TrainingPlanTab(onOpenPlanner)
+            TrainingTab.Plan -> com.bioscan.fieldterminal.ui.screens.training.TrainingPlanTab(onOpenPlanner, onOpenAllBlocks = onOpenTrainingBlocks)
             TrainingTab.Injury -> InjuryTab()
         }
     }

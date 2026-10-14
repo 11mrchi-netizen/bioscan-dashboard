@@ -155,6 +155,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     onOpenPlanner = { navController.navigate("training_planner") },
                     onOpenRunning = { navController.navigate("skill_running") },
                     onOpenStrength = { navController.navigate("skill_strength") },
+                    onOpenTrainingBlocks = { navController.navigate("training_blocks") },
                     requestedTab = trainingRequestedTab,
                     onRequestedTabConsumed = { trainingRequestedTab = null },
                 )
@@ -182,7 +183,11 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             composable(TopLevelTab.User.route) {
                 UserProfileScreen(
                     onOpenAging = { navController.navigate("aging_profile") },
-                    onOpenTrainingBlocks = { navController.navigate("training_blocks") },
+                    // UX review P5: the User tab's block card opens Training › Plan, the block's one home.
+                    onOpenTrainingPlan = {
+                        trainingRequestedTab = TrainingTab.Plan
+                        navController.navigate(TileRoute.Training.route) { launchSingleTop = true }
+                    },
                     onOpenSkill = { skill ->
                         navController.navigate(
                             when (skill) {
@@ -217,17 +222,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             composable(SettingsRoute.Notifications.route) { NotificationsSettingsScreen(scope = scope, onBack = { navController.popBackStack() }) }
             composable(SettingsRoute.ConnectedServices.route) { ConnectedServicesScreen(scope = scope, onBack = { navController.popBackStack() }) }
             composable(SettingsRoute.Training.route) {
-                com.bioscan.fieldterminal.ui.screens.training.TrainingSettingsScreen(
-                    onBack = { navController.popBackStack() },
-                    onStart = { key -> navController.navigate("training_planner/$key") },
-                )
-            }
-            composable("training_planner/{program}") { entry ->
-                com.bioscan.fieldterminal.ui.screens.training.TrainingPlannerScreen(
-                    onBack = { navController.popBackStack() },
-                    onCreated = { navController.popBackStack() },
-                    initialProgram = entry.arguments?.getString("program"),
-                )
+                com.bioscan.fieldterminal.ui.screens.training.TrainingSettingsScreen(onBack = { navController.popBackStack() })
             }
             // Phase G4: the app's first pushed detail route (every other
             // screen so far is a flat tab or a bottom sheet) -- a session's

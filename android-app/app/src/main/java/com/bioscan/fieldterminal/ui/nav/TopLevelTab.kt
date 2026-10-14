@@ -97,7 +97,8 @@ enum class UserTab(val label: String) {
 
 enum class ConnectedServicesTab(val label: String) {
     AiNutrition("AI NUTRITION"),
-    Map("MAP"),
+    // UX review P8: it serves Session Detail's route preview now, not a Map tab.
+    Map("MAPS & ROUTES"),
     HealthConnect("HEALTH CONNECT"),
     Zepp("ZEPP"),
 }

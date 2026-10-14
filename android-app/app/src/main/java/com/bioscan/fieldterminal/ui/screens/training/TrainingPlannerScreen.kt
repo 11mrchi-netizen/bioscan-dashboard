@@ -56,7 +56,6 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMultiDropdown
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabChip
-import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -75,17 +74,10 @@ internal fun methodologyOf(key: String) = key.substringBefore('.')
 // DAV-345. Block-first setup: pick a program, the modules and dates, the exercises of each
 // cluster, the conditioning sessions, then review the generated block before it is created.
 @Composable
-fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit, initialProgram: String? = null) {
+fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit) {
     val scope = rememberCoroutineScope()
     val state = remember { TrainingPlannerState(TrainingProgramRepository(SupabaseClientProvider.client), scope) }
     LaunchedEffect(Unit) { state.load() }
-    // Started from Settings: "build" opens the build path, a template key opens that published program.
-    LaunchedEffect(state.loading, initialProgram) {
-        if (!state.loading && initialProgram != null && state.program == null) {
-            if (initialProgram == "build") { state.choose(Program.Build); state.step = PlannerStep.Strength }
-            else state.catalog?.definitions.orEmpty().filterIsInstance<TemplateDef>().firstOrNull { it.key == initialProgram }?.let { state.choose(Program.Fixed(it)); state.step = PlannerStep.Modules }
-        }
-    }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         TileHeader(
@@ -147,8 +139,9 @@ private fun ProgramStep(state: TrainingPlannerState) {
     val templates = state.catalog?.definitions.orEmpty().filterIsInstance<TemplateDef>()
     var showPublished by remember { mutableStateOf(state.program is Program.Fixed) }
     var method by remember { mutableStateOf("all") }
+    // UX review P5: the program library is imported here, where it is used (it was in Setup).
     if (state.catalog?.definitions.isNullOrEmpty()) {
-        Body("No programs yet. Import your program definitions in Settings, under Training programs.", muted = true)
+        ImportCard(state)
         return
     }
     Label("HOW DO YOU WANT TO START?")
@@ -168,6 +161,7 @@ private fun ProgramStep(state: TrainingPlannerState) {
             ProgramCard(t.title, "${t.weeks} weeks · ${t.domains.joinToString(", ") { it.replace('_', ' ') }}", t.notes.firstOrNull(), t.key == selectedKey) { state.choose(Program.Fixed(t)) }
         }
     }
+    ImportCard(state)
 }
 
 @Composable

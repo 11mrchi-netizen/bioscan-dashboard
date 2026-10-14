@@ -28,9 +28,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
-import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
-import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
-import com.bioscan.fieldterminal.domain.training.definition.TemplateDef
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
@@ -45,60 +42,27 @@ private val PLATE_CHOICES = listOf(0.5, 1.25, 2.5, 5.0, 10.0, 15.0, 20.0, 25.0)
 private fun plateText(p: Double) = if (p == Math.floor(p)) p.toInt().toString() else p.toString()
 private fun time(s: String) = runCatching { LocalTime.parse(s) }.getOrDefault(LocalTime.of(7, 0))
 
-// DAV-345. Settings > Training programs: the program library, what the lifter owns (plates) and
-// the default session times. Starting a block from a program opens the setup flow at its modules.
+// DAV-345. Setup › Training setup: what the lifter owns (plates) and the default session times.
+// UX review P5 / P8: the program library and its import moved into PLAN A NEW BLOCK (TrainingPlannerScreen's first step),
+// so Setup keeps only true settings and a block is started, seen and edited in Training › Plan alone.
 @Composable
-fun TrainingSettingsScreen(onBack: () -> Unit, onStart: (String) -> Unit) {
+fun TrainingSettingsScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val state = remember { TrainingPlannerState(TrainingProgramRepository(SupabaseClientProvider.client), scope) }
     LaunchedEffect(Unit) { state.load() }
 
     Column(Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack, title = "TRAINING PROGRAMS", subtitle = "LIBRARY · EQUIPMENT · SESSION TIMES")
+        TileHeader(onBack = onBack, title = "TRAINING SETUP", subtitle = "EQUIPMENT · SESSION TIMES", accent = FT.DomainTraining)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (state.loading) {
                 Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.DomainTraining) }
             } else {
                 state.error?.let { Text(it, color = FT.Critical, style = FTType.BodySmall) }
-                ImportCard(state)
-                ProgramLibrary(state, onStart)
                 EquipmentCard(state)
                 ScheduleCard(state)
                 Spacer(Modifier.height(24.dp))
             }
         }
-    }
-}
-
-@Composable
-private fun ProgramLibrary(state: TrainingPlannerState, onStart: (String) -> Unit) {
-    val templates = state.catalog?.definitions.orEmpty().filterIsInstance<TemplateDef>()
-    val strength = state.catalog?.definitions.orEmpty().count { it is StrengthModuleDef }
-    val protocols = state.catalog?.definitions.orEmpty().count { it is ConditioningProtocolDef }
-    if (templates.isEmpty() && strength == 0) return
-    var method by remember { mutableStateOf("all") }
-    val methods = listOf("all") + templates.map { methodologyOf(it.key) }.distinct().sorted()
-    FTCard(title = "BUILD A BLOCK") {
-        Body("Pick one of $strength strength templates and one of $protocols conditioning templates, then decide the days, the length and the deload weeks.", muted = true)
-        FTButton("BUILD A BLOCK") { onStart("build") }
-    }
-    FTCard(title = "PUBLISHED PROGRAMS") {
-        Body("Fixed week-by-day programs where strength and conditioning are already placed. Tap START to plan one.", muted = true)
-        Chips(methods, setOf(method), { methodologyLabels[it] ?: it.uppercase() }) { method = it }
-        templates.filter { method == "all" || methodologyOf(it.key) == method }.sortedBy { it.title }.forEach { t ->
-            ProgramRow(t.title, "${t.weeks} weeks") { onStart(t.key) }
-        }
-    }
-}
-
-@Composable
-private fun ProgramRow(title: String, meta: String, onStart: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Column(Modifier.weight(1f)) {
-            Text(title, color = FT.TextPrimary, style = FTType.BodySmall)
-            Text(meta, color = FT.TextSecondary, style = FTType.MonoCaption)
-        }
-        FTButton("START", onClick = onStart)
     }
 }
 

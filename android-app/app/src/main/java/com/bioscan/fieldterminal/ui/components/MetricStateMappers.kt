@@ -31,6 +31,16 @@ fun confidenceLevel(score: Double): ConfidenceLevel = when {
     else -> ConfidenceLevel.Low
 }
 
+// A 0-100 index/axis score (Healthspan and its axes). Same cutoffs as sleepIndexBand():
+// >= 75 Optimal, >= 55 Neutral, below that Warning (attention). Never Critical -- a
+// lifestyle index is not an alarm. No score is Unavailable.
+fun scoreState(score: Double?): MetricState = when {
+    score == null -> MetricState.Unavailable
+    score >= 75.0 -> MetricState.Optimal
+    score >= 55.0 -> MetricState.Neutral
+    else -> MetricState.Warning
+}
+
 // A percentile band is a position in a population, not a health verdict:
 // only the top decile reads as Optimal; a low band is "Building", never
 // Warning/Critical (low percentile != something is wrong).

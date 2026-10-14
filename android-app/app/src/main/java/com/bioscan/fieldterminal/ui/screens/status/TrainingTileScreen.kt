@@ -97,7 +97,13 @@ import java.time.LocalDate
 // without rest" stat on the OSTRC card reads from it), just no longer as
 // its own dedicated card here.
 @Composable
-fun TrainingTileScreen(onBack: () -> Unit, onOpenSessionDetail: (Long) -> Unit = {}, onOpenPlanner: () -> Unit = {}) {
+fun TrainingTileScreen(
+    onBack: () -> Unit,
+    onOpenSessionDetail: (Long) -> Unit = {},
+    onOpenPlanner: () -> Unit = {},
+    onOpenRunning: () -> Unit = {},
+    onOpenStrength: () -> Unit = {},
+) {
     var tab by remember { mutableStateOf(TrainingTab.Load) }
     // 25/9 rework: one switch for the whole Load tab -- drives the CTL/ATL/TSB
     // charts and the PERFORMANCE chart (RUNNING keeps its own 7D-1Y toggle).
@@ -118,7 +124,7 @@ fun TrainingTileScreen(onBack: () -> Unit, onOpenSessionDetail: (Long) -> Unit =
                     modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
                 )
                 TrainingLoadSection(timeframe)
-                TrainingScreen(timeframe, onOpenSessionDetail)
+                TrainingScreen(timeframe, onOpenSessionDetail, onOpenRunning, onOpenStrength)
             }
             TrainingTab.Plan -> com.bioscan.fieldterminal.ui.screens.training.TrainingPlanTab(onOpenPlanner)
             TrainingTab.Injury -> InjuryTab()

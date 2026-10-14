@@ -41,6 +41,10 @@ import com.bioscan.fieldterminal.ui.screens.settings.NotificationsSettingsScreen
 import com.bioscan.fieldterminal.ui.screens.settings.UserSettingsScreen
 import com.bioscan.fieldterminal.ui.screens.TrainingBlocksScreen
 import com.bioscan.fieldterminal.ui.screens.UserProfileScreen
+import com.bioscan.fieldterminal.ui.screens.user.ConditioningSkillScreen
+import com.bioscan.fieldterminal.ui.screens.user.RunningSkillScreen
+import com.bioscan.fieldterminal.ui.screens.user.Skill
+import com.bioscan.fieldterminal.ui.screens.user.StrengthSkillScreen
 import com.bioscan.fieldterminal.ui.screens.status.DailyReadinessScreen
 import com.bioscan.fieldterminal.ui.screens.status.FuelTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.HeartTileScreen
@@ -94,6 +98,8 @@ fun FieldTerminalNavHost() {
                     onBack = { navController.popBackStack() },
                     onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") },
                     onOpenPlanner = { navController.navigate("training_planner") },
+                    onOpenRunning = { navController.navigate("skill_running") },
+                    onOpenStrength = { navController.navigate("skill_strength") },
                 )
             }
             composable("training_planner") {
@@ -115,9 +121,21 @@ fun FieldTerminalNavHost() {
                 UserProfileScreen(
                     onOpenAging = { navController.navigate("aging_profile") },
                     onOpenTrainingBlocks = { navController.navigate("training_blocks") },
+                    onOpenSkill = { skill ->
+                        navController.navigate(
+                            when (skill) {
+                                Skill.RUNNING -> "skill_running"
+                                Skill.STRENGTH -> "skill_strength"
+                                Skill.CONDITIONING -> "skill_conditioning"
+                            },
+                        )
+                    },
                 )
             }
             composable("aging_profile") { AgingProfileScreen(onBack = { navController.popBackStack() }) }
+            composable("skill_running") { RunningSkillScreen(onBack = { navController.popBackStack() }) }
+            composable("skill_strength") { StrengthSkillScreen(onBack = { navController.popBackStack() }) }
+            composable("skill_conditioning") { ConditioningSkillScreen(onBack = { navController.popBackStack() }) }
             composable("training_blocks") {
                 TrainingBlocksScreen(onBack = { navController.popBackStack() })
             }

@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -291,6 +292,17 @@ private fun DayCell(day: Int, selected: Boolean, isToday: Boolean, modifier: Mod
 
 // ---- Time (12-hour, AM/PM) ----
 
+// The row in the highlighted centre slot, as a value index. The list is [PAD blank rows][count value rows][PAD blank rows] shown
+// PAD*2+1 rows at a time and snapped to a row start, so with PAD blank rows on top the centre slot always holds value index
+// firstVisibleIndex (not firstVisibleIndex - PAD): row f is at the top, f + PAD is the centre, and list row PAD + i holds value i.
+// While a drag is in flight the centre is rounded to the nearest row, so the highlight follows the finger.
+internal const val WHEEL_PAD_ROWS = 2
+
+internal fun wheelCentredIndex(firstVisibleIndex: Int, scrollOffsetPx: Int, itemHeightPx: Int, count: Int): Int {
+    val roundUp = itemHeightPx > 0 && scrollOffsetPx * 2 >= itemHeightPx
+    return (firstVisibleIndex + if (roundUp) 1 else 0).coerceIn(0, count - 1)
+}
+
 @Composable
 private fun WheelPicker(
     count: Int,
@@ -299,26 +311,26 @@ private fun WheelPicker(
     label: (Int) -> String,
     modifier: Modifier = Modifier,
 ) {
-    val visibleItems = 5
     val itemHeight = 44.dp
-    val padding = visibleItems / 2
-    val state = rememberLazyListState(
-        initialFirstVisibleItemIndex = (selected + padding).coerceAtLeast(0)
-    )
+    val itemHeightPx = with(LocalDensity.current) { itemHeight.roundToPx() }
+    // Start on the selected value: it is the top row f = selected, which puts it in the centre slot.
+    val state = rememberLazyListState(initialFirstVisibleItemIndex = selected.coerceIn(0, count - 1))
     val fling = rememberSnapFlingBehavior(state)
-    val centred by remember { derivedStateOf {
-        (state.firstVisibleItemIndex - padding).coerceIn(0, count - 1)
-    } }
+    val centred by remember {
+        derivedStateOf {
+            wheelCentredIndex(state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset, itemHeightPx, count)
+        }
+    }
     LaunchedEffect(centred) { onSelected(centred) }
 
-    Box(modifier = modifier.height(itemHeight * visibleItems)) {
+    Box(modifier = modifier.height(itemHeight * (WHEEL_PAD_ROWS * 2 + 1))) {
         // centre-slot highlight
         Box(
             Modifier.fillMaxWidth().height(itemHeight).align(Alignment.Center)
                 .background(FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
         )
         LazyColumn(state = state, flingBehavior = fling, modifier = Modifier.fillMaxSize()) {
-            items(padding) { Box(Modifier.height(itemHeight).fillMaxWidth()) }
+            items(WHEEL_PAD_ROWS) { Box(Modifier.height(itemHeight).fillMaxWidth()) }
             items(count) { i ->
                 val active = i == centred
                 Box(Modifier.height(itemHeight).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -329,7 +341,7 @@ private fun WheelPicker(
                     )
                 }
             }
-            items(padding) { Box(Modifier.height(itemHeight).fillMaxWidth()) }
+            items(WHEEL_PAD_ROWS) { Box(Modifier.height(itemHeight).fillMaxWidth()) }
         }
     }
 }
@@ -369,56 +381,5 @@ private fun TimePanel(time: LocalTime, onChange: (LocalTime) -> Unit) {
             onSelect = { onChange(build(hour12, time.minute, it)) },
             modifier = Modifier.width(96.dp),
         )
-    }
-}
-
-@Composable
-private fun TimeSegment(text: String, active: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(FT.RadiusSmall)
-    Box(
-        modifier = Modifier
-            .clip(shape)
-            .background(if (active) FT.Emerald.copy(alpha = 0.14f) else FT.GlassFill, shape)
-            .border(FT.BorderWidth, if (active) FT.Emerald else FT.GlassBorder, shape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text, style = FTType.DisplayMetric, color = if (active) FT.Emerald else FT.TextPrimary)
-    }
-}
-
-@Composable
-private fun ButtonGrid(items: List<String>, selectedIndex: Int?, columns: Int = 4, onPick: (Int) -> Unit) {
-    val rows = (items.size + columns - 1) / columns
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (r in 0 until rows) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (c in 0 until columns) {
-                    val i = r * columns + c
-                    if (i < items.size) {
-                        GridButton(items[i], selected = i == selectedIndex, modifier = Modifier.weight(1f)) { onPick(i) }
-                    } else {
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun GridButton(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(FT.RadiusSmall)
-    Box(
-        modifier = modifier
-            .height(48.dp)
-            .clip(shape)
-            .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else FT.GlassFill, shape)
-            .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, shape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text, style = if (selected) FTType.Telemetry else FTType.Value, color = if (selected) FT.Emerald else FT.TextPrimary)
     }
 }

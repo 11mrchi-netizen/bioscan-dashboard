@@ -2,9 +2,7 @@ package com.bioscan.fieldterminal.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -118,7 +116,7 @@ private fun PickerBox(label: String, valueText: String, onClick: () -> Unit) {
             .fillMaxWidth()
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
             .background(FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -187,14 +185,14 @@ private fun FTPickerSheet(
                 Box(
                     modifier = Modifier
                         .height(48.dp)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
+                        .ftClickable(onClick = onDismiss)
                         .padding(horizontal = 16.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text("CANCEL", style = FTType.LabelCaps, color = FT.TextSecondary)
                 }
                 Spacer(Modifier.width(8.dp))
-                AmberButton(label = "SET") { onConfirm(selected) }
+                FTButton(label = "SET", emphasis = FTButtonEmphasis.Primary) { onConfirm(selected) }
             }
         }
     }
@@ -255,7 +253,7 @@ private fun NavGlyph(glyph: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(44.dp)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+            .ftClickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(glyph, style = FTType.MetricMedium, color = FT.TextSecondary)
@@ -279,7 +277,7 @@ private fun DayCell(day: Int, selected: Boolean, isToday: Boolean, modifier: Mod
                     else -> Modifier
                 },
             )
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+            .ftClickable(shape = shape, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(

@@ -2,8 +2,6 @@ package com.bioscan.fieldterminal.ui.nav
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,20 +21,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.bioscan.fieldterminal.R
 import com.bioscan.fieldterminal.domain.notifications.NotificationDestination
 import com.bioscan.fieldterminal.domain.notifications.notificationDestination
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.screens.AgingProfileScreen
 import com.bioscan.fieldterminal.ui.screens.LogScreen
 import com.bioscan.fieldterminal.ui.screens.SessionDetailScreen
@@ -69,6 +71,10 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     var labsRequestedTab by remember { mutableStateOf<LabsTab?>(null) }
     // Same hand-off for Training's subtabs (UX review F1: the Status injury flag lands on Training › Injury).
     var trainingRequestedTab by remember { mutableStateOf<TrainingTab?>(null) }
+    // Contract A4: the dock keeps lit the tab whose stack you are in, also on pushed screens (tiles, settings and detail
+    // pages), which used to light nothing. Set whenever a top-level destination is shown and when a dock tab is tapped,
+    // so a deep link pushed onto the current stack keeps that stack's tab.
+    var dockTab by rememberSaveable { mutableStateOf(TopLevelTab.Status) }
 
     LaunchedEffect(pendingNotificationKind) {
         val kind = pendingNotificationKind ?: return@LaunchedEffect
@@ -91,6 +97,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     androidx.compose.runtime.DisposableEffect(navController) {
         val listener = androidx.navigation.NavController.OnDestinationChangedListener { _, destination, _ ->
             com.bioscan.fieldterminal.util.Perf.mark(destination.route ?: "?")
+            TopLevelTab.entries.firstOrNull { it.route == destination.route }?.let { dockTab = it }
         }
         navController.addOnDestinationChangedListener(listener)
         onDispose { navController.removeOnDestinationChangedListener(listener) }
@@ -99,10 +106,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     Scaffold(
         containerColor = FT.Base,
         bottomBar = {
-            val backStackEntry by navController.currentBackStackEntryAsState()
-            val currentRoute = backStackEntry?.destination?.route
-
-            FieldBottomBar(currentRoute = currentRoute) { tab ->
+            FieldBottomBar(selectedTab = dockTab) { tab ->
+                dockTab = tab
                 navController.navigate(tab.route) {
                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                     launchSingleTop = true
@@ -234,7 +239,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
 // follow the Futuristic Material contract. Selected state is accent color AND
 // the filled pill AND the label, never color alone.
 @Composable
-private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -> Unit) {
+private fun FieldBottomBar(selectedTab: TopLevelTab, onTabSelected: (TopLevelTab) -> Unit) {
     val dockShape = RoundedCornerShape(FT.RadiusCard)
     val pillShape = RoundedCornerShape(FT.RadiusModule)
     Box(
@@ -258,7 +263,7 @@ private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -
             // compiler doesn't reliably propagate that receiver into a
             // non-inline lambda passed to `entries.forEach` here.
             for (tab in TopLevelTab.entries) {
-                val selected = currentRoute == tab.route
+                val isSelected = tab == selectedTab
                 val accent = tab.domainAccent
                 Column(
                     modifier = Modifier
@@ -266,7 +271,7 @@ private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -
                         .fillMaxHeight()
                         .clip(pillShape)
                         .then(
-                            if (selected) {
+                            if (isSelected) {
                                 Modifier
                                     .background(accent.copy(alpha = 0.14f), pillShape)
                                     .border(FT.BorderWidth, accent.copy(alpha = 0.55f), pillShape)
@@ -274,17 +279,16 @@ private fun FieldBottomBar(currentRoute: String?, onTabSelected: (TopLevelTab) -
                                 Modifier
                             },
                         )
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { onTabSelected(tab) },
+                        .ftClickable(shape = pillShape, role = Role.Tab) { onTabSelected(tab) }
+                        .semantics { selected = isSelected },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    val tint = if (selected) accent else FT.TextSecondary
+                    val tint = if (isSelected) accent else FT.TextSecondary
+                    // The label below already names the tab; describing the icon too made screen readers say it twice.
                     Icon(
                         painter = painterResource(tab.iconRes),
-                        contentDescription = tab.label,
+                        contentDescription = null,
                         tint = tint,
                         modifier = Modifier.size(21.dp),
                     )

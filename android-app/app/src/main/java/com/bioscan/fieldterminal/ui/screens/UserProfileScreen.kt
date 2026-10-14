@@ -1,11 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
-import com.bioscan.fieldterminal.ui.components.launchSafe
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,8 +45,12 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.user.Skill
 import com.bioscan.fieldterminal.ui.screens.user.SkillNavTiles
 import com.bioscan.fieldterminal.ui.screens.user.UserDataCache
@@ -178,11 +177,11 @@ private suspend fun loadLevel(compute: suspend () -> SkillLevel): SkillLevel =
 private fun AgingCard(overview: AgingProfileOverview?, onOpen: () -> Unit) {
     FTCard(
         title = "AGING",
-        modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen),
+        onClick = onOpen,
     ) {
         when {
             overview == null -> CircularProgressIndicator(color = FT.Emerald)
-            overview.chronologicalAgeYears == null -> FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile to see this.")
+            overview.chronologicalAgeYears == null -> FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile & goals to see this.")
             else -> {
                 BioAgeHero(overview)
                 Text(
@@ -408,6 +407,6 @@ private fun EditLink(label: String, onClick: () -> Unit) {
         label,
         style = FTType.Label,
         color = FT.Emerald,
-        modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        modifier = Modifier.ftClickable(onClick = onClick),
     )
 }

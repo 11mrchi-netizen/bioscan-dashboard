@@ -20,8 +20,10 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
 import com.bioscan.fieldterminal.data.model.GeneratedBlockRow
 import com.bioscan.fieldterminal.data.model.UpcomingSessionRow
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
@@ -55,7 +57,7 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit) {
         }
     }
     Column(Modifier.padding(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        AmberButton("PLAN A NEW BLOCK", onClick = onOpenPlanner)
+        FTButton("PLAN A NEW BLOCK", onClick = onOpenPlanner, emphasis = FTButtonEmphasis.Primary)
         if (guard.error != null) {
             LoadErrorCard(guard)
             return@Column
@@ -84,14 +86,16 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit) {
                             Text("${blk.startDate} to ${blk.endDate} · ${blk.status.uppercase()}", color = FT.TextSecondary, style = FTType.MonoCaption)
                         }
                         if (confirmingDelete != blk.id) {
-                            AmberButton("DELETE") { confirmingDelete = blk.id; deleteError = null }
+                            FTButton("DELETE", emphasis = FTButtonEmphasis.Destructive) { confirmingDelete = blk.id; deleteError = null }
                         }
                     }
                     if (confirmingDelete == blk.id) {
-                        Text("Delete this block and all its planned sessions? This can't be undone.", color = FT.TextSecondary, style = FTType.BodySmall)
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            AmberButton("CANCEL", enabled = !deleting) { confirmingDelete = null }
-                            AmberButton(if (deleting) "DELETING…" else "CONFIRM DELETE", enabled = !deleting) {
+                        FTConfirmDestructive(
+                            message = "Delete this block and all its planned sessions? This can't be undone.",
+                            confirmLabel = "DELETE BLOCK",
+                            busy = deleting,
+                            onCancel = { confirmingDelete = null },
+                            onConfirm = {
                                 deleting = true
                                 scope.launchSafe(
                                     onError = { e -> deleteError = describeLoadFailure(e) },
@@ -100,8 +104,8 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit) {
                                     repo.deleteBlock(blk.id)
                                     guard.retry()
                                 }
-                            }
-                        }
+                            },
+                        )
                     }
                 }
             }

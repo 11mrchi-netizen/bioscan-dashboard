@@ -8,7 +8,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,14 +49,16 @@ import com.bioscan.fieldterminal.domain.training.generate.slotsToChoose
 import com.bioscan.fieldterminal.domain.training.generate.summaryLines
 import com.bioscan.fieldterminal.domain.training.generate.templateVariables
 import com.bioscan.fieldterminal.domain.training.movementKey
-import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMultiDropdown
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabChip
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.Dispatchers
@@ -87,11 +88,11 @@ fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit, initialProg
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = { if (state.creating || !state.back()) onBack() })
-        Text(
-            "STEP ${state.steps.indexOf(state.step) + 1} OF ${state.steps.size} · ${state.step.label}",
-            color = FT.TextSecondary, style = FTType.LabelCaps,
-            modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
+        TileHeader(
+            onBack = { if (state.creating || !state.back()) onBack() },
+            title = "PLAN A BLOCK",
+            subtitle = "STEP ${state.steps.indexOf(state.step) + 1} OF ${state.steps.size} · ${state.step.label}",
+            accent = FT.DomainTraining,
         )
         Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
             when {
@@ -114,10 +115,11 @@ fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit, initialProg
         if (!state.loading) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 val last = state.step == PlannerStep.Review
-                if (state.steps.indexOf(state.step) > 0) AmberButton("BACK", enabled = !state.creating) { state.back() }
-                AmberButton(
+                if (state.steps.indexOf(state.step) > 0) FTButton("BACK", enabled = !state.creating) { state.back() }
+                FTButton(
                     if (last) (if (state.creating) "CREATING..." else "CREATE BLOCK") else "NEXT",
                     enabled = state.canContinue() && !state.creating,
+                    emphasis = FTButtonEmphasis.Primary,
                 ) {
                     if (last) state.create { onCreated() } else state.next()
                 }
@@ -175,7 +177,7 @@ internal fun ProgramCard(title: String, meta: String, note: String?, selected: B
         Modifier.padding(top = 10.dp).fillMaxWidth()
             .border(BorderStroke(FT.BorderWidth, if (selected) FT.DomainTraining else FT.GlassBorder), shape)
             .background(if (selected) FT.DomainTraining.copy(alpha = 0.10f) else FT.GlassFill, shape)
-            .clickable { onClick() }.padding(14.dp),
+            .ftClickable(shape = shape, onClick = onClick).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(title, color = FT.TextPrimary, style = FTType.RowTitle)
@@ -201,7 +203,7 @@ internal fun ImportCard(state: TrainingPlannerState) {
         state.catalog?.unreadable?.takeIf { it.isNotEmpty() }?.let { Body("${it.size} unreadable definitions, first: ${it.first()}", muted = true) }
         state.importMessage?.let { Body(it) }
         Spacer(Modifier.height(8.dp))
-        AmberButton("IMPORT FOLDER") { picker.launch(null) }
+        FTButton("IMPORT FOLDER") { picker.launch(null) }
     }
 }
 
@@ -294,7 +296,7 @@ internal fun ExercisesStep(state: TrainingPlannerState) {
                     var draft by remember(m.key, slot.id) { mutableStateOf("") }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) { FieldTextField(draft, { draft = it }, "Add another exercise") }
-                        AmberButton("ADD", enabled = draft.isNotBlank()) { state.updateChoice(m.key) { c -> c.copy(exercises = c.exercises + (slot.id to (effective + draft.trim()).distinct())) }; draft = "" }
+                        FTButton("ADD", enabled = draft.isNotBlank()) { state.updateChoice(m.key) { c -> c.copy(exercises = c.exercises + (slot.id to (effective + draft.trim()).distinct())) }; draft = "" }
                     }
                     if (slot.pick == null) effective.forEach { MaxRow(state, it) }
                 } else {
@@ -321,7 +323,7 @@ private fun SeCircuit(state: TrainingPlannerState, se: SeModuleDef) {
         var draft by remember(se.key) { mutableStateOf("") }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { FieldTextField(draft, { draft = it }, "Add an exercise") }
-            AmberButton("ADD", enabled = draft.isNotBlank()) { state.updateChoice(se.key) { c -> c.copy(exercises = c.exercises + ("SE" to (chosen + draft.trim()).distinct())) }; draft = "" }
+            FTButton("ADD", enabled = draft.isNotBlank()) { state.updateChoice(se.key) { c -> c.copy(exercises = c.exercises + ("SE" to (chosen + draft.trim()).distinct())) }; draft = "" }
         }
     }
 }
@@ -455,7 +457,7 @@ private fun Section(state: TrainingPlannerState, id: String, title: String, summ
     Column(
         Modifier.padding(top = 10.dp).fillMaxWidth().border(BorderStroke(FT.BorderWidth, if (open) FT.DomainTraining else FT.GlassBorder), shape).background(FT.GlassFill, shape).padding(14.dp),
     ) {
-        Row(Modifier.fillMaxWidth().clickable { state.openSection = if (open) null else id }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxWidth().ftClickable(shape = shape) { state.openSection = if (open) null else id }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) {
                 Text(title, color = FT.TextPrimary, style = FTType.RowTitle)
                 Text(summary.take(90), color = FT.TextSecondary, style = FTType.MonoCaption)

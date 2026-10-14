@@ -1,10 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
-import com.bioscan.fieldterminal.ui.components.launchSafe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,12 +28,15 @@ import com.bioscan.fieldterminal.data.NutritionGoals
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.UserProfileRepository
-import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.ClearChip
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.nav.UserTab
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -50,7 +50,7 @@ fun UserSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
     var tab by remember { mutableStateOf(UserTab.Profile) }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack)
+        TileHeader(onBack = onBack, title = "PROFILE & GOALS", subtitle = "PROFILE · NUTRITION GOALS · DATA CAPTURE")
         SubTabRow(items = UserTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
@@ -111,7 +111,7 @@ private fun ProfileCard(scope: CoroutineScope) {
                 SexChip("Female", selectedSex == "female") { selectedSex = if (selectedSex == "female") null else "female" }
             }
         }
-        AmberButton(label = if (profileSaving) "SAVING…" else "SAVE PROFILE") {
+        FTButton(label = if (profileSaving) "SAVING…" else "SAVE PROFILE", emphasis = FTButtonEmphasis.Primary) {
             val dob = dobInput.trim().ifBlank { null }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
             if (dobInput.isNotBlank() && dob == null) {
                 profileError = true
@@ -175,7 +175,7 @@ private fun NutritionGoalsCard() {
             color = FT.TextMuted,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AmberButton(label = "SAVE GOALS") {
+            FTButton(label = "SAVE GOALS", emphasis = FTButtonEmphasis.Primary) {
                 // Blank clears that one field; anything entered must be a positive number.
                 fun parse(input: String): Double? = input.trim().takeIf { it.isNotEmpty() }?.toDoubleOrNull()
                 val calories = parse(caloriesInput)
@@ -229,7 +229,7 @@ private fun SexChip(label: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
             .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
             .padding(horizontal = 20.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {

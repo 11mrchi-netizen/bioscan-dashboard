@@ -1,8 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +28,7 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRadarChart
 import com.bioscan.fieldterminal.ui.components.RadarAxis
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
@@ -127,7 +126,7 @@ private fun FactorRow(f: HealthspanFactor, expanded: Boolean, assessed: Int, onC
         modifier = Modifier
             .fillMaxWidth()
             .then(if (expanded) Modifier.background(FT.GlassFill, RoundedCornerShape(FT.RadiusSmall)).padding(10.dp) else Modifier.padding(vertical = 2.dp))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall)),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

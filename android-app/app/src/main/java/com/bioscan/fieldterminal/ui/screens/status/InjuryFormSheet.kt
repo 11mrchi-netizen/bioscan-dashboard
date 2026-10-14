@@ -23,8 +23,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.HealthEventsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -75,7 +76,7 @@ fun InjuryFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
 
             val severityValue = severity.toIntOrNull()
             val valid = part.isNotBlank() && type.isNotBlank() && severityValue != null && severityValue in 1..10
-            AmberButton(label = if (saving) "SAVING..." else "SAVE") {
+            FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
                 if (valid && !saving) {
                     saving = true
                     error = null

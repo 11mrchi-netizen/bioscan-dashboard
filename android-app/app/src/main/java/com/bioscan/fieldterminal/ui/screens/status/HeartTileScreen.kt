@@ -1,22 +1,17 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import com.bioscan.fieldterminal.util.Perf
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.parallel
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -85,25 +80,28 @@ import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.expValue
 import com.bioscan.fieldterminal.domain.interpretSwcEvaluation
 import com.bioscan.fieldterminal.domain.vitalsTrendSeries
+import com.bioscan.fieldterminal.ui.nav.HeartTab
+import com.bioscan.fieldterminal.domain.TimePoint
 import com.bioscan.fieldterminal.ui.components.ComparisonStrip
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
-import com.bioscan.fieldterminal.ui.components.FTStatePill
-import com.bioscan.fieldterminal.ui.components.stateTreatment
-import com.bioscan.fieldterminal.ui.components.SegmentedToggle
-import com.bioscan.fieldterminal.ui.components.SubTabRow
-import com.bioscan.fieldterminal.ui.components.TileHeader
-import com.bioscan.fieldterminal.ui.nav.HeartTab
-import com.bioscan.fieldterminal.domain.TimePoint
-import com.bioscan.fieldterminal.ui.components.FTMetricRow
-import com.bioscan.fieldterminal.ui.components.LineChart
 import com.bioscan.fieldterminal.ui.components.FTScoreRow
 import com.bioscan.fieldterminal.ui.components.FTSegment
 import com.bioscan.fieldterminal.ui.components.FTSegmentBar
-import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.LineChart
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.PinnedPage
+import com.bioscan.fieldterminal.ui.components.SegmentedToggle
+import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.components.parallel
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.stateTreatment
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Instant
@@ -164,9 +162,22 @@ fun HeartTileScreen(onBack: () -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
-        TileHeader(onBack = onBack)
-        SubTabRow(items = HeartTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
+    // Contract A4: title, context line and sub-tab rail stay pinned; only the tab's content scrolls, from the top on a tab change.
+    val scroll = rememberScrollState()
+    LaunchedEffect(tab) { scroll.scrollTo(0) }
+    PinnedPage(
+        onBack = onBack,
+        title = "HEALTH",
+        subtitle = when (tab) {
+            HeartTab.Cardio -> "HRV · RHR · SPO2 · BREATHING · STEPS"
+            HeartTab.Recovery -> "SLEEP · RECOVERY · CIRCADIAN RHYTHM"
+            HeartTab.Wellbeing -> "ENERGY · MOOD · STRESS · SORENESS"
+            HeartTab.SexualHealth -> "ACTIVITY · PATTERNS · CORRELATIONS"
+        },
+        accent = FT.DomainHeart,
+        rail = { SubTabRow(items = HeartTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        scrollState = scroll,
+    ) {
 
         val w = wearable
         val s = sleep
@@ -180,7 +191,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     CircularProgressIndicator(color = FT.DomainHeart)
                 }
             }
-            return@Column
+            return@PinnedPage
         }
 
         Column(

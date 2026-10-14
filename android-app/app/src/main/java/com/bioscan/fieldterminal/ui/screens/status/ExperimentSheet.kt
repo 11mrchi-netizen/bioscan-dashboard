@@ -32,7 +32,8 @@ import com.bioscan.fieldterminal.domain.buildProtocol
 import com.bioscan.fieldterminal.domain.experimentProblems
 import com.bioscan.fieldterminal.domain.mdeCaveat
 import com.bioscan.fieldterminal.domain.mdeText
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -132,7 +133,7 @@ fun ExperimentSheet(
             problems.forEach { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
             error?.takeIf { preview.isNotEmpty() }?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
 
-            AmberButton(label = if (saving) "REGISTERING..." else "REGISTER AND START", enabled = problems.isEmpty() && !saving && !loading) {
+            FTButton(label = if (saving) "REGISTERING..." else "REGISTER AND START", enabled = problems.isEmpty() && !saving && !loading, emphasis = FTButtonEmphasis.Primary) {
                 saving = true
                 scope.launch {
                     try {

@@ -1,9 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import com.bioscan.fieldterminal.util.Perf
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.parallel
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,8 +58,11 @@ import com.bioscan.fieldterminal.domain.trainingLoadSeries
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.HydrationSourceDonutChart
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.MacroDonutChart
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.components.parallel
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -122,7 +122,7 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
     val nut = nutrition
     if (s == null || w == null || sl == null || wb == null || !cycleLoaded || nut == null) {
         Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-            TileHeader(onBack = onBack)
+            TileHeader(onBack = onBack, title = "TODAY", subtitle = todayContextLine())
             if (guard.error != null) {
                 LoadErrorCard(guard)
             } else {
@@ -179,7 +179,7 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
     val todayCaffeineMg = nut.todayBeverageItems.mapNotNull { it.caffeineMg }.takeIf { it.isNotEmpty() }?.sum()
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
-        TileHeader(onBack = onBack)
+        TileHeader(onBack = onBack, title = "TODAY", subtitle = todayContextLine())
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -236,3 +236,7 @@ fun DailyReadinessScreen(onBack: () -> Unit) {
         }
     }
 }
+
+// "WED 14 OCT": the Today page's context line.
+private fun todayContextLine(): String =
+    java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH)).uppercase()

@@ -31,7 +31,7 @@ import com.bioscan.fieldterminal.data.TrainingProgramRepository
 import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
 import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
 import com.bioscan.fieldterminal.domain.training.definition.TemplateDef
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.TileHeader
@@ -54,9 +54,8 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onStart: (String) -> Unit) {
     LaunchedEffect(Unit) { state.load() }
 
     Column(Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack)
+        TileHeader(onBack = onBack, title = "TRAINING PROGRAMS", subtitle = "LIBRARY · EQUIPMENT · SESSION TIMES")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("TRAINING PROGRAMS", color = FT.TextPrimary, style = FTType.LabelCaps, modifier = Modifier.padding(top = 8.dp))
             if (state.loading) {
                 Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.DomainTraining) }
             } else {
@@ -81,7 +80,7 @@ private fun ProgramLibrary(state: TrainingPlannerState, onStart: (String) -> Uni
     val methods = listOf("all") + templates.map { methodologyOf(it.key) }.distinct().sorted()
     FTCard(title = "BUILD A BLOCK") {
         Body("Pick one of $strength strength templates and one of $protocols conditioning templates, then decide the days, the length and the deload weeks.", muted = true)
-        AmberButton("BUILD A BLOCK") { onStart("build") }
+        FTButton("BUILD A BLOCK") { onStart("build") }
     }
     FTCard(title = "PUBLISHED PROGRAMS") {
         Body("Fixed week-by-day programs where strength and conditioning are already placed. Tap START to plan one.", muted = true)
@@ -99,7 +98,7 @@ private fun ProgramRow(title: String, meta: String, onStart: () -> Unit) {
             Text(title, color = FT.TextPrimary, style = FTType.BodySmall)
             Text(meta, color = FT.TextSecondary, style = FTType.MonoCaption)
         }
-        AmberButton("START", onClick = onStart)
+        FTButton("START", onClick = onStart)
     }
 }
 
@@ -117,7 +116,7 @@ private fun EquipmentCard(state: TrainingPlannerState) {
         Body("Added weight follows your own logs; total load follows the books (bodyweight included).", muted = true)
         Chips(listOf("added", "total"), setOf(base), { if (it == "added") "ADDED WEIGHT" else "TOTAL LOAD" }) { base = it }
         Spacer(Modifier.height(8.dp))
-        AmberButton("SAVE EQUIPMENT", enabled = plates.isNotEmpty()) { state.saveSettings(state.settings.copy(platesKg = plates.sorted(), weightedPercentBase = base)) }
+        FTButton("SAVE EQUIPMENT", enabled = plates.isNotEmpty()) { state.saveSettings(state.settings.copy(platesKg = plates.sorted(), weightedPercentBase = base)) }
         state.settingsMessage?.let { Body(it, muted = true) }
     }
 }
@@ -142,7 +141,7 @@ private fun ScheduleCard(state: TrainingPlannerState) {
             Box(Modifier.width(110.dp)) { FieldTextField(secondMin, { secondMin = it }, "min", keyboardType = KeyboardType.Number) }
         }
         Spacer(Modifier.height(8.dp))
-        AmberButton("SAVE TIMES", enabled = firstMin.toIntOrNull() != null && secondMin.toIntOrNull() != null) {
+        FTButton("SAVE TIMES", enabled = firstMin.toIntOrNull() != null && secondMin.toIntOrNull() != null) {
             state.saveSettings(
                 s.copy(
                     defaultStartTime = first.toString() + ":00", defaultDurationMin = firstMin.toInt(),

@@ -27,7 +27,8 @@ import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -143,7 +144,7 @@ fun NutritionEstimateConfirmSheet(
             val fatValue = fat.toDoubleOrNull()
             val valid = description.isNotBlank() && caloriesValue != null && proteinValue != null && carbsValue != null && fatValue != null
 
-            AmberButton(label = if (saving) "SAVING..." else "SAVE", enabled = valid && !saving) {
+            FTButton(label = if (saving) "SAVING..." else "SAVE", enabled = valid && !saving, emphasis = FTButtonEmphasis.Primary) {
                 if (valid && !saving) {
                     saving = true
                     error = null

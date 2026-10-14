@@ -2,7 +2,6 @@ package com.bioscan.fieldterminal.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -17,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -33,7 +33,7 @@ fun InfoHelpButton(title: String, body: String, modifier: Modifier = Modifier) {
             .clip(CircleShape)
             .background(FT.GlassFill)
             .border(FT.BorderWidth, FT.GlassBorder, CircleShape)
-            .clickable { open = true },
+            .ftClickable(shape = CircleShape, role = Role.Button, onClickLabel = "Explain") { open = true },
         contentAlignment = Alignment.Center,
     ) {
         Text("?", style = FTType.Label, color = FT.TextSecondary)

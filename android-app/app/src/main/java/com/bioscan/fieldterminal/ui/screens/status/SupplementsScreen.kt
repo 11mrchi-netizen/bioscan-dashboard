@@ -1,8 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.ExperimentResultRow
 import com.bioscan.fieldterminal.data.ExperimentRow
 import com.bioscan.fieldterminal.data.ExperimentsRepository
@@ -38,7 +35,8 @@ import com.bioscan.fieldterminal.domain.DetectedInteraction
 import com.bioscan.fieldterminal.domain.InteractionRecord
 import com.bioscan.fieldterminal.domain.RosterItem
 import com.bioscan.fieldterminal.domain.detectInteractions
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -173,8 +171,8 @@ private fun SupplementsContent(
                 color = FT.TextSecondary,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                AmberButton(label = "PANTRY") { onOpenPantry() }
-                AmberButton(label = "+ ADD") { onAddClick() }
+                FTButton(label = "PANTRY") { onOpenPantry() }
+                FTButton(label = "+ ADD") { onAddClick() }
             }
         }
 
@@ -235,7 +233,7 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+                .ftClickable(onClick = onClick)
                 .padding(14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -260,7 +258,7 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
                     color = FT.DomainLog,
                     modifier = Modifier
                         .padding(top = 6.dp)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onExperiment),
+                        .ftClickable(onClick = onExperiment),
                 )
             }
             Column(horizontalAlignment = Alignment.End) {

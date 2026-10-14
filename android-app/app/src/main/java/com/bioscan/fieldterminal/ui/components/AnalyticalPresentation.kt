@@ -26,7 +26,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.domain.ChartPresentation
 import com.bioscan.fieldterminal.domain.ConfidenceLevel
 import com.bioscan.fieldterminal.domain.DataAvailability
@@ -197,6 +196,8 @@ fun FTCard(
     // Analysis Layer 3 / Phase 7: a metric-registry key. When set, the help button also shows that metric's methodology,
     // limits and references (after `info`, if any), so the text comes from the single registry instead of per-screen strings.
     methodology: String? = null,
+    // A card that opens something (Aging -> the full profile): the press/focus feedback is drawn inside the card's shape.
+    onClick: (() -> Unit)? = null,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(FT.RadiusCard)
@@ -217,7 +218,8 @@ fun FTCard(
             // this. clip() is what actually confines any child to the shape.
             .clip(shape)
             .border(FT.BorderWidth, FT.GlassBorder, shape)
-            .background(FT.GlassFill, shape),
+            .background(FT.GlassFill, shape)
+            .then(if (onClick != null) Modifier.ftClickable(shape = shape, onClick = onClick) else Modifier),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),

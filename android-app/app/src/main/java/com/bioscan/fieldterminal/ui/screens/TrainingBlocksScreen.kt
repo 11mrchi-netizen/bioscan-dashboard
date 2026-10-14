@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,7 +30,9 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -47,34 +47,36 @@ fun TrainingBlocksScreen(onBack: () -> Unit) {
     }
 
     val b = blocks
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(FT.Base),
-        contentPadding = PaddingValues(bottom = 24.dp),
-    ) {
-        item { TileHeader(onBack = onBack) }
-        if (b == null && guard.error != null) {
-            item { LoadErrorCard(guard) }
-        } else if (b == null) {
-            item {
-                Box(
-                    Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                    contentAlignment = Alignment.Center,
-                ) { CircularProgressIndicator(color = FT.DomainTraining) }
-            }
-        } else if (b.isEmpty()) {
-            item {
-                Text(
-                    "No training blocks found.",
-                    color = FT.TextSecondary, style = FTType.BodySmall,
-                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 32.dp),
-                )
-            }
-        } else {
-            items(b, key = { it.id }) { block ->
-                TrainingBlockCard(
-                    block = block,
-                    modifier = Modifier.padding(horizontal = 22.dp).padding(top = 18.dp),
-                )
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+        TileHeader(onBack = onBack, title = "TRAINING BLOCKS", subtitle = "EVERY BLOCK · SESSIONS · OUTCOMES", accent = FT.DomainTraining)
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentPadding = PaddingValues(bottom = 24.dp),
+        ) {
+            if (b == null && guard.error != null) {
+                item { LoadErrorCard(guard) }
+            } else if (b == null) {
+                item {
+                    Box(
+                        Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { CircularProgressIndicator(color = FT.DomainTraining) }
+                }
+            } else if (b.isEmpty()) {
+                item {
+                    Text(
+                        "No training blocks found.",
+                        color = FT.TextSecondary, style = FTType.BodySmall,
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 32.dp),
+                    )
+                }
+            } else {
+                items(b, key = { it.id }) { block ->
+                    TrainingBlockCard(
+                        block = block,
+                        modifier = Modifier.padding(horizontal = 22.dp).padding(top = 18.dp),
+                    )
+                }
             }
         }
     }

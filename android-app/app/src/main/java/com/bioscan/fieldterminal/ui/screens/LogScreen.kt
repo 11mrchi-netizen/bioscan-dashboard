@@ -3,8 +3,6 @@ package com.bioscan.fieldterminal.ui.screens
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +51,7 @@ import com.bioscan.fieldterminal.domain.category
 import com.bioscan.fieldterminal.domain.supplementExpectedOn
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.components.SubTabChip
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -235,7 +234,7 @@ private fun AddEntryFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .background(FT.DomainLog, CircleShape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick, shape = CircleShape)
             .padding(horizontal = 22.dp, vertical = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -256,7 +255,7 @@ private fun LogToolbar(gapsOnly: Boolean, onToggleGaps: () -> Unit, allOpen: Boo
             Text(
                 if (allOpen) "COLLAPSE ALL" else "EXPAND ALL",
                 style = FTType.Label, color = FT.TextSecondary,
-                modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggleAll),
+                modifier = Modifier.ftClickable(onClick = onToggleAll),
             )
         }
         Text(
@@ -284,7 +283,7 @@ private fun LogDayCard(day: LogDay, open: Boolean, onToggle: () -> Unit, onEntry
             modifier = Modifier
                 .fillMaxWidth()
                 .background(if (open) FT.GlassStrongFill else FT.GlassFill)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggle)
+                .ftClickable(onClick = onToggle)
                 .padding(horizontal = 22.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -381,7 +380,7 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -448,7 +447,7 @@ private fun LoadOlderButton(onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+                .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
             Text("LOAD OLDER", style = FTType.LabelCaps, color = FT.TextSecondary)

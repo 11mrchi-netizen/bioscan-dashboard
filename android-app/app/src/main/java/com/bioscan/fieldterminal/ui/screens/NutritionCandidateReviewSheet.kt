@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,7 +29,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.ConfirmedMealItem
 import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.NutritionFoodSearchRepository
@@ -41,9 +38,11 @@ import com.bioscan.fieldterminal.data.ResolvedMealItem
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.FoodRow
 import com.bioscan.fieldterminal.data.model.FoodServingRow
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -74,7 +73,7 @@ private fun SheetBackHeader(label: String, onBack: () -> Unit) {
             "BACK",
             style = sheetActionLabelStyle,
             color = FT.TextSecondary,
-            modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onBack),
+            modifier = Modifier.ftClickable(onClick = onBack),
         )
         Text(label, style = sheetHeaderTitleStyle, color = FT.DomainLog)
     }
@@ -87,7 +86,7 @@ private fun FormLabel(text: String) {
 
 @Composable
 private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    AmberButton(label = if (saving) "SAVING..." else "SAVE", enabled = enabled && !saving, onClick = onClick)
+    FTButton(label = if (saving) "SAVING..." else "SAVE", enabled = enabled && !saving, onClick = onClick, emphasis = FTButtonEmphasis.Primary)
 }
 
 data class ReviewSeedItem(
@@ -156,7 +155,7 @@ fun NutritionCandidateReviewSheet(
                 )
             }
 
-            AmberButton(label = "ADD ITEM") {
+            FTButton(label = "ADD ITEM") {
                 val key = nextKey.toString()
                 nextKey += 1
                 rows = rows + (key to ReviewSeedItem(description = "", source = MealItemSource.Manual))
@@ -311,7 +310,7 @@ private fun ReviewItemCard(
                     "CHANGE",
                     style = sheetActionLabelStyle,
                     color = FT.TextSecondary,
-                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showSearch = true },
+                    modifier = Modifier.ftClickable { showSearch = true },
                 )
             }
         } else {
@@ -320,7 +319,7 @@ private fun ReviewItemCard(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        .ftClickable {
                             matchedFood = food
                             showSearch = false
                         }
@@ -361,7 +360,7 @@ private fun ReviewItemCard(
                         modifier = Modifier
                             .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, shape)
                             .background(if (isSelected) FT.DomainLog.copy(alpha = 0.14f) else Color.Transparent, shape)
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            .ftClickable(shape = shape) {
                                 if (isSelected) {
                                     selectedServing = null
                                 } else {
@@ -394,7 +393,7 @@ private fun ReviewItemCard(
             "REMOVE",
             style = sheetActionLabelStyle,
             color = FT.Critical,
-            modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onRemove),
+            modifier = Modifier.ftClickable(onClick = onRemove),
         )
     }
 }

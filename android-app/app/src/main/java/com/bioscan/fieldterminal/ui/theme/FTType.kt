@@ -24,6 +24,8 @@ object FTType {
     val BodySmall = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 13.sp)
     val Caption = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 12.sp)
     val CaptionStrong = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+    // Contract A7: actions and choices read as words (FTButton, add-entry type tiles), not as telemetry.
+    val ButtonLabel = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, letterSpacing = 0.04.em)
 
     // ---- Telemetry (Roboto Mono) ----
     val Value = TextStyle(fontFamily = RobotoMono, fontWeight = FontWeight.Normal, fontSize = 14.sp)

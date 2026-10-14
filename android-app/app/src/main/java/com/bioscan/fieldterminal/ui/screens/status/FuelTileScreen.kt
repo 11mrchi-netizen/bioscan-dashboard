@@ -1,17 +1,12 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,20 +44,22 @@ import com.bioscan.fieldterminal.domain.evaluateNutrition
 import com.bioscan.fieldterminal.domain.evaluateTdee
 import com.bioscan.fieldterminal.domain.evaluateWeightTrend
 import com.bioscan.fieldterminal.domain.proteinPercentSeries
-import java.time.OffsetDateTime
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
-import com.bioscan.fieldterminal.ui.components.FTMetricValue
-import com.bioscan.fieldterminal.ui.components.FTStatePill
-import com.bioscan.fieldterminal.ui.components.SubTabRow
-import com.bioscan.fieldterminal.ui.components.TileHeader
-import com.bioscan.fieldterminal.ui.nav.FuelTab
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTSegment
 import com.bioscan.fieldterminal.ui.components.FTSegmentBar
-import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.PinnedPage
+import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import java.time.OffsetDateTime
+import com.bioscan.fieldterminal.ui.nav.FuelTab
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -94,9 +91,20 @@ fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {})
         isLoading = false
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
-        TileHeader(onBack = onBack)
-        SubTabRow(items = FuelTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
+    // Contract A4: title, context line and sub-tab rail stay pinned; only the tab's content scrolls, from the top on a tab change.
+    val scroll = rememberScrollState()
+    LaunchedEffect(tab) { scroll.scrollTo(0) }
+    PinnedPage(
+        onBack = onBack,
+        title = "FUEL",
+        subtitle = when (tab) {
+            FuelTab.Nutrition -> "TODAY · MACROS · HYDRATION"
+            FuelTab.Digestion -> "STOOL · WEIGHT · BODY FAT"
+        },
+        accent = FT.DomainFuel,
+        rail = { SubTabRow(items = FuelTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        scrollState = scroll,
+    ) {
 
         when {
             guard.error != null && !isLoading -> LoadErrorCard(guard)

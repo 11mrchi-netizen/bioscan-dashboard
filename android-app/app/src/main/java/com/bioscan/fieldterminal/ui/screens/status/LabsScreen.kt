@@ -1,8 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,9 +31,10 @@ import com.bioscan.fieldterminal.domain.MarkerDirection
 import com.bioscan.fieldterminal.domain.PersonalRange
 import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.labMarkerTheme
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.labFlagState
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -101,8 +100,8 @@ fun LabsScreen() {
 private fun AddResultButtons(onAddClick: () -> Unit, onUploadClick: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AmberButton(label = "+ UPLOAD REPORT") { onUploadClick() }
-            AmberButton(label = "+ ADD RESULT") { onAddClick() }
+            FTButton(label = "+ UPLOAD REPORT") { onUploadClick() }
+            FTButton(label = "+ ADD RESULT") { onAddClick() }
         }
     }
 }
@@ -159,7 +158,7 @@ private fun ThemeGroupHeader(theme: LabMarkerTheme, count: Int, collapsed: Boole
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick)
             .padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,

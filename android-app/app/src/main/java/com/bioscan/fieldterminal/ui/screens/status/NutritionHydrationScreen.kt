@@ -2,8 +2,6 @@ package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,14 +48,15 @@ import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.TotalsPeriod
 import com.bioscan.fieldterminal.domain.sumNutritionSince
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.MacroDonutChart
 import com.bioscan.fieldterminal.ui.components.PeriodToggle
-import com.bioscan.fieldterminal.ui.components.FTMetricRow
-import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
 import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -169,11 +168,7 @@ private fun NutrientBreakdownButton(onClick: () -> Unit) {
             .fillMaxWidth()
             .border(FT.BorderWidth, FT.DomainFuel.copy(alpha = 0.5f), shape)
             .background(FT.DomainFuel.copy(alpha = 0.08f), shape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            .ftClickable(onClick = onClick, shape = shape)
             .padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {

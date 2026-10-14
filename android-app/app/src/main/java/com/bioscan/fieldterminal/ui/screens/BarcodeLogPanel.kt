@@ -1,7 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,8 +24,9 @@ import com.bioscan.fieldterminal.data.SupplementLookupRepository
 import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.normalizeBarcode
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.scanBarcode
@@ -93,7 +93,7 @@ fun BarcodeLogPanel(roster: List<SupplementRow>, onMatched: (List<SupplementRow>
         )
         FieldTextField(typed, { typed = it }, "Barcode (UPC)", keyboardType = KeyboardType.Number)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AmberButton(label = "SCAN", enabled = !busy) {
+            FTButton(label = "SCAN", enabled = !busy) {
                 scope.launch {
                     message = null
                     val raw = scanBarcode(context) { message = "Scanner unavailable ($it). Type the barcode instead." }
@@ -103,7 +103,7 @@ fun BarcodeLogPanel(roster: List<SupplementRow>, onMatched: (List<SupplementRow>
                     }
                 }
             }
-            AmberButton(label = if (busy) "LOOKING UP..." else "FIND", enabled = !busy && typed.isNotBlank()) { resolve(typed) }
+            FTButton(label = if (busy) "LOOKING UP..." else "FIND", enabled = !busy && typed.isNotBlank()) { resolve(typed) }
         }
         message?.let { Text(it, style = note, color = FT.TextSecondary) }
         unknown?.let { u ->
@@ -119,7 +119,7 @@ fun BarcodeLogPanel(roster: List<SupplementRow>, onMatched: (List<SupplementRow>
                     modifier = Modifier
                         .fillMaxWidth()
                         .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-                        .clickable(enabled = !busy) {
+                        .ftClickable(enabled = !busy, shape = RoundedCornerShape(FT.RadiusModule)) {
                             busy = true
                             scope.launch {
                                 try {

@@ -1,10 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.ui.components.softLoad
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,14 +65,14 @@ import com.bioscan.fieldterminal.domain.mergePreferZepp
 import com.bioscan.fieldterminal.domain.trail.computeTrailSessionState
 import com.bioscan.fieldterminal.domain.trail.elevationProfileWithOverlays
 import com.bioscan.fieldterminal.domain.trail.itraCategory
-import com.bioscan.fieldterminal.ui.components.AmberButton
-import com.bioscan.fieldterminal.ui.components.BodyHeatMap
 import com.bioscan.fieldterminal.domain.zoneLoads
+import com.bioscan.fieldterminal.ui.components.BodyHeatMap
+import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.HeartRateZoneDonutChart
-import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import com.bioscan.fieldterminal.ui.components.LineChart
 import com.bioscan.fieldterminal.ui.components.MinMaxAverageBar
@@ -83,9 +80,10 @@ import com.bioscan.fieldterminal.ui.components.RangeBar
 import com.bioscan.fieldterminal.ui.components.RouteMiniMap
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
-import com.bioscan.fieldterminal.ui.components.TrailElevationChart
-import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.components.TrailElevationChart
+import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
+import com.bioscan.fieldterminal.ui.components.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Instant
@@ -398,7 +396,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                                     style = FTType.BodySmall,
                                     color = FT.TextSecondary,
                                 )
-                                AmberButton(label = "VIEW ROUTE") { routeLauncher.launch(recordId) }
+                                FTButton(label = "VIEW ROUTE") { routeLauncher.launch(recordId) }
                             }
                             routeError != null -> Text(
                                 "Couldn't check for a recorded route (${routeError}).",

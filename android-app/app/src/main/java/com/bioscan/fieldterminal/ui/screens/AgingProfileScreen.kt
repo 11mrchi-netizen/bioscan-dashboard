@@ -1,10 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,15 +27,17 @@ import com.bioscan.fieldterminal.data.AgingProfileRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
+import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.ui.components.DotPlot
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDataState
-import com.bioscan.fieldterminal.ui.components.TileHeader
-import com.bioscan.fieldterminal.ui.components.InfoHelpButton
-import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.InfoHelpButton
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.ageAccelerationState
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.format.DateTimeFormatter
@@ -57,7 +55,7 @@ fun AgingProfileScreen(onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack, title = "AGING PROFILE")
+        TileHeader(onBack = onBack, title = "AGING PROFILE", subtitle = "BIOLOGICAL AGE · DIMENSIONS · HISTORY", accent = FT.DomainUser)
 
         val current = overview
         when {
@@ -66,7 +64,7 @@ fun AgingProfileScreen(onBack: () -> Unit) {
                 CircularProgressIndicator(color = FT.Emerald)
             }
             current.chronologicalAgeYears == null -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
-                FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile to see your Aging Profile.")
+                FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile & goals to see your Aging Profile.")
             }
             else -> Column(
                 modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 4.dp),
@@ -84,7 +82,7 @@ fun AgingProfileScreen(onBack: () -> Unit) {
 private fun OverviewCard(overview: AgingProfileOverview) {
     FTCard(title = "OVERVIEW") {
         BioAgeHero(overview)
-        StatLineHelp("Chronological age", "${overview.chronologicalAgeYears} yr", "Chronological age", "Your real age, from date of birth (Setup › Profile). Every biological-age model is compared against this.")
+        StatLineHelp("Chronological age", "${overview.chronologicalAgeYears} yr", "Chronological age", "Your real age, from date of birth (Setup › Profile & goals). Every biological-age model is compared against this.")
     }
 }
 
@@ -247,5 +245,5 @@ private const val CARDIO_AGE_HELP =
         "interpolated between published age-decade medians. A functional, not clinical, age-equivalent — " +
         "clamped, not extrapolated, past either end of the table: fitter than the youngest bracket's " +
         "median reads as that bracket's age (e.g. 24.5), not a fabricated age below 20.\n\n" +
-        "Reference table applies to US adults aged 20-79; needs your sex set in Setup › Profile. " +
+        "Reference table applies to US adults aged 20-79; needs your sex set in Setup › Profile & goals. " +
         "Recalculates automatically from your latest synced VO2max reading every time you open this page."

@@ -1,9 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
-import com.bioscan.fieldterminal.ui.components.launchSafe
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -34,12 +31,16 @@ import com.bioscan.fieldterminal.data.ZeppRepository
 import com.bioscan.fieldterminal.data.ZeppSyncStateRow
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
-import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.ClearChip
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.nav.ConnectedServicesTab
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -55,7 +56,7 @@ fun ConnectedServicesScreen(scope: CoroutineScope, onBack: () -> Unit) {
     val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack)
+        TileHeader(onBack = onBack, title = "CONNECTED SERVICES", subtitle = "AI NUTRITION · MAPS · HEALTH CONNECT · ZEPP")
         SubTabRow(items = ConnectedServicesTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
@@ -89,7 +90,7 @@ private fun AiNutritionCard(context: android.content.Context) {
             placeholder = if (keySaved) "•••••••• (key saved — paste to replace)" else "Paste your Gemini API key",
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AmberButton(label = "SAVE KEY") {
+            FTButton(label = "SAVE KEY") {
                 if (apiKeyInput.isNotBlank()) {
                     GeminiApiKeyStore.save(context, apiKeyInput.trim())
                     keySaved = true
@@ -133,7 +134,7 @@ private fun MapCard(context: android.content.Context) {
             placeholder = if (cartoKeySaved) "•••••••• (key saved — paste to replace)" else "Paste your CARTO API key",
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AmberButton(label = "SAVE KEY") {
+            FTButton(label = "SAVE KEY") {
                 if (cartoKeyInput.isNotBlank()) {
                     MapSettingsStore.saveCartoKey(context, cartoKeyInput.trim())
                     cartoKeySaved = true
@@ -172,7 +173,7 @@ private fun MapCard(context: android.content.Context) {
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AmberButton(label = "SAVE HOME") {
+            FTButton(label = "SAVE HOME") {
                 val lat = homeLatInput.toDoubleOrNull()
                 val lon = homeLonInput.toDoubleOrNull()
                 if (lat != null && lon != null && lat in -90.0..90.0 && lon in -180.0..180.0) {
@@ -239,7 +240,7 @@ private fun HealthConnectCard(context: android.content.Context) {
             color = if (hcGranted) FT.Emerald else FT.TextSecondary,
         )
         if (hcAvailable && hcChecked && !hcGranted) {
-            AmberButton(label = "CONNECT HEALTH CONNECT") {
+            FTButton(label = "CONNECT HEALTH CONNECT") {
                 hcPermissionLauncher.launch(HealthConnectManager.PERMISSIONS)
             }
         }
@@ -330,7 +331,7 @@ private fun ZeppCard(scope: CoroutineScope) {
                 color = FT.TextSecondary,
             )
         }
-        AmberButton(label = if (zeppSyncing) "SYNCING…" else "SYNC NOW") {
+        FTButton(label = if (zeppSyncing) "SYNCING…" else "SYNC NOW") {
             if (!zeppSyncing) {
                 scope.launchSafe(onDone = { zeppSyncing = false }) {
                     zeppSyncing = true
@@ -343,7 +344,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         // Writes the next 7 days of planned sessions to Zepp's calendar: a real feature, so it stays next to SYNC NOW.
         var probing by remember { mutableStateOf(false) }
         var probeResult by remember { mutableStateOf<String?>(null) }
-        AmberButton(label = if (probing) "SENDING…" else "SEND NEXT 7 DAYS TO ZEPP") {
+        FTButton(label = if (probing) "SENDING…" else "SEND NEXT 7 DAYS TO ZEPP") {
             if (!probing) {
                 scope.launchSafe(onDone = { probing = false }) {
                     probing = true
@@ -360,7 +361,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showDiagnostics = !showDiagnostics; confirming = null }
+                .ftClickable { showDiagnostics = !showDiagnostics; confirming = null }
                 .padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -375,22 +376,28 @@ private fun ZeppCard(scope: CoroutineScope) {
             )
             ZeppDiagnostic.entries.forEach { diagnostic ->
                 if (confirming == diagnostic) {
-                    Text(diagnostic.writes.orEmpty(), style = FTType.BodySmall, color = FT.TextSecondary)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        AmberButton(label = "CANCEL") { confirming = null }
-                        AmberButton(label = "RUN ${diagnostic.label}") {
-                            confirming = null
-                            if (!probing) {
-                                scope.launchSafe(onDone = { probing = false }) {
-                                    probing = true
-                                    probeResult = zeppRepository.probeTrainingApi(diagnostic.mode)
-                                    probing = false
-                                }
+                    val run = {
+                        confirming = null
+                        if (!probing) {
+                            scope.launchSafe(onDone = { probing = false }) {
+                                probing = true
+                                probeResult = zeppRepository.probeTrainingApi(diagnostic.mode)
+                                probing = false
                             }
                         }
                     }
+                    if (diagnostic == ZeppDiagnostic.BulkCleanup) {
+                        // Contract A2: deleting from the Zepp account is destructive, so it gets the destructive confirm.
+                        FTConfirmDestructive(diagnostic.writes.orEmpty(), confirmLabel = "DELETE TEST ENTRIES", onCancel = { confirming = null }, onConfirm = run)
+                    } else {
+                        Text(diagnostic.writes.orEmpty(), style = FTType.BodySmall, color = FT.TextSecondary)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            FTButton(label = "CANCEL") { confirming = null }
+                            FTButton(label = "RUN ${diagnostic.label}", emphasis = FTButtonEmphasis.Primary, onClick = run)
+                        }
+                    }
                 } else {
-                    AmberButton(label = if (probing) "CHECKING…" else diagnostic.label) {
+                    FTButton(label = if (probing) "CHECKING…" else diagnostic.label) {
                         if (diagnostic.writes != null) {
                             confirming = diagnostic
                         } else if (!probing) {

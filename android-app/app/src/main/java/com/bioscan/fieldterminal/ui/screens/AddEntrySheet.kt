@@ -1,8 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.ui.components.describeLoadFailure
-import com.bioscan.fieldterminal.ui.components.softLoad
-import com.bioscan.fieldterminal.ui.components.launchSafe
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -11,9 +8,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,11 +38,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
@@ -94,10 +87,15 @@ import com.bioscan.fieldterminal.domain.supplementNextDueDate
 import com.bioscan.fieldterminal.domain.FuelSubType
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogSource
-import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.DateTimeField
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -174,7 +172,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .border(FT.BorderWidth, FT.DomainLog, RoundedCornerShape(FT.RadiusModule))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { sayIt = true }
+                        .ftClickable(shape = RoundedCornerShape(FT.RadiusModule)) { sayIt = true }
                         .padding(vertical = 18.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -182,7 +180,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 }
                 Spacer(Modifier.height(10.dp))
                 lastType?.let { last ->
-                    AmberButton(label = "LAST: ${last.label}") { selectedType = last }
+                    FTButton(label = "LAST: ${last.label}") { selectedType = last }
                     Spacer(Modifier.height(10.dp))
                 }
                 TypePickerGrid(onSelect = { picked ->
@@ -267,16 +265,16 @@ fun EntryActionSheet(
 
             if (!confirmingDelete) {
                 if (onViewDetail != null) {
-                    AmberButton(label = "DETAIL", onClick = onViewDetail)
+                    FTButton(label = "DETAIL", onClick = onViewDetail)
                 }
                 if (editable) {
-                    AmberButton(label = "EDIT", onClick = onEdit)
+                    FTButton(label = "EDIT", onClick = onEdit)
                 }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .border(FT.BorderWidth, FT.Critical, RoundedCornerShape(FT.RadiusSmall))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { confirmingDelete = true }
+                        .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { confirmingDelete = true }
                         .padding(vertical = 14.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -293,7 +291,7 @@ fun EntryActionSheet(
                         modifier = Modifier
                             .weight(1f)
                             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { confirmingDelete = false }
+                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { confirmingDelete = false }
                             .padding(vertical = 14.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -303,7 +301,7 @@ fun EntryActionSheet(
                         modifier = Modifier
                             .weight(1f)
                             .background(FT.Critical, RoundedCornerShape(FT.RadiusSmall))
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) {
                                 if (!deleting) {
                                     deleting = true
                                     scope.launchSafe(onDone = { deleting = false }) {
@@ -611,7 +609,7 @@ private fun SheetBackHeader(label: String, onBack: () -> Unit) {
             "BACK",
             style = sheetActionLabelStyle,
             color = FT.TextSecondary,
-            modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onBack),
+            modifier = Modifier.ftClickable(onClick = onBack),
         )
         Text(label, style = sheetHeaderTitleStyle, color = FT.DomainLog)
     }
@@ -627,10 +625,7 @@ private fun TypePickerGrid(onSelect: (AddEntryType) -> Unit) {
                         modifier = Modifier
                             .weight(1f)
                             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { onSelect(type) }
+                            .ftClickable(shape = RoundedCornerShape(FT.RadiusModule)) { onSelect(type) }
                             .padding(vertical = 18.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -655,7 +650,7 @@ private fun FormLabel(text: String) {
 
 @Composable
 private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    AmberButton(label = if (saving) "SAVING..." else "SAVE") {
+    FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
         if (enabled && !saving) onClick()
     }
 }
@@ -675,7 +670,7 @@ private fun QtyRow(qty: Int, onChange: (Int) -> Unit) {
                     .clip(shape)
                     .background(FT.GlassFill, shape)
                     .border(FT.BorderWidth, FT.GlassBorder, shape)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                    .ftClickable(shape = shape) {
                         val next = qty + delta
                         if (next >= 1) onChange(next)
                     },
@@ -704,7 +699,7 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
                         .weight(1f)
                         .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                         .background(if (isSelected) FT.DomainLog.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { subType = sub }
+                        .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { subType = sub }
                         .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -987,7 +982,7 @@ private fun FoodForm(
                         "CLEAR",
                         style = sheetActionLabelStyle,
                         color = FT.Critical,
-                        modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        modifier = Modifier.ftClickable {
                             pendingPhotos = emptyList()
                         },
                     )
@@ -1035,7 +1030,7 @@ private fun FoodForm(
                 color = FT.TextSecondary,
                 modifier = Modifier
                     .padding(top = 14.dp)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                    .ftClickable {
                         showRecentMeals = !showRecentMeals
                     },
             )
@@ -1059,8 +1054,8 @@ private fun FoodForm(
                                 color = if (cloning) FT.TextMuted else FT.TextPrimary,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = !cloning) {
-                                        val id = meal.id ?: return@clickable
+                                    .ftClickable(enabled = !cloning) {
+                                        val id = meal.id ?: return@ftClickable
                                         cloning = true
                                         scope.launch {
                                             try {
@@ -1210,13 +1205,13 @@ private fun DrinkForm(
             }
         } else {
             val label = BEVERAGE_CLASS_LABELS[beverageClass] ?: beverageClass!!.uppercase()
-            AmberButton(label = if (beverageSaving) "SAVING..." else "LOG $label") {
-                val vol = mlValue ?: return@AmberButton
-                if (vol <= 0 || beverageSaving) return@AmberButton
+            FTButton(label = if (beverageSaving) "SAVING..." else "LOG $label", emphasis = FTButtonEmphasis.Primary) {
+                val vol = mlValue ?: return@FTButton
+                if (vol <= 0 || beverageSaving) return@FTButton
                 val abvValue = abv.toDoubleOrNull()
                 if (beverageClass == "alcohol" && ethanolGrams(vol.toDouble(), abvValue ?: 0.0) == null) {
                     beverageError = "Enter the drink's strength (ABV %, above 0 and at most 100)."
-                    return@AmberButton
+                    return@FTButton
                 }
                 beverageSaving = true
                 beverageError = null
@@ -1447,7 +1442,7 @@ private fun BundleToggleRow(label: String, itemNames: String, checked: Boolean, 
             .fillMaxWidth()
             .border(FT.BorderWidth, if (checked) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
             .background(if (checked) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(FT.RadiusModule))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggle)
+            .ftClickable(onClick = onToggle, shape = RoundedCornerShape(FT.RadiusModule))
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1467,7 +1462,7 @@ private fun CheckToggleRow(label: String, checked: Boolean, onToggle: () -> Unit
             .fillMaxWidth()
             .border(FT.BorderWidth, if (checked) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
             .background(if (checked) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(FT.RadiusModule))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggle)
+            .ftClickable(onClick = onToggle, shape = RoundedCornerShape(FT.RadiusModule))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1487,7 +1482,7 @@ private fun CheckboxGlyph(checked: Boolean) {
         contentAlignment = Alignment.Center,
     ) {
         if (checked) {
-            Text("✓", style = TextStyle(fontSize = 12.sp), color = FT.Base)
+            Text("✓", style = FTType.CaptionStrong, color = FT.Base)
         }
     }
 }
@@ -1498,7 +1493,7 @@ private fun PhotoActionButton(label: String, modifier: Modifier = Modifier, enab
     Box(
         modifier = modifier
             .border(FT.BorderWidth, color, RoundedCornerShape(FT.RadiusSmall))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = enabled, onClick = onClick)
+            .ftClickable(enabled = enabled, onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
             .padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -1627,10 +1622,7 @@ private fun IntChipRow(range: IntRange, selected: Int?, onSelect: (Int) -> Unit)
                     .weight(1f)
                     .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                     .background(if (isSelected) FT.DomainLog.copy(alpha = 0.18f) else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onSelect(n) }
+                    .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onSelect(n) }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1743,10 +1735,7 @@ private fun SexualActivityForm(
                 "+ ADD INSTANCE",
                 style = FTType.MonoCaption,
                 color = FT.DomainLog,
-                modifier = Modifier.clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) { instances.add(EditableSexualActivityInstance()) },
+                modifier = Modifier.ftClickable { instances.add(EditableSexualActivityInstance()) },
             )
         }
         Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
@@ -1776,7 +1765,7 @@ private fun SexualActivityInstanceEditor(
                     "REMOVE",
                     style = FTType.MonoCaption,
                     color = FT.Critical,
-                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onRemove() },
+                    modifier = Modifier.ftClickable { onRemove() },
                 )
             }
         }
@@ -1809,7 +1798,7 @@ private fun SexualActivityInstanceEditor(
                             "CLEAR",
                             style = FTType.Micro,
                             color = FT.Critical,
-                            modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            modifier = Modifier.ftClickable {
                                 instance.partnerId = null
                                 instance.partnerName = ""
                                 partnerQuery = ""
@@ -1825,7 +1814,7 @@ private fun SexualActivityInstanceEditor(
                             color = FT.TextSecondary,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                .ftClickable {
                                     instance.partnerId = person.id
                                     instance.partnerName = person.name
                                     partnerQuery = ""
@@ -1839,7 +1828,7 @@ private fun SexualActivityInstanceEditor(
                             "+ ADD \"$trimmedQuery\"",
                             style = FTType.LabelCaps,
                             color = FT.Emerald,
-                            modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            modifier = Modifier.ftClickable {
                                 newPartnerInitialName = trimmedQuery
                                 showNewPartnerSheet = true
                             },
@@ -2068,10 +2057,7 @@ private fun ExerciseDetailsForm(
                     "+ ADD EXERCISE",
                     style = FTType.MonoCaption,
                     color = FT.DomainLog,
-                    modifier = Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { exercises.add(EditableExercise()) },
+                    modifier = Modifier.ftClickable { exercises.add(EditableExercise()) },
                 )
             }
         }
@@ -2105,10 +2091,7 @@ internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int =
                             .weight(1f)
                             .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                             .background(if (isSelected) FT.DomainLog.copy(alpha = 0.18f) else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { onSelect(if (isSelected) null else option) }
+                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onSelect(if (isSelected) null else option) }
                             .padding(vertical = 10.dp, horizontal = 2.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -2199,10 +2182,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                     "REMOVE",
                     style = FTType.MonoCaption,
                     color = FT.Critical,
-                    modifier = Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onRemove() },
+                    modifier = Modifier.ftClickable { onRemove() },
                 )
             }
         }
@@ -2219,10 +2199,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                         color = FT.TextSecondary,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) {
+                            .ftClickable {
                                 suppressSearch = true
                                 exercise.name = match.name
                                 suggestions = emptyList()
@@ -2247,10 +2224,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                             "REMOVE",
                             style = FTType.MonoCaption,
                             color = FT.Critical,
-                            modifier = Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { exercise.sets.removeAt(i) },
+                            modifier = Modifier.ftClickable { exercise.sets.removeAt(i) },
                         )
                     }
                 }
@@ -2261,10 +2235,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
             "+ ADD SET",
             style = FTType.MonoCaption,
             color = FT.DomainLog,
-            modifier = Modifier.clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) {
+            modifier = Modifier.ftClickable {
                 // Most sets in a real workout repeat or closely follow the
                 // one before it -- default to the previous set's values
                 // instead of blank fields, per direct user feedback.

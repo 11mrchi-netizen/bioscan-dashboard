@@ -37,7 +37,8 @@ import com.bioscan.fieldterminal.data.NotificationDispatchWorker
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.ZeppSyncWorker
 import com.bioscan.fieldterminal.data.model.NotificationKind
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.nav.FieldTerminalNavHost
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.FieldTerminalTheme
@@ -125,7 +126,7 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
             is SessionStatus.NotAuthenticated -> {
                 androidx.compose.runtime.LaunchedEffect(Unit) { com.bioscan.fieldterminal.data.ReadCache.invalidateAll() } // nothing of the last user survives sign-out
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AmberButton(label = "SIGN IN WITH GOOGLE") {
+                    FTButton(label = "SIGN IN WITH GOOGLE", emphasis = FTButtonEmphasis.Primary) {
                         scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
                     }
                     signInError?.let { Text("Sign-in failed: $it", style = FTType.Caption, color = FT.Critical) }
@@ -143,7 +144,7 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
                     }
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        AmberButton(label = "SESSION EXPIRED — SIGN IN AGAIN") {
+                        FTButton(label = "SESSION EXPIRED — SIGN IN AGAIN") {
                             scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
                         }
                         signInError?.let { Text("Sign-in failed: $it", style = FTType.Caption, color = FT.Critical) }

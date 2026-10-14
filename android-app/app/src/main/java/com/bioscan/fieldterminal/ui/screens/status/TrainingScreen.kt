@@ -1,10 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.ui.components.launchSafe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,14 +40,16 @@ import com.bioscan.fieldterminal.domain.comparison.comparableSet
 import com.bioscan.fieldterminal.domain.comparison.comparePersonal
 import com.bioscan.fieldterminal.domain.comparison.isComparableSessionDistance
 import com.bioscan.fieldterminal.domain.sumDistanceKmSince
-import com.bioscan.fieldterminal.ui.components.ComparisonStrip
-import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.FTMetricValue
-import com.bioscan.fieldterminal.ui.components.SegmentedToggle
-import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
+import com.bioscan.fieldterminal.ui.components.ComparisonStrip
+import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.FTMetricValue
+import com.bioscan.fieldterminal.ui.components.SegmentedToggle
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -180,7 +179,7 @@ private fun SessionRow(session: ExerciseSessionRow, onClick: () -> Unit) {
 
     Row(
         modifier = Modifier.fillMaxWidth()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick)
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -298,7 +297,7 @@ private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimefr
 private fun SkillLink(summary: String, label: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick)
             .padding(top = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -316,7 +315,7 @@ private fun SuspectedTrailRuns(suspected: List<SuspectedTrailRun>, onMark: (List
     var expanded by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { expanded = !expanded }
+            .ftClickable { expanded = !expanded }
             .padding(top = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -354,7 +353,7 @@ private fun TrailMarkButton(label: String, modifier: Modifier = Modifier, onClic
     Box(
         modifier = modifier
             .border(FT.BorderWidth, FT.DomainTraining, shape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick, shape = shape)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {

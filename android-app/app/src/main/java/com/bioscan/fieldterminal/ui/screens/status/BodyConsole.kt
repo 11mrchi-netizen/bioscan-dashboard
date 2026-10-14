@@ -4,8 +4,6 @@ import android.app.Activity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -66,11 +64,12 @@ import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.figurePinForBodyPart
 import com.bioscan.fieldterminal.domain.healthFlagDay
 import com.bioscan.fieldterminal.domain.parseSessionZonedDateTime
-import com.bioscan.fieldterminal.ui.nav.TileRoute
 import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.metricStateColor
 import com.bioscan.fieldterminal.ui.components.metricStateLabel
 import com.bioscan.fieldterminal.ui.components.readinessState
+import com.bioscan.fieldterminal.ui.nav.TileRoute
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.ZonedDateTime
@@ -165,13 +164,14 @@ private fun SystemTile(tile: SystemTileSpec, state: MetricState?, preview: List<
             .clip(RoundedCornerShape(FT.RadiusModule))
             .background(FT.GlassFill)
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusModule))
             .padding(vertical = 14.dp, horizontal = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(tile.icon, contentDescription = tile.label, tint = tile.accent, modifier = Modifier.size(22.dp))
+            // The visible label below names the tile; a description here would be read twice.
+            Icon(tile.icon, contentDescription = null, tint = tile.accent, modifier = Modifier.size(22.dp))
             state?.let {
                 Spacer(Modifier.width(6.dp))
                 Box(
@@ -224,7 +224,7 @@ private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean, 
                         .align(Alignment.TopStart)
                         .fillMaxWidth()
                         // Tapping the condition hero opens Daily Readiness.
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpenDailyReadiness)
+                        .ftClickable(onClick = onOpenDailyReadiness)
                         .padding(horizontal = 18.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
@@ -271,12 +271,7 @@ private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean, 
                                 .padding(start = 16.dp)
                                 .then(
                                     if (flags > 0) {
-                                        Modifier.clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null,
-                                            onClickLabel = "Open Training, Injury",
-                                            onClick = onOpenInjury,
-                                        )
+                                        Modifier.ftClickable(onClickLabel = "Open Training, Injury", onClick = onOpenInjury)
                                     } else {
                                         Modifier
                                     },
@@ -411,7 +406,7 @@ private fun BodySchematic(overview: StatusOverview, onOpenInjury: () -> Unit, mo
             Text("RHR " + (overview.latestRhr?.let { "%.0f".format(it) } ?: "—"), style = smallValue, color = FT.TextPrimary)
         }
 
-        if (pin != null && flag != null) {
+        if (pin != null) {
             val at = pin.point
             val left = flagLabelsLeft(at)
             val description = "Open injury: " + flag.label + (flagDay?.let { ", day $it" } ?: "") + ". Opens Training, Injury."
@@ -420,7 +415,7 @@ private fun BodySchematic(overview: StatusOverview, onOpenInjury: () -> Unit, mo
                 Column(
                     modifier = Modifier
                         .semantics(mergeDescendants = true) { contentDescription = description }
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpenInjury)
+                        .ftClickable(onClick = onOpenInjury)
                         .padding(horizontal = 6.dp, vertical = 6.dp),
                     horizontalAlignment = if (left) Alignment.End else Alignment.Start,
                 ) {
@@ -534,11 +529,7 @@ private fun NextUpSection(modifier: Modifier = Modifier) {
             .background(FT.Surface)
             .then(
                 if (onTap != null) {
-                    Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onTap,
-                    )
+                    Modifier.ftClickable(onClick = onTap)
                 } else {
                     Modifier
                 },

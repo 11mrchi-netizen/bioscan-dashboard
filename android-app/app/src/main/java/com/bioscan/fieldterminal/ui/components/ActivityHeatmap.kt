@@ -1,8 +1,6 @@
 package com.bioscan.fieldterminal.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -112,7 +110,7 @@ private fun HeatCell(activity: DayActivity?, size: Dp, isFuture: Boolean, onClic
         modifier = Modifier
             .size(size)
             .clip(shape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = !isFuture, onClick = onClick),
+            .ftClickable(enabled = !isFuture, onClick = onClick, shape = shape),
     ) {
         when {
             hasIntercourse && hasMasturbation -> Row(Modifier.fillMaxWidth().fillMaxHeight()) {

@@ -2,8 +2,6 @@ package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,13 +28,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.HealthEventsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.MedicationEntry
-import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
@@ -129,11 +128,11 @@ fun IllnessFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                             }
                             Text(
                                 "REMOVE",
-                                style = illnessSheetLabelStyle.copy(fontSize = 10.sp),
+                                style = illnessSheetLabelStyle,
                                 color = FT.Critical,
                                 modifier = Modifier
                                     .padding(top = 18.dp)
-                                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                    .ftClickable {
                                         medications.removeAt(i)
                                     },
                             )
@@ -154,7 +153,7 @@ fun IllnessFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     "+ ADD MEDICATION",
                     style = illnessSheetLabelStyle,
                     color = FT.Info,
-                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                    modifier = Modifier.ftClickable {
                         medications.add(MedicationEntryDraft())
                     },
                 )
@@ -170,7 +169,7 @@ fun IllnessFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
             }
 
             val valid = name.isNotBlank()
-            AmberButton(label = if (saving) "SAVING..." else "SAVE") {
+            FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
                 if (valid && !saving) {
                     saving = true
                     error = null

@@ -45,7 +45,7 @@ import java.time.LocalDate
 @Composable
 fun SkillPage(title: String, subtitle: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack, title = title, subtitle = subtitle)
+        TileHeader(onBack = onBack, title = title, subtitle = subtitle, accent = FT.DomainUser)
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),

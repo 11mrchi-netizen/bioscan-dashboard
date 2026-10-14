@@ -1,6 +1,7 @@
 # Field Terminal UX review: build plan
 
-Status: in progress on branch `ccr-b7b17b42-flzlrb` (draft PR #20), one commit per phase.
+Status: phases 0–5 built on branch `ccr-b7b17b42-flzlrb` (draft PR #20), one commit per phase; see §7. Awaiting an
+Android build and the on-device checks listed in the PR.
 Source review: "Field Terminal UX Review" (claude.ai artifact NTRCX87sgYpRFwaPm9NGaG, 14 Oct 2026), findings F1–F14,
 proposals P1–P8, contract amendments A1–A7.
 
@@ -132,5 +133,34 @@ against the result.
 
 - PR #20 baseline: 0 type errors; 566 / 568 tests pass (the two wrong tests above).
 - Each phase must keep 0 type errors and all tests passing before it is pushed.
+- After phase 5: 0 type errors, 588 / 588 tests pass (4 skipped, as on the baseline); 20 new tests cover the freshness
+  line, the supplements-due summary, the grouped add-entry choices and recents, the entry sheet's time line, and the
+  injury flag.
 - Not covered: Android-only Compose APIs newer than 1.8.2, resource merging, R8, and anything visual. Every phase lists
   on-device checks in the PR description; please run `./gradlew compileDebugKotlin testDebugUnitTest` and the checks.
+
+## 7. Build status
+
+| Phase | Commit | What landed |
+|---|---|---|
+| 0 | `e3d4f31` | Injury flag names the region and day and opens Training › Injury; tappable Next up (calendar, consent, retry); Plan delete confirms and reports failures; Zepp diagnostics collapsed, writes confirm. |
+| 1 | `d7a7e6b` | `ftClickable` on every tap; `FTButton` with emphasis (was `AmberButton`) and `FTConfirmDestructive`; titled `TileHeader` / `PinnedPage`; dock keeps the parent tab lit; HEALTH, PROFILE & GOALS, TODAY naming. |
+| 2 | `3bd5166` | Status hero with basis, freshness (`STALE_AFTER_DAYS`) and TODAY ›; scrolling hub, 2×2 tiles with Fuel and Labs previews; quick-log row; Today page (recovery, READY FOR, fuel, links, patterns). |
+| 3 | `aabe01a` | Grouped add-entry picker with Fuel's forms first-level, RECENT row, injury/illness entry points, drink presets; Log header counts today; entry sheet; "+ LOG". |
+| 4 | `136e9b9` | `FTCard` Hero / Supporting with neutral titles; `FTGlanceStrip` on Training › Load, Health › Cardio and Recovery; Load hero first with the timeframe on it; CTL + ATL on one chart with a legend. |
+| 5 | `70fcd91` | Training › Plan holds the current block, planning, planned blocks and history; User keeps a compact card; Setup's TRAINING SETUP keeps equipment and session times; program import moved into the planner; MAPS & ROUTES. |
+
+Where the build differs from the plan or the review:
+- **Recents (P3)** repeat the last three *types* (one tap to the form), not past entries with their values; SAY IT stays a
+  button that opens its form rather than an inline input.
+- **Hero cards (A3)** are set where a tab leads with a card: Training › Load, Training › Plan, Health › Cardio, Health ›
+  Recovery and the Today page. Fuel and Labs lead with a headline value, so they have no Hero card; their card titles turn
+  neutral like all others.
+- **Glance strips** are on the three long tabs named in the plan only.
+- **Recording a block run elsewhere** (the legacy `training_cycles` add) stays on CURRENT BLOCK as a tertiary action, so
+  nothing that could be recorded before is lost; planning a block is the primary path.
+- **Program import** was only in Setup (the planner had the library but not the import); it now sits in the planner's
+  first step, and the Setup-only `training_planner/{program}` route is removed.
+- **Status figure** height is 30% of the viewport, clamped to 160–280 dp, so the hero and the four tiles fit the first
+  390×844 frame at default font size; this is the main thing to confirm on a device.
+- **F14**: `MapScreen.kt` (unmounted) keeps its raw font sizes.

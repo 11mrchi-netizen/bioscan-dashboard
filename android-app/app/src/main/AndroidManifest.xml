@@ -79,12 +79,19 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@android:style/Theme.Material.Light.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- "LOG ALL" action on the supplement reminder notification. Internal
+             only (fired by our own PendingIntent). -->
+        <receiver
+            android:name=".data.NotificationActionReceiver"
+            android:exported="false" />
 
         <!-- Hands a temp camera-capture file a content:// Uri so the camera
              app (a different process) can write to it; a plain file:// Uri

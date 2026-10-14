@@ -59,6 +59,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
             if (fireTime.isAfter(now)) continue
             if (!withinLimits(rule, prefs, now, shownToday)) continue
 
+            var logAllIds: List<Long> = emptyList()
             val (title, body) = when (rule.kind) {
                 NotificationKind.SUPPLEMENT_DUE -> {
                     // Find which bucket this fire belongs to by matching the scheduled time
@@ -86,6 +87,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                         rule.conditions.skipIfLogged,
                     )
                     if (due.isEmpty()) continue
+                    logAllIds = due.map { it.id }
                     val names = due.take(3).joinToString(", ") { it.name }
                     val more = if (due.size > 3) " +${due.size - 3} more" else ""
                     "Time for your $bucket supplements" to "$names$more"
@@ -114,13 +116,21 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                 else -> continue
             }
 
-            val notification = NotificationCompat.Builder(applicationContext, rule.kind)
+            val builder = NotificationCompat.Builder(applicationContext, rule.kind)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true)
-                .build()
+                .setContentIntent(NotificationActionReceiver.contentIntent(applicationContext, rule.kind))
+            if (rule.kind == NotificationKind.SUPPLEMENT_DUE && logAllIds.isNotEmpty()) {
+                builder.addAction(
+                    0,
+                    "LOG ALL",
+                    NotificationActionReceiver.logAllIntent(applicationContext, rule.kind, logAllIds),
+                )
+            }
+            val notification = builder.build()
 
             nm.notify(rule.kind.hashCode(), notification)
             runCatching { repo.appendLog(rule.kind, NotificationOutcome.SHOWN) }

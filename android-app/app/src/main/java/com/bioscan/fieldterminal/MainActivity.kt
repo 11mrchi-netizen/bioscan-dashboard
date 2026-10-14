@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -14,12 +15,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.data.HealthConnectSyncWorker
+import com.bioscan.fieldterminal.data.NotificationActionReceiver
 import com.bioscan.fieldterminal.data.NotificationDispatchWorker
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.ZeppSyncWorker
@@ -37,8 +41,22 @@ import kotlinx.coroutines.launch
 // styled in FieldTerminalNavHost.kt and its screens). Real per-screen
 // content is Phase C onward, per mobile-app-implementation-roadmap.md.
 class MainActivity : ComponentActivity() {
+    // The notification kind the user tapped, held until FieldTerminalNavHost (only shown once signed in) has navigated
+    // to its destination and cleared it. Compose state, so a tap while the app is already open (onNewIntent) re-triggers it.
+    private var pendingNotificationKind by mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingNotificationKind = intent.getStringExtra(NotificationActionReceiver.EXTRA_KIND)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Only on a fresh launch: after rotation/process restore the same intent is redelivered and would re-navigate.
+        if (savedInstanceState == null) {
+            pendingNotificationKind = intent?.getStringExtra(NotificationActionReceiver.EXTRA_KIND)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = getSystemService(NotificationManager::class.java)
             listOf(
@@ -53,14 +71,17 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             FieldTerminalTheme {
-                AuthGate()
+                AuthGate(
+                    pendingNotificationKind = pendingNotificationKind,
+                    onNotificationHandled = { pendingNotificationKind = null },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun AuthGate() {
+private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sessionStatus by SupabaseClientProvider.client.auth.sessionStatus.collectAsState()
@@ -96,7 +117,10 @@ private fun AuthGate() {
         contentAlignment = Alignment.Center,
     ) {
         when (sessionStatus) {
-            is SessionStatus.Authenticated -> FieldTerminalNavHost()
+            is SessionStatus.Authenticated -> FieldTerminalNavHost(
+                pendingNotificationKind = pendingNotificationKind,
+                onNotificationHandled = onNotificationHandled,
+            )
             is SessionStatus.NotAuthenticated -> {
                 AmberButton(label = "SIGN IN WITH GOOGLE") {
                     scope.launch { GoogleAuthManager.signIn(context) }

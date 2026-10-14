@@ -51,8 +51,20 @@ import java.time.LocalDate
 // DAV-209 (24/9 fixes): Supplements moved in from Fuel as a second subtab --
 // SupplementsScreen() itself is reused unchanged.
 @Composable
-fun LabsTileScreen(onBack: () -> Unit, onOpenPantry: () -> Unit = {}) {
-    var tab by remember { mutableStateOf(LabsTab.Bloodwork) }
+fun LabsTileScreen(
+    onBack: () -> Unit,
+    onOpenPantry: () -> Unit = {},
+    // Set by a notification tap (supplement reminder -> SUPPLEMENTS); applied once, then cleared via the callback.
+    requestedTab: LabsTab? = null,
+    onRequestedTabConsumed: () -> Unit = {},
+) {
+    var tab by remember { mutableStateOf(requestedTab ?: LabsTab.Bloodwork) }
+    LaunchedEffect(requestedTab) {
+        if (requestedTab != null) {
+            tab = requestedTab
+            onRequestedTabConsumed()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
         TileHeader(onBack = onBack)

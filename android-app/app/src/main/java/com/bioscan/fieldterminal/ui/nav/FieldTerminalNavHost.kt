@@ -18,9 +18,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +35,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.bioscan.fieldterminal.R
+import com.bioscan.fieldterminal.domain.notifications.NotificationDestination
+import com.bioscan.fieldterminal.domain.notifications.notificationDestination
 import com.bioscan.fieldterminal.ui.screens.AgingProfileScreen
 import com.bioscan.fieldterminal.ui.screens.LogScreen
 import com.bioscan.fieldterminal.ui.screens.SessionDetailScreen
@@ -53,9 +58,28 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 @Composable
-fun FieldTerminalNavHost() {
+fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotificationHandled: () -> Unit = {}) {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
+    // Set when a notification tap should land on a specific Labs subtab; LabsTileScreen consumes it.
+    var labsRequestedTab by remember { mutableStateOf<LabsTab?>(null) }
+
+    LaunchedEffect(pendingNotificationKind) {
+        val kind = pendingNotificationKind ?: return@LaunchedEffect
+        when (notificationDestination(kind)) {
+            NotificationDestination.SUPPLEMENTS -> {
+                labsRequestedTab = LabsTab.Supplements
+                navController.navigate(TileRoute.Labs.route) { launchSingleTop = true }
+            }
+            NotificationDestination.LOG -> navController.navigate(TopLevelTab.Log.route) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+            NotificationDestination.NONE -> Unit
+        }
+        onNotificationHandled()
+    }
 
     Scaffold(
         containerColor = FT.Base,
@@ -108,7 +132,12 @@ fun FieldTerminalNavHost() {
             composable("nutrient_breakdown") { NutrientBreakdownScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Heart.route) { HeartTileScreen(onBack = { navController.popBackStack() }) }
             composable(TileRoute.Labs.route) {
-                LabsTileScreen(onBack = { navController.popBackStack() }, onOpenPantry = { navController.navigate("pantry") })
+                LabsTileScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenPantry = { navController.navigate("pantry") },
+                    requestedTab = labsRequestedTab,
+                    onRequestedTabConsumed = { labsRequestedTab = null },
+                )
             }
             composable("pantry") { PantryScreen(onBack = { navController.popBackStack() }) }
             composable(TopLevelTab.User.route) {

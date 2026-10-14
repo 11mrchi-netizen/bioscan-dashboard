@@ -182,6 +182,9 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
     }
 }
 
+// Contract A3: Hero = the one lead card of a tab (strong glass, primary title); Supporting = every other card.
+enum class FTCardEmphasis { Hero, Supporting }
+
 // Titled container matching Card.kt's exact shape/API (title bar + padded
 // content) for screens that have migrated to Futuristic Material -- Card.kt
 // itself stays legacy-amber until every one of its callers migrates (see
@@ -198,6 +201,8 @@ fun FTCard(
     methodology: String? = null,
     // A card that opens something (Aging -> the full profile): the press/focus feedback is drawn inside the card's shape.
     onClick: (() -> Unit)? = null,
+    // Contract A3: one Hero card leads a tab; every other card is Supporting.
+    emphasis: FTCardEmphasis = FTCardEmphasis.Supporting,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(FT.RadiusCard)
@@ -218,16 +223,17 @@ fun FTCard(
             // this. clip() is what actually confines any child to the shape.
             .clip(shape)
             .border(FT.BorderWidth, FT.GlassBorder, shape)
-            .background(FT.GlassFill, shape)
+            .background(if (emphasis == FTCardEmphasis.Hero) FT.GlassStrongFill else FT.GlassFill, shape)
             .then(if (onClick != null) Modifier.ftClickable(shape = shape, onClick = onClick) else Modifier),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Card titles are neutral (A3): emerald stays a state signal, so a title never reads as "optimal".
             Text(
                 text = title.uppercase(),
-                color = FT.Emerald,
+                color = if (emphasis == FTCardEmphasis.Hero) FT.TextPrimary else FT.TextSecondary,
                 style = FTType.CardTitle,
                 modifier = Modifier.weight(1f),
             )

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -85,7 +86,11 @@ import com.bioscan.fieldterminal.domain.TimePoint
 import com.bioscan.fieldterminal.ui.components.ComparisonStrip
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
 import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.FTGlanceStrip
+import com.bioscan.fieldterminal.ui.components.GlanceAnchors
+import com.bioscan.fieldterminal.ui.components.GlanceChip
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
@@ -99,7 +104,9 @@ import com.bioscan.fieldterminal.ui.components.PinnedPage
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.components.glanceAnchor
 import com.bioscan.fieldterminal.ui.components.parallel
+import com.bioscan.fieldterminal.ui.components.rememberGlanceAnchors
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.components.stateTreatment
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -200,6 +207,9 @@ fun HeartTileScreen(onBack: () -> Unit) {
         ) {
             when (tab) {
                 HeartTab.Cardio -> {
+                    // UX review P2: an index of the cards below, each chip carrying the state its card computes.
+                    val glance = rememberGlanceAnchors()
+                    FTGlanceStrip(glance, contentPadding = PaddingValues(0.dp))
                     // DAV-285: one shared timeframe for both HRV and RHR's trend
                     // charts -- they're the same kind of daily wearable stream, so
                     // a person comparing them wants the same window on both, not
@@ -222,13 +232,18 @@ fun HeartTileScreen(onBack: () -> Unit) {
                             origin = "health_connect",
                         )
                     }
-                    EvalCard("HRV", evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).toExpSpace(), "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints, comparison = hrvComparison, timeframe = vitalsTimeframe, methodology = "hrv")
+                    val hrvEval = evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).toExpSpace()
+                    EvalCard(
+                        "HRV", hrvEval, "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints, comparison = hrvComparison,
+                        timeframe = vitalsTimeframe, methodology = "hrv", emphasis = FTCardEmphasis.Hero,
+                        modifier = Modifier.glanceAnchor(glance, "hrv", GlanceChip(0, "HRV", state = hrvEval.state.toMetricState())),
+                    )
                     // v12: intraday HR from Zepp band_data. Show for the most
                     // recent day that has data; silently absent when not yet synced.
                     val todayHr = hrDay
                     if (todayHr != null) {
                         val hrPoints = todayHr.map { TimePoint(it.offsetMinutes * 60L, it.bpm.toDouble()) }
-                        FTCard(title = "DAILY HEART RATE") {
+                        FTCard(title = "DAILY HEART RATE", modifier = Modifier.glanceAnchor(glance, "hr", GlanceChip(1, "DAILY HR"))) {
                             LineChart(points = hrPoints, color = FT.DomainHeart, modifier = androidx.compose.ui.Modifier.fillMaxWidth().height(120.dp), filled = true)
                         }
                     }
@@ -246,17 +261,36 @@ fun HeartTileScreen(onBack: () -> Unit) {
                             origin = "health_connect",
                         )
                     }
-                    EvalCard("RESTING HEART RATE", evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")), "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints, comparison = rhrComparison, timeframe = vitalsTimeframe, methodology = "rhr")
+                    val rhrEval = evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr"))
+                    EvalCard(
+                        "RESTING HEART RATE", rhrEval, "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints,
+                        comparison = rhrComparison, timeframe = vitalsTimeframe, methodology = "rhr",
+                        modifier = Modifier.glanceAnchor(glance, "rhr", GlanceChip(2, "RHR", state = rhrEval.state.toMetricState())),
+                    )
                     val spo2Points = w.mapNotNull { row -> row.spo2?.let { LocalDate.parse(row.date) to it } }
-                    EvalCard("SPO2", evaluateSpo2(spo2Points), "%", directionality = Directionality.NON_DIRECTIONAL, points = spo2Points, timeframe = vitalsTimeframe)
+                    val spo2Eval = evaluateSpo2(spo2Points)
+                    EvalCard(
+                        "SPO2", spo2Eval, "%", directionality = Directionality.NON_DIRECTIONAL, points = spo2Points, timeframe = vitalsTimeframe,
+                        modifier = Modifier.glanceAnchor(glance, "spo2", GlanceChip(3, "SPO2", state = spo2Eval.state.toMetricState())),
+                    )
                     val rrPoints = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
-                    RespiratoryCard(evaluateRespiratoryAnomaly(rrPoints))
+                    val rrEval = evaluateRespiratoryAnomaly(rrPoints)
+                    RespiratoryCard(
+                        rrEval,
+                        modifier = Modifier.glanceAnchor(glance, "resp", GlanceChip(4, "RESP", headline = if (rrEval.flagged) "FLAGGED" else "NO FLAG")),
+                    )
                     val stepsPoints = w.mapNotNull { row -> row.steps?.let { LocalDate.parse(row.date) to it } }
-                    StepsCard(stepsPoints, stepsBenchmark)
+                    StepsCard(stepsPoints, stepsBenchmark, glance = glance, chipOrder = 5)
                     val sessionStarts = exerciseSessions.mapNotNull { runCatching { OffsetDateTime.parse(it.startTime) }.getOrNull() }
-                    MovementIndexCard(computeMovementIndex(stepsPoints, sessionStarts))
+                    val movement = computeMovementIndex(stepsPoints, sessionStarts)
+                    MovementIndexCard(
+                        movement,
+                        modifier = Modifier.glanceAnchor(glance, "movement", GlanceChip(6, "MOVEMENT", headline = movement.score?.let { "%.0f / 100".format(it) } ?: "BUILDING")),
+                    )
                 }
                 HeartTab.Recovery -> {
+                    val glance = rememberGlanceAnchors()
+                    FTGlanceStrip(glance, contentPadding = PaddingValues(0.dp))
                     val hoursPoints = s.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } }
                     val nights = s.mapNotNull { row ->
                         val bedtime = row.bedtime?.let { runCatching { Instant.parse(it) }.getOrNull() }
@@ -293,23 +327,38 @@ fun HeartTileScreen(onBack: () -> Unit) {
                         arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
                     )
                     }
-                    DynamicRecoveryCard(dynamicRecovery)
+                    DynamicRecoveryCard(
+                        dynamicRecovery,
+                        modifier = Modifier.glanceAnchor(glance, "recovery", GlanceChip(0, "RECOVERY", state = dynamicRecovery.state.toMetricState())),
+                    )
 
                     // 09.1 Sleep Index: a headline aggregate above the same
                     // component cards below it -- an aggregation layer, never
                     // a replacement (DAV-235's own rule).
-                    SleepIndexCard(sleepIndexResult)
-                    EvalCard("SLEEP DURATION", evaluateSleepDuration(hoursPoints, windowStart = breakStarts.start("sleep_hours")), "h", directionality = METRIC_DIRECTIONALITY.getValue("sleep_duration"), points = hoursPoints, methodology = "sleep_duration")
+                    SleepIndexCard(
+                        sleepIndexResult,
+                        modifier = Modifier.glanceAnchor(glance, "index", GlanceChip(1, "SLEEP INDEX", headline = sleepIndexResult.score?.let { "%.0f".format(it) } ?: "BUILDING")),
+                    )
+                    val durationEval = evaluateSleepDuration(hoursPoints, windowStart = breakStarts.start("sleep_hours"))
+                    EvalCard(
+                        "SLEEP DURATION", durationEval, "h", directionality = METRIC_DIRECTIONALITY.getValue("sleep_duration"), points = hoursPoints,
+                        methodology = "sleep_duration",
+                        modifier = Modifier.glanceAnchor(glance, "duration", GlanceChip(2, "DURATION", state = durationEval.state.toMetricState())),
+                    )
                     val sriEval = remember(s) { evaluateSri(nights) }
-                    SriCard(sriEval)
-                    SleepPhasesCard(s)
+                    SriCard(sriEval, modifier = Modifier.glanceAnchor(glance, "sri", GlanceChip(3, "SRI", headline = sriEval.value?.let { "%.0f".format(it) } ?: "BUILDING")))
+                    SleepPhasesCard(s, glance = glance, chipOrder = 4)
                     // 09.6 Circadian Alignment: sleep timing reuses the same
                     // SriEvaluation above (no second algorithm); meal/exercise
                     // timing reuse the meals/exercise-session data already
                     // loaded for logging and Movement Index respectively.
                     val mealTimestamps = recentMealsForTiming.mapNotNull { runCatching { OffsetDateTime.parse(it.loggedAt) }.getOrNull() }
                     val exerciseTimestamps = exerciseSessions.mapNotNull { runCatching { OffsetDateTime.parse(it.startTime) }.getOrNull() }
-                    CircadianAlignmentCard(computeCircadianAlignment(sriEval, mealTimestamps, exerciseTimestamps))
+                    val circadian = computeCircadianAlignment(sriEval, mealTimestamps, exerciseTimestamps)
+                    CircadianAlignmentCard(
+                        circadian,
+                        modifier = Modifier.glanceAnchor(glance, "circadian", GlanceChip(5, "CIRCADIAN", headline = circadian.score?.let { "%.0f".format(it) } ?: "BUILDING")),
+                    )
                 }
                 HeartTab.Wellbeing -> {
                     // DAV-101: small multiples, not one collapsed score.
@@ -539,8 +588,9 @@ internal fun EvalCard(
     timeframe: VitalsTimeframe? = null,
     methodology: String? = null,
     modifier: Modifier = Modifier,
+    emphasis: FTCardEmphasis = FTCardEmphasis.Supporting,
 ) {
-    FTCard(title = title, modifier = modifier, methodology = methodology) {
+    FTCard(title = title, modifier = modifier, methodology = methodology, emphasis = emphasis) {
         FTStatePill(eval.state.toMetricState())
         FTConfidenceChip(confidenceLevel(eval.confidence))
         comparison?.let { ComparisonStrip(it) }
@@ -597,8 +647,9 @@ private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<
 }
 
 @Composable
-internal fun DynamicRecoveryCard(result: DynamicRecoveryResult) {
-    FTCard(title = "TODAY'S RECOVERY", methodology = "dynamic_recovery") {
+internal fun DynamicRecoveryCard(result: DynamicRecoveryResult, modifier: Modifier = Modifier) {
+    // Contract A3: the lead card of Health › Recovery and of the Today page.
+    FTCard(title = "TODAY'S RECOVERY", methodology = "dynamic_recovery", emphasis = FTCardEmphasis.Hero, modifier = modifier) {
         FTStatePill(result.state.toMetricState())
         FTConfidenceChip(confidenceLevel(result.confidence))
         if (result.contributors.isEmpty()) {
@@ -623,8 +674,8 @@ internal fun DynamicRecoveryCard(result: DynamicRecoveryResult) {
 }
 
 @Composable
-private fun SleepIndexCard(result: SleepIndexResult) {
-    FTCard(title = "SLEEP INDEX", methodology = "sleep_index") {
+private fun SleepIndexCard(result: SleepIndexResult, modifier: Modifier = Modifier) {
+    FTCard(title = "SLEEP INDEX", methodology = "sleep_index", modifier = modifier) {
         FTConfidenceChip(confidenceLevel(result.confidence))
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
@@ -642,8 +693,8 @@ private fun SleepIndexCard(result: SleepIndexResult) {
 }
 
 @Composable
-private fun CircadianAlignmentCard(result: CircadianAlignmentResult) {
-    FTCard(title = "CIRCADIAN ALIGNMENT", info = "A behavioral regularity proxy, not a measured circadian phase.") {
+private fun CircadianAlignmentCard(result: CircadianAlignmentResult, modifier: Modifier = Modifier) {
+    FTCard(title = "CIRCADIAN ALIGNMENT", info = "A behavioral regularity proxy, not a measured circadian phase.", modifier = modifier) {
         FTConfidenceChip(confidenceLevel(result.confidence))
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
@@ -704,8 +755,8 @@ private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay
 }
 
 @Composable
-private fun SriCard(eval: SriEvaluation) {
-    FTCard(title = "SLEEP REGULARITY (SRI)", methodology = "sri") {
+private fun SriCard(eval: SriEvaluation, modifier: Modifier = Modifier) {
+    FTCard(title = "SLEEP REGULARITY (SRI)", methodology = "sri", modifier = modifier) {
         FTConfidenceChip(confidenceLevel(eval.confidence))
         if (eval.value != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(eval.value), unit = "/ 100"))
@@ -728,7 +779,7 @@ private fun SriCard(eval: SriEvaluation) {
 private const val SLEEP_PHASE_WINDOW_DAYS = 14L
 
 @Composable
-private fun SleepPhasesCard(nights: List<SleepAnalysisRow>) {
+private fun SleepPhasesCard(nights: List<SleepAnalysisRow>, glance: GlanceAnchors? = null, chipOrder: Int = 0) {
     val today = LocalDate.now()
     val recent = nights.filter {
         it.deepMin != null && it.remMin != null && it.lightMin != null &&
@@ -741,7 +792,8 @@ private fun SleepPhasesCard(nights: List<SleepAnalysisRow>) {
     val avgLight = recent.map { it.lightMin!! }.average()
     val avgTotal = (avgDeep + avgRem + avgLight).takeIf { it > 0 } ?: 1.0
 
-    FTCard(title = "SLEEP PHASES", methodology = "sleep_stages") {
+    // Anchored here, after the early return, so the glance strip never points at a card that is not shown.
+    FTCard(title = "SLEEP PHASES", methodology = "sleep_stages", modifier = Modifier.glanceAnchor(glance, "phases", GlanceChip(chipOrder, "PHASES"))) {
         FTSegmentBar(
             listOf(
                 FTSegment("Deep", avgDeep, FT.Category.Sleep.c700),
@@ -781,8 +833,8 @@ private fun PhaseRow(label: String, minutes: Double, totalMinutes: Double, dotCo
 private const val STEPS_WINDOW_DAYS = 15L
 
 @Composable
-private fun MovementIndexCard(result: MovementIndexResult) {
-    FTCard(title = "MOVEMENT INDEX") {
+private fun MovementIndexCard(result: MovementIndexResult, modifier: Modifier = Modifier) {
+    FTCard(title = "MOVEMENT INDEX", modifier = modifier) {
         FTConfidenceChip(confidenceLevel(result.confidence))
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100"))
@@ -807,7 +859,7 @@ private fun MovementIndexCard(result: MovementIndexResult) {
 }
 
 @Composable
-private fun StepsCard(points: List<Pair<LocalDate, Double>>, benchmarkArtifacts: List<BenchmarkArtifact>) {
+private fun StepsCard(points: List<Pair<LocalDate, Double>>, benchmarkArtifacts: List<BenchmarkArtifact>, glance: GlanceAnchors? = null, chipOrder: Int = 0) {
     val today = LocalDate.now()
     val recent = points.filter { ChronoUnit.DAYS.between(it.first, today) <= STEPS_WINDOW_DAYS }
     if (recent.size < 2) return
@@ -825,7 +877,8 @@ private fun StepsCard(points: List<Pair<LocalDate, Double>>, benchmarkArtifacts:
         artifacts = benchmarkArtifacts,
     )
 
-    FTCard(title = "STEPS") {
+    // Anchored after the early return, like SLEEP PHASES.
+    FTCard(title = "STEPS", modifier = Modifier.glanceAnchor(glance, "steps", GlanceChip(chipOrder, "STEPS", headline = "${avg.toInt()} / DAY"))) {
         FTMetricValue(DisplayValue(primary = "${avg.toInt()}", unit = "AVG/DAY", secondary = "last 15 days"))
         // DAV-196: first real population artifact (Tudor-Locke & Bassett's
         // steps/day categories) -- no personal-history comparison wired for
@@ -836,8 +889,8 @@ private fun StepsCard(points: List<Pair<LocalDate, Double>>, benchmarkArtifacts:
 }
 
 @Composable
-private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation) {
-    FTCard(title = "RESPIRATORY RATE", methodology = "respiratory_rate_sleep") {
+private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation, modifier: Modifier = Modifier) {
+    FTCard(title = "RESPIRATORY RATE", methodology = "respiratory_rate_sleep", modifier = modifier) {
         FTConfidenceChip(confidenceLevel(eval.confidence))
         eval.baseline?.let { FTMetricRow("14-night baseline", "%.1f breaths/min".format(it)) }
         Text(

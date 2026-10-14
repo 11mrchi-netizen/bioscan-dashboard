@@ -7,17 +7,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -42,7 +45,15 @@ private val INSPECT_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern
 // `highlightLast` draws a permanent state-colored dot on the series' latest
 // point (BodyConsole.kt's "engine pin" two-circle motif, at chart scale) so
 // the most recent reading reads at a glance, without needing to tap first.
-data class TrendSeries(val points: List<Pair<LocalDate, Double>>, val color: Color, val label: String? = null, val highlightLast: Color? = null)
+// `dashed` (UX review P2): a second series in the same hue is told apart by pattern as well as lightness, so the
+// difference never rests on colour alone.
+data class TrendSeries(
+    val points: List<Pair<LocalDate, Double>>,
+    val color: Color,
+    val label: String? = null,
+    val highlightLast: Color? = null,
+    val dashed: Boolean = false,
+)
 
 private fun defaultTrendFormat(v: Double): String = if (kotlin.math.abs(v) >= 100) "%.0f".format(v) else "%.1f".format(v)
 
@@ -76,6 +87,8 @@ fun DateTrendLine(
     // Chart frame: the unit every value on this chart is in, shown as a header
     // so a trend is never an unlabeled squiggle (contract section 10).
     unit: String? = null,
+    // A key under the chart (line sample + label per labelled series), for charts whose series a reader must tell apart.
+    legend: Boolean = false,
 ) {
     val sortedSeries = series.map { it.copy(points = it.points.sortedBy { p -> p.first }) }.filter { it.points.size >= 2 }
     if (sortedSeries.isEmpty()) return
@@ -141,7 +154,16 @@ fun DateTrendLine(
                         if (i == 0) moveTo(x, y) else lineTo(x, y)
                     }
                 }
-                drawPath(line, color = s.color, style = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                drawPath(
+                    line,
+                    color = s.color,
+                    style = Stroke(
+                        width = 4f,
+                        cap = if (s.dashed) StrokeCap.Butt else StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                        pathEffect = if (s.dashed) PathEffect.dashPathEffect(floatArrayOf(14f, 9f)) else null,
+                    ),
+                )
 
                 s.highlightLast?.let { highlight ->
                     val (lastDay, lastValue) = s.points.last()
@@ -168,6 +190,24 @@ fun DateTrendLine(
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(allPoints.minOf { it.first }.format(TREND_DATE_FORMAT), style = FTType.MonoCaption, color = FT.TextSecondary)
             Text(allPoints.maxOf { it.first }.format(TREND_DATE_FORMAT), style = FTType.MonoCaption, color = FT.TextSecondary)
+        }
+        if (legend) {
+            Row(modifier = Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                sortedSeries.filter { it.label != null }.forEach { s ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Canvas(modifier = Modifier.width(22.dp).height(8.dp)) {
+                            drawLine(
+                                color = s.color,
+                                start = Offset(0f, size.height / 2f),
+                                end = Offset(size.width, size.height / 2f),
+                                strokeWidth = 4f,
+                                pathEffect = if (s.dashed) PathEffect.dashPathEffect(floatArrayOf(14f, 9f)) else null,
+                            )
+                        }
+                        Text(s.label!!, style = FTType.MonoCaption, color = FT.TextSecondary)
+                    }
+                }
+            }
         }
     }
 }

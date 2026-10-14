@@ -68,17 +68,24 @@ import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.ui.components.BandedGauge
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
 import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.FTGlanceStrip
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.GaugeBand
+import com.bioscan.fieldterminal.ui.components.GlanceAnchors
+import com.bioscan.fieldterminal.ui.components.GlanceChip
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.PinnedPage
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
+import com.bioscan.fieldterminal.ui.components.TrendSeries
 import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.components.glanceAnchor
 import com.bioscan.fieldterminal.ui.components.parallel
+import com.bioscan.fieldterminal.ui.components.rememberGlanceAnchors
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.nav.TrainingTab
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -143,16 +150,12 @@ fun TrainingTileScreen(
 
         when (tab) {
             TrainingTab.Load -> {
-                SegmentedToggle(
-                    options = PerformanceTimeframe.entries,
-                    selected = timeframe,
-                    labelOf = { it.label },
-                    onSelect = { timeframe = it },
-                    accentColor = FT.DomainTraining,
-                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
-                )
-                TrainingLoadSection(timeframe)
-                TrainingScreen(timeframe, onOpenSessionDetail, onOpenRunning, onOpenStrength)
+                // UX review P2 / F10: a glance strip indexes the cards below; TRAINING LOAD leads (IA contract §5) with
+                // the timeframe toggle on the card whose charts it controls.
+                val glance = rememberGlanceAnchors()
+                FTGlanceStrip(glance)
+                TrainingLoadSection(timeframe, onTimeframeChange = { timeframe = it }, glance = glance)
+                TrainingScreen(timeframe, onOpenSessionDetail, onOpenRunning, onOpenStrength, glance = glance)
             }
             TrainingTab.Plan -> com.bioscan.fieldterminal.ui.screens.training.TrainingPlanTab(onOpenPlanner)
             TrainingTab.Injury -> InjuryTab()
@@ -281,10 +284,10 @@ private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
 }
 
 @Composable
-internal fun TrainingReadinessCard(result: TrainingReadinessResult) {
+internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Modifier = Modifier) {
     // UX review P6: "READY FOR" (was "TODAY'S READINESS"): readiness per kind of session, built on Today's Recovery; one name
     // for each of the three "how am I today" states (CONDITION on Status, TODAY'S RECOVERY, READY FOR).
-    FTCard(title = "READY FOR", methodology = "dynamic_recovery") {
+    FTCard(title = "READY FOR", methodology = "dynamic_recovery", modifier = modifier) {
         FTStatePill(result.generalState.toMetricState())
         FTConfidenceChip(confidenceLevel(result.confidence))
         result.demandRelative.forEach { (tier, state) ->
@@ -306,7 +309,7 @@ internal fun TrainingReadinessCard(result: TrainingReadinessResult) {
 }
 
 @Composable
-private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
+private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChange: (PerformanceTimeframe) -> Unit, glance: GlanceAnchors? = null) {
     var sessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
@@ -401,18 +404,39 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
             )
             Triple(sessionLoads, trainingLoadEval, recovery)
         }
-        TrainingReadinessCard(computeTrainingReadiness(recovery))
-
-        TrainingLoadCard(trainingLoadEval, resolveTier(MetricCategory.TrainingLoad, activeCycle), trainingLoadSeries(sessionLoads), timeframe)
+        TrainingLoadCard(
+            trainingLoadEval,
+            resolveTier(MetricCategory.TrainingLoad, activeCycle),
+            trainingLoadSeries(sessionLoads),
+            timeframe,
+            onTimeframeChange = onTimeframeChange,
+            modifier = Modifier.glanceAnchor(
+                glance, "load",
+                GlanceChip(order = 0, label = "LOAD", state = trainingLoadEval.state.toMetricState(), headline = trainingLoadEval.tsbBand?.uppercase()),
+            ),
+        )
+        val readiness = computeTrainingReadiness(recovery)
+        TrainingReadinessCard(
+            readiness,
+            modifier = Modifier.glanceAnchor(glance, "ready", GlanceChip(order = 1, label = "READY FOR", state = readiness.generalState.toMetricState())),
+        )
     }
 }
 
 @Composable
-internal fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTier?, series: List<TrainingLoadPoint>, timeframe: PerformanceTimeframe) {
+internal fun TrainingLoadCard(
+    eval: TrainingLoadEvaluation,
+    tier: ExpectationTier?,
+    series: List<TrainingLoadPoint>,
+    timeframe: PerformanceTimeframe,
+    onTimeframeChange: ((PerformanceTimeframe) -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
     val cutoff = LocalDate.now().minusMonths(timeframe.months)
     val visible = series.filter { it.date >= cutoff }
 
-    FTCard(title = "TRAINING LOAD", methodology = "training_load") {
+    // Contract A3: the Load tab's lead card.
+    FTCard(title = "TRAINING LOAD", methodology = "training_load", emphasis = FTCardEmphasis.Hero, modifier = modifier) {
         // One banded gauge on the TSB axis replaces the old State pill and
         // "TSB band" row -- the band name IS the state, and the gauge shows
         // where inside the band you sit. Building/NoData has no TSB yet, so
@@ -446,9 +470,33 @@ internal fun TrainingLoadCard(eval: TrainingLoadEvaluation, tier: ExpectationTie
                 eval.atl?.let { LoadLevel("ATL · FATIGUE", "%.1f".format(it), "ATL — fatigue", LOAD_HELP_ATL, Modifier.weight(1f)) }
             }
         }
-        // Trend lines: the numbers live above, so these carry only the history.
-        eval.ctl?.let { LoadMetricBlock("CTL trend", visible.map { p -> p.date to p.ctl }, FT.Category.Activity.c500) }
-        eval.atl?.let { LoadMetricBlock("ATL trend", visible.map { p -> p.date to p.atl }, FT.Category.Activity.c500) }
+        // The timeframe sits on the charts it controls (UX review P2; it used to float above the whole tab).
+        if (onTimeframeChange != null && (eval.ctl != null || eval.tsb != null)) {
+            SegmentedToggle(
+                options = PerformanceTimeframe.entries,
+                selected = timeframe,
+                labelOf = { it.label },
+                onSelect = onTimeframeChange,
+                accentColor = FT.DomainTraining,
+            )
+        }
+        // Trend lines: the numbers live above, so these carry only the history. Fitness and fatigue share one chart (same
+        // unit, same axis) and are told apart by lightness, dash and a legend (UX review F10: two single-line charts read
+        // as the same shape twice).
+        if (eval.ctl != null && eval.atl != null && visible.size >= 2) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Fitness and fatigue", style = FTType.Body, color = FT.TextSecondary)
+                DateTrendLine(
+                    series = listOf(
+                        TrendSeries(visible.map { p -> p.date to p.ctl }, FT.Category.Activity.c500, label = "CTL · FITNESS"),
+                        TrendSeries(visible.map { p -> p.date to p.atl }, FT.Category.Activity.c300, label = "ATL · FATIGUE", dashed = true),
+                    ),
+                    valueFormat = { v -> "%.1f".format(v) },
+                    unit = "training load (AU)",
+                    legend = true,
+                )
+            }
+        }
         eval.tsb?.let {
             LoadMetricBlock("TSB trend", visible.map { p -> p.date to p.tsb }, FT.Category.Activity.c500, helpTitle = "TSB — form", helpBody = LOAD_HELP_TSB, refLow = TSB_LOADED_BELOW, refHigh = TSB_FRESHENED_FROM, signed = true)
         }

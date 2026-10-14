@@ -47,8 +47,11 @@ import com.bioscan.fieldterminal.ui.components.ComparisonStrip
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
+import com.bioscan.fieldterminal.ui.components.GlanceAnchors
+import com.bioscan.fieldterminal.ui.components.GlanceChip
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.glanceAnchor
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -68,6 +71,8 @@ fun TrainingScreen(
     onOpenSessionDetail: (Long) -> Unit = {},
     onOpenRunning: () -> Unit = {},
     onOpenStrength: () -> Unit = {},
+    // The Load tab's glance strip (UX review P2); each card below registers its chip.
+    glance: GlanceAnchors? = null,
 ) {
     var overview by remember { mutableStateOf<TrainingOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -102,7 +107,7 @@ fun TrainingScreen(
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
         }
-        else -> TrainingContent(overview!!, timeframe, onOpenSessionDetail, onMarkTrail, onOpenRunning, onOpenStrength)
+        else -> TrainingContent(overview!!, timeframe, onOpenSessionDetail, onMarkTrail, onOpenRunning, onOpenStrength, glance)
     }
 }
 
@@ -114,7 +119,9 @@ private fun TrainingContent(
     onMarkTrail: (List<Long>) -> Unit,
     onOpenRunning: () -> Unit,
     onOpenStrength: () -> Unit,
+    glance: GlanceAnchors?,
 ) {
+    val today = LocalDate.now()
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -123,9 +130,24 @@ private fun TrainingContent(
         // (previously three separate top-level cards) per direct user
         // request -- both are running-related, and neither is per-session so
         // they read fine as sub-sections rather than their own cards.
-        RunningCard(overview, timeframe, onMarkTrail, onOpenRunning)
+        RunningCard(
+            overview, timeframe, onMarkTrail, onOpenRunning,
+            modifier = Modifier.glanceAnchor(
+                glance, "running",
+                GlanceChip(
+                    order = 2, label = "RUNNING",
+                    headline = if (overview.hasAnyRunning) "%.1f KM · 7D".format(sumDistanceKmSince(overview.runningSessions, today, 7)) else "NONE YET",
+                ),
+            ),
+        )
 
-        FTCard(title = "STRENGTH") {
+        FTCard(
+            title = "STRENGTH",
+            modifier = Modifier.glanceAnchor(
+                glance, "strength",
+                GlanceChip(order = 3, label = "STRENGTH", headline = if (overview.hasAnyStrength) "${overview.strengthSessionsThisWeek} THIS WEEK" else "NONE YET"),
+            ),
+        ) {
             if (overview.hasAnyStrength) {
                 FTMetricValue(
                     DisplayValue(
@@ -150,7 +172,10 @@ private fun TrainingContent(
             }
         }
 
-        SessionListCard(overview.recentSessions, onOpenSessionDetail)
+        SessionListCard(
+            overview.recentSessions, onOpenSessionDetail,
+            modifier = Modifier.glanceAnchor(glance, "sessions", GlanceChip(order = 4, label = "SESSIONS", headline = "${overview.recentSessions.take(20).size}")),
+        )
     }
 }
 
@@ -159,9 +184,9 @@ private fun TrainingContent(
 // recentSessions fetch those cards already get (no new query) and the same
 // session_detail/{id} route the Log tab's EntryRow already opens.
 @Composable
-private fun SessionListCard(sessions: List<ExerciseSessionRow>, onOpenSessionDetail: (Long) -> Unit) {
+private fun SessionListCard(sessions: List<ExerciseSessionRow>, onOpenSessionDetail: (Long) -> Unit, modifier: Modifier = Modifier) {
     if (sessions.isEmpty()) return
-    FTCard(title = "ALL SESSIONS") {
+    FTCard(title = "ALL SESSIONS", modifier = modifier) {
         sessions.take(20).forEach { session -> SessionRow(session, onClick = { onOpenSessionDetail(session.id) }) }
     }
 }
@@ -203,11 +228,11 @@ private fun SessionRow(session: ExerciseSessionRow, onClick: () -> Unit) {
 // No volume bar: a fixed km ceiling was arbitrary at any period, so the hero
 // value stands alone until a real personal baseline backs a comparison.
 @Composable
-private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimeframe, onMarkTrail: (List<Long>) -> Unit, onOpenRunning: () -> Unit) {
+private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimeframe, onMarkTrail: (List<Long>) -> Unit, onOpenRunning: () -> Unit, modifier: Modifier = Modifier) {
     var period by remember { mutableStateOf(RunningPeriod.Week) }
     val today = LocalDate.now()
 
-    FTCard(title = "RUNNING") {
+    FTCard(title = "RUNNING", modifier = modifier) {
         if (!overview.hasAnyRunning) {
             Text("No running sessions logged yet.", style = FTType.Body, color = FT.TextSecondary)
         } else {

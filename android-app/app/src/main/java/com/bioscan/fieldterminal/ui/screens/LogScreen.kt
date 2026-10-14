@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,6 +34,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.LOG_PAGE_DAYS
 import com.bioscan.fieldterminal.data.LogFeed
@@ -63,8 +65,8 @@ import java.time.format.DateTimeFormatter
 // domain/Log.kt for what's deliberately NOT included (supplement-taken
 // confirmations have no backing table) and data/LogRepository.kt for the
 // pagination approach Step 11's roadmap text explicitly asked to be decided.
-// Tapping "+" opens AddEntrySheet; tapping an existing entry opens
-// EntryActionSheet (EDIT/DELETE), and EDIT opens EditEntrySheet (all in
+// Tapping "+ LOG" opens AddEntrySheet; tapping an existing entry opens
+// EntrySheet (the entry, then DETAIL/EDIT/DELETE), and EDIT opens EditEntrySheet (all in
 // ui/screens/AddEntrySheet.kt). Any successful save or delete bumps
 // `reloadKey` so the feed re-fetches immediately.
 @Composable
@@ -113,11 +115,14 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
         Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
             val current = feed
             val gapCount = days.count { it.hasGap }
+            // UX review P4: the header counts today (the all-time count of loaded rows said little) and keeps the gap count.
+            val today = LocalDate.now()
             ScreenHeader(
                 title = "LOG",
                 context = when {
                     error != null -> "ERROR"
-                    current != null -> "${current.entries.size} ENTRIES · ${if (gapCount == 0) "NO GAPS" else "$gapCount DAYS WITH GAPS"}"
+                    current != null -> "TODAY ${current.entries.count { it.timestamp.toLocalDate() == today }} · " +
+                        if (gapCount == 0) "NO GAPS" else "$gapCount DAY${if (gapCount == 1) "" else "S"} WITH GAPS"
                     else -> "LOADING"
                 },
             )
@@ -164,7 +169,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
                         if (visibleDays < shown.size) {
                             item(key = "older") { LoadOlderButton(onClick = { visibleDays += LOG_PAGE_DAYS }) }
                         }
-                        item(key = "end-pad") { Box(Modifier.fillMaxWidth().padding(vertical = 40.dp)) }
+                        item(key = "end-pad") { Box(Modifier.fillMaxWidth().padding(vertical = 48.dp)) }
                     }
                 }
             }
@@ -184,7 +189,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     }
 
     actionEntry?.let { entry ->
-        EntryActionSheet(
+        EntrySheet(
             entry = entry,
             onDismiss = { actionEntry = null },
             onEdit = {
@@ -229,20 +234,19 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     }
 }
 
+// UX review P4: a labelled "+ LOG" (was a bare "+", which said nothing to a screen reader). The feed's end padding keeps
+// the last row clear of it.
 @Composable
 private fun AddEntryFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
+            .defaultMinSize(minHeight = 56.dp)
             .background(FT.DomainLog, CircleShape)
-            .ftClickable(onClick = onClick, shape = CircleShape)
-            .padding(horizontal = 22.dp, vertical = 16.dp),
+            .ftClickable(onClick = onClick, shape = CircleShape, role = Role.Button, onClickLabel = "Log a new entry")
+            .padding(horizontal = 24.dp, vertical = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            "+",
-            style = FTType.MetricMedium,
-            color = FT.Base,
-        )
+        Text("+ LOG", style = FTType.ButtonLabel, color = FT.Base)
     }
 }
 

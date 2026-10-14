@@ -21,7 +21,7 @@ import java.time.OffsetDateTime
 enum class LogEntryKind(val label: String) {
     Exercise("EXERCISE"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
     Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
-    Wellness("WELL"), Supplement("SUPP"), Ostrc("OSTRC"), Masturbation("MASTURBATION"),
+    Wellness("WELL"), Supplement("SUPP"), Ostrc("CHECK-IN"), Masturbation("MASTURBATION"),
     Intercourse("INTERCOURSE"), Grip("GRIP"),
 }
 
@@ -91,6 +91,24 @@ private val SEXUAL_ACTIVITY_NOMINAL_TIME = LocalTime.of(22, 0)
 private val DRINK_NOMINAL_TIME = LocalTime.of(12, 0)
 private val WELLNESS_NOMINAL_TIME = LocalTime.of(8, 0)
 private val OSTRC_NOMINAL_TIME = LocalTime.of(8, 15)
+
+// Whether an entry's time of day is real. The date-only tables above get a nominal sort time, which the Log's entry sheet
+// must not present as when it happened (an old encounter without occurred_at still shows its nominal 21:00).
+val LogSource.hasTimeOfDay: Boolean
+    get() = this != LogSource.Sleep && this != LogSource.Hydration && this != LogSource.Wellbeing &&
+        this != LogSource.Ostrc && this != LogSource.Masturbation
+
+// The entry sheet's first line: kind, day and -- only where it is real -- the time ("FOOD · TODAY · 07:20").
+fun logEntryWhen(entry: LogEntry, today: LocalDate): String {
+    val date = entry.timestamp.toLocalDate()
+    val day = when (date) {
+        today -> "TODAY"
+        today.minusDays(1) -> "YESTERDAY"
+        else -> date.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH)).uppercase()
+    }
+    val time = if (entry.source.hasTimeOfDay) " · " + entry.timestamp.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) else ""
+    return "${entry.kind.label} · $day$time"
+}
 
 fun buildLogEntries(
     meals: List<LogMealRow>,

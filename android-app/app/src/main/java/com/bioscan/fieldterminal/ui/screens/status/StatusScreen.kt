@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,13 +32,12 @@ import kotlinx.coroutines.coroutineScope
 // navigation destination.
 //
 // UX review P1: the hub scrolls now (BodyConsole), the FUEL and LABS tiles preview today's data, and the quick-log row
-// opens the add sheet here, on the right form; a save reloads the previews so the tiles show it at once.
+// opens the add sheet here, on the right form; a save reloads the hub so the tiles show it at once.
 @Composable
 fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenToday: () -> Unit, onOpenInjury: () -> Unit = {}) {
     var overview by remember { mutableStateOf<StatusOverview?>(null) }
     var previews by remember { mutableStateOf<TodayPreviews?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var previewsAttempt by remember { mutableIntStateOf(0) }
     var addStart by remember { mutableStateOf<AddEntryStart?>(null) }
     val guard = rememberLoadGuard()
     val repo = remember { StatusRepository(SupabaseClientProvider.client) }
@@ -54,9 +52,6 @@ fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenToday: () -> Unit, onOpe
             }
         }
         isLoading = false
-    }
-    LaunchedEffect(previewsAttempt) {
-        if (previewsAttempt > 0) previews = repo.loadTodayPreviews()
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
@@ -78,7 +73,9 @@ fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenToday: () -> Unit, onOpe
     addStart?.let { start ->
         AddEntrySheet(
             onDismiss = { addStart = null },
-            onSaved = { addStart = null; previewsAttempt++ },
+            // Reload all of it: back from the quick-log form the picker can log anything, an injury included. The old
+            // values stay on screen until the new ones arrive.
+            onSaved = { addStart = null; guard.retry() },
             start = start,
         )
     }

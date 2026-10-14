@@ -9,11 +9,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -36,8 +40,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -80,23 +86,35 @@ import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
+import com.bioscan.fieldterminal.domain.AddEntryChoice
+import com.bioscan.fieldterminal.domain.AddEntryGroup
 import com.bioscan.fieldterminal.domain.AddEntryStart
+import com.bioscan.fieldterminal.domain.AddEntryTarget
+
 import com.bioscan.fieldterminal.domain.AddEntryType
 import com.bioscan.fieldterminal.domain.ethanolGrams
 import com.bioscan.fieldterminal.domain.isSupplementDueToday
 import com.bioscan.fieldterminal.domain.supplementNextDueDate
 import com.bioscan.fieldterminal.domain.FuelSubType
+import com.bioscan.fieldterminal.domain.formatRecentChoices
+import com.bioscan.fieldterminal.domain.parseRecentChoices
+import com.bioscan.fieldterminal.domain.recordRecentChoice
+import com.bioscan.fieldterminal.domain.target
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogSource
+import com.bioscan.fieldterminal.domain.logEntryWhen
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.DateTimeField
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.ui.screens.status.IllnessFormSheet
+import com.bioscan.fieldterminal.ui.screens.status.InjuryFormSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -129,9 +147,11 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
     var selectedType by remember { mutableStateOf(if (start is AddEntryStart.Fuel) AddEntryType.Fuel else null) }
     // Cleared on back, so picking FUEL again from the picker opens on FOOD as usual.
     var fuelStart by remember { mutableStateOf(start as? AddEntryStart.Fuel) }
-    // Daily-use shortcut: the type logged last time is one tap away (the picker is otherwise FAB -> grid -> type).
+    // UX review P3: the last three choices are one tap away in a RECENT row (was a single LAST button).
     val addPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("ft_ui", android.content.Context.MODE_PRIVATE)
-    val lastType = remember { addPrefs.getString("last_add_type", null)?.let { name -> AddEntryType.entries.firstOrNull { it.name == name } } }
+    var recent by remember { mutableStateOf(parseRecentChoices(addPrefs.getString("recent_add_choices", null))) }
+    // Injury and illness have their own form sheets (shared with Training › Injury); picking one swaps this sheet for it.
+    var healthForm by remember { mutableStateOf<AddEntryTarget?>(null) }
     // Analysis Layer 3 / R2: "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
     var sayIt by remember { mutableStateOf(start is AddEntryStart.SayIt) }
     var foodPrefill by remember { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
@@ -144,110 +164,121 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
     // callback even though the user hasn't actually dismissed the sheet.
     val externalActivityActive = remember { mutableStateOf(false) }
 
-    ModalBottomSheet(
-        onDismissRequest = { if (!externalActivityActive.value && !com.bioscan.fieldterminal.util.ExternalActivityGuard.active) onDismiss() },
-        sheetState = sheetState,
-        shape = FT.SheetShape,
-        containerColor = FT.Surface,
-        contentColor = FT.TextPrimary,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
-                .verticalScroll(rememberScrollState()),
+    val pick: (AddEntryChoice) -> Unit = { choice ->
+        recent = recordRecentChoice(recent, choice)
+        addPrefs.edit().putString("recent_add_choices", formatRecentChoices(recent)).apply()
+        when (val target = choice.target) {
+            is AddEntryTarget.Form -> {
+                fuelStart = target.fuel?.let { AddEntryStart.Fuel(it) }
+                selectedType = target.type
+            }
+            else -> healthForm = target
+        }
+    }
+
+    when (healthForm) {
+        AddEntryTarget.InjuryForm -> InjuryFormSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.IllnessForm -> IllnessFormSheet(onDismiss = onDismiss, onSaved = onSaved)
+        else -> ModalBottomSheet(
+            onDismissRequest = { if (!externalActivityActive.value && !com.bioscan.fieldterminal.util.ExternalActivityGuard.active) onDismiss() },
+            sheetState = sheetState,
+            shape = FT.SheetShape,
+            containerColor = FT.Surface,
+            contentColor = FT.TextPrimary,
         ) {
-            val type = selectedType
-            if (sayIt) {
-                SheetBackHeader(label = "SAY IT", onBack = { sayIt = false })
-                Spacer(Modifier.height(16.dp))
-                LogAgentForm(
-                    onSaved = onSaved,
-                    onFoodHandoff = { text, at ->
-                        foodPrefill = text to at
-                        sayIt = false
-                        selectedType = AddEntryType.Fuel
-                    },
-                )
-            } else if (type == null) {
-                Text("LOG NEW ENTRY", style = sheetHeaderTitleStyle, color = FT.DomainLog)
-                Spacer(Modifier.height(16.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(FT.BorderWidth, FT.DomainLog, RoundedCornerShape(FT.RadiusModule))
-                        .ftClickable(shape = RoundedCornerShape(FT.RadiusModule)) { sayIt = true }
-                        .padding(vertical = 18.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("SAY IT", style = sheetActionLabelStyle, color = FT.DomainLog)
-                }
-                Spacer(Modifier.height(10.dp))
-                lastType?.let { last ->
-                    FTButton(label = "LAST: ${last.label}") { selectedType = last }
-                    Spacer(Modifier.height(10.dp))
-                }
-                TypePickerGrid(onSelect = { picked ->
-                    addPrefs.edit().putString("last_add_type", picked.name).apply()
-                    selectedType = picked
-                })
-            } else {
-                SheetBackHeader(label = type.label, onBack = { selectedType = null; foodPrefill = null; fuelStart = null })
-                Spacer(Modifier.height(16.dp))
-                val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
-                    saving = true
-                    saveError = null
-                    scope.launch {
-                        // A rejected write must surface here, not crash the app.
-                        try {
-                            write(repo)
-                            saving = false
-                            onSaved()
-                        } catch (e: kotlinx.coroutines.CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            saving = false
-                            saveError = e.message ?: "Save failed"
-                        }
-                    }
-                }
-                saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
-                when (type) {
-                    AddEntryType.Fuel -> FuelForm(
-                        saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill,
-                        initialSubType = fuelStart?.subType ?: FuelSubType.Food,
-                        supplementBundle = fuelStart?.supplementBundle,
-                    )
-                    AddEntryType.Encounter -> EncounterForm(
-                        saving,
-                        onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
-                            onSubmit { it.addEncounter(date = date, encounterType = et, notes = n, occurredAt = occurredAt, locationType = loc, durationMin = dur, activities = acts, myRating = rating) }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                val type = selectedType
+                if (sayIt) {
+                    SheetBackHeader(label = "SAY IT", onBack = { sayIt = false })
+                    Spacer(Modifier.height(16.dp))
+                    LogAgentForm(
+                        onSaved = onSaved,
+                        onFoodHandoff = { text, at ->
+                            foodPrefill = text to at
+                            sayIt = false
+                            selectedType = AddEntryType.Fuel
                         },
                     )
-                    AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d -> onSubmit { it.addStool(occurredAt, bt, d) } })
-                    AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so, mw, al -> onSubmit { it.addWellbeing(date, e, m, s, so, mw, al) } })
-                    AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
-                    AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
-                    AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
-                    AddEntryType.Grip -> GripForm(saving, onSave = { occurredAt, hand, kg -> onSubmit { it.addGrip(occurredAt, hand, kg) } })
+                } else if (type == null) {
+                    Text("LOG NEW ENTRY", style = sheetHeaderTitleStyle, color = FT.DomainLog)
+                    Spacer(Modifier.height(16.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(FT.BorderWidth, FT.DomainLog, RoundedCornerShape(FT.RadiusModule))
+                            .ftClickable(shape = RoundedCornerShape(FT.RadiusModule)) { sayIt = true }
+                            .padding(vertical = 18.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("SAY IT", style = sheetActionLabelStyle, color = FT.DomainLog)
+                    }
+                    Spacer(Modifier.height(18.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        if (recent.isNotEmpty()) ChoiceSection("RECENT", recent, pick)
+                        AddEntryGroup.entries.forEach { group -> ChoiceSection(group.label, AddEntryChoice.entries.filter { it.group == group }, pick) }
+                    }
+                } else {
+                    SheetBackHeader(label = type.label, onBack = { selectedType = null; foodPrefill = null; fuelStart = null })
+                    Spacer(Modifier.height(16.dp))
+                    val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
+                        saving = true
+                        saveError = null
+                        scope.launch {
+                            // A rejected write must surface here, not crash the app.
+                            try {
+                                write(repo)
+                                saving = false
+                                onSaved()
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                saving = false
+                                saveError = e.message ?: "Save failed"
+                            }
+                        }
+                    }
+                    saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
+                    when (type) {
+                        AddEntryType.Fuel -> FuelForm(
+                            saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill,
+                            initialSubType = fuelStart?.subType ?: FuelSubType.Food,
+                            supplementBundle = fuelStart?.supplementBundle,
+                        )
+                        AddEntryType.Encounter -> EncounterForm(
+                            saving,
+                            onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
+                                onSubmit { it.addEncounter(date = date, encounterType = et, notes = n, occurredAt = occurredAt, locationType = loc, durationMin = dur, activities = acts, myRating = rating) }
+                            },
+                        )
+                        AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d -> onSubmit { it.addStool(occurredAt, bt, d) } })
+                        AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so, mw, al -> onSubmit { it.addWellbeing(date, e, m, s, so, mw, al) } })
+                        AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
+                        AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
+                        AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
+                        AddEntryType.Grip -> GripForm(saving, onSave = { occurredAt, hand, kg -> onSubmit { it.addGrip(occurredAt, hand, kg) } })
+                    }
                 }
+                Spacer(Modifier.height(12.dp))
             }
-            Spacer(Modifier.height(12.dp))
         }
     }
 }
 
-// Tapping a Log entry opens this first -- EDIT (when the source has a
-// corresponding form) and DELETE, with an inline confirm step rather than a
-// second popup. Sleep has no add-entry form and no editable fields, so it
-// stays delete-only. Supplement (DAV-156) is editable now -- dose is a real
-// field, even though which supplement was taken still isn't (that's "delete
-// and re-log," not "edit"). Exercise (Phase G3) IS editable -- not its
-// Health-Connect-sourced fields, just rpe/notes via ExerciseDetailsForm.
-// Phase G4 adds a DETAIL action for Exercise entries, pushing SessionDetailScreen.
+// Tapping a Log entry opens the entry itself (UX review P4, adapted to PR #20's Log): what it is and when, its values, then
+// DETAIL / EDIT / DELETE. It used to open a bare action menu. EDIT appears when the source has a corresponding form;
+// Sleep has no add-entry form and no editable fields, so it stays delete-only. Supplement (DAV-156) is editable -- dose
+// is a real field, even though which supplement was taken still isn't (that's "delete and re-log," not "edit").
+// Exercise (Phase G3) IS editable -- not its Health-Connect-sourced fields, just rpe/notes via ExerciseDetailsForm.
+// DETAIL (Phase G4) pushes SessionDetailScreen for exercise and opens the sleep detail for sleep. DELETE asks first
+// (contract A2) and says when it failed.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EntryActionSheet(
+fun EntrySheet(
     entry: LogEntry,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
@@ -259,6 +290,7 @@ fun EntryActionSheet(
     val scope = rememberCoroutineScope()
     var confirmingDelete by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
     val editable = entry.source != LogSource.Sleep
 
     ModalBottomSheet(
@@ -269,63 +301,37 @@ fun EntryActionSheet(
         contentColor = FT.TextPrimary,
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(entry.headline, style = sheetHeaderTitleStyle, color = FT.DomainLog)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(logEntryWhen(entry, LocalDate.now()), style = FTType.LabelCaps, color = FT.TextMuted)
+                Text(entry.headline, style = sheetHeaderTitleStyle, color = FT.TextPrimary)
+                entry.detail?.takeIf { it.isNotBlank() }?.let { Text(it, style = FTType.Body, color = FT.TextSecondary) }
+            }
 
             if (!confirmingDelete) {
-                if (onViewDetail != null) {
-                    FTButton(label = "DETAIL", onClick = onViewDetail)
-                }
-                if (editable) {
-                    FTButton(label = "EDIT", onClick = onEdit)
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(FT.BorderWidth, FT.Critical, RoundedCornerShape(FT.RadiusSmall))
-                        .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { confirmingDelete = true }
-                        .padding(vertical = 14.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("DELETE", style = sheetActionLabelStyle, color = FT.Critical)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    onViewDetail?.let { FTButton(label = "DETAIL", modifier = Modifier.weight(1f), onClick = it) }
+                    if (editable) FTButton(label = "EDIT", modifier = Modifier.weight(1f), onClick = onEdit)
+                    FTButton(label = "DELETE", emphasis = FTButtonEmphasis.Destructive, modifier = Modifier.weight(1f)) {
+                        confirmingDelete = true
+                        deleteError = null
+                    }
                 }
             } else {
-                Text(
-                    "Delete this entry? This can't be undone.",
-                    style = FTType.Body,
-                    color = FT.TextSecondary,
+                FTConfirmDestructive(
+                    message = "Delete this entry? This can't be undone.",
+                    confirmLabel = "DELETE ENTRY",
+                    busy = deleting,
+                    onCancel = { confirmingDelete = false },
+                    onConfirm = {
+                        deleting = true
+                        scope.launchSafe(onError = { deleteError = describeLoadFailure(it) }, onDone = { deleting = false }) {
+                            repo.deleteEntry(entry.source, entry.id)
+                            onDeleted()
+                        }
+                    },
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { confirmingDelete = false }
-                            .padding(vertical = 14.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("CANCEL", style = sheetActionLabelStyle, color = FT.TextSecondary)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(FT.Critical, RoundedCornerShape(FT.RadiusSmall))
-                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) {
-                                if (!deleting) {
-                                    deleting = true
-                                    scope.launchSafe(onDone = { deleting = false }) {
-                                        repo.deleteEntry(entry.source, entry.id)
-                                        deleting = false
-                                        onDeleted()
-                                    }
-                                }
-                            }
-                            .padding(vertical = 14.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(if (deleting) "DELETING..." else "CONFIRM", style = sheetActionLabelStyle, color = FT.Base)
-                    }
-                }
             }
+            deleteError?.let { Text("Couldn't delete: $it", style = FTType.BodySmall, color = FT.Critical) }
             Spacer(Modifier.height(4.dp))
         }
     }
@@ -358,7 +364,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Ostrc -> repo.fetchOstrc(entry.id)
             LogSource.Masturbation -> repo.fetchSexualActivity(entry.id)
             LogSource.Supplement -> repo.fetchSupplementTaken(entry.id)
-            LogSource.Sleep -> null // no edit form; EntryActionSheet never offers EDIT for this
+            LogSource.Sleep -> null // no edit form; EntrySheet never offers EDIT for this
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -512,7 +518,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
 }
 
 // DAV-160. Read-only detail view for Sleep, opened via the same DETAIL
-// action Exercise already uses (EntryActionSheet's onViewDetail) rather than
+// action Exercise already uses (EntrySheet's onViewDetail) rather than
 // a new nav route -- a bottom sheet is proportionate for a handful of read-
 // only stats, matching every other sheet in this file. Sleep still has no
 // edit form (see LogSource's own doc comment); this only reads.
@@ -623,27 +629,47 @@ private fun SheetBackHeader(label: String, onBack: () -> Unit) {
     }
 }
 
+// UX review P3: one labelled group of add-entry choices, three per row. Labels are words a person reads (Inter, contract
+// A7); the dot is the entry's category colour, an identity mark the Log feed uses for the same kinds, never a state.
 @Composable
-private fun TypePickerGrid(onSelect: (AddEntryType) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        AddEntryType.entries.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { type ->
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-                            .ftClickable(shape = RoundedCornerShape(FT.RadiusModule)) { onSelect(type) }
-                            .padding(vertical = 18.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(type.label, style = sheetActionLabelStyle, color = FT.TextPrimary)
-                    }
-                }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+private fun ChoiceSection(label: String, choices: List<AddEntryChoice>, onPick: (AddEntryChoice) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, style = FTType.LabelCaps, color = FT.TextMuted)
+        choices.chunked(3).forEach { row ->
+            Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { choice -> ChoiceTile(choice, Modifier.weight(1f).fillMaxHeight()) { onPick(choice) } }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
+}
+
+@Composable
+private fun ChoiceTile(choice: AddEntryChoice, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(FT.RadiusModule)
+    Row(
+        modifier = modifier
+            .defaultMinSize(minHeight = 48.dp)
+            .border(FT.BorderWidth, FT.GlassBorder, shape)
+            .ftClickable(shape = shape, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(choiceColor(choice)))
+        Text(choice.label, style = FTType.ButtonLabel, color = FT.TextPrimary, maxLines = 2)
+    }
+}
+
+private fun choiceColor(choice: AddEntryChoice): Color = when (choice) {
+    AddEntryChoice.Food, AddEntryChoice.RunFuel -> FT.Category.Intake.c500
+    AddEntryChoice.Drink -> FT.Category.Intake.c300
+    AddEntryChoice.Supplements -> FT.Category.Intake.c700
+    AddEntryChoice.Wellbeing -> FT.Category.Wellbeing.c500
+    AddEntryChoice.Stool, AddEntryChoice.InjuryCheckIn, AddEntryChoice.Injury, AddEntryChoice.Illness -> FT.Category.Digestion.c500
+    AddEntryChoice.Grip -> FT.Category.Activity.c500
+    AddEntryChoice.SexualActivity, AddEntryChoice.Encounter -> FT.Category.Arousal.c500
+    AddEntryChoice.Note -> FT.TextSecondary
 }
 
 @Composable
@@ -1187,7 +1213,12 @@ private fun DrinkForm(
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateField("DATE", date, { date = it })
-        Column { FormLabel("AMOUNT (ML)"); FieldTextField(ml, { ml = it }, "e.g. 500", keyboardType = KeyboardType.Number) }
+        // UX review P3: the usual glass and bottle sizes one tap away; the field still takes any amount.
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FormLabel("AMOUNT (ML)")
+            TextChipRow(DRINK_PRESETS_ML, ml.takeIf { it in DRINK_PRESETS_ML }, perRow = 4) { ml = it ?: "" }
+            FieldTextField(ml, { ml = it }, "e.g. 500", keyboardType = KeyboardType.Number)
+        }
 
         // Unselected = water → simple hydration_daily path. Any other class
         // creates a meal_items beverage row with the DAV-181 retention factor.
@@ -1877,6 +1908,7 @@ private fun SexualActivityInstanceEditor(
     }
 }
 
+private val DRINK_PRESETS_ML = listOf("250", "330", "500", "750")
 private val OSTRC_Q1Q4_OPTIONS = listOf("0", "8", "17", "25")
 private val OSTRC_Q2Q3_OPTIONS = listOf("0", "6", "13", "19", "25")
 

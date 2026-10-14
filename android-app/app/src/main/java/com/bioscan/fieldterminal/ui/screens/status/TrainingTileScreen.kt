@@ -108,8 +108,17 @@ fun TrainingTileScreen(
     onOpenPlanner: () -> Unit = {},
     onOpenRunning: () -> Unit = {},
     onOpenStrength: () -> Unit = {},
+    // Set by a deep link (Status's injury flag -> INJURY); applied once, then cleared via the callback.
+    requestedTab: TrainingTab? = null,
+    onRequestedTabConsumed: () -> Unit = {},
 ) {
-    var tab by remember { mutableStateOf(TrainingTab.Load) }
+    var tab by remember { mutableStateOf(requestedTab ?: TrainingTab.Load) }
+    LaunchedEffect(requestedTab) {
+        if (requestedTab != null) {
+            tab = requestedTab
+            onRequestedTabConsumed()
+        }
+    }
     // 25/9 rework: one switch for the whole Load tab -- drives the CTL/ATL/TSB
     // charts and the PERFORMANCE chart (RUNNING keeps its own 7D-1Y toggle).
     var timeframe by remember { mutableStateOf(PerformanceTimeframe.ThreeMonths) }

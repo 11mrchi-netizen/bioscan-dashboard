@@ -37,6 +37,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,8 +60,11 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
 import com.bioscan.fieldterminal.data.MapRepository
 import com.bioscan.fieldterminal.data.StatusOverview
+import com.bioscan.fieldterminal.domain.FigurePoint
 import com.bioscan.fieldterminal.domain.MapEvent
 import com.bioscan.fieldterminal.domain.MetricState
+import com.bioscan.fieldterminal.domain.figurePinForBodyPart
+import com.bioscan.fieldterminal.domain.healthFlagDay
 import com.bioscan.fieldterminal.domain.parseSessionZonedDateTime
 import com.bioscan.fieldterminal.ui.nav.TileRoute
 import com.bioscan.fieldterminal.ui.components.FTStatePill
@@ -76,12 +84,18 @@ import java.time.temporal.ChronoUnit
 // legend under it spells out each zone's state in words so color is never the
 // only signal. Entirely Futuristic Material tokens/fonts.
 @Composable
-fun BodyConsole(overview: StatusOverview?, isLoading: Boolean, onOpenTile: (TileRoute) -> Unit, onOpenDailyReadiness: () -> Unit) {
+fun BodyConsole(
+    overview: StatusOverview?,
+    isLoading: Boolean,
+    onOpenTile: (TileRoute) -> Unit,
+    onOpenDailyReadiness: () -> Unit,
+    onOpenInjury: () -> Unit = {},
+) {
     Column(modifier = Modifier.fillMaxSize()) {
         // 25/9 rework: figure absorbs all leftover height; Next Up band and the
         // tile row sit at the bottom, resting on the Scaffold's bottom menu.
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            ConditionFigureField(overview, isLoading, onOpenDailyReadiness)
+            ConditionFigureField(overview, isLoading, onOpenDailyReadiness, onOpenInjury)
         }
         NextUpSection()
         SystemTileRow(overview, onOpenTile)
@@ -180,7 +194,7 @@ private val tileLabelStyle = FTType.CaptionStrong
 private val tilePreviewStyle = FTType.Label
 
 @Composable
-private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean, onOpenDailyReadiness: () -> Unit) {
+private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean, onOpenDailyReadiness: () -> Unit, onOpenInjury: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -235,7 +249,7 @@ private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean, 
                     FTStatePill(conditionState)
                 }
                 // Inset clears the hero block above and the legend/footer below.
-                BodySchematic(overview, modifier = Modifier.fillMaxSize().padding(top = 104.dp, bottom = 112.dp, start = 8.dp, end = 8.dp))
+                BodySchematic(overview, onOpenInjury, modifier = Modifier.fillMaxSize().padding(top = 104.dp, bottom = 112.dp, start = 8.dp, end = 8.dp))
                 Column(
                     modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -247,11 +261,26 @@ private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean, 
                             style = FTType.Label,
                             color = FT.TextSecondary,
                         )
+                        // UX review F1: the count opens the same place the pin does (Training › Injury).
+                        val flags = overview.openHealthFlags.takeIf { it > 0 } ?: if (overview.activeHealthEvent) 1 else 0
                         Text(
-                            text = if (overview.activeHealthEvent) "1 FLAG" else "0 FLAGS",
+                            text = if (flags == 1) "1 FLAG ›" else if (flags > 1) "$flags FLAGS ›" else "0 FLAGS",
                             style = FTType.Label,
-                            color = if (overview.activeHealthEvent) FT.Critical else FT.TextSecondary,
-                            modifier = Modifier.padding(start = 16.dp),
+                            color = if (flags > 0) FT.Critical else FT.TextSecondary,
+                            modifier = Modifier
+                                .padding(start = 16.dp)
+                                .then(
+                                    if (flags > 0) {
+                                        Modifier.clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            onClickLabel = "Open Training, Injury",
+                                            onClick = onOpenInjury,
+                                        )
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
                         )
                     }
                 }
@@ -300,11 +329,16 @@ private fun ZoneLegendCell(label: String, state: MetricState, modifier: Modifier
 // instead of every line being uniform amber. Arms and rib lines stay amber/
 // green decoration since they aren't mapped to any of the three systems.
 @Composable
-private fun BodySchematic(overview: StatusOverview, modifier: Modifier = Modifier) {
+private fun BodySchematic(overview: StatusOverview, onOpenInjury: () -> Unit, modifier: Modifier = Modifier) {
     val headColor = metricStateColor(overview.recoveryState)
     val chestColor = metricStateColor(overview.cardioState)
     val legColor = metricStateColor(overview.trainingState)
     val armColor = FT.TextMuted
+    // UX review F1: the pin sits on the injured region and names it (domain/HealthFlag.kt); an illness has no region, so
+    // it is shown by the flag count under the figure only.
+    val flag = overview.healthFlag?.takeIf { it.isInjury }
+    val pin = flag?.let { figurePinForBodyPart(it.label) }
+    val flagDay = flag?.let { healthFlagDay(it, java.time.LocalDate.now()) }
 
     // 25/9 rework: the figure fills whatever height the layout leaves it, so
     // scale (dp per viewBox unit) comes from the tighter of width/height.
@@ -351,12 +385,17 @@ private fun BodySchematic(overview: StatusOverview, modifier: Modifier = Modifie
             drawCircle(chestColor, radius = 9f * s, center = p(130f, 78f), style = Stroke(1.8f * s))
             drawLine(chestColor.copy(alpha = 0.7f), p(120f, 78f), p(58f, 78f), 1.4f * s)
 
-            // Health-event pin -- only drawn when something is actually active
-            if (overview.activeHealthEvent) {
-                drawCircle(FT.Critical.copy(alpha = 0.18f), radius = 13f * s, center = p(150f, 146f))
-                drawCircle(FT.Critical, radius = 13f * s, center = p(150f, 146f), style = Stroke(2f * s))
-                drawCircle(FT.Critical, radius = 4.4f * s, center = p(150f, 146f))
-                drawLine(FT.Critical, p(164f, 146f), p(204f, 146f), 1.4f * s)
+            // Injury pin -- only drawn when an injury is actually open, on its region, with a leader to its label.
+            if (pin != null) {
+                val at = pin.point
+                drawCircle(FT.Critical.copy(alpha = 0.18f), radius = 13f * s, center = p(at.x, at.y))
+                drawCircle(FT.Critical, radius = 13f * s, center = p(at.x, at.y), style = Stroke(2f * s))
+                drawCircle(FT.Critical, radius = 4.4f * s, center = p(at.x, at.y))
+                if (flagLabelsLeft(at)) {
+                    drawLine(FT.Critical, p(at.x - 14f, at.y), p(58f, at.y), 1.4f * s)
+                } else {
+                    drawLine(FT.Critical, p(at.x + 14f, at.y), p(204f, at.y), 1.4f * s)
+                }
             }
         }
 
@@ -372,17 +411,36 @@ private fun BodySchematic(overview: StatusOverview, modifier: Modifier = Modifie
             Text("RHR " + (overview.latestRhr?.let { "%.0f".format(it) } ?: "—"), style = smallValue, color = FT.TextPrimary)
         }
 
-        if (overview.activeHealthEvent) {
-            LabelAt(x = 208f, y = 135f, scale = scale, align = Alignment.TopStart) {
-                Text("FLAGGED", style = smallLabel, color = FT.Critical)
-            }
-            LabelAt(x = 208f, y = 161f, scale = scale, align = Alignment.TopStart) {
-                Text("SEE HEALTH", style = smallValue, color = FT.TextPrimary)
+        if (pin != null && flag != null) {
+            val at = pin.point
+            val left = flagLabelsLeft(at)
+            val description = "Open injury: " + flag.label + (flagDay?.let { ", day $it" } ?: "") + ". Opens Training, Injury."
+            // One tap target for both lines (padded toward the 48dp minimum), opening Training › Injury.
+            LabelAt(x = if (left) 58f else 202f, y = at.y - 17f, scale = scale, align = if (left) Alignment.TopEnd else Alignment.TopStart) {
+                Column(
+                    modifier = Modifier
+                        .semantics(mergeDescendants = true) { contentDescription = description }
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpenInjury)
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                    horizontalAlignment = if (left) Alignment.End else Alignment.Start,
+                ) {
+                    Text(pin.label, style = smallLabel, color = FT.Critical, maxLines = 1)
+                    Text(
+                        (flagDay?.let { "DAY $it " } ?: "") + "›",
+                        style = smallValue,
+                        color = FT.TextPrimary,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
     }
 }
+
+// Labels go on the pin's side, except for left-side pins level with the cardio labels (HRV/RHR sit on the left down to
+// y ~100; the flag label starts 17 units above its pin, so only pins below y 112 have room there).
+private fun flagLabelsLeft(at: FigurePoint): Boolean = at.x < 130f && at.y > 112f
 
 private val smallLabel = FTType.Label
 private val smallValue = FTType.Label
@@ -407,51 +465,96 @@ private fun LabelAt(x: Float, y: Float, scale: Float, align: Alignment, content:
 }
 
 // DAV-69: real Calendar data, same silent-authorize + fetchUpcomingEvents()
-// path MapScreen.kt already uses. Deliberately never launches the OAuth
-// consent screen from this passive Status band -- if scopes aren't already
-// granted, authorize() reports a resolution and this just shows a hint to
-// visit Map (which does prompt), rather than a Status-tab surprise dialog.
+// path MapScreen.kt used. Loading stays silent: if Calendar access isn't
+// granted yet, the row says so and a TAP asks for it (UX review F1: with the
+// Map tab gone there was nowhere left to grant it). An explicit tap is the
+// one place a consent dialog is expected, so the passive load never opens it.
 private sealed interface NextUpState {
     data object Loading : NextUpState
     data class Found(val event: MapEvent) : NextUpState
     data object None : NextUpState
-    data object NeedsMapConsent : NextUpState
+    data class NeedsConsent(val pendingIntent: android.app.PendingIntent) : NextUpState
     data class Error(val message: String) : NextUpState
 }
+
+private suspend fun loadNextUp(token: String): NextUpState =
+    MapRepository(token).fetchUpcomingEvents().firstOrNull()?.let { NextUpState.Found(it) } ?: NextUpState.None
 
 @Composable
 private fun NextUpSection(modifier: Modifier = Modifier) {
     val activity = LocalContext.current as Activity
+    val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<NextUpState>(NextUpState.Loading) }
+    var attempt by remember { mutableStateOf(0) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(attempt) {
+        state = NextUpState.Loading
         state = try {
             val authResult = GoogleAuthorizationManager.authorize(activity)
             val token = authResult.accessToken
+            val pendingIntent = authResult.pendingIntent
             when {
-                authResult.hasResolution() -> NextUpState.NeedsMapConsent
+                authResult.hasResolution() && pendingIntent != null -> NextUpState.NeedsConsent(pendingIntent)
                 token == null -> NextUpState.Error("Could not get a Google access token.")
-                else -> MapRepository(token).fetchUpcomingEvents().firstOrNull()
-                    ?.let { NextUpState.Found(it) } ?: NextUpState.None
+                else -> loadNextUp(token)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             NextUpState.Error(e.message ?: "Couldn't load calendar.")
         }
     }
 
+    val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        scope.launch {
+            state = try {
+                val token = GoogleAuthorizationManager.resultFromIntent(activity, result.data).accessToken
+                if (token == null) NextUpState.Error("Calendar access was not granted.") else loadNextUp(token)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                NextUpState.Error(e.message ?: "Couldn't connect Calendar.")
+            }
+        }
+    }
+
+    // Found: opens the calendar app at the event's time. NeedsConsent: asks for Calendar access. Error: retries.
+    val onTap: (() -> Unit)? = when (val s = state) {
+        is NextUpState.Found -> { { openCalendarAt(activity, s.event) } }
+        is NextUpState.NeedsConsent -> { { consentLauncher.launch(IntentSenderRequest.Builder(s.pendingIntent.intentSender).build()) } }
+        is NextUpState.Error -> { { attempt++ } }
+        else -> null
+    }
+
     // 25/9 rework: back to a single-line band; the figure above now absorbs
     // the leftover height and the tile row sits below this band.
-    // DAV-296: this used to tap through to the Map tab, focused on the
-    // found event -- dropped along with the tab (see
-    // docs/user-profile-milestone/01-canonical-contracts-audit.md section 10).
-    // Still shows the next calendar event as information; just not tappable.
-    Box(
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .background(FT.Surface)
+            .then(
+                if (onTap != null) {
+                    Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onTap,
+                    )
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(nextUpLabel(state), style = FTType.LabelCaps, color = FT.TextSecondary)
+        Text(
+            nextUpLabel(state),
+            style = FTType.LabelCaps,
+            color = if (state is NextUpState.NeedsConsent) FT.EmeraldHighlight else FT.TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (onTap != null) Text("›", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -459,8 +562,15 @@ private fun nextUpLabel(state: NextUpState): String = when (state) {
     NextUpState.Loading -> "NEXT UP — loading…"
     is NextUpState.Found -> "NEXT UP — ${state.event.title.trim().ifBlank { "Untitled event" }} · ${relativeTimeLabel(state.event)}"
     NextUpState.None -> "NEXT UP — nothing in the next 24h"
-    NextUpState.NeedsMapConsent -> "NEXT UP — connect Calendar in the Map tab"
-    is NextUpState.Error -> "NEXT UP — unavailable"
+    is NextUpState.NeedsConsent -> "NEXT UP — tap to connect Google Calendar"
+    is NextUpState.Error -> "NEXT UP — couldn't load · tap to retry"
+}
+
+// Opens the device's calendar app at the event's start time (the standard calendar time intent, no event id needed).
+private fun openCalendarAt(activity: Activity, event: MapEvent) {
+    val startMillis = runCatching { parseSessionZonedDateTime(event.startIso).toInstant().toEpochMilli() }.getOrNull() ?: return
+    val uri = android.provider.CalendarContract.CONTENT_URI.buildUpon().appendPath("time").appendPath(startMillis.toString()).build()
+    runCatching { activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri)) }
 }
 
 private fun relativeTimeLabel(event: MapEvent): String {

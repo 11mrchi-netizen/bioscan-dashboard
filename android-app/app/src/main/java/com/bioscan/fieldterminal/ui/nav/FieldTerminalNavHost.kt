@@ -67,6 +67,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     val scope = rememberCoroutineScope()
     // Set when a notification tap should land on a specific Labs subtab; LabsTileScreen consumes it.
     var labsRequestedTab by remember { mutableStateOf<LabsTab?>(null) }
+    // Same hand-off for Training's subtabs (UX review F1: the Status injury flag lands on Training › Injury).
+    var trainingRequestedTab by remember { mutableStateOf<TrainingTab?>(null) }
 
     LaunchedEffect(pendingNotificationKind) {
         val kind = pendingNotificationKind ?: return@LaunchedEffect
@@ -118,6 +120,10 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 StatusScreen(
                     onOpenTile = { tile -> navController.navigate(tile.route) },
                     onOpenDailyReadiness = { navController.navigate("daily_readiness") },
+                    onOpenInjury = {
+                        trainingRequestedTab = TrainingTab.Injury
+                        navController.navigate(TileRoute.Training.route) { launchSingleTop = true }
+                    },
                 )
             }
             composable("daily_readiness") { DailyReadinessScreen(onBack = { navController.popBackStack() }) }
@@ -133,6 +139,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     onOpenPlanner = { navController.navigate("training_planner") },
                     onOpenRunning = { navController.navigate("skill_running") },
                     onOpenStrength = { navController.navigate("skill_strength") },
+                    requestedTab = trainingRequestedTab,
+                    onRequestedTabConsumed = { trainingRequestedTab = null },
                 )
             }
             composable("training_planner") {

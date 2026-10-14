@@ -31,4 +31,8 @@ data class SleepDailyRow(
 data class HealthEventRow(
     val status: String,
     @SerialName("end_date") val endDate: String? = null,
+    // Status hub's flag label: the injured body part (injuries) or the illness name (illnesses), and when it started.
+    val part: String? = null,
+    val name: String? = null,
+    @SerialName("start_date") val startDate: String? = null,
 )

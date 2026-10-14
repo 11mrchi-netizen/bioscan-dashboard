@@ -26,7 +26,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // in ui/nav/TopLevelTab.kt) -- this is a compositional change, not a new
 // navigation destination.
 @Composable
-fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenDailyReadiness: () -> Unit) {
+fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenDailyReadiness: () -> Unit, onOpenInjury: () -> Unit = {}) {
     var overview by remember { mutableStateOf<StatusOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     val guard = rememberLoadGuard()
@@ -46,6 +46,6 @@ fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenDailyReadiness: () -> Un
     // one screen (e.g. very large system font) -- revisit if that happens.
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         if (guard.error != null && overview == null) LoadErrorCard(guard)
-        else BodyConsole(overview = overview, isLoading = isLoading, onOpenTile = onOpenTile, onOpenDailyReadiness = onOpenDailyReadiness)
+        else BodyConsole(overview = overview, isLoading = isLoading, onOpenTile = onOpenTile, onOpenDailyReadiness = onOpenDailyReadiness, onOpenInjury = onOpenInjury)
     }
 }

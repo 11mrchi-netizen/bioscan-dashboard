@@ -22,27 +22,44 @@ import com.bioscan.fieldterminal.data.model.GeneratedBlockRow
 import com.bioscan.fieldterminal.data.model.UpcomingSessionRow
 import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.parallel
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 // DAV-345. The PLAN tab: start a block, see the generated blocks and what is coming up.
+// UX review F8: a failed load shows COULDN'T LOAD + RETRY instead of reading as "nothing planned", and DELETE asks first
+// (it removes the block and every planned session in it) and says when it failed.
 @Composable
 fun TrainingPlanTab(onOpenPlanner: () -> Unit) {
     val repo = remember { TrainingProgramRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var blocks by remember { mutableStateOf<List<GeneratedBlockRow>?>(null) }
     var upcoming by remember { mutableStateOf<List<UpcomingSessionRow>>(emptyList()) }
-    var reload by remember { mutableStateOf(0) }
-    LaunchedEffect(reload) {
-        blocks = runCatching { repo.loadGeneratedBlocks() }.getOrDefault(emptyList())
-        upcoming = runCatching { repo.loadUpcoming(LocalDate.now()) }.getOrDefault(emptyList())
+    var confirmingDelete by remember { mutableStateOf<Long?>(null) }
+    var deleting by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
+    val guard = rememberLoadGuard()
+    LaunchedEffect(guard.attempt) {
+        guard.run {
+            parallel(
+                { blocks = repo.loadGeneratedBlocks() },
+                { upcoming = repo.loadUpcoming(LocalDate.now()) },
+            )
+        }
     }
     Column(Modifier.padding(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         AmberButton("PLAN A NEW BLOCK", onClick = onOpenPlanner)
+        if (guard.error != null) {
+            LoadErrorCard(guard)
+            return@Column
+        }
         FTCard(title = "UPCOMING") {
             if (upcoming.isEmpty()) Text("No planned sessions yet.", color = FT.TextSecondary, style = FTType.BodySmall)
             upcoming.forEach { s ->
@@ -57,14 +74,35 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit) {
         }
         FTCard(title = "PLANNED BLOCKS") {
             val b = blocks.orEmpty()
-            if (b.isEmpty()) Text("No generated blocks yet.", color = FT.TextSecondary, style = FTType.BodySmall)
+            if (blocks != null && b.isEmpty()) Text("No generated blocks yet.", color = FT.TextSecondary, style = FTType.BodySmall)
+            deleteError?.let { Text("Couldn't delete: $it", color = FT.Critical, style = FTType.BodySmall) }
             b.forEach { blk ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(blk.name, color = FT.TextPrimary, style = FTType.BodySmall)
-                        Text("${blk.startDate} to ${blk.endDate} · ${blk.status.uppercase()}", color = FT.TextSecondary, style = FTType.MonoCaption)
+                Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(blk.name, color = FT.TextPrimary, style = FTType.BodySmall)
+                            Text("${blk.startDate} to ${blk.endDate} · ${blk.status.uppercase()}", color = FT.TextSecondary, style = FTType.MonoCaption)
+                        }
+                        if (confirmingDelete != blk.id) {
+                            AmberButton("DELETE") { confirmingDelete = blk.id; deleteError = null }
+                        }
                     }
-                    AmberButton("DELETE") { scope.launch { runCatching { repo.deleteBlock(blk.id) }; reload++ } }
+                    if (confirmingDelete == blk.id) {
+                        Text("Delete this block and all its planned sessions? This can't be undone.", color = FT.TextSecondary, style = FTType.BodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            AmberButton("CANCEL", enabled = !deleting) { confirmingDelete = null }
+                            AmberButton(if (deleting) "DELETING…" else "CONFIRM DELETE", enabled = !deleting) {
+                                deleting = true
+                                scope.launchSafe(
+                                    onError = { e -> deleteError = describeLoadFailure(e) },
+                                    onDone = { deleting = false; confirmingDelete = null },
+                                ) {
+                                    repo.deleteBlock(blk.id)
+                                    guard.retry()
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

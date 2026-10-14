@@ -9,8 +9,10 @@ import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
 import com.bioscan.fieldterminal.data.model.SleepDailyRow
 import com.bioscan.fieldterminal.data.model.WearableDailyRow
+import com.bioscan.fieldterminal.domain.HealthFlag
 import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.ReadinessBand
+import com.bioscan.fieldterminal.domain.pickHealthFlag
 import com.bioscan.fieldterminal.domain.computeHrvReadinessSeries
 import com.bioscan.fieldterminal.domain.evaluateHrv
 import com.bioscan.fieldterminal.domain.evaluateRhr
@@ -30,6 +32,9 @@ data class StatusOverview(
     val latestRhr: Double?,
     val sleepHours: Double?,
     val activeHealthEvent: Boolean,
+    // UX review F1: how many injuries / illnesses are open, and the one the body figure pins (domain/HealthFlag.kt).
+    val openHealthFlags: Int = 0,
+    val healthFlag: HealthFlag? = null,
     // DAV-203 (24/9 fixes): per-region states for the zone-mapped body
     // figure -- chest=cardio (worst of HRV/RHR SWC evaluation, same math the
     // Health tab's Cardio subtab uses, so the figure never disagrees with
@@ -61,10 +66,10 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         val breaksD = async(Dispatchers.Default) { analysis.loadSeriesBreakStarts() }
         val loadSessionsD = async(Dispatchers.Default) { analysis.loadExerciseSessionsForTrainingLoad() }
         val injuriesD = async(Dispatchers.Default) {
-            supabase.postgrest.from("injuries").select(columns = Columns.list("status,end_date")).decodeList<HealthEventRow>()
+            supabase.postgrest.from("injuries").select(columns = Columns.list("status,end_date,part,start_date")).decodeList<HealthEventRow>()
         }
         val illnessesD = async(Dispatchers.Default) {
-            supabase.postgrest.from("illnesses").select(columns = Columns.list("status,end_date")).decodeList<HealthEventRow>()
+            supabase.postgrest.from("illnesses").select(columns = Columns.list("status,end_date,name,start_date")).decodeList<HealthEventRow>()
         }
         // Small dedicated fetch (10 days of margin, filtered to 7 by date below)
         // rather than reusing TrainingLoadSessionRow, which carries no type/source.
@@ -88,9 +93,16 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         val sleepRows = sleepD.await()
         val latestSleep = sleepRows.lastOrNull()
 
-        val activeHealthEvent = (injuriesD.await() + illnessesD.await()).any { row ->
-            isHealthEventActive(row.status, row.endDate?.let(LocalDate::parse), today)
-        }
+        fun HealthEventRow.isOpen() = isHealthEventActive(status, endDate?.let(LocalDate::parse), today)
+        fun HealthEventRow.toFlag(isInjury: Boolean) = HealthFlag(
+            label = (if (isInjury) part else name)?.takeIf { it.isNotBlank() } ?: if (isInjury) "Injury" else "Illness",
+            isInjury = isInjury,
+            since = startDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+        )
+        val openInjuries = injuriesD.await().filter { it.isOpen() }
+        val openIllnesses = illnessesD.await().filter { it.isOpen() }
+        val activeHealthEvent = openInjuries.isNotEmpty() || openIllnesses.isNotEmpty()
+        val healthFlag = pickHealthFlag(openInjuries.map { it.toFlag(true) }, openIllnesses.map { it.toFlag(false) })
 
         // DAV-203: reuse the exact same evaluations the Health/Training tabs already compute so the figure's zone colors
         // never disagree with what tapping into that tile shows.
@@ -121,6 +133,8 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
             latestRhr = wearable.lastOrNull()?.rhr,
             sleepHours = latestSleep?.hours,
             activeHealthEvent = activeHealthEvent,
+            openHealthFlags = openInjuries.size + openIllnesses.size,
+            healthFlag = healthFlag,
             cardioState = cardioState,
             trainingState = trainingState,
             recoveryState = recoveryState,

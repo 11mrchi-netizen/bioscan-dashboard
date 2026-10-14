@@ -79,7 +79,8 @@ class SkillSeriesTest {
             LoggedSet(monday, "Squat", 5, 100.0),
             LoggedSet(monday.plusDays(2), "Bench Press", 10, 50.0),
         )
-        assertEquals(2500.0, weeklyTonnageKg(sets, monday, monday.plusDays(6)).single().value, 1e-9)
+        // 5 x 100 + 5 x 100 + 10 x 50
+        assertEquals(1500.0, weeklyTonnageKg(sets, monday, monday.plusDays(6)).single().value, 1e-9)
         assertEquals(2.0, weeklyStrengthDays(sets, monday, monday.plusDays(6)).single().value, 1e-9)
         assertTrue(weeklyStrengthDays(emptyList(), monday, monday.plusDays(6)).single().count == 0)
     }

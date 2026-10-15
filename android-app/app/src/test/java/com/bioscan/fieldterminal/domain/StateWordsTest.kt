@@ -35,8 +35,9 @@ class StateWordsTest {
     @Test
     fun recoveryAndLoadWords() {
         assertEquals(StateWord(MetricState.Neutral, "MIXED SIGNALS"), recoveryStateWord(EvalState.Unstable))
-        assertEquals(StateWord(MetricState.Optimal, "ABOVE USUAL"), recoveryStateWord(EvalState.ShiftUp))
-        assertEquals(StateWord(MetricState.Warning, "BELOW USUAL"), recoveryStateWord(EvalState.ShiftDown))
+        assertEquals(StateWord(MetricState.Optimal, "ABOVE EXPECTED"), recoveryStateWord(EvalState.ShiftUp))
+        assertEquals(StateWord(MetricState.Warning, "BELOW EXPECTED"), recoveryStateWord(EvalState.ShiftDown))
+        assertEquals(StateWord(MetricState.Neutral, "AS EXPECTED"), recoveryStateWord(EvalState.Stable))
         assertEquals(StateWord(MetricState.Neutral, "LOADED"), trainingLoadStateWord(EvalState.ShiftDown, "Loaded"))
         assertEquals(StateWord(MetricState.Warning, "HEAVILY LOADED"), trainingLoadStateWord(EvalState.Unstable))
         assertEquals(StateWord(MetricState.Neutral, "RISING"), trendStateWord(EvalState.ShiftUp))

@@ -58,19 +58,6 @@ class PerfGoldenTest {
         assertEquals(one, batch)
     }
 
-    // ---------- computeHrvReadinessSeries ----------
-
-    @Test
-    fun hrvReadinessSeriesMatchesTheHandComputedZScores() {
-        val z = computeHrvReadinessSeries(listOf(50.0, 52.0, 48.0, 51.0, 49.0, null, 53.0))
-        assertNull(z[0]); assertNull(z[1]); assertNull(z[2]) // fewer than 3 prior valid days
-        assertEquals(0.61237, z[3]!!, 1e-4) // prior 50,52,48: mean 50, population sd 1.63299
-        assertEquals(-0.84515, z[4]!!, 1e-4) // prior 50,52,48,51
-        assertNull(z[5]) // the day itself is null
-        assertEquals(2.12132, z[6]!!, 1e-4) // null prior dropped: 50,52,48,51,49
-        assertEquals(0.0, computeHrvReadinessSeries(listOf(10.0, 10.0, 10.0, 10.0))[3]!!, 0.0) // sd 0 -> 0
-    }
-
     // ---------- aggregateMealsByDay ----------
 
     @Test

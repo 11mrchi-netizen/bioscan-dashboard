@@ -18,7 +18,9 @@
 // `experiment` (Phase 5, pre-registered supplement N-of-1; analysis review phase F adds the randomised designs) and
 // `intervention_response` (Intervention & Protocol Intelligence 08.6, observational baseline-vs-active for any active
 // intervention) and `intervention_its` (analysis review phase F: each intervention read once against a forecast from
-// the eight weeks before it started) results.
+// the eight weeks before it started) and `fitness_fatigue` (analysis review phase G: the personal fitness and fatigue
+// spans, adopted only when they forecast tomorrow's HRV better than 42 and 7 on held-out weeks) results; the `typicality`
+// payload carries its scorecard against logged illness.
 // The action `experiment_preview` returns the smallest detectable effect of a planned design for the signed-in user.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -28,6 +30,7 @@ import { runInterventionIts, runInterventionResponses } from "../_shared/analysi
 import { loadFrame, runRelationships } from "../_shared/analysis-core/runRelationships.ts";
 import { runEvidence } from "../_shared/analysis-core/runEvidence.ts";
 import { runExpectedBands } from "../_shared/analysis-core/runExpectedBands.ts";
+import { runFitnessFatigue } from "../_shared/analysis-core/runFitnessFatigue.ts";
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
 import { runTypicality } from "../_shared/analysis-core/runTypicality.ts";
 import { pearson, pFromR } from "../_shared/analysis-core/stats.ts";
@@ -127,7 +130,8 @@ Deno.serve(async (req) => {
       const experiments = await runExperiments(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const interventionResponses = await runInterventionResponses(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const interventionIts = await runInterventionIts(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      results.push({ ...breaks, relationships, typicality, expectedBands, evidence, experiments, interventionResponses, interventionIts });
+      const fitnessFatigue = await runFitnessFatigue(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      results.push({ ...breaks, relationships, typicality, expectedBands, evidence, experiments, interventionResponses, interventionIts, fitnessFatigue });
     }
     return json({ coreVersion: CORE_VERSION, results }, 200);
   }

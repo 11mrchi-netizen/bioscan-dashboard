@@ -84,7 +84,6 @@ import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.metricStateColor
 import com.bioscan.fieldterminal.ui.components.metricStateLabel
-import com.bioscan.fieldterminal.ui.components.readinessState
 import com.bioscan.fieldterminal.ui.nav.TileRoute
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -98,9 +97,9 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 // The Status hub: a body-centered composition (design/FIELD_TERMINAL_IA_CONTRACT.md
-// section 4). Real data for readiness/HRV/RHR/sleep/health-flag. The hero is
-// the HRV-vs-baseline readiness band (categorical on purpose: no composite
-// 0-100 score exists or is invented), paired with a state pill; the figure's
+// section 4). Real data for HRV/RHR/sleep/health-flag. The hero is this
+// morning's HRV against the band expected for it (analysis review phase C; no
+// composite 0-100 score exists or is invented), paired with a state pill; the figure's
 // head/chest/legs tint by recovery/cardio/training-load state, and the zone
 // legend under it spells out each zone's state in words so color is never the
 // only signal. Entirely Futuristic Material tokens/fonts.
@@ -338,18 +337,16 @@ private fun ConditionField(overview: StatusOverview?, isLoading: Boolean, figure
     }
 }
 
-// UX review P1 / P6: the hero says what it is (HRV against your recent baseline), how fresh the reading is (contract A5),
-// and where a tap goes (TODAY ›) -- it used to be a hidden tap with no basis or date.
-// Analysis review phase C: when the expected band exists and this morning has a reading, the hero states it against the
-// band (value, words, size); otherwise it falls back to the HRV-against-baseline readiness band as before.
+// UX review P1 / P6: the hero says what it is, how fresh the reading is (contract A5), and where a tap goes (TODAY ›).
+// Analysis review phase C: this morning's HRV against the band expected for it (value, words, size). Phase G retired the
+// fallback that judged HRV against a 7-day z-score (LOW / REDUCED / NORMAL / PRIMED): while the band builds, the hero
+// shows the reading and how many mornings the band still needs, without a verdict.
 @Composable
 private fun ConditionHero(overview: StatusOverview, onOpenToday: () -> Unit) {
     overview.hrvReadout?.let { readout ->
         BandHero(overview, readout, onOpenToday)
         return
     }
-    val readiness = overview.readiness
-    val conditionState = readinessState(readiness.label)
     val freshness = freshnessLine(
         readingDate = overview.hrvReadingDate,
         source = "WEARABLE",
@@ -357,6 +354,12 @@ private fun ConditionHero(overview: StatusOverview, onOpenToday: () -> Unit) {
         today = LocalDate.now(),
         staleAfterDays = STALE_AFTER_DAYS,
     )
+    val progress = overview.hrvBandProgress
+    val building = when {
+        progress == null -> "THE EXPECTED BAND APPEARS AFTER THE FIRST NIGHTLY ANALYSIS"
+        progress.second > progress.first -> "THE EXPECTED BAND NEEDS ${progress.second - progress.first} MORE MORNINGS"
+        else -> "NO HRV READING THIS MORNING YET"
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -365,7 +368,7 @@ private fun ConditionHero(overview: StatusOverview, onOpenToday: () -> Unit) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "CONDITION · HRV VS BASELINE",
+                "THIS MORNING · HRV",
                 style = FTType.LabelCaps,
                 color = FT.TextMuted,
                 maxLines = 1,
@@ -376,21 +379,14 @@ private fun ConditionHero(overview: StatusOverview, onOpenToday: () -> Unit) {
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = readiness.label.display,
+                text = overview.latestHrv?.let { "%.0f MS".format(it) } ?: "—",
                 style = FTType.DisplayMetric,
-                // Neutral/Building/Unavailable stay unaccented: only a
-                // real favorable/attention state earns a signal color.
-                color = when (conditionState) {
-                    MetricState.Optimal, MetricState.Warning, MetricState.Critical -> metricStateColor(conditionState)
-                    else -> FT.TextPrimary
-                },
+                color = FT.TextPrimary,
                 modifier = Modifier.weight(1f),
             )
-            FTStatePill(conditionState)
+            FTStatePill(MetricState.Building)
         }
-        if (conditionState == MetricState.Building) {
-            Text(readiness.note.uppercase(), style = FTType.Micro, color = FT.TextMuted)
-        }
+        Text(building, style = FTType.Micro, color = FT.TextMuted)
         Text(freshness.text, style = FTType.Micro, color = if (freshness.stale) FT.Warning else FT.TextMuted, maxLines = 2)
     }
 }

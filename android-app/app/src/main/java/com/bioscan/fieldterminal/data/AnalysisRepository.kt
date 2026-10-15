@@ -1,6 +1,10 @@
 package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.HrPoint
+import com.bioscan.fieldterminal.domain.LoadSpans
+import com.bioscan.fieldterminal.data.model.FitnessFatigueRow
+import com.bioscan.fieldterminal.domain.SCORECARD_HISTORY_DAYS
+import com.bioscan.fieldterminal.data.model.PlannedOutcomeRow
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
 import com.bioscan.fieldterminal.data.model.CaseCrossoverResultRow
 import com.bioscan.fieldterminal.data.model.EventCurveRow
@@ -271,6 +275,37 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             }
             .decodeList<TrainingLoadSessionRow>()
             .reversed()
+
+    // Analysis review phase G: the personal fitness-fatigue result, and the spans every load chart uses (the standard 42 and
+    // 7 unless the personal pair was adopted; standard too when nothing is published or the read fails).
+    suspend fun loadFitnessFatigue(): FitnessFatigueRow? = ReadCache.get("analysis.FitnessFatigue") {
+        runCatching {
+            supabase.postgrest.from("analysis_results")
+                .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "fitness_fatigue"); eq("key", "hrv") }; newestFirst() }
+                .decodeList<FitnessFatigueRow>()
+                .firstOrNull()
+        }.getOrNull()
+    }
+
+    suspend fun loadLoadSpans(): LoadSpans = loadFitnessFatigue()?.payload?.let { p ->
+        val personal = p.personal
+        if (p.adopted && personal != null) LoadSpans(personal.ctl, personal.atl, personal = true) else null
+    } ?: LoadSpans.STANDARD
+
+    // Analysis review phase G: planned sessions of the scorecard's window that are already in the past, for READY FOR.
+    suspend fun loadPlannedOutcomes(): List<PlannedOutcomeRow> = ReadCache.get("analysis.PlannedOutcomes") {
+        val today = java.time.LocalDate.now()
+        supabase.postgrest.from("planned_sessions")
+            .select(columns = Columns.list("scheduled_date,status,exercise_session_id")) {
+                filter {
+                    gte("scheduled_date", today.minusDays(SCORECARD_HISTORY_DAYS.toLong()).toString())
+                    lt("scheduled_date", today.toString())
+                    neq("status", "superseded")
+                }
+                limit(2000)
+            }
+            .decodeList<PlannedOutcomeRow>()
+    }
 
     // Phase A4 (Category 3). 30-day baseline gate, same margin reasoning as
     // everything else here.

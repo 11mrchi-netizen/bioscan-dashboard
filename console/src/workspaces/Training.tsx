@@ -34,6 +34,9 @@ interface TrainingData {
   vo2maxDates: string[]
   vo2maxValues: (number | null)[]
   sessions: RunRow[]
+  /** Analysis review phase G: the spans the averages use, and the published personal fit behind them. */
+  spans: { ctl: number; atl: number; personal: boolean }
+  spansSummary: string | null
 }
 
 function useTrainingData(start: string, end: string): { data: TrainingData | null; loading: boolean; error: string | null; retry: () => void } {
@@ -48,7 +51,7 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
     // exercise_sessions replaced the old `runs` table; only endurance types feed this run-based load model
     // (4,000+ auto-detected walks would otherwise dominate the TSS proxy).
     const { from, to } = dayBounds(warmupStr, end)
-    const [{ data: rows, error }, rhrRes] = await Promise.all([
+    const [{ data: rows, error }, rhrRes, ffRes] = await Promise.all([
       supabase.from('exercise_sessions')
         .select('id, start_time, distance_km, duration_min, type, avg_hr, max_hr, rpe, source')
         .in('type', ENDURANCE_TYPES)
@@ -56,7 +59,12 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
         .order('start_time', { ascending: true }),
       // TRIMP needs a resting heart rate; Android uses the latest one, so this does too.
       supabase.from('wearable_daily').select('rhr').not('rhr', 'is', null).order('date', { ascending: false }).limit(1),
+      // Analysis review phase G: the personal fitness-fatigue spans, used only when adopted (as on Android).
+      supabase.from('analysis_results').select('payload, calculated_at').eq('kind', 'fitness_fatigue').eq('key', 'hrv').order('calculated_at', { ascending: false }).limit(1),
     ])
+    type FfPayload = { adopted?: boolean; personal?: { ctl: number; atl: number } | null; summary?: string }
+    const ff = ((ffRes.data ?? [])[0] as { payload?: FfPayload } | undefined)?.payload
+    const spans = ff?.adopted && ff.personal ? { ctl: ff.personal.ctl, atl: ff.personal.atl, personal: true } : { ctl: 42, atl: 7, personal: false }
     const restingHr = ((rhrRes.data ?? [])[0] as { rhr?: number } | undefined)?.rhr ?? null
     {
         warnOnError('training sessions', error)
@@ -89,8 +97,8 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
         }
         const dailyTss = allDates.map(dt => tssMap.get(dt) ?? 0)
 
-        const ctlAll = ema(dailyTss, 42)
-        const atlAll = ema(dailyTss, 7)
+        const ctlAll = ema(dailyTss, spans.ctl)
+        const atlAll = ema(dailyTss, spans.atl)
 
         // Slice to visible range only
         const visibleStart = allDates.indexOf(start)
@@ -107,7 +115,7 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
           vo2maxFromPace(r.distance_km ?? 0, r.duration_minutes ?? 0)
         )
 
-        if (isCurrent()) setData({ dates: visibleDates, ctl, atl, tsb, vo2maxDates, vo2maxValues, sessions: visibleRuns.slice().reverse() })
+        if (isCurrent()) setData({ dates: visibleDates, ctl, atl, tsb, vo2maxDates, vo2maxValues, sessions: visibleRuns.slice().reverse(), spans, spansSummary: ff?.summary ?? null })
     }
   }, [start, end])
 
@@ -164,6 +172,10 @@ export function Training() {
             <FTChart spec={tsbSpec} result={tsbResult!} height={140} />
           </div>
         </div>
+        <p className="training-footnote mono">
+          Spans: fitness {data.spans.ctl} days, fatigue {data.spans.atl} days · {data.spans.personal ? 'yours (predictive)' : 'standard'}
+        </p>
+        {data.spansSummary && <p className="training-footnote">{data.spansSummary}</p>}
       </section>
 
       <section className="training-section">

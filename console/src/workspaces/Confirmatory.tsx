@@ -110,7 +110,7 @@ function ForestRow({ p, scale }: { p: Payload; scale: number }) {
 }
 
 // Days around an event, or lags after an exposure, on a labelled y axis: chance band, 95% interval, estimate.
-function CurveChart({ points, unit, label, marker }: {
+export function CurveChart({ points, unit, label, marker }: {
   points: { x: number; mean: number | null; lo: number | null; hi: number | null; chanceLo?: number | null; chanceHi?: number | null }[]
   unit: string
   label: (x: number) => string
@@ -156,7 +156,7 @@ function CurveChart({ points, unit, label, marker }: {
   )
 }
 
-async function newest<T>(kind: string): Promise<{ key: string; state: string; payload: T }[]> {
+export async function newest<T>(kind: string): Promise<{ key: string; state: string; payload: T }[]> {
   const { data, error } = await supabase
     .from('analysis_results')
     .select('key, as_of, state, calculated_at, payload')

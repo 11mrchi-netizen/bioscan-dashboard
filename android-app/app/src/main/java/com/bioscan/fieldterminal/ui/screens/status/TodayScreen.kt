@@ -1,5 +1,10 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.domain.LoadSpans
+import com.bioscan.fieldterminal.data.model.PlannedOutcomeRow
+import com.bioscan.fieldterminal.domain.compositeInputs
+import com.bioscan.fieldterminal.domain.evaluations
+import com.bioscan.fieldterminal.domain.recoveryFrom
 import androidx.compose.runtime.mutableIntStateOf
 import com.bioscan.fieldterminal.data.ExperimentResultRow
 import com.bioscan.fieldterminal.data.ExperimentRow
@@ -45,7 +50,6 @@ import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.ZeppStressRepository
-import com.bioscan.fieldterminal.data.buildTrainingSessionLoads
 import com.bioscan.fieldterminal.data.model.ExpectedBandRow
 import com.bioscan.fieldterminal.data.model.NewRegisteredQuestion
 import com.bioscan.fieldterminal.data.model.RegisteredQuestion
@@ -58,15 +62,8 @@ import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.EveningCheckin
 import com.bioscan.fieldterminal.domain.SeriesBreakStarts
-import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.checkinDateFor
-import com.bioscan.fieldterminal.domain.computeDynamicRecovery
-import com.bioscan.fieldterminal.domain.computeSleepIndex
 import com.bioscan.fieldterminal.domain.computeTrainingReadiness
-import com.bioscan.fieldterminal.domain.evaluateHrv
-import com.bioscan.fieldterminal.domain.evaluateRhr
-import com.bioscan.fieldterminal.domain.evaluateSubjective
-import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.isComplete
 import com.bioscan.fieldterminal.domain.lastEveningDate
 import com.bioscan.fieldterminal.domain.contributors
@@ -141,6 +138,10 @@ fun TodayScreen(
     var experimentResults by remember { mutableStateOf<Map<String, ExperimentResultRow>>(emptyMap()) }
     var experimentsKey by remember { mutableIntStateOf(0) }
     var testing by remember { mutableStateOf<DailyChoice?>(null) }
+    // Analysis review phase G: past planned sessions, for READY FOR's scorecard (null while loading or if the read fails).
+    var planned by remember { mutableStateOf<List<PlannedOutcomeRow>?>(null) }
+    // Phase G: the fitness and fatigue spans load is drawn with (standard unless the personal pair was adopted).
+    var loadSpans by remember { mutableStateOf(LoadSpans.STANDARD) }
     var experimentError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     // Analysis review phase B: last evening's check-in (null until answered or if the read fails) and the open sheet.
@@ -180,6 +181,8 @@ fun TodayScreen(
                     { evidence = repo.loadEvidence() },
                     { registeredResults = repo.loadRegisteredResults() },
                     { registeredQuestions = repo.loadRegisteredQuestions() },
+                    { planned = runCatching { repo.loadPlannedOutcomes() }.getOrNull() },
+                    { loadSpans = repo.loadLoadSpans() },
                     // A missing table (migration not yet applied) or a failed read just leaves the card asking.
                     { lastEvening = runCatching { EveningCheckinRepository(SupabaseClientProvider.client).load(lastEveningDate(LocalDate.now())) }.getOrNull() },
                 )
@@ -209,42 +212,19 @@ fun TodayScreen(
     val hrvPoints = w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }
     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
     // Perf pass: pure functions of the loaded rows, computed once per load instead of on every recomposition.
-    val (trainingLoadEval, recovery) = remember(s, w, sl, wb, stressDays, breakStarts) {
-        val sessionLoads = buildTrainingSessionLoads(s, w.lastOrNull()?.rhr)
-        val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
-
-        val nights = sl.mapNotNull { row ->
-            val bedtime = row.bedtime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-            val wake = row.wakeTime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-            if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
-        }
-        val sleepIndexResult = computeSleepIndex(
-            sl.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } },
-            sl.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } },
-            sl.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } },
-            nights,
-            durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min"),
-        )
+    // Analysis review phase G: assembled by the shared builder (domain/Composites.kt) the Heart and Training tiles use too.
+    val (trainingLoadEval, recovery) = remember(s, w, sl, wb, stressDays, breakStarts, loadSpans) {
+        val evaluations = compositeInputs(w, sl, wb, s, breakStarts, loadSpans).evaluations()
         val exerciseWindows = s.mapNotNull { session ->
             val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
             val durationMin = session.durationMin ?: return@mapNotNull null
             start to start.plusSeconds((durationMin * 60).toLong())
         }
         val physiologicalStress = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindows) }
-        val recovery = computeDynamicRecovery(
-            sleepIndex = sleepIndexResult,
-            hrvEval = evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")),
-            rhrEval = evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")),
-            trainingLoadEval = trainingLoadEval,
-            energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-            stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-            sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-            physiologicalStress = physiologicalStress,
-            morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-            arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-        )
-        trainingLoadEval to recovery
+        evaluations.load to recoveryFrom(evaluations, physiologicalStress)
     }
+    // Phase G: each composite's scorecard on this history, worked out off the main thread (null until ready).
+    val scorecards by rememberScorecards(w, sl, wb, s, breakStarts, loadSpans, planned)
 
     val waterMl = nut.todayHydrationMl?.toDouble() ?: 0.0
     val beverageMl = nut.todayBeverageItems.mapNotNull { it.effectiveHydrationMl }.sum()
@@ -272,8 +252,8 @@ fun TodayScreen(
             val eveningAnswered = lastEvening?.isComplete == true
             if (!eveningAnswered) LastEveningCard(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) }
             TodaysDrawCard(experiments, LocalDate.now())
-            DynamicRecoveryCard(recovery, emphasis = if (bandInputs.isEmpty()) FTCardEmphasis.Hero else FTCardEmphasis.Supporting)
-            TrainingReadinessCard(computeTrainingReadiness(recovery))
+            DynamicRecoveryCard(recovery, emphasis = if (bandInputs.isEmpty()) FTCardEmphasis.Hero else FTCardEmphasis.Supporting, scorecard = scorecards?.recovery)
+            TrainingReadinessCard(computeTrainingReadiness(recovery), scorecard = scorecards?.readyFor)
             // The inputs behind recovery and READY FOR, one tap away instead of repeated on this page.
             Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 val tsb = trainingLoadEval.tsb
@@ -360,7 +340,9 @@ fun TodayScreen(
                     }
                 },
             )
-            TypicalityCard(typicalityView(typicality))
+            val typicalityView = typicalityView(typicality)
+            TypicalityCard(typicalityView)
+            ScorecardsCard(scorecards, typicality = typicalityView.scorecard)
         }
     }
 

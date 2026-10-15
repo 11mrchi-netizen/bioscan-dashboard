@@ -23,7 +23,7 @@
 import { BAND_SPECS, fitWeights, q80, runFilter } from './expectedBand.ts'
 import type { BandSpec } from './expectedBand.ts'
 import { fnv1a } from './hash.ts'
-import { coefficient, olsHac, trendColumns, weekdayColumns } from './regression.ts'
+import { olsHac, trendColumns, weekdayColumns } from './regression.ts'
 import type { Frame } from './relationship.ts'
 import { mean, mulberry32, sd, tCritical, weekdayOf } from './stats.ts'
 import type { Num } from './stats.ts'

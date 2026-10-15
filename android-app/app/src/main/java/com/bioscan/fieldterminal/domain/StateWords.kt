@@ -39,13 +39,14 @@ private fun shiftState(direction: Int, directionality: Directionality, range: Cl
         Directionality.TARGET_VALUE, Directionality.NON_DIRECTIONAL -> MetricState.Neutral
     }
 
-// Today's recovery (DynamicRecovery.kt): every directional contributor up, every one down, a balance, or a split.
+// Today's recovery (DynamicRecovery.kt): every directional contributor up, every one down, a balance, or a split. Since
+// analysis review phase G in the vocabulary every composite shares with the morning band (AS / ABOVE / BELOW EXPECTED).
 fun recoveryStateWord(state: EvalState): StateWord = when (state) {
     EvalState.NoData -> StateWord(MetricState.Unavailable)
     EvalState.Building -> StateWord(MetricState.Building)
-    EvalState.Stable -> StateWord(MetricState.Neutral, "AS USUAL")
-    EvalState.ShiftUp -> StateWord(MetricState.Optimal, "ABOVE USUAL")
-    EvalState.ShiftDown -> StateWord(MetricState.Warning, "BELOW USUAL")
+    EvalState.Stable -> StateWord(MetricState.Neutral, "AS EXPECTED")
+    EvalState.ShiftUp -> StateWord(MetricState.Optimal, "ABOVE EXPECTED")
+    EvalState.ShiftDown -> StateWord(MetricState.Warning, "BELOW EXPECTED")
     // Contributors point both ways: no clean verdict, which is information, not missing data.
     EvalState.Unstable -> StateWord(MetricState.Neutral, "MIXED SIGNALS")
 }

@@ -82,6 +82,15 @@ data class WellbeingAnalysisRow(
     @SerialName("arousal_level") val arousalLevel: Int? = null,
 )
 
+// Analysis review phase G: what became of a planned session, for READY FOR's scorecard. Done means it was matched to a
+// recorded session (or confirmed by hand); a planned day that passed without one counts as not done.
+@Serializable
+data class PlannedOutcomeRow(
+    @SerialName("scheduled_date") val scheduledDate: String,
+    val status: String = "planned",
+    @SerialName("exercise_session_id") val exerciseSessionId: Long? = null,
+)
+
 // Phase A4 (Category 8). Bristol half.
 @Serializable
 data class StoolAnalysisRow(
@@ -148,6 +157,21 @@ data class TypicalityDay(
 @Serializable
 data class TypicalityLookalike(val date: String = "", val illness: Boolean = false)
 
+// Analysis review phase G: the strain flag replayed on the person's history and checked against logged illness.
+@Serializable
+data class TypicalityScorecardPayload(
+    // earns_its_place | no_better | unclear | not_yet
+    val verdict: String = "not_yet",
+    val onsets: Int = 0,
+    val caught: Int = 0,
+    val flags: Int = 0,
+    val flagsBeforeOnset: Int = 0,
+    val precision: Double? = null,
+    val recall: Double? = null,
+    val baseRate: Double? = null,
+    val sentence: String = "",
+)
+
 @Serializable
 data class TypicalityPayload(
     val baselineDays: Int = 0,
@@ -156,7 +180,27 @@ data class TypicalityPayload(
     val suggestIllnessLog: Boolean = false,
     val lookalikes: List<TypicalityLookalike> = emptyList(),
     val skipped: List<String> = emptyList(),
+    val scorecard: TypicalityScorecardPayload? = null,
 )
+
+// Analysis review phase G: the personal fitness-fatigue spans (kind fitness_fatigue, key hrv). `adopted` is true only when
+// they forecast tomorrow's HRV better than 42 and 7 on held-out weeks.
+@Serializable
+data class LoadSpanPair(val ctl: Double = 42.0, val atl: Double = 7.0)
+
+@Serializable
+data class FitnessFatiguePayload(
+    // predictive | no_better | unclear | not_yet
+    val state: String = "not_yet",
+    val standard: LoadSpanPair = LoadSpanPair(),
+    val personal: LoadSpanPair? = null,
+    val adopted: Boolean = false,
+    val heldOutDays: Int = 0,
+    val summary: String = "",
+)
+
+@Serializable
+data class FitnessFatigueRow(val key: String = "hrv", val state: String = "not_yet", val payload: FitnessFatiguePayload = FitnessFatiguePayload())
 
 @Serializable
 data class RelationshipEffect(val value: Double = 0.0, val lo: Double = 0.0, val hi: Double = 0.0, val unit: String = "")

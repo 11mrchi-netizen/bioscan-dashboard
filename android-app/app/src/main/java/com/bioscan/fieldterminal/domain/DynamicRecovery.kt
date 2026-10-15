@@ -81,13 +81,10 @@ fun computeDynamicRecovery(
 ): DynamicRecoveryResult {
     val contributors = mutableListOf<RecoveryContributor>()
 
+    // Analysis review phase G: the Sleep Index's own cut-offs (SleepIndex.kt), not a second set: a week of sleep as
+    // expected is neutral here, one below expected holds recovery back.
     if (sleepIndex.score != null) {
-        val direction = when {
-            sleepIndex.score >= 70.0 -> 1
-            sleepIndex.score < 50.0 -> -1
-            else -> 0
-        }
-        contributors += RecoveryContributor("sleep", direction, sleepIndex.score, sleepIndex.confidence, Provenance("sleep_index", "computeSleepIndex", SLEEP_INDEX_MODEL_VERSION))
+        contributors += RecoveryContributor("sleep", sleepIndexDirection(sleepIndex.score), sleepIndex.score, sleepIndex.confidence, Provenance("sleep_index", "computeSleepIndex", SLEEP_INDEX_MODEL_VERSION))
     }
 
     directionFromShift(hrvEval.state, METRIC_DIRECTIONALITY.getValue("hrv")).let { direction ->

@@ -17,20 +17,17 @@ import com.bioscan.fieldterminal.data.model.SleepDailyRow
 import com.bioscan.fieldterminal.data.model.WearableDailyRow
 import com.bioscan.fieldterminal.domain.HealthFlag
 import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.ReadinessBand
 import com.bioscan.fieldterminal.domain.MorningReadout
 import com.bioscan.fieldterminal.domain.morningReadout
 import com.bioscan.fieldterminal.domain.SupplementsToday
 import com.bioscan.fieldterminal.domain.computeHydrationIntelligence
 import com.bioscan.fieldterminal.domain.pickHealthFlag
 import com.bioscan.fieldterminal.domain.supplementsToday
-import com.bioscan.fieldterminal.domain.computeHrvReadinessSeries
 import com.bioscan.fieldterminal.domain.evaluateHrv
 import com.bioscan.fieldterminal.domain.evaluateRhr
 import com.bioscan.fieldterminal.domain.evaluateSleepDuration
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.isHealthEventActive
-import com.bioscan.fieldterminal.domain.readinessBand
 import com.bioscan.fieldterminal.domain.trainingLoadStateWord
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -38,7 +35,6 @@ import io.github.jan.supabase.postgrest.query.Order
 import java.time.LocalDate
 
 data class StatusOverview(
-    val readiness: ReadinessBand,
     val latestHrv: Double?,
     val latestRhr: Double?,
     val sleepHours: Double?,
@@ -64,8 +60,11 @@ data class StatusOverview(
     // The TRAINING tile's load word (TSB band from the same evaluation as trainingState, e.g. "Loaded").
     val trainingLoadBand: String? = null,
     // Analysis review phase C: this morning's HRV against the band expected for it. Null before the first analysis run,
-    // while the band is building, or with no reading yet today; the hero then falls back to the readiness band.
+    // while the band is building, or with no reading yet today.
     val hrvReadout: MorningReadout? = null,
+    // Analysis review phase G: how far the HRV band has got (mornings it has, mornings it needs), for the hero while it
+    // builds. The old fallback, HRV against a 7-day z-score (LOW / REDUCED / NORMAL / PRIMED), is retired.
+    val hrvBandProgress: Pair<Int, Int>? = null,
 )
 
 // Contract A5. A nightly reading (HRV, resting HR, sleep) is dated the day it was recorded, and before the phone's
@@ -110,6 +109,7 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         val breaksD = async(Dispatchers.Default) { analysis.loadSeriesBreakStarts() }
         val bandsD = async(Dispatchers.Default) { analysis.loadExpectedBands() }
         val loadSessionsD = async(Dispatchers.Default) { analysis.loadExerciseSessionsForTrainingLoad() }
+        val loadSpansD = async(Dispatchers.Default) { analysis.loadLoadSpans() }
         val injuriesD = async(Dispatchers.Default) {
             supabase.postgrest.from("injuries").select(columns = Columns.list("status,end_date,part,start_date")).decodeList<HealthEventRow>()
         }
@@ -128,13 +128,8 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
                 .decodeList<ExerciseSessionRow>()
         }
 
-        // 60 most recent days in chronological order -- computeHrvReadinessSeries() needs index i-1 to mean "the day
-        // before index i", matching how index.html's own wearable.hrv array is built. 10 was too few: readiness returned
-        // Unknown when only 3 of 10 days had valid HRV, even with 60+ valid days in the DB.
         val wearableAnalysis = wearableD.await()
         val wearable = wearableAnalysis.takeLast(60)
-        val hrvSeries = computeHrvReadinessSeries(wearable.map { it.hrv })
-        val readiness = readinessBand(hrvSeries.lastOrNull())
 
         val sleepRows = sleepD.await()
         val latestSleep = sleepRows.lastOrNull()
@@ -167,7 +162,7 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         // DAV-205: TRIMP-fallback session loads, same shared builder TrainingTileScreen uses -- keeps the figure's leg
         // color and the Training tab's own Load card from ever disagreeing.
         val sessionLoads = buildTrainingSessionLoads(loadSessionsD.await(), wearableAnalysis.lastOrNull()?.rhr)
-        val trainingLoad = evaluateTrainingLoad(sessionLoads)
+        val trainingLoad = evaluateTrainingLoad(sessionLoads, spans = loadSpansD.await())
         val trainingState = trainingLoadStateWord(trainingLoad.state, trainingLoad.tsbBand).state
 
         val recentSessions = recentD.await()
@@ -175,10 +170,10 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         val sessionsLast7Days = dedupeRunSessions(recentSessions.filter { it.type == "run" }).size +
             recentSessions.count { it.type != "run" }
 
-        val hrvReadout = bandsD.await()["hrv"]?.let { morningReadout(it.payload, today, hrvPoints.lastOrNull()) }
+        val hrvBand = bandsD.await()["hrv"]
+        val hrvReadout = hrvBand?.let { morningReadout(it.payload, today, hrvPoints.lastOrNull()) }
 
         StatusOverview(
-            readiness = readiness,
             latestHrv = wearable.lastOrNull()?.hrv,
             latestRhr = wearable.lastOrNull()?.rhr,
             sleepHours = latestSleep?.hours,
@@ -193,6 +188,7 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
             lastSyncAt = lastSyncD.await(),
             trainingLoadBand = trainingLoad.tsbBand,
             hrvReadout = hrvReadout,
+            hrvBandProgress = hrvBand?.payload?.let { it.have to it.need },
         )
     }
 

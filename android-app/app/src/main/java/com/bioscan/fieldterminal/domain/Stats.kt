@@ -6,11 +6,9 @@ import kotlin.math.exp
 import kotlin.math.sqrt
 
 // Phase A2 (Analysis Layer). This project's own domain layer had no generic
-// mean/SD/median helper before this -- domain/Readiness.kt's
-// computeHrvReadinessSeries() inlines its own mean/variance math rather than
-// calling a shared one. These three are deliberately the first, kept
-// minimal (population SD, matching that existing function's own convention
-// of dividing by n rather than n-1, for consistency with it) rather than a
+// mean/SD/median helper before this. These three are deliberately the first, kept
+// minimal (population SD, dividing by n rather than n-1, the convention of the
+// HRV z-score band they were written beside, since retired) rather than a
 // general statistics library.
 fun mean(values: List<Double>): Double = if (values.isEmpty()) 0.0 else values.sum() / values.size
 

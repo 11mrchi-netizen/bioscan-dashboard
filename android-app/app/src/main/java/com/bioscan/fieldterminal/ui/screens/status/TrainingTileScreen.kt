@@ -1,5 +1,13 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.domain.LoadSpans
+import com.bioscan.fieldterminal.data.model.FitnessFatigueRow
+import com.bioscan.fieldterminal.data.model.PlannedOutcomeRow
+import com.bioscan.fieldterminal.domain.compositeInputs
+import com.bioscan.fieldterminal.domain.evaluations
+import com.bioscan.fieldterminal.domain.recoveryFrom
+import com.bioscan.fieldterminal.domain.demotes
+import com.bioscan.fieldterminal.domain.ScorecardResult
 import com.bioscan.fieldterminal.domain.recoveryStateWord
 import com.bioscan.fieldterminal.domain.trainingLoadStateWord
 import com.bioscan.fieldterminal.util.Perf
@@ -55,11 +63,6 @@ import com.bioscan.fieldterminal.domain.trainingLoadSeries
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.ZeppStressRepository
 import com.bioscan.fieldterminal.domain.SeriesBreakStarts
-import com.bioscan.fieldterminal.domain.SleepNight
-import com.bioscan.fieldterminal.domain.computeSleepIndex
-import com.bioscan.fieldterminal.domain.evaluateHrv
-import com.bioscan.fieldterminal.domain.evaluateRhr
-import com.bioscan.fieldterminal.domain.computeDynamicRecovery
 import com.bioscan.fieldterminal.domain.computeTrainingReadiness
 import com.bioscan.fieldterminal.domain.TrainingReadinessResult
 import com.bioscan.fieldterminal.domain.TrainingDemandTier
@@ -175,6 +178,8 @@ private fun InjuryTab() {
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
     var ostrc by remember { mutableStateOf<List<OstrcAnalysisRow>?>(null) }
+    // Analysis review phase G: the same spans the Load tab draws with.
+    var injuryLoadSpans by remember { mutableStateOf(LoadSpans.STANDARD) }
 
     val guard = rememberLoadGuard()
     LaunchedEffect(guard.attempt) {
@@ -186,6 +191,7 @@ private fun InjuryTab() {
                     { wearable = repo.loadWearableDaily() },
                     { wellbeing = repo.loadWellbeingDaily() },
                     { ostrc = repo.loadOstrcCheckins() },
+                    { injuryLoadSpans = repo.loadLoadSpans() },
                 )
             }
         }
@@ -213,7 +219,7 @@ private fun InjuryTab() {
         HealthEventsScreen()
         // DAV-205 (24/9 fixes): TRIMP fallback, same shared builder Load tab uses.
         val sessionLoads = buildTrainingSessionLoads(s, w.lastOrNull()?.rhr)
-        val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
+        val trainingLoadEval = evaluateTrainingLoad(sessionLoads, spans = injuryLoadSpans)
         val restCadenceEval = evaluateRestCadence(sessionLoads, trainingLoadEval.tsb, trainingLoadEval.confidence.met)
         val sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } })
         val ostrcByBodyArea = os.mapNotNull { row -> row.severityScore?.let { row.bodyArea to (LocalDate.parse(row.checkDate) to it) } }
@@ -285,13 +291,16 @@ private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
 }
 
 @Composable
-internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Modifier = Modifier) {
-    // UX review P6: "READY FOR" (was "TODAY'S READINESS"): readiness per kind of session, built on Today's Recovery; one name
-    // for each of the three "how am I today" states (CONDITION on Status, TODAY'S RECOVERY, READY FOR).
+internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Modifier = Modifier, scorecard: ScorecardResult? = null) {
+    // UX review P6: "READY FOR" (was "TODAY'S READINESS"): readiness per kind of session, built on Today's Recovery.
+    // Analysis review phase G: scored against whether planned sessions were done; demoted, it shows no per-session words.
     FTCard(title = "READY FOR", methodology = "dynamic_recovery", modifier = modifier) {
-        FTStatePill(recoveryStateWord(result.generalState))
+        val demoted = scorecard.demotes()
+        FTStatePill(if (demoted) INPUTS_ONLY else recoveryStateWord(result.generalState))
         FTDataChip(result.confidence)
-        result.demandRelative.forEach { (tier, state) ->
+        if (demoted) {
+            Text("Its per-session words did not foresee your planned sessions better than one of its inputs: see the inputs under TODAY'S RECOVERY.", style = FTType.BodySmall, color = FT.TextSecondary)
+        } else result.demandRelative.forEach { (tier, state) ->
             val label = when (tier) {
                 TrainingDemandTier.EASY_AEROBIC -> "Easy aerobic"
                 TrainingDemandTier.THRESHOLD -> "Threshold"
@@ -306,6 +315,7 @@ internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Mo
             }
             FTMetricRow(label, symbol)
         }
+        ScorecardLine(scorecard)
     }
 }
 
@@ -324,6 +334,11 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChan
     var stressDays by remember { mutableStateOf<List<StressDay>>(emptyList()) }
     // Analysis Layer 3 / R1: start of each metric's current regime (last confirmed series break); NONE until loaded.
     var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
+    // Analysis review phase G: past planned sessions, for READY FOR's scorecard (null while loading or if the read fails).
+    var planned by remember { mutableStateOf<List<PlannedOutcomeRow>?>(null) }
+    // Analysis review phase G: the spans load is drawn with, and the personal fit behind them.
+    var fitnessFatigue by remember { mutableStateOf<FitnessFatigueRow?>(null) }
+    var loadSpans by remember { mutableStateOf(LoadSpans.STANDARD) }
 
     val loadGuard = rememberLoadGuard()
     LaunchedEffect(loadGuard.attempt) {
@@ -338,6 +353,8 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChan
                     { wellbeing = repo.loadWellbeingDaily() },
                     { stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays() },
                     { breakStarts = repo.loadSeriesBreakStarts() },
+                    { planned = runCatching { repo.loadPlannedOutcomes() }.getOrNull() },
+                    { fitnessFatigue = repo.loadFitnessFatigue(); loadSpans = repo.loadLoadSpans() },
                 )
             }
         }
@@ -366,60 +383,38 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChan
         // see AnalysisRepository.buildTrainingSessionLoads()'s own comment.
         // Perf pass: these evaluations are pure functions of the loaded rows; compute them once per load, not on every
         // recomposition (timeframe taps, tab changes).
-        val (sessionLoads, trainingLoadEval, recovery) = remember(s, w, sl, wb, stressDays, breakStarts) {
-            val sessionLoads = buildTrainingSessionLoads(s, w.lastOrNull()?.rhr)
-            val trainingLoadEval = evaluateTrainingLoad(sessionLoads)
-
-            // 09.4 Training Readiness: consumes Dynamic Recovery (09.2) directly,
-            // never recomputes CTL/ATL/TSB itself (DAV-250's own rule) -- the
-            // same trainingLoadEval the card below already renders.
-            val nights = sl.mapNotNull { row ->
-                val bedtime = row.bedtime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-                val wake = row.wakeTime?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-                if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
-            }
-            val sleepIndexResult = computeSleepIndex(
-                sl.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } },
-                sl.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } },
-                sl.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } },
-                nights,
-                durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min"),
-            )
+        // Analysis review phase G: assembled by the shared builder (domain/Composites.kt), as on Today and the Heart tile.
+        val (sessionLoads, trainingLoadEval, recovery) = remember(s, w, sl, wb, stressDays, breakStarts, loadSpans) {
+            val composite = compositeInputs(w, sl, wb, s, breakStarts, loadSpans)
+            val evaluations = composite.evaluations()
             val exerciseWindows = s.mapNotNull { session ->
                 val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
                 val durationMin = session.durationMin ?: return@mapNotNull null
                 start to start.plusSeconds((durationMin * 60).toLong())
             }
             val physiologicalStress = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindows) }
-            val recovery = computeDynamicRecovery(
-                sleepIndex = sleepIndexResult,
-                hrvEval = evaluateHrv(w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("hrv")),
-                rhrEval = evaluateRhr(w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("rhr")),
-                trainingLoadEval = trainingLoadEval,
-                energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                physiologicalStress = physiologicalStress,
-                morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-            )
-            Triple(sessionLoads, trainingLoadEval, recovery)
+            Triple(composite.sessionLoads, evaluations.load, recoveryFrom(evaluations, physiologicalStress))
         }
+        // Phase G: READY FOR's scorecard against the planned sessions it should foresee (null while worked out).
+        val scorecards by rememberScorecards(w, sl, wb, s, breakStarts, loadSpans, planned)
         TrainingLoadCard(
             trainingLoadEval,
             resolveTier(MetricCategory.TrainingLoad, activeCycle),
-            trainingLoadSeries(sessionLoads),
+            trainingLoadSeries(sessionLoads, spans = loadSpans),
             timeframe,
             onTimeframeChange = onTimeframeChange,
+            fitnessFatigue = fitnessFatigue,
             modifier = Modifier.glanceAnchor(
                 glance, "load",
                 GlanceChip(order = 0, label = "LOAD", state = trainingLoadStateWord(trainingLoadEval.state, trainingLoadEval.tsbBand).state, headline = trainingLoadEval.tsbBand?.uppercase()),
             ),
         )
         val readiness = computeTrainingReadiness(recovery)
+        val readyWord = if (scorecards?.readyFor.demotes()) INPUTS_ONLY else recoveryStateWord(readiness.generalState)
         TrainingReadinessCard(
             readiness,
-            modifier = Modifier.glanceAnchor(glance, "ready", recoveryStateWord(readiness.generalState).let { GlanceChip(order = 1, label = "READY FOR", state = it.state, headline = it.word) }),
+            scorecard = scorecards?.readyFor,
+            modifier = Modifier.glanceAnchor(glance, "ready", GlanceChip(order = 1, label = "READY FOR", state = readyWord.state, headline = readyWord.word)),
         )
     }
 }
@@ -432,6 +427,7 @@ internal fun TrainingLoadCard(
     timeframe: PerformanceTimeframe,
     onTimeframeChange: ((PerformanceTimeframe) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    fitnessFatigue: FitnessFatigueRow? = null,
 ) {
     val cutoff = LocalDate.now().minusMonths(timeframe.months)
     val visible = series.filter { it.date >= cutoff }
@@ -470,6 +466,14 @@ internal fun TrainingLoadCard(
                 eval.ctl?.let { LoadLevel("CTL · FITNESS", "%.1f".format(it), "CTL — fitness", LOAD_HELP_CTL, Modifier.weight(1f)) }
                 eval.atl?.let { LoadLevel("ATL · FATIGUE", "%.1f".format(it), "ATL — fatigue", LOAD_HELP_ATL, Modifier.weight(1f)) }
             }
+        }
+        // Analysis review phase G: which spans the averages use, and why -- the person's own pair only when it forecast
+        // tomorrow's HRV better than 42 and 7 on weeks the fit never saw (the PREDICTIVE rung).
+        fitnessFatigue?.payload?.let { ff ->
+            val personal = ff.personal
+            val spans = if (ff.adopted && personal != null) "%.0f AND %.0f DAYS · YOURS (PREDICTIVE)".format(personal.ctl, personal.atl) else "42 AND 7 DAYS · STANDARD"
+            Text("SPANS · $spans", style = FTType.LabelCaps, color = FT.TextSecondary)
+            if (ff.summary.isNotBlank()) Text(ff.summary, style = FTType.Caption, color = FT.TextMuted)
         }
         // The timeframe sits on the charts it controls (UX review P2; it used to float above the whole tab).
         if (onTimeframeChange != null && (eval.ctl != null || eval.tsb != null)) {

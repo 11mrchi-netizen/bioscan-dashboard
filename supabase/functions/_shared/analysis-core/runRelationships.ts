@@ -1,6 +1,7 @@
 // I/O for the relationship engine: reads a user's raw rows through a duck-typed Supabase client (tested in Node with an
 // in-memory fake, run unchanged in the analysis-run Edge Function), builds the daily frame the catalogue refers to, runs
 // the catalogue and publishes one analysis_results row per hypothesis (kind 'relationship').
+import { sessionLoad } from './trainingLoad.ts'
 import { HYPOTHESES, CATALOGUE_VERSION, registeredHypothesis } from './hypotheses.ts'
 import type { RegisteredQuestionRow } from './hypotheses.ts'
 import { analyseHypothesis, MIN_PAIRS, runCatalogue } from './relationship.ts'
@@ -30,7 +31,7 @@ export interface RawInputs {
   sleep: { date: string; hours: number | null; deep_min?: number | null; rem_min?: number | null }[]
   wellbeing: { date: string; energy: number | null; mood: number | null; stress: number | null; soreness: number | null }[]
   meals: { logged_at: string; meal_items: { alcohol_g: number | null; caffeine_mg: number | null }[] | null }[]
-  sessions: { start_time: string; duration_min: number | null; type?: string | null }[]
+  sessions: { start_time: string; duration_min: number | null; type?: string | null; rpe?: number | null; avg_hr?: number | null; max_hr?: number | null }[]
   recovery: { date: string }[]
   illnesses: { start_date: string; end_date: string | null }[]
   /** Evening check-ins (analysis review phase B); optional so older callers and tests keep working. */
@@ -181,6 +182,18 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
     minutesByDay.set(d, (minutesByDay.get(d) ?? 0) + (num(s.duration_min) ?? 0))
   }
   series.training_min = axis.map((d) => (minutesByDay.has(d) ? (minutesByDay.get(d) as number) : watchDays.has(d) ? 0 : null))
+  // Analysis review phase G: the apps' session load (session RPE x minutes, else TRIMP against the latest resting heart
+  // rate, as on Android and in the console), summed per local day, for the personal fitness-fatigue fit; zero on watch days
+  // without a session.
+  const latestRhr = [...raw.wearable].reverse().map((w) => num(w.rhr)).find((v) => v !== null) ?? null
+  const loadByDay = new Map<string, number>()
+  for (const s of raw.sessions) {
+    const load = sessionLoad({ duration_min: num(s.duration_min), rpe: num(s.rpe), avg_hr: num(s.avg_hr), max_hr: num(s.max_hr) }, latestRhr)
+    if (load === null) continue
+    const d = clock(s.start_time).date
+    loadByDay.set(d, (loadByDay.get(d) ?? 0) + load)
+  }
+  series.training_load = axis.map((d) => (loadByDay.has(d) ? (loadByDay.get(d) as number) : watchDays.has(d) ? 0 : null))
 
   // Recovery sessions are logged by hand: zero only from the day the first one was logged.
   const recoveryDays = new Set(raw.recovery.map((r) => r.date))
@@ -239,7 +252,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
     fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min', 'date', since)),
     fetchAll<RawInputs['wellbeing'][number]>(q('wellbeing_daily', 'date, energy, mood, stress, soreness', 'date', since)),
     fetchAll<RawInputs['meals'][number]>(q('meals', 'logged_at, meal_items(alcohol_g, caffeine_mg)', 'logged_at', sinceStamp)),
-    fetchAll<RawInputs['sessions'][number]>(q('exercise_sessions', 'start_time, duration_min, type', 'start_time', sinceStamp)),
+    fetchAll<RawInputs['sessions'][number]>(q('exercise_sessions', 'start_time, duration_min, type, rpe, avg_hr, max_hr', 'start_time', sinceStamp)),
     fetchAll<RawInputs['recovery'][number]>(q('recovery_sessions', 'date', 'date', since)),
     admin.from('illnesses').select('start_date, end_date').eq('user_id', userId),
     // Phase B tables: read softly, so the nightly run keeps working before the migration is applied.

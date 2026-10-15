@@ -1,5 +1,12 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.domain.LoadSpans
+import com.bioscan.fieldterminal.domain.compositeInputs
+import com.bioscan.fieldterminal.domain.evaluations
+import com.bioscan.fieldterminal.domain.recoveryFrom
+import com.bioscan.fieldterminal.domain.sleepIndex
+import com.bioscan.fieldterminal.domain.demotes
+import com.bioscan.fieldterminal.domain.ScorecardResult
 import com.bioscan.fieldterminal.domain.SLEEP_HOURS_RANGE
 import com.bioscan.fieldterminal.domain.baselineStateWord
 import com.bioscan.fieldterminal.domain.recoveryStateWord
@@ -37,7 +44,6 @@ import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.NutritionRepository
-import com.bioscan.fieldterminal.data.buildTrainingSessionLoads
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.ExpectedBandRow
 import com.bioscan.fieldterminal.domain.expectedStateWord
@@ -62,9 +68,9 @@ import com.bioscan.fieldterminal.domain.comparison.comparePersonal
 import com.bioscan.fieldterminal.domain.comparison.comparePopulation
 import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.SleepNight
+import com.bioscan.fieldterminal.domain.sriWord
 import com.bioscan.fieldterminal.domain.SriEvaluation
 import com.bioscan.fieldterminal.domain.SleepIndexResult
-import com.bioscan.fieldterminal.domain.computeSleepIndex
 import com.bioscan.fieldterminal.domain.MovementIndexResult
 import com.bioscan.fieldterminal.domain.computeMovementIndex
 import com.bioscan.fieldterminal.domain.CircadianAlignmentResult
@@ -73,10 +79,8 @@ import com.bioscan.fieldterminal.data.ZeppStressRepository
 import com.bioscan.fieldterminal.domain.stress.StressDay
 import com.bioscan.fieldterminal.domain.stress.StressRhythmResult
 import com.bioscan.fieldterminal.domain.stress.analyzeStressDay
-import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.TrainingLoadEvaluation
 import com.bioscan.fieldterminal.domain.DynamicRecoveryResult
-import com.bioscan.fieldterminal.domain.computeDynamicRecovery
 import com.bioscan.fieldterminal.domain.SubjectiveEvaluation
 import com.bioscan.fieldterminal.domain.SwcEvaluation
 import com.bioscan.fieldterminal.domain.VitalsTimeframe
@@ -153,6 +157,8 @@ fun HeartTileScreen(onBack: () -> Unit) {
     var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
     // Analysis review phase C: the published expected band per metric; empty before the first run.
     var bands by remember { mutableStateOf<Map<String, ExpectedBandRow>>(emptyMap()) }
+    // Analysis review phase G: the spans training load is drawn with (standard unless the personal pair was adopted).
+    var loadSpans by remember { mutableStateOf(LoadSpans.STANDARD) }
 
     val guard = rememberLoadGuard()
     LaunchedEffect(guard.attempt) {
@@ -176,6 +182,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     { stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays() },
                     { breakStarts = repo.loadSeriesBreakStarts() },
                     { bands = repo.loadExpectedBands() },
+                    { loadSpans = repo.loadLoadSpans() },
                 )
             }
         }
@@ -326,46 +333,44 @@ fun HeartTileScreen(onBack: () -> Unit) {
                         if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
                     }
                     val deepPoints = s.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } }
-                    val respiratoryForIndex = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
                     // Perf pass: pure functions of the loaded rows, computed once per load, not on every recomposition.
-                    val sleepIndexResult = remember(s, breakStarts) { computeSleepIndex(hoursPoints, deepPoints, respiratoryForIndex, nights, durationWindowStart = breakStarts.start("sleep_hours"), stageWindowStart = breakStarts.start("deep_min")) }
+                    // Analysis review phase G: assembled by the shared builder (domain/Composites.kt), as on Today and Training.
+                    val composite = remember(s, w, wb, exerciseSessions, breakStarts, loadSpans) { compositeInputs(w, s, wb, exerciseSessions, breakStarts, loadSpans) }
+                    val sleepIndexResult = remember(composite) { composite.sleepIndex() }
 
                     // 09.2 Dynamic Recovery: a hero card above everything else
                     // in this tab, same placement pattern AgingCard already
                     // uses atop UserProfileScreen.kt -- reuses every
                     // contributor's existing evaluation, recomputes nothing.
-                    val dynamicRecovery = remember(s, w, wb, exerciseSessions, stressDays, breakStarts, sleepIndexResult) {
+                    val dynamicRecovery = remember(composite, exerciseSessions, stressDays, sleepIndexResult) {
                         val exerciseWindowsForRecovery = exerciseSessions.mapNotNull { session ->
                             val start = runCatching { OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
                             val durationMin = session.durationMin ?: return@mapNotNull null
                             start to start.plusSeconds((durationMin * 60).toLong())
                         }
                         val physiologicalStressForRecovery = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindowsForRecovery) }
-                        val sessionLoadsForRecovery = buildTrainingSessionLoads(exerciseSessions, w.lastOrNull()?.rhr)
-                    computeDynamicRecovery(
-                        sleepIndex = sleepIndexResult,
-                        hrvEval = evaluateHrv(w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("hrv")),
-                        rhrEval = evaluateRhr(w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }, windowStart = breakStarts.start("rhr")),
-                        trainingLoadEval = evaluateTrainingLoad(sessionLoadsForRecovery),
-                        energyEval = evaluateSubjective(wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                        stressEval = evaluateSubjective(wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                        sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                        physiologicalStress = physiologicalStressForRecovery,
-                        morningWoodEval = evaluateSubjective(wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                        arousalEval = evaluateSubjective(wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }),
-                    )
+                        recoveryFrom(composite.evaluations(sleepIndex = sleepIndexResult), physiologicalStressForRecovery)
                     }
+                    // Phase G: the composites' scorecards on this history (null while they are worked out).
+                    val scorecards by rememberScorecards(w, s, wb, exerciseSessions, breakStarts, loadSpans)
+                    val recoveryWord = if (scorecards?.recovery.demotes()) INPUTS_ONLY else recoveryStateWord(dynamicRecovery.state)
                     DynamicRecoveryCard(
                         dynamicRecovery,
-                        modifier = Modifier.glanceAnchor(glance, "recovery", recoveryStateWord(dynamicRecovery.state).let { GlanceChip(0, "RECOVERY", state = it.state, headline = it.word) }),
+                        scorecard = scorecards?.recovery,
+                        modifier = Modifier.glanceAnchor(glance, "recovery", GlanceChip(0, "RECOVERY", state = recoveryWord.state, headline = recoveryWord.word)),
                     )
 
                     // 09.1 Sleep Index: a headline aggregate above the same
                     // component cards below it -- an aggregation layer, never
                     // a replacement (DAV-235's own rule).
+                    val sleepDemoted = scorecards?.sleepIndex.demotes()
                     SleepIndexCard(
                         sleepIndexResult,
-                        modifier = Modifier.glanceAnchor(glance, "index", GlanceChip(1, "SLEEP INDEX", headline = sleepIndexResult.score?.let { "%.0f".format(it) } ?: "BUILDING")),
+                        scorecard = scorecards?.sleepIndex,
+                        modifier = Modifier.glanceAnchor(
+                            glance, "index",
+                            GlanceChip(1, "SLEEP INDEX", headline = if (sleepDemoted) "INPUTS ONLY" else sleepIndexResult.score?.let { "%.0f".format(it) } ?: "BUILDING"),
+                        ),
                     )
                     val durationEval = evaluateSleepDuration(hoursPoints, windowStart = breakStarts.start("sleep_hours"))
                     EvalCard(
@@ -684,10 +689,17 @@ private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<
 }
 
 @Composable
-internal fun DynamicRecoveryCard(result: DynamicRecoveryResult, modifier: Modifier = Modifier, emphasis: FTCardEmphasis = FTCardEmphasis.Hero) {
+internal fun DynamicRecoveryCard(
+    result: DynamicRecoveryResult,
+    modifier: Modifier = Modifier,
+    emphasis: FTCardEmphasis = FTCardEmphasis.Hero,
+    scorecard: ScorecardResult? = null,
+) {
     // Contract A3: the lead card of Health › Recovery; on Today it follows THIS MORNING when the expected band exists.
+    // Analysis review phase G: when its scorecard says it forecasts no better than one of its inputs, it drops its own
+    // word (INPUTS ONLY) and shows the inputs.
     FTCard(title = "TODAY'S RECOVERY", methodology = "dynamic_recovery", emphasis = emphasis, modifier = modifier) {
-        FTStatePill(recoveryStateWord(result.state))
+        FTStatePill(if (scorecard.demotes()) INPUTS_ONLY else recoveryStateWord(result.state))
         FTDataChip(result.confidence)
         if (result.contributors.isEmpty()) {
             Text(
@@ -707,15 +719,18 @@ internal fun DynamicRecoveryCard(result: DynamicRecoveryResult, modifier: Modifi
                 FTMetricRow(contributor.dimension.replace('_', ' ').replaceFirstChar { it.uppercase() }, effect)
             }
         }
+        ScorecardLine(scorecard)
     }
 }
 
 @Composable
-private fun SleepIndexCard(result: SleepIndexResult, modifier: Modifier = Modifier) {
+private fun SleepIndexCard(result: SleepIndexResult, modifier: Modifier = Modifier, scorecard: ScorecardResult? = null) {
     FTCard(title = "SLEEP INDEX", methodology = "sleep_index", modifier = modifier) {
         FTDataChip(result.confidence)
+        // Analysis review phase G: demoted by its scorecard, the index gives way to its components.
+        if (scorecard.demotes()) FTStatePill(INPUTS_ONLY)
         if (result.score != null) {
-            FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
+            if (!scorecard.demotes()) FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
             result.components.forEach { (component, componentScore) ->
                 FTScoreRow(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, componentScore.score, FT.Category.Sleep.c500)
             }
@@ -726,6 +741,7 @@ private fun SleepIndexCard(result: SleepIndexResult, modifier: Modifier = Modifi
                 color = FT.TextSecondary,
             )
         }
+        ScorecardLine(scorecard)
     }
 }
 
@@ -796,7 +812,8 @@ private fun SriCard(eval: SriEvaluation, modifier: Modifier = Modifier) {
     FTCard(title = "SLEEP REGULARITY (SRI)", methodology = "sri", modifier = modifier) {
         FTDataChip(eval.confidence)
         if (eval.value != null) {
-            FTMetricValue(DisplayValue(primary = "%.0f".format(eval.value), unit = "/ 100"))
+            // Analysis review phase G: the one regularity mark (SRI_REGULAR), the same the Healthspan sleep factor uses.
+            FTMetricValue(DisplayValue(primary = "%.0f".format(eval.value), unit = "/ 100", secondary = sriWord(eval.value)))
         } else {
             Text(
                 "Not enough consecutive nights yet (gaps over 2 nights reset the count).",

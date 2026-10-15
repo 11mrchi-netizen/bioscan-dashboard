@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.domain.aging
 
 import com.bioscan.fieldterminal.domain.LiftReading
+import com.bioscan.fieldterminal.domain.SRI_REGULAR
 import com.bioscan.fieldterminal.domain.SriEvaluation
 import com.bioscan.fieldterminal.domain.StrengthLevel
 import com.bioscan.fieldterminal.domain.strengthLevelFor
@@ -104,7 +105,6 @@ private const val PHENOAGE_OPPORTUNITY_YEARS = 2.0
 private const val WHTR_FAVORABLE = 0.5 // Ashwell 2012: keep waist under half of height
 private const val WHTR_OPPORTUNITY = 0.6 // product-defined step
 private const val SLEEP_MIN_HOURS = 7.0 // Watson 2015 consensus: adults at least 7 h
-private const val SRI_REGULAR = 80.0 // product-defined
 private const val TRIGLYCERIDES_FLAG = 150.0 // Alberti 2009 harmonised criteria
 private const val HDL_FLAG_MALE = 40.0
 private const val HDL_FLAG_FEMALE = 50.0

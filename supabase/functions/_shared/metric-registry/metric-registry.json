@@ -412,10 +412,10 @@
       "key": "training_load",
       "docName": "Training load (CTL/ATL/TSB)",
       "kind": "modeled",
-      "methodology": "Session load = minutes x RPE, summed per day. Chronic load (CTL) is an exponentially weighted average with a 42-day time constant, acute load (ATL) with a 7-day constant, and form (TSB) is CTL minus ATL. Sessions without an RPE contribute nothing; nothing is imputed. CTL needs 42 days of history.",
+      "methodology": "Session load = minutes x RPE when an RPE was logged, otherwise Banister's TRIMP from average and maximum heart rate against the latest resting heart rate; a session with neither contributes nothing, nothing is imputed. Loads are summed per day. Fitness (CTL) and fatigue (ATL) are exponentially weighted averages with spans of 42 and 7 days (alpha = 2 / (span + 1)), and form (TSB) is yesterday's CTL minus ATL. Since October 2026 the spans can be your own: every night a pair is fitted to forecast tomorrow morning's ln HRV (from today's ln HRV, the weekday, fitness and fatigue) and tested on weeks the fit never saw (rolling origin, log score); it replaces 42 and 7, in the app and the console alike, only when it forecasts better (the 95% Newey-West interval of the daily score difference above zero, the PREDICTIVE rung). CTL needs 42 days of history.",
       "limitations": [
-        "Time constants are population conventions, not fitted to you.",
-        "Needs an RPE on each session; unlogged sessions understate load.",
+        "The spans are population conventions unless your own pair beat them on held-out weeks, and a personal pair is fitted to HRV, not to performance.",
+        "Sessions with neither an RPE nor heart rate understate load.",
         "The web dashboard still computes a different ratio (ACWR) from the same sessions."
       ],
       "references": [
@@ -426,10 +426,18 @@
         {
           "citation": "Foster C, Florhaug JA, Franklin J, et al. A new approach to monitoring exercise training. J Strength Cond Res 2001;15(1):109-115.",
           "doi": null
+        },
+        {
+          "citation": "Gneiting T, Raftery AE. Strictly proper scoring rules, prediction, and estimation. J Am Stat Assoc 2007;102(477):359-378.",
+          "doi": "10.1198/016214506000001437"
+        },
+        {
+          "citation": "Tashman LJ. Out-of-sample tests of forecasting accuracy: an analysis and review. Int J Forecast 2000;16(4):437-450.",
+          "doi": "10.1016/S0169-2070(00)00065-0"
         }
       ],
       "productDefined": false,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "2.0.0"
     },
     {
       "key": "trimp",
@@ -517,27 +525,56 @@
       "key": "sleep_index",
       "docName": null,
       "kind": "composite",
-      "methodology": "A 0 to 100 index that aggregates the existing sleep evaluations (duration, regularity, respiratory anomaly, stages) with named fixed weights. It shows how close your recent week is to your own norm, never a universal target. At least two components are required.",
+      "methodology": "A 0 to 100 index that aggregates the existing sleep evaluations (duration, regularity, respiratory anomaly, stages) with named fixed weights. It shows how close your recent week is to your own norm, never a universal target: duration and stages count against their own 60-day means, capped at 100. At least two components are required. One set of cut-offs, shared with Today's recovery: AS EXPECTED from 75, BELOW EXPECTED under 75, UNUSUALLY LOW under 55; it has no ABOVE EXPECTED, since a week cannot score better than its own norm. Since October 2026 it carries a scorecard worked out on your own history: every past morning it is recomputed as it would have read then and turned into a forecast of the day's energy and that morning's HRV against its recent level by a straight line fitted only on the days before (the last 120 with an outcome); the forecast is scored once the outcome is known (log score of a Gaussian forecast), and each of its single inputs is scored the same way on the same days. It EARNS ITS PLACE when it beats its best single input (the 95% Newey-West interval of the daily score difference above zero), is NO BETTER when it cannot be more than negligibly better, and then is shown as its inputs, without its own word (INPUTS ONLY); otherwise UNCLEAR, or NOT YET SCORED before 60 scored days. It is demoted only when it is no better on both outcomes; its main rival is last night's duration alone.",
       "limitations": [
         "Product-defined: weights are documented opinions, not fitted or clinically validated.",
-        "Not comparable between people."
+        "Not comparable between people.",
+        "The 75 and 55 cut-offs are product-defined."
       ],
-      "references": [],
+      "references": [
+        {
+          "citation": "Gneiting T, Raftery AE. Strictly proper scoring rules, prediction, and estimation. J Am Stat Assoc 2007;102(477):359-378.",
+          "doi": "10.1198/016214506000001437"
+        },
+        {
+          "citation": "Diebold FX, Mariano RS. Comparing predictive accuracy. J Bus Econ Stat 1995;13(3):253-263.",
+          "doi": "10.1080/07350015.1995.10524599"
+        },
+        {
+          "citation": "Tashman LJ. Out-of-sample tests of forecasting accuracy: an analysis and review. Int J Forecast 2000;16(4):437-450.",
+          "doi": "10.1016/S0169-2070(00)00065-0"
+        }
+      ],
       "productDefined": true,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "2.0.0"
     },
     {
       "key": "dynamic_recovery",
       "docName": null,
       "kind": "composite",
-      "methodology": "A recovery state built from separate contributors (sleep index, HRV, resting heart rate, training load, optionally Zepp stress). Each keeps its own direction and confidence; they are listed, not blended into one score. At least two contributors are required for a state.",
+      "methodology": "A recovery state built from separate contributors (the Sleep Index, HRV and resting heart rate as 7-day against 60-day baselines, training load, energy, stress and soreness, optionally Zepp stress). Each keeps its own direction and confidence; they are listed, not blended into one score. At least two contributors are required for a state: ABOVE EXPECTED when every contributor with a direction points up, BELOW EXPECTED when every one points down, MIXED SIGNALS when they disagree, AS EXPECTED otherwise. The Sleep Index counts with its own cut-offs: as expected (75 or more) it is neutral, below that it holds recovery back. Since October 2026 it carries a scorecard worked out on your own history: every past morning it is recomputed as it would have read then and turned into a forecast of tomorrow morning's HRV against its recent level by a straight line fitted only on the days before (the last 120 with an outcome); the forecast is scored once the outcome is known (log score of a Gaussian forecast), and each of its single inputs is scored the same way on the same days. It EARNS ITS PLACE when it beats its best single input (the 95% Newey-West interval of the daily score difference above zero), is NO BETTER when it cannot be more than negligibly better, and then is shown as its inputs, without its own word (INPUTS ONLY); otherwise UNCLEAR, or NOT YET SCORED before 60 scored days.",
       "limitations": [
         "Product-defined, not clinically validated.",
-        "Direction mapping (for example lower resting heart rate is better) is a convention."
+        "Direction mapping (for example lower resting heart rate is better) is a convention.",
+        "The scorecard's history leaves out the Zepp stress contributor, which exists only for the last few days.",
+        "READY FOR is the same state matched to the demand of a kind of session; its own scorecard asks whether planned sessions were done (Brier score), and needs 40 planned days."
       ],
-      "references": [],
+      "references": [
+        {
+          "citation": "Gneiting T, Raftery AE. Strictly proper scoring rules, prediction, and estimation. J Am Stat Assoc 2007;102(477):359-378.",
+          "doi": "10.1198/016214506000001437"
+        },
+        {
+          "citation": "Diebold FX, Mariano RS. Comparing predictive accuracy. J Bus Econ Stat 1995;13(3):253-263.",
+          "doi": "10.1080/07350015.1995.10524599"
+        },
+        {
+          "citation": "Tashman LJ. Out-of-sample tests of forecasting accuracy: an analysis and review. Int J Forecast 2000;16(4):437-450.",
+          "doi": "10.1016/S0169-2070(00)00065-0"
+        }
+      ],
       "productDefined": true,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "2.0.0"
     },
     {
       "key": "series_break",
@@ -597,12 +634,13 @@
       "key": "typicality",
       "docName": null,
       "kind": "modeled",
-      "methodology": "Compares today with your own recent typical days across five signals together: ln HRV, resting heart rate, sleep hours, deep + REM minutes and steps. The baseline is up to 120 past days that ends before the 14 days being judged, leaves out logged illness days and starts at the last confirmed series break. Each signal is standardised with a robust centre and spread (median, MAD); the joint pattern is described by a mean and a Ledoit-Wolf shrunk covariance, so correlated signals are judged together. A day's distance is the Mahalanobis distance over the signals it has (at least three) divided by their number, and 'elevated' and 'unusual' mean further out than 90% and 97.5% of your own typical days (leave-one-out). Two such days in a row with resting heart rate up suggest logging an illness. Today's steps are ignored because the day is not over, and a device-sensitive signal (deep + REM) is left out while a detected series break lies inside the window.",
+      "methodology": "Compares today with your own recent typical days across five signals together: ln HRV, resting heart rate, sleep hours, deep + REM minutes and steps. The baseline is up to 120 past days that ends before the 14 days being judged, leaves out logged illness days and starts at the last confirmed series break. Each signal is standardised with a robust centre and spread (median, MAD); the joint pattern is described by a mean and a Ledoit-Wolf shrunk covariance, so correlated signals are judged together. A day's distance is the Mahalanobis distance over the signals it has (at least three) divided by their number, and 'elevated' and 'unusual' mean further out than 90% and 97.5% of your own typical days (leave-one-out). Two such days in a row with resting heart rate up suggest logging an illness. Today's steps are ignored because the day is not over, and a device-sensitive signal (deep + REM) is left out while a detected series break lies inside the window. Since October 2026 its strain flag is scored against logged illness: the engine is replayed two weeks at a time on your history, each block against the baseline before it, and each strain day outside an illness is checked against illnesses logged in the three days after. Precision (strain days followed by an illness) is set against the base rate (the share of all days that fall in the three days before one): EARNS ITS PLACE when the precision's 95% Wilson interval lies above the base rate, NO BETTER THAN CHANCE when it lies under one and a half times it, UNCLEAR otherwise, NOT YET SCORED before 5 logged illnesses and 10 strain days.",
       "limitations": [
         "Experimental: on a real 9-month history, replayed one day at a time, it flagged clearly more ordinary days than its nominal 10% (elevated) and 2.5% (unusual), because real signals drift and change regime; on synthetic stationary data it stays near nominal. It is therefore shown as a drill-down and does not feed Today's Recovery.",
         "A day being atypical is not a problem in itself (an unusually long sleep or a big hike day are atypical too); only the strain flag requires resting heart rate to be up.",
         "Needs 45 complete days (all five signals) before it says anything.",
-        "Observational and personal: it says nothing about other people or about causes."
+        "Observational and personal: it says nothing about other people or about causes.",
+        "The scorecard needs illnesses to be logged; an illness that was never logged counts as a strain day with nothing after it."
       ],
       "references": [
         {
@@ -611,7 +649,7 @@
         }
       ],
       "productDefined": true,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "1.1.0"
     },
     {
       "key": "supplement_experiment",

@@ -8,6 +8,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { computeEffort } from "./effort.ts";
+import { decodeMinuteHr, type HrMinutePoint } from "./minuteHr.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -568,8 +569,6 @@ const METRIC_DEFS: MetricDef[] = [
 // dp/lt/dt fields give deep/light/REM minutes pre-aggregated.
 const SLEEP_MODE_AWAKE = 7;
 
-interface HrMinutePoint { offsetMinutes: number; bpm: number; }
-
 interface BandDataDecoded {
   sleepHours: number | null;
   sleepScore: number | null;
@@ -646,19 +645,8 @@ function decodeBandDataSummary(rawBody: unknown): BandDataDecoded | null {
   const stepsVal = stp ? Number(stp.ttl) : NaN;
   const steps = Number.isFinite(stepsVal) && stepsVal >= 0 ? stepsVal : null;
 
-  let hrTimeseries: HrMinutePoint[] | null = null;
-  const hrB64 = entry.data_hr;
-  if (typeof hrB64 === "string" && hrB64) {
-    try {
-      const bytes = atob(hrB64);
-      const pts: HrMinutePoint[] = [];
-      for (let i = 0; i < bytes.length; i++) {
-        const bpm = bytes.charCodeAt(i);
-        if (bpm > 0) pts.push({ offsetMinutes: i, bpm });
-      }
-      if (pts.length > 0) hrTimeseries = pts;
-    } catch { /* invalid base64, skip */ }
-  }
+  // Minute heart rate without the band's no-reading markers (minuteHr.ts).
+  const hrTimeseries = decodeMinuteHr(entry.data_hr);
 
   return { sleepHours, sleepScore, bedtimeIso, wakeTimeIso, deepMin, remMin, lightMin, rhr, steps, hrTimeseries };
 }

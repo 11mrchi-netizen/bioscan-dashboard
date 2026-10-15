@@ -2,6 +2,8 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.HrPoint
 import com.bioscan.fieldterminal.domain.LoadSpans
+import com.bioscan.fieldterminal.domain.HeartRateDay
+import com.bioscan.fieldterminal.domain.plausibleMinutes
 import com.bioscan.fieldterminal.data.model.FitnessFatigueRow
 import com.bioscan.fieldterminal.domain.SCORECARD_HISTORY_DAYS
 import com.bioscan.fieldterminal.data.model.PlannedOutcomeRow
@@ -194,22 +196,23 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<WearableAnalysisRow>()
             .reversed()
 
-    // The intraday heart-rate series of the day the Heart tab charts: the OLDEST day in the 200-row wearable window that
-    // has one (that is what `firstOrNull` on the ascending list always picked; kept unchanged, see HeartTileScreen).
-    // Fetched on its own because the column is ~50 kB of JSON per day and the other five screens never read it.
-    suspend fun loadHeartRateDay(windowStart: String?): List<HrPoint>? = ReadCache.get("analysis.hr_day.$windowStart") {
+    // The intraday heart-rate series the Heart tab charts: the NEWEST day that has one, with its date. It used to be the
+    // oldest day of the 200-row window (an ascending list's first row), so the card showed a day from months ago
+    // without saying which. Only plausible minutes are kept (MinuteHeartRate.kt). Fetched on its own because the column
+    // is ~50 kB of JSON per day and the other screens never read it.
+    suspend fun loadHeartRateDay(): HeartRateDay? = ReadCache.get("analysis.hr_day") {
         supabase.postgrest.from("wearable_daily")
             .select(columns = Columns.list("date,hr_timeseries")) {
                 filter {
-                    if (windowStart != null) gte("date", windowStart)
                     filterNot("hr_timeseries", io.github.jan.supabase.postgrest.query.filter.FilterOperator.IS, "null")
                 }
-                order("date", Order.ASCENDING)
-                limit(5)
+                order("date", Order.DESCENDING)
+                limit(3)
             }
             .decodeList<HrDayRow>()
-            .firstOrNull { it.hrTimeseries?.isNotEmpty() == true }
-            ?.hrTimeseries
+            .firstNotNullOfOrNull { row ->
+                plausibleMinutes(row.hrTimeseries.orEmpty()).takeIf { it.isNotEmpty() }?.let { HeartRateDay(LocalDate.parse(row.date), it) }
+            }
     }
 
     suspend fun loadSleepDaily(): List<SleepAnalysisRow> = ReadCache.get("analysis.SleepDaily") { fetchSleepDaily() }

@@ -95,7 +95,7 @@ import com.bioscan.fieldterminal.domain.expValue
 import com.bioscan.fieldterminal.domain.interpretSwcEvaluation
 import com.bioscan.fieldterminal.domain.vitalsTrendSeries
 import com.bioscan.fieldterminal.ui.nav.HeartTab
-import com.bioscan.fieldterminal.domain.TimePoint
+import com.bioscan.fieldterminal.domain.minuteHrSummary
 import com.bioscan.fieldterminal.ui.components.ComparisonStrip
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.personalScale
@@ -112,7 +112,7 @@ import com.bioscan.fieldterminal.ui.components.FTScoreRow
 import com.bioscan.fieldterminal.ui.components.FTSegment
 import com.bioscan.fieldterminal.ui.components.FTSegmentBar
 import com.bioscan.fieldterminal.ui.components.FTStatePill
-import com.bioscan.fieldterminal.ui.components.LineChart
+import com.bioscan.fieldterminal.ui.components.MinuteHeartRateChart
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.PinnedPage
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
@@ -144,8 +144,9 @@ fun HeartTileScreen(onBack: () -> Unit) {
     var tab by remember { mutableStateOf(HeartTab.Cardio) }
 
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
-    // Intraday HR of the one day the DAILY HEART RATE card charts; loaded apart from the daily list (it is ~50 kB per day).
-    var hrDay by remember { mutableStateOf<List<com.bioscan.fieldterminal.data.model.HrPoint>?>(null) }
+    // Intraday HR of the newest day that has one, for the DAILY HEART RATE card; loaded apart from the daily list (it is
+    // ~50 kB per day).
+    var hrDay by remember { mutableStateOf<com.bioscan.fieldterminal.domain.HeartRateDay?>(null) }
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
     var sexualActivity by remember { mutableStateOf<List<LogSexualActivityRow>?>(null) }
@@ -167,7 +168,8 @@ fun HeartTileScreen(onBack: () -> Unit) {
             guard.run {
                 val repo = AnalysisRepository(SupabaseClientProvider.client)
                 parallel(
-                    { wearable = repo.loadWearableDaily().also { hrDay = repo.loadHeartRateDay(it.firstOrNull()?.date) } },
+                    { wearable = repo.loadWearableDaily() },
+                    { hrDay = repo.loadHeartRateDay() },
                     { sleep = repo.loadSleepDaily() },
                     { wellbeing = repo.loadWellbeingDaily() },
                     // Arousal folded into wellbeing_daily -- see `wellbeing` above.
@@ -273,13 +275,24 @@ fun HeartTileScreen(onBack: () -> Unit) {
                         timeframe = vitalsTimeframe, methodology = "hrv", emphasis = if (bandInputs.isEmpty()) FTCardEmphasis.Hero else FTCardEmphasis.Supporting,
                         modifier = Modifier.glanceAnchor(glance, "hrv", baselineStateWord(hrvEval.state, METRIC_DIRECTIONALITY.getValue("hrv")).let { GlanceChip(0, "HRV", state = it.state, headline = it.word) }),
                     )
-                    // v12: intraday HR from Zepp band_data. Show for the most
-                    // recent day that has data; silently absent when not yet synced.
-                    val todayHr = hrDay
-                    if (todayHr != null) {
-                        val hrPoints = todayHr.map { TimePoint(it.offsetMinutes * 60L, it.bpm.toDouble()) }
-                        FTCard(title = "DAILY HEART RATE", modifier = Modifier.glanceAnchor(glance, "hr", GlanceChip(1, "DAILY HR"))) {
-                            LineChart(points = hrPoints, color = FT.DomainHeart, modifier = androidx.compose.ui.Modifier.fillMaxWidth().height(120.dp), filled = true)
+                    // v12: intraday HR from Zepp band_data, the newest day that has it, named in the title; silently
+                    // absent when not yet synced. Minutes without a reading are gaps, not values (MinuteHeartRate.kt).
+                    hrDay?.let { day ->
+                        val summary = minuteHrSummary(day.points)
+                        FTCard(
+                            title = "HEART RATE · ${day.date.format(java.time.format.DateTimeFormatter.ofPattern("d MMM")).uppercase()}",
+                            info = DAILY_HR_INFO,
+                            modifier = Modifier.glanceAnchor(glance, "hr", GlanceChip(1, "DAILY HR")),
+                        ) {
+                            MinuteHeartRateChart(points = day.points, color = FT.DomainHeart)
+                            summary?.let {
+                                Text(
+                                    "Worn ${it.wornMinutes / 60} h ${it.wornMinutes % 60} min · ${it.low}–${it.high} bpm · average ${it.average} bpm",
+                                    style = FTType.Caption,
+                                    color = FT.TextSecondary,
+                                    modifier = Modifier.padding(top = 6.dp),
+                                )
+                            }
                         }
                     }
                     val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
@@ -679,6 +692,11 @@ internal fun EvalCard(
 // Live check: 90 days diluted the visible trend with old history and made
 // the recent, actually-relevant month hard to read -- narrowed to 30,
 // shared by every EvalCard on both the Cardio and Recovery tabs.
+private const val DAILY_HR_INFO =
+    "Your band's heart rate minute by minute for the newest day it has synced, from midnight to midnight. Minutes " +
+        "without a reading (band off the wrist, or no measurement) are left out: the line breaks there and a dashed " +
+        "stretch on the baseline marks them. Tap or drag the chart to read a minute."
+
 private const val TREND_WINDOW_DAYS = 30L
 
 private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<LocalDate, Double>>? {

@@ -9,7 +9,7 @@ uncorrected correlation scan is retired, with a note to revisit it (section "Rev
 |---|---|---|---|
 | A | Fix what is wrong on screen | A unit test per bug; the baseline state's false-shift rate on stationary data at or below 10% | Done |
 | B | Capture for cause-and-effect questions | Exposure status known on most days once the check-in runs (reported nightly as `capture.knownShare28`) | Done |
-| C | Expected bands and flags | Synthetic 80% bands hold 78-82% of days; flags without a real change under one a month | Pending |
+| C | Expected bands and flags | Synthetic 80% bands hold 78-82% of days; flags without a real change under one a month | Done |
 | D | Association engines and the evidence board | Null data reads "clear" on at most 5% of questions; interval coverage 93-97% | Pending |
 | E | Ledger and confirmation | Nightly re-runs with no true effect ever read "clear" at most 5% of the time | Pending |
 | F | Randomised experiments and interrupted time series | Backtests with drift, carry-over and missing days keep false positives at or below 5% | Pending |
@@ -45,6 +45,24 @@ uncorrected correlation scan is retired, with a note to revisit it (section "Rev
 | Overnight readings keyed to their night | HRV and resting heart rate from Health Connect are averaged per night (readings from 18:00 count toward the next morning), like sleep_daily, instead of per calendar day, which split one night across two dates. Applies to rows written from the next sync on | domain/DailyAggregation.kt, HealthConnectDailySyncRepository.kt | NightDateTest |
 | Passive weather and daylight | Not built: the app has no location source, and adding one needs a permission decision. `daily_context` has nullable columns ready for it | - | - |
 | Readiness meter per question | Moved to phase D, where each question gets its no-effect zone (the meter is computed from it) | - | - |
+
+## Phase C: what changed
+
+| Plan item | Built | Where | Test |
+|---|---|---|---|
+| Expected band engine | Per metric (HRV in logs, resting heart rate, sleep duration) a slowly moving level plus a weekly pattern (exponential smoothing, ETS(A,N,A)); the two smoothing weights are fitted per person by a grid search on one-step errors. The band's width is the spread of the last 120 days of one-step errors, widened after missing days (the h-step forecast variance) and while errors are few (Student t). Published nightly as `expected_band`: the 80% and 99% bands for each of the last 28 mornings and for the morning after the run, in natural units, with the model-space centre and width | analysis-core/expectedBand.ts, runExpectedBands.ts, analysis-run/index.ts | expectedBand.test.ts, runExpectedBands.test.ts |
+| Flags | One morning beyond the 99% band, or a run of mornings on one side that trips an EWMA chart on the standardised errors (lambda 0.3, limit 2.4; its input clipped at the 99% point so one faulty reading cannot fake a run). Runs are flagged only once the band rests on 21 errors. Model updates use errors clipped at three band widths. Illness days are drawn against the band but neither update it nor count | expectedBand.ts | expectedBand.test.ts |
+| Regimes | A confirmed series break of the metric starts a new regime: the level relearns as a running mean of the new readings, the weekly pattern carries over, and the band is built from new-regime errors only (none for the first seven, then wide). Candidate breaks and breaks of other series do nothing | expectedBand.ts, runExpectedBands.ts | both |
+| Gate | Over 60 synthetic series for each of three noise structures (lag-one autocorrelation 0, 0.3, 0.5; 20% of days missing) the 80% band held 81.2%, 80.2% and 80.9% of mornings and the 99% band 99.1 to 99.2%; low-side flags came 0.2 to 0.4 days a month and flag episodes on either side 0.4 to 0.7 a month. Over 1,000 series a 2.5-SD drop lasting five mornings was flagged 88% of the time, a 1.5-SD drop lasting four 44% | expectedBand.test.ts | (the gate tests) |
+| Today answers first | THIS MORNING leads Today: one sentence per metric (the value, its size against what was expected for that weekday, the 80% band labelled "8 mornings in 10", how often a morning that far out comes as a natural frequency, and the flag in words), the lead metric's band chart with flagged mornings ringed and illness and source changes marked, and under it how often the band actually held | domain/ExpectedBand.kt, ExpectedBandCard.kt, TodayScreen.kt | ExpectedBandTest |
+| HRV and resting HR today | Health › Cardio leads with THIS MORNING for both, each with its band chart; the 60-day baseline cards follow as the longer view | HeartTileScreen.kt | - |
+| Status hero | THIS MORNING · HRV VS EXPECTED when the band exists and today has a reading; otherwise the HRV-against-baseline readiness band, as before | StatusRepository.kt, BodyConsole.kt | - |
+| A reading after the run | The nightly run sees only readings synced before it. A later reading is placed with the published centre and width, and steps the run chart once, as the server would have | domain/ExpectedBand.kt | ExpectedBandTest |
+| Chart rules | Every trend has a y-axis with at least three labelled values. HRV, resting HR, steps and wellbeing charts use a fixed personal scale (2nd to 98th percentile of the person's readings); vitals, steps, wellbeing and protein break at missing days, with the gap marked on the axis; the band chart uses per-day bands, ringed flags and annotations | DateTrendLine.kt, ChartRules.kt, HeartTileScreen.kt, FuelTileScreen.kt | ChartRulesTest |
+| Contract | R3 (each morning against what was expected) and R4 (chart rules) | design/ANALYTICAL_PRESENTATION_CONTRACT.md | - |
+| Engine version | `CORE_VERSION` 3.0.0-alpha.2: phases A to C changed published algorithms; old rows stay readable | version.ts, docs/analysis-layer-3/contract-v3.md | - |
+| Replay on the real history | Runs every night once deployed: each metric's `calibration.inside80` (how often the published band held over the last 120 mornings) is in the payload and shown under the chart. Not run from here, as the repository holds no personal data | - | - |
+| Not built | The optional inputs the plan mentioned (yesterday's load, last night's sleep as regressors) and online changepoint detection: the series-break engine supplies regimes instead. SpO2 has no band (it is not in the analysis frame) | - | - |
 
 ## Revisit
 

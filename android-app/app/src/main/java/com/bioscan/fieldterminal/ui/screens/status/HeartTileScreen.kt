@@ -39,6 +39,10 @@ import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.buildTrainingSessionLoads
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
+import com.bioscan.fieldterminal.data.model.ExpectedBandRow
+import com.bioscan.fieldterminal.domain.expectedStateWord
+import com.bioscan.fieldterminal.domain.leadReadout
+import com.bioscan.fieldterminal.domain.morningReadout
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.EvalState
@@ -90,6 +94,7 @@ import com.bioscan.fieldterminal.ui.nav.HeartTab
 import com.bioscan.fieldterminal.domain.TimePoint
 import com.bioscan.fieldterminal.ui.components.ComparisonStrip
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
+import com.bioscan.fieldterminal.ui.components.personalScale
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
 import com.bioscan.fieldterminal.ui.components.FTDataChip
@@ -146,6 +151,8 @@ fun HeartTileScreen(onBack: () -> Unit) {
     var stressDays by remember { mutableStateOf<List<StressDay>>(emptyList()) }
     // Analysis Layer 3 / R1: start of each metric's current regime (last confirmed series break); NONE until loaded.
     var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
+    // Analysis review phase C: the published expected band per metric; empty before the first run.
+    var bands by remember { mutableStateOf<Map<String, ExpectedBandRow>>(emptyMap()) }
 
     val guard = rememberLoadGuard()
     LaunchedEffect(guard.attempt) {
@@ -168,6 +175,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     // 05.1 Stress Rhythm: decoded client-side from zepp_raw_extracts (see ZeppStressRepository).
                     { stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays() },
                     { breakStarts = repo.loadSeriesBreakStarts() },
+                    { bands = repo.loadExpectedBands() },
                 )
             }
         }
@@ -214,6 +222,22 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     // UX review P2: an index of the cards below, each chip carrying the state its card computes.
                     val glance = rememberGlanceAnchors()
                     FTGlanceStrip(glance, contentPadding = PaddingValues(0.dp))
+                    // Analysis review phase C: this morning against what was expected leads the tab; the baseline cards
+                    // below keep the longer view.
+                    val today = LocalDate.now()
+                    val bandInputs = buildMap {
+                        bands["hrv"]?.let { put("hrv", BandInputs(it, w.mapNotNull { row -> row.hrv?.let { v -> LocalDate.parse(row.date) to v } })) }
+                        bands["rhr"]?.let { put("rhr", BandInputs(it, w.mapNotNull { row -> row.rhr?.let { v -> LocalDate.parse(row.date) to v } })) }
+                    }
+                    if (bandInputs.isNotEmpty()) {
+                        val leadWord = leadReadout(bandInputs.values.mapNotNull { morningReadout(it.row.payload, today, it.readings.lastOrNull()) })?.let(::expectedStateWord)
+                        val idle = if (bandInputs.values.all { it.row.payload.state == "building" }) "BUILDING" else "NO READING"
+                        CardioMorningCard(
+                            bandInputs,
+                            today,
+                            modifier = Modifier.glanceAnchor(glance, "today", GlanceChip(-1, "TODAY", state = leadWord?.state, headline = leadWord?.word ?: idle)),
+                        )
+                    }
                     // DAV-285: one shared timeframe for both HRV and RHR's trend
                     // charts -- they're the same kind of daily wearable stream, so
                     // a person comparing them wants the same window on both, not
@@ -239,7 +263,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     val hrvEval = evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).toExpSpace()
                     EvalCard(
                         "HRV", hrvEval, "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints, comparison = hrvComparison,
-                        timeframe = vitalsTimeframe, methodology = "hrv", emphasis = FTCardEmphasis.Hero,
+                        timeframe = vitalsTimeframe, methodology = "hrv", emphasis = if (bandInputs.isEmpty()) FTCardEmphasis.Hero else FTCardEmphasis.Supporting,
                         modifier = Modifier.glanceAnchor(glance, "hrv", baselineStateWord(hrvEval.state, METRIC_DIRECTIONALITY.getValue("hrv")).let { GlanceChip(0, "HRV", state = it.state, headline = it.word) }),
                     )
                     // v12: intraday HR from Zepp band_data. Show for the most
@@ -626,6 +650,9 @@ internal fun EvalCard(
             else recentTrendWindow(pts)
         }
         series?.let {
+            // Chart rules (analysis review phase C): the axis is fixed to this person's usual range for the metric, and
+            // missing days break the line (a missing week, once the points are weekly means).
+            val weekly = timeframe != null && timeframe != VitalsTimeframe.Week
             DateTrendLine(
                 points = it,
                 color = FT.DomainHeart,
@@ -634,6 +661,8 @@ internal fun EvalCard(
                 highlightColor = stateTreatment(word.state).color,
                 modifier = Modifier.padding(top = 8.dp),
                 unit = unit,
+                scale = points?.let { all -> personalScale(all.takeLast(365).map { p -> p.second }) },
+                maxGapDays = if (weekly) 7 else 1,
             )
         }
         interpretSwcEvaluation(title, eval, directionality)?.let { sentence ->
@@ -655,9 +684,9 @@ private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<
 }
 
 @Composable
-internal fun DynamicRecoveryCard(result: DynamicRecoveryResult, modifier: Modifier = Modifier) {
-    // Contract A3: the lead card of Health › Recovery and of the Today page.
-    FTCard(title = "TODAY'S RECOVERY", methodology = "dynamic_recovery", emphasis = FTCardEmphasis.Hero, modifier = modifier) {
+internal fun DynamicRecoveryCard(result: DynamicRecoveryResult, modifier: Modifier = Modifier, emphasis: FTCardEmphasis = FTCardEmphasis.Hero) {
+    // Contract A3: the lead card of Health › Recovery; on Today it follows THIS MORNING when the expected band exists.
+    FTCard(title = "TODAY'S RECOVERY", methodology = "dynamic_recovery", emphasis = emphasis, modifier = modifier) {
         FTStatePill(recoveryStateWord(result.state))
         FTDataChip(result.confidence)
         if (result.contributors.isEmpty()) {
@@ -892,7 +921,7 @@ private fun StepsCard(points: List<Pair<LocalDate, Double>>, benchmarkArtifacts:
         // steps/day categories) -- no personal-history comparison wired for
         // steps yet.
         ComparisonStrip(population = comparison)
-        DateTrendLine(points = recent, color = FT.DomainHeart, unit = "steps / day")
+        DateTrendLine(points = recent, color = FT.DomainHeart, unit = "steps / day", scale = personalScale(points.takeLast(365).map { it.second }), maxGapDays = 1)
     }
 }
 
@@ -924,7 +953,7 @@ private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>,
         eval.iqr7d?.let { FTMetricRow("7-day IQR", "%.1f".format(it)) }
         eval.trendDirection?.let { FTMetricRow("14-day trend", if (it > 0) "↑ rising (p<0.05)" else "↓ falling (p<0.05)") }
         recentTrendWindow(points)?.let { recent ->
-            DateTrendLine(points = recent, color = FT.Category.Wellbeing.c500, modifier = Modifier.padding(top = 8.dp))
+            DateTrendLine(points = recent, color = FT.Category.Wellbeing.c500, modifier = Modifier.padding(top = 8.dp), scale = personalScale(points.takeLast(365).map { it.second }), maxGapDays = 1)
         }
     }
 }

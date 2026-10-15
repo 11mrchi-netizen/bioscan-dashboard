@@ -72,6 +72,9 @@ import com.bioscan.fieldterminal.domain.FigurePoint
 import com.bioscan.fieldterminal.domain.FuelSubType
 import com.bioscan.fieldterminal.domain.MapEvent
 import com.bioscan.fieldterminal.domain.MetricState
+import com.bioscan.fieldterminal.domain.MorningReadout
+import com.bioscan.fieldterminal.domain.expectedStateWord
+import com.bioscan.fieldterminal.domain.headline
 import com.bioscan.fieldterminal.domain.figurePinForBodyPart
 import com.bioscan.fieldterminal.domain.freshnessLine
 import com.bioscan.fieldterminal.domain.healthFlagDay
@@ -337,8 +340,14 @@ private fun ConditionField(overview: StatusOverview?, isLoading: Boolean, figure
 
 // UX review P1 / P6: the hero says what it is (HRV against your recent baseline), how fresh the reading is (contract A5),
 // and where a tap goes (TODAY ›) -- it used to be a hidden tap with no basis or date.
+// Analysis review phase C: when the expected band exists and this morning has a reading, the hero states it against the
+// band (value, words, size); otherwise it falls back to the HRV-against-baseline readiness band as before.
 @Composable
 private fun ConditionHero(overview: StatusOverview, onOpenToday: () -> Unit) {
+    overview.hrvReadout?.let { readout ->
+        BandHero(overview, readout, onOpenToday)
+        return
+    }
     val readiness = overview.readiness
     val conditionState = readinessState(readiness.label)
     val freshness = freshnessLine(
@@ -382,6 +391,47 @@ private fun ConditionHero(overview: StatusOverview, onOpenToday: () -> Unit) {
         if (conditionState == MetricState.Building) {
             Text(readiness.note.uppercase(), style = FTType.Micro, color = FT.TextMuted)
         }
+        Text(freshness.text, style = FTType.Micro, color = if (freshness.stale) FT.Warning else FT.TextMuted, maxLines = 2)
+    }
+}
+
+@Composable
+private fun BandHero(overview: StatusOverview, readout: MorningReadout, onOpenToday: () -> Unit) {
+    val word = expectedStateWord(readout)
+    val freshness = freshnessLine(
+        readingDate = overview.hrvReadingDate,
+        source = "WEARABLE",
+        lastSync = overview.lastSyncAt?.atZone(ZoneId.systemDefault())?.toLocalDateTime(),
+        today = LocalDate.now(),
+        staleAfterDays = STALE_AFTER_DAYS,
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .ftClickable(role = Role.Button, onClickLabel = "Open Today", onClick = onOpenToday)
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "THIS MORNING · HRV VS EXPECTED",
+                style = FTType.LabelCaps,
+                color = FT.TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text("TODAY ›", style = FTType.LabelCaps, color = FT.EmeraldHighlight, modifier = Modifier.padding(start = 8.dp))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "%.0f ms".format(readout.value),
+                style = FTType.DisplayMetric,
+                color = if (word.state == MetricState.Warning) metricStateColor(word.state) else FT.TextPrimary,
+                modifier = Modifier.weight(1f),
+            )
+            FTStatePill(word)
+        }
+        Text(readout.headline(), style = FTType.BodySmall, color = FT.TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(freshness.text, style = FTType.Micro, color = if (freshness.stale) FT.Warning else FT.TextMuted, maxLines = 2)
     }
 }

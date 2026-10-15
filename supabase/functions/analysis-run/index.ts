@@ -13,8 +13,9 @@
 //                no human-held secret and no service role key is involved
 //
 // Publishes `series_break` (Phase 1), `relationship` (Phase 3, the confirmatory catalogue), `typicality` (Phase 4,
-// "is today typical for you"), `experiment` (Phase 5, pre-registered supplement N-of-1) and `intervention_response`
-// (Intervention & Protocol Intelligence 08.6, observational baseline-vs-active for any active intervention) results.
+// "is today typical for you"), `expected_band` (analysis review phase C: each morning against a forecast band, with
+// flags), `experiment` (Phase 5, pre-registered supplement N-of-1) and `intervention_response` (Intervention & Protocol
+// Intelligence 08.6, observational baseline-vs-active for any active intervention) results.
 // The action `experiment_preview` returns the smallest detectable effect of a planned design for the signed-in user.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -22,6 +23,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildPreview, runExperiments } from "../_shared/analysis-core/runExperiments.ts";
 import { runInterventionResponses } from "../_shared/analysis-core/runInterventionResponse.ts";
 import { loadFrame, runRelationships } from "../_shared/analysis-core/runRelationships.ts";
+import { runExpectedBands } from "../_shared/analysis-core/runExpectedBands.ts";
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
 import { runTypicality } from "../_shared/analysis-core/runTypicality.ts";
 import { pearson, pFromR } from "../_shared/analysis-core/stats.ts";
@@ -108,17 +110,18 @@ Deno.serve(async (req) => {
     for (const id of userIds) {
       const breaks = await runSeriesBreaks(admin, id);
       // The frame is read once and shared; one engine failing must not hide the others: each reports its own error.
-      // Typicality runs after the series breaks because it restarts its baseline at the last confirmed one.
+      // Typicality and the expected bands run after the series breaks because they restart at confirmed ones.
       const loaded = await loadFrame(admin, id).catch((e) => ({ userId: id, error: String(e) }));
       if ("error" in loaded) {
-        results.push({ ...breaks, relationships: loaded, typicality: loaded, experiments: loaded });
+        results.push({ ...breaks, relationships: loaded, typicality: loaded, expectedBands: loaded, experiments: loaded });
         continue;
       }
       const relationships = await runRelationships(admin, id, new Date(), loaded).catch((e) => ({ userId: id, error: String(e) }));
       const typicality = await runTypicality(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      const expectedBands = await runExpectedBands(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const experiments = await runExperiments(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const interventionResponses = await runInterventionResponses(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      results.push({ ...breaks, relationships, typicality, experiments, interventionResponses });
+      results.push({ ...breaks, relationships, typicality, expectedBands, experiments, interventionResponses });
     }
     return json({ coreVersion: CORE_VERSION, results }, 200);
   }

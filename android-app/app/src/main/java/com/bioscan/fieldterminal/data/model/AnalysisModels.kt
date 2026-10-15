@@ -172,3 +172,72 @@ data class RelationshipPayload(
     val pAdjusted: Double? = null,
     val notes: List<String> = emptyList(),
 )
+
+// Analysis review phase C. Read model for analysis_results rows of kind "expected_band", key = metric (hrv, rhr,
+// sleep_hours): the band each recent morning was expected to fall in, and the band for the morning after the run
+// (supabase/functions/_shared/analysis-core/expectedBand.ts). Every field is defaulted so a partial payload still decodes.
+@Serializable
+data class ExpectedBandRow(val key: String, val state: String = "building", val payload: ExpectedBandPayload = ExpectedBandPayload())
+
+@Serializable
+data class BandPoint(
+    val date: String = "",
+    val value: Double? = null,
+    val expected: Double? = null,
+    val lo80: Double? = null,
+    val hi80: Double? = null,
+    val lo99: Double? = null,
+    val hi99: Double? = null,
+    // Model space (log for HRV), so a reading that arrives after the run can be placed.
+    val mu: Double? = null,
+    val sigma: Double? = null,
+    val z: Double? = null,
+    // "extreme" | "run" | null, with side "low" | "high".
+    val flag: String? = null,
+    val side: String? = null,
+    val excluded: Boolean = false,
+)
+
+@Serializable
+data class BandParams(
+    val alpha: Double = 0.0,
+    val gamma: Double = 0.0,
+    val sigma: Double? = null,
+    val df: Int = 0,
+    val q80: Double? = null,
+    val q99: Double? = null,
+)
+
+@Serializable
+data class BandCalibration(val days: Int = 0, val inside80: Double? = null, val inside99: Double? = null)
+
+@Serializable
+data class BandEwma(
+    val lambda: Double = 0.3,
+    val limit: Double = 1.0,
+    val value: Double = 0.0,
+    val date: String? = null,
+    val runsActive: Boolean = false,
+)
+
+@Serializable
+data class ExpectedBandPayload(
+    val metric: String = "",
+    val unit: String = "",
+    // "ln" | "none"
+    val transform: String = "none",
+    // "higher" | "lower" | "range"
+    val better: String = "higher",
+    // "building" | "provisional" | "ready"
+    val state: String = "building",
+    val asOf: String = "",
+    val regimeStart: String? = null,
+    val lastObserved: String? = null,
+    val have: Int = 0,
+    val need: Int = 21,
+    val params: BandParams = BandParams(),
+    val calibration: BandCalibration = BandCalibration(),
+    val recent: List<BandPoint> = emptyList(),
+    val next: BandPoint? = null,
+    val ewma: BandEwma = BandEwma(),
+)

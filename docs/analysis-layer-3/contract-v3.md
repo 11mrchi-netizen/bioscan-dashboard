@@ -13,10 +13,10 @@ Version 3.0.0. This is what the server-published results look like and how they 
 | Column | Meaning |
 | -- | -- |
 | `user_id` | Owner. Rows are written with the service role and readable only by their owner. |
-| `kind` | `series_break`, `relationship`, `typicality`, `experiment`. New kinds may be added; readers ignore kinds they do not know. |
+| `kind` | `series_break`, `relationship`, `typicality`, `experiment`, `intervention_response`, `expected_band`. New kinds may be added; readers ignore kinds they do not know. |
 | `key` | Identifies the result inside its kind: a metric name (`hrv`), a hypothesis id (`alcohol->hrv@1`), `personal_normal`, an experiment id. |
 | `as_of` | The data date the result describes. |
-| `engine_version` | `CORE_VERSION` of the shared core (`supabase/functions/_shared/analysis-core/version.ts`, currently `3.0.0-alpha.1`). Bumped whenever an algorithm or parameter changes; part of the unique key so old results stay readable. |
+| `engine_version` | `CORE_VERSION` of the shared core (`supabase/functions/_shared/analysis-core/version.ts`, currently `3.0.0-alpha.2`: the analysis review phases A to C changed the permutation p, typicality thresholds, series-break confirmation and exposures, and added `expected_band`). Bumped whenever an algorithm or parameter changes; part of the unique key so old results stay readable. |
 | `inputs_hash` | Hash of the inputs. A result is stale when the hash of the current data differs. |
 | `state` | A state name, mirroring the Kotlin contract (see each kind). |
 | `confidence_have`, `confidence_need` | `Confidence(have, need)`. |
@@ -34,6 +34,8 @@ Unique key: `(user_id, kind, key, as_of, engine_version)`. A nightly job (`analy
 **`typicality`**, key = `personal_normal`. `state`: `building`, `typical`, `elevated`, `unusual`, `insufficient`. Payload: baseline window and size, thresholds, the day's distance and its drivers (signal, z, direction), recent days, lookalike days, `skipped` signals. A state, never a score; experimental (see README, Phase 4).
 
 **`experiment`**, key = experiment id. `state`: the stage (`before`, `running`) while it runs, then the primary outcome's verdict (`effect_detected`, `no_detectable_effect`, `insufficient`) once complete. Payload: `{ id, name, asOf, stage, adherence, metrics: [{ metric, role: primary|secondary, verdict: effect_detected|no_detectable_effect|insufficient|running, n0, n1, mean0, mean1, diff: {value, lo, hi, unit}, mde, p, pAdjusted, preTrendPerWeek, trendWarning, replicated, summary, notes }] }`, plus `status`, `supplementId`, the registered `protocol`, `preregisteredAt` and the `mdePreview` shown at registration. While the experiment runs, verdicts are `running`.
+
+**`expected_band`** (analysis review phase C), key = metric (`hrv`, `rhr`, `sleep_hours`). `state`: `building` (fewer than 7 one-step errors in the current regime: no band), `provisional` (a band, widened by Student t, but no run flags), `ready` (21 or more errors). Payload: `{ metric, unit, transform: ln|none, better: higher|lower|range, state, asOf, regimeStart, lastObserved, have, need, params: { alpha, gamma, sigma, df, q80, q99 }, calibration: { days, inside80, inside99 }, recent: [BandPoint x 28], next: BandPoint|null, ewma: { lambda, limit, value, date, runsActive } }`, where `BandPoint = { date, value, expected, lo80, hi80, lo99, hi99, mu, sigma, z, flag: extreme|run|null, side: low|high|null, excluded }`. Values and band edges are in natural units; `mu` and `sigma` are in model space (log for HRV) so a reading that arrives after the run is placed as `z = (T(value) - mu) / sigma` and the run chart is stepped once (`lambda * clip(z, q99) + (1 - lambda) * ewma.value`). `next` is the band for the day after `asOf`. A confirmed series break of the metric starts a new regime.
 
 ## Other tables the contract depends on
 

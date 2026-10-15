@@ -197,12 +197,18 @@ From the analysis review (docs/analysis-review/README.md). Each one changes what
 
 **R2 · Data is not confidence.** A count of observations against what a gate needs is shown as a data chip (DATA: GOOD at 80% of the need or more, PARTIAL at 50%, THIN below), never as CONFIDENCE. The confidence chip is kept for results that carry a real precision (an interval compared with the smallest change that matters). Population comparisons report how well the reference fits the person (confirmed age band and sex), not a constant.
 
+**R3 · Each morning against what was expected.** For HRV, resting heart rate and sleep duration, the morning's reading is placed against a band forecast before it arrived (the `expected_band` result: the person's usual level for that weekday, learnt from their own history). Inside the 80% band reads AS EXPECTED; outside it BELOW or ABOVE EXPECTED, with the size in natural units (a percentage for HRV) and how often a morning that far out comes when nothing has changed, as a natural frequency ("about once a month"), never a percentile. One morning outside the band is ordinary and stays Neutral. A flag needs a morning beyond the 99% band (UNUSUALLY LOW / HIGH) or a run on one side that trips the run chart on the forecast errors (LOW / HIGH LATELY); only a flag on the metric's unfavorable side is Warning (for sleep duration, only outside 7-9 h). Optimal is not used: one morning is not a change. Days inside a logged illness read ILLNESS LOGGED and are not judged. Under the band's chart, the share of recent mornings the 80% band actually held is stated, so the band can be audited. A building band shows how many mornings it still needs; nothing is guessed.
+
+**R4 · Chart rules.** Applied by the shared trend component (DateTrendLine with ChartRules.kt), so no screen has to remember them: a y-axis with at least three labelled values at nice steps; a fixed personal scale per metric when the caller has one (2nd to 98th percentile of the person's own readings), widened only when the data leave it, so an ordinary wobble looks like a wobble; a daily series breaks its line at missing days and the gap is marked on the axis (a session series, a run every few days, stays connected); a per-day band labelled with what it holds; flagged points ringed, so a flag never rests on colour alone; and dated annotations for a logged illness (a span) and a source change (a line). Two units still never share one axis.
+
 ## Acceptance tests
 
 - The same card renders Warning + Declining + High confidence and Optimal + Improving + High confidence solely by changing presentation input.
 - A low-confidence estimate cannot appear as a confirmed measurement.
 - Sparse history shows Building/Sparse without an invented trend or personal band.
 - Charts retain unit, time window, scale context and visible gaps.
+- Every trend shows at least three labelled y values; a daily series with a missing day draws two pieces, not one bridged line.
+- A morning outside its 80% band without a flag is Neutral; a flag on the unfavorable side is Warning and carries a word.
 - Range shows its type and never infers desirability from position.
 - State uses text and icon/shape as well as color.
 - No component receives raw data and makes metric-specific interpretation.

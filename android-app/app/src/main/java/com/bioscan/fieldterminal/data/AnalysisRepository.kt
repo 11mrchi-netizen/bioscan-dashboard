@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.HrPoint
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
+import com.bioscan.fieldterminal.data.model.ExpectedBandRow
 import com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow
 import com.bioscan.fieldterminal.data.model.LabResultAnalysisRow
 import com.bioscan.fieldterminal.data.model.MaxHrRow
@@ -88,6 +89,23 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             throw e
         } catch (e: Exception) {
             null
+        }
+
+    // Analysis review phase C. The latest expected band per metric (hrv, rhr, sleep_hours); empty before the first run
+    // or if the read fails, and every screen then falls back to what it showed before.
+    suspend fun loadExpectedBands(): Map<String, ExpectedBandRow> =
+        try {
+            ReadCache.get("analysis.expected_band") {
+                supabase.postgrest.from("analysis_results")
+                    .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "expected_band") }; newestFirst() }
+                    .decodeList<ExpectedBandRow>()
+                    .distinctBy { it.key }
+                    .associateBy { it.key }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyMap()
         }
 
     suspend fun loadWearableDaily(): List<WearableAnalysisRow> = ReadCache.get("analysis.WearableDaily") { fetchWearableDaily() }

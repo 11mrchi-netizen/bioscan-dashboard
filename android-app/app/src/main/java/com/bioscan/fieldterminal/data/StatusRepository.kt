@@ -18,6 +18,8 @@ import com.bioscan.fieldterminal.data.model.WearableDailyRow
 import com.bioscan.fieldterminal.domain.HealthFlag
 import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.ReadinessBand
+import com.bioscan.fieldterminal.domain.MorningReadout
+import com.bioscan.fieldterminal.domain.morningReadout
 import com.bioscan.fieldterminal.domain.SupplementsToday
 import com.bioscan.fieldterminal.domain.computeHydrationIntelligence
 import com.bioscan.fieldterminal.domain.pickHealthFlag
@@ -61,6 +63,9 @@ data class StatusOverview(
     val lastSyncAt: Instant? = null,
     // The TRAINING tile's load word (TSB band from the same evaluation as trainingState, e.g. "Loaded").
     val trainingLoadBand: String? = null,
+    // Analysis review phase C: this morning's HRV against the band expected for it. Null before the first analysis run,
+    // while the band is building, or with no reading yet today; the hero then falls back to the readiness band.
+    val hrvReadout: MorningReadout? = null,
 )
 
 // Contract A5. A nightly reading (HRV, resting HR, sleep) is dated the day it was recorded, and before the phone's
@@ -103,6 +108,7 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         val wearableD = async(Dispatchers.Default) { analysis.loadWearableDaily() }
         val sleepD = async(Dispatchers.Default) { analysis.loadSleepDaily() }
         val breaksD = async(Dispatchers.Default) { analysis.loadSeriesBreakStarts() }
+        val bandsD = async(Dispatchers.Default) { analysis.loadExpectedBands() }
         val loadSessionsD = async(Dispatchers.Default) { analysis.loadExerciseSessionsForTrainingLoad() }
         val injuriesD = async(Dispatchers.Default) {
             supabase.postgrest.from("injuries").select(columns = Columns.list("status,end_date,part,start_date")).decodeList<HealthEventRow>()
@@ -169,6 +175,8 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         val sessionsLast7Days = dedupeRunSessions(recentSessions.filter { it.type == "run" }).size +
             recentSessions.count { it.type != "run" }
 
+        val hrvReadout = bandsD.await()["hrv"]?.let { morningReadout(it.payload, today, hrvPoints.lastOrNull()) }
+
         StatusOverview(
             readiness = readiness,
             latestHrv = wearable.lastOrNull()?.hrv,
@@ -184,6 +192,7 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
             hrvReadingDate = wearableAnalysis.lastOrNull { it.hrv != null }?.let { runCatching { LocalDate.parse(it.date) }.getOrNull() },
             lastSyncAt = lastSyncD.await(),
             trainingLoadBand = trainingLoad.tsbBand,
+            hrvReadout = hrvReadout,
         )
     }
 

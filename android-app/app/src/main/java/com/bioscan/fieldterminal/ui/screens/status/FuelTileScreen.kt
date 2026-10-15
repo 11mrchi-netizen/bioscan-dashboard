@@ -261,6 +261,8 @@ private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) 
                 refLow = PROTEIN_PCT_LOW * 100,
                 refHigh = PROTEIN_PCT_HIGH * 100,
                 unit = "% of calories from protein",
+                // Chart rules: a day without a complete log is a gap, not a straight line across it.
+                maxGapDays = 1,
             )
         }
     }

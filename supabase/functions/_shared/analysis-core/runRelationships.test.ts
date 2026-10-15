@@ -11,9 +11,11 @@ type Row = Record<string, unknown>
 // In-memory stand-in for the Supabase query builder: select / eq / gte / lt / order / range / delete / upsert.
 function fakeAdmin(tables: Record<string, Row[]>) {
   const upserts: Row[] = []
+  const ledger: Row[] = []
   const deletes: { table: string; filters: [string, string, unknown][] }[] = []
   return {
     upserts,
+    ledger,
     deletes,
     from(table: string) {
       const filters: [string, string, unknown][] = []
@@ -27,7 +29,11 @@ function fakeAdmin(tables: Record<string, Row[]>) {
         order() { return q },
         range(a: number, b: number) { window = [a, b]; return q },
         delete() { isDelete = true; return q },
-        upsert(row: Row) { upserts.push(row); return Promise.resolve({ error: null }) },
+        upsert(row: Row | Row[]) {
+          if (table === 'evidence_ledger') ledger.push(...(row as Row[]))
+          else upserts.push(row as Row)
+          return Promise.resolve({ error: null })
+        },
         then(resolve: (v: { data: Row[]; error: null }) => void) {
           let rows = (tables[table] ?? []).filter((r) => filters.every(([op, c, v]) => (op === 'eq' ? r[c] === v : op === 'gte' ? String(r[c]) >= String(v) : String(r[c]) < String(v))))
           if (isDelete) deletes.push({ table, filters })
@@ -109,6 +115,41 @@ test('runRelationships publishes one row per hypothesis from raw tables and repl
   assert.equal(row('caffeine_pm_sleep').confidence_have, 0)
   assert.ok((row('caffeine_pm_sleep').confidence_need as number) >= 6)
   assert.ok(admin.deletes.some((d) => d.table === 'analysis_results' && d.filters.some(([op, c]) => op === 'lt' && c === 'as_of')))
+  // Analysis review phase E: every verdict goes to the ledger too.
+  assert.equal(admin.ledger.length, HYPOTHESES.length)
+  const entry = admin.ledger.find((l) => l.question_id === 'alcohol_hrv') as Row
+  assert.equal(entry.source, 'catalogue')
+  assert.equal(entry.verdict, 'clear')
+  assert.equal(entry.as_of, today)
+  assert.ok((entry.information as number) > 0 && (entry.information as number) <= 1)
+})
+
+test('a registered question is tested only on days after its registration, and a withdrawn one not at all', async () => {
+  const ds = plantedDataset(20261011, 300, '2026-01-05', 10_000, 10_000, [])
+  const today = ds.dates[ds.dates.length - 1]
+  const tables: Record<string, Row[]> = {
+    wearable_daily: ds.dates.map((d, i) => ({ user_id: USER, date: d, hrv: ds.hrv[i], rhr: ds.rhr[i], steps: null })),
+    sleep_daily: ds.dates.map((d, i) => ({ user_id: USER, date: d, hours: ds.sleepH[i] })),
+    meals: ds.dates.map((d, i) => ({ user_id: USER, logged_at: `${d}T12:00:00Z`, meal_items: [{ alcohol_g: ds.alcoholG[i] > 0 ? ds.alcoholG[i] : null, caffeine_mg: null }] })),
+    exercise_sessions: [],
+    recovery_sessions: [],
+    illnesses: [],
+    registered_questions: [
+      { user_id: USER, id: 1, exposure: 'alcohol_any', outcome: 'rhr', lag: 1, no_effect: 1, registered_on: ds.dates[119], source: 'case_crossover', withdrawn_at: null },
+      { user_id: USER, id: 2, exposure: 'alcohol_any', outcome: 'sleep_hours', lag: 1, no_effect: 10, registered_on: ds.dates[119], source: 'case_crossover', withdrawn_at: '2026-06-01T00:00:00Z' },
+    ],
+  }
+  const admin = fakeAdmin(tables)
+  const run = await runRelationships(admin, USER, new Date(`${today}T20:00:00Z`))
+  assert.equal(run.error, undefined)
+  assert.deepEqual(run.registered?.map((r) => r.id), ['reg_1'])
+  const row = admin.upserts.find((u) => u.kind === 'registered_question') as Row
+  const payload = row.payload as { n: number; registeredOn: string; daysSince: number; label: string }
+  assert.equal(payload.registeredOn, ds.dates[119])
+  assert.equal(payload.daysSince, 180)
+  assert.ok(payload.n <= 180, `only post-registration days: ${payload.n}`)
+  assert.equal(payload.label, 'Alcohol and next-morning resting heart rate')
+  assert.ok(admin.ledger.some((l) => l.question_id === 'reg_1' && l.source === 'registered'))
 })
 
 // Analysis review phase B: local time, the small hours belong to the evening before, and check-ins make real zeros.

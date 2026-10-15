@@ -101,6 +101,44 @@ test('gate: planted effects are recovered with 95% intervals that cover the trut
   for (const s of scenarios) assert.ok(s.hits / s.runs >= 0.9, `${s.label}: ${(s.hits / s.runs).toFixed(3)}`)
 })
 
+test('gate (phase E): re-checked every night with no true effect, a question ever reads clear at most 5% of the time', () => {
+  // 50 simulated histories; every 10th night from day 45 to day 405, on the last 365 days each time. Without the
+  // sequential boundary 10% of such histories read clear at some point (most of them in the first weeks).
+  let ever = 0
+  const runs = 50
+  for (let r = 0; r < runs; r++) {
+    const d = simulated(70_000 + r * 7, 405, 0)
+    for (let end = 45; end <= 405; end += 10) {
+      const start = Math.max(0, end - 365)
+      const f: Frame = { dates: d.dates.slice(start, end), series: { alcohol_any: d.alcohol.slice(start, end), hrv: d.hrv.slice(start, end) }, excluded: d.dates.slice(start, end).map(() => false) }
+      if (analyseHypothesis(byId('alcohol_hrv'), f).state === 'clear') { ever++; break }
+    }
+  }
+  assert.ok(ever / runs <= 0.05, `${ever} of ${runs} null histories read clear at some point`)
+})
+
+test('the verdict uses a wider, sequential interval while information is short; the 95% interval stays the estimate', () => {
+  const short = analyseHypothesis(byId('alcohol_hrv'), { ...frame, dates: frame.dates.slice(0, 120), excluded: frame.excluded.slice(0, 120), series: Object.fromEntries(Object.entries(frame.series).map(([k, v]) => [k, v.slice(0, 120)])) })
+  const v = short.verdictInterval!
+  assert.ok(v.information < 1 && v.boundary > 2.24, JSON.stringify(v))
+  assert.ok(v.lo < short.effect!.lo && v.hi > short.effect!.hi)
+  const long = analyseHypothesis(byId('alcohol_hrv'), frame)
+  assert.ok(long.verdictInterval!.boundary < v.boundary)
+})
+
+test('related questions are pooled: same exposure, favourable direction, probability beyond the zone', () => {
+  const out = runCatalogue([byId('alcohol_hrv'), byId('alcohol_rhr'), byId('sleep_hrv')], frame)
+  const hrv = out.find((o) => o.id === 'alcohol_hrv')!
+  const rhr = out.find((o) => o.id === 'alcohol_rhr')!
+  assert.equal(hrv.pooled?.family, 'alcohol_any')
+  assert.equal(hrv.pooled?.members, 2)
+  assert.equal(hrv.pooled?.unit, '%')
+  assert.equal(rhr.pooled?.unit, 'bpm')
+  assert.ok((hrv.pooled?.value as number) < 0 && (rhr.pooled?.value as number) > 0, 'signs stay in each outcome\'s own direction')
+  assert.ok((hrv.pooled?.probabilityBeyondZone as number) > 0.9)
+  assert.equal(out.find((o) => o.id === 'sleep_hrv')!.pooled, null) // alone in its family
+})
+
 test('planted effects read clear, with the right sign, size and interval', () => {
   const out = runCatalogue([byId('alcohol_hrv'), byId('alcohol_rhr'), byId('sleep_hrv'), breath], frame)
   const get = (id: string) => out.find((o) => o.id === id)!

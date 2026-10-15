@@ -6,6 +6,9 @@ import com.bioscan.fieldterminal.data.model.CaseCrossoverResultRow
 import com.bioscan.fieldterminal.data.model.EventCurveRow
 import com.bioscan.fieldterminal.data.model.ExpectedBandRow
 import com.bioscan.fieldterminal.data.model.LagCurveRow
+import com.bioscan.fieldterminal.data.model.LedgerEntry
+import com.bioscan.fieldterminal.data.model.NewRegisteredQuestion
+import com.bioscan.fieldterminal.data.model.RegisteredQuestion
 import com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow
 import com.bioscan.fieldterminal.data.model.LabResultAnalysisRow
 import com.bioscan.fieldterminal.data.model.MaxHrRow
@@ -112,6 +115,47 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     private suspend fun <T> softList(cacheKey: String, block: suspend () -> List<T>): List<T> =
         try {
             ReadCache.get(cacheKey) { block() }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+    // Analysis review phase E. Registered questions' results (kind registered_question), newest per key; empty before
+    // the first one is registered or if the read fails.
+    suspend fun loadRegisteredResults(): List<RelationshipResultRow> =
+        softList("analysis.registered_question") { latestOf<RelationshipResultRow>("registered_question").distinctBy { it.key } }
+
+    // The live registrations themselves (the result appears after the next nightly run).
+    suspend fun loadRegisteredQuestions(): List<RegisteredQuestion> =
+        softList("analysis.registered_questions") {
+            supabase.postgrest.from("registered_questions")
+                .select(columns = Columns.list("id,exposure,outcome,lag,registered_on,withdrawn_at"))
+                .decodeList<RegisteredQuestion>()
+                .filter { it.withdrawnAt == null }
+        }
+
+    // Registers a hint as a question tested only on days after today. Throws on failure (the caller shows it). Any write
+    // clears the read cache (ReadCache's CacheInvalidation), so the lists above reload.
+    suspend fun registerQuestion(q: NewRegisteredQuestion) {
+        supabase.postgrest.from("registered_questions").insert(q)
+    }
+
+    // Withdrawing keeps the row (and its ledger history); it just stops being tested.
+    suspend fun withdrawQuestion(id: Long) {
+        supabase.postgrest.from("registered_questions").update(mapOf("withdrawn_at" to java.time.Instant.now().toString())) { filter { eq("id", id) } }
+    }
+
+    // The verdict history of one question from the append-only ledger, newest first (empty if the read fails).
+    suspend fun loadLedger(questionId: String, limit: Long = 120): List<LedgerEntry> =
+        try {
+            supabase.postgrest.from("evidence_ledger")
+                .select(columns = Columns.list("question_id,as_of,verdict,estimate,lo,hi,unit")) {
+                    filter { eq("question_id", questionId) }
+                    order("as_of", Order.DESCENDING)
+                    limit(limit)
+                }
+                .decodeList<LedgerEntry>()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

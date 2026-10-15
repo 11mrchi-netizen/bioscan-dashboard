@@ -37,7 +37,13 @@ interface Payload {
   familySize: number
   catalogueVersion: string
   window: { start: string; end: string }
+  // Analysis review phase E.
+  verdictInterval: { lo: number; hi: number; boundary: number; information: number } | null
+  pooled: { family: string; members: number; value: number; lo: number; hi: number; unit: string; probabilityBeyondZone: number } | null
+  registeredOn?: string
+  daysSince?: number
 }
+interface LedgerRow { question_id: string; as_of: string; verdict: string }
 interface Row { key: string; as_of: string; state: string; calculated_at: string; payload: Payload }
 
 interface CurveDay { k: number; mean: number | null; lo: number | null; hi: number | null; chanceLo: number | null; chanceHi: number | null; n: number }
@@ -51,7 +57,19 @@ const CATALOGUE = [
   'alcohol_hrv', 'alcohol_rhr', 'alcohol_sleep', 'caffeine_pm_sleep', 'late_meal_sleep', 'late_meal_hrv', 'stress_sleep',
   'evening_training_sleep', 'training_hrv', 'recovery_hrv', 'sleep_hrv', 'steps_hrv', 'sleep_energy',
 ]
-const GROUPS: [Payload['outcome'], string][] = [['hrv', 'HRV'], ['rhr', 'RESTING HEART RATE'], ['sleep', 'SLEEP'], ['energy', 'ENERGY']]
+const GROUPS: [Payload['outcome'] | 'registered', string][] = [['hrv', 'HRV'], ['rhr', 'RESTING HEART RATE'], ['sleep', 'SLEEP'], ['energy', 'ENERGY'], ['registered', 'QUESTIONS YOU REGISTERED']]
+
+// "CLEAR since 2026-10-13 (2 nights) · UNCLEAR 2026-10-10 to 2026-10-12 (3 nights)" from the ledger, newest first.
+function historyLine(entries: LedgerRow[]): string | null {
+  const sorted = [...entries].sort((a, b) => a.as_of.localeCompare(b.as_of))
+  const runs: { verdict: string; from: string; to: string; nights: number }[] = []
+  for (const e of sorted) {
+    const last = runs[runs.length - 1]
+    if (last && last.verdict === e.verdict) { last.to = e.as_of; last.nights++ } else runs.push({ verdict: e.verdict, from: e.as_of, to: e.as_of, nights: 1 })
+  }
+  if (runs.length === 0) return null
+  return runs.reverse().slice(0, 4).map((r, i) => `${WORD[asVerdict(r.verdict)]} ${i === 0 ? `since ${r.from}` : `${r.from} to ${r.to}`} (${r.nights} night${r.nights === 1 ? '' : 's'})`).join(' · ')
+}
 const WORD: Record<Verdict, string> = { clear: 'CLEAR', negligible: 'NEGLIGIBLE', unclear: 'UNCLEAR', not_yet: 'NOT YET' }
 const asVerdict = (s: string): Verdict => (s === 'clear' || s === 'negligible' || s === 'unclear' ? s : 'not_yet')
 
@@ -157,6 +175,8 @@ export function Confirmatory() {
   const [lags, setLags] = useState<Map<string, LagCurve>>(new Map())
   const [crossover, setCrossover] = useState<Crossover[]>([])
   const [open, setOpen] = useState<string | null>(null)
+  const [registered, setRegistered] = useState<Row[]>([])
+  const [history, setHistory] = useState<Map<string, string | null>>(new Map())
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -165,8 +185,12 @@ export function Confirmatory() {
   const load = useCallback(async () => {
     try {
       // Analysis review A8: newest row per key (latest as_of, then latest run). A failed read is an error, not an empty board.
-      const [rel, ev, lg, cc] = await Promise.all([newest<Payload>('relationship'), newest<EventCurve>('event_curve'), newest<LagCurve>('lag_curve'), newest<Crossover>('case_crossover')])
+      const [rel, ev, lg, cc, reg] = await Promise.all([
+        newest<Payload>('relationship'), newest<EventCurve>('event_curve'), newest<LagCurve>('lag_curve'), newest<Crossover>('case_crossover'),
+        newest<Payload>('registered_question'),
+      ])
       setRows(rel as unknown as Row[])
+      setRegistered(reg as unknown as Row[])
       setCurves(new Map(ev.map((r) => [r.key, r.payload])))
       setLags(new Map(lg.map((r) => [r.key, r.payload])))
       setCrossover(cc.map((r) => r.payload))
@@ -180,6 +204,16 @@ export function Confirmatory() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+
+  // Phase E: the open question's verdict history from the append-only ledger (loaded once per question).
+  useEffect(() => {
+    if (!open || history.has(open)) return
+    void (async () => {
+      const { data, error } = await supabase.from('evidence_ledger').select('question_id, as_of, verdict').eq('question_id', open).order('as_of', { ascending: false }).limit(180)
+      warnOnError('evidence ledger', error)
+      setHistory((h) => new Map(h).set(open, error ? null : historyLine((data ?? []) as LedgerRow[])))
+    })()
+  }, [open, history])
 
   const run = useCallback(async () => {
     setRunning(true)
@@ -218,7 +252,7 @@ export function Confirmatory() {
       {tally && <div className="ev-tally mono">{tally}</div>}
 
       {GROUPS.map(([g, title]) => {
-        const groupRows = sorted.filter((r) => r.payload.outcome === g)
+        const groupRows = g === 'registered' ? registered : sorted.filter((r) => r.payload.outcome === g)
         if (groupRows.length === 0) return null
         const scale = Math.max(
           ...groupRows.flatMap((r) => [r.payload.effect ? Math.abs(r.payload.effect.lo) : 0, r.payload.effect ? Math.abs(r.payload.effect.hi) : 0, r.payload.mde ?? 0, (r.payload.noEffect ?? 0) * 1.5]),
@@ -249,7 +283,19 @@ export function Confirmatory() {
                   {isOpen && (
                     <div className="ev-detail">
                       <p className="conf-summary">{p.summary}</p>
+                      {p.registeredOn && <p className="conf-footnote">Registered {p.registeredOn}; tested only on the {p.daysSince ?? 0} days since.</p>}
+                      {p.verdictInterval && p.effect && (p.verdictInterval.lo < p.effect.lo || p.verdictInterval.hi > p.effect.hi) && (
+                        <p className="conf-footnote">
+                          The verdict uses a wider interval ({fmt(p.verdictInterval.lo, p.effect.unit)} to {fmt(p.verdictInterval.hi, p.effect.unit)}, boundary {p.verdictInterval.boundary.toFixed(2)}) because the question is re-checked every night; {Math.round(p.verdictInterval.information * 100)}% of a full year's information so far.
+                        </p>
+                      )}
                       {p.adjustments?.length > 0 && <p className="conf-footnote">Adjusted for {p.adjustments.join(', ')}.</p>}
+                      {p.pooled && (
+                        <p className="conf-footnote">
+                          Pooled with {p.pooled.members - 1} related question{p.pooled.members === 2 ? '' : 's'} about the same exposure: {fmt(p.pooled.value, p.pooled.unit)} ({fmt(p.pooled.lo, p.pooled.unit)} to {fmt(p.pooled.hi, p.pooled.unit)}); about {Math.round(p.pooled.probabilityBeyondZone * 100)}% likely beyond the zone under that model.
+                        </p>
+                      )}
+                      {history.get(r.key) && <p className="conf-footnote mono">History: {history.get(r.key)}</p>}
                       {v === 'unclear' && p.readiness && <p className="conf-footnote">About {Math.max(0, p.readiness.need - p.readiness.have)} more {p.readiness.unit} would settle it.</p>}
                       <div className="conf-stats mono">
                         {p.mde !== null && p.effect && <span>detectable ±{p.mde.toFixed(p.effect.unit === '%' ? 1 : 2)}{p.effect.unit === '%' ? '%' : ` ${p.effect.unit}`}</span>}

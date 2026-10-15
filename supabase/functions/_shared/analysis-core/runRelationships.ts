@@ -1,8 +1,9 @@
 // I/O for the relationship engine: reads a user's raw rows through a duck-typed Supabase client (tested in Node with an
 // in-memory fake, run unchanged in the analysis-run Edge Function), builds the daily frame the catalogue refers to, runs
 // the catalogue and publishes one analysis_results row per hypothesis (kind 'relationship').
-import { HYPOTHESES, CATALOGUE_VERSION } from './hypotheses.ts'
-import { MIN_PAIRS, runCatalogue } from './relationship.ts'
+import { HYPOTHESES, CATALOGUE_VERSION, registeredHypothesis } from './hypotheses.ts'
+import type { RegisteredQuestionRow } from './hypotheses.ts'
+import { analyseHypothesis, MIN_PAIRS, runCatalogue } from './relationship.ts'
 import type { Frame, RelationshipOutcome } from './relationship.ts'
 import { alignToAxis, dateAxis } from './stats.ts'
 import type { Num } from './stats.ts'
@@ -213,6 +214,10 @@ export interface RelationshipRun {
   userId: string
   error?: string
   results?: { id: string; state: string; n: number; p: number | null; pAdjusted: number | null }[]
+  /** Analysis review phase E: registered questions tested tonight. */
+  registered?: { id: string; state: string; n: number }[]
+  /** The ledger append failed (for example before its migration); the results above were still published. */
+  ledgerError?: string
 }
 
 export interface LoadedFrame {
@@ -264,6 +269,7 @@ export async function runRelationships(admin: Admin, userId: string, now: Date =
   const outcomes: RelationshipOutcome[] = runCatalogue(HYPOTHESES, frame)
 
   const results: NonNullable<RelationshipRun['results']> = []
+  const ledger: LedgerRow[] = []
   for (const o of outcomes) {
     const { error } = await admin.from('analysis_results').upsert(
       {
@@ -291,6 +297,81 @@ export async function runRelationships(admin: Admin, userId: string, now: Date =
     if (error) return { userId, error: error.message, results }
     await admin.from('analysis_results').delete().eq('user_id', userId).eq('kind', 'relationship').eq('key', o.id).eq('engine_version', CORE_VERSION).lt('as_of', today)
     results.push({ id: o.id, state: o.state, n: o.n, p: o.p, pAdjusted: o.pAdjusted })
+    ledger.push(ledgerRow(userId, today, 'catalogue', o))
   }
-  return { userId, results }
+
+  // Analysis review phase E: registered questions, each tested only on days after its registration date. Read softly,
+  // so the nightly run keeps working before the migration is applied.
+  const registered: NonNullable<RelationshipRun['registered']> = []
+  const reg = await admin.from('registered_questions').select('id, exposure, outcome, lag, no_effect, registered_on, source, withdrawn_at').eq('user_id', userId)
+  if (!reg.error) {
+    for (const row of (reg.data ?? []) as RegisteredQuestionRow[]) {
+      if (row.withdrawn_at) continue
+      const h = registeredHypothesis(row)
+      if (!h) continue
+      const from = frame.dates.findIndex((d) => d > row.registered_on)
+      const after: Frame = from < 0
+        ? { dates: [], series: {}, excluded: [] }
+        : { ...frame, dates: frame.dates.slice(from), excluded: frame.excluded.slice(from), series: Object.fromEntries(Object.entries(frame.series).map(([k, v]) => [k, v.slice(from)])) }
+      const o = after.dates.length > 0 ? analyseHypothesis(h, after) : null
+      if (!o) continue
+      const { error } = await admin.from('analysis_results').upsert(
+        {
+          user_id: userId,
+          kind: 'registered_question',
+          key: h.id,
+          as_of: today,
+          engine_version: CORE_VERSION,
+          inputs_hash: o.inputsHash,
+          state: o.state,
+          confidence_have: o.readiness?.have ?? o.n,
+          confidence_need: o.readiness?.need ?? MIN_PAIRS,
+          payload: { registeredOn: row.registered_on, source: row.source ?? null, exposure: row.exposure, target: row.outcome, lag: row.lag, daysSince: after.dates.length, ...o },
+          calculated_at: now.toISOString(),
+        },
+        { onConflict: 'user_id,kind,key,as_of,engine_version' },
+      )
+      if (error) return { userId, error: error.message, results, registered }
+      await admin.from('analysis_results').delete().eq('user_id', userId).eq('kind', 'registered_question').eq('key', h.id).eq('engine_version', CORE_VERSION).lt('as_of', today)
+      registered.push({ id: h.id, state: o.state, n: o.n })
+      ledger.push(ledgerRow(userId, today, 'registered', o))
+    }
+  }
+
+  // Every verdict, every night, kept (append-only; a re-run the same night keeps the first row).
+  const { error: ledgerError } = ledger.length > 0
+    ? await admin.from('evidence_ledger').upsert(ledger, { onConflict: 'user_id,question_id,as_of,engine_version', ignoreDuplicates: true })
+    : { error: null }
+  return { userId, results, registered, ...(ledgerError ? { ledgerError: ledgerError.message } : {}) }
+}
+
+export interface LedgerRow {
+  user_id: string
+  question_id: string
+  source: 'catalogue' | 'registered'
+  as_of: string
+  engine_version: string
+  catalogue_version: string | null
+  inputs_hash: string
+  verdict: string
+  estimate: number | null
+  lo: number | null
+  hi: number | null
+  unit: string | null
+  verdict_lo: number | null
+  verdict_hi: number | null
+  information: number | null
+  no_effect: number
+  n: number
+  n_on: number | null
+}
+
+function ledgerRow(userId: string, asOf: string, source: LedgerRow['source'], o: RelationshipOutcome): LedgerRow {
+  return {
+    user_id: userId, question_id: o.id, source, as_of: asOf, engine_version: CORE_VERSION,
+    catalogue_version: source === 'catalogue' ? CATALOGUE_VERSION : null, inputs_hash: o.inputsHash, verdict: o.state,
+    estimate: o.effect?.value ?? null, lo: o.effect?.lo ?? null, hi: o.effect?.hi ?? null, unit: o.effect?.unit ?? null,
+    verdict_lo: o.verdictInterval?.lo ?? null, verdict_hi: o.verdictInterval?.hi ?? null, information: o.verdictInterval?.information ?? null,
+    no_effect: o.noEffect, n: o.n, n_on: o.nOn,
+  }
 }

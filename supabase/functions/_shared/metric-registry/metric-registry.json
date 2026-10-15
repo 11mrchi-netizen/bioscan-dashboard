@@ -557,7 +557,7 @@
       "key": "relationship_engine",
       "docName": null,
       "kind": "modeled",
-      "methodology": "A fixed catalogue of questions (for example alcohol and next-morning HRV), each tested once with one regression: the outcome on day t against the exposure on day t minus the lag, adjusted for weekday, a slow trend (a linear spline with a knot every 60 days), the outcome measured before the exposure and the exposure behind that earlier outcome. Standard errors are Newey-West in calendar days with small-sample corrections, so neighbouring days are not counted as independent. The verdict compares the 95% interval with the question's no-effect zone, fixed before any data (HRV 2%, resting heart rate 1 bpm, sleep 10 minutes, energy half a point): CLEAR when the interval lies entirely outside the zone, NEGLIGIBLE when it lies entirely inside, UNCLEAR when it crosses an edge, NOT YET when there are too few days. Each answer carries the smallest effect the data could detect, an E-value and a negative-control lag (the same model on the outcome before the exposure). On simulated data with no effect, under 1% of questions read clear; planted effects are covered by the 95% interval 93-96% of the time.",
+      "methodology": "A fixed catalogue of questions (for example alcohol and next-morning HRV), each tested once with one regression: the outcome on day t against the exposure on day t minus the lag, adjusted for weekday, a slow trend (a linear spline with a knot every 60 days), the outcome measured before the exposure and the exposure behind that earlier outcome. Standard errors are Newey-West in calendar days with small-sample corrections, so neighbouring days are not counted as independent. The verdict compares the 95% interval with the question's no-effect zone, fixed before any data (HRV 2%, resting heart rate 1 bpm, sleep 10 minutes, energy half a point): CLEAR when the interval lies entirely outside the zone, NEGLIGIBLE when it lies entirely inside, UNCLEAR when it crosses an edge, NOT YET when there are too few days. Each answer carries the smallest effect the data could detect, an E-value and a negative-control lag (the same model on the outcome before the exposure). On simulated data with no effect, under 1% of questions read clear; planted effects are covered by the 95% interval 93-96% of the time. Because every question is re-checked every night, the verdict uses a repeated confidence interval with an O'Brien-Fleming-type boundary (2.24 divided by the square root of the information so far against a full year), so with no effect a question reads clear at some point in about 1% of simulated histories instead of 10%. Every verdict is kept in an append-only ledger. Questions about the same exposure are also pooled (normal-normal model, DerSimonian-Laird spread) and the pooled estimate is shown next to the verdict.",
       "limitations": [
         "Observational: a clear answer is an association on the evidence ladder's second rung, not proof of cause; only a randomised self-experiment reaches 'tested'.",
         "Days without a record are left out, except where a question states that absence counts as none (an answered evening check-in, days with a watch record for training, days after the first logged recovery session).",
@@ -580,10 +580,18 @@
         {
           "citation": "Lipsitch M, Tchetgen Tchetgen E, Cohen T. Negative controls: a tool for detecting confounding and bias in observational studies. Epidemiology 2010;21(3):383-388.",
           "doi": "10.1097/EDE.0b013e3181d61eeb"
+        },
+        {
+          "citation": "Lan KKG, DeMets DL. Discrete sequential boundaries for clinical trials. Biometrika 1983;70(3):659-663.",
+          "doi": "10.1093/biomet/70.3.659"
+        },
+        {
+          "citation": "DerSimonian R, Laird N. Meta-analysis in clinical trials. Control Clin Trials 1986;7(3):177-188.",
+          "doi": "10.1016/0197-2456(86)90046-2"
         }
       ],
       "productDefined": true,
-      "methodologyVersion": "2.0.0"
+      "methodologyVersion": "2.1.0"
     },
     {
       "key": "typicality",

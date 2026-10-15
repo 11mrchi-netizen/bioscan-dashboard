@@ -11,7 +11,7 @@ uncorrected correlation scan is retired, with a note to revisit it (section "Rev
 | B | Capture for cause-and-effect questions | Exposure status known on most days once the check-in runs (reported nightly as `capture.knownShare28`) | Done |
 | C | Expected bands and flags | Synthetic 80% bands hold 78-82% of days; flags without a real change under one a month | Done |
 | D | Association engines and the evidence board | Null data reads "clear" on at most 5% of questions; interval coverage 93-97% | Done |
-| E | Ledger and confirmation | Nightly re-runs with no true effect ever read "clear" at most 5% of the time | Pending |
+| E | Ledger and confirmation | Nightly re-runs with no true effect ever read "clear" at most 5% of the time | Done |
 | F | Randomised experiments and interrupted time series | Backtests with drift, carry-over and missing days keep false positives at or below 5% | Pending |
 | G | Composite scorecard and the console | A published scorecard per composite | Pending |
 
@@ -83,6 +83,19 @@ uncorrected correlation scan is retired, with a note to revisit it (section "Rev
 | Contract | R5: verdict words, rung badges and the language contract | design/ANALYTICAL_PRESENTATION_CONTRACT.md | - |
 | Registry | The relationship engine's help text rewritten (methodology 2.0.0); new entries for the expected band, event curves, case-crossover and lag curves | supabase/functions/_shared/metric-registry/metric-registry.json | metricRegistry.test.ts |
 | Not built | Partial pooling across related questions and the Bayesian estimates moved to phase E with the ledger, as decided. The personal fitness-fatigue model (the second half of P6) needs the forecast scorecard and moved to phase G | - | - |
+
+## Phase E: what changed
+
+| Plan item | Built | Where | Test |
+|---|---|---|---|
+| The problem it fixes | Every question is re-tested every night on a growing history. With the phase D rule, 10% of simulated histories with no effect read CLEAR at some point (most in the first weeks, with 6 to 13 days of the exposure), twice the gate | - | relationship.test.ts |
+| Planned looks with alpha spending | The verdict now uses a repeated confidence interval: the same estimate with a boundary of 2.24 / sqrt(t), the O'Brien-Fleming-type boundary for continuous monitoring (Lan & DeMets), where t is the information so far against a full year (60 days with a yes/no exposure, 300 days for a continuous one). Testing starts at 60 paired days and 12 days with and without the exposure. The published 95% interval stays the calibrated estimate; when the two differ, the card says why ("re-checked every night") | analysis-core/relationship.ts (`SEQUENTIAL`) | relationship.test.ts |
+| Gate | Re-checked nightly from day 45 to day 540 on the last 365 days, histories with no effect ever read CLEAR 1% of the time for alcohol and HRV and 0% for sleep and HRV (100 each); the CI test checks it every tenth night over 50 histories. The cost: a planted -8% alcohol effect still read CLEAR in every history, at a median of 225 days | relationship.test.ts | (the gate test) |
+| Ledger | `evidence_ledger`: every nightly verdict of every question with its date, engine and catalogue version, inputs hash, estimate, both intervals and the information fraction. Users read their own rows; there are no write policies; a trigger refuses updates; a re-run the same night keeps the first row. The app's detail sheet and the console show the verdict history ("CLEAR since 13 Oct (2 nights) · UNCLEAR ...") | migrations/20261016_evidence_ledger.sql, runRelationships.ts, EvidenceBoardCard.kt, Confirmatory.tsx | runRelationships.test.ts, EvidenceLedgerTest |
+| Register, then confirm on new days | A hint from WHAT CAME BEFORE OFF MORNINGS (more or less often before, not already in the catalogue) can be registered. A registered question is tested only on days after its registration date, with the same sequential boundary, and shows under QUESTIONS YOU REGISTERED with how many new days it has. Registrations cannot be backdated, their fields cannot change (a trigger), and they are withdrawn, never deleted | registered_questions (migration), hypotheses.ts `registeredHypothesis`, runRelationships.ts, EvidenceBoard.kt, TodayScreen.kt | runRelationships.test.ts, EvidenceLedgerTest |
+| Exploratory and confirmed | Catalogue questions (fixed before any data) are ASSOCIATED; registered questions are ASSOCIATED on days after their registration; case-crossover rows stay EXPLORATORY | contract R5, R6 | - |
+| Partial pooling | Questions about the same exposure are pooled on a common scale (effect in units of its own zone, favourable direction positive) with a normal-normal model and the DerSimonian-Laird between-question spread. Each row shows the pooled estimate and the probability that the effect lies beyond the zone under that model, next to the frequentist verdict, never instead of it (as decided) | analysis-core/pooling.ts, relationship.ts `poolFamilies` | pooling.test.ts, relationship.test.ts |
+| Not built | The discovery screen (prewhitened lag heatmap with a Register button) stays retired with its revisit note, as decided; registration starts from the case-crossover hints instead | - | - |
 
 ## Revisit
 

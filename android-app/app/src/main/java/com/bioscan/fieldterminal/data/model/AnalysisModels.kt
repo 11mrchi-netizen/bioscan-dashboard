@@ -172,6 +172,56 @@ data class RelationshipNegativeControl(val value: Double = 0.0, val lo: Double =
 @Serializable
 data class RelationshipReadiness(val have: Int = 0, val need: Int = 0, val unit: String = "days")
 
+// Analysis review phase E: the interval the verdict used (a repeated confidence interval, wider while information is
+// short, because every question is re-checked every night) and the partial-pooling estimate with the question's family.
+@Serializable
+data class VerdictInterval(val lo: Double = 0.0, val hi: Double = 0.0, val boundary: Double = 1.96, val information: Double = 1.0)
+
+@Serializable
+data class PooledEstimate(
+    val family: String = "",
+    val members: Int = 0,
+    val value: Double = 0.0,
+    val lo: Double = 0.0,
+    val hi: Double = 0.0,
+    val unit: String = "",
+    val shrinkage: Double = 0.0,
+    val probabilityBeyondZone: Double = 0.0,
+)
+
+// Analysis review phase E: one row of the append-only evidence ledger (every nightly verdict of every question).
+@Serializable
+data class LedgerEntry(
+    @SerialName("question_id") val questionId: String = "",
+    @SerialName("as_of") val asOf: String = "",
+    val verdict: String = "not_yet",
+    val estimate: Double? = null,
+    val lo: Double? = null,
+    val hi: Double? = null,
+    val unit: String? = null,
+)
+
+// Analysis review phase E: a hint registered as a question of its own (registered_questions).
+@Serializable
+data class NewRegisteredQuestion(
+    val exposure: String,
+    val outcome: String,
+    val lag: Int = 1,
+    @SerialName("no_effect") val noEffect: Double,
+    @SerialName("registered_on") val registeredOn: String,
+    val source: String = "case_crossover",
+)
+
+@Serializable
+data class RegisteredQuestion(
+    val id: Long = 0,
+    val exposure: String = "",
+    val outcome: String = "",
+    val lag: Int = 1,
+    @SerialName("registered_on") val registeredOn: String = "",
+    @SerialName("withdrawn_at") val withdrawnAt: String? = null,
+)
+
 @Serializable
 data class RelationshipPayload(
     val id: String = "",
@@ -195,6 +245,11 @@ data class RelationshipPayload(
     val adjustments: List<String> = emptyList(),
     val notes: List<String> = emptyList(),
     val catalogueVersion: String = "",
+    val verdictInterval: VerdictInterval? = null,
+    val pooled: PooledEstimate? = null,
+    // Registered questions only (kind registered_question).
+    val registeredOn: String? = null,
+    val daysSince: Int? = null,
 )
 
 // Analysis review phase D: event curves (kind event_curve), case-crossover tables (case_crossover) and lag curves

@@ -18,6 +18,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,14 +38,22 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.EvidenceRows
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.model.RegisteredQuestion
 import com.bioscan.fieldterminal.data.model.CaseCrossoverResultRow
 import com.bioscan.fieldterminal.data.model.EventCurvePayload
 import com.bioscan.fieldterminal.data.model.LagCurvePayload
 import com.bioscan.fieldterminal.domain.EvidenceGroup
 import com.bioscan.fieldterminal.domain.EvidenceRowView
 import com.bioscan.fieldterminal.domain.Verdict
+import com.bioscan.fieldterminal.domain.canRegister
 import com.bioscan.fieldterminal.domain.evidenceTally
+import com.bioscan.fieldterminal.domain.verdictHistoryLine
+import com.bioscan.fieldterminal.domain.verdictRuns
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.niceTicks
@@ -115,6 +124,7 @@ private fun EvidenceRow(row: EvidenceRowView, scale: Double, onOpen: () -> Unit)
             row.sizeLine?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
             if (row.verdict == Verdict.Unclear) row.progress?.let { ProgressLine(it.fraction, "${it.text} to settle it") }
         }
+        row.registeredLine?.let { Text(it, style = FTType.Caption, color = FT.TextMuted) }
         row.warning?.let { Text(it, style = FTType.Caption, color = FT.Warning) }
     }
 }
@@ -201,7 +211,19 @@ private fun EvidenceDetailSheet(row: EvidenceRowView, curve: EventCurvePayload?,
             Text(row.label.uppercase(), style = FTType.SectionTitle, color = FT.TextPrimary)
             VerdictChip(row.verdict)
             Text(row.summary, style = FTType.Body, color = FT.TextPrimary)
+            row.registeredLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
+            row.verdictIntervalLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
             if (row.adjustments.isNotEmpty()) Text("Adjusted for ${row.adjustments.joinToString(", ")}.", style = FTType.BodySmall, color = FT.TextSecondary)
+            row.pooledLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
+            // Phase E: the question's verdicts over time, from the append-only ledger.
+            var history by remember(row.id) { mutableStateOf<String?>(null) }
+            LaunchedEffect(row.id) {
+                history = runCatching { verdictHistoryLine(verdictRuns(AnalysisRepository(SupabaseClientProvider.client).loadLedger(row.id))) }.getOrNull()
+            }
+            history?.let {
+                Text("VERDICT HISTORY", style = FTType.LabelCaps, color = FT.TextSecondary)
+                Text(it, style = FTType.Caption, color = FT.TextSecondary)
+            }
             row.progress?.let { ProgressLine(it.fraction, it.text) }
             row.checks.forEach { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
             if (curve != null && curve.state == "ready" && curve.days.isNotEmpty()) {
@@ -305,7 +327,13 @@ private fun OffsetCurveChart(points: List<OffsetPoint>, unit: String, xLabel: (I
 // Analysis review phase D (P5): what came before mornings outside the expected range on the unfavourable side,
 // against reference days on the same weekday in the same month. Exploratory: a hint of what to test next.
 @Composable
-internal fun CaseCrossoverCard(rows: List<CaseCrossoverResultRow>) {
+internal fun CaseCrossoverCard(
+    rows: List<CaseCrossoverResultRow>,
+    // Phase E: a hint can be registered as a question of its own, tested only on days after today.
+    registered: List<RegisteredQuestion> = emptyList(),
+    onRegister: ((exposure: String, outcome: String) -> Unit)? = null,
+    registerError: String? = null,
+) {
     if (rows.isEmpty()) return
     FTCard(
         title = "WHAT CAME BEFORE OFF MORNINGS",
@@ -313,6 +341,15 @@ internal fun CaseCrossoverCard(rows: List<CaseCrossoverResultRow>) {
         methodology = "case_crossover",
     ) {
         Text("EXPLORATORY", style = FTType.Micro, color = FT.TextMuted)
+        registerError?.let { Text("Couldn't register: $it", style = FTType.Caption, color = FT.Critical) }
+        if (registered.isNotEmpty()) {
+            Text(
+                "Registered: " + registered.joinToString(", ") { "${it.exposure.replace('_', ' ')} and ${it.outcome.replace('_', ' ')} (since ${it.registeredOn})" } +
+                    ". Each is tested only on days after its registration; results appear under QUESTIONS YOU REGISTERED.",
+                style = FTType.Caption,
+                color = FT.TextSecondary,
+            )
+        }
         rows.sortedBy { listOf("hrv", "rhr", "sleep_hours").indexOf(it.key) }.forEach { r ->
             val p = r.payload
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -337,6 +374,13 @@ internal fun CaseCrossoverCard(rows: List<CaseCrossoverResultRow>) {
                             modifier = Modifier.padding(end = 8.dp),
                         )
                         Text(word, style = FTType.Micro, color = if (e.verdict == "no_clear_difference") FT.TextMuted else FT.TextPrimary)
+                    }
+                    if (onRegister != null && canRegister(e.exposure, r.key, e.verdict, registered)) {
+                        FTButton(
+                            "REGISTER TO TEST ON NEW DAYS",
+                            emphasis = FTButtonEmphasis.Tertiary,
+                            onClick = { onRegister(e.exposure, r.key) },
+                        )
                     }
                 }
             }

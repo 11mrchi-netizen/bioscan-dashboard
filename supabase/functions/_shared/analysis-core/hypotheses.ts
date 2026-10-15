@@ -77,3 +77,42 @@ export const HYPOTHESES: Hypothesis[] = [
     causeText: 'Each extra hour of sleep', targetText: 'same-day energy (0-10)', expectedSign: 1, exposureModel: VALUE_MODEL,
   },
 ]
+
+// Analysis review phase E: questions a person registers from a hint (what came before off mornings). Each is tested only
+// on days after its registration date, with the default zone of its outcome unless one was given.
+export const REGISTRABLE_EXPOSURES: Record<string, { label: string; causeText: string; exposureModel: string }> = {
+  alcohol_any: { label: 'Alcohol', causeText: 'A day with alcohol', exposureModel: EXPLICIT_MODEL },
+  caffeine_pm_any: { label: 'Caffeine after 14:00', causeText: 'A day with caffeine after 14:00', exposureModel: EXPLICIT_MODEL },
+  late_meal: { label: 'A meal after 21:00', causeText: 'A day with a meal after 21:00', exposureModel: EXPLICIT_MODEL },
+  stress_high: { label: 'A high-stress day', causeText: 'A high-stress day', exposureModel: STRESS_MODEL },
+  evening_training: { label: 'Training after 19:00', causeText: 'A day with training after 19:00', exposureModel: DEVICE_MODEL },
+  training_day: { label: 'A training day', causeText: 'A training day', exposureModel: DEVICE_MODEL },
+}
+
+const REGISTRABLE_OUTCOMES: Record<string, { spec: typeof HRV | typeof RHR | typeof SLEEP; targetText: string }> = {
+  hrv: { spec: HRV, targetText: 'next-morning HRV' },
+  rhr: { spec: RHR, targetText: 'next-morning resting heart rate' },
+  sleep_hours: { spec: SLEEP, targetText: 'that night\'s sleep' },
+}
+
+export interface RegisteredQuestionRow {
+  id: number
+  exposure: string
+  outcome: string
+  lag: number
+  no_effect: number
+  registered_on: string
+  source?: string | null
+  withdrawn_at?: string | null
+}
+
+export function registeredHypothesis(r: RegisteredQuestionRow): Hypothesis | null {
+  const ex = REGISTRABLE_EXPOSURES[r.exposure]
+  const out = REGISTRABLE_OUTCOMES[r.outcome]
+  if (!ex || !out) return null
+  return {
+    id: `reg_${r.id}`, label: `${ex.label} and ${out.targetText}`, cause: r.exposure, lag: r.lag, exposure: 'binary', ...out.spec,
+    noEffect: r.no_effect > 0 ? r.no_effect : out.spec.noEffect,
+    causeText: ex.causeText, targetText: out.targetText, expectedSign: 0, exposureModel: ex.exposureModel,
+  }
+}

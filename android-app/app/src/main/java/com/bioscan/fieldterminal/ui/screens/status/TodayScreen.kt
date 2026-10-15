@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +42,8 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.ZeppStressRepository
 import com.bioscan.fieldterminal.data.buildTrainingSessionLoads
 import com.bioscan.fieldterminal.data.model.ExpectedBandRow
+import com.bioscan.fieldterminal.data.model.NewRegisteredQuestion
+import com.bioscan.fieldterminal.data.model.RegisteredQuestion
 import com.bioscan.fieldterminal.data.model.RelationshipResultRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
@@ -62,6 +65,7 @@ import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.isComplete
 import com.bioscan.fieldterminal.domain.lastEveningDate
 import com.bioscan.fieldterminal.domain.contributors
+import com.bioscan.fieldterminal.domain.defaultZone
 import com.bioscan.fieldterminal.domain.evidenceBoard
 import com.bioscan.fieldterminal.domain.stress.StressDay
 import com.bioscan.fieldterminal.domain.stress.analyzeStressDay
@@ -75,6 +79,8 @@ import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.HydrationSourceDonutChart
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.components.MacroDonutChart
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.ftClickable
@@ -121,6 +127,11 @@ fun TodayScreen(
     var bands by remember { mutableStateOf<Map<String, ExpectedBandRow>>(emptyMap()) }
     // Analysis review phase D: event curves, case-crossover tables and lag curves for the evidence board.
     var evidence by remember { mutableStateOf(EvidenceRows()) }
+    // Analysis review phase E: questions registered from a hint, and their results.
+    var registeredResults by remember { mutableStateOf<List<RelationshipResultRow>>(emptyList()) }
+    var registeredQuestions by remember { mutableStateOf<List<RegisteredQuestion>>(emptyList()) }
+    var registerError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     // Analysis review phase B: last evening's check-in (null until answered or if the read fails) and the open sheet.
     var lastEvening by remember { mutableStateOf<EveningCheckin?>(null) }
     var checkInDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -149,6 +160,8 @@ fun TodayScreen(
                     { typicality = repo.loadTypicality() },
                     { bands = repo.loadExpectedBands() },
                     { evidence = repo.loadEvidence() },
+                    { registeredResults = repo.loadRegisteredResults() },
+                    { registeredQuestions = repo.loadRegisteredQuestions() },
                     // A missing table (migration not yet applied) or a failed read just leaves the card asking.
                     { lastEvening = runCatching { EveningCheckinRepository(SupabaseClientProvider.client).load(lastEveningDate(LocalDate.now())) }.getOrNull() },
                 )
@@ -299,8 +312,22 @@ fun TodayScreen(
             }
 
             if (eveningAnswered) LastEveningCard(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) }
-            EvidenceBoardCard(evidenceBoard(relationships), evidence)
-            CaseCrossoverCard(evidence.crossover)
+            EvidenceBoardCard(evidenceBoard(relationships, registeredResults), evidence)
+            CaseCrossoverCard(
+                evidence.crossover,
+                registered = registeredQuestions,
+                registerError = registerError,
+                onRegister = { exposure, outcome ->
+                    registerError = null
+                    scope.launchSafe(onError = { e -> registerError = describeLoadFailure(e) }) {
+                        val repo = AnalysisRepository(SupabaseClientProvider.client)
+                        repo.registerQuestion(
+                            NewRegisteredQuestion(exposure = exposure, outcome = outcome, noEffect = defaultZone(outcome), registeredOn = LocalDate.now().toString()),
+                        )
+                        registeredQuestions = repo.loadRegisteredQuestions()
+                    }
+                },
+            )
             TypicalityCard(typicalityView(typicality))
         }
     }

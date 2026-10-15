@@ -17,6 +17,8 @@
 //   CLEAR       the interval lies entirely outside the zone: there is an effect and it is big enough to matter;
 //   NEGLIGIBLE  the interval lies entirely inside the zone: any effect is too small to matter, which is an answer;
 //   UNCLEAR     the interval crosses an edge of the zone (with roughly how many more days would settle it);
+// (since phase E the verdict's interval is a repeated confidence interval, wider while information is short, because
+// every question is re-checked every night; the published 95% interval stays the calibrated one);
 //   NOT YET     too few days, or too few with and without the exposure, to test.
 // Two checks travel with every answer: the E-value (how strong a hidden factor would have to be to explain it away;
 // VanderWeele & Ding 2017) and a negative-control lag (the same model on the outcome measured before the exposure,
@@ -24,6 +26,7 @@
 // "followed", it never "lowers" or "causes".
 // Days that are missing stay missing (never zero) except where a question states its exposure model explicitly.
 import { fnv1a, hashSeries } from './hash.ts'
+import { partialPool, probabilityBeyondZone } from './pooling.ts'
 import { coefficient, olsHac, trendColumns, weekdayColumns } from './regression.ts'
 import type { OlsFit } from './regression.ts'
 import { benjaminiHochberg, sd, weekdayDemean } from './stats.ts'
@@ -108,6 +111,9 @@ export interface RelationshipOutcome {
   noEffect: number
   /** Smallest effect detectable with 80% power at 5% two-sided, same unit as `effect`. */
   mde: number | null
+  /** The interval the verdict uses: wider than `effect`'s while information is short, because the question is re-checked
+   *  every night (repeated confidence interval). `boundary` is its critical value, `information` the fraction t. */
+  verdictInterval: { lo: number; hi: number; boundary: number; information: number } | null
   p: number | null
   /** Benjamini-Hochberg across the questions tested tonight; reported, not used by the verdict. */
   pAdjusted: number | null
@@ -120,14 +126,23 @@ export interface RelationshipOutcome {
   /** Progress toward an answer: days (or days with the exposure) available against roughly how many would settle it. */
   readiness: { have: number; need: number; unit: 'days with it' | 'days' } | null
   adjustments: string[]
+  /** Estimate and standard error in model units (log for HRV), for pooling and the ledger. */
+  model: { estimate: number; se: number } | null
+  /** Partial pooling with the family's other questions (same exposure); reported next to the verdict, never instead. */
+  pooled: { family: string; members: number; value: number; lo: number; hi: number; unit: string; shrinkage: number; probabilityBeyondZone: number } | null
   summary: string
   notes: string[]
   inputsHash: string
 }
 
-export const MIN_PAIRS = 30
-export const MIN_GROUP = 6
+export const MIN_PAIRS = 60
+export const MIN_GROUP = 12
 export const ALPHA = 0.05
+// Analysis review phase E: every question is re-checked every night, so the verdict uses a repeated confidence interval
+// (Jennison & Turnbull) with an O'Brien-Fleming-type boundary for continuous monitoring, c(t) = 2.24 / sqrt(t) (Lan &
+// DeMets 1983), where t is the information so far against a full year: 60 days with a yes/no exposure, or 300 days for
+// a continuous one. Early on only a very large effect can read CLEAR; the 95% interval shown stays the calibrated one.
+export const SEQUENTIAL = { c: 2.24, fullExposed: 60, fullDays: 300 }
 const Z80 = 0.8416
 export const ADJUSTMENTS = ['weekday', 'slow trend', 'the outcome before the exposure and the exposure before that']
 
@@ -136,8 +151,8 @@ const round = (v: number, d = 4) => (Number.isFinite(v) ? Math.round(v * 10 ** d
 function emptyOutcome(h: Hypothesis, inputsHash: string): RelationshipOutcome {
   return {
     id: h.id, label: h.label, outcome: h.outcome, state: 'not_yet', rung: 'associated', n: 0, nOn: null, nOff: null, reason: null,
-    effect: null, noEffect: h.noEffect, mde: null, p: null, pAdjusted: null, direction: null, signMatchesPrior: null, eValue: null,
-    negativeControl: null, readiness: null, adjustments: ADJUSTMENTS, summary: '', notes: [], inputsHash,
+    effect: null, noEffect: h.noEffect, mde: null, verdictInterval: null, p: null, pAdjusted: null, direction: null, signMatchesPrior: null, eValue: null,
+    negativeControl: null, readiness: null, adjustments: ADJUSTMENTS, model: null, pooled: null, summary: '', notes: [], inputsHash,
   }
 }
 
@@ -233,10 +248,10 @@ function verdictOf(lo: number, hi: number, zone: number): Verdict {
   return 'unclear'
 }
 
-// Roughly how many days (with the exposure, for a yes/no exposure) would make the 95% interval no wider than the zone,
-// assuming the same mix of days keeps arriving.
+// Roughly how many days (with the exposure, for a yes/no exposure) would make the verdict's interval no wider than the
+// zone, assuming the same mix of days keeps arriving (the boundary is SEQUENTIAL.c once information is full).
 function readinessFor(h: Hypothesis, se: number, have: number): number {
-  const target = zoneInModel(h) / 1.96
+  const target = zoneInModel(h) / SEQUENTIAL.c
   return Math.max(have, Math.ceil(have * (se / target) ** 2))
 }
 
@@ -252,7 +267,7 @@ function readinessBeforeTest(h: Hypothesis, cause: Num[], target: Num[], dates: 
   const base = buildDesign(cause, target, dates, h.lag, false)
   const fit = base.rows.length > 15 ? olsHac(base.rows, base.y, base.days) : null
   if (!fit) return h.exposure === 'binary' ? { have: nOn ?? 0, need: MIN_GROUP, unit: 'days with it' } : { have: n, need: MIN_PAIRS, unit: 'days' }
-  const target95 = zoneInModel(h) / 1.96
+  const target95 = zoneInModel(h) / SEQUENTIAL.c
   if (h.exposure === 'binary') {
     const known = cause.filter((v) => v !== null) as number[]
     const share = known.length > 0 && known.some((v) => v > 0) ? known.filter((v) => v > 0).length / known.length : 0.2
@@ -300,8 +315,15 @@ export function analyseHypothesis(h: Hypothesis, frame: Frame): RelationshipOutc
 
   const e = effectFrom(h, fit, design.xCol)
   const zone = h.noEffect
-  const state = verdictOf(e.effect.lo, e.effect.hi, zone)
-  const mde = round(Math.abs(toNatural(h, (coefficient(fit, design.xCol).tc + Z80) * e.se)))
+  // The verdict's interval: the same estimate, widened by the sequential boundary while information is short.
+  const information = Math.min(1, h.exposure === 'binary' ? (nOn as number) / SEQUENTIAL.fullExposed : n / SEQUENTIAL.fullDays)
+  const tc = coefficient(fit, design.xCol).tc
+  const boundary = Math.max(tc, SEQUENTIAL.c / Math.sqrt(information))
+  const vLo = round(toNatural(h, e.est - boundary * e.se))
+  const vHi = round(toNatural(h, e.est + boundary * e.se))
+  const verdictInterval = { lo: vLo, hi: vHi, boundary: round(boundary, 3), information: round(information, 3) }
+  const state = verdictOf(vLo, vHi, zone)
+  const mde = round(Math.abs(toNatural(h, (tc + Z80) * e.se)))
   const direction = e.est === 0 ? null : e.est > 0 ? 'positive' : 'negative'
   const signMatchesPrior = h.expectedSign === 0 || direction === null ? null : (e.est > 0 ? 1 : -1) === h.expectedSign
 
@@ -331,7 +353,8 @@ export function analyseHypothesis(h: Hypothesis, frame: Frame): RelationshipOutc
 
   const o: RelationshipOutcome = {
     ...emptyOutcome(h, hash),
-    state, n, nOn, nOff, effect: e.effect, mde, p: round(e.p, 5), direction, signMatchesPrior, eValue, negativeControl, readiness, notes,
+    state, n, nOn, nOff, effect: e.effect, mde, verdictInterval, p: round(e.p, 5), direction, signMatchesPrior, eValue, negativeControl, readiness, notes,
+    model: { estimate: round(e.est, 6), se: round(e.se, 6) },
   }
   o.summary = summarise(h, o)
   return o
@@ -356,12 +379,53 @@ function summarise(h: Hypothesis, o: RelationshipOutcome): string {
   if (o.state === 'clear') return `${what} (${interval}; ${days(h, o)}), clear of the ${zone} no-effect zone.`
   if (o.state === 'negligible') return `No meaningful difference: ${what} (${interval}; ${days(h, o)}), inside the ${zone} no-effect zone.`
   const more = o.readiness ? ` About ${Math.max(0, o.readiness.need - o.readiness.have)} more ${o.readiness.unit} would settle it.` : ''
+  const v = o.verdictInterval
+  if (v && (e.lo > h.noEffect || e.hi < -h.noEffect)) {
+    return `Unclear so far: ${what} (${interval}; ${days(h, o)}). Because this is re-checked every night, a clear answer needs the wider interval ${fmt(v.lo, e.unit)} to ${fmt(v.hi, e.unit)} to clear the ${zone} zone too.${more}`
+  }
   return `Unclear: ${what} (${interval}; ${days(h, o)}), which crosses the edge of the ${zone} no-effect zone.${more}`
+}
+
+// The favourable direction of each outcome group: higher HRV, lower resting heart rate, more sleep, more energy.
+const FAVOURABLE: Record<Hypothesis['outcome'], 1 | -1> = { hrv: 1, rhr: -1, sleep: 1, energy: 1 }
+
+/** Partial pooling within each family of questions about the same exposure (pooling.ts). Mutates `pooled`. */
+export function poolFamilies(hypotheses: Hypothesis[], outcomes: RelationshipOutcome[]): void {
+  const families = new Map<string, number[]>()
+  outcomes.forEach((o, i) => {
+    if (o.state === 'not_yet' || !o.model) return
+    const key = hypotheses[i].cause
+    families.set(key, [...(families.get(key) ?? []), i])
+  })
+  for (const [family, idx] of families) {
+    if (idx.length < 2) continue
+    const inputs = idx.map((i) => {
+      const h = hypotheses[i]
+      const z = zoneInModel(h)
+      const m = outcomes[i].model as { estimate: number; se: number }
+      return { id: String(i), estimate: (FAVOURABLE[h.outcome] * m.estimate) / z, se: m.se / z }
+    })
+    const pooled = partialPool(inputs)
+    if (!pooled) continue
+    for (const member of pooled.members) {
+      const i = Number(member.id)
+      const h = hypotheses[i]
+      const z = zoneInModel(h)
+      const back = (v: number) => toNatural(h, FAVOURABLE[h.outcome] * v * z)
+      const a = back(member.mean - 1.96 * member.sd)
+      const b = back(member.mean + 1.96 * member.sd)
+      outcomes[i].pooled = {
+        family, members: idx.length, value: round(back(member.mean)), lo: round(Math.min(a, b)), hi: round(Math.max(a, b)),
+        unit: unitOf(h), shrinkage: round(member.shrinkage, 3), probabilityBeyondZone: round(probabilityBeyondZone(member.mean, member.sd), 3),
+      }
+    }
+  }
 }
 
 /** Test every question, then report the Benjamini-Hochberg adjustment across the ones that could be tested. */
 export function runCatalogue(hypotheses: Hypothesis[], frame: Frame): RelationshipOutcome[] {
   const outcomes = hypotheses.map((h) => analyseHypothesis(h, frame))
+  poolFamilies(hypotheses, outcomes)
   const tested = outcomes.filter((o) => o.state !== 'not_yet' && o.p !== null)
   const adjusted = benjaminiHochberg(tested.map((o) => o.p as number))
   tested.forEach((o, i) => {

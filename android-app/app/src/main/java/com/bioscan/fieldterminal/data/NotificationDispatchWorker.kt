@@ -14,6 +14,7 @@ import androidx.work.WorkerParameters
 import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.model.NotificationOutcome
 import com.bioscan.fieldterminal.domain.notifications.ShownEntry
+import com.bioscan.fieldterminal.domain.bodyCheckinNeeded
 import com.bioscan.fieldterminal.domain.checkinDateFor
 import com.bioscan.fieldterminal.domain.eveningCheckinNeeded
 import com.bioscan.fieldterminal.domain.notifications.eveningLogNeeded
@@ -120,6 +121,13 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                     val saved = runCatching { EveningCheckinRepository(supabase).load(checkinDateFor(now)) }.getOrElse { continue }
                     if (rule.conditions.skipIfLogged && !eveningCheckinNeeded(saved)) continue
                     "Evening check-in" to "Drinks, caffeine after 14:00, a late meal: one tap each"
+                }
+
+                // The monthly body check-in: a failed lookup skips this window rather than nagging.
+                NotificationKind.BODY_CHECKIN -> {
+                    val last = runCatching { BodyCheckinRepository(supabase).lastCheckinDate() }.getOrElse { continue }
+                    if (rule.conditions.skipIfLogged && !bodyCheckinNeeded(last, today)) continue
+                    "Monthly body check-in" to "Grip, tape and skinfolds: before breakfast, about 15 minutes"
                 }
 
                 else -> continue

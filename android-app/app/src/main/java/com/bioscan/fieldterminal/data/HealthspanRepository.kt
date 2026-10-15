@@ -18,6 +18,7 @@ import com.bioscan.fieldterminal.domain.comparison.PopulationContext
 import com.bioscan.fieldterminal.domain.comparison.comparePopulation
 import com.bioscan.fieldterminal.domain.comparison.resolveArtifact
 import com.bioscan.fieldterminal.domain.evaluateSri
+import com.bioscan.fieldterminal.domain.ratioWaist
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -138,6 +139,16 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
 
         val labs = loadLabObservations()
         fun lab(vararg names: String) = latestLab(labs) { m -> names.any { m.equals(it, ignoreCase = true) } }
+        // Waist from the monthly body check-in's tape (the WHO site, else the navel) when it is newer than a lab value;
+        // height from Health Connect or the check-in when no lab has it (an adult height does not age out, so it is dated
+        // today for the freshness gate).
+        val checkins = BodyCheckinRepository(supabase)
+        val tapeWaist = runCatching { checkins.loadHistory() }.getOrElse { emptyList() }
+            .lastOrNull { ratioWaist(it) != null }
+            ?.let { DatedValue(ratioWaist(it)!!, it.date, "cm") }
+        val labWaist = lab("Waistline")
+        val waist = listOfNotNull(labWaist, tapeWaist).maxByOrNull { it.date }
+        val height = lab("Body Height") ?: runCatching { checkins.latestHeightCm() }.getOrNull()?.let { DatedValue(it, asOf, "cm") }
         return HealthspanBundle(
             summary = healthspanSummary(
                 HealthspanInputs(
@@ -149,8 +160,8 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
                     lifts = bestLifts(liftSets),
                     bodyWeightKg = bodyWeight?.let { DatedValue(it.weightKg!!, LocalDate.parse(it.date), "kg") },
                     grip = grip,
-                    waistCm = lab("Waistline"),
-                    heightCm = lab("Body Height"),
+                    waistCm = waist,
+                    heightCm = height,
                     sleepMeanHours = hours.takeIf { it.isNotEmpty() }?.average(),
                     sleepNights = hours.size,
                     sri = evaluateSri(nights),

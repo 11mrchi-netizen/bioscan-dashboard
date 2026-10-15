@@ -12,7 +12,9 @@ object NotificationKind {
     const val EVENING_LOG = "evening_log"
     // Analysis review phase B: the structured evening check-in (drinks, caffeine after 14:00, late meal, stress) at 22:25.
     const val EVENING_CHECKIN = "evening_checkin"
-    val ALL = listOf(SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG, EVENING_CHECKIN)
+    // The monthly body check-in (grip, tape, skinfolds): Saturday 09:30, skipped until 28 days after the last one.
+    const val BODY_CHECKIN = "body_checkin"
+    val ALL = listOf(SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG, EVENING_CHECKIN, BODY_CHECKIN)
 }
 
 object NotificationOutcome {

@@ -47,6 +47,8 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
     Wellbeing("Wellbeing", AddEntryGroup.Body),
     Stool("Stool", AddEntryGroup.Body),
     Grip("Grip strength", AddEntryGroup.Body),
+    // The monthly sitting: grip, tape girths and skinfolds (BodyCheckin.kt).
+    BodyCheckIn("Body check-in", AddEntryGroup.Body),
     InjuryCheckIn("Injury check-in", AddEntryGroup.Training),
     Injury("Injury", AddEntryGroup.Training),
     Illness("Illness", AddEntryGroup.Training),
@@ -55,12 +57,13 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
     Note("Note", AddEntryGroup.Other),
 }
 
-// Where a choice leads: one of the sheet's own forms (a Fuel choice opens FuelForm on that sub-type), or the injury /
-// illness form sheets that Training › Injury also uses.
+// Where a choice leads: one of the sheet's own forms (a Fuel choice opens FuelForm on that sub-type), the injury /
+// illness form sheets that Training › Injury also uses, or the body check-in that Fuel › Body also opens.
 sealed interface AddEntryTarget {
     data class Form(val type: AddEntryType, val fuel: FuelSubType? = null) : AddEntryTarget
     data object InjuryForm : AddEntryTarget
     data object IllnessForm : AddEntryTarget
+    data object BodyCheckIn : AddEntryTarget
 }
 
 val AddEntryChoice.target: AddEntryTarget
@@ -72,6 +75,7 @@ val AddEntryChoice.target: AddEntryTarget
         AddEntryChoice.Wellbeing -> AddEntryTarget.Form(AddEntryType.Wellness)
         AddEntryChoice.Stool -> AddEntryTarget.Form(AddEntryType.Stool)
         AddEntryChoice.Grip -> AddEntryTarget.Form(AddEntryType.Grip)
+        AddEntryChoice.BodyCheckIn -> AddEntryTarget.BodyCheckIn
         AddEntryChoice.InjuryCheckIn -> AddEntryTarget.Form(AddEntryType.Ostrc)
         AddEntryChoice.Injury -> AddEntryTarget.InjuryForm
         AddEntryChoice.Illness -> AddEntryTarget.IllnessForm

@@ -244,7 +244,7 @@ private fun strength(i: HealthspanInputs): HealthspanFactor {
 
 private fun bodyComposition(i: HealthspanInputs): HealthspanFactor {
     val id = HealthspanFactorId.BODY_COMPOSITION
-    val howTo = "Add waist and height to a lab entry."
+    val howTo = "Measure your waist at the monthly body check-in (Fuel › Body), and set your height."
     val g = Gate(i.asOf)
     val waist = g.lab(i.waistCm, "waist circumference", "cm")
     val height = g.lab(i.heightCm, "height", "cm")

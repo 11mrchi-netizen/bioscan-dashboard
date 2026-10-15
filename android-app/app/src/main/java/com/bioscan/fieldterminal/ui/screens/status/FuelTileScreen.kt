@@ -11,6 +11,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import com.bioscan.fieldterminal.data.BodyCheckinRepository
+import com.bioscan.fieldterminal.data.UserProfileRepository
+import com.bioscan.fieldterminal.data.model.UserProfileRow
+import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,8 +80,24 @@ import kotlin.math.roundToInt
 // backlog per ROADMAP.md) -- this tab shows the real weight/body-fat trend
 // data that does exist rather than fabricate a TDEE number.
 @Composable
-fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {}) {
-    var tab by remember { mutableStateOf(FuelTab.Nutrition) }
+fun FuelTileScreen(
+    onBack: () -> Unit,
+    onOpenNutrientBreakdown: () -> Unit = {},
+    // The monthly body check-in reminder lands on Body with the check-in sheet up.
+    openBodyCheckIn: Boolean = false,
+    onBodyCheckInHandled: () -> Unit = {},
+) {
+    var tab by remember { mutableStateOf(if (openBodyCheckIn) FuelTab.Body else FuelTab.Nutrition) }
+    var bodyCheckInOpen by remember { mutableStateOf(false) }
+    // Bumped after a check-in is saved so the Body tab reads the new one.
+    var bodyReload by remember { mutableStateOf(0) }
+    LaunchedEffect(openBodyCheckIn) {
+        if (openBodyCheckIn) {
+            tab = FuelTab.Body
+            bodyCheckInOpen = true
+            onBodyCheckInHandled()
+        }
+    }
     var overview by remember { mutableStateOf<NutritionOverview?>(null) }
     var stool by remember { mutableStateOf<List<StoolAnalysisRow>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -99,7 +119,7 @@ fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {})
         title = "FUEL",
         subtitle = when (tab) {
             FuelTab.Nutrition -> "TODAY · MACROS · HYDRATION"
-            FuelTab.Digestion -> "STOOL · WEIGHT · BODY FAT"
+            FuelTab.Body -> "WEIGHT · MEASUREMENTS · BODY FAT · STOOL"
         },
         accent = FT.DomainFuel,
         rail = { SubTabRow(items = FuelTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
@@ -130,17 +150,27 @@ fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {})
                 // exists, per the ticket's own framing -- not built here).
                 // DAV-208 (24/9 fixes): Body (weight/body-fat/TDEE) folded in
                 // as a second stacked section, same reasoning as Hydration above.
-                FuelTab.Digestion -> {
+                FuelTab.Body -> {
+                    BodyTab(allDays = overview?.allDays ?: emptyList(), reloadKey = bodyReload, onStartCheckIn = { bodyCheckInOpen = true })
                     stool?.let { rows ->
-                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                             val stoolEntries = rows.mapNotNull { row -> row.bristolType?.let { OffsetDateTime.parse(row.occurredAt).toLocalDateTime().toLocalDate() to it } }
                             BristolCard(evaluateBristol(stoolEntries), stoolEntries)
                         }
                     }
-                    BodyTab(allDays = overview?.allDays ?: emptyList())
                 }
             }
         }
+    }
+
+    if (bodyCheckInOpen) {
+        BodyCheckInSheet(
+            onDismiss = { bodyCheckInOpen = false },
+            onSaved = {
+                bodyCheckInOpen = false
+                bodyReload++
+            },
+        )
     }
 }
 
@@ -182,12 +212,21 @@ private fun bristolPatternLabel(p: BristolPattern): String = when (p) {
 // under -- weight/body-fat trend content is unchanged; DAV-104's real TDEE
 // estimate replaces the old "not built yet" placeholder.
 @Composable
-private fun BodyTab(allDays: List<DailyNutrition>) {
+private fun BodyTab(allDays: List<DailyNutrition>, reloadKey: Int, onStartCheckIn: () -> Unit) {
     var bodyMetrics by remember { mutableStateOf<List<BodyMetricsAnalysisRow>?>(null) }
+    // The monthly body check-in: its history, the newest height and the profile its estimates need. A failed read
+    // leaves the card on its empty state rather than failing the tab.
+    var checkins by remember { mutableStateOf<List<BodyCheckinRecord>>(emptyList()) }
+    var heightCm by remember { mutableStateOf<Double?>(null) }
+    var profile by remember { mutableStateOf<UserProfileRow?>(null) }
     val bodyGuard = rememberLoadGuard()
 
-    LaunchedEffect(bodyGuard.attempt) {
+    LaunchedEffect(bodyGuard.attempt, reloadKey) {
         bodyGuard.run { bodyMetrics = AnalysisRepository(SupabaseClientProvider.client).loadBodyMetrics() }
+        val repo = BodyCheckinRepository(SupabaseClientProvider.client)
+        checkins = runCatching { repo.loadHistory() }.getOrElse { emptyList() }
+        heightCm = runCatching { repo.latestHeightCm() }.getOrNull()
+        profile = runCatching { UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull()
     }
 
     val b = bodyMetrics
@@ -208,6 +247,15 @@ private fun BodyTab(allDays: List<DailyNutrition>) {
         val weightPoints = b.mapNotNull { row -> row.weightKg?.let { LocalDate.parse(row.date) to it } }
         val weightEval = evaluateWeightTrend(weightPoints)
         WeightCard(weightEval)
+
+        BodyMeasurementsCard(
+            history = checkins,
+            heightCm = heightCm,
+            sex = profile?.sex?.takeIf { it == "male" || it == "female" },
+            ageYears = profile?.dateOfBirth?.let { runCatching { ChronoUnit.YEARS.between(LocalDate.parse(it), LocalDate.now()).toInt() }.getOrNull() },
+            scaleBodyFat = b.lastOrNull { it.bodyFatPct != null }?.bodyFatPct,
+            onStart = onStartCheckIn,
+        )
 
         // DAV-76: read alongside weight rather than as a disconnected number
         // -- no numeric calorie/macro goal exists anywhere in this project

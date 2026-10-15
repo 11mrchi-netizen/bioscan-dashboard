@@ -92,6 +92,11 @@ works today.
 | — (new) | **DIGESTION** | New tab. Relocated content: Bristol/stool data currently lives in Heart's `Stool` tab (`BristolEvaluation.kt`/`BristolCard`) — moves here wholesale. No causal food→stool link is implied or computed; it's a contextual section, not a correlation feature. |
 | `Weight` | **BODY** | Rename, not rebuild — `WeightTdeeTab` already exists and already has weight/body-fat trend content. DAV-103/104 extend it with the adaptive-TDEE panel and explicit confidence states; the existing trend content is not thrown away. |
 
+**Amendment (body check-in, Oct 2026):** the shipped tabs are NUTRITION (with hydration) and BODY. BODY (the enum entry
+was `Digestion` until the monthly body check-in arrived) holds weight, BODY MEASUREMENTS (the check-in's girths,
+skinfolds, ratios and labelled body-fat estimates, with START BODY CHECK-IN), body fat, protein on-target, energy
+balance, then the Bristol pattern. The monthly reminder lands here with the check-in sheet open (docs/body-checkin/README.md).
+
 ## 7. Heart — real tab mapping (checked against `HeartTab` enum: `Heart, Arousal, Wellness, Sleep,
 Stool, Injuries, Respiratory`)
 

@@ -73,6 +73,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     var trainingRequestedTab by remember { mutableStateOf<TrainingTab?>(null) }
     // Analysis review phase B: the 22:25 evening check-in reminder opens Today with the check-in sheet up.
     var checkInRequested by remember { mutableStateOf(false) }
+    // The monthly body check-in reminder opens Fuel › Body with the check-in sheet up.
+    var bodyCheckInRequested by remember { mutableStateOf(false) }
     // Contract A4: the dock keeps lit the tab whose stack you are in, also on pushed screens (tiles, settings and detail
     // pages), which used to light nothing. Set whenever a top-level destination is shown and when a dock tab is tapped,
     // so a deep link pushed onto the current stack keeps that stack's tab.
@@ -93,6 +95,10 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             NotificationDestination.CHECKIN -> {
                 checkInRequested = true
                 navController.navigate("today") { launchSingleTop = true }
+            }
+            NotificationDestination.BODY_CHECKIN -> {
+                bodyCheckInRequested = true
+                navController.navigate(TileRoute.Fuel.route) { launchSingleTop = true }
             }
             NotificationDestination.NONE -> Unit
         }
@@ -175,6 +181,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 FuelTileScreen(
                     onBack = { navController.popBackStack() },
                     onOpenNutrientBreakdown = { navController.navigate("nutrient_breakdown") },
+                    openBodyCheckIn = bodyCheckInRequested,
+                    onBodyCheckInHandled = { bodyCheckInRequested = false },
                 )
             }
             composable("nutrient_breakdown") { NutrientBreakdownScreen(onBack = { navController.popBackStack() }) }

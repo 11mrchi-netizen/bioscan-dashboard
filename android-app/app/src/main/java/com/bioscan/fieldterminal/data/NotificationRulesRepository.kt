@@ -75,6 +75,14 @@ private val DEFAULT_RULES = listOf(
         conditions = NotificationConditions(skipIfLogged = true),
         limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 20),
     ),
+    // The monthly body check-in: a Saturday morning, before breakfast and training; skipped until 28 days have passed.
+    NewNotificationRuleRow(
+        kind = NotificationKind.BODY_CHECKIN,
+        enabled = true,
+        schedule = NotificationSchedule(times = listOf("09:30"), days = listOf(6)),
+        conditions = NotificationConditions(skipIfLogged = true),
+        limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 60),
+    ),
 )
 
 class NotificationRulesRepository(private val supabase: SupabaseClient) {

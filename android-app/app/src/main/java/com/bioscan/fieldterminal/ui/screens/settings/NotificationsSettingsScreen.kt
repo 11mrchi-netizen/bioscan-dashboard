@@ -54,6 +54,7 @@ private val RULE_LABELS = mapOf(
     NotificationKind.WELLBEING_CHECKIN to "WELLBEING CHECK-IN",
     NotificationKind.EVENING_LOG to "EVENING LOG",
     NotificationKind.EVENING_CHECKIN to "EVENING CHECK-IN",
+    NotificationKind.BODY_CHECKIN to "MONTHLY BODY CHECK-IN",
 )
 
 // Setup > Notifications: single destination, no sub-tabs.

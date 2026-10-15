@@ -848,6 +848,115 @@
       ],
       "productDefined": true,
       "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "grip_strength",
+      "docName": null,
+      "kind": "raw",
+      "methodology": "Handgrip strength on a hand dynamometer, the best of three squeezes per hand, standing with the arm at the side and the elbow straight, alternating hands. Logged on its own or as the first step of the monthly body check-in.",
+      "limitations": [
+        "Dynamometers differ from each other; readings from a different device are not comparable.",
+        "Posture and effort change the reading; the protocol is fixed so months are comparable, not so the number matches a clinic's."
+      ],
+      "references": [
+        {
+          "citation": "Roberts HC, Denison HJ, Martin HJ, et al. A review of the measurement of grip strength in clinical and epidemiological studies: towards a standardised approach. Age Ageing 2011;40(4):423-429.",
+          "doi": "10.1093/ageing/afr051"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "body_girths",
+      "docName": null,
+      "kind": "raw",
+      "methodology": "Tape girths taken by the person at the monthly body check-in: neck, shoulders, chest, waist at the navel, waist midway between the lowest rib and the top of the hip bone (WHO site), hips, and on both sides relaxed upper arm (optionally flexed), forearm, mid-thigh and calf. A non-stretch tape, level, snug without compressing the skin, trunk sites at the end of a normal breath out. Two readings per site, a third when they differ by more than 0.5 cm; the value is the median. A change between check-ins, and a left-right difference, is called only beyond 2.77 typical errors of the site's value: the typical error of one reading from the within-sitting repeats, divided by the root of the readings behind the value, never below 0.5 cm.",
+      "limitations": [
+        "Self-measurement is less reliable than a trained measurer; shoulders and chest in particular need a mirror or a helper to keep the tape level.",
+        "Within-sitting repeats miss the error of finding the landmark again on another day; the 0.5 cm floor stands in for it until enough months exist.",
+        "Food, fluid and the time of day move the waist by about a centimetre: the same conditions each month matter more than the tape."
+      ],
+      "references": [
+        {
+          "citation": "Stewart A, Marfell-Jones M, Olds T, de Ridder H. International Standards for Anthropometric Assessment. International Society for the Advancement of Kinanthropometry, Lower Hutt, 2011.",
+          "doi": null
+        },
+        {
+          "citation": "Hopkins WG. Measures of reliability in sports medicine and science. Sports Med 2000;30(1):1-15.",
+          "doi": "10.2165/00007256-200030010-00001"
+        },
+        {
+          "citation": "World Health Organization. Waist circumference and waist-hip ratio: report of a WHO expert consultation, Geneva, 8-11 December 2008. WHO, 2011.",
+          "doi": null
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "skinfold_sum",
+      "docName": null,
+      "kind": "raw",
+      "methodology": "Sum of three skinfolds the person can pinch on themselves, on the right side: abdominal (vertical, 2 cm right of the navel), suprailiac (diagonal, above the hip bone in line with the front of the armpit) and front thigh (vertical, seated with the knee bent). Three readings per site taken in rounds, a fourth when they span more than 2 mm; the value is the median. The caliper is recorded and a sum taken with a different caliper is not compared. The change is judged against the sites' typical errors added in quadrature (never below 1 mm per site), times 2.77. The sum is the primary skinfold number: it tracks subcutaneous fat without a population equation.",
+      "limitations": [
+        "Self-pinched folds are less reliable than a trained measurer's; the same person, side, sites and caliper keep it comparable over time.",
+        "Cheap plastic calipers read differently from spring calipers such as a Harpenden; readings only compare within one caliper.",
+        "The triceps fold (part of the usual women's three-site equation) cannot be pinched on oneself and is left out."
+      ],
+      "references": [
+        {
+          "citation": "Stewart A, Marfell-Jones M, Olds T, de Ridder H. International Standards for Anthropometric Assessment. International Society for the Advancement of Kinanthropometry, Lower Hutt, 2011.",
+          "doi": null
+        },
+        {
+          "citation": "Hopkins WG. Measures of reliability in sports medicine and science. Sports Med 2000;30(1):1-15.",
+          "doi": "10.2165/00007256-200030010-00001"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "waist_to_height",
+      "docName": null,
+      "kind": "derived",
+      "methodology": "Waist (the WHO midpoint site, else at the navel) divided by height, from the monthly body check-in; waist-to-hip uses the same waist over the hips. Under 0.5 is the boundary the evidence supports for cardiometabolic risk.",
+      "limitations": [
+        "A screening ratio, not a diagnosis.",
+        "Inherits the waist measurement's day-to-day error of about a centimetre."
+      ],
+      "references": [
+        {
+          "citation": "Ashwell M, Gunn P, Gibson S. Waist-to-height ratio is a better screening tool than waist circumference and BMI for adult cardiometabolic risk factors: systematic review and meta-analysis. Obes Rev 2012;13(3):275-286.",
+          "doi": "10.1111/j.1467-789X.2011.00952.x"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "body_fat_estimates",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "Two body-fat estimates from the monthly check-in, shown next to the scale's impedance reading and labelled as estimates: the US Navy circumference equation (men: waist at the navel minus neck, and height; women: waist plus hips minus neck, and height) and, for men who measured the chest fold, the Jackson-Pollock three-site skinfold equation (chest, abdominal, thigh and age) turned into body fat with Siri's equation.",
+      "limitations": [
+        "Population equations: for one person each is typically a few percentage points off a reference method, and the methods disagree with each other.",
+        "Follow one method's trend; the gap between methods is not information about the body.",
+        "Needs sex (and age for the skinfold equation) in the profile."
+      ],
+      "references": [
+        {
+          "citation": "Hodgdon JA, Beckett MB. Prediction of percent body fat for U.S. Navy men and women from body circumferences and height. Naval Health Research Center, San Diego, Reports 84-11 and 84-29, 1984.",
+          "doi": null
+        },
+        {
+          "citation": "Jackson AS, Pollock ML. Generalized equations for predicting body density of men. Br J Nutr 1978;40(3):497-504.",
+          "doi": "10.1079/BJN19780152"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
     }
   ]
 }

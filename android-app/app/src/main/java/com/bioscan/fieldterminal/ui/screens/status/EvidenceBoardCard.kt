@@ -48,7 +48,9 @@ import com.bioscan.fieldterminal.data.model.LagCurvePayload
 import com.bioscan.fieldterminal.domain.EvidenceGroup
 import com.bioscan.fieldterminal.domain.EvidenceRowView
 import com.bioscan.fieldterminal.domain.Verdict
+import com.bioscan.fieldterminal.domain.DailyChoice
 import com.bioscan.fieldterminal.domain.canRegister
+import com.bioscan.fieldterminal.domain.dailyChoiceFor
 import com.bioscan.fieldterminal.domain.evidenceTally
 import com.bioscan.fieldterminal.domain.verdictHistoryLine
 import com.bioscan.fieldterminal.domain.verdictRuns
@@ -75,7 +77,7 @@ private const val BOARD_INFO =
         "not a cause. Only a randomised self-experiment reaches TESTED."
 
 @Composable
-internal fun EvidenceBoardCard(groups: List<EvidenceGroup>, evidence: EvidenceRows) {
+internal fun EvidenceBoardCard(groups: List<EvidenceGroup>, evidence: EvidenceRows, onTest: ((DailyChoice) -> Unit)? = null) {
     var open by remember { mutableStateOf<EvidenceRowView?>(null) }
     FTCard(title = "WHAT GOES WITH WHAT", info = BOARD_INFO, methodology = "relationship_engine") {
         if (groups.isEmpty()) {
@@ -98,6 +100,7 @@ internal fun EvidenceBoardCard(groups: List<EvidenceGroup>, evidence: EvidenceRo
             curve = evidence.events.firstOrNull { it.key == row.id }?.payload,
             lag = evidence.lags.firstOrNull { it.key == row.id }?.payload,
             onDismiss = { open = null },
+            onTest = onTest?.let { test -> dailyChoiceFor(row.id)?.let { choice -> { open = null; test(choice) } } },
         )
     }
 }
@@ -201,7 +204,7 @@ private fun AxisLabels(scale: Double, unit: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EvidenceDetailSheet(row: EvidenceRowView, curve: EventCurvePayload?, lag: LagCurvePayload?, onDismiss: () -> Unit) {
+private fun EvidenceDetailSheet(row: EvidenceRowView, curve: EventCurvePayload?, lag: LagCurvePayload?, onDismiss: () -> Unit, onTest: (() -> Unit)? = null) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary) {
         Column(
@@ -260,6 +263,16 @@ private fun EvidenceDetailSheet(row: EvidenceRowView, curve: EventCurvePayload?,
                 }
             }
             row.notes.forEach { Text(it, style = FTType.Micro, color = FT.TextMuted) }
+            // Phase F: a same-day choice can be tested -- the step from ASSOCIATED to TESTED.
+            onTest?.let { test ->
+                Text("TEST IT", style = FTType.LabelCaps, color = FT.TextSecondary)
+                Text(
+                    "This row is an association. To find out what the choice itself does for you, let the app draw the days: some with the rule, some without, in random order.",
+                    style = FTType.BodySmall,
+                    color = FT.TextSecondary,
+                )
+                FTButton(label = "SET UP A RANDOMISED TEST", emphasis = FTButtonEmphasis.Primary, onClick = test)
+            }
         }
     }
 }

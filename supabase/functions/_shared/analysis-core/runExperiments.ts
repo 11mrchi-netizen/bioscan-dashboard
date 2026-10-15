@@ -2,13 +2,14 @@
 // the shared daily frame, advances the experiment's status and publishes one analysis_results row per experiment (kind
 // 'experiment', key = experiment id). Also builds the pre-registration preview (what could this design detect on your own
 // data) that the app shows before a person starts. Duck-typed client, tested in Node, run unchanged in analysis-run.
-import { analyseExperiment, METRIC_INFO, MIN_PHASE_DAYS, previewMde } from './experiment.ts'
-import type { ExperimentResult, ExperimentSpec, MdePreview, MetricId, Protocol } from './experiment.ts'
+import { analyseExperiment, exclusionMask, freezeBlocks, METRIC_INFO, MIN_PHASE_DAYS, previewMde, withProtocolDefaults } from './experiment.ts'
+import type { ExperimentResult, ExperimentSpec, FrozenExclusions, MdePreview, MetricId, Protocol } from './experiment.ts'
 import type { Admin, LoadedFrame } from './runRelationships.ts'
 import { fnv1a } from './hash.ts'
 import { CORE_VERSION } from './version.ts'
 
 interface ExperimentRow {
+  deleted_at?: string | null
   id: string
   supplement_id: number | null
   intervention_id: string | null
@@ -31,15 +32,17 @@ export async function runExperiments(admin: Admin, loaded: LoadedFrame, now: Dat
   const { userId, frame, today } = loaded
   const { data, error } = await admin
     .from('experiments')
-    .select('id, supplement_id, intervention_id, name, primary_metric, secondary_metrics, protocol, status, preregistered_at, mde_preview')
+    .select('*')
     .eq('user_id', userId)
     .order('preregistered_at')
   if (error) return { userId, error: error.message }
-  const rows = ((data ?? []) as ExperimentRow[]).filter((r) => r.status !== 'abandoned')
+  // Analysis review phase F: deletion is soft; a deleted or abandoned experiment is no longer analysed.
+  const rows = ((data ?? []) as ExperimentRow[]).filter((r) => r.status !== 'abandoned' && !r.deleted_at)
 
   const results: NonNullable<ExperimentsRun['results']> = []
   for (const row of rows) {
-    const first = row.protocol?.phases?.[0]?.start
+    // A daily randomised design has no phases, only its drawn schedule.
+    const first = row.protocol?.phases?.[0]?.start ?? row.protocol?.assignments?.[0]?.date
     if (!first) continue
     // Adherence logging stays domain-owned (08.1): supplement_log is the only wired-in source today, so an
     // intervention-only experiment (no supplement_id) reports zero logged days rather than guessing at adherence.
@@ -50,7 +53,24 @@ export async function runExperiments(admin: Admin, loaded: LoadedFrame, now: Dat
       taken = new Set(((log.data ?? []) as { taken_at: string }[]).map((l) => String(l.taken_at).slice(0, 10)))
     }
     const spec: ExperimentSpec = { id: row.id, name: row.name, primary: row.primary_metric, secondary: row.secondary_metrics ?? [], protocol: row.protocol }
-    const result: ExperimentResult = analyseExperiment(spec, frame, taken, today)
+    // Analysis review phase F: the days a period leaves out are frozen when it ends, so editing an illness or a drink
+    // afterwards cannot move a finished period's result. Read and written softly (before the migration, live logs).
+    let frozen: FrozenExclusions | undefined
+    if (row.protocol.version === 2) {
+      const snap = await admin.from('experiment_exclusion_snapshots').select('period_start, excluded_dates').eq('experiment_id', row.id)
+      if (!snap.error) {
+        frozen = new Map(((snap.data ?? []) as { period_start: string; excluded_dates: string[] }[]).map((x) => [x.period_start, new Set(x.excluded_dates)]))
+        const live = exclusionMask(frame, withProtocolDefaults(row.protocol), undefined)
+        const fresh = freezeBlocks(row.protocol)
+          .filter((b) => b.end < today && !frozen!.has(b.start))
+          .map((b) => ({ experiment_id: row.id, user_id: userId, period_start: b.start, period_end: b.end, excluded_dates: frame.dates.filter((d, i) => d >= b.start && d <= b.end && live[i]) }))
+        if (fresh.length > 0) {
+          const ins = await admin.from('experiment_exclusion_snapshots').upsert(fresh, { onConflict: 'experiment_id,period_start', ignoreDuplicates: true })
+          if (!ins.error) fresh.forEach((f) => frozen!.set(f.period_start, new Set(f.excluded_dates)))
+        }
+      }
+    }
+    const result: ExperimentResult = analyseExperiment(spec, frame, taken, today, frozen)
 
     const nextStatus = result.stage === 'complete' ? 'completed' : result.stage === 'running' ? 'running' : 'planned'
     if (nextStatus !== row.status) {

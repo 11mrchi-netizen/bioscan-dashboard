@@ -617,22 +617,30 @@
       "key": "supplement_experiment",
       "docName": null,
       "kind": "modeled",
-      "methodology": "A pre-registered N-of-1 test of one supplement: a phase without it (A) and a phase with it (B), once or twice (AB or ABAB), with the dates, the one primary outcome (at most three secondary) and the rules fixed before the first day; the database refuses later changes to the plan. The B days are compared with the A days by phase (intention to treat), after removing illness days, alcohol days and the morning after (when the plan says so) and any washout days, and adjusting for day of week. The difference of means is reported in natural units with a 95% interval that uses the effective sample size implied by day-to-day autocorrelation (small-sample corrected) and a Student t, together with the smallest difference the design could detect at 80% power. While the experiment runs the numbers are labelled interim and carry no verdict. Adherence is counted from the real supplement log, never assumed.",
+      "methodology": "A randomised N-of-1 test, registered before the first day: the outcome (one primary, at most three secondary), the smallest change that would matter (the no-effect zone) and the schedule are fixed when the person registers, and the database refuses later changes and a schedule that starts in the past. Two designs. Periods in random order (a supplement or a fueling product): pairs of equal periods, with and without, the order inside each pair drawn on the phone (SecureRandom); every period starts with a washout whose days do not count. Each pair gives one difference (with minus without, weekday-adjusted, from its own two periods, so a slow drift cancels); the estimate is the mean of the pair differences with a Student t interval on them, and with six or more pairs the exact randomisation p over all the orders that could have been drawn. Days in random order (a same-day choice from the evidence board, such as no caffeine after 14:00): each week 3 or 4 days drawn for the rule, the outcome read the next morning; analysed as drawn, with an exact randomisation test that re-draws the schedule the way the phone did, and the interval from inverting it. The answer, once the last period or day has been read, is CLEAR BENEFIT or CLEAR HARM (the 95% interval lies beyond the zone, in the outcome's favourable or unfavourable direction), NO MEANINGFUL EFFECT (inside it) or UNCLEAR (across an edge); while it runs the numbers are interim and carry no verdict. The days a period leaves out (illness; alcohol in the period designs) are frozen the night after it ends. Adherence comes from the supplement log or, for a daily rule, from what the check-in recorded. Optional blinding: a partner fills a weekly organiser with the real thing or a placebo following the schedule, and the app keeps the schedule out of sight. Plans registered before October 2026 used a fixed without-then-with order and keep their original reading.",
       "limitations": [
-        "Not randomised or blinded: the person knows which phase they are in, so expectation, season, training and life events can move an outcome in step with the phases.",
-        "A drifting outcome in the without-phase is checked and flagged, but cannot be fully separated from an effect in a single AB design; ABAB shows whether the effect repeats.",
-        "With a few weeks per phase only large differences can be seen; \"no detectable effect\" is not evidence of no effect, and the result states the smallest difference the design could have seen.",
-        "Supplements with slow onset (weeks) need longer phases or a washout than the defaults; outcomes with a recent device or source change are less reliable.",
-        "Applies to this person only and says nothing about other people."
+        "It answers for this person, under the conditions tested, and says nothing about other people.",
+        "Unblinded, knowing which period or day it is can still move a self-rated outcome (energy, mood); the randomised order protects against trends, seasons and bad weeks, not against expectation.",
+        "Days or periods where the schedule was not followed still count as drawn, which shrinks a real effect toward zero; low adherence is reported with the result.",
+        "Slow-acting changes need longer periods: an effect that lingers beyond the washout leaks into the next period and also shrinks the difference.",
+        "Small designs can only see large effects: four pairs of 14 days see about 16% on HRV; the sheet shows what a design can detect before it is registered, and UNCLEAR is not evidence of no effect."
       ],
       "references": [
         {
           "citation": "Guyatt GH, Keller JL, Jaeschke R, Rosenbloom D, Adachi JD, Newhouse MT. The n-of-1 randomized controlled trial: clinical usefulness. Our three-year experience. Ann Intern Med 1990;112(4):293-299.",
           "doi": "10.7326/0003-4819-112-4-293"
+        },
+        {
+          "citation": "Klasnja P, Hekler EB, Shiffman S, et al. Microrandomized trials: an experimental design for developing just-in-time adaptive interventions. Health Psychol 2015;34(Suppl):1220-1228.",
+          "doi": "10.1037/hea0000305"
+        },
+        {
+          "citation": "Edgington ES, Onghena P. Randomization Tests. 4th ed. Chapman & Hall/CRC; 2007.",
+          "doi": "10.1201/9781420011814"
         }
       ],
       "productDefined": true,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "2.0.0"
     },
     {
       "key": "supplement_interactions",
@@ -779,6 +787,25 @@
         {
           "citation": "Gasparrini A, Armstrong B, Kenward MG. Distributed lag non-linear models. Stat Med 2010;29(21):2224-2234.",
           "doi": "10.1002/sim.3940"
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "intervention_its",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "An intervention read once, on a date fixed when it started (four weeks after the start unless the person set another, and never after it stopped), against a forecast from before it: the level and weekly pattern of the eight weeks before the start (HRV on a log scale) are carried forward over the days since, and the estimate is the average gap between what happened and that forecast. Its 95% interval counts neighbouring days as one long-run variance of the pre-period's day-to-day noise (lag-one autocorrelation, bias-corrected) for both the forecast's level and the gaps, with a Student t. The gap is judged against the outcome's no-effect zone: CLEAR, NEGLIGIBLE or UNCLEAR. A confirmed device change before the start shortens the pre-period to the days after it; one after the start leaves nothing to read. The read is published once and kept.",
+      "limitations": [
+        "It is the OBSERVED rung: what happened against what was expected, not what the intervention did; anything else that changed at the same time counts too, and it never changes a protocol on its own.",
+        "The forecast assumes the eight weeks before would have stayed level; when they were already drifting the result says so.",
+        "Four weeks of an intervention only show large changes (about 16% on HRV is seen three times in four); a randomised self-experiment is the way to a tested answer."
+      ],
+      "references": [
+        {
+          "citation": "Bernal JL, Cummins S, Gasparrini A. Interrupted time series regression for the evaluation of public health interventions: a tutorial. Int J Epidemiol 2017;46(1):348-355.",
+          "doi": "10.1093/ije/dyw098"
         }
       ],
       "productDefined": true,

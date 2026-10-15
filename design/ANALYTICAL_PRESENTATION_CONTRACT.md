@@ -205,6 +205,8 @@ From the analysis review (docs/analysis-review/README.md). Each one changes what
 
 **R6 · Re-checked every night, and confirmed on new days.** A question that is re-tested every night carries two intervals: the 95% interval (the estimate, drawn on the board) and the wider interval its verdict uses while information is short. When they differ, the row says so in words ("re-checked every night; it narrows as days accumulate") instead of letting a drawn interval that clears the zone sit beside UNCLEAR unexplained. Every verdict is kept in a ledger and the detail shows its history. A hint registered as a question says when it was registered and how many new days it has; only those days count. A pooled estimate is labelled as coming from a model of related questions and never replaces the verdict.
 
+**R7 · Tested and observed answers.** A randomised self-experiment is the TESTED rung. Its answer, once the last period or day is read, is one of four phrases against the zone the person set at registration, in the outcome's own direction: CLEAR BENEFIT, CLEAR HARM, NO MEANINGFUL EFFECT, UNCLEAR. It may say "with it" and "without it" and that the order was drawn at random; it still answers for this person under the conditions tested, never for people in general. While it runs, numbers are labelled interim and carry no verdict. What today's draw asks for is shown as an instruction (WITH / WITHOUT, or "take today's organiser dose" when blinded: a blinded schedule is never on screen unless the person asks for it on behalf of whoever fills the organiser), and a without-day of a behaviour rule is "no rule, as you usually would", never an instruction to do the opposite. Before registering, the sheet states what the design can detect in the outcome's unit, against the zone. An intervention read against its forecast from before the start is OBSERVED: "ran +x% against the forecast", "what happened, not why"; it never proposes stopping, cutting back, pausing or stepping up on its own, and the proposal it would have made becomes REASSESS with the way to a tested answer.
+
 ## Acceptance tests
 
 - The same card renders Warning + Declining + High confidence and Optimal + Improving + High confidence solely by changing presentation input.
@@ -214,6 +216,7 @@ From the analysis review (docs/analysis-review/README.md). Each one changes what
 - Every trend shows at least three labelled y values; a daily series with a missing day draws two pieces, not one bridged line.
 - A morning outside its 80% band without a flag is Neutral; a flag on the unfavorable side is Warning and carries a word.
 - An associated finding never uses a cause verb or an arrow; every evidence row shows its verdict word and rung, and a NEGLIGIBLE row stays on the board.
+- A randomised experiment shows no verdict before its last period or day is read; a blinded experiment never shows today's arm; an observational read never yields a proposal to stop, cut back, pause or step up.
 - Range shows its type and never infers desirability from position.
 - State uses text and icon/shape as well as color.
 - No component receives raw data and makes metric-specific interpretation.

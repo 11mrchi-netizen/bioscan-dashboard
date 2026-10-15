@@ -1,5 +1,10 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import androidx.compose.runtime.mutableIntStateOf
+import com.bioscan.fieldterminal.data.ExperimentResultRow
+import com.bioscan.fieldterminal.data.ExperimentRow
+import com.bioscan.fieldterminal.data.ExperimentsRepository
+import com.bioscan.fieldterminal.domain.DailyChoice
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -131,6 +136,12 @@ fun TodayScreen(
     var registeredResults by remember { mutableStateOf<List<RelationshipResultRow>>(emptyList()) }
     var registeredQuestions by remember { mutableStateOf<List<RegisteredQuestion>>(emptyList()) }
     var registerError by remember { mutableStateOf<String?>(null) }
+    // Analysis review phase F: randomised experiments -- what today's draw asks for, and the daily tests of a behaviour.
+    var experiments by remember { mutableStateOf<List<ExperimentRow>>(emptyList()) }
+    var experimentResults by remember { mutableStateOf<Map<String, ExperimentResultRow>>(emptyMap()) }
+    var experimentsKey by remember { mutableIntStateOf(0) }
+    var testing by remember { mutableStateOf<DailyChoice?>(null) }
+    var experimentError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     // Analysis review phase B: last evening's check-in (null until answered or if the read fails) and the open sheet.
     var lastEvening by remember { mutableStateOf<EveningCheckin?>(null) }
@@ -140,6 +151,13 @@ fun TodayScreen(
             checkInDate = checkinDateFor(LocalDateTime.now())
             onCheckInHandled()
         }
+    }
+
+    // Optional enrichment, reloaded after a registration or a delete: a failed read just leaves the experiment cards out.
+    LaunchedEffect(experimentsKey) {
+        val repo = ExperimentsRepository(SupabaseClientProvider.client)
+        runCatching { experiments = repo.loadExperiments() }
+        runCatching { experimentResults = repo.loadResults() }
     }
 
     val guard = rememberLoadGuard()
@@ -253,6 +271,7 @@ fun TodayScreen(
             )
             val eveningAnswered = lastEvening?.isComplete == true
             if (!eveningAnswered) LastEveningCard(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) }
+            TodaysDrawCard(experiments, LocalDate.now())
             DynamicRecoveryCard(recovery, emphasis = if (bandInputs.isEmpty()) FTCardEmphasis.Hero else FTCardEmphasis.Supporting)
             TrainingReadinessCard(computeTrainingReadiness(recovery))
             // The inputs behind recovery and READY FOR, one tap away instead of repeated on this page.
@@ -312,7 +331,20 @@ fun TodayScreen(
             }
 
             if (eveningAnswered) LastEveningCard(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) }
-            EvidenceBoardCard(evidenceBoard(relationships, registeredResults), evidence)
+            EvidenceBoardCard(evidenceBoard(relationships, registeredResults), evidence, onTest = { testing = it })
+            ExperimentsSection(
+                experiments.filter { it.protocol?.behaviour != null },
+                experimentResults,
+                title = "DAILY TESTS",
+                onDelete = { e ->
+                    experimentError = null
+                    scope.launchSafe(onError = { err -> experimentError = describeLoadFailure(err) }) {
+                        ExperimentsRepository(SupabaseClientProvider.client).delete(e.id)
+                        experimentsKey++
+                    }
+                },
+            )
+            experimentError?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
             CaseCrossoverCard(
                 evidence.crossover,
                 registered = registeredQuestions,
@@ -332,6 +364,9 @@ fun TodayScreen(
         }
     }
 
+    testing?.let { choice ->
+        DailyExperimentSheet(choice, onDismiss = { testing = null }, onRegistered = { testing = null; experimentsKey++ })
+    }
     checkInDate?.let { date ->
         EveningCheckInSheet(
             date = date,

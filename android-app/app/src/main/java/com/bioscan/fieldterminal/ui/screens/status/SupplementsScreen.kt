@@ -40,6 +40,8 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 // Step 8 (Phase C). Real data from `supplements`. Ports index.html's
 // isSupplementActive()/supplementOutcome() 1:1 (domain/Supplements.kt) --
@@ -73,6 +75,7 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     val detections = remember(interactionRecords, rosterItems) { detectInteractions(rosterItems, interactionRecords) }
 
     var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(reloadKey) {
         isLoading = true
@@ -90,7 +93,8 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
                 rosterItems = interactionRepo.rosterItems(loaded.active)
             }.onFailure { interactionRecords = emptyList(); rosterItems = emptyList() }
             val expRepo = ExperimentsRepository(SupabaseClientProvider.client)
-            experiments = expRepo.loadExperiments()
+            // Daily tests of a behaviour live on the Today page; supplements and fueling products here.
+            experiments = expRepo.loadExperiments().filter { it.protocol?.behaviour == null }
             experimentResults = expRepo.loadResults()
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
@@ -114,6 +118,13 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
             onExperiment = { experimenting = it },
             experiments = experiments,
             experimentResults = experimentResults,
+            onDeleteExperiment = { e ->
+                scope.launch {
+                    runCatching { ExperimentsRepository(SupabaseClientProvider.client).delete(e.id) }
+                        .onSuccess { reloadKey++ }
+                        .onFailure { error = it.message ?: "Could not delete the experiment" }
+                }
+            },
             detections = detections,
         )
     }
@@ -158,6 +169,7 @@ private fun SupplementsContent(
     onExperiment: (SupplementRow) -> Unit,
     experiments: List<ExperimentRow>,
     experimentResults: Map<String, ExperimentResultRow>,
+    onDeleteExperiment: (ExperimentRow) -> Unit,
     detections: List<DetectedInteraction>,
 ) {
     Column(
@@ -206,7 +218,7 @@ private fun SupplementsContent(
 
         InteractionsSection(detections)
 
-        ExperimentsSection(experiments, experimentResults)
+        ExperimentsSection(experiments, experimentResults, onDelete = onDeleteExperiment)
 
         if (overview.ended.isNotEmpty()) {
             SectionLabel("ENDED", FT.TextSecondary)

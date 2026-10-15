@@ -15,14 +15,16 @@
 // Publishes `series_break` (Phase 1), `relationship` (Phase 3, the confirmatory catalogue), `typicality` (Phase 4,
 // "is today typical for you"), `expected_band` (analysis review phase C: each morning against a forecast band, with
 // flags), `event_curve`, `case_crossover` and `lag_curve` (analysis review phase D: the evidence board's three views),
-// `experiment` (Phase 5, pre-registered supplement N-of-1) and `intervention_response` (Intervention & Protocol
-// Intelligence 08.6, observational baseline-vs-active for any active intervention) results.
+// `experiment` (Phase 5, pre-registered supplement N-of-1; analysis review phase F adds the randomised designs) and
+// `intervention_response` (Intervention & Protocol Intelligence 08.6, observational baseline-vs-active for any active
+// intervention) and `intervention_its` (analysis review phase F: each intervention read once against a forecast from
+// the eight weeks before it started) results.
 // The action `experiment_preview` returns the smallest detectable effect of a planned design for the signed-in user.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildPreview, runExperiments } from "../_shared/analysis-core/runExperiments.ts";
-import { runInterventionResponses } from "../_shared/analysis-core/runInterventionResponse.ts";
+import { runInterventionIts, runInterventionResponses } from "../_shared/analysis-core/runInterventionResponse.ts";
 import { loadFrame, runRelationships } from "../_shared/analysis-core/runRelationships.ts";
 import { runEvidence } from "../_shared/analysis-core/runEvidence.ts";
 import { runExpectedBands } from "../_shared/analysis-core/runExpectedBands.ts";
@@ -124,7 +126,8 @@ Deno.serve(async (req) => {
       const evidence = await runEvidence(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const experiments = await runExperiments(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const interventionResponses = await runInterventionResponses(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      results.push({ ...breaks, relationships, typicality, expectedBands, evidence, experiments, interventionResponses });
+      const interventionIts = await runInterventionIts(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      results.push({ ...breaks, relationships, typicality, expectedBands, evidence, experiments, interventionResponses, interventionIts });
     }
     return json({ coreVersion: CORE_VERSION, results }, 200);
   }

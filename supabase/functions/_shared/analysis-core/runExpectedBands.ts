@@ -15,24 +15,34 @@ export interface ExpectedBandRun {
   metrics?: { metric: string; state: string; have: number }[]
 }
 
-export async function runExpectedBands(admin: Admin, loaded: LoadedFrame, now: Date = new Date()): Promise<ExpectedBandRun> {
-  const { userId, frame, today } = loaded
-  const { data, error: readError } = await admin
+/**
+ * Confirmed series-break dates per metric, oldest first. Only confirmed breaks (a source change or the person's answer)
+ * start a regime; candidates are noise until then.
+ */
+export async function loadConfirmedBreaks(admin: Admin, userId: string): Promise<Map<string, string[]> | { error: string }> {
+  const { data, error } = await admin
     .from('analysis_results')
     .select('key, payload')
     .eq('user_id', userId)
     .eq('kind', 'series_break')
-  if (readError) return { userId, error: readError.message }
+  if (error) return { error: error.message }
   type BreakRow = { key: string; payload: { breaks?: { date: string; status?: string }[] } }
-  const rows = (data ?? []) as BreakRow[]
+  const out = new Map<string, string[]>()
+  for (const r of (data ?? []) as BreakRow[]) {
+    const dates = (r.payload?.breaks ?? []).filter((b) => b.status === 'confirmed').map((b) => b.date)
+    out.set(r.key, [...(out.get(r.key) ?? []), ...dates].sort())
+  }
+  return out
+}
+
+export async function runExpectedBands(admin: Admin, loaded: LoadedFrame, now: Date = new Date()): Promise<ExpectedBandRun> {
+  const { userId, frame, today } = loaded
+  const breaks = await loadConfirmedBreaks(admin, userId)
+  if ('error' in breaks) return { userId, error: breaks.error as string }
 
   const metrics: NonNullable<ExpectedBandRun['metrics']> = []
   for (const spec of BAND_SPECS) {
-    // Only confirmed breaks (a source change or the person's answer) start a regime; candidates are noise until then.
-    const restartDates = rows
-      .filter((r) => r.key === spec.metric)
-      .flatMap((r) => (r.payload?.breaks ?? []).filter((b) => b.status === 'confirmed').map((b) => b.date))
-      .sort()
+    const restartDates = breaks.get(spec.metric) ?? []
     const values = frame.series[spec.metric] ?? frame.dates.map(() => null)
     const result = analyseExpectedBand({ spec, dates: frame.dates, values, excluded: frame.excluded, restartDates })
     const { error } = await admin.from('analysis_results').upsert(

@@ -161,16 +161,133 @@ data class TypicalityPayload(
 @Serializable
 data class RelationshipEffect(val value: Double = 0.0, val lo: Double = 0.0, val hi: Double = 0.0, val unit: String = "")
 
+// Analysis review phase D: one regression per question; the verdict (state) compares the 95% interval with the
+// question's no-effect zone: clear | negligible | unclear | not_yet.
+@Serializable
+data class RelationshipEValue(val point: Double = 1.0, val ci: Double = 1.0)
+
+@Serializable
+data class RelationshipNegativeControl(val value: Double = 0.0, val lo: Double = 0.0, val hi: Double = 0.0, val unit: String = "", val clear: Boolean = false)
+
+@Serializable
+data class RelationshipReadiness(val have: Int = 0, val need: Int = 0, val unit: String = "days")
+
 @Serializable
 data class RelationshipPayload(
+    val id: String = "",
     val label: String = "",
+    // hrv | rhr | sleep | energy: the evidence board's group.
+    val outcome: String = "",
+    val rung: String = "associated",
     val summary: String = "",
     val reason: String? = null,
     val n: Int = 0,
+    val nOn: Int? = null,
+    val nOff: Int? = null,
     val effect: RelationshipEffect? = null,
+    // Half-width of the no-effect zone, in the effect's unit.
+    val noEffect: Double? = null,
     val mde: Double? = null,
     val pAdjusted: Double? = null,
+    val eValue: RelationshipEValue? = null,
+    val negativeControl: RelationshipNegativeControl? = null,
+    val readiness: RelationshipReadiness? = null,
+    val adjustments: List<String> = emptyList(),
     val notes: List<String> = emptyList(),
+    val catalogueVersion: String = "",
+)
+
+// Analysis review phase D: event curves (kind event_curve), case-crossover tables (case_crossover) and lag curves
+// (lag_curve), from supabase/functions/_shared/analysis-core/evidence.ts. Every field is defaulted.
+@Serializable
+data class EventCurveRow(val key: String, val state: String = "not_yet", val payload: EventCurvePayload = EventCurvePayload())
+
+@Serializable
+data class EventCurveDay(
+    val k: Int = 0,
+    // Event days minus comparable days without the event, display units.
+    val mean: Double? = null,
+    val lo: Double? = null,
+    val hi: Double? = null,
+    val chanceLo: Double? = null,
+    val chanceHi: Double? = null,
+    val n: Int = 0,
+)
+
+@Serializable
+data class EventPeak(val k: Int = 0, val value: Double = 0.0)
+
+@Serializable
+data class EventCurvePayload(
+    val id: String = "",
+    val label: String = "",
+    val exposure: String = "",
+    val outcome: String = "",
+    val unit: String = "",
+    val state: String = "not_yet",
+    val events: Int = 0,
+    val need: Int = 8,
+    val days: List<EventCurveDay> = emptyList(),
+    val peak: EventPeak? = null,
+    val backByDay: Int? = null,
+    val differentBefore: Boolean = false,
+    val summary: String = "",
+)
+
+@Serializable
+data class CaseCrossoverResultRow(val key: String, val state: String = "not_yet", val payload: CaseCrossoverPayload = CaseCrossoverPayload())
+
+@Serializable
+data class CaseCrossoverEntry(
+    val exposure: String = "",
+    val label: String = "",
+    val cases: Int = 0,
+    val need: Int = 15,
+    @SerialName("or") val oddsRatio: Double? = null,
+    val lo: Double? = null,
+    val hi: Double? = null,
+    // more_often | less_often | no_clear_difference | not_yet
+    val verdict: String = "not_yet",
+)
+
+@Serializable
+data class CaseCrossoverPayload(
+    val outcome: String = "",
+    val side: String = "low",
+    val text: String = "",
+    val caseDays: Int = 0,
+    val rows: List<CaseCrossoverEntry> = emptyList(),
+)
+
+@Serializable
+data class LagCurveRow(val key: String, val state: String = "not_yet", val payload: LagCurvePayload = LagCurvePayload())
+
+@Serializable
+data class LagPoint(val lag: Int = 0, val value: Double = 0.0, val lo: Double = 0.0, val hi: Double = 0.0)
+
+@Serializable
+data class LagCumulative(val value: Double = 0.0, val lo: Double = 0.0, val hi: Double = 0.0)
+
+@Serializable
+data class DosePoint(val group: String = "", val n: Int = 0, val mean: Double = 0.0, val lo: Double = 0.0, val hi: Double = 0.0)
+
+@Serializable
+data class LagCurvePayload(
+    val id: String = "",
+    val label: String = "",
+    val exposure: String = "",
+    val outcome: String = "",
+    val unit: String = "",
+    val perText: String = "",
+    val state: String = "not_yet",
+    val rows: Int = 0,
+    val exposedDays: Int = 0,
+    val lags: List<LagPoint> = emptyList(),
+    val cumulative: LagCumulative? = null,
+    val clearLags: List<Int> = emptyList(),
+    val lastClearLag: Int? = null,
+    val dose: List<DosePoint>? = null,
+    val summary: String = "",
 )
 
 // Analysis review phase C. Read model for analysis_results rows of kind "expected_band", key = metric (hrv, rhr,

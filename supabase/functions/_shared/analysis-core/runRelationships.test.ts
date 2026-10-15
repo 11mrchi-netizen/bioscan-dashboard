@@ -94,13 +94,20 @@ test('runRelationships publishes one row per hypothesis from raw tables and repl
 
   const row = (k: string) => admin.upserts.find((u) => u.key === k) as Row
   assert.equal(row('alcohol_hrv').kind, 'relationship')
-  assert.equal(row('alcohol_hrv').state, 'supported')
+  assert.equal(row('alcohol_hrv').state, 'clear')
   assert.equal(row('alcohol_hrv').engine_version, CORE_VERSION)
   assert.equal(row('alcohol_hrv').as_of, today)
-  assert.equal(row('training_hrv').state, 'insufficient') // fixed weekly schedule
-  assert.equal(row('steps_hrv').state, 'insufficient') // no steps recorded
-  assert.equal(row('caffeine_pm_sleep').state, 'insufficient') // no caffeine logged
-  assert.equal((row('alcohol_hrv').payload as Row).catalogueVersion, '1.0.0')
+  assert.equal(row('training_hrv').state, 'not_yet') // fixed weekly schedule
+  assert.equal(row('steps_hrv').state, 'not_yet') // no steps recorded
+  assert.equal(row('caffeine_pm_sleep').state, 'not_yet') // no caffeine logged
+  const payload = row('alcohol_hrv').payload as Row
+  assert.equal(payload.catalogueVersion, '2.0.0')
+  assert.equal(payload.rung, 'associated')
+  assert.equal(payload.noEffect, 2)
+  assert.ok('capture' in payload)
+  // NOT YET rows carry their progress in the confidence columns.
+  assert.equal(row('caffeine_pm_sleep').confidence_have, 0)
+  assert.ok((row('caffeine_pm_sleep').confidence_need as number) >= 6)
   assert.ok(admin.deletes.some((d) => d.table === 'analysis_results' && d.filters.some(([op, c]) => op === 'lt' && c === 'as_of')))
 })
 

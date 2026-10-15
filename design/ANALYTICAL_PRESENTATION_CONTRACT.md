@@ -201,6 +201,8 @@ From the analysis review (docs/analysis-review/README.md). Each one changes what
 
 **R4 · Chart rules.** Applied by the shared trend component (DateTrendLine with ChartRules.kt), so no screen has to remember them: a y-axis with at least three labelled values at nice steps; a fixed personal scale per metric when the caller has one (2nd to 98th percentile of the person's own readings), widened only when the data leave it, so an ordinary wobble looks like a wobble; a daily series breaks its line at missing days and the gap is marked on the axis (a session series, a run every few days, stays connected); a per-day band labelled with what it holds; flagged points ringed, so a flag never rests on colour alone; and dated annotations for a logged illness (a span) and a source change (a line). Two units still never share one axis.
 
+**R5 · Verdict words, rungs and the language contract.** Every statement sits on one rung of the evidence ladder: OBSERVED (a reading against what was expected), ASSOCIATED (a pattern in your history, adjusted for weekday, trend and the day before), PREDICTIVE (helps forecast on held-out weeks) or TESTED (a randomised self-experiment). The rung decides the verbs: an association "goes with", "followed" or "came before"; it never "lowers", "raises", "improves" or "causes", and no arrow joins an exposure to an outcome. A tested question carries one of four verdict words, from its 95% interval against a no-effect zone fixed before any data: CLEAR (outside the zone), NEGLIGIBLE (inside it; an answer, not a non-result), UNCLEAR (across an edge, with how many more days would settle it), NOT YET (too few days, shown as progress). The word and the rung badge sit beside every row, so nothing rests on colour. The evidence board draws each question to scale on its outcome's shared axis (estimate, interval, zone, smallest detectable effect), keeps nulls on the board, and orders rows by question, never by p. Exploratory screens (what came before off mornings) say EXPLORATORY and never use the verdict words.
+
 ## Acceptance tests
 
 - The same card renders Warning + Declining + High confidence and Optimal + Improving + High confidence solely by changing presentation input.
@@ -209,6 +211,7 @@ From the analysis review (docs/analysis-review/README.md). Each one changes what
 - Charts retain unit, time window, scale context and visible gaps.
 - Every trend shows at least three labelled y values; a daily series with a missing day draws two pieces, not one bridged line.
 - A morning outside its 80% band without a flag is Neutral; a flag on the unfavorable side is Warning and carries a word.
+- An associated finding never uses a cause verb or an arrow; every evidence row shows its verdict word and rung, and a NEGLIGIBLE row stays on the board.
 - Range shows its type and never infers desirability from position.
 - State uses text and icon/shape as well as color.
 - No component receives raw data and makes metric-specific interpretation.

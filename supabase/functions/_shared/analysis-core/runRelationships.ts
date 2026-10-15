@@ -143,6 +143,15 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
     const drinks = checkins.get(d)?.drinks
     return exposure(d, (alcoholByDay.get(d) ?? 0) > 0, drinks === null || drinks === undefined ? null : drinks > 0)
   })
+  // Analysis review phase D: how much (standard drinks), for the dose curve. The check-in's count wins; otherwise logged
+  // grams at 14 g a drink; a known none is 0; unknown stays unknown.
+  series.alcohol_drinks = axis.map((d, i) => {
+    const drinks = num(checkins.get(d)?.drinks)
+    if (drinks !== null) return drinks
+    const grams = alcoholByDay.get(d) ?? 0
+    if (grams > 0) return Math.round((grams / 14) * 10) / 10
+    return series.alcohol_any[i] === 0 ? 0 : null
+  })
   series.caffeine_pm_any = axis.map((d) => exposure(d, (caffeinePmByDay.get(d) ?? 0) > 0, checkins.get(d)?.caffeine_after_14))
   series.late_meal = axis.map((d) => exposure(d, lateMealDays.has(d), checkins.get(d)?.late_meal))
   // Stress is a rating, so only an answered check-in says anything about it.
@@ -164,6 +173,13 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
   const watchDays = new Set(raw.wearable.filter((w) => num(w.hrv) !== null || num(w.rhr) !== null || num(w.steps) !== null).map((w) => w.date))
   series.training_day = axis.map((d) => (sessionDays.has(d) ? 1 : watchDays.has(d) ? 0 : null))
   series.evening_training = axis.map((d) => (eveningSessionDays.has(d) ? 1 : watchDays.has(d) ? 0 : null))
+  // Analysis review phase D: training minutes per day, the dose for the lag curve (zero on watch days without a session).
+  const minutesByDay = new Map<string, number>()
+  for (const s of training) {
+    const d = clock(s.start_time).date
+    minutesByDay.set(d, (minutesByDay.get(d) ?? 0) + (num(s.duration_min) ?? 0))
+  }
+  series.training_min = axis.map((d) => (minutesByDay.has(d) ? (minutesByDay.get(d) as number) : watchDays.has(d) ? 0 : null))
 
   // Recovery sessions are logged by hand: zero only from the day the first one was logged.
   const recoveryDays = new Set(raw.recovery.map((r) => r.date))
@@ -258,9 +274,16 @@ export async function runRelationships(admin: Admin, userId: string, now: Date =
         engine_version: CORE_VERSION,
         inputs_hash: o.inputsHash,
         state: o.state,
-        confidence_have: o.n,
-        confidence_need: MIN_PAIRS,
-        payload: { catalogueVersion: CATALOGUE_VERSION, familySize: outcomes.filter((x) => x.state !== 'insufficient').length, window: { start: frame.dates[0], end: frame.dates[frame.dates.length - 1] }, ...o },
+        confidence_have: o.readiness?.have ?? o.n,
+        confidence_need: o.readiness?.need ?? MIN_PAIRS,
+        payload: {
+          catalogueVersion: CATALOGUE_VERSION,
+          familySize: outcomes.filter((x) => x.state !== 'not_yet').length,
+          window: { start: frame.dates[0], end: frame.dates[frame.dates.length - 1] },
+          // Analysis review phase D: how complete the exposure capture was, so a reader can tell thin logging from no effect.
+          capture: frame.capture ?? null,
+          ...o,
+        },
         calculated_at: now.toISOString(),
       },
       { onConflict: 'user_id,kind,key,as_of,engine_version' },

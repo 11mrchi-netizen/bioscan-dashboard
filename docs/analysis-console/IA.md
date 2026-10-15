@@ -100,7 +100,7 @@ Workspaces are saved analytical environments, not fixed dashboards. The left rai
 | Nutrition | `/console/nutrition` | Macros, fluid, caffeine, meals table, TDEE overlay |
 | Comparison | `/console/comparison` | Personal-historical + population benchmarks |
 | Data Explorer | `/console/data-explorer` | Raw + derived canonical datasets, virtualized table |
-| Relationship Lab | `/console/relationship` | Confirmatory catalogue, experiments, interventions, fueling. The two-metric scatter/lag scan was retired in 2026-10 and is to be revisited as a corrected discovery screen (docs/analysis-review/README.md, "Revisit") |
+| Relationship Lab | `/console/relationship` | Evidence board (the fixed catalogue against its no-effect zones, with event curves, lag curves and an exploratory case-crossover table), experiments, interventions, fueling. The two-metric scatter/lag scan was retired in 2026-10 and is to be revisited as a corrected discovery screen (docs/analysis-review/README.md, "Revisit") |
 
 ---
 

@@ -138,6 +138,8 @@ export interface FilterRun {
   regimeErrors: number
   regimeStart: number
   lastUpdate: number
+  /** With `record`: the level and weekly pattern each day was forecast from (before that day's update); null before the first reading. */
+  states: ({ level: number; season: number[] } | null)[] | null
 }
 
 const WEEK = 7
@@ -187,13 +189,13 @@ function initialState(dates: string[], values: Num[], usable: (t: number) => boo
 }
 
 /** Runs the filter over model-space values with fixed smoothing weights. `restarts` are indices that open a new regime. */
-export function runFilter(dates: string[], values: Num[], excluded: boolean[], restarts: number[], alpha: number, gamma: number): FilterRun {
+export function runFilter(dates: string[], values: Num[], excluded: boolean[], restarts: number[], alpha: number, gamma: number, record = false): FilterRun {
   const n = dates.length
   const usable = (t: number) => values[t] !== null && Number.isFinite(values[t] as number) && excluded[t] !== true
   const blank: FilterStep = { mu: null, sigma: null, df: 0, z: null, scored: false, ewma: 0, flag: null, side: null }
   let first = -1
   for (let t = 0; t < n; t++) if (usable(t)) { first = t; break }
-  if (first < 0) return { steps: dates.map(() => ({ ...blank })), meanSquare: Infinity, counted: 0, regimeErrors: 0, regimeStart: -1, lastUpdate: -1 }
+  if (first < 0) return { steps: dates.map(() => ({ ...blank })), meanSquare: Infinity, counted: 0, regimeErrors: 0, regimeStart: -1, lastUpdate: -1, states: record ? dates.map(() => null) : null }
 
   const starts = [...new Set(restarts)].filter((r) => r > first).sort((a, b) => a - b)
   const init = initialState(dates, values, usable, first)
@@ -211,6 +213,7 @@ export function runFilter(dates: string[], values: Num[], excluded: boolean[], r
   let counted = 0
   let nextStart = 0
   const steps: FilterStep[] = []
+  const states: ({ level: number; season: number[] } | null)[] | null = record ? [] : null
 
   for (let t = 0; t < n; t++) {
     while (nextStart < starts.length && starts[nextStart] <= t) {
@@ -224,8 +227,10 @@ export function runFilter(dates: string[], values: Num[], excluded: boolean[], r
     }
     if (t < first) {
       steps.push({ ...blank })
+      states?.push(null)
       continue
     }
+    states?.push({ level, season: season.slice() })
     const w = weekdayOf(dates[t])
     const mu = level + season[w]
     const h = lastUpdate < 0 ? 1 : t - lastUpdate
@@ -289,7 +294,7 @@ export function runFilter(dates: string[], values: Num[], excluded: boolean[], r
     }
     steps.push(step)
   }
-  return { steps, meanSquare: counted > 0 ? sumSq / counted : Infinity, counted, regimeErrors: errs.length, regimeStart, lastUpdate }
+  return { steps, meanSquare: counted > 0 ? sumSq / counted : Infinity, counted, regimeErrors: errs.length, regimeStart, lastUpdate, states }
 }
 
 /** Picks the smoothing weights with the smallest mean squared one-step error. Ties keep the smoother setting. */

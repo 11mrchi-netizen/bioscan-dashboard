@@ -2,7 +2,10 @@ package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.HrPoint
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
+import com.bioscan.fieldterminal.data.model.CaseCrossoverResultRow
+import com.bioscan.fieldterminal.data.model.EventCurveRow
 import com.bioscan.fieldterminal.data.model.ExpectedBandRow
+import com.bioscan.fieldterminal.data.model.LagCurveRow
 import com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow
 import com.bioscan.fieldterminal.data.model.LabResultAnalysisRow
 import com.bioscan.fieldterminal.data.model.MaxHrRow
@@ -24,6 +27,7 @@ import com.bioscan.fieldterminal.domain.aggregateMealsByDay
 import com.bioscan.fieldterminal.domain.seriesBreakStartsFrom
 import com.bioscan.fieldterminal.domain.trimp
 import io.github.jan.supabase.SupabaseClient
+import kotlinx.coroutines.async
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
@@ -89,6 +93,29 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             throw e
         } catch (e: Exception) {
             null
+        }
+
+    // Analysis review phase D. The evidence board's other views: event curves, case-crossover tables, lag curves. Each
+    // list is empty before the first run or if its read fails.
+    suspend fun loadEvidence(): EvidenceRows = kotlinx.coroutines.coroutineScope {
+        val events = async { softList("analysis.event_curve") { latestOf<EventCurveRow>("event_curve") } }
+        val crossover = async { softList("analysis.case_crossover") { latestOf<CaseCrossoverResultRow>("case_crossover") } }
+        val lags = async { softList("analysis.lag_curve") { latestOf<LagCurveRow>("lag_curve") } }
+        EvidenceRows(events.await(), crossover.await(), lags.await())
+    }
+
+    private suspend inline fun <reified T : Any> latestOf(kind: String): List<T> =
+        supabase.postgrest.from("analysis_results")
+            .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", kind) }; newestFirst() }
+            .decodeList<T>()
+
+    private suspend fun <T> softList(cacheKey: String, block: suspend () -> List<T>): List<T> =
+        try {
+            ReadCache.get(cacheKey) { block() }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
         }
 
     // Analysis review phase C. The latest expected band per metric (hrv, rhr, sleep_hours); empty before the first run
@@ -325,3 +352,10 @@ private fun io.github.jan.supabase.postgrest.query.PostgrestRequestBuilder.newes
     order("as_of", Order.DESCENDING)
     order("calculated_at", Order.DESCENDING)
 }
+
+// Analysis review phase D: the newest row per key of each evidence view (the reader keeps the first row per key).
+data class EvidenceRows(
+    val events: List<EventCurveRow> = emptyList(),
+    val crossover: List<CaseCrossoverResultRow> = emptyList(),
+    val lags: List<LagCurveRow> = emptyList(),
+)

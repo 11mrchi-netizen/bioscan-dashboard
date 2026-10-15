@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.EveningCheckinRepository
+import com.bioscan.fieldterminal.data.EvidenceRows
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -60,7 +61,8 @@ import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.isComplete
 import com.bioscan.fieldterminal.domain.lastEveningDate
-import com.bioscan.fieldterminal.domain.patternsView
+import com.bioscan.fieldterminal.domain.contributors
+import com.bioscan.fieldterminal.domain.evidenceBoard
 import com.bioscan.fieldterminal.domain.stress.StressDay
 import com.bioscan.fieldterminal.domain.stress.analyzeStressDay
 import com.bioscan.fieldterminal.domain.summary
@@ -87,8 +89,9 @@ import java.time.LocalDateTime
 import kotlin.math.roundToInt
 
 // The Today page (UX review P6; was Daily Readiness), reached from TODAY › on the Status hero. One vocabulary for "how am I
-// today": THIS MORNING leads (analysis review phase C: each core metric against the band expected for you, answer first),
-// then TODAY'S RECOVERY, READY FOR (it is built on recovery), today's fuel, then patterns and typicality. Training load and HRV / resting HR are linked (Training › Load, Health › Cardio) instead of repeated here.
+// today": THIS MORNING leads (analysis review phase C: each core metric against the band expected for you, answer first,
+// with what last evening brought), then TODAY'S RECOVERY, READY FOR (it is built on recovery), today's fuel, then the
+// evidence board (phase D), what came before off mornings, and typicality. Training load and HRV / resting HR are linked (Training › Load, Health › Cardio) instead of repeated here.
 // Every section reuses the exact domain chain + render card its own tile screen already uses (DynamicRecoveryCard in
 // HeartTileScreen.kt, TrainingReadinessCard in TrainingTileScreen.kt, the hydration/macro totals in
 // NutritionHydrationScreen.kt) -- this screen just composes them, loading its own data independently per this app's
@@ -116,6 +119,8 @@ fun TodayScreen(
     var typicality by remember { mutableStateOf<TypicalityResultRow?>(null) }
     // Analysis review phase C: the published expected band per metric (empty before the first run).
     var bands by remember { mutableStateOf<Map<String, ExpectedBandRow>>(emptyMap()) }
+    // Analysis review phase D: event curves, case-crossover tables and lag curves for the evidence board.
+    var evidence by remember { mutableStateOf(EvidenceRows()) }
     // Analysis review phase B: last evening's check-in (null until answered or if the read fails) and the open sheet.
     var lastEvening by remember { mutableStateOf<EveningCheckin?>(null) }
     var checkInDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -143,6 +148,7 @@ fun TodayScreen(
                     { relationships = repo.loadRelationships() },
                     { typicality = repo.loadTypicality() },
                     { bands = repo.loadExpectedBands() },
+                    { evidence = repo.loadEvidence() },
                     // A missing table (migration not yet applied) or a failed read just leaves the card asking.
                     { lastEvening = runCatching { EveningCheckinRepository(SupabaseClientProvider.client).load(lastEveningDate(LocalDate.now())) }.getOrNull() },
                 )
@@ -225,7 +231,13 @@ fun TodayScreen(
                 bands["rhr"]?.let { put("rhr", BandInputs(it, rhrPoints)) }
                 bands["sleep_hours"]?.let { put("sleep_hours", BandInputs(it, sl.mapNotNull { row -> row.hours?.let { v -> LocalDate.parse(row.date) to v } })) }
             }
-            ThisMorningCard(bandInputs, LocalDate.now(), onOpenCardio = onOpenCardio)
+            ThisMorningCard(
+                bandInputs,
+                LocalDate.now(),
+                onOpenCardio = onOpenCardio,
+                // Analysis review phase D: what last evening brought, with the board's evidence about it.
+                contributors = contributors(lastEvening, relationships, evidence.events.map { it.payload }),
+            )
             val eveningAnswered = lastEvening?.isComplete == true
             if (!eveningAnswered) LastEveningCard(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) }
             DynamicRecoveryCard(recovery, emphasis = if (bandInputs.isEmpty()) FTCardEmphasis.Hero else FTCardEmphasis.Supporting)
@@ -287,7 +299,8 @@ fun TodayScreen(
             }
 
             if (eveningAnswered) LastEveningCard(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) }
-            PatternsCard(patternsView(relationships))
+            EvidenceBoardCard(evidenceBoard(relationships), evidence)
+            CaseCrossoverCard(evidence.crossover)
             TypicalityCard(typicalityView(typicality))
         }
     }

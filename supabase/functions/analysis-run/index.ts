@@ -14,7 +14,8 @@
 //
 // Publishes `series_break` (Phase 1), `relationship` (Phase 3, the confirmatory catalogue), `typicality` (Phase 4,
 // "is today typical for you"), `expected_band` (analysis review phase C: each morning against a forecast band, with
-// flags), `experiment` (Phase 5, pre-registered supplement N-of-1) and `intervention_response` (Intervention & Protocol
+// flags), `event_curve`, `case_crossover` and `lag_curve` (analysis review phase D: the evidence board's three views),
+// `experiment` (Phase 5, pre-registered supplement N-of-1) and `intervention_response` (Intervention & Protocol
 // Intelligence 08.6, observational baseline-vs-active for any active intervention) results.
 // The action `experiment_preview` returns the smallest detectable effect of a planned design for the signed-in user.
 
@@ -23,6 +24,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildPreview, runExperiments } from "../_shared/analysis-core/runExperiments.ts";
 import { runInterventionResponses } from "../_shared/analysis-core/runInterventionResponse.ts";
 import { loadFrame, runRelationships } from "../_shared/analysis-core/runRelationships.ts";
+import { runEvidence } from "../_shared/analysis-core/runEvidence.ts";
 import { runExpectedBands } from "../_shared/analysis-core/runExpectedBands.ts";
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
 import { runTypicality } from "../_shared/analysis-core/runTypicality.ts";
@@ -113,15 +115,16 @@ Deno.serve(async (req) => {
       // Typicality and the expected bands run after the series breaks because they restart at confirmed ones.
       const loaded = await loadFrame(admin, id).catch((e) => ({ userId: id, error: String(e) }));
       if ("error" in loaded) {
-        results.push({ ...breaks, relationships: loaded, typicality: loaded, expectedBands: loaded, experiments: loaded });
+        results.push({ ...breaks, relationships: loaded, typicality: loaded, expectedBands: loaded, evidence: loaded, experiments: loaded });
         continue;
       }
       const relationships = await runRelationships(admin, id, new Date(), loaded).catch((e) => ({ userId: id, error: String(e) }));
       const typicality = await runTypicality(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const expectedBands = await runExpectedBands(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      const evidence = await runEvidence(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const experiments = await runExperiments(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const interventionResponses = await runInterventionResponses(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      results.push({ ...breaks, relationships, typicality, expectedBands, experiments, interventionResponses });
+      results.push({ ...breaks, relationships, typicality, expectedBands, evidence, experiments, interventionResponses });
     }
     return json({ coreVersion: CORE_VERSION, results }, 200);
   }

@@ -13,7 +13,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.model.ExpectedBandPayload
 import com.bioscan.fieldterminal.data.model.ExpectedBandRow
+import com.bioscan.fieldterminal.domain.Contributor
 import com.bioscan.fieldterminal.domain.MetricState
+import com.bioscan.fieldterminal.domain.Verdict
 import com.bioscan.fieldterminal.domain.MorningReadout
 import com.bioscan.fieldterminal.domain.SLEEP_HOURS_RANGE
 import com.bioscan.fieldterminal.domain.bandLine
@@ -60,7 +62,14 @@ data class BandInputs(val row: ExpectedBandRow, val readings: List<Pair<LocalDat
 
 // Today's lead card. `metrics` holds the rows that exist; the card is left out entirely before the first run.
 @Composable
-internal fun ThisMorningCard(metrics: Map<String, BandInputs>, today: LocalDate, onOpenCardio: (() -> Unit)? = null, modifier: Modifier = Modifier) {
+internal fun ThisMorningCard(
+    metrics: Map<String, BandInputs>,
+    today: LocalDate,
+    onOpenCardio: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    // Analysis review phase D: last evening's exposures that the evidence board reads CLEAR about.
+    contributors: List<Contributor> = emptyList(),
+) {
     if (metrics.isEmpty()) return
     val ordered = METRIC_ORDER.mapNotNull { key -> metrics[key]?.let { key to it } }
     val readouts = ordered.mapNotNull { (_, m) -> morningReadout(m.row.payload, today, m.readings.lastOrNull()) }
@@ -69,6 +78,15 @@ internal fun ThisMorningCard(metrics: Map<String, BandInputs>, today: LocalDate,
         ordered.forEach { (key, m) ->
             val readout = readouts.firstOrNull { it.metric == key }
             BandSection(METRIC_TITLES[key] ?: key.uppercase(), m, readout, today, chart = readout != null && readout === lead)
+        }
+        contributors.forEach { c ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(c.title.uppercase(), style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.weight(1f))
+                    VerdictChip(Verdict.Clear)
+                }
+                Text(c.line, style = FTType.Caption, color = FT.TextSecondary)
+            }
         }
         onOpenCardio?.let { FTButton("HRV AND RESTING HR IN DETAIL", emphasis = FTButtonEmphasis.Tertiary, onClick = it) }
     }

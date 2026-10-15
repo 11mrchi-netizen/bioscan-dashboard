@@ -42,7 +42,6 @@ import com.bioscan.fieldterminal.data.toRoutePoints
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.toMetricState
 import com.bioscan.fieldterminal.domain.RouteAvailability
 import com.bioscan.fieldterminal.domain.RoutePoint
 import com.bioscan.fieldterminal.domain.SessionDetail
@@ -50,6 +49,7 @@ import com.bioscan.fieldterminal.domain.SessionSplit
 import com.bioscan.fieldterminal.domain.TimePoint
 import com.bioscan.fieldterminal.domain.bestEstimatedOneRepMax
 import com.bioscan.fieldterminal.domain.classifyMovementPattern
+import com.bioscan.fieldterminal.domain.gateStateWord
 import com.bioscan.fieldterminal.domain.heartRateZoneBreakdown
 import com.bioscan.fieldterminal.domain.heartRateZoneFor
 import com.bioscan.fieldterminal.domain.MovementPattern
@@ -681,7 +681,7 @@ private fun TrailCard(state: SessionStateObject, routePoints: List<RoutePoint>, 
                 if (mountainIndex.value != null) {
                     FTMetricValue(DisplayValue(primary = "%.0f".format(mountainIndex.value), unit = "M/KM"))
                 } else {
-                    FTStatePill(mountainIndex.evalState.toMetricState())
+                    FTStatePill(gateStateWord(mountainIndex.evalState))
                 }
             }
             Column(modifier = Modifier.weight(1f)) {

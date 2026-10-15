@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.domain.recoveryStateWord
+import com.bioscan.fieldterminal.domain.trainingLoadStateWord
 import com.bioscan.fieldterminal.util.Perf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -31,7 +33,6 @@ import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
-import com.bioscan.fieldterminal.domain.toMetricState
 import com.bioscan.fieldterminal.domain.ExpectationTier
 import com.bioscan.fieldterminal.domain.MetricCategory
 import com.bioscan.fieldterminal.domain.OstrcEvaluation
@@ -69,7 +70,7 @@ import com.bioscan.fieldterminal.ui.components.BandedGauge
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
-import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.FTDataChip
 import com.bioscan.fieldterminal.ui.components.FTGlanceStrip
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTStatePill
@@ -82,7 +83,6 @@ import com.bioscan.fieldterminal.ui.components.PinnedPage
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TrendSeries
-import com.bioscan.fieldterminal.ui.components.confidenceLevel
 import com.bioscan.fieldterminal.ui.components.glanceAnchor
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberGlanceAnchors
@@ -238,7 +238,7 @@ private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int,
         title = "OSTRC-H2 · ${eval.bodyArea.uppercase()}",
         info = "No injury risk score — single-factor screening doesn't predict injury. You do the synthesis; this doesn't.",
     ) {
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTDataChip(eval.confidence)
         eval.latestSeverityScore?.let { FTMetricRow("Latest severity", "$it / 100") }
         eval.latestCheckDate?.let { FTMetricRow("Last check-in", it.toString()) }
         Text(
@@ -289,8 +289,8 @@ internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Mo
     // UX review P6: "READY FOR" (was "TODAY'S READINESS"): readiness per kind of session, built on Today's Recovery; one name
     // for each of the three "how am I today" states (CONDITION on Status, TODAY'S RECOVERY, READY FOR).
     FTCard(title = "READY FOR", methodology = "dynamic_recovery", modifier = modifier) {
-        FTStatePill(result.generalState.toMetricState())
-        FTConfidenceChip(confidenceLevel(result.confidence))
+        FTStatePill(recoveryStateWord(result.generalState))
+        FTDataChip(result.confidence)
         result.demandRelative.forEach { (tier, state) ->
             val label = when (tier) {
                 TrainingDemandTier.EASY_AEROBIC -> "Easy aerobic"
@@ -413,13 +413,13 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChan
             onTimeframeChange = onTimeframeChange,
             modifier = Modifier.glanceAnchor(
                 glance, "load",
-                GlanceChip(order = 0, label = "LOAD", state = trainingLoadEval.state.toMetricState(), headline = trainingLoadEval.tsbBand?.uppercase()),
+                GlanceChip(order = 0, label = "LOAD", state = trainingLoadStateWord(trainingLoadEval.state, trainingLoadEval.tsbBand).state, headline = trainingLoadEval.tsbBand?.uppercase()),
             ),
         )
         val readiness = computeTrainingReadiness(recovery)
         TrainingReadinessCard(
             readiness,
-            modifier = Modifier.glanceAnchor(glance, "ready", GlanceChip(order = 1, label = "READY FOR", state = readiness.generalState.toMetricState())),
+            modifier = Modifier.glanceAnchor(glance, "ready", recoveryStateWord(readiness.generalState).let { GlanceChip(order = 1, label = "READY FOR", state = it.state, headline = it.word) }),
         )
     }
 }
@@ -459,10 +459,10 @@ internal fun TrainingLoadCard(
         } else {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("State", style = FTType.Body, color = FT.TextSecondary)
-                FTStatePill(eval.state.toMetricState())
+                FTStatePill(trainingLoadStateWord(eval.state, eval.tsbBand))
             }
         }
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTDataChip(eval.confidence)
         // Supporting levels beside the TSB hero above: current fitness (CTL)
         // and fatigue (ATL), each at one step below the hero's size.
         if (eval.ctl != null || eval.atl != null) {

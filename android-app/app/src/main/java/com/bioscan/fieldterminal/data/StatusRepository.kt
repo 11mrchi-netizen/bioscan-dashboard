@@ -5,6 +5,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.HealthEventRow
+import com.bioscan.fieldterminal.domain.SLEEP_HOURS_RANGE
+import com.bioscan.fieldterminal.domain.baselineStateWord
+import com.bioscan.fieldterminal.domain.comparison.METRIC_DIRECTIONALITY
 import com.bioscan.fieldterminal.domain.dedupeRunSessions
 import java.time.Instant
 import java.time.LocalTime
@@ -26,7 +29,7 @@ import com.bioscan.fieldterminal.domain.evaluateSleepDuration
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.isHealthEventActive
 import com.bioscan.fieldterminal.domain.readinessBand
-import com.bioscan.fieldterminal.domain.toMetricState
+import com.bioscan.fieldterminal.domain.trainingLoadStateWord
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
@@ -147,18 +150,19 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         val hrvPoints = wearableAnalysis.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }
         val rhrPoints = wearableAnalysis.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
         val cardioState = worstOf(
-            evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).state.toMetricState(),
-            evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")).state.toMetricState(),
+            baselineStateWord(evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).state, METRIC_DIRECTIONALITY.getValue("hrv")).state,
+            baselineStateWord(evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr")).state, METRIC_DIRECTIONALITY.getValue("resting_heart_rate")).state,
         )
 
         val sleepHoursPoints = sleepRows.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } }
-        val recoveryState = evaluateSleepDuration(sleepHoursPoints, windowStart = breakStarts.start("sleep_hours")).state.toMetricState()
+        val sleepEval = evaluateSleepDuration(sleepHoursPoints, windowStart = breakStarts.start("sleep_hours"))
+        val recoveryState = baselineStateWord(sleepEval.state, METRIC_DIRECTIONALITY.getValue("sleep_duration"), SLEEP_HOURS_RANGE, sleepEval.baseline7d).state
 
         // DAV-205: TRIMP-fallback session loads, same shared builder TrainingTileScreen uses -- keeps the figure's leg
         // color and the Training tab's own Load card from ever disagreeing.
         val sessionLoads = buildTrainingSessionLoads(loadSessionsD.await(), wearableAnalysis.lastOrNull()?.rhr)
         val trainingLoad = evaluateTrainingLoad(sessionLoads)
-        val trainingState = trainingLoad.state.toMetricState()
+        val trainingState = trainingLoadStateWord(trainingLoad.state, trainingLoad.tsbBand).state
 
         val recentSessions = recentD.await()
             .filter { ChronoUnit.DAYS.between(OffsetDateTime.parse(it.startTime).toLocalDate(), today) < 7 }

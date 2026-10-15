@@ -189,6 +189,14 @@ When Figma quota is available, create or extend:
 
 Bind visual properties to Futuristic Material variables before publishing. Never encode thresholds or metric-specific state decisions in Figma variants.
 
+## Analysis review amendments (2026-10)
+
+From the analysis review (docs/analysis-review/README.md). Each one changes what upstream supplies, not how a primitive looks.
+
+**R1 · State words.** An evaluation may supply a short word with its semantic state (`StateWord(state, word)`, domain/StateWords.kt): STEADY, ABOVE BASELINE, BELOW BASELINE, MIXED SIGNALS, LOADED. The pill shows the word; the state still sets colour and symbol, and the accessibility summary reads both. Optimal is reserved for a change in the favorable direction (or a value inside a supplied target); a stable reading is Neutral, never Optimal, and a shift's state follows the metric's directionality, so a rise in HRV and a rise in resting heart rate no longer share one ATTENTION pill.
+
+**R2 · Data is not confidence.** A count of observations against what a gate needs is shown as a data chip (DATA: GOOD at 80% of the need or more, PARTIAL at 50%, THIN below), never as CONFIDENCE. The confidence chip is kept for results that carry a real precision (an interval compared with the smallest change that matters). Population comparisons report how well the reference fits the person (confirmed age band and sex), not a constant.
+
 ## Acceptance tests
 
 - The same card renders Warning + Declining + High confidence and Optimal + Improving + High confidence solely by changing presentation input.

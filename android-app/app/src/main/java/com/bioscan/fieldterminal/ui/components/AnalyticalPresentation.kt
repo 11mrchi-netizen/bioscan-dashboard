@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.ChartPresentation
+import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.ConfidenceLevel
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.DisplayValue
@@ -36,6 +37,7 @@ import com.bioscan.fieldterminal.domain.PersonalRange
 import com.bioscan.fieldterminal.domain.Provenance
 import com.bioscan.fieldterminal.domain.RangeComparison
 import com.bioscan.fieldterminal.domain.RangeKind
+import com.bioscan.fieldterminal.domain.StateWord
 import com.bioscan.fieldterminal.domain.TrendState
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -56,11 +58,17 @@ fun FTMetricValue(value: DisplayValue, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun FTStatePill(state: MetricState, modifier: Modifier = Modifier) {
-    val treatment = stateTreatment(state)
+fun FTStatePill(state: MetricState, modifier: Modifier = Modifier) = FTStatePill(StateWord(state), modifier)
+
+// Contract amendment "State words" (analysis review A1): the evaluation may name its comparison (STEADY, ABOVE
+// BASELINE, MIXED SIGNALS...). The semantic state still sets colour and symbol, and screen readers hear both.
+@Composable
+fun FTStatePill(word: StateWord, modifier: Modifier = Modifier) {
+    val treatment = stateTreatment(word.state)
+    val label = word.word ?: treatment.label
     Row(
         modifier = modifier
-            .semantics { contentDescription = treatment.label }
+            .semantics { contentDescription = if (word.word != null) "$label, ${treatment.label.lowercase()}" else label }
             .border(FT.BorderWidth, treatment.color.copy(alpha = 0.65f), RoundedCornerShape(FT.RadiusSmall))
             .background(treatment.color.copy(alpha = 0.12f), RoundedCornerShape(FT.RadiusSmall))
             .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -68,7 +76,7 @@ fun FTStatePill(state: MetricState, modifier: Modifier = Modifier) {
     ) {
         Text(treatment.symbol, color = treatment.color, style = FTType.Label)
         Spacer(Modifier.width(5.dp))
-        Text(treatment.label, color = treatment.color, style = FTType.Label)
+        Text(label, color = treatment.color, style = FTType.Label)
     }
 }
 
@@ -85,6 +93,28 @@ fun FTTrendIndicator(trend: TrendState, modifier: Modifier = Modifier) {
         text = treatment.first + " " + treatment.second,
         modifier = modifier.semantics { contentDescription = treatment.second.lowercase() },
         color = FT.TextSecondary,
+        style = FTType.Label,
+    )
+}
+
+// Analysis review A7. Most evaluations carry an observation count against what their gate needs (Confidence(have,
+// need)), which says how much data backs the card, not how sure the result is. This chip says exactly that: GOOD at 80%
+// of the need or more, PARTIAL at 50%, THIN below. FTConfidenceChip stays for results that carry a real precision.
+@Composable
+fun FTDataChip(confidence: Confidence, modifier: Modifier = Modifier) {
+    val ratio = if (confidence.need > 0) confidence.have.toDouble() / confidence.need else 0.0
+    val (word, color) = when {
+        ratio >= 0.8 -> "GOOD" to FT.TextSecondary
+        ratio >= 0.5 -> "PARTIAL" to FT.Info
+        else -> "THIN" to FT.Warning
+    }
+    Text(
+        text = "DATA: $word",
+        modifier = modifier
+            .semantics { contentDescription = "data ${word.lowercase()}, ${confidence.have} of ${confidence.need} needed" }
+            .border(FT.BorderWidth, color.copy(alpha = 0.5f), RoundedCornerShape(FT.RadiusSmall))
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        color = color,
         style = FTType.Label,
     )
 }

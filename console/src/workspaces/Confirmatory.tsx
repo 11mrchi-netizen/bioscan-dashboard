@@ -64,12 +64,20 @@ export function Confirmatory() {
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const loadInner = useCallback(async () => {
+    // Analysis review A8: newest row per question (contract v3: latest as_of, then latest run of that night), so an
+    // engine-version bump or a failed delete can't show two cards for one question. A failed read is an error, not an
+    // empty catalogue.
     const { data, error } = await supabase
       .from('analysis_results')
       .select('key, as_of, state, calculated_at, payload')
       .eq('kind', 'relationship')
+      .order('as_of', { ascending: false })
+      .order('calculated_at', { ascending: false })
     warnOnError('confirmatory relationships', error)
-    const list = ((data ?? []) as unknown as Row[]).sort((a, b) => ORDER[a.state] - ORDER[b.state] || a.key.localeCompare(b.key))
+    if (error) throw new Error(error.message)
+    const seen = new Set<string>()
+    const latest = ((data ?? []) as unknown as Row[]).filter((r) => (seen.has(r.key) ? false : (seen.add(r.key), true)))
+    const list = latest.sort((a, b) => ORDER[a.state] - ORDER[b.state] || a.key.localeCompare(b.key))
     setRows(list)
     setLoading(false)
   }, [])
@@ -107,7 +115,7 @@ export function Confirmatory() {
     <div className="conf">
       <div className="conf-head">
         <p className="conf-note">
-          {rows.length} fixed questions, each tested once. Both sides are adjusted for day of week, and the p-values are corrected across the {tested} that had enough data.
+          {rows.length} fixed questions, re-tested every night on the last year of data; each card is the latest run. Both sides are adjusted for day of week, and the p-values are corrected across the {tested} that had enough data that night.
           An effect is shown only if it survives that correction; otherwise the card says how large an effect would have had to be to be seen.
           {first ? ` Window ${first.window.start} to ${first.window.end} · catalogue v${first.catalogueVersion}.` : ''}
         </p>

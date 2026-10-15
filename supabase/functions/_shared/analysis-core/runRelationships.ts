@@ -7,6 +7,7 @@ import type { Frame, RelationshipOutcome } from './relationship.ts'
 import { alignToAxis, dateAxis } from './stats.ts'
 import type { Num } from './stats.ts'
 import { CORE_VERSION } from './version.ts'
+import { fetchAll } from './paging.ts'
 
 export const RELATIONSHIP_LOOKBACK_DAYS = 365
 // A day counts as having "afternoon caffeine" from this local hour on.
@@ -95,16 +96,6 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
 
 // deno-lint-ignore no-explicit-any
 export type Admin = any
-
-async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<{ rows: T[]; error?: string }> {
-  const rows: T[] = []
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await page(from, from + 999)
-    if (error) return { rows, error: error.message }
-    rows.push(...(data ?? []))
-    if ((data ?? []).length < 1000) return { rows }
-  }
-}
 
 export interface RelationshipRun {
   userId: string

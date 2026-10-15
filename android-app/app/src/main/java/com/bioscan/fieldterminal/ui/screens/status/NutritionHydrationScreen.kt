@@ -47,14 +47,13 @@ import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.TotalsPeriod
 import com.bioscan.fieldterminal.domain.sumNutritionSince
 import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.FTDataChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.MacroDonutChart
 import com.bioscan.fieldterminal.ui.components.PeriodToggle
-import com.bioscan.fieldterminal.ui.components.confidenceLevel
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -443,7 +442,7 @@ private fun targetRange(label: String, current: Double, target: Double): Persona
 @Composable
 private fun HydrationIntelligenceCard(result: HydrationIntelligenceResult) {
     FTCard(title = "HYDRATION INTELLIGENCE") {
-        FTConfidenceChip(confidenceLevel(result.confidence))
+        FTDataChip(result.confidence)
         result.measuredIntakeMl?.let { FTMetricRow("Measured intake", "%.0f ml".format(it)) }
         result.effectiveHydrationMl?.let { FTMetricRow("Effective hydration (modeled)", "%.0f ml".format(it)) }
         if (result.inferredDemandMl != null) {

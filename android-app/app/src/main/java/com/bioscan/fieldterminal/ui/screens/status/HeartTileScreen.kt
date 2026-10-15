@@ -1,5 +1,10 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.domain.SLEEP_HOURS_RANGE
+import com.bioscan.fieldterminal.domain.baselineStateWord
+import com.bioscan.fieldterminal.domain.recoveryStateWord
+import com.bioscan.fieldterminal.domain.toExpSpace
+import com.bioscan.fieldterminal.domain.trendStateWord
 import com.bioscan.fieldterminal.util.Perf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -38,13 +43,13 @@ import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.toMetricState
 import com.bioscan.fieldterminal.domain.PersonalRange
 import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.RespiratoryAnomalyEvaluation
 import com.bioscan.fieldterminal.data.BenchmarkArtifactRepository
 import com.bioscan.fieldterminal.domain.analysis.ComparisonResult
 import com.bioscan.fieldterminal.domain.analysis.Directionality
+import com.bioscan.fieldterminal.domain.analysis.MIN_CORRELATION_PAIRS
 import com.bioscan.fieldterminal.domain.analysis.pearsonCorrelation
 import com.bioscan.fieldterminal.domain.comparison.BenchmarkArtifact
 import com.bioscan.fieldterminal.domain.comparison.METRIC_DIRECTIONALITY
@@ -87,7 +92,7 @@ import com.bioscan.fieldterminal.ui.components.ComparisonStrip
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
-import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.FTDataChip
 import com.bioscan.fieldterminal.ui.components.FTGlanceStrip
 import com.bioscan.fieldterminal.ui.components.GlanceAnchors
 import com.bioscan.fieldterminal.ui.components.GlanceChip
@@ -103,7 +108,6 @@ import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.PinnedPage
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
-import com.bioscan.fieldterminal.ui.components.confidenceLevel
 import com.bioscan.fieldterminal.ui.components.glanceAnchor
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberGlanceAnchors
@@ -236,7 +240,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     EvalCard(
                         "HRV", hrvEval, "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints, comparison = hrvComparison,
                         timeframe = vitalsTimeframe, methodology = "hrv", emphasis = FTCardEmphasis.Hero,
-                        modifier = Modifier.glanceAnchor(glance, "hrv", GlanceChip(0, "HRV", state = hrvEval.state.toMetricState())),
+                        modifier = Modifier.glanceAnchor(glance, "hrv", baselineStateWord(hrvEval.state, METRIC_DIRECTIONALITY.getValue("hrv")).let { GlanceChip(0, "HRV", state = it.state, headline = it.word) }),
                     )
                     // v12: intraday HR from Zepp band_data. Show for the most
                     // recent day that has data; silently absent when not yet synced.
@@ -265,13 +269,13 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     EvalCard(
                         "RESTING HEART RATE", rhrEval, "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints,
                         comparison = rhrComparison, timeframe = vitalsTimeframe, methodology = "rhr",
-                        modifier = Modifier.glanceAnchor(glance, "rhr", GlanceChip(2, "RHR", state = rhrEval.state.toMetricState())),
+                        modifier = Modifier.glanceAnchor(glance, "rhr", baselineStateWord(rhrEval.state, METRIC_DIRECTIONALITY.getValue("resting_heart_rate")).let { GlanceChip(2, "RHR", state = it.state, headline = it.word) }),
                     )
                     val spo2Points = w.mapNotNull { row -> row.spo2?.let { LocalDate.parse(row.date) to it } }
                     val spo2Eval = evaluateSpo2(spo2Points)
                     EvalCard(
                         "SPO2", spo2Eval, "%", directionality = Directionality.NON_DIRECTIONAL, points = spo2Points, timeframe = vitalsTimeframe,
-                        modifier = Modifier.glanceAnchor(glance, "spo2", GlanceChip(3, "SPO2", state = spo2Eval.state.toMetricState())),
+                        modifier = Modifier.glanceAnchor(glance, "spo2", baselineStateWord(spo2Eval.state, Directionality.NON_DIRECTIONAL).let { GlanceChip(3, "SPO2", state = it.state, headline = it.word) }),
                     )
                     val rrPoints = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
                     val rrEval = evaluateRespiratoryAnomaly(rrPoints)
@@ -329,7 +333,7 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     }
                     DynamicRecoveryCard(
                         dynamicRecovery,
-                        modifier = Modifier.glanceAnchor(glance, "recovery", GlanceChip(0, "RECOVERY", state = dynamicRecovery.state.toMetricState())),
+                        modifier = Modifier.glanceAnchor(glance, "recovery", recoveryStateWord(dynamicRecovery.state).let { GlanceChip(0, "RECOVERY", state = it.state, headline = it.word) }),
                     )
 
                     // 09.1 Sleep Index: a headline aggregate above the same
@@ -342,8 +346,8 @@ fun HeartTileScreen(onBack: () -> Unit) {
                     val durationEval = evaluateSleepDuration(hoursPoints, windowStart = breakStarts.start("sleep_hours"))
                     EvalCard(
                         "SLEEP DURATION", durationEval, "h", directionality = METRIC_DIRECTIONALITY.getValue("sleep_duration"), points = hoursPoints,
-                        methodology = "sleep_duration",
-                        modifier = Modifier.glanceAnchor(glance, "duration", GlanceChip(2, "DURATION", state = durationEval.state.toMetricState())),
+                        methodology = "sleep_duration", range = SLEEP_HOURS_RANGE,
+                        modifier = Modifier.glanceAnchor(glance, "duration", baselineStateWord(durationEval.state, METRIC_DIRECTIONALITY.getValue("sleep_duration"), SLEEP_HOURS_RANGE, durationEval.baseline7d).let { GlanceChip(2, "DURATION", state = it.state, headline = it.word) }),
                     )
                     val sriEval = remember(s) { evaluateSri(nights) }
                     SriCard(sriEval, modifier = Modifier.glanceAnchor(glance, "sri", GlanceChip(3, "SRI", headline = sriEval.value?.let { "%.0f".format(it) } ?: "BUILDING")))
@@ -547,9 +551,9 @@ private fun SexualHealthCorrelationsCard(wb: List<WellbeingAnalysisRow>, sa: Lis
         intensityVsGap?.let { Triple("Orgasm intensity × days since last activity", it, "observed in your data only") },
     )
 
-    FTCard(title = "CORRELATIONS", info = "Pearson r, minimum 7 paired days. Only morning erection quality × sleep has real supporting research -- everything else is observed in your own data, not a validated link.") {
+    FTCard(title = "CORRELATIONS", info = "Pearson r with its 95% interval, minimum $MIN_CORRELATION_PAIRS paired days. A strength word is shown only when the interval excludes zero. Only morning erection quality × sleep has real supporting research -- everything else is observed in your own data, not a validated link, and a correlation never shows cause.") {
         if (rows.isEmpty()) {
-            Text("Not enough paired history yet (need 7+ overlapping days per pair).", style = FTType.BodySmall, color = FT.TextSecondary)
+            Text("Not enough paired history yet (need $MIN_CORRELATION_PAIRS+ overlapping days per pair).", style = FTType.BodySmall, color = FT.TextSecondary)
         } else {
             rows.forEach { (label, result, caption) ->
                 Column(modifier = Modifier.padding(top = 10.dp)) {
@@ -557,14 +561,16 @@ private fun SexualHealthCorrelationsCard(wb: List<WellbeingAnalysisRow>, sa: Lis
                         Text(label, style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f))
                         Text("r = %.2f".format(result.r), style = FTType.Value, color = FT.TextSecondary)
                     }
-                    Text("${result.strength} · n=${result.n} · $caption", style = FTType.Caption, color = FT.TextMuted)
+                    Text(
+                        "${result.strength} · 95% interval ${"%.2f".format(result.lower)} to ${"%.2f".format(result.upper)} · n=${result.n} · $caption",
+                        style = FTType.Caption,
+                        color = FT.TextMuted,
+                    )
                 }
             }
         }
     }
 }
-
-internal fun SwcEvaluation.toExpSpace(): SwcEvaluation = copy(baseline7d = expValue(baseline7d), mean60d = expValue(mean60d))
 
 // DAV-75/101: baseline/mean/CV were plain numbers with no sense of the real
 // day-to-day shape behind them, and no personal-range context -- the raw
@@ -589,17 +595,19 @@ internal fun EvalCard(
     methodology: String? = null,
     modifier: Modifier = Modifier,
     emphasis: FTCardEmphasis = FTCardEmphasis.Supporting,
+    // A known healthy range for an OPTIMAL_RANGE metric (sleep duration), so a shift out of it reads as attention.
+    range: ClosedFloatingPointRange<Double>? = null,
 ) {
+    val word = baselineStateWord(eval.state, directionality, range, eval.baseline7d)
     FTCard(title = title, modifier = modifier, methodology = methodology, emphasis = emphasis) {
-        FTStatePill(eval.state.toMetricState())
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTStatePill(word)
+        FTDataChip(eval.confidence)
         comparison?.let { ComparisonStrip(it) }
-        var bandLow: Double? = null
-        var bandHigh: Double? = null
-        if (eval.mean60d != null && eval.swcPct != null) {
-            val band = eval.mean60d * (eval.swcPct / 100.0)
-            bandLow = eval.mean60d - band
-            bandHigh = eval.mean60d + band
+        // Analysis review A2: the band drawn is the band that decided the pill (SwcEvaluation.bandLow/bandHigh, already in
+        // display units for HRV via toExpSpace), not mean x swcPct, which drew HRV's log-space band about 4x too narrow.
+        val bandLow = eval.bandLow
+        val bandHigh = eval.bandHigh
+        if (eval.mean60d != null && bandLow != null && bandHigh != null) {
             FTRangeIndicator(
                 PersonalRange(
                     kind = RangeKind.PersonalBaseline,
@@ -607,7 +615,7 @@ internal fun EvalCard(
                     upper = bandHigh,
                     baseline = eval.mean60d,
                     current = eval.baseline7d,
-                    label = "60-DAY BASELINE ± SWC ($unit)",
+                    label = "60-DAY BASELINE, SHIFT BAND ($unit)",
                     sufficientHistory = true,
                 ),
             )
@@ -623,7 +631,7 @@ internal fun EvalCard(
                 color = FT.DomainHeart,
                 refLow = bandLow,
                 refHigh = bandHigh,
-                highlightColor = stateTreatment(eval.state.toMetricState()).color,
+                highlightColor = stateTreatment(word.state).color,
                 modifier = Modifier.padding(top = 8.dp),
                 unit = unit,
             )
@@ -650,8 +658,8 @@ private fun recentTrendWindow(points: List<Pair<LocalDate, Double>>): List<Pair<
 internal fun DynamicRecoveryCard(result: DynamicRecoveryResult, modifier: Modifier = Modifier) {
     // Contract A3: the lead card of Health › Recovery and of the Today page.
     FTCard(title = "TODAY'S RECOVERY", methodology = "dynamic_recovery", emphasis = FTCardEmphasis.Hero, modifier = modifier) {
-        FTStatePill(result.state.toMetricState())
-        FTConfidenceChip(confidenceLevel(result.confidence))
+        FTStatePill(recoveryStateWord(result.state))
+        FTDataChip(result.confidence)
         if (result.contributors.isEmpty()) {
             Text(
                 "Not enough contributors yet -- needs at least 2 of sleep/HRV/RHR/training load/subjective state.",
@@ -676,7 +684,7 @@ internal fun DynamicRecoveryCard(result: DynamicRecoveryResult, modifier: Modifi
 @Composable
 private fun SleepIndexCard(result: SleepIndexResult, modifier: Modifier = Modifier) {
     FTCard(title = "SLEEP INDEX", methodology = "sleep_index", modifier = modifier) {
-        FTConfidenceChip(confidenceLevel(result.confidence))
+        FTDataChip(result.confidence)
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
             result.components.forEach { (component, componentScore) ->
@@ -695,7 +703,7 @@ private fun SleepIndexCard(result: SleepIndexResult, modifier: Modifier = Modifi
 @Composable
 private fun CircadianAlignmentCard(result: CircadianAlignmentResult, modifier: Modifier = Modifier) {
     FTCard(title = "CIRCADIAN ALIGNMENT", info = "A behavioral regularity proxy, not a measured circadian phase.", modifier = modifier) {
-        FTConfidenceChip(confidenceLevel(result.confidence))
+        FTDataChip(result.confidence)
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
             result.components.forEach { (component, componentScore) ->
@@ -716,7 +724,7 @@ private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay
     // "PHYSIOLOGICAL STRESS" not "STRESS" -- never visually conflated with
     // the subjective SubjectiveCard("STRESS") above it (DAV-246's own rule).
     FTCard(title = "PHYSIOLOGICAL STRESS") {
-        FTConfidenceChip(confidenceLevel(result.confidence))
+        FTDataChip(result.confidence)
         val summary = today.summary
         if (summary.avg != null) {
             FTMetricValue(DisplayValue(primary = "${summary.avg}", unit = "/ 100 avg today"))
@@ -757,7 +765,7 @@ private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay
 @Composable
 private fun SriCard(eval: SriEvaluation, modifier: Modifier = Modifier) {
     FTCard(title = "SLEEP REGULARITY (SRI)", methodology = "sri", modifier = modifier) {
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTDataChip(eval.confidence)
         if (eval.value != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(eval.value), unit = "/ 100"))
         } else {
@@ -835,7 +843,7 @@ private const val STEPS_WINDOW_DAYS = 15L
 @Composable
 private fun MovementIndexCard(result: MovementIndexResult, modifier: Modifier = Modifier) {
     FTCard(title = "MOVEMENT INDEX", modifier = modifier) {
-        FTConfidenceChip(confidenceLevel(result.confidence))
+        FTDataChip(result.confidence)
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100"))
             result.components.forEach { (component, componentScore) ->
@@ -891,7 +899,7 @@ private fun StepsCard(points: List<Pair<LocalDate, Double>>, benchmarkArtifacts:
 @Composable
 private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation, modifier: Modifier = Modifier) {
     FTCard(title = "RESPIRATORY RATE", methodology = "respiratory_rate_sleep", modifier = modifier) {
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTDataChip(eval.confidence)
         eval.baseline?.let { FTMetricRow("14-night baseline", "%.1f breaths/min".format(it)) }
         Text(
             if (eval.flagged) {
@@ -909,8 +917,8 @@ private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation, modifier: Modifi
 private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>, modifier: Modifier = Modifier) {
     val eval = evaluateSubjective(points)
     FTCard(title = title, modifier = modifier) {
-        FTStatePill(eval.state.toMetricState())
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTStatePill(trendStateWord(eval.state))
+        FTDataChip(eval.confidence)
         eval.median7d?.let { FTMetricRow("7-day median", "%.1f".format(it)) }
         eval.medianBaseline30d?.let { FTMetricRow("30-day baseline", "%.1f".format(it)) }
         eval.iqr7d?.let { FTMetricRow("7-day IQR", "%.1f".format(it)) }

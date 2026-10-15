@@ -32,7 +32,6 @@ import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.toMetricState
 import com.bioscan.fieldterminal.domain.NutritionEvaluation
 import com.bioscan.fieldterminal.domain.PROTEIN_PCT_HIGH
 import com.bioscan.fieldterminal.domain.PROTEIN_PCT_LOW
@@ -43,10 +42,12 @@ import com.bioscan.fieldterminal.domain.evaluateBristol
 import com.bioscan.fieldterminal.domain.evaluateNutrition
 import com.bioscan.fieldterminal.domain.evaluateTdee
 import com.bioscan.fieldterminal.domain.evaluateWeightTrend
+import com.bioscan.fieldterminal.domain.gateStateWord
 import com.bioscan.fieldterminal.domain.proteinPercentSeries
+import com.bioscan.fieldterminal.domain.trendStateWord
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.FTDataChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
@@ -56,7 +57,6 @@ import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.PinnedPage
 import com.bioscan.fieldterminal.ui.components.SubTabRow
-import com.bioscan.fieldterminal.ui.components.confidenceLevel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import java.time.OffsetDateTime
 import com.bioscan.fieldterminal.ui.nav.FuelTab
@@ -152,7 +152,7 @@ fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {})
 private fun BristolCard(eval: BristolEvaluation, entries: List<Pair<LocalDate, Int>>) {
     FTCard(title = "DIGESTIVE PATTERN (BRISTOL)", info = "Descriptive pattern only — not a diagnostic tool.") {
         FTMetricRow("Frequency (14d)", "${eval.confidence.have} entries logged")
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTDataChip(eval.confidence)
         eval.pattern?.let { FTMetricRow("Pattern", bristolPatternLabel(it)) }
         // Bristol type is an ordinal category (1-7), so the shape across days is
         // shown as a hard / normal / loose distribution, not a continuous line.
@@ -232,8 +232,8 @@ private const val TREND_WINDOW_DAYS = 90L
 @Composable
 private fun WeightCard(eval: WeightEvaluation) {
     FTCard(title = "WEIGHT TREND") {
-        FTStatePill(eval.state.toMetricState())
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTStatePill(trendStateWord(eval.state))
+        FTDataChip(eval.confidence)
         eval.emaToday?.let { FTMetricRow("EMA (today)", "%.1f kg".format(it)) }
         eval.rateKgPerWeek?.let { FTMetricRow("Rate", "%+.2f kg/week".format(it)) }
         val today = LocalDate.now()
@@ -273,8 +273,8 @@ private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) 
 @Composable
 private fun NutritionCard(eval: NutritionEvaluation) {
     FTCard(title = "NUTRITION (ANALYSIS)") {
-        FTStatePill(eval.state.toMetricState())
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTStatePill(gateStateWord(eval.state))
+        FTDataChip(eval.confidence)
         eval.energyTrend14d?.let { FTMetricRow("14-day energy trend", "%.0f kcal".format(it)) }
         eval.energyCv28d?.let { FTMetricRow("28-day energy CV", "%.1f%%".format(it)) }
         eval.proteinAdherence14d?.let { FTMetricRow("Protein in AMDR band (10-35% kcal)", "%.0f%%".format(it)) }
@@ -284,8 +284,8 @@ private fun NutritionCard(eval: NutritionEvaluation) {
 @Composable
 private fun BodyFatCard(eval: BodyFatEvaluation) {
     FTCard(title = "BODY FAT %") {
-        FTStatePill(eval.state.toMetricState())
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTStatePill(trendStateWord(eval.state))
+        FTDataChip(eval.confidence)
         eval.latest?.let { FTMetricRow("Latest", "%.1f%%".format(it)) }
         eval.previous?.let { FTMetricRow("Previous (≥30d prior)", "%.1f%%".format(it)) }
         eval.delta?.let { FTMetricRow("Delta", "%+.1f pp".format(it)) }
@@ -303,7 +303,7 @@ private fun TdeeCard(eval: TdeeEvaluation) {
         title = "ENERGY BALANCE (TDEE ESTIMATE)",
         info = "Post-fact estimate from your own logged intake and real weight trend — not a predictive formula, and not a target to hit.",
     ) {
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTDataChip(eval.confidence)
         if (eval.state == EvalState.Stable && eval.tdeeKcal != null && eval.rangeLowKcal != null && eval.rangeHighKcal != null) {
             FTMetricValue(
                 DisplayValue(

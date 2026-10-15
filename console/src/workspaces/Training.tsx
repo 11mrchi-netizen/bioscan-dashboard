@@ -1,6 +1,6 @@
 // DAV-314: Training workspace — stress balance, VO2max trend, session list.
-// CTL/ATL/TSB computed from runs using duration-based TSS proxy.
-// VO2max estimated from best recent pace via Daniels VDOT.
+// CTL/ATL/TSB from session load (sRPE, else TRIMP from heart rate), with the same model and EWMA convention as the
+// Android app (analysis review A5). VO2max estimated per effort via Daniels & Gilbert.
 
 import { LoadBanner } from '../components/shared/LoadBanner'
 import { useLoadEffect } from '../lib/useLoadEffect'
@@ -8,7 +8,7 @@ import { useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRange, useInspect } from '../lib/analysisStore'
 import { ENDURANCE_TYPES, dayBounds, localDate, warnOnError } from '../lib/schema'
-import { tss, vo2maxFromPace, ema } from '../lib/training'
+import { sessionLoad, vo2maxFromPace, ema } from '../lib/training'
 import { FTChart } from '../components/shared/FTChart'
 import type { MetricResult } from '../lib/metricAdapter'
 import type { ChartSpec } from '../lib/chartSpec'
@@ -21,6 +21,8 @@ interface RunRow {
   duration_minutes: number | null
   activity_type: string | null
   avg_hr: number | null
+  max_hr: number | null
+  rpe: number | null
   source: string | null
 }
 
@@ -46,11 +48,16 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
     // exercise_sessions replaced the old `runs` table; only endurance types feed this run-based load model
     // (4,000+ auto-detected walks would otherwise dominate the TSS proxy).
     const { from, to } = dayBounds(warmupStr, end)
-    const { data: rows, error } = await supabase.from('exercise_sessions')
-      .select('id, start_time, distance_km, duration_min, type, avg_hr, source')
-      .in('type', ENDURANCE_TYPES)
-      .gte('start_time', from).lte('start_time', to)
-      .order('start_time', { ascending: true })
+    const [{ data: rows, error }, rhrRes] = await Promise.all([
+      supabase.from('exercise_sessions')
+        .select('id, start_time, distance_km, duration_min, type, avg_hr, max_hr, rpe, source')
+        .in('type', ENDURANCE_TYPES)
+        .gte('start_time', from).lte('start_time', to)
+        .order('start_time', { ascending: true }),
+      // TRIMP needs a resting heart rate; Android uses the latest one, so this does too.
+      supabase.from('wearable_daily').select('rhr').not('rhr', 'is', null).order('date', { ascending: false }).limit(1),
+    ])
+    const restingHr = ((rhrRes.data ?? [])[0] as { rhr?: number } | undefined)?.rhr ?? null
     {
         warnOnError('training sessions', error)
         if (error) throw new Error(error.message)
@@ -61,6 +68,8 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
           duration_minutes: r.duration_min as number | null,
           activity_type: r.type as string | null,
           avg_hr: r.avg_hr as number | null,
+          max_hr: r.max_hr as number | null,
+          rpe: r.rpe as number | null,
           source: r.source as string | null,
         }))
 
@@ -74,7 +83,10 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
         }
 
         const tssMap = new Map<string, number>()
-        for (const r of runs) tssMap.set(r.date, (tssMap.get(r.date) ?? 0) + tss(r))
+        for (const r of runs) {
+          const load = sessionLoad(r, restingHr)
+          if (load !== null) tssMap.set(r.date, (tssMap.get(r.date) ?? 0) + load)
+        }
         const dailyTss = allDates.map(dt => tssMap.get(dt) ?? 0)
 
         const ctlAll = ema(dailyTss, 42)

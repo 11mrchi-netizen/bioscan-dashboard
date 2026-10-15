@@ -57,7 +57,7 @@ import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.patternsView
 import com.bioscan.fieldterminal.domain.stress.StressDay
 import com.bioscan.fieldterminal.domain.stress.analyzeStressDay
-import com.bioscan.fieldterminal.domain.toMetricState
+import com.bioscan.fieldterminal.domain.trainingLoadStateWord
 import com.bioscan.fieldterminal.domain.typicalityView
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
@@ -195,7 +195,7 @@ fun TodayScreen(onBack: () -> Unit, onOpenTrainingLoad: () -> Unit, onOpenCardio
                 LinkTile(
                     title = "TRAINING LOAD",
                     value = trainingLoadEval.tsbBand?.uppercase()?.let { band -> if (tsb != null) "$band · TSB " + "%+.0f".format(tsb) else band }
-                        ?: metricStateLabel(trainingLoadEval.state.toMetricState()),
+                        ?: trainingLoadStateWord(trainingLoadEval.state).let { it.word ?: metricStateLabel(it.state) },
                     accent = FT.DomainTraining,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     onClick = onOpenTrainingLoad,

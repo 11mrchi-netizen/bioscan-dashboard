@@ -30,11 +30,10 @@ import com.bioscan.fieldterminal.domain.preparePerformanceTrendData
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTBar
 import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
+import com.bioscan.fieldterminal.ui.components.FTDataChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.TrendSeries
-import com.bioscan.fieldterminal.ui.components.confidenceLevel
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -82,7 +81,7 @@ fun SkillHeroCard(skill: Skill, level: SkillLevel, info: String, extra: @Composa
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(level.basis?.chip ?: "", style = FTType.Micro, color = FT.TextMuted)
                 if (level.provisional) Text("PROVISIONAL", style = FTType.Micro, color = FT.Warning)
-                FTConfidenceChip(confidenceLevel(level.confidence))
+                FTDataChip(level.confidence)
             }
         }
         extra()

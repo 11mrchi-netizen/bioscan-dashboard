@@ -49,8 +49,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         try {
             ReadCache.get("analysis.series_break") {
                 val rows = supabase.postgrest.from("analysis_results")
-                    .select(columns = Columns.list("key,payload")) { filter { eq("kind", "series_break") } }
+                    .select(columns = Columns.list("key,payload")) { filter { eq("kind", "series_break") }; newestFirst() }
                     .decodeList<SeriesBreakResultRow>()
+                    .distinctBy { it.key }
                 seriesBreakStartsFrom(rows.associate { it.key to it.payload.lastConfirmed })
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -64,8 +65,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         try {
             ReadCache.get("analysis.relationships") {
                 supabase.postgrest.from("analysis_results")
-                    .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "relationship") } }
+                    .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "relationship") }; newestFirst() }
                     .decodeList<RelationshipResultRow>()
+                    .distinctBy { it.key }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -78,7 +80,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         try {
             ReadCache.get("analysis.typicality") {
                 supabase.postgrest.from("analysis_results")
-                    .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "typicality") } }
+                    .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "typicality") }; newestFirst() }
                     .decodeList<TypicalityResultRow>()
                     .firstOrNull()
             }
@@ -296,3 +298,12 @@ private data class HrDayRow(
     val date: String,
     @kotlinx.serialization.SerialName("hr_timeseries") val hrTimeseries: List<HrPoint>? = null,
 )
+
+// Analysis review A8 (docs/analysis-layer-3/contract-v3.md: "read the latest as_of for the current version"). Publishers
+// delete older rows today, but nothing guarantees that across an engine-version bump or a failed delete, and the readers
+// took whichever row came back first. Newest night first, then the newest run of that night; callers keep the first
+// row per key.
+private fun io.github.jan.supabase.postgrest.query.PostgrestRequestBuilder.newestFirst() {
+    order("as_of", Order.DESCENDING)
+    order("calculated_at", Order.DESCENDING)
+}

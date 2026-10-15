@@ -9,6 +9,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { computeEffort } from "./effort.ts";
 import { decodeMinuteHr, type HrMinutePoint } from "./minuteHr.ts";
+import { buildZeppExercises, doneSets, exercisesFingerprint, parseLapSets, planStrengthDetails } from "./strengthImport.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -249,25 +250,6 @@ interface StrengthSetDecoded {
   durationSec: number;
   exerciseCode: number;
   scores: StrengthMovementScores | null;
-}
-
-// Parse the semicolon-separated lap string into per-set objects.
-// Index map (confirmed from live data 2026-10-08): [0]=idx, [1]=duration_sec,
-// [4]=avg_hr, [15]=IMU_detected_reps, [21]=weight_kg, [22]=target_reps,
-// [26]=status (-1 or 0=done, 2=planned/skipped), [28]=exercise_code.
-function parseLapSets(lapStr: unknown): Array<{
-  idx: number; durationSec: number; avgHr: number; detectedReps: number;
-  weightKg: number; targetReps: number; status: number; exerciseCode: number;
-}> {
-  if (typeof lapStr !== "string" || !lapStr) return [];
-  return lapStr.split(";").filter(Boolean).map(f => {
-    const c = f.split(",");
-    return {
-      idx: +c[0], durationSec: +c[1], avgHr: +c[4],
-      detectedReps: +c[15], weightKg: +c[21], targetReps: +c[22],
-      status: +c[26], exerciseCode: +c[28],
-    };
-  });
 }
 
 // Parse strengthAssess JSON string → per-set timing + IMU movement scores.
@@ -999,10 +981,12 @@ Deno.serve(async (req: Request) => {
       const rawData = ((detailRawBody as Record<string, unknown>).data) as Record<string, unknown> | undefined;
       if (!rawData) return;
 
-      // Done sets carry status -1 (older exports) or 0 (current firmware); 2 is a planned set that was
-      // skipped. Filtering on -1 alone dropped every set from the 2026-10-08 session.
-      const laps = parseLapSets(rawData.lap).filter(s => s.status !== 2 && s.durationSec > 0);
+      // Done sets only (strengthImport.ts: status -1 or 0; 2 is a planned set that was skipped).
+      const laps = doneSets(parseLapSets(rawData.lap));
       if (!laps.length) return;
+      // Zepp's current version of the exercises, kept with the per-set data so the app can offer it when the person's
+      // own edit and Zepp's version differ (strengthImport.ts).
+      const zeppExercises = buildZeppExercises(laps, (code) => ZEPP_EXERCISE_NAMES[code]);
 
       const assess = parseStrengthAssess(rawData.strengthAssess as unknown);
       const assessByIdx = new Map(assess.map(a => [a.idx, a]));
@@ -1022,51 +1006,31 @@ Deno.serve(async (req: Request) => {
       });
 
       // Patch decoded.strengthData onto the existing decoded object.
-      const mergedDecoded = { ...(existingDecoded ?? {}), strengthData: { sets: strengthSets } };
+      const mergedDecoded = {
+        ...(existingDecoded ?? {}),
+        strengthData: { sets: strengthSets, exercises: zeppExercises, fingerprint: exercisesFingerprint(zeppExercises) },
+      };
       const { error: decodedUpdateErr } = await supabase
         .from("zepp_workout_detail")
         .update({ decoded: mergedDecoded })
         .eq("exercise_session_id", exerciseSessionId);
       if (decodedUpdateErr) throw new Error(`zepp_workout_detail decoded patch failed: ${decodedUpdateErr.message}`);
 
-      // Only write exercise_sessions.details if currently null/empty.
-      const { data: sessionRow } = await supabase
+      // Exercises Zepp wrote follow Zepp: a later correction in the Zepp app replaces them. Exercises changed in the app
+      // are never overwritten here (the app offers Zepp's version instead). strengthImport.ts has the rules.
+      const { data: sessionRow, error: readErr } = await supabase
         .from("exercise_sessions")
         .select("details")
         .eq("id", exerciseSessionId)
         .single();
+      if (readErr) throw new Error(`exercise_sessions details read failed: ${readErr.message}`);
       const existing = (sessionRow as Record<string, unknown> | null)?.details as Record<string, unknown> | null | undefined;
-      if (existing && Array.isArray((existing as Record<string, unknown>).exercises) && ((existing as Record<string, unknown>).exercises as unknown[]).length > 0) {
-        return; // user has already set details, don't overwrite
-      }
-
-      // Group consecutive laps by exercise code.
-      const groups: Array<{ code: number; sets: Array<Record<string, unknown>> }> = [];
-      for (const lap of laps) {
-        const last = groups.at(-1);
-        const setRow: Record<string, unknown> = {
-          reps: lap.targetReps,
-          weight_kg: lap.weightKg,
-          duration_sec: lap.durationSec,
-          avg_hr: lap.avgHr > 0 ? lap.avgHr : null,
-          detected_reps: lap.detectedReps > 0 ? lap.detectedReps : null,
-        };
-        if (last && last.code === lap.exerciseCode) {
-          last.sets.push(setRow);
-        } else {
-          groups.push({ code: lap.exerciseCode, sets: [setRow] });
-        }
-      }
-
-      const exercises = groups.map(g => ({
-        name: ZEPP_EXERCISE_NAMES[g.code] ?? `Exercise ${g.code}`,
-        exercise_code: g.code,
-        sets: g.sets,
-      }));
+      const plan = planStrengthDetails(existing, zeppExercises);
+      if (plan.details === null) return;
 
       const { error: detailsUpdateErr } = await supabase
         .from("exercise_sessions")
-        .update({ details: { exercises } })
+        .update({ details: plan.details })
         .eq("id", exerciseSessionId);
       if (detailsUpdateErr) throw new Error(`exercise_sessions details update failed: ${detailsUpdateErr.message}`);
     }

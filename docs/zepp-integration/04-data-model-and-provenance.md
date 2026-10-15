@@ -51,6 +51,30 @@ metadata" ask, acceptable because today's extractor changes (endpoint fixes, hea
 so far always affected the whole function's request shape, never one metric's decode logic in
 isolation.
 
+## Strength exercises: who owns the list
+
+A strength workout's `exercise_sessions.details.exercises` is written by the Zepp import from the
+workout's laps. A workout corrected in the Zepp app after the first sync (exercises not picked on
+the watch) used to stay wrong here: every re-sync fetched the corrected detail but skipped the
+write because "exercises already present" could not tell Zepp's own earlier import from an edit in
+the app. Now (`zepp-extract/strengthImport.ts`, `domain/StrengthImport.kt`):
+
+- `details.exercises_source` is `zepp` (written by the import) or `app` (exercises changed in the
+  edit form); `details.zepp_fingerprint` is the fingerprint (exercises in order, each set's reps and
+  weight) of the Zepp version the list is based on. Rows from before the markers: a list with an
+  `exercise_code` on every exercise is Zepp's (the edit form used to drop the codes).
+- A Zepp list is replaced on the next sync whenever Zepp's fingerprint changes. An app list is never
+  overwritten by a sync.
+- Every sync stores Zepp's current version and fingerprint in
+  `zepp_workout_detail.decoded.strengthData` (`exercises`, `fingerprint`). When an app edit and
+  Zepp's version differ, the session shows ZEPP HAS A DIFFERENT VERSION with USE ZEPP'S VERSION /
+  KEEP MINE; KEEP MINE records the fingerprint seen, so it is asked again only if Zepp changes.
+- The app re-syncs the last three days when it opens; RE-IMPORT FROM ZEPP on a strength session
+  pulls the days around that workout for an older correction.
+- The edit form carries the watch-measured fields (set duration, heart rate, detected reps, the
+  exercise code unless renamed) through a save, and saving only RPE or notes keeps the list's
+  source, so it keeps following Zepp.
+
 ## What's a genuine gap, left open
 
 - **Units/resolution as queryable metadata.** Units are correct but live only in code comments

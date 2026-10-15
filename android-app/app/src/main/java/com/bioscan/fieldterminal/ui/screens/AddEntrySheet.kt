@@ -87,6 +87,7 @@ import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.AddEntryChoice
+import com.bioscan.fieldterminal.domain.editedDetails
 import com.bioscan.fieldterminal.domain.AddEntryGroup
 import com.bioscan.fieldterminal.domain.AddEntryStart
 import com.bioscan.fieldterminal.domain.AddEntryTarget
@@ -2121,7 +2122,10 @@ private fun ExerciseDetailsForm(
         Column { FormLabel("RPE 0-10 (OPTIONAL)"); FieldTextField(rpe, { rpe = it }, "e.g. 6", keyboardType = KeyboardType.Number) }
         Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
         SaveButton(saving, true) {
-            val details = ExerciseSessionDetails(
+            // Changing the exercises makes them the person's own, so no Zepp sync overwrites them; saving only RPE or
+            // notes leaves a Zepp list following Zepp (domain/StrengthImport.kt).
+            val details = editedDetails(
+                initial = initialDetails,
                 routeType = routeType,
                 runType = runType,
                 exercises = if (type == "strength") exercises.mapNotNull { it.toDtoOrNull() }.ifEmpty { null } else initialDetails.exercises,
@@ -2168,21 +2172,40 @@ internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int =
 // backed (reps/weight_kg parse to Int/Double only on Save) since a set
 // mid-entry is routinely blank or partial, which the DTO's non-nullable
 // reps/weight_kg can't represent.
-private class EditableSet(reps: String = "", weightKg: String = "", rpe: String = "", percentOneRm: String = "") {
+// What the watch measured (set duration, heart rate, detected reps, and the exercise's Zepp code) is not editable but
+// rides along unchanged: saving used to drop it, so the first edit, even of RPE alone, lost the link to Zepp's data.
+private class EditableSet(
+    reps: String = "",
+    weightKg: String = "",
+    rpe: String = "",
+    percentOneRm: String = "",
+    val durationSec: Int? = null,
+    val avgHr: Int? = null,
+    val detectedReps: Int? = null,
+) {
     var reps by mutableStateOf(reps)
     var weightKg by mutableStateOf(weightKg)
     var rpe by mutableStateOf(rpe)
     var percentOneRm by mutableStateOf(percentOneRm)
 }
 
-private class EditableExercise(name: String = "") {
+private class EditableExercise(name: String = "", val exerciseCode: Int? = null) {
+    // The Zepp code names the exercise Zepp recorded; renamed, it would point at the wrong one, so it is dropped then.
+    val originalName = name
     var name by mutableStateOf(name)
     val sets = mutableStateListOf(EditableSet())
 }
 
-private fun StrengthExerciseDto.toEditable() = EditableExercise(name).also { editable ->
+private fun StrengthExerciseDto.toEditable() = EditableExercise(name, exerciseCode).also { editable ->
     editable.sets.clear()
-    sets.forEach { s -> editable.sets.add(EditableSet(s.reps.toString(), s.weightKg.toString(), s.rpe?.toString() ?: "", s.percentOneRm?.toString() ?: "")) }
+    sets.forEach { s ->
+        editable.sets.add(
+            EditableSet(
+                s.reps.toString(), s.weightKg.toString(), s.rpe?.toString() ?: "", s.percentOneRm?.toString() ?: "",
+                durationSec = s.durationSec, avgHr = s.avgHr, detectedReps = s.detectedReps,
+            ),
+        )
+    }
 }
 
 // Drops a set with no reps/weight rather than saving a garbage 0; drops an
@@ -2193,9 +2216,18 @@ private fun EditableExercise.toDtoOrNull(): StrengthExerciseDto? {
         val reps = s.reps.toIntOrNull()
         val weightKg = s.weightKg.toDoubleOrNull()
         if (reps == null || weightKg == null) null
-        else StrengthSetDto(reps = reps, weightKg = weightKg, rpe = s.rpe.toIntOrNull(), percentOneRm = s.percentOneRm.toDoubleOrNull())
+        else StrengthSetDto(
+            reps = reps,
+            weightKg = weightKg,
+            rpe = s.rpe.toIntOrNull(),
+            percentOneRm = s.percentOneRm.toDoubleOrNull(),
+            durationSec = s.durationSec,
+            avgHr = s.avgHr,
+            detectedReps = s.detectedReps,
+        )
     }
-    return if (validSets.isEmpty()) null else StrengthExerciseDto(name.trim(), sets = validSets)
+    val code = exerciseCode.takeIf { name.trim() == originalName.trim() }
+    return if (validSets.isEmpty()) null else StrengthExerciseDto(name.trim(), exerciseCode = code, sets = validSets)
 }
 
 // One exercise's editable form: name, its list of sets, and add/remove

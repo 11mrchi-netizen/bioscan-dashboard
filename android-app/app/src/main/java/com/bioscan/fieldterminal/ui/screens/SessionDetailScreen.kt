@@ -301,6 +301,17 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                         h.details.exercises?.takeIf { it.isNotEmpty() }?.let { exercises ->
                             StrengthCard(exercises, exerciseLibrary, zeppStrengthData)
                         }
+                        // The exercises against Zepp's version: a choice when they differ, and RE-IMPORT FROM ZEPP.
+                        StrengthZeppCard(
+                            sessionId = sessionId,
+                            sessionDate = OffsetDateTime.parse(h.startTime).toLocalDate(),
+                            details = h.details,
+                            zepp = zeppStrengthData,
+                        ) {
+                            val repo = SessionDetailRepository(context, SupabaseClientProvider.client)
+                            header = repo.loadHeader(sessionId)
+                            zeppStrengthData = repo.loadZeppStrengthData(sessionId)
+                        }
                         // HR chart with work/rest overlay -- only when Zepp strength
                         // timing is available and there is actually a heartRate series.
                         val hrSeries = d?.heartRate.orEmpty()

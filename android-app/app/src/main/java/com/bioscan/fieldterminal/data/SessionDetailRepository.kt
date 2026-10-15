@@ -77,6 +77,10 @@ data class ZeppStrengthSetData(
 @Serializable
 data class ZeppStrengthData(
     val sets: List<ZeppStrengthSetData> = emptyList(),
+    // Zepp's current version of the exercises and its fingerprint (zepp-extract/strengthImport.ts). Kept as raw JSON so
+    // an unexpected shape can never break the per-set data above; read with zeppExercises().
+    val exercises: kotlinx.serialization.json.JsonElement? = null,
+    val fingerprint: String? = null,
 )
 
 @Serializable

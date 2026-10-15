@@ -68,7 +68,11 @@ class ZeppRepository(private val supabase: SupabaseClient) {
     // corrected /v1/ endpoint; training_load and vo2max still 404/500.
     suspend fun sync(daysBack: Long = 3, metrics: String? = "sport_history,stress,band_data"): ZeppSyncResult {
         val to = LocalDate.now()
-        val from = to.minusDays(daysBack)
+        return syncRange(to.minusDays(daysBack), to, metrics)
+    }
+
+    // A fixed date range (at most 31 days, the server's cap): RE-IMPORT FROM ZEPP on one workout pulls the days around it.
+    suspend fun syncRange(from: LocalDate, to: LocalDate, metrics: String? = "sport_history"): ZeppSyncResult {
         return try {
             // The generic invoke(function, body: T) overload didn't attach a
             // body at all in practice (confirmed on-device: server saw

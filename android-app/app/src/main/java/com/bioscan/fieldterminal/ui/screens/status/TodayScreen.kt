@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
+import com.bioscan.fieldterminal.data.EveningCheckinRepository
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -45,8 +46,10 @@ import com.bioscan.fieldterminal.data.model.TypicalityResultRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DisplayValue
+import com.bioscan.fieldterminal.domain.EveningCheckin
 import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.SleepNight
+import com.bioscan.fieldterminal.domain.checkinDateFor
 import com.bioscan.fieldterminal.domain.computeDynamicRecovery
 import com.bioscan.fieldterminal.domain.computeSleepIndex
 import com.bioscan.fieldterminal.domain.computeTrainingReadiness
@@ -54,11 +57,16 @@ import com.bioscan.fieldterminal.domain.evaluateHrv
 import com.bioscan.fieldterminal.domain.evaluateRhr
 import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
+import com.bioscan.fieldterminal.domain.isComplete
+import com.bioscan.fieldterminal.domain.lastEveningDate
 import com.bioscan.fieldterminal.domain.patternsView
 import com.bioscan.fieldterminal.domain.stress.StressDay
 import com.bioscan.fieldterminal.domain.stress.analyzeStressDay
+import com.bioscan.fieldterminal.domain.summary
 import com.bioscan.fieldterminal.domain.trainingLoadStateWord
 import com.bioscan.fieldterminal.domain.typicalityView
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.HydrationSourceDonutChart
@@ -73,6 +81,7 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.Perf
 import java.time.LocalDate
+import java.time.LocalDateTime
 import kotlin.math.roundToInt
 
 // The Today page (UX review P6; was Daily Readiness), reached from TODAY › on the Status hero. One vocabulary for "how am I
@@ -83,7 +92,14 @@ import kotlin.math.roundToInt
 // NutritionHydrationScreen.kt) -- this screen just composes them, loading its own data independently per this app's
 // established per-screen-loader convention.
 @Composable
-fun TodayScreen(onBack: () -> Unit, onOpenTrainingLoad: () -> Unit, onOpenCardio: () -> Unit) {
+fun TodayScreen(
+    onBack: () -> Unit,
+    onOpenTrainingLoad: () -> Unit,
+    onOpenCardio: () -> Unit,
+    // Analysis review phase B: the 22:25 reminder lands here with the evening check-in open.
+    openCheckIn: Boolean = false,
+    onCheckInHandled: () -> Unit = {},
+) {
     var sessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
@@ -96,6 +112,15 @@ fun TodayScreen(onBack: () -> Unit, onOpenTrainingLoad: () -> Unit, onOpenCardio
     var relationships by remember { mutableStateOf<List<RelationshipResultRow>>(emptyList()) }
     // Analysis Layer 3 / Phase 4: "is today typical for you", a quiet drill-down (not part of Today's Recovery).
     var typicality by remember { mutableStateOf<TypicalityResultRow?>(null) }
+    // Analysis review phase B: last evening's check-in (null until answered or if the read fails) and the open sheet.
+    var lastEvening by remember { mutableStateOf<EveningCheckin?>(null) }
+    var checkInDate by remember { mutableStateOf<LocalDate?>(null) }
+    LaunchedEffect(openCheckIn) {
+        if (openCheckIn) {
+            checkInDate = checkinDateFor(LocalDateTime.now())
+            onCheckInHandled()
+        }
+    }
 
     val guard = rememberLoadGuard()
     LaunchedEffect(guard.attempt) {
@@ -113,6 +138,8 @@ fun TodayScreen(onBack: () -> Unit, onOpenTrainingLoad: () -> Unit, onOpenCardio
                     { breakStarts = repo.loadSeriesBreakStarts() },
                     { relationships = repo.loadRelationships() },
                     { typicality = repo.loadTypicality() },
+                    // A missing table (migration not yet applied) or a failed read just leaves the card asking.
+                    { lastEvening = runCatching { EveningCheckinRepository(SupabaseClientProvider.client).load(lastEveningDate(LocalDate.now())) }.getOrNull() },
                 )
             }
         }
@@ -187,6 +214,8 @@ fun TodayScreen(onBack: () -> Unit, onOpenTrainingLoad: () -> Unit, onOpenCardio
             modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
+            val eveningAnswered = lastEvening?.isComplete == true
+            if (!eveningAnswered) LastEveningCard(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) }
             DynamicRecoveryCard(recovery)
             TrainingReadinessCard(computeTrainingReadiness(recovery))
             // The inputs behind recovery and READY FOR, one tap away instead of repeated on this page.
@@ -245,8 +274,40 @@ fun TodayScreen(onBack: () -> Unit, onOpenTrainingLoad: () -> Unit, onOpenCardio
                 }
             }
 
+            if (eveningAnswered) LastEveningCard(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) }
             PatternsCard(patternsView(relationships))
             TypicalityCard(typicalityView(typicality))
+        }
+    }
+
+    checkInDate?.let { date ->
+        EveningCheckInSheet(
+            date = date,
+            onDismiss = { checkInDate = null },
+            onSaved = { saved ->
+                if (saved.date == lastEveningDate(LocalDate.now())) lastEvening = saved
+                checkInDate = null
+            },
+        )
+    }
+}
+
+// Analysis review phase B: the morning catch-up for last evening's check-in. Unanswered, it leads the page; answered,
+// it sits above the patterns as a one-line summary with EDIT.
+@Composable
+private fun LastEveningCard(checkin: EveningCheckin?, onOpen: () -> Unit) {
+    FTCard(title = "LAST EVENING") {
+        if (checkin?.isComplete == true) {
+            Text(checkin.summary().replaceFirstChar { it.uppercase() }, style = FTType.BodySmall, color = FT.TextPrimary)
+            FTButton("EDIT", emphasis = FTButtonEmphasis.Tertiary, onClick = onOpen)
+        } else {
+            Text(
+                "Drinks, caffeine after 14:00, a late meal: one tap each. A quiet evening then counts as a real none, which is what " +
+                    "lets the app tell whether any of them goes with your next morning.",
+                style = FTType.BodySmall,
+                color = FT.TextSecondary,
+            )
+            FTButton("ANSWER", emphasis = FTButtonEmphasis.Primary, onClick = onOpen)
         }
     }
 }

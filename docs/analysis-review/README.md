@@ -8,7 +8,7 @@ uncorrected correlation scan is retired, with a note to revisit it (section "Rev
 | Phase | What | Gate | Status |
 |---|---|---|---|
 | A | Fix what is wrong on screen | A unit test per bug; the baseline state's false-shift rate on stationary data at or below 10% | Done |
-| B | Capture for cause-and-effect questions | Exposure status known on most days once the check-in runs | Pending |
+| B | Capture for cause-and-effect questions | Exposure status known on most days once the check-in runs (reported nightly as `capture.knownShare28`) | Done |
 | C | Expected bands and flags | Synthetic 80% bands hold 78-82% of days; flags without a real change under one a month | Pending |
 | D | Association engines and the evidence board | Null data reads "clear" on at most 5% of questions; interval coverage 93-97% | Pending |
 | E | Ledger and confirmation | Nightly re-runs with no true effect ever read "clear" at most 5% of the time | Pending |
@@ -32,6 +32,19 @@ uncorrected correlation scan is retired, with a note to revisit it (section "Rev
 | B9 Typicality thresholds calibrated on a different distance | Reference distances computed over the same signals and the same way as the judged day | analysis-core/typicality.ts | typicality.test.ts (day without steps) |
 | B10 Every metric auto-confirmed on any source flip; unpaged provenance | Only device-sensitive metrics; a switch must hold for more than two thirds of the next six days; paged reads | runSeriesBreaks.ts, seriesBreakResult.ts, paging.ts | runSeriesBreaks.test.ts |
 | Decision: retire the exploratory scan | The console's EXPLORATORY tab now shows why it was retired and what to build instead | console/src/workspaces/RelationshipLab.tsx, docs/analysis-console/IA.md | - |
+
+## Phase B: what changed
+
+| Plan item | Built | Where | Test |
+|---|---|---|---|
+| Evening check-in with an explicit none | `evening_checkins` (one row per local evening; null = not answered, 0 / false = none). A sheet asks drinks, caffeine after 14:00, a late meal after 21:00 and stress 1-5; NOTHING ELSE turns every open exposure into a none. Today shows LAST EVENING until it is answered | migrations/20261015_evening_checkins.sql, domain/EveningCheckin.kt, EveningCheckInSheet.kt, TodayScreen.kt | EveningCheckinTest |
+| The 22:25 reminder | New `evening_checkin` notification rule (seeded for existing accounts by the migration, by `ensureDefaults` for new ones), skipped once tonight is answered; a tap opens Today with the sheet up. The older 21:00 generic reminder is renamed EVENING NOTE and can be switched off in Setup › Notifications | NotificationModels.kt, NotificationRulesRepository.kt, NotificationDispatchWorker.kt, NotificationRouting.kt, FieldTerminalNavHost.kt | EveningCheckinTest |
+| Explicit zeros in the analysis | Alcohol, afternoon caffeine and late meals are 1 on positive evidence (a log or the check-in), 0 only when the check-in says none, or before the first check-in ever on a day with a food log (the legacy rule), otherwise unknown. New series: `late_meal`, `stress_high`, `evening_training` | analysis-core/runRelationships.ts | runRelationships.test.ts |
+| Local time | The phone records its UTC offset and time zone per day (`daily_context`); the engine turns timestamps into local dates and hours with it. It used UTC: in UTC+8 a 15:00 coffee counted as morning caffeine and a 07:30 breakfast landed on the day before | EveningCheckinRepository.recordDailyContext, runRelationships.ts `localClock` | runRelationships.test.ts |
+| The small hours belong to the evening before | Food logged before 04:00 counts toward the previous evening; check-ins answered after midnight are filed under that evening | runRelationships.ts, domain/EveningCheckin.kt | both |
+| Overnight readings keyed to their night | HRV and resting heart rate from Health Connect are averaged per night (readings from 18:00 count toward the next morning), like sleep_daily, instead of per calendar day, which split one night across two dates. Applies to rows written from the next sync on | domain/DailyAggregation.kt, HealthConnectDailySyncRepository.kt | NightDateTest |
+| Passive weather and daylight | Not built: the app has no location source, and adding one needs a permission decision. `daily_context` has nullable columns ready for it | - | - |
+| Readiness meter per question | Moved to phase D, where each question gets its no-effect zone (the meter is computed from it) | - | - |
 
 ## Revisit
 

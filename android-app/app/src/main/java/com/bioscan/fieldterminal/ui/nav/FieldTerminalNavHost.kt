@@ -71,6 +71,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     var labsRequestedTab by remember { mutableStateOf<LabsTab?>(null) }
     // Same hand-off for Training's subtabs (UX review F1: the Status injury flag lands on Training › Injury).
     var trainingRequestedTab by remember { mutableStateOf<TrainingTab?>(null) }
+    // Analysis review phase B: the 22:25 evening check-in reminder opens Today with the check-in sheet up.
+    var checkInRequested by remember { mutableStateOf(false) }
     // Contract A4: the dock keeps lit the tab whose stack you are in, also on pushed screens (tiles, settings and detail
     // pages), which used to light nothing. Set whenever a top-level destination is shown and when a dock tab is tapped,
     // so a deep link pushed onto the current stack keeps that stack's tab.
@@ -87,6 +89,10 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                 launchSingleTop = true
                 restoreState = true
+            }
+            NotificationDestination.CHECKIN -> {
+                checkInRequested = true
+                navController.navigate("today") { launchSingleTop = true }
             }
             NotificationDestination.NONE -> Unit
         }
@@ -134,6 +140,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             // UX review P6: the Today page (was Daily Readiness) links to the cards it no longer repeats.
             composable("today") {
                 TodayScreen(
+                    openCheckIn = checkInRequested,
+                    onCheckInHandled = { checkInRequested = false },
                     onBack = { navController.popBackStack() },
                     onOpenTrainingLoad = {
                         trainingRequestedTab = TrainingTab.Load

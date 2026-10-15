@@ -49,9 +49,11 @@ import kotlinx.coroutines.launch
 private val RULE_LABELS = mapOf(
     NotificationKind.SUPPLEMENT_DUE to "SUPPLEMENT REMINDERS",
     NotificationKind.CHECKIN_MORNING to "MORNING CHECK-IN",
-    NotificationKind.CHECKIN_EVENING to "EVENING CHECK-IN",
+    // The generic 21:00 nudge to the Log tab; the structured check-in below is EVENING CHECK-IN (analysis review phase B).
+    NotificationKind.CHECKIN_EVENING to "EVENING NOTE",
     NotificationKind.WELLBEING_CHECKIN to "WELLBEING CHECK-IN",
     NotificationKind.EVENING_LOG to "EVENING LOG",
+    NotificationKind.EVENING_CHECKIN to "EVENING CHECK-IN",
 )
 
 // Setup > Notifications: single destination, no sub-tabs.

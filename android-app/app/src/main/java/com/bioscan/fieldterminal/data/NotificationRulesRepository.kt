@@ -67,6 +67,14 @@ private val DEFAULT_RULES = listOf(
         conditions = NotificationConditions(skipIfLogged = true),
         limits = NotificationLimits(maxPerDay = 1, minGapMin = 120, snoozeMin = 60),
     ),
+    // Analysis review phase B: 22:25 is the owner's choice. Skipped once tonight's exposures are answered.
+    NewNotificationRuleRow(
+        kind = NotificationKind.EVENING_CHECKIN,
+        enabled = true,
+        schedule = NotificationSchedule(times = listOf("22:25")),
+        conditions = NotificationConditions(skipIfLogged = true),
+        limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 20),
+    ),
 )
 
 class NotificationRulesRepository(private val supabase: SupabaseClient) {

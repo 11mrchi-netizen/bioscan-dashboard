@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { plantedDataset } from './fixtures.ts'
 import { HYPOTHESES } from './hypotheses.ts'
-import { buildFrame, runRelationships } from './runRelationships.ts'
+import { buildFrame, localClock, runRelationships } from './runRelationships.ts'
 import type { RawInputs } from './runRelationships.ts'
 import { CORE_VERSION } from './version.ts'
 
@@ -102,4 +102,47 @@ test('runRelationships publishes one row per hypothesis from raw tables and repl
   assert.equal(row('caffeine_pm_sleep').state, 'insufficient') // no caffeine logged
   assert.equal((row('alcohol_hrv').payload as Row).catalogueVersion, '1.0.0')
   assert.ok(admin.deletes.some((d) => d.table === 'analysis_results' && d.filters.some(([op, c]) => op === 'lt' && c === 'as_of')))
+})
+
+// Analysis review phase B: local time, the small hours belong to the evening before, and check-ins make real zeros.
+test('localClock: timestamps become local dates and hours with the recorded offset, nearest earlier day first', () => {
+  const clock = localClock([{ date: '2026-03-01', utc_offset_min: 480 }, { date: '2026-03-10', utc_offset_min: 60 }])
+  assert.deepEqual(clock('2026-03-02T07:00:00Z'), { date: '2026-03-02', hour: 15 }) // 15:00 in UTC+8, not 07:00
+  assert.deepEqual(clock('2026-03-02T23:30:00Z'), { date: '2026-03-03', hour: 7 }) // breakfast the next local day
+  assert.deepEqual(clock('2026-03-12T07:00:00Z'), { date: '2026-03-12', hour: 8 }) // after the move to UTC+1
+  assert.deepEqual(clock('2026-02-20T07:00:00Z'), { date: '2026-02-20', hour: 15 }) // before the first row: its offset
+  assert.deepEqual(localClock([])('2026-03-02T07:00:00Z'), { date: '2026-03-02', hour: 7 }) // nothing recorded: UTC
+})
+
+test('buildFrame phase B: local caffeine hours, late-night drinks on the evening before, explicit zeros from check-ins', () => {
+  const raw: RawInputs = {
+    wearable: ['2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05', '2026-03-06'].map((date) => ({ date, hrv: 60, rhr: 55, steps: 8000 })),
+    sleep: [],
+    wellbeing: [],
+    meals: [
+      { logged_at: '2026-03-01T07:00:00Z', meal_items: [{ alcohol_g: null, caffeine_mg: 90 }] }, // 15:00 local: afternoon caffeine
+      { logged_at: '2026-03-02T16:40:00Z', meal_items: [{ alcohol_g: 14, caffeine_mg: null }] }, // 00:40 on 03-03: evening of 03-02
+      { logged_at: '2026-03-03T13:30:00Z', meal_items: [{ alcohol_g: null, caffeine_mg: null }] }, // 21:30: a late meal on 03-03
+      { logged_at: '2026-03-05T01:00:00Z', meal_items: [{ alcohol_g: null, caffeine_mg: null }] }, // breakfast on 03-05, after check-ins began
+    ],
+    sessions: [{ start_time: '2026-03-04T10:30:00Z', duration_min: 60, type: 'run' }], // ends 19:30 local
+    recovery: [],
+    illnesses: [],
+    checkins: [
+      { date: '2026-03-04', drinks: 0, caffeine_after_14: false, late_meal: false, stress: 4 },
+      { date: '2026-03-06', drinks: 2, caffeine_after_14: null, late_meal: null, stress: 2 },
+    ],
+    context: [{ date: '2026-03-01', utc_offset_min: 480 }],
+  }
+  const f = buildFrame(raw, '2026-03-06', 6)
+  // 03-01 legacy zero (food log, before check-ins), 03-02 a late-night drink, 03-03 legacy zero, 03-04 answered none,
+  // 03-05 unknown (after check-ins began, no answer and no positive log), 03-06 answered two drinks
+  assert.deepEqual(f.series.alcohol_any, [0, 1, 0, 0, null, 1])
+  assert.deepEqual(f.series.caffeine_pm_any, [1, 0, 0, 0, null, null])
+  assert.deepEqual(f.series.late_meal, [0, 1, 1, 0, null, null])
+  assert.deepEqual(f.series.stress_high, [null, null, null, 1, null, 0])
+  assert.deepEqual(f.series.evening_training, [0, 0, 0, 1, 0, 0])
+  assert.equal(f.capture!.firstCheckin, '2026-03-04')
+  assert.equal(f.capture!.localTime, true)
+  assert.equal(f.capture!.knownShare28.alcohol, 0.83) // 5 of the 6 days
 })

@@ -51,6 +51,17 @@ export interface Frame {
   series: Record<string, Num[]>
   /** True for days to leave out (illness). */
   excluded: boolean[]
+  /** How the exposures were built (analysis review phase B); absent on frames built by tests or older callers. */
+  capture?: FrameCapture
+}
+
+export interface FrameCapture {
+  /** First evening with a check-in; before it, a day with a food log still counts as a zero (the legacy rule). */
+  firstCheckin: string | null
+  /** Share of the last 28 days whose alcohol and afternoon-caffeine status is known (answered or logged). */
+  knownShare28: { alcohol: number; caffeine_pm: number }
+  /** True when local dates and hours came from the phone's recorded UTC offset rather than UTC. */
+  localTime: boolean
 }
 
 export type RelationshipState = 'supported' | 'not_distinguishable' | 'insufficient'

@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.bioscan.fieldterminal.data.EveningCheckinRepository
 import com.bioscan.fieldterminal.data.StatusOverview
 import com.bioscan.fieldterminal.data.StatusRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -41,6 +42,12 @@ fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenToday: () -> Unit, onOpe
     var addStart by remember { mutableStateOf<AddEntryStart?>(null) }
     val guard = rememberLoadGuard()
     val repo = remember { StatusRepository(SupabaseClientProvider.client) }
+
+    // Analysis review phase B: today's UTC offset and time zone, so the analysis engine can turn logged timestamps into
+    // local dates and hours. Idempotent and silent on failure (an unapplied migration just skips it).
+    LaunchedEffect(Unit) {
+        runCatching { EveningCheckinRepository(SupabaseClientProvider.client).recordDailyContext() }
+    }
 
     LaunchedEffect(guard.attempt) {
         guard.run {

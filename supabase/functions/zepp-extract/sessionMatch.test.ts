@@ -30,6 +30,12 @@ test("fragments, long containing sessions and other types are not the same worko
   assert.equal(pickSessionMatch(zepp(0, 60), [cand(3, "walk", -5, 60)], "t1"), null);
 });
 
+test("an imported log with a placeholder time matches only by start, never by overlap", () => {
+  const notion = { ...cand(9, "strength", -20, 40), deviceTimed: false };
+  assert.equal(pickSessionMatch(zepp(0, 60, "strength"), [notion], "t1"), null);
+  assert.deepEqual(pickSessionMatch(zepp(0, 60, "strength"), [{ ...notion, startMs: min(1) }], "t1"), { id: 9, kind: "start" });
+});
+
 test("a session linked to another Zepp workout is never taken; one linked to this workout is", () => {
   assert.equal(pickSessionMatch(zepp(0, 60), [cand(1, "run", 0, 60, "t2")], "t1"), null);
   assert.deepEqual(pickSessionMatch(zepp(0, 60), [cand(1, "run", 0, 60, "t1")], "t1"), { id: 1, kind: "start" });

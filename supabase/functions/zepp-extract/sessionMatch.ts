@@ -6,7 +6,8 @@
 // found no match for many older workouts and inserted a second session: both then counted in records, weekly volume
 // and load. Now, failing the 2-minute rule, a session of the same type whose time span overlaps the workout's by at least
 // half of the longer of the two is the same workout. Half of the LONGER keeps a 6-minute fragment inside a 70-minute
-// run, or a 3-hour ride that contains a 70-minute one, from counting as the same session.
+// run, or a 3-hour ride that contains a 70-minute one, from counting as the same session. Only sessions whose times a
+// device recorded take part in the overlap rule.
 
 import { exercisesSource } from "./strengthImport.ts";
 
@@ -20,6 +21,11 @@ export interface SessionCandidate extends Span {
   type: string | null;
   /** The Zepp track this session is already linked to, if any. */
   linkedTrackId: string | null;
+  /**
+   * Whether its times were recorded by a device (Health Connect), so an overlap means something. Imported logs carry
+   * placeholder times (a Notion workout "at 12:00"); they match only by the 2-minute rule. Default true.
+   */
+  deviceTimed?: boolean;
 }
 
 export type MatchKind = "start" | "overlap";
@@ -56,7 +62,7 @@ export function pickSessionMatch(
   if (byStart.length > 0) return { id: byStart[0].id, kind: "start" };
   const zeppLength = zepp.endMs - zepp.startMs;
   const byOverlap = free
-    .filter((c) => c.type !== null && c.type === zepp.type)
+    .filter((c) => c.deviceTimed !== false && c.type !== null && c.type === zepp.type)
     .map((c) => ({ c, overlap: overlapMs(zepp, c) }))
     .filter(({ c, overlap }) => overlap > 0 && overlap >= MIN_OVERLAP_OF_LONGER * Math.max(zeppLength, c.endMs - c.startMs))
     .sort((a, b) => b.overlap - a.overlap || startGap(a.c) - startGap(b.c));

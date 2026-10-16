@@ -785,7 +785,7 @@ async function extract(
     if (!span) return null;
     const links = row.zepp_workout_detail as { zepp_track_id: unknown }[] | null | undefined;
     const linked = Array.isArray(links) && links.length > 0 ? String(links[0].zepp_track_id) : null;
-    return { id: row.id, type: row.type, startMs: span.startMs, endMs: span.endMs, linkedTrackId: linked };
+    return { id: row.id, type: row.type, startMs: span.startMs, endMs: span.endMs, linkedTrackId: linked, deviceTimed: row.source === "health_connect" };
   }
 
   async function reconcileWorkout(

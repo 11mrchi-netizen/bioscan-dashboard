@@ -77,7 +77,9 @@ to another Zepp workout is never taken. The 2-minute rule alone missed Health Co
 (a strength session's whole gym visit, a run's start pressed before the watch's): the history pull then inserted a
 second, `source='zepp'` session for the same workout, and both counted in records, weekly volume and load. Half of the
 longer span keeps a 6-minute Health Connect fragment inside a 70-minute run, or a 3-hour ride that contains a
-70-minute one, from counting as the same workout. A session matched by overlap takes the workout's own start, end and
+70-minute one, from counting as the same workout. Only sessions whose times a device recorded (Health Connect) take part in
+the overlap rule: imported logs carry placeholder times (Notion workouts "at 12:00") and match only by the 2-minute
+rule. A session matched by overlap takes the workout's own start, end and
 duration with Zepp's measurements, so its pace and load use the workout's time.
 
 `mergeOrphanedZeppSessions` (start of every sync) applies the same rule to every `source='zepp'` session and folds it

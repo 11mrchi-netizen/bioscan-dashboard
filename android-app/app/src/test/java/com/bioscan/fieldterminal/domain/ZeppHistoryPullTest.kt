@@ -1,49 +1,31 @@
 package com.bioscan.fieldterminal.domain
 
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDate
+import java.time.OffsetDateTime
 
 class ZeppHistoryPullTest {
-    private val today = LocalDate.parse("2026-10-16")
+    private val json = Json { ignoreUnknownKeys = true }
 
     @Test
-    fun `windows walk back from today, a week each, without gaps`() {
-        val s0 = startHistoryPull(today)
-        assertEquals(LocalDate.parse("2026-10-10") to today, s0.nextWindow)
-        val s1 = s0.afterWindow(workouts = 5, bandDays = 7)
-        assertEquals(LocalDate.parse("2026-10-03") to LocalDate.parse("2026-10-09"), s1.nextWindow)
-        assertEquals(5, s1.workouts)
-        assertEquals(7, s1.bandDays)
-        assertEquals("2026-10-10", s1.oldestWithData)
+    fun `the server's row decodes, extra columns ignored`() {
+        val row = json.decodeFromString<ZeppHistoryPullRow>(
+            """{"user_id":"u","next_end":"2025-03-01","workouts":120,"band_days":540,"weeks_done":80,"oldest_with_data":"2025-03-09",
+               "done":false,"error":null,"running_since":null,"updated_at":"2026-10-16T09:00:00+00:00","empty_streak":1}""",
+        )
+        assertEquals(120, row.workouts)
+        assertEquals("2025-03-09", row.oldestWithData)
+        assertEquals(60L, row.secondsSinceUpdate(OffsetDateTime.parse("2026-10-16T09:01:00Z")))
     }
 
     @Test
-    fun `the pull stops after eight empty weeks in a row, a shorter gap does not stop it`() {
-        var s = startHistoryPull(today).afterWindow(3, 7)
-        repeat(HISTORY_STOP_AFTER_EMPTY - 1) { s = s.afterWindow(0, 0) }
-        assertFalse(s.done)
-        // Data again (seven weeks without the band): the streak starts over.
-        s = s.afterWindow(1, 5)
-        assertEquals(0, s.emptyStreak)
-        repeat(HISTORY_STOP_AFTER_EMPTY) { s = s.afterWindow(0, 0) }
-        assertTrue(s.done)
-        assertEquals(4, s.workouts)
-    }
-
-    @Test
-    fun `the pull never goes before the floor`() {
-        val s = HistoryPullState(nextEnd = HISTORY_FLOOR.plusDays(5).toString()).afterWindow(1, 1)
-        assertTrue(s.done)
-    }
-
-    @Test
-    fun `the settings line says where it is`() {
-        val s = startHistoryPull(today).afterWindow(2, 7)
-        assertTrue(s.describe(running = true).startsWith("Pulling, now at 2026-10-09 back to 2026-10-10"))
-        assertTrue(s.copy(error = "Zepp's token has expired").describe(running = false).startsWith("Paused"))
-        assertTrue(s.copy(done = true).describe(running = false).startsWith("Done: Zepp history back to 2026-10-10"))
+    fun `the settings line says where the pull is and what it waits on`() {
+        val base = ZeppHistoryPullRow(nextEnd = "2025-03-01", workouts = 120, bandDays = 540, weeksDone = 80, oldestWithData = "2025-03-09")
+        assertTrue(base.describe().startsWith("Pulling on the server, now at 2025-03-01 back to 2025-03-09 (120 workouts, 540 days"))
+        assertTrue(base.copy(done = true).describe().startsWith("Done: Zepp history back to 2025-03-09"))
+        assertTrue(base.copy(error = "Zepp refused the app token").describe().startsWith("Paused back to 2025-03-09"))
+        assertTrue(ZeppHistoryPullRow(nextEnd = "2026-10-16").describe().startsWith("Starting"))
     }
 }

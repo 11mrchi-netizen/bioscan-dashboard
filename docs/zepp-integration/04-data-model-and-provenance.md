@@ -70,17 +70,26 @@ one app. Fixes (`zepp-extract/workoutDistance.ts`, `domain/HealthConnectDistance
 
 ## The whole history from Zepp
 
-Stored Zepp data started on 26 Aug 2026. Settings › Connected services › PULL ALL ZEPP HISTORY pulls
-everything Zepp holds, back to the start of the account (`domain/ZeppHistoryPull.kt`,
-`data/ZeppHistoryWorker.kt`): workouts (with Zepp's distances, which repairs the doubled runs), daily
-band data (sleep, resting heart rate, steps, minute heart rate) and stress. A background worker walks
-back from today a week per zepp-extract call (each call reports what the week held, `found`), stores
-its progress after every week, and stops after eight empty weeks in a row, where the account's
-history starts. It survives leaving the screen; a failed week (no network, an expired Zepp token)
-pauses it with the reason, and CARRY ON resumes from there. For days already stored, Zepp's sleep,
-resting heart rate and steps replace Health Connect's, the same "Zepp wins" rule as for recent days,
-so the series no longer change source on 26 Aug. A workout adds about 0.4 MB (raw and decoded detail),
-a day of band data about 7 kB.
+Stored Zepp data started on 26 Aug 2026. The rest of the history is pulled on the server, with no
+phone involved: the Zepp token, user id and host are already Edge Function secrets
+(`zepp-extract/historyPull.ts`, migration `20261020_zepp_history_pull.sql`).
+
+- A row in `zepp_history_pull` starts the pull: inserted from Settings › Connected services › PULL
+  ALL ZEPP HISTORY, or by SQL (`insert into zepp_history_pull (user_id, next_end) values (…, current_date)`).
+- pg_cron calls `private.run_zepp_history()` every minute. While a pull is pending it posts to
+  zepp-extract with a random Vault secret in `x-zepp-history` (checked by a service role-only
+  function, the same pattern as the nightly analysis); otherwise it does nothing.
+- zepp-extract claims the pull (a four-minute lease, so calls never overlap), answers at once and
+  works on in the background for up to 100 s: a week at a time back in time, workouts, daily band
+  data (sleep, resting heart rate, steps, minute heart rate) and stress, saving after every week. It
+  runs the same per-day pipeline as the app's sync (`extract()`), as the service role writing the
+  pull's user_id, and leaves the "last synced" marker alone.
+- It stops after eight empty weeks in a row, where the account's history starts. A week Zepp refuses
+  (an expired token) pauses it with that reason; clearing `error` (CARRY ON in Settings) resumes.
+- Workouts get Zepp's distances, which repairs the doubled runs. For days already stored, Zepp's sleep,
+  resting heart rate and steps replace Health Connect's, the same "Zepp wins" rule as for recent days,
+  so the series no longer change source on 26 Aug. A workout adds about 0.4 MB (raw and decoded
+  detail), a day of band data about 7 kB.
 
 ## Strength exercises: who owns the list
 

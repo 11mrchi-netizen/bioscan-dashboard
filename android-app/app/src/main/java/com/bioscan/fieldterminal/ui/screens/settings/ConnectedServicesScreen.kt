@@ -288,7 +288,6 @@ private fun HealthConnectCard(context: android.content.Context) {
 
 @Composable
 private fun ZeppCard(scope: CoroutineScope) {
-    val context = LocalContext.current
     val zeppRepository = remember { ZeppRepository(SupabaseClientProvider.client) }
     var zeppStatus by remember { mutableStateOf<ZeppSyncStateRow?>(null) }
     var zeppStatusLoaded by remember { mutableStateOf(false) }
@@ -343,46 +342,42 @@ private fun ZeppCard(scope: CoroutineScope) {
                 }
             }
         }
-        // The whole Zepp history (workouts, daily band data, stress), pulled in the background back to where the account
-        // starts (ZeppHistoryWorker, domain/ZeppHistoryPull.kt). Progress is read from the worker's store every few seconds.
-        val historyStore = remember { com.bioscan.fieldterminal.data.ZeppHistoryStore(context) }
-        var historyState by remember { mutableStateOf(historyStore.load()) }
-        var historyRunning by remember { mutableStateOf(historyStore.running()) }
+        // The whole Zepp history (workouts, daily band data, stress), pulled on the server back to where the account
+        // starts (domain/ZeppHistoryPull.kt); the app starts or resumes it and shows its row, re-read every few seconds.
+        var historyPull by remember { mutableStateOf<com.bioscan.fieldterminal.domain.ZeppHistoryPullRow?>(null) }
+        var historyBusy by remember { mutableStateOf(false) }
+        var historyError by remember { mutableStateOf<String?>(null) }
         LaunchedEffect(Unit) {
             while (true) {
-                historyState = historyStore.load()
-                historyRunning = historyStore.running()
-                kotlinx.coroutines.delay(2_000)
+                runCatching { zeppRepository.loadHistoryPull() }.onSuccess { historyPull = it }
+                kotlinx.coroutines.delay(10_000)
             }
         }
         Text(
             "Pulls everything Zepp has, back to the start of your account: workouts (with Zepp's own distances), sleep, " +
-                "resting heart rate, steps, minute heart rate and stress. Runs in the background, a week per step, and can " +
-                "take a while for a long history. For days already stored, Zepp's values replace the ones from Health Connect.",
+                "resting heart rate, steps, minute heart rate and stress. Runs on the server a week at a time, also with the " +
+                "app closed. For days already stored, Zepp's values replace the ones from Health Connect.",
             style = FTType.Caption,
             color = FT.TextSecondary,
         )
-        historyState?.let { Text(it.describe(historyRunning), style = FTType.Caption, color = if (it.error != null) FT.Warning else FT.TextMuted) }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            val state = historyState
-            when {
-                historyRunning -> FTButton(label = "STOP", modifier = Modifier.weight(1f)) {
-                    com.bioscan.fieldterminal.data.ZeppHistoryWorker.stop(context)
-                    historyRunning = false
-                }
-                state == null -> FTButton(label = "PULL ALL ZEPP HISTORY", modifier = Modifier.weight(1f)) {
-                    com.bioscan.fieldterminal.data.ZeppHistoryWorker.start(context)
-                    historyRunning = true
-                }
-                state.done -> FTButton(label = "PULL AGAIN FROM TODAY", modifier = Modifier.weight(1f)) {
-                    com.bioscan.fieldterminal.data.ZeppHistoryWorker.start(context, fromScratch = true)
-                    historyRunning = true
-                }
-                else -> FTButton(label = "CARRY ON", modifier = Modifier.weight(1f)) {
-                    com.bioscan.fieldterminal.data.ZeppHistoryWorker.start(context)
-                    historyRunning = true
-                }
+        historyPull?.let { Text(it.describe(), style = FTType.Caption, color = if (it.error != null) FT.Warning else FT.TextMuted) }
+        historyError?.let { Text("Couldn't reach the server: $it", style = FTType.Caption, color = FT.Warning) }
+        val pull = historyPull
+        fun act(block: suspend () -> Unit) {
+            scope.launchSafe(onError = { e -> historyError = e.message }, onDone = { historyBusy = false }) {
+                historyBusy = true
+                historyError = null
+                block()
+                historyPull = zeppRepository.loadHistoryPull()
             }
+        }
+        when {
+            pull == null -> FTButton(label = if (historyBusy) "STARTING…" else "PULL ALL ZEPP HISTORY", enabled = !historyBusy) {
+                act { zeppRepository.startHistoryPull() }
+            }
+            pull.error != null -> FTButton(label = "CARRY ON", enabled = !historyBusy) { act { zeppRepository.carryOnHistoryPull() } }
+            pull.done -> FTButton(label = "PULL AGAIN FROM TODAY", enabled = !historyBusy) { act { zeppRepository.startHistoryPull() } }
+            else -> Unit
         }
         // Writes the next 7 days of planned sessions to Zepp's calendar: a real feature, so it stays next to SYNC NOW.
         var probing by remember { mutableStateOf(false) }

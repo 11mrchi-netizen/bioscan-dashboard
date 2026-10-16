@@ -5,7 +5,6 @@ import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
-import io.ktor.client.plugins.timeout
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -17,6 +16,7 @@ import com.bioscan.fieldterminal.domain.training.movementKey
 import com.bioscan.fieldterminal.domain.training.parsePlannedLifts
 import com.bioscan.fieldterminal.domain.training.warmupSets
 import kotlinx.serialization.json.Json
+import com.bioscan.fieldterminal.domain.ZeppHistoryPullRow
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -60,14 +60,6 @@ sealed class ZeppSyncResult {
     data class Failed(val message: String) : ZeppSyncResult()
 }
 
-@Serializable
-data class HistoryWindowFound(val workouts: Int = 0, val bandDays: Int = 0)
-
-@Serializable
-private data class HistoryWindowResponse(val found: HistoryWindowFound? = null, val authFailed: Boolean = false)
-
-private val historyJson = Json { ignoreUnknownKeys = true }
-
 class ZeppRepository(private val supabase: SupabaseClient) {
     // Default is a small window for the automatic on-app-open sync
     // (ZeppSyncWorker) -- keeping recent workouts current, not a backfill.
@@ -80,22 +72,38 @@ class ZeppRepository(private val supabase: SupabaseClient) {
         return syncRange(to.minusDays(daysBack), to, metrics)
     }
 
-    /**
-     * One window of the history pull: workouts, daily band data and stress for [from]..[to]. Returns what the window
-     * held (zepp-extract's `found`), or throws with the reason (Zepp's token expired, no network).
-     */
-    suspend fun pullHistoryWindow(from: LocalDate, to: LocalDate): HistoryWindowFound {
-        val response = supabase.functions.invoke(function = "zepp-extract") {
-            contentType(ContentType.Application.Json)
-            // A week of three metrics takes longer than the client's usual 45 s; stay under the function's own limit.
-            timeout { requestTimeoutMillis = 140_000; socketTimeoutMillis = 140_000 }
-            setBody("""{"from":"$from","to":"$to","metrics":"sport_history,band_data,stress"}""")
-        }
-        val body = response.bodyAsText()
-        if (!response.status.isSuccess()) throw IllegalStateException("HTTP ${response.status.value}: ${body.take(200)}")
-        val parsed = historyJson.decodeFromString<HistoryWindowResponse>(body)
-        if (parsed.authFailed) throw IllegalStateException("Zepp's token has expired; renew it, then carry on")
-        return parsed.found ?: HistoryWindowFound()
+    // The server-side history pull (domain/ZeppHistoryPull.kt): the app reads its row, starts it or resumes it.
+    suspend fun loadHistoryPull(): ZeppHistoryPullRow? =
+        supabase.postgrest.from("zepp_history_pull")
+            .select(columns = Columns.list("next_end,workouts,band_days,weeks_done,oldest_with_data,done,error,running_since,updated_at"))
+            .decodeList<ZeppHistoryPullRow>()
+            .firstOrNull()
+
+    /** Starts the pull from [today] back, forgetting any earlier progress. */
+    suspend fun startHistoryPull(today: LocalDate = LocalDate.now()) {
+        supabase.postgrest.from("zepp_history_pull").upsert(
+            buildJsonObject {
+                put("next_end", today.toString())
+                put("empty_streak", 0)
+                put("workouts", 0)
+                put("band_days", 0)
+                put("weeks_done", 0)
+                put("oldest_with_data", null as String?)
+                put("done", false)
+                put("error", null as String?)
+                put("running_since", null as String?)
+            },
+        ) { onConflict = "user_id" }
+    }
+
+    /** Clears a paused pull's error so the server carries on from where it stopped. */
+    suspend fun carryOnHistoryPull() {
+        supabase.postgrest.from("zepp_history_pull").update(
+            buildJsonObject {
+                put("error", null as String?)
+                put("running_since", null as String?)
+            },
+        ) { filter { eq("done", false) } }
     }
 
     // A fixed date range (at most 31 days, the server's cap): RE-IMPORT FROM ZEPP on one workout pulls the days around it.

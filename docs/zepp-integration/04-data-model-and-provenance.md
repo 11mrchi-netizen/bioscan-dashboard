@@ -54,7 +54,7 @@ isolation.
 ## Run distance: Zepp's own, on every copy
 
 Health Connect stored most runs from January to mid-August 2026 at about twice their real distance
-(a 37.4 km "longest run" Zepp has as 18.4 km; a 2:45/km "fastest run" that was a treadmill session).
+(a 37.4 km "longest run" Zepp has at a little over 18 km; a 2:45/km "fastest run" that was a treadmill session).
 The source app wrote some workouts, and their distance records, twice (some sessions are stored twice
 with identical times), and the per-app rule (largest single app's total) cannot see duplicates from
 one app. Fixes (`zepp-extract/workoutDistance.ts`, `domain/HealthConnectDistance.kt`):

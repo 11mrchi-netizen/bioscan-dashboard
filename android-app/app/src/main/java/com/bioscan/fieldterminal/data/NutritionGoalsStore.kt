@@ -30,6 +30,12 @@ data class NutritionGoals(
     val fatG: Double? = null,
     val hydrationMinMl: Double? = null,
     val hydrationMaxMl: Double? = null,
+    // How the goal was entered (domain/NutritionTargets.kt), so the form reopens the same way: protein per kg of body
+    // weight and fat as a share of calories when chosen that way (the grams above are always the resolved goal), and the
+    // activity level when chosen by hand (null: taken from logged training).
+    val proteinPerKg: Double? = null,
+    val fatPct: Double? = null,
+    val activityLevel: String? = null,
 ) {
     // Calorie/macro goals only -- the goal-adherence card keys off this.
     val isSet: Boolean get() = caloriesKcal != null || proteinG != null || carbsG != null || fatG != null
@@ -49,6 +55,9 @@ object NutritionGoalsStore {
     private const val PREF_FAT = "fat_g"
     private const val PREF_HYDRATION_MIN = "hydration_min_ml"
     private const val PREF_HYDRATION_MAX = "hydration_max_ml"
+    private const val PREF_PROTEIN_PER_KG = "protein_per_kg"
+    private const val PREF_FAT_PCT = "fat_pct"
+    private const val PREF_ACTIVITY = "activity_level"
 
     fun getGoals(context: Context): NutritionGoals {
         val p = prefs(context)
@@ -59,6 +68,9 @@ object NutritionGoalsStore {
             fatG = p.getString(PREF_FAT, null)?.toDoubleOrNull(),
             hydrationMinMl = p.getString(PREF_HYDRATION_MIN, null)?.toDoubleOrNull(),
             hydrationMaxMl = p.getString(PREF_HYDRATION_MAX, null)?.toDoubleOrNull(),
+            proteinPerKg = p.getString(PREF_PROTEIN_PER_KG, null)?.toDoubleOrNull(),
+            fatPct = p.getString(PREF_FAT_PCT, null)?.toDoubleOrNull(),
+            activityLevel = p.getString(PREF_ACTIVITY, null),
         )
     }
 
@@ -70,6 +82,9 @@ object NutritionGoalsStore {
             .putOrRemove(PREF_FAT, goals.fatG)
             .putOrRemove(PREF_HYDRATION_MIN, goals.hydrationMinMl)
             .putOrRemove(PREF_HYDRATION_MAX, goals.hydrationMaxMl)
+            .putOrRemove(PREF_PROTEIN_PER_KG, goals.proteinPerKg)
+            .putOrRemove(PREF_FAT_PCT, goals.fatPct)
+            .putOrRemoveString(PREF_ACTIVITY, goals.activityLevel)
             .apply()
     }
 
@@ -77,11 +92,15 @@ object NutritionGoalsStore {
         prefs(context).edit()
             .remove(PREF_CALORIES).remove(PREF_PROTEIN).remove(PREF_CARBS).remove(PREF_FAT)
             .remove(PREF_HYDRATION_MIN).remove(PREF_HYDRATION_MAX)
+            .remove(PREF_PROTEIN_PER_KG).remove(PREF_FAT_PCT).remove(PREF_ACTIVITY)
             .apply()
     }
 
     private fun SharedPreferences.Editor.putOrRemove(key: String, value: Double?) =
         if (value != null) putString(key, value.toString()) else remove(key)
+
+    private fun SharedPreferences.Editor.putOrRemoveString(key: String, value: String?) =
+        if (value != null) putString(key, value) else remove(key)
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 }

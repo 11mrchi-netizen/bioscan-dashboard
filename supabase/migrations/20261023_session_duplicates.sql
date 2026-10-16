@@ -20,6 +20,9 @@
 -- The plan (private.exercise_session_duplicate_plan) and the fold stay, so the same check can be run again; running this
 -- migration again folds only what has appeared since.
 --
+-- Live, it went in two steps because the migration endpoint timed out: the table, trigger and plan on 16 Oct 2026 with
+-- the SQL tool; private.fold_exercise_session and the fold (everything below the plan) from the SQL editor, by the owner.
+--
 -- Rollback (the folds themselves are not undone): drop trigger exercise_sessions_skip_tombstoned on public.exercise_sessions;
 --   drop function public.skip_tombstoned_session(); drop function private.exercise_session_duplicate_plan();
 --   drop function private.fold_exercise_session(bigint, bigint, text); drop function private.session_has_list(jsonb);
@@ -53,8 +56,7 @@ end
 $$;
 revoke all on function public.skip_tombstoned_session() from public, anon, authenticated;
 
-drop trigger if exists exercise_sessions_skip_tombstoned on public.exercise_sessions;
-create trigger exercise_sessions_skip_tombstoned
+create or replace trigger exercise_sessions_skip_tombstoned
   before insert on public.exercise_sessions
   for each row execute function public.skip_tombstoned_session();
 

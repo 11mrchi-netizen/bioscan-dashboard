@@ -68,6 +68,27 @@ one app. Fixes (`zepp-extract/workoutDistance.ts`, `domain/HealthConnectDistance
   outside the workout only for its part inside.
 - Runs Zepp does not have keep their Health Connect distance.
 
+## Which session a Zepp workout is
+
+`zepp-extract/sessionMatch.ts` (Node tests). A Zepp workout is the stored session that starts within 2 minutes of it
+(any type; the original rule), or else the session of the same type whose time span overlaps the workout's by at least
+half of the **longer** of the two spans; the largest overlap wins, then the closest start, and a session already linked
+to another Zepp workout is never taken. The 2-minute rule alone missed Health Connect copies that start minutes earlier
+(a strength session's whole gym visit, a run's start pressed before the watch's): the history pull then inserted a
+second, `source='zepp'` session for the same workout, and both counted in records, weekly volume and load. Half of the
+longer span keeps a 6-minute Health Connect fragment inside a 70-minute run, or a 3-hour ride that contains a
+70-minute one, from counting as the same workout. A session matched by overlap takes the workout's own start, end and
+duration with Zepp's measurements, so its pace and load use the workout's time.
+
+`mergeOrphanedZeppSessions` (start of every sync) applies the same rule to every `source='zepp'` session and folds it
+into the Health Connect session it matches. The Health Connect row is kept: its record id serves the session page's
+series and route, and a Health Connect re-sync would bring it back if it were deleted. It takes the Zepp copy's
+distance, heart rate, calories, elevation, speed and timing where the copy has them, and the copy's RPE, notes and
+exercise list only where it has none (`mergedSessionFields`); every table referencing the copy (`zepp_workout_detail`,
+`planned_routes`, `fueling_intake_log`, `calendar_strength_staging`, and `planned_sessions` when the kept row has no
+plan) is moved over before the copy is deleted. Two Health Connect copies of one workout (the source app wrote some
+twice) are not merged: neither is a Zepp copy, and the run list's own de-duplication keeps one.
+
 ## The whole history from Zepp
 
 Stored Zepp data started on 26 Aug 2026. The rest of the history is pulled on the server, with no

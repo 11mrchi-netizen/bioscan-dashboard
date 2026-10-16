@@ -10,6 +10,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { computeEffort } from "./effort.ts";
 import { decodeMinuteHr, type HrMinutePoint } from "./minuteHr.ts";
 import { hrHistogram } from "./hrHistogram.ts";
+import { mergedSessionFields, pickSessionMatch, type SessionCandidate, type Span, spanOf, START_TOLERANCE_MS } from "./sessionMatch.ts";
 import { exerciseTypeForZeppSport, summaryDistanceM, takesDistance, zeppDistanceKm } from "./workoutDistance.ts";
 import { afterWindow, HISTORY_METRICS, type HistoryState, windowDates } from "./historyPull.ts";
 import { buildZeppExercises, doneSets, exercisesFingerprint, parseLapSets, planStrengthDetails } from "./strengthImport.ts";
@@ -755,11 +756,37 @@ async function extract(
   }
 
   // DAV-115: match a Zepp workout to an existing Health-Connect-sourced
-  // exercise_sessions row by start_time proximity rather than duplicating it;
-  // insert a new source='zepp' row only when nothing matches. Also tracks the
-  // highest track_id seen, for zepp_sync_state below.
-  const RECONCILE_TOLERANCE_MS = 2 * 60 * 1000;
+  // exercise_sessions row rather than duplicating it; insert a new
+  // source='zepp' row only when nothing matches. Matching (sessionMatch.ts):
+  // a session starting within 2 minutes, else one of the same type
+  // overlapping the workout by at least half of the longer span. Also tracks
+  // the highest track_id seen, for zepp_sync_state below.
+  const RECONCILE_TOLERANCE_MS = START_TOLERANCE_MS;
+  const CANDIDATE_LOOKBACK_MS = 6 * 60 * 60 * 1000;
   let maxTrackIdSeen = 0;
+
+  type SessionRow = Record<string, unknown> & { id: number; type: string | null; source: string | null };
+
+  // Sessions that could be this workout: starting up to 6 h before it and no later than 2 min after its end, each with
+  // the Zepp track it is already linked to (if any).
+  async function candidateSessions(span: Span, columns: string): Promise<SessionRow[]> {
+    const { data, error } = await supabase
+      .from("exercise_sessions")
+      .select(`${columns},zepp_workout_detail(zepp_track_id)`)
+      .eq("user_id", user.id)
+      .gte("start_time", new Date(span.startMs - CANDIDATE_LOOKBACK_MS).toISOString())
+      .lte("start_time", new Date(span.endMs + RECONCILE_TOLERANCE_MS).toISOString());
+    if (error) throw new Error(`exercise_sessions candidate read failed: ${error.message}`);
+    return (data ?? []) as SessionRow[];
+  }
+
+  function asCandidate(row: SessionRow): SessionCandidate | null {
+    const span = spanOf(row);
+    if (!span) return null;
+    const links = row.zepp_workout_detail as { zepp_track_id: unknown }[] | null | undefined;
+    const linked = Array.isArray(links) && links.length > 0 ? String(links[0].zepp_track_id) : null;
+    return { id: row.id, type: row.type, startMs: span.startMs, endMs: span.endMs, linkedTrackId: linked };
+  }
 
   async function reconcileWorkout(
     ref: WorkoutRef,
@@ -768,16 +795,17 @@ async function extract(
     if (!ref.startTimeIso || !ref.endTimeIso) return; // no reliable time to reconcile with
 
     const startMs = new Date(ref.startTimeIso).getTime();
-    const { data: matches } = await supabase
-      .from("exercise_sessions")
-      .select("id,type")
-      .eq("user_id", user.id)
-      .gte("start_time", new Date(startMs - RECONCILE_TOLERANCE_MS).toISOString())
-      .lte("start_time", new Date(startMs + RECONCILE_TOLERANCE_MS).toISOString())
-      .limit(1);
+    const zeppSpan = { startMs, endMs: new Date(ref.endTimeIso).getTime() };
+    const rows = await candidateSessions(zeppSpan, "id,type,source,start_time,end_time,duration_min");
+    const match = pickSessionMatch(
+      { ...zeppSpan, type: exerciseTypeForZeppSport(ref.sportType) },
+      rows.map(asCandidate).filter((c): c is SessionCandidate => c !== null),
+      String(ref.trackId),
+    );
+    const matchedRow = match ? rows.find((r) => r.id === match.id) : undefined;
 
-    let exerciseSessionId: number | null = matches?.[0]?.id ?? null;
-    const matchedType: string = matches?.[0]?.type ?? exerciseTypeForZeppSport(ref.sportType);
+    let exerciseSessionId: number | null = matchedRow?.id ?? null;
+    const matchedType: string = matchedRow?.type ?? exerciseTypeForZeppSport(ref.sportType);
 
     if (exerciseSessionId === null) {
       // Unmatched: this workout isn't in Health Connect yet. Insert minimally
@@ -854,6 +882,12 @@ async function extract(
         .gte("start_time", new Date(startMs - RECONCILE_TOLERANCE_MS).toISOString())
         .lte("start_time", new Date(startMs + RECONCILE_TOLERANCE_MS).toISOString());
       if (distanceUpdateError) throw new Error(`exercise_sessions distance update failed: ${distanceUpdateError.message}`);
+      // A session matched by overlap starts outside that 2-minute window.
+      if (match?.kind === "overlap") {
+        const { error: matchedDistanceError } = await supabase
+          .from("exercise_sessions").update({ distance_km: zeppKm }).eq("id", exerciseSessionId);
+        if (matchedDistanceError) throw new Error(`exercise_sessions distance update failed: ${matchedDistanceError.message}`);
+      }
     }
 
     // v12: write Zepp-primary aggregates. Prefer smoothedAscentM (GPS-smoothed
@@ -871,6 +905,15 @@ async function extract(
       if ((ref.calorieKcal ?? 0) > 0)    aggregates.calories_active = ref.calorieKcal!;
       if (elevationM !== null)            aggregates.elevation_gain_m = elevationM;
       if ((ref.avgPaceSecPerKm ?? 0) > 0) aggregates.avg_speed_kmh = (1000 / ref.avgPaceSecPerKm!) * 3.6;
+      // Matched by overlap rather than start: the stored session's times are another app's (a gym visit, a start pressed
+      // early); the workout's own times keep its pace and load right.
+      const timing: Record<string, unknown> = {};
+      if (match?.kind === "overlap") {
+        timing.start_time = ref.startTimeIso;
+        timing.end_time = ref.endTimeIso;
+        timing.duration_min = Math.round((zeppSpan.endMs - startMs) / 60000);
+      }
+      Object.assign(aggregates, timing);
 
       if (Object.keys(aggregates).length > 0) {
         const { error: aggUpdateError } = await supabase
@@ -974,40 +1017,67 @@ async function extract(
   // real per-second series (splits, charts) ever reaches the row the app
   // actually displays. Self-heals here: by the *next* sync, Health Connect
   // has normally caught up, so re-run the same match this time and merge.
+  //
+  // The same matching as reconcileWorkout (sessionMatch.ts), so a copy the
+  // history pull inserted because the Health Connect session started minutes
+  // earlier folds in too. The Health Connect row is kept (its record id serves
+  // the session page's series and route, and a Health Connect re-sync would
+  // bring it back if deleted); it takes the copy's Zepp measurements, timing,
+  // and RPE, notes and exercises where it has none (mergedSessionFields), and
+  // every reference to the copy is moved to it before the copy is deleted.
+  const MERGE_COLUMNS =
+    "id,type,source,start_time,end_time,duration_min,distance_km,avg_hr,max_hr,calories_active,elevation_gain_m,avg_speed_kmh,rpe,notes,details";
+
   async function mergeOrphanedZeppSessions(): Promise<number> {
-    const { data: orphans } = await supabase
+    const { data: orphanRows, error: orphanErr } = await supabase
       .from("exercise_sessions")
-      .select("id,start_time")
+      .select(`${MERGE_COLUMNS},zepp_workout_detail(zepp_track_id)`)
       .eq("user_id", user.id)
       .eq("source", "zepp");
-    if (!orphans || orphans.length === 0) return 0;
+    if (orphanErr) throw new Error(`orphan read failed: ${orphanErr.message}`);
+    const orphans = (orphanRows ?? []) as SessionRow[];
+    if (orphans.length === 0) return 0;
 
     let merged = 0;
     for (const orphan of orphans) {
-      const orphanMs = new Date(orphan.start_time).getTime();
-      const { data: matches } = await supabase
-        .from("exercise_sessions")
-        .select("id")
-        .eq("user_id", user.id)
-        .neq("id", orphan.id)
-        .neq("source", "zepp")
-        .gte("start_time", new Date(orphanMs - RECONCILE_TOLERANCE_MS).toISOString())
-        .lte("start_time", new Date(orphanMs + RECONCILE_TOLERANCE_MS).toISOString())
-        .limit(1);
-      const realId = matches?.[0]?.id;
-      if (realId === undefined) continue;
+      const self = asCandidate(orphan);
+      if (!self) continue;
+      const rows = (await candidateSessions(self, MERGE_COLUMNS)).filter((r) => r.id !== orphan.id && r.source !== "zepp");
+      const match = pickSessionMatch(
+        { startMs: self.startMs, endMs: self.endMs, type: orphan.type },
+        rows.map(asCandidate).filter((c): c is SessionCandidate => c !== null),
+        self.linkedTrackId,
+      );
+      const real = match ? rows.find((r) => r.id === match.id) : undefined;
+      if (!real) continue;
+      const realId = real.id;
 
-      // Repoint both real FKs to exercise_sessions before deleting the orphan.
-      const { error: repointDetailError } = await supabase
-        .from("zepp_workout_detail")
-        .update({ exercise_session_id: realId })
-        .eq("exercise_session_id", orphan.id);
-      if (repointDetailError) throw new Error(`zepp_workout_detail repoint failed: ${repointDetailError.message}`);
-      const { error: repointRouteError } = await supabase
-        .from("planned_routes")
-        .update({ exercise_session_id: realId })
-        .eq("exercise_session_id", orphan.id);
-      if (repointRouteError) throw new Error(`planned_routes repoint failed: ${repointRouteError.message}`);
+      const update = mergedSessionFields(orphan, real);
+      if (Object.keys(update).length > 0) {
+        const { error: updateError } = await supabase.from("exercise_sessions").update(update).eq("id", realId);
+        if (updateError) throw new Error(`merged session update failed: ${updateError.message}`);
+      }
+
+      // Every table that references exercise_sessions (fueling_intake_log and calendar_strength_staging cascade on
+      // delete, the others would lose their link).
+      for (const [table, column] of [
+        ["zepp_workout_detail", "exercise_session_id"],
+        ["planned_routes", "exercise_session_id"],
+        ["fueling_intake_log", "exercise_session_id"],
+        ["calendar_strength_staging", "session_id"],
+      ]) {
+        const { error: repointError } = await supabase.from(table).update({ [column]: realId }).eq(column, orphan.id);
+        if (repointError) throw new Error(`${table} repoint failed: ${repointError.message}`);
+      }
+      // A planned session moves over only if the kept session has none (one plan per workout).
+      const { data: keptPlans, error: planReadError } = await supabase
+        .from("planned_sessions").select("id").eq("exercise_session_id", realId).limit(1);
+      if (planReadError) throw new Error(`planned_sessions read failed: ${planReadError.message}`);
+      if ((keptPlans ?? []).length === 0) {
+        const { error: planError } = await supabase
+          .from("planned_sessions").update({ exercise_session_id: realId }).eq("exercise_session_id", orphan.id);
+        if (planError) throw new Error(`planned_sessions repoint failed: ${planError.message}`);
+      }
 
       const { error: deleteError } = await supabase.from("exercise_sessions").delete().eq("id", orphan.id);
       if (deleteError) throw new Error(`orphaned exercise_sessions delete failed: ${deleteError.message}`);

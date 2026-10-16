@@ -164,4 +164,13 @@ class HeartRateZonesTest {
         assertTrue(anchorsCaption(ZoneMethod.HRR, anchors).contains("resting 53"))
         assertTrue(anchorsCaption(ZoneMethod.MAX, anchors).contains("max 196"))
     }
+
+    @Test
+    fun theChartOpensOnTheDefaultWhenItApplies() {
+        assertEquals(ZoneMethod.MAX, initialZoneMethod(ZoneMethod.MAX, anchors, "run"))
+        assertEquals(ZoneMethod.LTHR, initialZoneMethod(ZoneMethod.AUTO, anchors, "run"))
+        // A threshold default on a ride falls back as AUTO would.
+        assertEquals(ZoneMethod.HRR, initialZoneMethod(ZoneMethod.LTHR, anchors, "ride"))
+        assertNull(initialZoneMethod(ZoneMethod.HRR, ZoneAnchors(), "run"))
+    }
 }

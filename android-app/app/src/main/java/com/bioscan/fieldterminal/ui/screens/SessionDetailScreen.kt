@@ -28,7 +28,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.contracts.ExerciseRouteRequestContract
-import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.SessionDetailRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -52,9 +51,13 @@ import com.bioscan.fieldterminal.domain.classifyMovementPattern
 import com.bioscan.fieldterminal.domain.gateStateWord
 import com.bioscan.fieldterminal.domain.heartRateZoneBreakdown
 import com.bioscan.fieldterminal.domain.heartRateZoneFor
-import com.bioscan.fieldterminal.domain.ZoneAnchors
 import com.bioscan.fieldterminal.domain.ZoneMethod
+import com.bioscan.fieldterminal.domain.initialZoneMethod
 import com.bioscan.fieldterminal.domain.zoneBounds
+import com.bioscan.fieldterminal.data.ZoneAnchorSeries
+import com.bioscan.fieldterminal.data.ZoneAnchorsRepository
+import com.bioscan.fieldterminal.ui.components.HeartRateZoneMethodSwitch
+import com.bioscan.fieldterminal.ui.components.SessionZoneInputs
 import com.bioscan.fieldterminal.domain.MovementPattern
 import com.bioscan.fieldterminal.domain.resolveExercise
 import com.bioscan.fieldterminal.domain.sessionAverageRir
@@ -122,7 +125,8 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
     var loadingDetail by remember { mutableStateOf(false) }
     var zeppSummary by remember { mutableStateOf<ZeppWorkoutSummary?>(null) }
     var zeppStrengthData by remember { mutableStateOf<ZeppStrengthData?>(null) }
-    var personalMaxHr by remember { mutableStateOf<Double?>(null) }
+    var zoneSeries by remember { mutableStateOf<ZoneAnchorSeries?>(null) }
+    var zoneDefault by remember { mutableStateOf(ZoneMethod.AUTO) }
     var planned by remember { mutableStateOf<com.bioscan.fieldterminal.data.PlannedMatch?>(null) }
     val sessionScope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -157,10 +161,10 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
         }
         header = row
         loadingHeader = false
-        // HR zone breakdown: this account's own highest-ever recorded max_hr,
-        // loaded once per screen open -- independent of this session's own
-        // header/detail loads below.
-        personalMaxHr = softLoad { AnalysisRepository(SupabaseClientProvider.client).loadPersonalMaxHr() }
+        // Heart-rate zones: the anchor series (maximum, resting, threshold) and the person's default method, loaded once
+        // per screen open; the anchors are taken as of this session's date below.
+        zoneSeries = softLoad { ZoneAnchorsRepository(SupabaseClientProvider.client).load() }
+        zoneDefault = softLoad { com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client).loadZoneMethod() } ?: ZoneMethod.AUTO
         // What the training block planned for this workout, if anything (DAV-346).
         if (row != null) {
             planned = runCatching {
@@ -287,7 +291,10 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                     // TRAIL -> PERFORMANCE+SPLITS -> RUN DYNAMICS -> ROUTE); strength
                     // stays SUMMARY -> STRENGTH. The HR/PACE/POWER/CADENCE chart
                     // (previously its own "PERFORMANCE" card) is now part of SUMMARY.
-                    SummaryCard(h, d, loadingDetail, detailError, hasHealthConnectRecord = h.healthConnectRecordId != null, personalMaxHr = personalMaxHr)
+                    SummaryCard(
+                        h, d, loadingDetail, detailError, hasHealthConnectRecord = h.healthConnectRecordId != null,
+                        zones = zoneSeries?.let { z -> SessionZoneInputs(z.anchorsFor(OffsetDateTime.parse(h.startTime).toLocalDate()), h.type, zoneDefault) },
+                    )
 
                     // Live check: h.details.exercises (name + sets, already
                     // editable via the Log tab's edit sheet) never rendered
@@ -456,7 +463,7 @@ private fun formatSignalValue(signal: PerfSignal, v: Double): String =
 private enum class ChartColorMode(val label: String) { Line("LINE"), Zones("ZONES") }
 
 @Composable
-private fun PerformanceChartSection(d: SessionDetail, personalMaxHr: Double?) {
+private fun PerformanceChartSection(d: SessionDetail, zones: SessionZoneInputs?) {
     val pace = remember(d.speedKmh) { d.speedKmh.mapNotNull { p -> if (p.value > 0) TimePoint(p.offsetSeconds, 60.0 / p.value) else null } }
     val seriesBySignal = mapOf(
         PerfSignal.HR to d.heartRate,
@@ -489,8 +496,10 @@ private fun PerformanceChartSection(d: SessionDetail, personalMaxHr: Double?) {
         format = { v -> formatSignalValue(selected, v) },
     )
 
-    val maxBounds = remember(personalMaxHr) { zoneBounds(ZoneMethod.MAX, ZoneAnchors(maxHr = personalMaxHr), null) }
-    val showZoneUi = selected == PerfSignal.HR && maxBounds != null
+    // The zone method starts on the person's default (or what AUTO picks for this session) and can be switched here.
+    var zoneMethod by remember(d, zones) { mutableStateOf(zones?.let { initialZoneMethod(it.defaultMethod, it.anchors, it.sport) }) }
+    val bounds = remember(zoneMethod, zones) { zones?.let { z -> zoneMethod?.let { zoneBounds(it, z.anchors, z.sport) } } }
+    val showZoneUi = selected == PerfSignal.HR && bounds != null
     var colorMode by remember(d) { mutableStateOf(ChartColorMode.Line) }
     if (showZoneUi) {
         SegmentedToggle(
@@ -500,13 +509,14 @@ private fun PerformanceChartSection(d: SessionDetail, personalMaxHr: Double?) {
             onSelect = { colorMode = it },
             modifier = Modifier.padding(top = 8.dp),
         )
+        HeartRateZoneMethodSwitch(zones!!, bounds!!.method, onSelect = { zoneMethod = it }, modifier = Modifier.padding(top = 6.dp))
     }
 
     LineChart(
         points = points,
         color = selected.color,
         xRange = sessionStart to sessionEnd,
-        segmentColor = if (showZoneUi && colorMode == ChartColorMode.Zones) { hr -> heartRateZoneColor(heartRateZoneFor(hr, maxBounds!!)) } else null,
+        segmentColor = if (showZoneUi && colorMode == ChartColorMode.Zones) { hr -> heartRateZoneColor(heartRateZoneFor(hr, bounds!!)) } else null,
         modifier = Modifier.padding(top = 4.dp),
         valueFormat = { v -> formatSignalValue(selected, v) },
         invertY = selected == PerfSignal.PACE,
@@ -521,8 +531,8 @@ private fun PerformanceChartSection(d: SessionDetail, personalMaxHr: Double?) {
     }
 
     if (showZoneUi) {
-        val breakdown = remember(points, maxBounds) { heartRateZoneBreakdown(points, maxBounds!!) }
-        HeartRateZoneDonutChart(breakdown, modifier = Modifier.padding(top = 12.dp))
+        val breakdown = remember(points, bounds) { heartRateZoneBreakdown(points, bounds!!) }
+        HeartRateZoneDonutChart(breakdown, modifier = Modifier.padding(top = 12.dp), bounds = bounds)
     }
 }
 
@@ -914,7 +924,7 @@ private fun SummaryCard(
     loadingDetail: Boolean,
     detailError: String?,
     hasHealthConnectRecord: Boolean,
-    personalMaxHr: Double?,
+    zones: SessionZoneInputs?,
 ) {
     // Live check: the stored session-level aggregates (avg_hr/avg_speed_kmh/
     // calories_active) are sometimes null even though the on-demand Health
@@ -987,7 +997,7 @@ private fun SummaryCard(
                     style = FTType.BodySmall,
                     color = FT.TextSecondary,
                 )
-                detail != null -> PerformanceChartSection(detail, personalMaxHr)
+                detail != null -> PerformanceChartSection(detail, zones)
             }
         }
     }

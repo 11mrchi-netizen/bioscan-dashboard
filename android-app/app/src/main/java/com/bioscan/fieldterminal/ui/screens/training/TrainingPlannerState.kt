@@ -9,6 +9,7 @@ import com.bioscan.fieldterminal.data.DefinitionCatalog
 import com.bioscan.fieldterminal.data.ImportFile
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
 import com.bioscan.fieldterminal.data.model.TrainingSettingsRow
+import com.bioscan.fieldterminal.domain.ZoneMethod
 import com.bioscan.fieldterminal.domain.training.PercentBase
 import com.bioscan.fieldterminal.domain.training.ResolvedMax
 import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
@@ -83,6 +84,8 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     var maxes by mutableStateOf<Map<String, ResolvedMax>>(emptyMap())
     var importMessage by mutableStateOf<String?>(null)
     var settingsMessage by mutableStateOf<String?>(null)
+    var zoneMethod by mutableStateOf(ZoneMethod.AUTO)
+    var zoneMessage by mutableStateOf<String?>(null)
     var creating by mutableStateOf(false)
 
     var step by mutableStateOf(PlannerStep.Program)
@@ -125,6 +128,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
             runCatching {
                 catalog = repo.loadCatalog()
                 settings = repo.loadSettings()
+                zoneMethod = repo.loadZoneMethod()
                 maxes = repo.loadMaxes()
             }.onFailure { error = it.message ?: "Could not load" }
             loading = false
@@ -136,6 +140,16 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
             runCatching { repo.saveSettings(new) }
                 .onSuccess { settings = new; settingsMessage = "Saved" }
                 .onFailure { settingsMessage = "Could not save: ${it.message}" }
+        }
+    }
+
+    fun saveZoneMethod(method: ZoneMethod) {
+        val before = zoneMethod
+        zoneMethod = method
+        scope.launch {
+            runCatching { repo.saveZoneMethod(method) }
+                .onSuccess { zoneMessage = "Saved" }
+                .onFailure { zoneMethod = before; zoneMessage = "Could not save: ${it.message}" }
         }
     }
 

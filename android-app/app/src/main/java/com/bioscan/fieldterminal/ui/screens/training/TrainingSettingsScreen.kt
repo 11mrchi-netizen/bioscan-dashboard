@@ -28,6 +28,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
+import com.bioscan.fieldterminal.domain.ZoneMethod
+import com.bioscan.fieldterminal.domain.zoneMethodExplanation
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
@@ -60,6 +62,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit) {
                 state.error?.let { Text(it, color = FT.Critical, style = FTType.BodySmall) }
                 EquipmentCard(state)
                 ScheduleCard(state)
+                HeartRateZonesCard(state)
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -82,6 +85,18 @@ private fun EquipmentCard(state: TrainingPlannerState) {
         Spacer(Modifier.height(8.dp))
         FTButton("SAVE EQUIPMENT", enabled = plates.isNotEmpty()) { state.saveSettings(state.settings.copy(platesKg = plates.sorted(), weightedPercentBase = base)) }
         state.settingsMessage?.let { Body(it, muted = true) }
+    }
+}
+
+// The default for every session's heart-rate chart (domain/HeartRateZones.kt); a session can still be switched there.
+@Composable
+private fun HeartRateZonesCard(state: TrainingPlannerState) {
+    FTCard(title = "HEART-RATE ZONES") {
+        Body("Where a session's zone edges sit. A session's heart-rate chart opens on this and can be switched there.", muted = true)
+        Chips(ZoneMethod.entries.map { it.key }, setOf(state.zoneMethod.key), { ZoneMethod.of(it).label }) { state.saveZoneMethod(ZoneMethod.of(it)) }
+        Spacer(Modifier.height(4.dp))
+        Body(zoneMethodExplanation(state.zoneMethod), muted = true)
+        state.zoneMessage?.let { Body(it, muted = true) }
     }
 }
 

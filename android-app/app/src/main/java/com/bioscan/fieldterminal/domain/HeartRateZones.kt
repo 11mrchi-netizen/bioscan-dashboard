@@ -107,6 +107,24 @@ fun resolveAuto(anchors: ZoneAnchors, sport: String?): ZoneMethod? {
 fun availableMethods(anchors: ZoneAnchors, sport: String?): List<ZoneMethod> =
     listOf(ZoneMethod.LTHR, ZoneMethod.HRR, ZoneMethod.MAX).filter { zoneBounds(it, anchors, sport) != null }
 
+/**
+ * The method a session's chart opens on: the person's default when this session has its inputs, else what AUTO picks
+ * (a default of LTHR on a ride shows reserve zones, for example).
+ */
+fun initialZoneMethod(default: ZoneMethod, anchors: ZoneAnchors, sport: String?): ZoneMethod? =
+    default.takeIf { it != ZoneMethod.AUTO && zoneBounds(it, anchors, sport) != null } ?: resolveAuto(anchors, sport)
+
+/** One line on what each choice of the default means (Setup › Training setup). */
+fun zoneMethodExplanation(method: ZoneMethod): String = when (method) {
+    ZoneMethod.AUTO -> "Runs use your lactate threshold when Zepp has estimated one in the last $LTHR_MAX_AGE_DAYS days; " +
+        "everything else uses heart-rate reserve, or % of maximum without a resting heart rate."
+    ZoneMethod.LTHR -> "% of your lactate-threshold heart rate (Zepp's estimate). It is a running threshold, so other " +
+        "sports use heart-rate reserve."
+    ZoneMethod.HRR -> "% of heart-rate reserve: resting + a share of the gap between resting and maximum. Moves with " +
+        "your resting heart rate."
+    ZoneMethod.MAX -> "% of maximum heart rate (50, 60, 70, 80, 90). The simplest, and the least personal."
+}
+
 fun heartRateZoneFor(hr: Double, bounds: ZoneBounds): HeartRateZone =
     ZONES.indices.lastOrNull { hr >= bounds.lowerBpm[it] }?.let { ZONES[it] } ?: HeartRateZone.BelowZ1
 

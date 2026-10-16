@@ -17,7 +17,6 @@ import com.bioscan.fieldterminal.data.model.NewRegisteredQuestion
 import com.bioscan.fieldterminal.data.model.RegisteredQuestion
 import com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow
 import com.bioscan.fieldterminal.data.model.LabResultAnalysisRow
-import com.bioscan.fieldterminal.data.model.MaxHrRow
 import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
@@ -242,27 +241,6 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // (19 real rows) than the other tables, but this stays consistent with
     // this repository's own "don't special-case the query, let the domain
     // layer's date filtering decide" convention.
-    // Session detail's HR zone breakdown (domain/HeartRateZones.kt): this
-    // account's own highest-ever recorded max_hr across every session, not
-    // limited to the 400-day Training Load window above -- a real measured
-    // ceiling, not an age-formula guess.
-    suspend fun loadPersonalMaxHr(): Double? = ReadCache.get("analysis.PersonalMaxHr") { fetchPersonalMaxHr() }
-
-    private suspend fun fetchPersonalMaxHr(): Double? =
-        supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("max_hr")) {
-                // gt(0) rather than an is-not-null filter -- excludes nulls the
-                // same way, using a filter already proven in this file, and
-                // Postgres sorts nulls first on DESC order anyway so a bare
-                // order+limit(1) would otherwise return a null row.
-                filter { gt("max_hr", 0) }
-                order("max_hr", Order.DESCENDING)
-                limit(1)
-            }
-            .decodeList<MaxHrRow>()
-            .firstOrNull()
-            ?.maxHr
-
     suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> = ReadCache.get("analysis.ExerciseSessionsForTrainingLoad") { fetchExerciseSessionsForTrainingLoad() }
 
     private suspend fun fetchExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> =

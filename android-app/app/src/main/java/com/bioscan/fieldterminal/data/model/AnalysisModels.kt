@@ -8,10 +8,6 @@ import kotlinx.serialization.Serializable
 // select a narrower column set (limit(10), no bedtime/wake_time/respiratory
 // rate) tuned for the BodyConsole readiness display, not the 60-day lookback
 // and extra sleep-timing columns the Evaluation Method Spec's formulas need.
-// AnalysisRepository.loadPersonalMaxHr()'s narrow single-column read.
-@Serializable
-data class MaxHrRow(@SerialName("max_hr") val maxHr: Double? = null)
-
 @Serializable
 data class WearableAnalysisRow(
     val date: String,

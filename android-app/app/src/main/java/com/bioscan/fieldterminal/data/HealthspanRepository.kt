@@ -111,15 +111,18 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
         }
 
         // Strength: best estimated 1RM per lift over about six months, the latest body weight, the latest logged grip.
-        val liftSets = supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("id,type,start_time,source,details")) {
-                filter {
-                    eq("type", "strength")
-                    gte("start_time", asOf.minusDays(183).toString())
+        // Cached: the User tab reloads this card on every visit (back from a skill page included).
+        val liftSets = ReadCache.get("healthspan.strength.$asOf", tables = setOf("exercise_sessions")) {
+            supabase.postgrest.from("exercise_sessions")
+                .select(columns = Columns.list("id,type,start_time,source,details")) {
+                    filter {
+                        eq("type", "strength")
+                        gte("start_time", asOf.minusDays(183).toString())
+                    }
+                    limit(1000)
                 }
-                limit(1000)
-            }
-            .decodeList<ExerciseSessionRow>()
+                .decodeList<ExerciseSessionRow>()
+        }
             .flatMap { session ->
                 val date = runCatching { OffsetDateTime.parse(session.startTime).toLocalDate() }.getOrNull() ?: return@flatMap emptyList()
                 session.details.exercises.orEmpty().flatMap { ex -> ex.sets.map { LiftSet(ex.name, it.weightKg, it.reps, date) } }

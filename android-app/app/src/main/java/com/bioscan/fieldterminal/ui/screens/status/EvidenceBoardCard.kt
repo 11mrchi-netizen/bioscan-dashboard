@@ -70,16 +70,19 @@ import kotlin.math.abs
 // opens its detail: the sentence, what was adjusted for, the checks, and its event and lag curves when they exist.
 
 private const val BOARD_INFO =
-    "Each question was fixed in advance with a no-effect zone, the smallest change that would matter (HRV 2%, resting " +
-        "heart rate 1 bpm, sleep 10 minutes). CLEAR: the 95% interval lies entirely outside the zone. NEGLIGIBLE: entirely " +
-        "inside it, which is an answer too. UNCLEAR: it crosses an edge; more days will settle it. NOT YET: too few days. " +
-        "Every row is ASSOCIATED, the second rung of the evidence ladder: adjusted for weekday, trend and the day before, but " +
-        "not a cause. Only a randomised self-experiment reaches TESTED."
+    "Each question was fixed in advance with a no-effect zone, the smallest change that would matter. CLEAR: the 95% " +
+        "interval lies beyond it. NEGLIGIBLE: inside it, also an answer. UNCLEAR: it crosses an edge. NOT YET: too few " +
+        "days. Every row is an association adjusted for weekday, trend and the day before, not a cause; only a " +
+        "randomised self-experiment tests one."
+
+private const val BOARD_DETAILS =
+    "No-effect zones: HRV 2%, resting heart rate 1 bpm, sleep 10 minutes. ASSOCIATED is the second rung of the evidence " +
+        "ladder; a randomised self-experiment reaches TESTED."
 
 @Composable
 internal fun EvidenceBoardCard(groups: List<EvidenceGroup>, evidence: EvidenceRows, onTest: ((DailyChoice) -> Unit)? = null) {
     var open by remember { mutableStateOf<EvidenceRowView?>(null) }
-    FTCard(title = "WHAT GOES WITH WHAT", info = BOARD_INFO, methodology = "relationship_engine") {
+    FTCard(title = "WHAT GOES WITH WHAT", info = BOARD_INFO, infoDetails = BOARD_DETAILS, methodology = "relationship_engine") {
         if (groups.isEmpty()) {
             Text("Not analysed yet. The nightly analysis publishes these.", style = FTType.BodySmall, color = FT.TextSecondary)
             return@FTCard
@@ -350,7 +353,7 @@ internal fun CaseCrossoverCard(
     if (rows.isEmpty()) return
     FTCard(
         title = "WHAT CAME BEFORE OFF MORNINGS",
-        info = "Each morning outside its expected range on the unfavourable side is compared with reference days on the same weekday in the same month, so habits and season cancel out. The number is how much more often the exposure was there the evening before (an odds ratio, with its 95% interval). Several exposures are screened at once, so this is exploratory: a hint of what to test next, not an answer.",
+        info = "Each off morning (outside its expected range on the unfavourable side) is compared with days on the same weekday in the same month, so habits and season cancel out. The number is how much more often the exposure came the evening before (an odds ratio, 95% interval). Many exposures are screened at once: a hint of what to test, not an answer.",
         methodology = "case_crossover",
     ) {
         Text("EXPLORATORY", style = FTType.Micro, color = FT.TextMuted)

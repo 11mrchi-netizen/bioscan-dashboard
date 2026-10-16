@@ -229,21 +229,13 @@ private fun StatLineHelp(label: String, value: String, helpTitle: String, helpBo
 private val sectionLabel = FTType.Label
 
 private const val PHENOAGE_HELP =
-    "PhenoAge (Levine et al. 2018) is a published formula combining 9 routine blood markers " +
-        "(albumin, creatinine, glucose, CRP, lymphocyte %, MCV, RDW, alkaline phosphatase, WBC) " +
-        "plus your age into a single age-equivalent, via a mortality-risk model. Computed from your " +
-        "most recent lab draw that has all 9 markers together — not necessarily your latest draw. " +
-        "A negative acceleration (younger than your real age) reflects a lower modeled mortality risk " +
-        "for this marker profile, not a guarantee about your own future health.\n\n" +
-        "Trained on a general US adult population (NHANES III), not specific to any age band or sex. " +
-        "Recalculates automatically from your latest complete lab draw every time you open this page — " +
-        "there's nothing to trigger manually, and nothing is cached from an older draw."
+    "PhenoAge (Levine 2018) turns 9 routine blood markers (albumin, creatinine, glucose, CRP, lymphocyte %, MCV, RDW, " +
+        "alkaline phosphatase, white cells) and your age into an age-equivalent through a mortality-risk model. It uses " +
+        "your latest lab draw that has all 9 together. Younger than your age means a lower modelled risk for this " +
+        "profile, not a guarantee. Built on US adults (NHANES III)."
 
 private const val CARDIO_AGE_HELP =
-    "Cardio Age compares your measured VO2max against FRIEND registry / Cooper Institute norms " +
-        "(as tabulated in ACSM's Guidelines for Exercise Testing and Prescription) for your sex, " +
-        "interpolated between published age-decade medians. A functional, not clinical, age-equivalent — " +
-        "clamped, not extrapolated, past either end of the table: fitter than the youngest bracket's " +
-        "median reads as that bracket's age (e.g. 24.5), not a fabricated age below 20.\n\n" +
-        "Reference table applies to US adults aged 20-79; needs your sex set in Setup › Profile & goals. " +
-        "Recalculates automatically from your latest synced VO2max reading every time you open this page."
+    "Cardio Age places your VO2max on published norms for your sex (FRIEND registry and Cooper Institute, as tabulated " +
+        "by ACSM) and reads the age whose median matches it: a fitness age, not a clinical one. Beyond either end of " +
+        "the table it stays at the end bracket rather than guessing. Covers adults aged 20 to 79 and needs your sex in " +
+        "Setup › Profile."

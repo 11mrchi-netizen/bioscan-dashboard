@@ -29,6 +29,20 @@ private val registryJson = Json { ignoreUnknownKeys = true }
 fun parseMetricRegistry(json: String): Map<String, MetricMethodology> =
     registryJson.decodeFromString<MetricRegistryFile>(json).metrics.associateBy { it.key }
 
+/**
+ * The opening of a methodology, for the first view of a help dialog: whole sentences up to about [maxChars] (at least
+ * the first sentence). The full text stays one tap away.
+ */
+fun summarySentences(text: String, maxChars: Int = 280): String {
+    // A sentence ends at ". ", "? " or "! " followed by a capital letter or a digit.
+    val ends = Regex("[.?!](?=\\s+[A-Z0-9])").findAll(text).map { it.range.last + 1 }.toList() + text.length
+    val first = ends.first()
+    val fit = ends.lastOrNull { it <= maxChars } ?: first
+    return text.substring(0, maxOf(first, fit)).trim()
+}
+
+fun MetricMethodology.summary(): String = summarySentences(methodology)
+
 // Same layout as methodologyText() in _shared/analysis-core/metricRegistry.ts.
 fun MetricMethodology.helpText(): String = buildList {
     add(methodology)

@@ -110,16 +110,19 @@ fun ScorecardLine(result: ScorecardResult?) {
 }
 
 private const val SCORECARDS_INFO =
-    "Each summary score is tested on your own history against the outcome it should help predict: every morning it is " +
-        "turned into a forecast from the days before, and the forecast is scored once the outcome is known (log score, or Brier " +
-        "score for yes or no). Each of its inputs is scored the same way. A summary that forecasts no better than its best " +
-        "single input adds nothing that input does not already say, so it is shown as its inputs instead. EARNS ITS PLACE: " +
-        "better than its best input. NO BETTER: not meaningfully better. UNCLEAR: not settled. NOT YET SCORED: too few days."
+    "Each summary score is tested on your own history: every morning it forecasts the outcome it is meant to help " +
+        "predict, scored once the outcome is known, and so is each of its inputs. EARNS ITS PLACE: better than its best " +
+        "single input. NO BETTER: shown as its inputs instead. UNCLEAR: not settled. NOT YET SCORED: too few days."
+
+private const val SCORECARDS_DETAILS =
+    "Forecasts use only the days before (rolling origin) and are scored with the log score, or the Brier score for a " +
+        "yes-or-no outcome. A summary that forecasts no better than its best single input adds nothing that input does " +
+        "not already say."
 
 // The Today page's overview: every composite with its scorecard, and the two the plan settled without one.
 @Composable
 fun ScorecardsCard(bundle: ScorecardBundle?, typicality: Pair<String, String>? = null) {
-    FTCard(title = "DO THE SUMMARIES EARN THEIR PLACE?", info = SCORECARDS_INFO) {
+    FTCard(title = "DO THE SUMMARIES EARN THEIR PLACE?", info = SCORECARDS_INFO, infoDetails = SCORECARDS_DETAILS) {
         if (bundle == null) {
             Text("Working out the scorecards from your history…", style = FTType.BodySmall, color = FT.TextSecondary)
             return@FTCard

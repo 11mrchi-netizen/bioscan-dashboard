@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import com.bioscan.fieldterminal.domain.helpText
+import com.bioscan.fieldterminal.domain.summary
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -229,6 +230,9 @@ fun FTCard(
     // Analysis Layer 3 / Phase 7: a metric-registry key. When set, the help button also shows that metric's methodology,
     // limits and references (after `info`, if any), so the text comes from the single registry instead of per-screen strings.
     methodology: String? = null,
+    // The longer part of `info` (thresholds, references): shown in the help dialog behind METHOD, LIMITS AND REFERENCES,
+    // with the registry's text, so the dialog opens on a short explanation.
+    infoDetails: String? = null,
     // A card that opens something (Aging -> the full profile): the press/focus feedback is drawn inside the card's shape.
     onClick: (() -> Unit)? = null,
     // Contract A3: one Hero card leads a tab; every other card is Supporting.
@@ -238,10 +242,13 @@ fun FTCard(
     val shape = RoundedCornerShape(FT.RadiusCard)
     val context = androidx.compose.ui.platform.LocalContext.current
     // remembered: the help text is a pure function of the key, so it is built once, not on every recomposition of the card
-    val registryText = androidx.compose.runtime.remember(methodology) {
-        methodology?.let { key -> com.bioscan.fieldterminal.data.MetricRegistryStore.get(context, key)?.helpText() }
+    val registryEntry = androidx.compose.runtime.remember(methodology) {
+        methodology?.let { key -> com.bioscan.fieldterminal.data.MetricRegistryStore.get(context, key) }
     }
-    val helpBody = listOfNotNull(info, registryText).joinToString("\n\n").ifBlank { null }
+    // The dialog opens on the card's own short text (or, without one, the registry's opening sentences); the details and
+    // the registry's full methodology, limits and references are one tap further.
+    val helpBody = (info ?: registryEntry?.summary())?.ifBlank { null }
+    val helpDetails = listOfNotNull(infoDetails, registryEntry?.helpText()).joinToString("\n\n").ifBlank { null }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -267,7 +274,7 @@ fun FTCard(
                 style = FTType.CardTitle,
                 modifier = Modifier.weight(1f),
             )
-            helpBody?.let { InfoHelpButton(title = title, body = it) }
+            helpBody?.let { InfoHelpButton(title = title, body = it, details = helpDetails) }
         }
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             content()

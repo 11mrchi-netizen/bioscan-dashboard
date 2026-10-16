@@ -47,10 +47,12 @@ import java.time.LocalDate
 // ringed, illness and source changes marked.
 
 private const val BAND_INFO =
-    "Each morning is compared with a forecast made before it: your usual level for that weekday, learnt from your own " +
-        "history. The grey band holds 8 mornings in 10 when nothing has changed; the line under the chart says how often it " +
-        "actually did. One morning outside it is ordinary and is not flagged. A flag needs a morning beyond the band 99 in " +
-        "100 fall inside, or several mornings in a row on one side. A new device starts the band again, wide at first. " +
+    "Each morning is compared with a forecast made before it from your usual level for that weekday. The grey band holds " +
+        "8 mornings in 10 when nothing has changed. One morning outside it is ordinary; a flag needs a morning beyond " +
+        "the 99-in-100 band, or several in a row on one side."
+
+private const val BAND_DETAILS =
+    "The line under the chart says how often the band actually held. A new device starts the band again, wide at first. " +
         "Days inside a logged illness are shown but not judged."
 
 private val METRIC_ORDER = listOf("hrv", "rhr", "sleep_hours")
@@ -74,7 +76,7 @@ internal fun ThisMorningCard(
     val ordered = METRIC_ORDER.mapNotNull { key -> metrics[key]?.let { key to it } }
     val readouts = ordered.mapNotNull { (_, m) -> morningReadout(m.row.payload, today, m.readings.lastOrNull()) }
     val lead = leadReadout(readouts)
-    FTCard(title = "THIS MORNING", info = BAND_INFO, emphasis = FTCardEmphasis.Hero, modifier = modifier) {
+    FTCard(title = "THIS MORNING", info = BAND_INFO, infoDetails = BAND_DETAILS, emphasis = FTCardEmphasis.Hero, modifier = modifier) {
         ordered.forEach { (key, m) ->
             val readout = readouts.firstOrNull { it.metric == key }
             BandSection(METRIC_TITLES[key] ?: key.uppercase(), m, readout, today, chart = readout != null && readout === lead)
@@ -97,7 +99,7 @@ internal fun ThisMorningCard(
 internal fun CardioMorningCard(metrics: Map<String, BandInputs>, today: LocalDate, modifier: Modifier = Modifier) {
     val ordered = listOf("hrv", "rhr").mapNotNull { key -> metrics[key]?.let { key to it } }
     if (ordered.isEmpty()) return
-    FTCard(title = "THIS MORNING", info = BAND_INFO, emphasis = FTCardEmphasis.Hero, modifier = modifier) {
+    FTCard(title = "THIS MORNING", info = BAND_INFO, infoDetails = BAND_DETAILS, emphasis = FTCardEmphasis.Hero, modifier = modifier) {
         ordered.forEach { (key, m) ->
             val readout = morningReadout(m.row.payload, today, m.readings.lastOrNull())
             BandSection(METRIC_TITLES[key] ?: key.uppercase(), m, readout, today, chart = true)

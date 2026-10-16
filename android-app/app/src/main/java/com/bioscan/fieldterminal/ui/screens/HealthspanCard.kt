@@ -43,7 +43,7 @@ fun HealthspanCard(summary: HealthspanSummary?, failed: Boolean = false) {
     var selected by remember { mutableStateOf<Int?>(null) }
     FTCard(
         title = "HEALTHSPAN",
-        info = "A general grade on this page only: the share of the factors that could be assessed from your own data and that are favorable. A factor is assessed only when its input is recent, complete, in a known unit and not conflicting; otherwise it says what is missing. In the chart, the outer ring is favorable, the middle neutral and the inner an opportunity; a hollow dashed marker means not assessed. Product-defined and provisional, not a medical assessment.",
+        info = "A general grade: the share of the factors that could be assessed from your own data and that are favorable. A factor is assessed only when its input is recent, complete and consistent; otherwise it says what is missing. Chart: outer ring favorable, middle neutral, inner an opportunity, hollow dashed not assessed. Product-defined, not a medical assessment.",
         methodology = "healthspan",
     ) {
         if (summary == null) {

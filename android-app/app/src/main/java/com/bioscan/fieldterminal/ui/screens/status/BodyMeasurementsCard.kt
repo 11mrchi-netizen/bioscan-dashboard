@@ -39,15 +39,18 @@ import java.time.format.DateTimeFormatter
 private val DAY = DateTimeFormatter.ofPattern("d MMM")
 
 private const val INFO =
-    "Once a month, in the same conditions: grip, tape girths (neck to calf, both sides of each limb) and three skinfolds " +
-        "on the right side that you can pinch yourself (abdominal, suprailiac, front thigh). Each site is read two or " +
-        "three times; the value is the median. The repeats give each site's typical error, never taken as smaller " +
-        "than finding the landmark again on another day allows (0.5 cm tape, 1 mm skinfold). A change counts as UP or " +
-        "DOWN only when it is larger than 2.77 typical errors, the smallest real difference at 95%; otherwise it is " +
-        "WITHIN ERROR. Waist-to-height under 0.5 is the threshold the evidence supports (Ashwell 2012). Body fat from " +
-        "the tape (US Navy, Hodgdon and Beckett 1984) and from the skinfolds (Jackson and Pollock 1978, men with the " +
-        "chest fold) are population equations, each a few percentage points off for an individual: follow one method's " +
-        "trend, not the gap between methods."
+    "Once a month, in the same conditions: grip, tape girths and three skinfolds you can pinch yourself. Each site is " +
+        "read two or three times and the median kept. A change shows as UP or DOWN only when it is bigger than that " +
+        "site's measurement error, otherwise WITHIN ERROR. Body-fat percentages are rough estimates: follow one " +
+        "method's trend, not the gap between methods."
+
+private const val INFO_DETAILS =
+    "Sites: neck to calf, both sides of each limb; skinfolds on the right side (abdominal, suprailiac, front thigh). " +
+        "Each site's typical error comes from the repeats, never taken as smaller than finding the landmark again on " +
+        "another day allows (0.5 cm tape, 1 mm skinfold). UP or DOWN means beyond 2.77 typical errors, the smallest " +
+        "real difference at 95%. Waist-to-height under 0.5 is the threshold the evidence supports (Ashwell 2012). Body " +
+        "fat from the tape: US Navy equation (Hodgdon and Beckett 1984); from skinfolds: Jackson and Pollock 1978, for " +
+        "men who took the chest fold. Each is a few percentage points off for one person."
 
 @Composable
 fun BodyMeasurementsCard(
@@ -58,7 +61,7 @@ fun BodyMeasurementsCard(
     scaleBodyFat: Double?,
     onStart: () -> Unit,
 ) {
-    FTCard(title = "BODY MEASUREMENTS", info = INFO) {
+    FTCard(title = "BODY MEASUREMENTS", info = INFO, infoDetails = INFO_DETAILS) {
         val latest = history.maxByOrNull { it.occurredAt }
         Text(
             latest?.let { "Last check-in ${it.date.format(DAY)} · next due ${bodyCheckinDueOn(it.date)!!.format(DAY)}" }

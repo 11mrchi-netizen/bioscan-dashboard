@@ -34,10 +34,9 @@ import java.time.LocalDate
 // BENEFIT, CLEAR HARM, NO MEANINGFUL EFFECT, UNCLEAR) -- the TESTED rung of the evidence ladder. Deleting is soft.
 
 private const val EXPERIMENTS_INFO =
-    "Randomised self-experiments: the order of the with- and without-periods (or days) was drawn when you registered, so a " +
-        "trend, a bad week or a season can't line up with it by design. Each answer is judged against the smallest change you " +
-        "said would matter: CLEAR BENEFIT or CLEAR HARM when the 95% interval lies beyond it, NO MEANINGFUL EFFECT when it lies " +
-        "inside, UNCLEAR when it crosses an edge. It answers for you, under the conditions you tested."
+    "Randomised self-experiments: the order of the with- and without-periods (or days) was drawn at registration, so a " +
+        "trend or a bad week can't line up with it. CLEAR BENEFIT or CLEAR HARM: the 95% interval lies beyond the " +
+        "smallest change you said would matter. NO MEANINGFUL EFFECT: inside it. UNCLEAR: it crosses an edge."
 
 @Composable
 fun ExperimentsSection(

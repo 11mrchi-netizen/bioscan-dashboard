@@ -9,6 +9,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { computeEffort } from "./effort.ts";
 import { decodeMinuteHr, type HrMinutePoint } from "./minuteHr.ts";
+import { exerciseTypeForZeppSport, summaryDistanceM, takesDistance, zeppDistanceKm } from "./workoutDistance.ts";
 import { buildZeppExercises, doneSets, exercisesFingerprint, parseLapSets, planStrengthDetails } from "./strengthImport.ts";
 
 const corsHeaders = {
@@ -387,22 +388,6 @@ function numOrNull(v: unknown): number | null {
 // this is a single-user, Taiwan-based account, not a guess made blind.
 const FALLBACK_TIMEZONE = "Asia/Taipei";
 
-// Confirmed codes only: 1=run, 7=trail run, 9=outdoor cycling, 52=strength.
-// Anything else is 'other' until DAV-268's full mapping lands.
-function exerciseTypeForZeppSport(sportType: string): string {
-  switch (sportType) {
-    case "1":
-    case "7":
-      return "run";
-    case "9":
-      return "ride";
-    case "52":
-      return "strength";
-    default:
-      return "other";
-  }
-}
-
 function toLocalLabeledUtcIso(realUtcMs: number, timeZone: string): string {
   const dtf = new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -480,7 +465,8 @@ function extractWorkoutRefs(historyResponse: unknown): WorkoutRef[] {
       calorieKcal: numOrNull(e.calorie),
       altitudeAscendM: numOrNull(e.altitude_ascend),
       avgPaceSecPerKm: numOrNull(e.avg_pace),
-      distanceSummaryM: numOrNull(e.distance),
+      // Zepp's summary carries `dis` / `highPrecisionDistance` (metres); there is no `distance` key (workoutDistance.ts).
+      distanceSummaryM: summaryDistanceM(e),
       realStartMs: hasEnd && hasRun ? (endSec - runSec) * 1000 : 0,
     });
   }
@@ -849,13 +835,14 @@ Deno.serve(async (req: Request) => {
       const startMs = new Date(ref.startTimeIso).getTime();
       const { data: matches } = await supabase
         .from("exercise_sessions")
-        .select("id")
+        .select("id,type")
         .eq("user_id", user.id)
         .gte("start_time", new Date(startMs - RECONCILE_TOLERANCE_MS).toISOString())
         .lte("start_time", new Date(startMs + RECONCILE_TOLERANCE_MS).toISOString())
         .limit(1);
 
       let exerciseSessionId: number | null = matches?.[0]?.id ?? null;
+      const matchedType: string = matches?.[0]?.type ?? exerciseTypeForZeppSport(ref.sportType);
 
       if (exerciseSessionId === null) {
         // Unmatched: this workout isn't in Health Connect yet. Insert minimally
@@ -918,12 +905,18 @@ Deno.serve(async (req: Request) => {
       // GPS ground truth (repeatedly cross-checked this session) -- write it
       // back outright, same "Zepp wins when present" principle
       // mergePreferZepp() already applies to the per-second series client-side.
-      const zeppDistanceKm = decoded?.distanceKm?.at(-1)?.value;
-      if (exerciseSessionId !== null && zeppDistanceKm && zeppDistanceKm > 0) {
+      // Zepp's distance: the GPS track, else the summary's (a treadmill has no track). It also goes to any duplicate
+      // row of the same session (same type, same start within the tolerance): the source app wrote some workouts to
+      // Health Connect twice, and correcting one copy left the run list keeping the other (workoutDistance.ts).
+      const zeppKm = zeppDistanceKm(decoded?.distanceKm?.at(-1)?.value, ref.distanceSummaryM);
+      if (exerciseSessionId !== null && zeppKm !== null && takesDistance(matchedType)) {
         const { error: distanceUpdateError } = await supabase
           .from("exercise_sessions")
-          .update({ distance_km: zeppDistanceKm })
-          .eq("id", exerciseSessionId);
+          .update({ distance_km: zeppKm })
+          .eq("user_id", user.id)
+          .eq("type", matchedType)
+          .gte("start_time", new Date(startMs - RECONCILE_TOLERANCE_MS).toISOString())
+          .lte("start_time", new Date(startMs + RECONCILE_TOLERANCE_MS).toISOString());
         if (distanceUpdateError) throw new Error(`exercise_sessions distance update failed: ${distanceUpdateError.message}`);
       }
 

@@ -51,6 +51,25 @@ metadata" ask, acceptable because today's extractor changes (endpoint fixes, hea
 so far always affected the whole function's request shape, never one metric's decode logic in
 isolation.
 
+## Run distance: Zepp's own, on every copy
+
+Health Connect stored most runs from January to mid-August 2026 at about twice their real distance
+(a 37.4 km "longest run" Zepp has as 18.4 km; a 2:45/km "fastest run" that was a treadmill session).
+The source app wrote some workouts, and their distance records, twice (some sessions are stored twice
+with identical times), and the per-app rule (largest single app's total) cannot see duplicates from
+one app. Fixes (`zepp-extract/workoutDistance.ts`, `domain/HealthConnectDistance.kt`):
+
+- The Zepp sync writes Zepp's distance: the GPS track's, else the summary's. The summary distance was
+  read from a `distance` key that sport_history entries do not have; they carry `dis` and
+  `highPrecisionDistance` (metres). A treadmill run (no track) is now corrected too.
+- The distance goes to every row of the same session (same type, start within two minutes), so a
+  duplicated session can no longer keep a wrong copy.
+- Health Connect ingestion counts each stretch of time once within one app, and a record reaching
+  outside the workout only for its part inside.
+- Settings › Connected services › RE-CHECK RUN HISTORY WITH ZEPP re-reads every workout back to the
+  first run, 31 days per call: the one-off repair for the stored history. Runs Zepp does not have keep
+  their Health Connect distance.
+
 ## Strength exercises: who owns the list
 
 A strength workout's `exercise_sessions.details.exercises` is written by the Zepp import from the

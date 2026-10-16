@@ -59,6 +59,9 @@ sealed class ZeppSyncResult {
     data class Failed(val message: String) : ZeppSyncResult()
 }
 
+@Serializable
+private data class FirstWorkoutRow(@SerialName("start_time") val startTime: String)
+
 class ZeppRepository(private val supabase: SupabaseClient) {
     // Default is a small window for the automatic on-app-open sync
     // (ZeppSyncWorker) -- keeping recent workouts current, not a backfill.
@@ -69,6 +72,36 @@ class ZeppRepository(private val supabase: SupabaseClient) {
     suspend fun sync(daysBack: Long = 3, metrics: String? = "sport_history,stress,band_data"): ZeppSyncResult {
         val to = LocalDate.now()
         return syncRange(to.minusDays(daysBack), to, metrics)
+    }
+
+    /** The day of the oldest stored workout of [type] (null when there is none). */
+    suspend fun earliestWorkoutDate(type: String = "run"): LocalDate? =
+        supabase.postgrest.from("exercise_sessions")
+            .select(columns = Columns.list("start_time")) {
+                filter { eq("type", type) }
+                order("start_time", Order.ASCENDING)
+                limit(1)
+            }
+            .decodeList<FirstWorkoutRow>()
+            .firstOrNull()
+            ?.let { runCatching { LocalDate.parse(it.startTime.take(10)) }.getOrNull() }
+
+    /**
+     * Re-reads every workout from [from] to [to] from Zepp, 31 days per call, so each one Zepp has gets Zepp's own
+     * distance (GPS, or the summary for a treadmill) on every stored copy of it. The one-off repair for the runs Health
+     * Connect stored at about twice their distance (January to mid-August 2026); safe to run again.
+     */
+    suspend fun resyncWorkoutHistory(from: LocalDate, to: LocalDate = LocalDate.now(), onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): ZeppSyncResult {
+        val windows = com.bioscan.fieldterminal.domain.syncWindows(from, to)
+        windows.forEachIndexed { i, (start, end) ->
+            onProgress(i, windows.size)
+            when (val result = syncRange(start, end, "sport_history")) {
+                is ZeppSyncResult.Failed -> return ZeppSyncResult.Failed("$start to $end: ${result.message}")
+                is ZeppSyncResult.Success -> Unit
+            }
+        }
+        onProgress(windows.size, windows.size)
+        return ZeppSyncResult.Success("${windows.size} windows from $from")
     }
 
     // A fixed date range (at most 31 days, the server's cap): RE-IMPORT FROM ZEPP on one workout pulls the days around it.

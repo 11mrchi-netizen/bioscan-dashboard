@@ -341,6 +341,28 @@ private fun ZeppCard(scope: CoroutineScope) {
                 }
             }
         }
+        // The one-off repair for runs Health Connect stored at about twice their distance (Jan to mid-Aug 2026): every
+        // workout back to the first run is read from Zepp again, which writes Zepp's own distance on each copy.
+        var historyProgress by remember { mutableStateOf<String?>(null) }
+        var historyRunning by remember { mutableStateOf(false) }
+        Text(
+            "Runs from Health Connect were stored at about twice their distance for part of the history. This reads every " +
+                "workout back to your first run from Zepp again and keeps Zepp's distance. Takes a few minutes; safe to repeat.",
+            style = FTType.Caption,
+            color = FT.TextSecondary,
+        )
+        FTButton(label = if (historyRunning) "RE-CHECKING…" else "RE-CHECK RUN HISTORY WITH ZEPP", enabled = !historyRunning) {
+            scope.launchSafe(onError = { e -> historyProgress = "Stopped: ${e.message}" }, onDone = { historyRunning = false }) {
+                historyRunning = true
+                val from = zeppRepository.earliestWorkoutDate() ?: java.time.LocalDate.now().minusDays(30)
+                val result = zeppRepository.resyncWorkoutHistory(from) { done, total -> historyProgress = "Month $done of $total…" }
+                historyProgress = when (result) {
+                    is com.bioscan.fieldterminal.data.ZeppSyncResult.Success -> "Done: workouts since $from re-checked with Zepp."
+                    is com.bioscan.fieldterminal.data.ZeppSyncResult.Failed -> "Stopped at ${result.message}"
+                }
+            }
+        }
+        historyProgress?.let { Text(it, style = FTType.Caption, color = FT.TextMuted) }
         // Writes the next 7 days of planned sessions to Zepp's calendar: a real feature, so it stays next to SYNC NOW.
         var probing by remember { mutableStateOf(false) }
         var probeResult by remember { mutableStateOf<String?>(null) }

@@ -36,27 +36,34 @@ ever) and hikes (no HR at all, only 2 real sessions).
 
 ### HR/TRIMP
 
-Needs: session `avg_hr`, a max-HR reference (session `max_hr`, or a fallback), and resting HR
-(`wearable_daily.rhr`, 42% daily coverage) for HR-reserve normalization.
+Needs: session `avg_hr`, the person's maximum heart rate and resting heart rate (`wearable_daily.rhr`) for
+heart-rate-reserve normalization.
 
-Degradation ladder when `max_hr` is missing (true for 100% of manual runs and 100% of hikes):
-1. Session `max_hr` if present (HC-sourced sessions, 88–98% of the time).
-2. **Correction from implementation (DAV-58):** an age-estimated max-HR fallback was planned here,
-   but this account has no age/birthdate field anywhere in the schema — there's nothing to estimate
-   from. `trimp()` (`domain/EnduranceLoad.kt`) only computes when a session's own measured `max_hr`
-   is present; there is no fallback step. Adding one is real future work gated on an age field
-   existing at all, not a DAV-58 gap.
-3. If `max_hr` is absent and `avg_hr` is also absent (hikes: 0% HR coverage) — skip TRIMP for that
-   session entirely and fall through to sRPE. Do not synthesize an HR value from RPE; that's what
-   the sRPE model is for, kept as its own separate series rather than smuggled into "TRIMP."
+**October 2026 (heart-rate zones work):** the maximum is no longer the session's own `max_hr`. Dividing by the
+session's peak made an easy hour at 148 bpm that peaked at 160 score about 187 instead of about 91 (against resting
+53 and a personal maximum of 196), and it made every session look equally hard. Both anchors are now the person's as
+of the session's date, from rows each engine already loads:
+- maximum: the second-highest plausible (120–230) session maximum of the 24 months up to the date, so one optical
+  spike cannot set it (the highest when only one exists);
+- resting: the median of the 30 days up to the latest reading on or before the date (before the first reading, the
+  median of the first 30 days that have one).
+
+The fraction is capped at 1. A session needs `avg_hr` and a duration above 0; its own `max_hr` is no longer needed,
+so sessions without one now get a TRIMP too. Without `avg_hr` (hikes) TRIMP is skipped and the session falls through
+to sRPE; no heart rate is synthesized from RPE. Male coefficients (0.64, 1.92) for everyone; the female pair (0.86,
+1.67) is not wired to the profile yet. The same formula, with shared golden values, runs on Android
+(`domain/EnduranceLoad.kt` `TrimpAnchors`), on the server (`analysis-core/trainingLoad.ts`, `CORE_VERSION`
+3.0.0-alpha.7) and in the console (`src/lib/training.ts`).
 
 ### Duration / zone exposure
 
-Session `duration_min` is reliably present. Per-session HR-zone *exposure* (minutes in each zone)
-cannot be derived from current data — only a sparse **daily** aggregate exists
-(`wearable_daily.zone_minutes`, 3% coverage, and it's a whole-day number, not session-scoped). This
-adapter is therefore duration-only for now; zone exposure stays a documented gap, not solved by
-inventing a per-session estimate from a daily number that predates or postdates the session.
+Session `duration_min` is reliably present. Per-session zone exposure now exists for Zepp workouts: the per-second
+heart rate is stored with the workout and `zepp_workout_detail.hr_histogram` keeps seconds per bpm (migration
+20261022, written by zepp-extract `hrHistogram.ts`). Zones are placed by % of maximum, heart-rate reserve or
+lactate-threshold heart rate with anchors as of the session's date (`domain/HeartRateZones.kt`, registry `hr_zones`);
+the session chart shows time in zone and Training › Load shows the weekly low / moderate / high split (registry
+`intensity_distribution`). Health-Connect-only sessions still have no stored per-sample series; the daily
+`wearable_daily.zone_minutes` aggregate is not used for session exposure.
 
 ### Pace / speed
 

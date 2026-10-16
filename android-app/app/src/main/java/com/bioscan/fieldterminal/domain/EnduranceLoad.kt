@@ -7,8 +7,8 @@ import java.time.LocalDate
 // independent named functions per DAV-53/55's "never collapse dimensions
 // prematurely" principle, not combined into one score. See
 // docs/analysis-layer-2/04-endurance-metric-adapters.md for the full design
-// this implements; duration/zone exposure from that doc is skipped here too
-// (only a sparse daily aggregate exists, no per-session number to compute).
+// this implements. Zone exposure lives in HeartRateZones.kt and
+// IntensityDistribution.kt, from the per-second heart rate of Zepp workouts.
 
 // Deliberately decoupled from any specific Supabase row shape (unlike
 // TrainingRepository's ExerciseSessionRow, which is that screen's own

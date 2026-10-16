@@ -6,14 +6,14 @@
       "key": "heart_rate_instant",
       "docName": "Heart rate (instantaneous)",
       "kind": "raw",
-      "methodology": "Per-sample heart rate as reported by the watch. Not stored per sample in the app database; only session-level and daily aggregates are kept.",
+      "methodology": "Per-sample heart rate as reported by the watch. For Zepp workouts the per-second series is stored with the workout (zepp_workout_detail.decoded) and drawn on the session's chart, colour-coded by zone; the workout's seconds per bpm are also kept as a small histogram for the weekly intensity split. Other sessions keep only session-level and daily aggregates; Health Connect series are read on demand.",
       "limitations": [
         "Optical heart-rate sensors lose accuracy during high-intensity, irregular-motion and cold-weather activity.",
-        "Not available at sample resolution in this app."
+        "Sessions without a Zepp record have no stored per-sample series."
       ],
       "references": [],
       "productDefined": false,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "1.1.0"
     },
     {
       "key": "heart_rate_session_avg",
@@ -412,7 +412,7 @@
       "key": "training_load",
       "docName": "Training load (CTL/ATL/TSB)",
       "kind": "modeled",
-      "methodology": "Session load = minutes x RPE when an RPE was logged, otherwise Banister's TRIMP from average and maximum heart rate against the latest resting heart rate; a session with neither contributes nothing, nothing is imputed. Loads are summed per day. Fitness (CTL) and fatigue (ATL) are exponentially weighted averages with spans of 42 and 7 days (alpha = 2 / (span + 1)), and form (TSB) is yesterday's CTL minus ATL. Since October 2026 the spans can be your own: every night a pair is fitted to forecast tomorrow morning's ln HRV (from today's ln HRV, the weekday, fitness and fatigue) and tested on weeks the fit never saw (rolling origin, log score); it replaces 42 and 7, in the app and the console alike, only when it forecasts better (the 95% Newey-West interval of the daily score difference above zero, the PREDICTIVE rung). CTL needs 42 days of history.",
+      "methodology": "Session load = minutes x RPE when an RPE was logged, otherwise Banister's TRIMP from average heart rate against the person's maximum and resting heart rate as of the session's date (see TRIMP); a session with neither contributes nothing, nothing is imputed. Loads are summed per day. Fitness (CTL) and fatigue (ATL) are exponentially weighted averages with spans of 42 and 7 days (alpha = 2 / (span + 1)), and form (TSB) is yesterday's CTL minus ATL. Since October 2026 the spans can be your own: every night a pair is fitted to forecast tomorrow morning's ln HRV (from today's ln HRV, the weekday, fitness and fatigue) and tested on weeks the fit never saw (rolling origin, log score); it replaces 42 and 7, in the app and the console alike, only when it forecasts better (the 95% Newey-West interval of the daily score difference above zero, the PREDICTIVE rung). CTL needs 42 days of history.",
       "limitations": [
         "The spans are population conventions unless your own pair beat them on held-out weeks, and a personal pair is fitted to HRV, not to performance.",
         "Sessions with neither an RPE nor heart rate understate load.",
@@ -437,24 +437,30 @@
         }
       ],
       "productDefined": false,
-      "methodologyVersion": "2.0.0"
+      "methodologyVersion": "2.1.0"
     },
     {
       "key": "trimp",
       "docName": "TRIMP",
       "kind": "modeled",
-      "methodology": "Heart-rate-reserve weighted training impulse. Specified but not yet implemented in the app.",
+      "methodology": "Banister's training impulse: minutes x heart-rate-reserve fraction x 0.64 x e^(1.92 x fraction), with the fraction (average - resting) / (maximum - resting) capped at 1. The maximum and resting heart rate are the person's as of the session's date: the second-highest session maximum of the 24 months up to it (so one optical spike cannot set it) and the 30-day median resting heart rate. It is the load of every session without an RPE. Until October 2026 the fraction divided by the session's own maximum, which made easy sessions score about twice what they should.",
       "limitations": [
-        "Needs per-minute heart rate and a maximum heart rate; not available for most sessions."
+        "Average heart rate hides how the session was spread: an interval session and a steady one with the same average score alike.",
+        "Male coefficients (0.64, 1.92) are used for everyone; the female pair (0.86, 1.67) is not applied yet.",
+        "The maximum is the highest values the watch saw, not a tested maximum, and drifts with what the sessions reached."
       ],
       "references": [
         {
           "citation": "Banister EW, Calvert TW. Planning for future performance: implications for long term training. Can J Appl Sport Sci 1980;5(3):170-176.",
           "doi": null
+        },
+        {
+          "citation": "Banister EW. Modeling elite athletic performance. In: MacDougall JD, Wenger HA, Green HJ, eds. Physiological Testing of the High-Performance Athlete. 2nd ed. Champaign, IL: Human Kinetics; 1991:403-424.",
+          "doi": null
         }
       ],
       "productDefined": false,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "2.0.0"
     },
     {
       "key": "threshold_intensity",
@@ -953,6 +959,52 @@
         {
           "citation": "Jackson AS, Pollock ML. Generalized equations for predicting body density of men. Br J Nutr 1978;40(3):497-504.",
           "doi": "10.1079/BJN19780152"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "hr_zones",
+      "docName": "Heart-rate zones",
+      "kind": "derived",
+      "methodology": "Five zones placed three ways, switchable on a session's chart with a default in Training setup. % of maximum: zones start at 50, 60, 70, 80 and 90% of the maximum. Heart-rate reserve (Karvonen): resting + 50 to 90% of (maximum - resting). Lactate threshold (Friel's run zones): Z2 from 85%, Z3 from 90%, Z4 from 95% and Z5 from 100% of Zepp's lactate-threshold heart rate, for runs only. Auto uses the threshold for a run when Zepp has estimated one in the last 120 days, otherwise heart-rate reserve, otherwise % of maximum. The anchors are taken as of the session's date: the second-highest session maximum of the 24 months up to it, the 30-day median resting heart rate and the latest threshold estimate.",
+      "limitations": [
+        "The maximum is the highest values the watch saw, not a tested maximum.",
+        "Zepp's lactate-threshold heart rate is an estimate from runs; it is not used for other sports.",
+        "Zone edges are conventions; the same bpm can be easy one day and hard on a hot or tired one."
+      ],
+      "references": [
+        {
+          "citation": "Karvonen MJ, Kentala E, Mustala O. The effects of training on heart rate; a longitudinal study. Ann Med Exp Biol Fenn 1957;35(3):307-315.",
+          "doi": null
+        },
+        {
+          "citation": "Friel J. The Triathlete's Training Bible. 4th ed. Boulder, CO: VeloPress; 2016.",
+          "doi": null
+        },
+        {
+          "citation": "Mann T, Lamberts RP, Lambert MI. Methods of prescribing relative exercise intensity: physiological and practical considerations. Sports Med 2013;43(7):613-625.",
+          "doi": "10.1007/s40279-013-0045-x"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "intensity_distribution",
+      "docName": "Intensity distribution",
+      "kind": "derived",
+      "methodology": "Each week's run, ride and hike minutes split as low (below zone 3), moderate (zone 3) and high (zones 4 and 5), from each workout's per-second heart rate placed in the zones of the default method with the anchors of its date. Only workouts with a Zepp heart-rate record are counted; the card says how many of the week's endurance sessions that is. Descriptive: endurance athletes typically spend about 80% of their training at low intensity, which the card mentions without setting a target.",
+      "limitations": [
+        "Five zones folded into three bands approximate the three-zone model, which is defined by the two lactate or ventilatory thresholds.",
+        "Heart rate lags effort in short intervals, so time in the high band understates very short hard efforts.",
+        "Strength sessions are left out."
+      ],
+      "references": [
+        {
+          "citation": "Seiler S. What is best practice for training intensity and duration distribution in endurance athletes? Int J Sports Physiol Perform 2010;5(3):276-291.",
+          "doi": "10.1123/ijspp.5.3.276"
         }
       ],
       "productDefined": false,

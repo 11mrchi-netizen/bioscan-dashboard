@@ -10,12 +10,12 @@ import java.time.temporal.ChronoUnit
 // dashboard carries the old metric, untouched by this phase (see ROADMAP.md's
 // Phase A context: this effort is mobile-first, the web dashboard stays as-is).
 //
-// session_load = duration_minutes * sRPE, per the spec's own formula. The
-// offered alternative (HR-based TRIMP) needs per-minute heart-rate data this
-// app doesn't persist for logged sessions (only avg_hr per session survives
-// to Supabase), so sRPE is the only one actually computable from stored
-// data. A session with no logged RPE contributes nothing to that day's
-// load -- never impute, same convention every other category already uses.
+// session_load = duration_minutes * sRPE when an RPE was logged, otherwise
+// Banister's TRIMP from the session's average heart rate against the
+// person's maximum and resting heart rate as of its date (EnduranceLoad.kt,
+// built by AnalysisRepository.buildTrainingSessionLoads). A session with
+// neither contributes nothing to that day's load -- never impute, same
+// convention every other category already uses.
 //
 // GAP (Grade Adjusted Pace) and Efficiency Factor are not computed here
 // (this file only does load). For Zepp-synced runs they are computed in the

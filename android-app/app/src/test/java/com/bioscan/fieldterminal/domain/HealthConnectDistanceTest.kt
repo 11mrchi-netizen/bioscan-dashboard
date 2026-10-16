@@ -2,7 +2,6 @@ package com.bioscan.fieldterminal.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import java.time.LocalDate
 
 // Synthetic records only.
 class HealthConnectDistanceTest {
@@ -39,14 +38,5 @@ class HealthConnectDistanceTest {
         )
         assertEquals(6000.0, workoutDistanceMeters(byApp, 0, 30 * min), 1e-6)
         assertEquals(0.0, workoutDistanceMeters(emptyMap(), 0, 30 * min), 1e-6)
-    }
-
-    @Test
-    fun `history is re-read from Zepp 31 days at a time, oldest first`() {
-        val w = syncWindows(LocalDate.parse("2026-01-01"), LocalDate.parse("2026-03-05"))
-        assertEquals(LocalDate.parse("2026-01-01") to LocalDate.parse("2026-01-31"), w.first())
-        assertEquals(LocalDate.parse("2026-03-04") to LocalDate.parse("2026-03-05"), w.last())
-        assertEquals(3, w.size)
-        assertEquals(emptyList<Pair<LocalDate, LocalDate>>(), syncWindows(LocalDate.parse("2026-02-01"), LocalDate.parse("2026-01-01")))
     }
 }

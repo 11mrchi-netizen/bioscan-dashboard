@@ -29,6 +29,7 @@ import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.ZeppRepository
 import com.bioscan.fieldterminal.data.ZeppSyncStateRow
+import com.bioscan.fieldterminal.domain.describe
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
 import com.bioscan.fieldterminal.ui.components.ClearChip
@@ -287,6 +288,7 @@ private fun HealthConnectCard(context: android.content.Context) {
 
 @Composable
 private fun ZeppCard(scope: CoroutineScope) {
+    val context = LocalContext.current
     val zeppRepository = remember { ZeppRepository(SupabaseClientProvider.client) }
     var zeppStatus by remember { mutableStateOf<ZeppSyncStateRow?>(null) }
     var zeppStatusLoaded by remember { mutableStateOf(false) }
@@ -341,28 +343,47 @@ private fun ZeppCard(scope: CoroutineScope) {
                 }
             }
         }
-        // The one-off repair for runs Health Connect stored at about twice their distance (Jan to mid-Aug 2026): every
-        // workout back to the first run is read from Zepp again, which writes Zepp's own distance on each copy.
-        var historyProgress by remember { mutableStateOf<String?>(null) }
-        var historyRunning by remember { mutableStateOf(false) }
+        // The whole Zepp history (workouts, daily band data, stress), pulled in the background back to where the account
+        // starts (ZeppHistoryWorker, domain/ZeppHistoryPull.kt). Progress is read from the worker's store every few seconds.
+        val historyStore = remember { com.bioscan.fieldterminal.data.ZeppHistoryStore(context) }
+        var historyState by remember { mutableStateOf(historyStore.load()) }
+        var historyRunning by remember { mutableStateOf(historyStore.running()) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                historyState = historyStore.load()
+                historyRunning = historyStore.running()
+                kotlinx.coroutines.delay(2_000)
+            }
+        }
         Text(
-            "Runs from Health Connect were stored at about twice their distance for part of the history. This reads every " +
-                "workout back to your first run from Zepp again and keeps Zepp's distance. Takes a few minutes; safe to repeat.",
+            "Pulls everything Zepp has, back to the start of your account: workouts (with Zepp's own distances), sleep, " +
+                "resting heart rate, steps, minute heart rate and stress. Runs in the background, a week per step, and can " +
+                "take a while for a long history. For days already stored, Zepp's values replace the ones from Health Connect.",
             style = FTType.Caption,
             color = FT.TextSecondary,
         )
-        FTButton(label = if (historyRunning) "RE-CHECKING…" else "RE-CHECK RUN HISTORY WITH ZEPP", enabled = !historyRunning) {
-            scope.launchSafe(onError = { e -> historyProgress = "Stopped: ${e.message}" }, onDone = { historyRunning = false }) {
-                historyRunning = true
-                val from = zeppRepository.earliestWorkoutDate() ?: java.time.LocalDate.now().minusDays(30)
-                val result = zeppRepository.resyncWorkoutHistory(from) { done, total -> historyProgress = "Month $done of $total…" }
-                historyProgress = when (result) {
-                    is com.bioscan.fieldterminal.data.ZeppSyncResult.Success -> "Done: workouts since $from re-checked with Zepp."
-                    is com.bioscan.fieldterminal.data.ZeppSyncResult.Failed -> "Stopped at ${result.message}"
+        historyState?.let { Text(it.describe(historyRunning), style = FTType.Caption, color = if (it.error != null) FT.Warning else FT.TextMuted) }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            val state = historyState
+            when {
+                historyRunning -> FTButton(label = "STOP", modifier = Modifier.weight(1f)) {
+                    com.bioscan.fieldterminal.data.ZeppHistoryWorker.stop(context)
+                    historyRunning = false
+                }
+                state == null -> FTButton(label = "PULL ALL ZEPP HISTORY", modifier = Modifier.weight(1f)) {
+                    com.bioscan.fieldterminal.data.ZeppHistoryWorker.start(context)
+                    historyRunning = true
+                }
+                state.done -> FTButton(label = "PULL AGAIN FROM TODAY", modifier = Modifier.weight(1f)) {
+                    com.bioscan.fieldterminal.data.ZeppHistoryWorker.start(context, fromScratch = true)
+                    historyRunning = true
+                }
+                else -> FTButton(label = "CARRY ON", modifier = Modifier.weight(1f)) {
+                    com.bioscan.fieldterminal.data.ZeppHistoryWorker.start(context)
+                    historyRunning = true
                 }
             }
         }
-        historyProgress?.let { Text(it, style = FTType.Caption, color = FT.TextMuted) }
         // Writes the next 7 days of planned sessions to Zepp's calendar: a real feature, so it stays next to SYNC NOW.
         var probing by remember { mutableStateOf(false) }
         var probeResult by remember { mutableStateOf<String?>(null) }

@@ -5,6 +5,7 @@ import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -60,7 +61,12 @@ sealed class ZeppSyncResult {
 }
 
 @Serializable
-private data class FirstWorkoutRow(@SerialName("start_time") val startTime: String)
+data class HistoryWindowFound(val workouts: Int = 0, val bandDays: Int = 0)
+
+@Serializable
+private data class HistoryWindowResponse(val found: HistoryWindowFound? = null, val authFailed: Boolean = false)
+
+private val historyJson = Json { ignoreUnknownKeys = true }
 
 class ZeppRepository(private val supabase: SupabaseClient) {
     // Default is a small window for the automatic on-app-open sync
@@ -74,34 +80,22 @@ class ZeppRepository(private val supabase: SupabaseClient) {
         return syncRange(to.minusDays(daysBack), to, metrics)
     }
 
-    /** The day of the oldest stored workout of [type] (null when there is none). */
-    suspend fun earliestWorkoutDate(type: String = "run"): LocalDate? =
-        supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("start_time")) {
-                filter { eq("type", type) }
-                order("start_time", Order.ASCENDING)
-                limit(1)
-            }
-            .decodeList<FirstWorkoutRow>()
-            .firstOrNull()
-            ?.let { runCatching { LocalDate.parse(it.startTime.take(10)) }.getOrNull() }
-
     /**
-     * Re-reads every workout from [from] to [to] from Zepp, 31 days per call, so each one Zepp has gets Zepp's own
-     * distance (GPS, or the summary for a treadmill) on every stored copy of it. The one-off repair for the runs Health
-     * Connect stored at about twice their distance (January to mid-August 2026); safe to run again.
+     * One window of the history pull: workouts, daily band data and stress for [from]..[to]. Returns what the window
+     * held (zepp-extract's `found`), or throws with the reason (Zepp's token expired, no network).
      */
-    suspend fun resyncWorkoutHistory(from: LocalDate, to: LocalDate = LocalDate.now(), onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): ZeppSyncResult {
-        val windows = com.bioscan.fieldterminal.domain.syncWindows(from, to)
-        windows.forEachIndexed { i, (start, end) ->
-            onProgress(i, windows.size)
-            when (val result = syncRange(start, end, "sport_history")) {
-                is ZeppSyncResult.Failed -> return ZeppSyncResult.Failed("$start to $end: ${result.message}")
-                is ZeppSyncResult.Success -> Unit
-            }
+    suspend fun pullHistoryWindow(from: LocalDate, to: LocalDate): HistoryWindowFound {
+        val response = supabase.functions.invoke(function = "zepp-extract") {
+            contentType(ContentType.Application.Json)
+            // A week of three metrics takes longer than the client's usual 45 s; stay under the function's own limit.
+            timeout { requestTimeoutMillis = 140_000; socketTimeoutMillis = 140_000 }
+            setBody("""{"from":"$from","to":"$to","metrics":"sport_history,band_data,stress"}""")
         }
-        onProgress(windows.size, windows.size)
-        return ZeppSyncResult.Success("${windows.size} windows from $from")
+        val body = response.bodyAsText()
+        if (!response.status.isSuccess()) throw IllegalStateException("HTTP ${response.status.value}: ${body.take(200)}")
+        val parsed = historyJson.decodeFromString<HistoryWindowResponse>(body)
+        if (parsed.authFailed) throw IllegalStateException("Zepp's token has expired; renew it, then carry on")
+        return parsed.found ?: HistoryWindowFound()
     }
 
     // A fixed date range (at most 31 days, the server's cap): RE-IMPORT FROM ZEPP on one workout pulls the days around it.

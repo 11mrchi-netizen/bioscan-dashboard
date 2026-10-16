@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.domain
 
-import java.time.LocalDate
-
 // Health Connect distance for one workout. Each app's distance records are summed for the workout's window and the
 // largest single app's total kept (summing across apps double-counted, DAV-79). That still doubled runs whose source
 // app wrote the same workout, and its distance records, twice (most runs from January to mid-August 2026, a 37 km
@@ -34,16 +32,3 @@ fun distanceWithoutOverlap(records: List<DistanceInterval>, windowStartMs: Long,
 /** The largest single app's distance in metres (apps by package name), each app's records counted without overlap. */
 fun workoutDistanceMeters(byApp: Map<String, List<DistanceInterval>>, windowStartMs: Long, windowEndMs: Long): Double =
     byApp.values.maxOfOrNull { distanceWithoutOverlap(it, windowStartMs, windowEndMs) } ?: 0.0
-
-/** Date windows of at most [maxDays] days covering [from]..[to], oldest first (the Zepp sync takes 31 days at a time). */
-fun syncWindows(from: LocalDate, to: LocalDate, maxDays: Long = 31): List<Pair<LocalDate, LocalDate>> {
-    if (to.isBefore(from)) return emptyList()
-    val out = mutableListOf<Pair<LocalDate, LocalDate>>()
-    var start = from
-    while (!start.isAfter(to)) {
-        val end = minOf(start.plusDays(maxDays - 1), to)
-        out += start to end
-        start = end.plusDays(1)
-    }
-    return out
-}

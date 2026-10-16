@@ -66,9 +66,21 @@ one app. Fixes (`zepp-extract/workoutDistance.ts`, `domain/HealthConnectDistance
   duplicated session can no longer keep a wrong copy.
 - Health Connect ingestion counts each stretch of time once within one app, and a record reaching
   outside the workout only for its part inside.
-- Settings › Connected services › RE-CHECK RUN HISTORY WITH ZEPP re-reads every workout back to the
-  first run, 31 days per call: the one-off repair for the stored history. Runs Zepp does not have keep
-  their Health Connect distance.
+- Runs Zepp does not have keep their Health Connect distance.
+
+## The whole history from Zepp
+
+Stored Zepp data started on 26 Aug 2026. Settings › Connected services › PULL ALL ZEPP HISTORY pulls
+everything Zepp holds, back to the start of the account (`domain/ZeppHistoryPull.kt`,
+`data/ZeppHistoryWorker.kt`): workouts (with Zepp's distances, which repairs the doubled runs), daily
+band data (sleep, resting heart rate, steps, minute heart rate) and stress. A background worker walks
+back from today a week per zepp-extract call (each call reports what the week held, `found`), stores
+its progress after every week, and stops after eight empty weeks in a row, where the account's
+history starts. It survives leaving the screen; a failed week (no network, an expired Zepp token)
+pauses it with the reason, and CARRY ON resumes from there. For days already stored, Zepp's sleep,
+resting heart rate and steps replace Health Connect's, the same "Zepp wins" rule as for recent days,
+so the series no longer change source on 26 Aug. A workout adds about 0.4 MB (raw and decoded detail),
+a day of band data about 7 kB.
 
 ## Strength exercises: who owns the list
 

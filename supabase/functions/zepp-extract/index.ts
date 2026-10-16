@@ -1205,8 +1205,17 @@ Deno.serve(async (req: Request) => {
     const succeeded = results.filter((r) => r.stored && r.status >= 200 && r.status < 300).length;
     const failed = results.length - succeeded;
 
+    // What the requested days actually held: the history pull on the phone walks back until Zepp has had nothing
+    // for several windows in a row, which is where the account's history starts.
+    const found = {
+      workouts: results.filter((r) => r.metric === WORKOUT_DETAIL_METRIC).length,
+      bandDays: results.filter((r) => r.metric === "band_data_decode" && r.stored).length,
+    };
+
     return json({
       summary: { total: results.length, succeeded, failed },
+      found,
+      authFailed,
       results,
     }, 200);
   } catch (e) {

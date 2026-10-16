@@ -52,6 +52,9 @@ import com.bioscan.fieldterminal.domain.classifyMovementPattern
 import com.bioscan.fieldterminal.domain.gateStateWord
 import com.bioscan.fieldterminal.domain.heartRateZoneBreakdown
 import com.bioscan.fieldterminal.domain.heartRateZoneFor
+import com.bioscan.fieldterminal.domain.ZoneAnchors
+import com.bioscan.fieldterminal.domain.ZoneMethod
+import com.bioscan.fieldterminal.domain.zoneBounds
 import com.bioscan.fieldterminal.domain.MovementPattern
 import com.bioscan.fieldterminal.domain.resolveExercise
 import com.bioscan.fieldterminal.domain.sessionAverageRir
@@ -486,7 +489,8 @@ private fun PerformanceChartSection(d: SessionDetail, personalMaxHr: Double?) {
         format = { v -> formatSignalValue(selected, v) },
     )
 
-    val showZoneUi = selected == PerfSignal.HR && personalMaxHr != null
+    val maxBounds = remember(personalMaxHr) { zoneBounds(ZoneMethod.MAX, ZoneAnchors(maxHr = personalMaxHr), null) }
+    val showZoneUi = selected == PerfSignal.HR && maxBounds != null
     var colorMode by remember(d) { mutableStateOf(ChartColorMode.Line) }
     if (showZoneUi) {
         SegmentedToggle(
@@ -502,7 +506,7 @@ private fun PerformanceChartSection(d: SessionDetail, personalMaxHr: Double?) {
         points = points,
         color = selected.color,
         xRange = sessionStart to sessionEnd,
-        segmentColor = if (showZoneUi && colorMode == ChartColorMode.Zones) { hr -> heartRateZoneColor(heartRateZoneFor(hr, personalMaxHr!!)) } else null,
+        segmentColor = if (showZoneUi && colorMode == ChartColorMode.Zones) { hr -> heartRateZoneColor(heartRateZoneFor(hr, maxBounds!!)) } else null,
         modifier = Modifier.padding(top = 4.dp),
         valueFormat = { v -> formatSignalValue(selected, v) },
         invertY = selected == PerfSignal.PACE,
@@ -517,7 +521,7 @@ private fun PerformanceChartSection(d: SessionDetail, personalMaxHr: Double?) {
     }
 
     if (showZoneUi) {
-        val breakdown = remember(points, personalMaxHr) { heartRateZoneBreakdown(points, personalMaxHr!!) }
+        val breakdown = remember(points, maxBounds) { heartRateZoneBreakdown(points, maxBounds!!) }
         HeartRateZoneDonutChart(breakdown, modifier = Modifier.padding(top = 12.dp))
     }
 }

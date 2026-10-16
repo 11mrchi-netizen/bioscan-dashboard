@@ -27,7 +27,7 @@ import com.bioscan.fieldterminal.domain.evaluateHrv
 import com.bioscan.fieldterminal.domain.evaluateRhr
 import com.bioscan.fieldterminal.domain.evaluateSleepDuration
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
-import com.bioscan.fieldterminal.domain.isHealthEventActive
+import com.bioscan.fieldterminal.domain.isHealthEventOpen
 import com.bioscan.fieldterminal.domain.trainingLoadStateWord
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -134,7 +134,9 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         val sleepRows = sleepD.await()
         val latestSleep = sleepRows.lastOrNull()
 
-        fun HealthEventRow.isOpen() = isHealthEventActive(status, endDate?.let(LocalDate::parse), today)
+        // Open means active or monitoring, the Injury list's rule: a resolved event leaves the figure (pin and count) the
+        // day it is resolved.
+        fun HealthEventRow.isOpen() = isHealthEventOpen(status)
         fun HealthEventRow.toFlag(isInjury: Boolean) = HealthFlag(
             label = (if (isInjury) part else name)?.takeIf { it.isNotBlank() } ?: if (isInjury) "Injury" else "Illness",
             isInjury = isInjury,

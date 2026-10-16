@@ -6,10 +6,11 @@ import java.time.LocalDate
 // days before, LOW / REDUCED / NORMAL / PRIMED) is retired; the expected band (ExpectedBand.kt, the analysis-run
 // `expected_band` result) answers the same question against weekday, trend and a calibrated band.
 
-// Ported 1:1 from index.html's isStatusCurrentlyRelevant()/isHealthEventActive()
-// -- same 7-day-after-resolution display cutoff, same "active/monitoring
-// always counts, resolved only within cutoffDays" rule. A display filter
-// only; nothing about the underlying data changes.
+// Ported 1:1 from index.html's isStatusCurrentlyRelevant() -- "an active status
+// always counts, an ended one only within cutoffDays of its end". A display
+// filter only; nothing about the underlying data changes. Supplements use it;
+// injuries and illnesses no longer do (isHealthEventOpen, HealthEvents.kt): a
+// resolved injury kept its pin on the Status figure for a week after resolving.
 fun isStatusCurrentlyRelevant(
     status: String,
     endDate: LocalDate?,
@@ -25,6 +26,3 @@ fun isStatusCurrentlyRelevant(
     }
     return false
 }
-
-fun isHealthEventActive(status: String, endDate: LocalDate?, today: LocalDate): Boolean =
-    isStatusCurrentlyRelevant(status, endDate, setOf("active", "monitoring"), setOf("resolved"), today)

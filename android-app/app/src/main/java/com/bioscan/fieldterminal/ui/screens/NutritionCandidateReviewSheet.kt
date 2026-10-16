@@ -15,6 +15,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -120,7 +121,7 @@ fun NutritionCandidateReviewSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var rows by remember { mutableStateOf(seedItems.mapIndexed { i, seed -> i.toString() to seed }) }
-    var nextKey by remember { mutableStateOf(seedItems.size) }
+    var nextKey by remember { mutableIntStateOf(seedItems.size) }
     val confirmed = remember { mutableStateMapOf<String, ConfirmedMealItem>() }
     var description by remember { mutableStateOf(seedItems.joinToString(", ") { it.description }.ifBlank { "Meal" }) }
     var saving by remember { mutableStateOf(false) }

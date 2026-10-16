@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,8 +73,8 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     var feed by remember { mutableStateOf<LogFeed?>(null) }
-    var visibleDays by remember { mutableStateOf(LOG_PAGE_DAYS) }
-    var reloadKey by remember { mutableStateOf(0) }
+    var visibleDays by remember { mutableIntStateOf(LOG_PAGE_DAYS) }
+    var reloadKey by remember { mutableIntStateOf(0) }
     var showAddSheet by remember { mutableStateOf(false) }
     var actionEntry by remember { mutableStateOf<LogEntry?>(null) }
     var editingEntry by remember { mutableStateOf<LogEntry?>(null) }

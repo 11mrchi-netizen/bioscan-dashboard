@@ -427,8 +427,8 @@ internal fun TrainingLoadCard(
     tier: ExpectationTier?,
     series: List<TrainingLoadPoint>,
     timeframe: PerformanceTimeframe,
-    onTimeframeChange: ((PerformanceTimeframe) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onTimeframeChange: ((PerformanceTimeframe) -> Unit)? = null,
     fitnessFatigue: FitnessFatigueRow? = null,
 ) {
     val cutoff = LocalDate.now().minusMonths(timeframe.months)

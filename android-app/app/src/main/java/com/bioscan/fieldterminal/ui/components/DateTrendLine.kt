@@ -83,10 +83,10 @@ private fun defaultTrendFormat(v: Double): String = if (kotlin.math.abs(v) >= 10
 fun DateTrendLine(
     points: List<Pair<LocalDate, Double>>,
     color: Color,
+    modifier: Modifier = Modifier,
     refLow: Double? = null,
     refHigh: Double? = null,
     highlightColor: Color? = null,
-    modifier: Modifier = Modifier,
     valueFormat: (Double) -> String = ::defaultTrendFormat,
     unit: String? = null,
     scale: ClosedFloatingPointRange<Double>? = null,
@@ -112,9 +112,9 @@ fun DateTrendLine(
 @Composable
 fun DateTrendLine(
     series: List<TrendSeries>,
+    modifier: Modifier = Modifier,
     refLow: Double? = null,
     refHigh: Double? = null,
-    modifier: Modifier = Modifier,
     valueFormat: (Double) -> String = ::defaultTrendFormat,
     // Chart frame: the unit every value on this chart is in, shown as a header
     // so a trend is never an unlabeled squiggle (contract section 10).

@@ -17,6 +17,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -62,8 +63,14 @@ fun FTRadarChart(
             },
     ) {
         if (n < 3) return@Canvas
-        val labelPad = 30.dp.toPx()
-        val radius = minOf(size.width, size.height) / 2f - labelPad
+        // The radius leaves room for the widest and tallest label (measured in the larger, selected style) beside the
+        // spokes, so no label has to be pushed back over its vertex to stay on the canvas.
+        val labels = axes.map { measurer.measure(labelText(it), FTType.CaptionStrong.copy(textAlign = TextAlign.Center)) }
+        val labelPad = 10.dp.toPx()
+        val radius = minOf(
+            size.width / 2f - labels.maxOf { it.size.width } - labelPad - 2.dp.toPx(),
+            size.height / 2f - labels.maxOf { it.size.height } - labelPad - 2.dp.toPx(),
+        ).coerceAtLeast(minOf(size.width, size.height) / 4f)
         val center = Offset(size.width / 2f, size.height / 2f)
         fun point(i: Int, fraction: Float): Offset {
             val theta = -PI / 2 + 2 * PI * i / n
@@ -122,21 +129,23 @@ fun FTRadarChart(
     }
 }
 
+// The axis name over its value (or status tag) on a second line: half the width of one line, so it fits beside a spoke.
+private fun labelText(axis: RadarAxis): String = when {
+    axis.valueLabel != null -> "${axis.label}\n${axis.valueLabel}"
+    axis.value != null -> "${axis.label}\n${"%.0f".format(axis.value)}"
+    else -> axis.label
+}
+
 private fun DrawScope.drawAxisLabel(measurer: TextMeasurer, axis: RadarAxis, selected: Boolean, tip: Offset, center: Offset, pad: Float) {
     val style = (if (selected) FTType.CaptionStrong else FTType.Micro)
-        .copy(color = if (axis.value == null) FT.TextMuted else if (selected) FT.TextPrimary else FT.TextSecondary)
-    val text = when {
-        axis.valueLabel != null -> "${axis.label}  ${axis.valueLabel}"
-        axis.value != null -> "${axis.label}  ${"%.0f".format(axis.value)}"
-        else -> axis.label
-    }
-    val layout = measurer.measure(text, style)
+        .copy(color = if (axis.value == null) FT.TextMuted else if (selected) FT.TextPrimary else FT.TextSecondary, textAlign = TextAlign.Center)
+    val layout = measurer.measure(labelText(axis), style)
     // Push the label outward along the spoke, keeping it on the canvas.
     val dx = tip.x - center.x
     val dy = tip.y - center.y
     val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
-    val ox = tip.x + dx / len * 10.dp.toPx() - layout.size.width * (0.5f - 0.5f * dx / len)
-    val oy = tip.y + dy / len * 10.dp.toPx() - layout.size.height * (0.5f - 0.5f * dy / len)
+    val ox = tip.x + dx / len * pad - layout.size.width * (0.5f - 0.5f * dx / len)
+    val oy = tip.y + dy / len * pad - layout.size.height * (0.5f - 0.5f * dy / len)
     val x = ox.coerceIn(0f, size.width - layout.size.width)
     val y = oy.coerceIn(0f, size.height - layout.size.height)
     drawText(layout, topLeft = Offset(x, y))

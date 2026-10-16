@@ -283,7 +283,7 @@ fun FTCard(
 }
 
 @Composable
-fun FTDataState(availability: DataAvailability, reason: String? = null, modifier: Modifier = Modifier) {
+fun FTDataState(availability: DataAvailability, reason: String?, modifier: Modifier = Modifier) {
     val label = when (availability) {
         DataAvailability.Available -> return
         DataAvailability.Sparse -> "SPARSE DATA"

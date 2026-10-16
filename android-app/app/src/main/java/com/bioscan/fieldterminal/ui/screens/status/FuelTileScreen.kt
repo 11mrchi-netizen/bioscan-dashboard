@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import com.bioscan.fieldterminal.data.BodyCheckinRepository
@@ -90,7 +91,7 @@ fun FuelTileScreen(
     var tab by remember { mutableStateOf(if (openBodyCheckIn) FuelTab.Body else FuelTab.Nutrition) }
     var bodyCheckInOpen by remember { mutableStateOf(false) }
     // Bumped after a check-in is saved so the Body tab reads the new one.
-    var bodyReload by remember { mutableStateOf(0) }
+    var bodyReload by remember { mutableIntStateOf(0) }
     LaunchedEffect(openBodyCheckIn) {
         if (openBodyCheckIn) {
             tab = FuelTab.Body

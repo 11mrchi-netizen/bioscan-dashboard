@@ -57,7 +57,7 @@ fun StrengthSkillScreen(onBack: () -> Unit) {
 
 @Composable
 private fun StrengthContent(history: StrengthHistory) {
-    var timeframe by remember { mutableStateOf(PerformanceTimeframe.SixMonths) }
+    var timeframe by remember { mutableStateOf(PerformanceTimeframe.ThreeMonths) }
     val today = remember { LocalDate.now() }
     val from = today.minusMonths(timeframe.months)
     val series = remember(history) { liftE1rmSeries(history.sets) }

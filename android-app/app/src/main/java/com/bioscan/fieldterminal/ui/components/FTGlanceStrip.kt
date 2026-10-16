@@ -1,14 +1,15 @@
-// BringIntoViewRequester is experimental in older Compose Foundation releases (stable in newer ones); opting in is harmless.
-@file:OptIn(ExperimentalFoundationApi::class)
+// BringIntoViewRequester and FlowRow are experimental in older Compose Foundation releases (stable in newer ones); opting in is harmless.
+@file:OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 
 package com.bioscan.fieldterminal.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -77,9 +77,11 @@ fun FTGlanceStrip(anchors: GlanceAnchors, modifier: Modifier = Modifier, content
     // One card needs no index.
     if (chips.size < 2) return
     val scope = rememberCoroutineScope()
-    Row(
-        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(contentPadding),
+    // Wraps rather than scrolls sideways: a scrolled strip cut its last chip mid-label, leaving a dot with no name.
+    FlowRow(
+        modifier = modifier.fillMaxWidth().padding(contentPadding),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         chips.forEach { (key, chip) ->
             GlanceChipView(chip) {

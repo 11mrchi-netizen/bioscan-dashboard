@@ -32,9 +32,9 @@ enum class FTButtonEmphasis { Primary, Secondary, Tertiary, Destructive }
 @Composable
 fun FTButton(
     label: String,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
     emphasis: FTButtonEmphasis = FTButtonEmphasis.Secondary,
-    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     ButtonBox(label, enabled, emphasis, filled = emphasis == FTButtonEmphasis.Primary, modifier, onClick)

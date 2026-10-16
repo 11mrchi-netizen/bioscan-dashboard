@@ -627,6 +627,7 @@ internal fun EvalCard(
     eval: SwcEvaluation,
     unit: String,
     directionality: Directionality,
+    modifier: Modifier = Modifier,
     points: List<Pair<LocalDate, Double>>? = null,
     comparison: ComparisonResult? = null,
     // DAV-285: HRV/RHR pass a real VitalsTimeframe selection (7D shows raw
@@ -635,7 +636,6 @@ internal fun EvalCard(
     // keeps the original fixed 30-day window unchanged.
     timeframe: VitalsTimeframe? = null,
     methodology: String? = null,
-    modifier: Modifier = Modifier,
     emphasis: FTCardEmphasis = FTCardEmphasis.Supporting,
     // A known healthy range for an OPTIMAL_RANGE metric (sleep duration), so a shift out of it reads as attention.
     range: ClosedFloatingPointRange<Double>? = null,

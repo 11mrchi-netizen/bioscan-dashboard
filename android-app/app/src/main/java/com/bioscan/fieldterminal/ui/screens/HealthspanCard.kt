@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -75,7 +76,7 @@ fun HealthspanCard(summary: HealthspanSummary?, failed: Boolean = false) {
             onSelect = { selected = if (selected == it) null else it },
         )
 
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             summary.factors.forEachIndexed { i, f ->
                 FactorRow(f, expanded = i == selected, assessed = summary.assessed) { selected = if (selected == i) null else i }
             }
@@ -122,12 +123,15 @@ private fun HealthspanFactorId.short(): String = when (this) {
 @Composable
 private fun FactorRow(f: HealthspanFactor, expanded: Boolean, assessed: Int, onClick: () -> Unit) {
     val (tag, color) = f.status.tag()
+    // The whole row is the touch target, at least 48 dp tall (it was 28 dp: the padding sat outside the clickable area).
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (expanded) Modifier.background(FT.GlassFill, RoundedCornerShape(FT.RadiusSmall)).padding(10.dp) else Modifier.padding(vertical = 2.dp))
-            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall)),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+            .heightIn(min = 48.dp)
+            .then(if (expanded) Modifier.background(FT.GlassFill, RoundedCornerShape(FT.RadiusSmall)) else Modifier)
+            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
+            .padding(horizontal = if (expanded) 10.dp else 0.dp, vertical = if (expanded) 10.dp else 4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(f.id.label, style = if (expanded) FTType.RowTitle else FTType.Body, color = if (expanded) FT.TextPrimary else FT.TextSecondary, modifier = Modifier.weight(1f))

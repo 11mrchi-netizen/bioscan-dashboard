@@ -33,7 +33,10 @@ import com.bioscan.fieldterminal.domain.EnduranceSessionInput
 import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.aggregateMealsByDay
 import com.bioscan.fieldterminal.domain.seriesBreakStartsFrom
+import com.bioscan.fieldterminal.domain.INTENSITY_SPORTS
+import com.bioscan.fieldterminal.domain.IntensitySession
 import com.bioscan.fieldterminal.domain.TrimpAnchors
+import com.bioscan.fieldterminal.domain.mondayOf
 import io.github.jan.supabase.SupabaseClient
 import kotlinx.coroutines.async
 import io.github.jan.supabase.postgrest.postgrest
@@ -257,6 +260,25 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<TrainingLoadSessionRow>()
             .reversed()
 
+    // Weekly intensity (domain/IntensityDistribution.kt): the endurance sessions of the last [weeks] weeks, each with its
+    // Zepp heart-rate histogram when it has one (zepp_workout_detail.hr_histogram, migration 20261022).
+    suspend fun loadIntensitySessions(weeks: Int = 12): List<IntensitySession> = ReadCache.get("analysis.intensity.$weeks") {
+        val from = mondayOf(LocalDate.now()).minusWeeks(weeks - 1L)
+        supabase.postgrest.from("exercise_sessions")
+            .select(columns = Columns.raw("start_time,type,zepp_workout_detail(hr_histogram)")) {
+                filter { gte("start_time", from.toString()); gt("duration_min", 0); isIn("type", INTENSITY_SPORTS.toList()) }
+                order("start_time", Order.ASCENDING)
+            }
+            .decodeList<IntensitySessionRow>()
+            .map { row ->
+                IntensitySession(
+                    OffsetDateTime.parse(row.startTime).toLocalDate(),
+                    row.type,
+                    row.zepp.firstNotNullOfOrNull { it.histogram }?.mapNotNull { (bpm, secs) -> bpm.toIntOrNull()?.let { it to secs } }?.toMap(),
+                )
+            }
+    }
+
     // Analysis review phase G: the personal fitness-fatigue result, and the spans every load chart uses (the standard 42 and
     // 7 unless the personal pair was adopted; standard too when nothing is published or the read fails).
     suspend fun loadFitnessFatigue(): FitnessFatigueRow? = ReadCache.get("analysis.FitnessFatigue") {
@@ -404,6 +426,16 @@ fun buildTrainingSessionLoads(sessions: List<TrainingLoadSessionRow>, restingDai
 /** The daily resting heart rates of wearable rows, for buildTrainingSessionLoads. */
 fun restingSeries(wearable: List<WearableAnalysisRow>): List<Pair<LocalDate, Double>> =
     wearable.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
+
+@kotlinx.serialization.Serializable
+private data class IntensitySessionRow(
+    @kotlinx.serialization.SerialName("start_time") val startTime: String,
+    val type: String? = null,
+    @kotlinx.serialization.SerialName("zepp_workout_detail") val zepp: List<HrHistogramRow> = emptyList(),
+)
+
+@kotlinx.serialization.Serializable
+private data class HrHistogramRow(@kotlinx.serialization.SerialName("hr_histogram") val histogram: Map<String, Double>? = null)
 
 @kotlinx.serialization.Serializable
 private data class HrDayRow(

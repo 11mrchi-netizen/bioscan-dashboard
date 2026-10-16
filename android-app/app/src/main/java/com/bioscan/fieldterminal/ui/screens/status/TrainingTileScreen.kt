@@ -410,6 +410,7 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChan
                 GlanceChip(order = 0, label = "LOAD", state = trainingLoadStateWord(trainingLoadEval.state, trainingLoadEval.tsbBand).state, headline = trainingLoadEval.tsbBand?.uppercase()),
             ),
         )
+        IntensityCard()
         val readiness = computeTrainingReadiness(recovery)
         val readyWord = if (scorecards?.readyFor.demotes()) INPUTS_ONLY else recoveryStateWord(readiness.generalState)
         TrainingReadinessCard(

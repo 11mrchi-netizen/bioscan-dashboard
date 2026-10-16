@@ -9,6 +9,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { computeEffort } from "./effort.ts";
 import { decodeMinuteHr, type HrMinutePoint } from "./minuteHr.ts";
+import { hrHistogram } from "./hrHistogram.ts";
 import { exerciseTypeForZeppSport, summaryDistanceM, takesDistance, zeppDistanceKm } from "./workoutDistance.ts";
 import { afterWindow, HISTORY_METRICS, type HistoryState, windowDates } from "./historyPull.ts";
 import { buildZeppExercises, doneSets, exercisesFingerprint, parseLapSets, planStrengthDetails } from "./strengthImport.ts";
@@ -825,6 +826,7 @@ async function extract(
         sport_type: ref.sportType,
         raw: detailRawBody,
         decoded,
+        hr_histogram: hrHistogram(decoded?.heartRate),
         fetched_at: new Date().toISOString(),
       },
       { onConflict: "user_id,zepp_track_id" },

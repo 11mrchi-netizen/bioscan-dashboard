@@ -2,8 +2,6 @@ package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,8 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.DEFAULT_HYDRATION_MAX_ML
-import com.bioscan.fieldterminal.data.DEFAULT_HYDRATION_MIN_ML
 import com.bioscan.fieldterminal.data.NutritionGoals
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.NutritionOverview
@@ -34,6 +31,7 @@ import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HydrationExplanationRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.hydrationBoundsMl
 import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.domain.CaffeineEvent
 import com.bioscan.fieldterminal.domain.computeCaffeineWindow
@@ -50,14 +48,14 @@ import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.TotalsPeriod
 import com.bioscan.fieldterminal.domain.sumNutritionSince
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTDataChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.MacroDonutChart
 import com.bioscan.fieldterminal.ui.components.PeriodToggle
-import com.bioscan.fieldterminal.ui.components.FTMetricRow
-import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
-import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -169,11 +167,7 @@ private fun NutrientBreakdownButton(onClick: () -> Unit) {
             .fillMaxWidth()
             .border(FT.BorderWidth, FT.DomainFuel.copy(alpha = 0.5f), shape)
             .background(FT.DomainFuel.copy(alpha = 0.08f), shape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            .ftClickable(onClick = onClick, shape = shape)
             .padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -202,8 +196,9 @@ private fun dailyRange(label: String, current: Double, target: Double?, referenc
 
 private fun hydrationRange(totalMl: Double, goals: NutritionGoals, exerciseDemandMl: Double): PersonalRange {
     val userSet = goals.hasHydrationRange
-    val lower = (goals.hydrationMinMl ?: DEFAULT_HYDRATION_MIN_ML) + exerciseDemandMl
-    val upper = (goals.hydrationMaxMl ?: DEFAULT_HYDRATION_MAX_ML) + exerciseDemandMl
+    val bounds = hydrationBoundsMl(goals, exerciseDemandMl)
+    val lower = bounds.start
+    val upper = bounds.endInclusive
     val comparison = when {
         totalMl < lower -> RangeComparison.Below
         totalMl > upper -> RangeComparison.Above
@@ -246,7 +241,7 @@ fun HydrationTabContent(overview: NutritionOverview) {
     // 09.5 Hydration Intelligence: this tab's own small independent load
     // (today's exercise duration only), same "each subtab loads its own
     // data" convention TrainingTileScreen.kt's InjuryTab already follows.
-    var todayExerciseMinutes by remember { mutableStateOf(0.0) }
+    var todayExerciseMinutes by remember { mutableDoubleStateOf(0.0) }
     LaunchedEffect(Unit) {
         val today = java.time.LocalDate.now()
         todayExerciseMinutes = AnalysisRepository(SupabaseClientProvider.client)
@@ -448,7 +443,7 @@ private fun targetRange(label: String, current: Double, target: Double): Persona
 @Composable
 private fun HydrationIntelligenceCard(result: HydrationIntelligenceResult) {
     FTCard(title = "HYDRATION INTELLIGENCE") {
-        FTConfidenceChip(confidenceLevel(result.confidence))
+        FTDataChip(result.confidence)
         result.measuredIntakeMl?.let { FTMetricRow("Measured intake", "%.0f ml".format(it)) }
         result.effectiveHydrationMl?.let { FTMetricRow("Effective hydration (modeled)", "%.0f ml".format(it)) }
         if (result.inferredDemandMl != null) {

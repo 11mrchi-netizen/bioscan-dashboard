@@ -34,9 +34,9 @@ import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.model.NotificationPrefsRow
 import com.bioscan.fieldterminal.data.model.NotificationRuleRow
 import com.bioscan.fieldterminal.domain.notifications.parseHm
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.TimeField
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -49,9 +49,12 @@ import kotlinx.coroutines.launch
 private val RULE_LABELS = mapOf(
     NotificationKind.SUPPLEMENT_DUE to "SUPPLEMENT REMINDERS",
     NotificationKind.CHECKIN_MORNING to "MORNING CHECK-IN",
-    NotificationKind.CHECKIN_EVENING to "EVENING CHECK-IN",
+    // The generic 21:00 nudge to the Log tab; the structured check-in below is EVENING CHECK-IN (analysis review phase B).
+    NotificationKind.CHECKIN_EVENING to "EVENING NOTE",
     NotificationKind.WELLBEING_CHECKIN to "WELLBEING CHECK-IN",
     NotificationKind.EVENING_LOG to "EVENING LOG",
+    NotificationKind.EVENING_CHECKIN to "EVENING CHECK-IN",
+    NotificationKind.BODY_CHECKIN to "MONTHLY BODY CHECK-IN",
 )
 
 // Setup > Notifications: single destination, no sub-tabs.
@@ -89,8 +92,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack)
-        ScreenHeader(title = "NOTIFICATIONS", context = "QUIET HOURS")
+        TileHeader(onBack = onBack, title = "NOTIFICATIONS", subtitle = "QUIET HOURS · WHAT TO RECEIVE")
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -146,8 +148,8 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                             color = FT.TextSecondary,
                         )
                     }
-                    AmberButton(label = if (notifSaving) "SAVING…" else "SAVE QUIET HOURS") {
-                        val toSave = notifPrefs ?: return@AmberButton
+                    FTButton(label = if (notifSaving) "SAVING…" else "SAVE QUIET HOURS", emphasis = FTButtonEmphasis.Primary) {
+                        val toSave = notifPrefs ?: return@FTButton
                         scope.launch {
                             notifSaving = true
                             notifError = runCatching { notificationsRepository.savePrefs(toSave) }.isFailure

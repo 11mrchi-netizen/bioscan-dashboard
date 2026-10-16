@@ -11,9 +11,13 @@ import com.bioscan.fieldterminal.data.model.LogSleepRow
 import com.bioscan.fieldterminal.data.model.LogGripRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
+import com.bioscan.fieldterminal.data.model.SupplementScheduleRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.domain.LogEntry
+import com.bioscan.fieldterminal.domain.LogMark
 import com.bioscan.fieldterminal.domain.buildLogEntries
+import com.bioscan.fieldterminal.domain.logCoverage
+import java.time.LocalDate
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -25,7 +29,7 @@ import kotlinx.coroutines.coroutineScope
 // window from every source table up front (60 rows each, well past this
 // account's current real volume), merge + sort once, then reveal the merged
 // pool 20 entries at a time via "LOAD OLDER" -- client-side windowing over
-// one real fetch, not unbounded, and not a fake infinite-scroll illusion.
+// one real fetch, not unbounded, and not a fake infinite-scroll illusion. The reveal is now by whole days (LOG_PAGE_DAYS).
 // Notes, hydration (as a "day total" entry), wellbeing and supplement-taken
 // confirmations all gained real Log presence across Steps 12 and this
 // follow-up pass -- `supplement_log` in particular is a new table (a
@@ -33,11 +37,19 @@ import kotlinx.coroutines.coroutineScope
 // confirmation is). Every row now also selects `id`, needed for Log tab
 // edit/delete.
 private const val FETCH_LIMIT_PER_SOURCE = 60L
-const val LOG_PAGE_SIZE = 20
+// Days revealed per "LOAD OLDER" tap (whole days, so a day is never half-shown).
+const val LOG_PAGE_DAYS = 14
+
+// The merged entries, how far back each flaggable mark's source is known to be complete, and the supplement roster.
+data class LogFeed(
+    val entries: List<LogEntry>,
+    val coverage: Map<LogMark, LocalDate?>,
+    val supplementSchedule: List<SupplementScheduleRow>,
+)
 
 class LogRepository(private val supabase: SupabaseClient) {
 
-    suspend fun loadAllEntries(): List<LogEntry> = coroutineScope {
+    suspend fun loadFeed(): LogFeed = coroutineScope {
         val meals = async {
             supabase.postgrest.from("meals")
                 .select(columns = Columns.list("id,logged_at,description,calories,protein_g,carbs_g,fat_g")) {
@@ -122,10 +134,32 @@ class LogRepository(private val supabase: SupabaseClient) {
                     limit(FETCH_LIMIT_PER_SOURCE)
                 }.decodeList<LogGripRow>()
         }
-        buildLogEntries(
-            meals.await(), exerciseSessions.await(), sleep.await(),
-            stool.await(), encounters.await(), notes.await(), hydration.await(),
-            wellbeing.await(), supplementsTaken.await(), ostrc.await(), sexualActivity.await(), grip.await(),
+        // A roster that fails to load only costs the supplement gap marks, never the feed (caught inside the child so the
+        // failure cannot cancel the sibling queries).
+        val schedule = async {
+            try {
+                supabase.postgrest.from("supplements")
+                    .select(columns = Columns.list("id,status,start_date,end_date,every_n_days"))
+                    .decodeList<SupplementScheduleRow>()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+        val mealRows = meals.await()
+        val hydrationRows = hydration.await()
+        val supplementRows = supplementsTaken.await()
+        val sleepRows = sleep.await()
+        val wellbeingRows = wellbeing.await()
+        LogFeed(
+            entries = buildLogEntries(
+                mealRows, exerciseSessions.await(), sleepRows,
+                stool.await(), encounters.await(), notes.await(), hydrationRows,
+                wellbeingRows, supplementRows, ostrc.await(), sexualActivity.await(), grip.await(),
+            ),
+            coverage = logCoverage(mealRows, hydrationRows, supplementRows, sleepRows, wellbeingRows, FETCH_LIMIT_PER_SOURCE.toInt()),
+            supplementSchedule = schedule.await(),
         )
     }
 }

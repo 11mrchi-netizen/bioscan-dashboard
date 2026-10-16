@@ -18,8 +18,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,8 +30,10 @@ import com.bioscan.fieldterminal.domain.ethanolGrams
 import com.bioscan.fieldterminal.domain.isReady
 import com.bioscan.fieldterminal.domain.missing
 import com.bioscan.fieldterminal.domain.whenLocal
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
@@ -131,7 +131,7 @@ fun LogAgentForm(onSaved: () -> Unit, onFoodHandoff: (text: String, at: LocalDat
             "e.g. 500 ml beer 5%, magnesium, energy 7, 20 min sauna",
             singleLine = false,
         )
-        AmberButton(label = if (loading) "READING..." else "READ MESSAGE", enabled = text.isNotBlank() && !loading) { propose() }
+        FTButton(label = if (loading) "READING..." else "READ MESSAGE", enabled = text.isNotBlank() && !loading, emphasis = FTButtonEmphasis.Primary) { propose() }
         if (loading) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.size(14.dp))
@@ -159,7 +159,7 @@ fun LogAgentForm(onSaved: () -> Unit, onFoodHandoff: (text: String, at: LocalDat
         }
 
         if (proposals.any { it.kind != "meal" }) {
-            AmberButton(
+            FTButton(
                 label = if (committing) "SAVING..." else "SAVE ${readyToSave.size}",
                 enabled = readyToSave.isNotEmpty() && !committing,
             ) { commitAll() }
@@ -203,7 +203,7 @@ private fun ProposalCard(
                     if (skipped) "SKIPPED (TAP TO UNDO)" else "SKIP",
                     style = FTType.LabelCaps,
                     color = FT.TextSecondary,
-                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onToggleSkip() },
+                    modifier = Modifier.ftClickable { onToggleSkip() },
                 )
             }
         }
@@ -244,7 +244,7 @@ private fun ProposalCard(
                 }
             }
             "meal" -> {
-                AmberButton(label = "OPEN FOOD FORM", enabled = canHandoff) { onFood() }
+                FTButton(label = "OPEN FOOD FORM", enabled = canHandoff) { onFood() }
                 if (!canHandoff) Text("Save or skip the other entries first.", style = FTType.BodySmall, color = FT.TextSecondary)
             }
             "recovery" -> if (p.durationMin == null) {

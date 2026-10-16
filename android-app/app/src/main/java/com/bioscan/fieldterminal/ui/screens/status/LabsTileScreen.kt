@@ -1,17 +1,12 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,14 +26,16 @@ import com.bioscan.fieldterminal.domain.BloodworkMarkerEvaluation
 import com.bioscan.fieldterminal.domain.BloodworkTrendState
 import com.bioscan.fieldterminal.domain.evaluateBloodworkMarker
 import com.bioscan.fieldterminal.domain.MetricState
+import com.bioscan.fieldterminal.ui.components.DotPlot
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.PinnedPage
+import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.bloodworkTrendMetricState
 import com.bioscan.fieldterminal.ui.components.metricStateColor
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.ui.components.DotPlot
-import com.bioscan.fieldterminal.ui.components.SubTabRow
-import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.nav.LabsTab
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -68,9 +65,20 @@ fun LabsTileScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
-        TileHeader(onBack = onBack)
-        SubTabRow(items = LabsTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
+    // Contract A4: title, context line and sub-tab rail stay pinned; only the tab's content scrolls, from the top on a tab change.
+    val scroll = rememberScrollState()
+    LaunchedEffect(tab) { scroll.scrollTo(0) }
+    PinnedPage(
+        onBack = onBack,
+        title = "LABS",
+        subtitle = when (tab) {
+            LabsTab.Bloodwork -> "LATEST DRAW · CHANGES BEYOND RCV"
+            LabsTab.Supplements -> "ROSTER · PANTRY · EXPERIMENTS"
+        },
+        accent = FT.DomainLabs,
+        rail = { SubTabRow(items = LabsTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        scrollState = scroll,
+    ) {
 
         when (tab) {
             LabsTab.Bloodwork -> {

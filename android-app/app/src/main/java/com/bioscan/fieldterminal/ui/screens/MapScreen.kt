@@ -10,8 +10,6 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,9 +67,10 @@ import com.bioscan.fieldterminal.domain.routeDistanceKm
 import com.bioscan.fieldterminal.domain.routeElevationGainM
 import com.bioscan.fieldterminal.domain.weatherCodeLabel
 import com.bioscan.fieldterminal.domain.weatherCodeSymbol
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -195,7 +194,7 @@ fun MapScreen(focusEventId: String? = null) {
                             style = FTType.Body,
                             color = FT.TextSecondary,
                         )
-                        AmberButton(label = "GRANT ACCESS") {
+                        FTButton(label = "GRANT ACCESS") {
                             consentLauncher.launch(IntentSenderRequest.Builder(s.pendingIntent.intentSender).build())
                         }
                     }
@@ -552,7 +551,7 @@ private fun PinDetailSheet(
             }
 
             if (!pin.isHomeFallback && home != null) {
-                AmberButton(label = "DIRECTIONS") {
+                FTButton(label = "DIRECTIONS") {
                     context.startActivity(directionsIntent(home.first, home.second, pin.lat, pin.lon))
                 }
             }
@@ -638,14 +637,14 @@ private fun PartnerSection(event: MapEvent) {
                         color = FT.DomainMap,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            .ftClickable {
                                 state = PartnerUiState.Matched(person)
                             }
                             .padding(vertical = 6.dp),
                     )
                 }
                 if (query.isNotBlank() && !creating) {
-                    AmberButton(label = "NEW PARTNER: \"${query.trim()}\"") {
+                    FTButton(label = "NEW PARTNER: \"${query.trim()}\"") {
                         creating = true
                         scope.launch {
                             state = try {
@@ -695,7 +694,7 @@ private fun EncounterLogRow(event: MapEvent, personId: Long) {
         error?.let {
             Text("Couldn't log this encounter (${it}).", style = FTType.Caption, color = FT.TextSecondary)
         }
-        AmberButton(label = if (saving) "SAVING…" else "LOG ENCOUNTER") {
+        FTButton(label = if (saving) "SAVING…" else "LOG ENCOUNTER") {
             if (!saving) {
                 saving = true
                 error = null
@@ -727,7 +726,7 @@ private fun WeatherRow(state: WeatherUiState, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
             .padding(horizontal = 14.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,

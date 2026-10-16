@@ -34,12 +34,20 @@ class TrainingReadinessTest {
         assertEquals(EvalState.Stable, result.demandRelative.getValue(TrainingDemandTier.LONG_HIGH_LOAD))
     }
 
+    // Analysis review A1: contributors that disagree are mixed signals, not missing data. They read like a neutral
+    // recovery (the pill says MIXED SIGNALS) instead of turning every row into BUILDING.
     @Test
-    fun contradictoryRecoveryGivesNoCleanReadinessClaim() {
-        val result = computeTrainingReadiness(recovery(EvalState.Unstable))
+    fun mixedRecoveryReadsLikeNeutralInsteadOfBuilding() {
+        val mixed = computeTrainingReadiness(recovery(EvalState.Unstable))
+        val neutral = computeTrainingReadiness(recovery(EvalState.Stable))
 
-        TrainingDemandTier.entries.forEach { tier ->
-            assertEquals(EvalState.Building, result.demandRelative.getValue(tier))
-        }
+        assertEquals(neutral.demandRelative, mixed.demandRelative)
+        TrainingDemandTier.entries.forEach { tier -> assert(mixed.demandRelative.getValue(tier) != EvalState.Building) }
+    }
+
+    @Test
+    fun missingRecoveryIsStillBuilding() {
+        val result = computeTrainingReadiness(recovery(EvalState.Building))
+        TrainingDemandTier.entries.forEach { tier -> assertEquals(EvalState.Building, result.demandRelative.getValue(tier)) }
     }
 }

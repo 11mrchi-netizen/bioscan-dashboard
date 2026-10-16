@@ -19,6 +19,9 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,7 +40,8 @@ import com.bioscan.fieldterminal.data.NotificationDispatchWorker
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.ZeppSyncWorker
 import com.bioscan.fieldterminal.data.model.NotificationKind
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.nav.FieldTerminalNavHost
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.FieldTerminalTheme
@@ -124,11 +128,8 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
             )
             is SessionStatus.NotAuthenticated -> {
                 androidx.compose.runtime.LaunchedEffect(Unit) { com.bioscan.fieldterminal.data.ReadCache.invalidateAll() } // nothing of the last user survives sign-out
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AmberButton(label = "SIGN IN WITH GOOGLE") {
-                        scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
-                    }
-                    signInError?.let { Text("Sign-in failed: $it", style = FTType.Caption, color = FT.Critical) }
+                SignInPrompt("SIGN IN WITH GOOGLE", FTButtonEmphasis.Primary, signInError) {
+                    scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
                 }
             }
             is SessionStatus.Initializing -> CircularProgressIndicator(color = FT.Emerald)
@@ -142,14 +143,22 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
                         Text("Offline. Reconnecting when the network is back.", style = FTType.BodySmall, color = FT.TextSecondary)
                     }
                 } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        AmberButton(label = "SESSION EXPIRED — SIGN IN AGAIN") {
-                            scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
-                        }
-                        signInError?.let { Text("Sign-in failed: $it", style = FTType.Caption, color = FT.Critical) }
+                    SignInPrompt("SESSION EXPIRED — SIGN IN AGAIN", FTButtonEmphasis.Secondary, signInError) {
+                        scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
                     }
                 }
             }
+        }
+    }
+}
+
+// The message has a fixed slot under the button, so a failure doesn't push the centred button up.
+@Composable
+private fun SignInPrompt(label: String, emphasis: FTButtonEmphasis, error: String?, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        FTButton(label = label, emphasis = emphasis, onClick = onClick)
+        Box(Modifier.widthIn(max = 300.dp).height(52.dp), contentAlignment = Alignment.TopCenter) {
+            error?.let { Text(it, style = FTType.Caption, color = FT.Critical, textAlign = TextAlign.Center, maxLines = 3) }
         }
     }
 }

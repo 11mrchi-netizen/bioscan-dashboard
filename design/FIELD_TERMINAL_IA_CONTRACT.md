@@ -24,9 +24,25 @@ Login, Add Entry (workflow/IA), broad Setup IA (only sync status relocates here 
 calendar-free chronological-feed behavior, and Map's spatial IA. Any issue in this project that
 appears to require touching one of these has scope-crept — stop and re-check against DAV-107.
 
+> **Update 2026-10 (UX review, A6; `docs/ux-review/01-plan.md`):** released for that review only:
+> - **Add Entry**: new entry points (Status quick log: water, food, supplements, say it), the type picker grouped
+>   INTAKE / BODY / TRAINING / INTIMACY / OTHER with Fuel's sub-types as first-level tiles, a RECENT row, Drink presets,
+>   and injury / illness entry points (their forms already existed under Training › Injury). The forms and the tables
+>   they write are unchanged.
+> - **Setup**: USER is renamed PROFILE & GOALS (one USER in the app); TRAINING PROGRAMS becomes TRAINING SETUP
+>   (equipment, session times) because blocks move to Training › Plan (§5); Connected services' MAP tab is MAPS & ROUTES.
+> - **Log**: tapping an entry opens an entry sheet (values first, then detail / edit / delete) instead of an action menu.
+>   The feed stays one chronological, calendar-free stream (PR #20's collapsed days and GAPS ONLY are kept).
+> Login and Map stay frozen.
+
 ## 3. Top-level navigation
 
 Four tabs: `STATUS | USER | LOG | SETUP`. (DAV-296: USER replaced MAP in the bottom bar; Map's screen stays in the codebase, unmounted.)
+
+> **Update 2026-10 (UX review):** with Map unmounted, Google Calendar access is granted from Status's Next up row (tap it
+> when it says Calendar isn't connected); nothing points to a Map tab any more. The rose-accent Status tile and its page
+> are called **HEALTH** (the code keeps `TileRoute.Heart` / `HeartTab`); §7's tab mapping is unchanged. On a pushed
+> screen the dock lights the tab whose stack you are in.
 
 > **Update 2026-10:** the tab sets in §6/§7 below were implemented differently — see `TopLevelTab.kt`: `FuelTab` = Nutrition, Digestion; `HeartTab` = Cardio, Recovery, Wellbeing; `TrainingTab` = Load, Injury; `LabsTab` = Bloodwork, Supplements (Hydration and Body folded into Fuel/Nutrition; Supplements moved under Labs; Injury moved under Training — DAV-207/208/209/216). The code is authoritative where it differs.
 
@@ -36,7 +52,14 @@ Today: Status renders a flat 2×2 grid of Training/Fuel/Heart/Labs tiles below t
 `BodyConsole.kt` schematic. Target (DAV-95): the schematic becomes the compositional center; the four
 system tiles attach to it as glass instruments with a compact state/metric preview, not an unrelated
 grid. Tapping an attached tile still opens that system's existing tile surface — this is a
-compositional change, not a new navigation destination. `BodyConsole.kt` already exists; DAV-95 should
+compositional change, not a new navigation destination.
+
+> **Update 2026-10 (UX review, P1/P6):** the hub reads "today at a glance": hero (HRV-vs-baseline condition with its basis
+> and freshness, TODAY › link), a shorter body figure whose injury flag opens Training › Injury, a tappable Next up row,
+> the four tiles as a 2×2 grid with real previews (Fuel: kcal vs goal and water vs range; Labs: supplements still due and
+> last draw), and a quick-log row. The hub scrolls. The hero's destination is the **Today** page (formerly Daily
+> Readiness): recovery, READY FOR, fuel today, patterns; it links to Training › Load and Health › Cardio instead of
+> repeating them. `BodyConsole.kt` already exists; DAV-95 should
 confirm during its own investigation whether it extends that file or replaces it — not decided here
 (see §6).
 
@@ -53,6 +76,12 @@ Current: `TrainingTileScreen.kt` has no sub-tabs — one flat screen, equal-weig
 No new sub-tab rail — this is section ordering within one screen, matching how the screen already
 works today.
 
+> **Update 2026-10 (UX review, P2/P5):** the LOAD tab (now one of LOAD / PLAN / INJURY) opens with TRAINING LOAD as its
+> hero card, then READY FOR, then the session rollups (VO2max and efficiency live on the Running skill page since PR #20).
+> **Training › Plan is the one home for training blocks**: current block (editable), new block, upcoming sessions,
+> planned blocks and history. `training_blocks` is the canonical block and `training_cycles` its legacy mirror
+> (`docs/training-programming/01-architecture.md`), so the User tab keeps only a current-block card that opens Plan.
+
 ## 6. Fuel — real tab mapping (checked against `FuelTab` enum)
 
 | Current (`FuelTab`) | Target | Change |
@@ -62,6 +91,11 @@ works today.
 | `Supplements` | SUPPLEMENTS | Minimal change — retain time-of-day grouping |
 | — (new) | **DIGESTION** | New tab. Relocated content: Bristol/stool data currently lives in Heart's `Stool` tab (`BristolEvaluation.kt`/`BristolCard`) — moves here wholesale. No causal food→stool link is implied or computed; it's a contextual section, not a correlation feature. |
 | `Weight` | **BODY** | Rename, not rebuild — `WeightTdeeTab` already exists and already has weight/body-fat trend content. DAV-103/104 extend it with the adaptive-TDEE panel and explicit confidence states; the existing trend content is not thrown away. |
+
+**Amendment (body check-in, Oct 2026):** the shipped tabs are NUTRITION (with hydration) and BODY. BODY (the enum entry
+was `Digestion` until the monthly body check-in arrived) holds weight, BODY MEASUREMENTS (the check-in's girths,
+skinfolds, ratios and labelled body-fat estimates, with START BODY CHECK-IN), body fat, protein on-target, energy
+balance, then the Bristol pattern. The monthly reminder lands here with the check-in sheet open (docs/body-checkin/README.md).
 
 ## 7. Heart — real tab mapping (checked against `HeartTab` enum: `Heart, Arousal, Wellness, Sleep,
 Stool, Injuries, Respiratory`)

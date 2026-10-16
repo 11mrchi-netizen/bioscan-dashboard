@@ -46,7 +46,8 @@ enum class TileRoute(val route: String) {
 // content is genuinely different in kind.
 enum class FuelTab(val label: String) {
     Nutrition("NUTRITION"),
-    Digestion("DIGESTION"),
+    // Weight, body fat, the monthly body check-in and digestion (renamed from DIGESTION when the check-in arrived).
+    Body("BODY"),
 }
 
 // DAV-97: 7 tabs collapsed to 4 per design/FIELD_TERMINAL_IA_CONTRACT.md
@@ -97,7 +98,8 @@ enum class UserTab(val label: String) {
 
 enum class ConnectedServicesTab(val label: String) {
     AiNutrition("AI NUTRITION"),
-    Map("MAP"),
+    // UX review P8: it serves Session Detail's route preview now, not a Map tab.
+    Map("MAPS & ROUTES"),
     HealthConnect("HEALTH CONNECT"),
     Zepp("ZEPP"),
 }

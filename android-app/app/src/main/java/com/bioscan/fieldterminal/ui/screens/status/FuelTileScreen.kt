@@ -1,21 +1,21 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import com.bioscan.fieldterminal.data.BodyCheckinRepository
+import com.bioscan.fieldterminal.data.UserProfileRepository
+import com.bioscan.fieldterminal.data.model.UserProfileRow
+import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +37,6 @@ import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.toMetricState
 import com.bioscan.fieldterminal.domain.NutritionEvaluation
 import com.bioscan.fieldterminal.domain.PROTEIN_PCT_HIGH
 import com.bioscan.fieldterminal.domain.PROTEIN_PCT_LOW
@@ -48,21 +47,24 @@ import com.bioscan.fieldterminal.domain.evaluateBristol
 import com.bioscan.fieldterminal.domain.evaluateNutrition
 import com.bioscan.fieldterminal.domain.evaluateTdee
 import com.bioscan.fieldterminal.domain.evaluateWeightTrend
+import com.bioscan.fieldterminal.domain.gateStateWord
 import com.bioscan.fieldterminal.domain.proteinPercentSeries
-import java.time.OffsetDateTime
+import com.bioscan.fieldterminal.domain.trendStateWord
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTDataChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
-import com.bioscan.fieldterminal.ui.components.FTMetricValue
-import com.bioscan.fieldterminal.ui.components.FTStatePill
-import com.bioscan.fieldterminal.ui.components.SubTabRow
-import com.bioscan.fieldterminal.ui.components.TileHeader
-import com.bioscan.fieldterminal.ui.nav.FuelTab
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTSegment
 import com.bioscan.fieldterminal.ui.components.FTSegmentBar
-import com.bioscan.fieldterminal.ui.components.FTConfidenceChip
-import com.bioscan.fieldterminal.ui.components.confidenceLevel
+import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.PinnedPage
+import com.bioscan.fieldterminal.ui.components.SubTabRow
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import java.time.OffsetDateTime
+import com.bioscan.fieldterminal.ui.nav.FuelTab
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -79,8 +81,24 @@ import kotlin.math.roundToInt
 // backlog per ROADMAP.md) -- this tab shows the real weight/body-fat trend
 // data that does exist rather than fabricate a TDEE number.
 @Composable
-fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {}) {
-    var tab by remember { mutableStateOf(FuelTab.Nutrition) }
+fun FuelTileScreen(
+    onBack: () -> Unit,
+    onOpenNutrientBreakdown: () -> Unit = {},
+    // The monthly body check-in reminder lands on Body with the check-in sheet up.
+    openBodyCheckIn: Boolean = false,
+    onBodyCheckInHandled: () -> Unit = {},
+) {
+    var tab by remember { mutableStateOf(if (openBodyCheckIn) FuelTab.Body else FuelTab.Nutrition) }
+    var bodyCheckInOpen by remember { mutableStateOf(false) }
+    // Bumped after a check-in is saved so the Body tab reads the new one.
+    var bodyReload by remember { mutableIntStateOf(0) }
+    LaunchedEffect(openBodyCheckIn) {
+        if (openBodyCheckIn) {
+            tab = FuelTab.Body
+            bodyCheckInOpen = true
+            onBodyCheckInHandled()
+        }
+    }
     var overview by remember { mutableStateOf<NutritionOverview?>(null) }
     var stool by remember { mutableStateOf<List<StoolAnalysisRow>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -94,9 +112,20 @@ fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {})
         isLoading = false
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
-        TileHeader(onBack = onBack)
-        SubTabRow(items = FuelTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
+    // Contract A4: title, context line and sub-tab rail stay pinned; only the tab's content scrolls, from the top on a tab change.
+    val scroll = rememberScrollState()
+    LaunchedEffect(tab) { scroll.scrollTo(0) }
+    PinnedPage(
+        onBack = onBack,
+        title = "FUEL",
+        subtitle = when (tab) {
+            FuelTab.Nutrition -> "TODAY · MACROS · HYDRATION"
+            FuelTab.Body -> "WEIGHT · MEASUREMENTS · BODY FAT · STOOL"
+        },
+        accent = FT.DomainFuel,
+        rail = { SubTabRow(items = FuelTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        scrollState = scroll,
+    ) {
 
         when {
             guard.error != null && !isLoading -> LoadErrorCard(guard)
@@ -122,17 +151,27 @@ fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {})
                 // exists, per the ticket's own framing -- not built here).
                 // DAV-208 (24/9 fixes): Body (weight/body-fat/TDEE) folded in
                 // as a second stacked section, same reasoning as Hydration above.
-                FuelTab.Digestion -> {
+                FuelTab.Body -> {
+                    BodyTab(allDays = overview?.allDays ?: emptyList(), reloadKey = bodyReload, onStartCheckIn = { bodyCheckInOpen = true })
                     stool?.let { rows ->
-                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                             val stoolEntries = rows.mapNotNull { row -> row.bristolType?.let { OffsetDateTime.parse(row.occurredAt).toLocalDateTime().toLocalDate() to it } }
                             BristolCard(evaluateBristol(stoolEntries), stoolEntries)
                         }
                     }
-                    BodyTab(allDays = overview?.allDays ?: emptyList())
                 }
             }
         }
+    }
+
+    if (bodyCheckInOpen) {
+        BodyCheckInSheet(
+            onDismiss = { bodyCheckInOpen = false },
+            onSaved = {
+                bodyCheckInOpen = false
+                bodyReload++
+            },
+        )
     }
 }
 
@@ -144,7 +183,7 @@ fun FuelTileScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit = {})
 private fun BristolCard(eval: BristolEvaluation, entries: List<Pair<LocalDate, Int>>) {
     FTCard(title = "DIGESTIVE PATTERN (BRISTOL)", info = "Descriptive pattern only — not a diagnostic tool.") {
         FTMetricRow("Frequency (14d)", "${eval.confidence.have} entries logged")
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTDataChip(eval.confidence)
         eval.pattern?.let { FTMetricRow("Pattern", bristolPatternLabel(it)) }
         // Bristol type is an ordinal category (1-7), so the shape across days is
         // shown as a hard / normal / loose distribution, not a continuous line.
@@ -174,12 +213,21 @@ private fun bristolPatternLabel(p: BristolPattern): String = when (p) {
 // under -- weight/body-fat trend content is unchanged; DAV-104's real TDEE
 // estimate replaces the old "not built yet" placeholder.
 @Composable
-private fun BodyTab(allDays: List<DailyNutrition>) {
+private fun BodyTab(allDays: List<DailyNutrition>, reloadKey: Int, onStartCheckIn: () -> Unit) {
     var bodyMetrics by remember { mutableStateOf<List<BodyMetricsAnalysisRow>?>(null) }
+    // The monthly body check-in: its history, the newest height and the profile its estimates need. A failed read
+    // leaves the card on its empty state rather than failing the tab.
+    var checkins by remember { mutableStateOf<List<BodyCheckinRecord>>(emptyList()) }
+    var heightCm by remember { mutableStateOf<Double?>(null) }
+    var profile by remember { mutableStateOf<UserProfileRow?>(null) }
     val bodyGuard = rememberLoadGuard()
 
-    LaunchedEffect(bodyGuard.attempt) {
+    LaunchedEffect(bodyGuard.attempt, reloadKey) {
         bodyGuard.run { bodyMetrics = AnalysisRepository(SupabaseClientProvider.client).loadBodyMetrics() }
+        val repo = BodyCheckinRepository(SupabaseClientProvider.client)
+        checkins = runCatching { repo.loadHistory() }.getOrElse { emptyList() }
+        heightCm = runCatching { repo.latestHeightCm() }.getOrNull()
+        profile = runCatching { UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull()
     }
 
     val b = bodyMetrics
@@ -200,6 +248,15 @@ private fun BodyTab(allDays: List<DailyNutrition>) {
         val weightPoints = b.mapNotNull { row -> row.weightKg?.let { LocalDate.parse(row.date) to it } }
         val weightEval = evaluateWeightTrend(weightPoints)
         WeightCard(weightEval)
+
+        BodyMeasurementsCard(
+            history = checkins,
+            heightCm = heightCm,
+            sex = profile?.sex?.takeIf { it == "male" || it == "female" },
+            ageYears = profile?.dateOfBirth?.let { runCatching { ChronoUnit.YEARS.between(LocalDate.parse(it), LocalDate.now()).toInt() }.getOrNull() },
+            scaleBodyFat = b.lastOrNull { it.bodyFatPct != null }?.bodyFatPct,
+            onStart = onStartCheckIn,
+        )
 
         // DAV-76: read alongside weight rather than as a disconnected number
         // -- no numeric calorie/macro goal exists anywhere in this project
@@ -224,8 +281,8 @@ private const val TREND_WINDOW_DAYS = 90L
 @Composable
 private fun WeightCard(eval: WeightEvaluation) {
     FTCard(title = "WEIGHT TREND") {
-        FTStatePill(eval.state.toMetricState())
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTStatePill(trendStateWord(eval.state))
+        FTDataChip(eval.confidence)
         eval.emaToday?.let { FTMetricRow("EMA (today)", "%.1f kg".format(it)) }
         eval.rateKgPerWeek?.let { FTMetricRow("Rate", "%+.2f kg/week".format(it)) }
         val today = LocalDate.now()
@@ -253,6 +310,8 @@ private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) 
                 refLow = PROTEIN_PCT_LOW * 100,
                 refHigh = PROTEIN_PCT_HIGH * 100,
                 unit = "% of calories from protein",
+                // Chart rules: a day without a complete log is a gap, not a straight line across it.
+                maxGapDays = 1,
             )
         }
     }
@@ -265,8 +324,8 @@ private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) 
 @Composable
 private fun NutritionCard(eval: NutritionEvaluation) {
     FTCard(title = "NUTRITION (ANALYSIS)") {
-        FTStatePill(eval.state.toMetricState())
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTStatePill(gateStateWord(eval.state))
+        FTDataChip(eval.confidence)
         eval.energyTrend14d?.let { FTMetricRow("14-day energy trend", "%.0f kcal".format(it)) }
         eval.energyCv28d?.let { FTMetricRow("28-day energy CV", "%.1f%%".format(it)) }
         eval.proteinAdherence14d?.let { FTMetricRow("Protein in AMDR band (10-35% kcal)", "%.0f%%".format(it)) }
@@ -276,8 +335,8 @@ private fun NutritionCard(eval: NutritionEvaluation) {
 @Composable
 private fun BodyFatCard(eval: BodyFatEvaluation) {
     FTCard(title = "BODY FAT %") {
-        FTStatePill(eval.state.toMetricState())
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTStatePill(trendStateWord(eval.state))
+        FTDataChip(eval.confidence)
         eval.latest?.let { FTMetricRow("Latest", "%.1f%%".format(it)) }
         eval.previous?.let { FTMetricRow("Previous (≥30d prior)", "%.1f%%".format(it)) }
         eval.delta?.let { FTMetricRow("Delta", "%+.1f pp".format(it)) }
@@ -295,7 +354,7 @@ private fun TdeeCard(eval: TdeeEvaluation) {
         title = "ENERGY BALANCE (TDEE ESTIMATE)",
         info = "Post-fact estimate from your own logged intake and real weight trend — not a predictive formula, and not a target to hit.",
     ) {
-        FTConfidenceChip(confidenceLevel(eval.confidence))
+        FTDataChip(eval.confidence)
         if (eval.state == EvalState.Stable && eval.tdeeKcal != null && eval.rangeLowKcal != null && eval.rangeHighKcal != null) {
             FTMetricValue(
                 DisplayValue(

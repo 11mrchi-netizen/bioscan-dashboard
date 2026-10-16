@@ -54,6 +54,7 @@ fun strengthSessionLoadVector(
     avgHr: Double?,
     maxHr: Double?,
     restingHr: Double?,
+    personalMaxHr: Double?,
     caloriesActive: Double?,
 ): SessionLoadVector {
     val dims = mutableMapOf<LoadDimension, Double>()
@@ -61,6 +62,7 @@ fun strengthSessionLoadVector(
     val cardio = trimp(
         EnduranceSessionInput(durationMin, null, avgHr, maxHr, null, null, null),
         restingHr,
+        personalMaxHr,
     )
     cardio?.let { dims[LoadDimension.Cardiovascular] = it }
 
@@ -96,6 +98,7 @@ private const val ELEVATION_MECHANICAL_SCALE_M = 1000.0
 fun enduranceSessionLoadVector(
     session: EnduranceSessionInput,
     restingHr: Double?,
+    personalMaxHr: Double?,
     caloriesActive: Double?,
     thresholdHr: Double?,
     thresholdPaceMinPerKm: Double?,
@@ -104,7 +107,7 @@ fun enduranceSessionLoadVector(
 ): SessionLoadVector {
     val dims = mutableMapOf<LoadDimension, Double>()
 
-    trimp(session, restingHr)?.let { dims[LoadDimension.Cardiovascular] = it }
+    trimp(session, restingHr, personalMaxHr)?.let { dims[LoadDimension.Cardiovascular] = it }
     // Muscular: not computed for endurance -- see the mapping table above.
     elevationGainM?.let { gain ->
         session.distanceKm?.let { distance ->
@@ -116,7 +119,7 @@ fun enduranceSessionLoadVector(
     session.rpe?.let { dims[LoadDimension.Perceptual] = it.toDouble() }
 
     val competing = buildMap {
-        trimp(session, restingHr)?.let { put("trimp", it) }
+        trimp(session, restingHr, personalMaxHr)?.let { put("trimp", it) }
         sRpeLoad(session)?.let { put("srpe", it) }
         thresholdRelativeIntensityPercent(session, thresholdHr, thresholdPaceMinPerKm)?.let { put("threshold_relative_pct", it) }
         powerPercentOfFtp(session, ftpWatts)?.let { put("power_pct_ftp", it) }

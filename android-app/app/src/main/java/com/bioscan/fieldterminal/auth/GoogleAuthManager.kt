@@ -5,7 +5,9 @@ import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import com.bioscan.fieldterminal.BuildConfig
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
@@ -14,6 +16,8 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingExcept
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.IDToken
+import io.github.jan.supabase.exceptions.HttpRequestException
+import io.github.jan.supabase.exceptions.RestException
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -74,14 +78,29 @@ object GoogleAuthManager {
                 nonce = rawNonce // raw (unhashed) nonce -- Supabase re-hashes to verify
             }
             Result.success(Unit)
+        } catch (e: GetCredentialCancellationException) {
+            // The user closed the account picker: nothing to report.
+            Result.failure(SignInException(null, e))
+        } catch (e: NoCredentialException) {
+            Log.w(TAG, "No Google account on the device", e)
+            Result.failure(SignInException("No Google account on this phone. Add one in Settings › Passwords & accounts, then try again.", e))
         } catch (e: GetCredentialException) {
             Log.e(TAG, "Credential retrieval failed", e)
-            Result.failure(e)
+            Result.failure(SignInException("Google sign-in didn't complete. Try again.", e))
         } catch (e: GoogleIdTokenParsingException) {
             Log.e(TAG, "Failed to parse Google ID token", e)
-            Result.failure(e)
+            Result.failure(SignInException("Google returned an unreadable sign-in. Try again.", e))
+        } catch (e: RestException) {
+            Log.e(TAG, "Supabase rejected the Google token", e)
+            Result.failure(SignInException("The server refused the sign-in. Try again, or check the account is allowed.", e))
+        } catch (e: HttpRequestException) {
+            Log.e(TAG, "Supabase unreachable", e)
+            Result.failure(SignInException("Couldn't reach the server. Check the connection and try again.", e))
         }
     }
+
+    /** A failed sign-in. `message` is shown on the sign-in screen as is; null means there is nothing to show (cancelled). */
+    class SignInException(message: String?, cause: Throwable) : Exception(message, cause)
 
     // Mirrors the web dashboard's sign-out button (see index.html / ROADMAP.md
     // Foundation section): a valid Supabase session skips straight past any

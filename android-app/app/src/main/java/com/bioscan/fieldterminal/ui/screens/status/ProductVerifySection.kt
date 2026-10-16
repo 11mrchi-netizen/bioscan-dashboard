@@ -1,7 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,10 +17,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.DSLD_SOURCE_NAME
 import com.bioscan.fieldterminal.data.DsldVerification
 import com.bioscan.fieldterminal.data.OwnProduct
@@ -39,8 +38,9 @@ import com.bioscan.fieldterminal.domain.FactField
 import com.bioscan.fieldterminal.domain.ProductFacts
 import com.bioscan.fieldterminal.domain.normalizeBarcode
 import com.bioscan.fieldterminal.domain.proposeFacts
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.scanBarcode
@@ -105,7 +105,7 @@ fun ProductVerifySection(productId: Long) {
         )
         FieldTextField(barcode, { barcode = it; result = null; error = null; info = null }, "Barcode (UPC)", keyboardType = KeyboardType.Number)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AmberButton(label = "SCAN", enabled = !busy) {
+            FTButton(label = "SCAN", enabled = !busy) {
                 scope.launch {
                     info = null
                     val raw = scanBarcode(context) { info = "Scanner unavailable ($it). Type the barcode instead." }
@@ -115,9 +115,9 @@ fun ProductVerifySection(productId: Long) {
                     }
                 }
             }
-            AmberButton(label = if (busy) "WORKING..." else "VERIFY", enabled = !busy && barcode.filter { it.isDigit() }.length >= 6) { verify(barcode) }
+            FTButton(label = if (busy) "WORKING..." else "VERIFY", enabled = !busy && barcode.filter { it.isDigit() }.length >= 6) { verify(barcode) }
         }
-        AmberButton(label = "FIND BY NAME", enabled = !busy && own != null) {
+        FTButton(label = "FIND BY NAME", enabled = !busy && own != null) {
             busy = true
             error = null
             info = null
@@ -204,7 +204,7 @@ private fun CandidateRow(text: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .clickable(onClick = onClick)
+            .ftClickable(shape = RoundedCornerShape(FT.RadiusModule), onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
     )
 }
@@ -227,10 +227,10 @@ private fun ApplyPanel(productId: Long, sourceName: String, label: String, yours
                 "${if (on) "[x]" else "[ ]"} ${p.field.label}: yours ${p.yours ?: "not set"} → ${p.theirs}",
                 style = body.copy(fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal),
                 color = FT.TextPrimary,
-                modifier = Modifier.fillMaxWidth().clickable { picked = if (on) picked - p.field else picked + p.field }.padding(vertical = 6.dp),
+                modifier = Modifier.fillMaxWidth().ftClickable(role = Role.Checkbox) { picked = if (on) picked - p.field else picked + p.field }.padding(vertical = 6.dp),
             )
         }
-        AmberButton(label = if (busy) "APPLYING..." else "APPLY ${picked.size} SELECTED", enabled = !busy && picked.isNotEmpty()) {
+        FTButton(label = if (busy) "APPLYING..." else "APPLY ${picked.size} SELECTED", enabled = !busy && picked.isNotEmpty()) {
             busy = true
             message = null
             scope.launch {
@@ -264,7 +264,7 @@ private fun BarcodePanel(productId: Long, code: String, current: String?, repo: 
             style = body,
             color = FT.TextSecondary,
         )
-        AmberButton(label = if (busy) "SAVING..." else "SAVE BARCODE", enabled = !busy && message == null) {
+        FTButton(label = if (busy) "SAVING..." else "SAVE BARCODE", enabled = !busy && message == null) {
             busy = true
             scope.launch {
                 try {
@@ -349,7 +349,7 @@ private fun SuppcoBlock(v: SuppcoVerification?, error: String?) {
             )
         }
         if (p.trust.details.isNotEmpty()) {
-            Text(p.trust.details.joinToString(" · ") { "${it.category}: ${it.rank}" }, style = body.copy(fontSize = 12.sp), color = FT.TextSecondary)
+            Text(p.trust.details.joinToString(" · ") { "${it.category}: ${it.rank}" }, style = FTType.Caption, color = FT.TextSecondary)
         }
 
         // Safety facts are stated in words, never by color alone.

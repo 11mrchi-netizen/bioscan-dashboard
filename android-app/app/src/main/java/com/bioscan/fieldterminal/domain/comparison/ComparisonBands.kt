@@ -42,7 +42,31 @@ fun presentComparison(result: ComparisonResult): ComparisonPresentation {
         ComparisonState.NON_COMPARABLE -> "No comparable observations"
         ComparisonState.STALE_REFERENCE -> "Reference is out of date"
     }
-    val monotonic = result.directionality != Directionality.OPTIMAL_RANGE && result.directionality != Directionality.TARGET_VALUE
-    val band = if (result.state == ComparisonState.OK && monotonic) result.percentile?.let(::percentileBand) else null
+    // Analysis review A3: only a metric with a better end gets a band, and the band is taken from the FAVORABLE position.
+    // It used the raw percentile, so the highest resting heart rate or the slowest pace read "Top 10%". A
+    // NON_DIRECTIONAL metric (body weight) has no better end, so "Top 10%" means nothing there either.
+    val band = if (result.state == ComparisonState.OK) favorablePercentile(result)?.let(::percentileBand) else null
     return ComparisonPresentation(stateLabel, band)
+}
+
+// The share of the reference the current value is at least as good as: the raw percentile for higher-better metrics,
+// its mirror for lower-better ones, null when the metric has no better end.
+fun favorablePercentile(result: ComparisonResult): Double? {
+    val p = result.percentile ?: return null
+    return when (result.directionality) {
+        Directionality.HIGHER_BETTER -> p
+        Directionality.LOWER_BETTER -> 100.0 - p
+        Directionality.OPTIMAL_RANGE, Directionality.TARGET_VALUE, Directionality.NON_DIRECTIONAL -> null
+    }
+}
+
+// 1st, 2nd, 3rd, 4th ... 11th, 12th, 13th ... 21st, 22nd, 23rd.
+fun ordinal(n: Int): String {
+    val suffix = if (n % 100 in 11..13) "th" else when (n % 10) {
+        1 -> "st"
+        2 -> "nd"
+        3 -> "rd"
+        else -> "th"
+    }
+    return "$n$suffix"
 }

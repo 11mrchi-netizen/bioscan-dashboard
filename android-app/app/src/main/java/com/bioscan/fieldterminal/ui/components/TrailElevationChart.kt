@@ -3,8 +3,6 @@ package com.bioscan.fieldterminal.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -171,7 +169,7 @@ fun TrailElevationChart(points: List<TrailChartPoint>, modifier: Modifier = Modi
                     modifier = Modifier
                         .border(FT.BorderWidth, if (isOn) signal.color else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                         .background(if (isOn) signal.color.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) {
                             active = if (isOn) active - signal else active + signal
                         }
                         .padding(horizontal = 12.dp, vertical = 6.dp),

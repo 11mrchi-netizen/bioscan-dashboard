@@ -44,4 +44,3 @@ private fun levelFrom(results: List<ComparisonResult>): DomainLevel {
 fun runningLevel(results: List<ComparisonResult>): DomainLevel = levelFrom(results)
 fun strengthLevel(results: List<ComparisonResult>): DomainLevel = levelFrom(results)
 fun conditioningLevel(results: List<ComparisonResult>): DomainLevel = levelFrom(results)
-fun mountainLevel(results: List<ComparisonResult>): DomainLevel = levelFrom(results)

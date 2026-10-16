@@ -115,3 +115,24 @@ test('the engine is deterministic', () => {
   const f = typicalitySeries(3, 200, '2026-01-05', [{ start: 195, length: 5 }])
   assert.equal(JSON.stringify(analyseTypicality(inputFrom(f))), JSON.stringify(analyseTypicality(inputFrom(f))))
 })
+
+// Analysis review B9: today never has a full step count, so it is judged on 4 of 5 signals. Its thresholds must come
+// from reference distances over the same 4 signals, or its false-flag rate drifts above nominal.
+test('a day judged without its step count keeps a near-nominal false-flag rate', () => {
+  let elevatedOrWorse = 0
+  let unusual = 0
+  let judged = 0
+  const sims = 200
+  for (let s = 0; s < sims; s++) {
+    const r = analyseTypicality(inputFrom(typicalitySeries(4000 + s, 200)))
+    const today = r.recent[r.recent.length - 1]
+    if (today.state === 'insufficient') continue
+    assert.equal(today.signalsUsed, 4)
+    judged++
+    if (today.state !== 'typical') elevatedOrWorse++
+    if (today.state === 'unusual') unusual++
+  }
+  assert.ok(judged >= 150, `judged ${judged}`)
+  assert.ok(elevatedOrWorse / judged <= 0.15, `elevated-or-worse share ${elevatedOrWorse / judged}`) // nominal 10 %
+  assert.ok(unusual / judged <= 0.05, `unusual share ${unusual / judged}`) // nominal 2.5 %
+})

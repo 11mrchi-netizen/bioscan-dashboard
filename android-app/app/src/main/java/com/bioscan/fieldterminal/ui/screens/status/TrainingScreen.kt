@@ -1,10 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import com.bioscan.fieldterminal.ui.components.launchSafe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,21 +39,20 @@ import com.bioscan.fieldterminal.domain.hasPlausiblePace
 import com.bioscan.fieldterminal.domain.comparison.comparableSet
 import com.bioscan.fieldterminal.domain.comparison.comparePersonal
 import com.bioscan.fieldterminal.domain.comparison.isComparableSessionDistance
-import com.bioscan.fieldterminal.domain.preparePerformanceTrendData
 import com.bioscan.fieldterminal.domain.sumDistanceKmSince
-import com.bioscan.fieldterminal.ui.components.ComparisonStrip
-import com.bioscan.fieldterminal.ui.components.DateTrendLine
-import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.FTMetricValue
-import com.bioscan.fieldterminal.ui.components.InfoHelpButton
-import com.bioscan.fieldterminal.domain.EF_MIN_RUNS_28D
-import com.bioscan.fieldterminal.domain.efficiencyRollingMedian28
-import com.bioscan.fieldterminal.ui.components.SegmentedToggle
-import com.bioscan.fieldterminal.ui.components.TrendSeries
-import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
+import com.bioscan.fieldterminal.ui.components.ComparisonStrip
+import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.FTMetricValue
+import com.bioscan.fieldterminal.ui.components.GlanceAnchors
+import com.bioscan.fieldterminal.ui.components.GlanceChip
+import com.bioscan.fieldterminal.ui.components.SegmentedToggle
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.glanceAnchor
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -70,7 +66,14 @@ import java.time.temporal.ChronoUnit
 // full per-lift breakdown -- that's Phase G5's "combined session detail"
 // view, once one exists to link to.
 @Composable
-fun TrainingScreen(timeframe: PerformanceTimeframe, onOpenSessionDetail: (Long) -> Unit = {}) {
+fun TrainingScreen(
+    timeframe: PerformanceTimeframe,
+    onOpenSessionDetail: (Long) -> Unit = {},
+    onOpenRunning: () -> Unit = {},
+    onOpenStrength: () -> Unit = {},
+    // The Load tab's glance strip (UX review P2); each card below registers its chip.
+    glance: GlanceAnchors? = null,
+) {
     var overview by remember { mutableStateOf<TrainingOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -104,12 +107,21 @@ fun TrainingScreen(timeframe: PerformanceTimeframe, onOpenSessionDetail: (Long) 
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
         }
-        else -> TrainingContent(overview!!, timeframe, onOpenSessionDetail, onMarkTrail)
+        else -> TrainingContent(overview!!, timeframe, onOpenSessionDetail, onMarkTrail, onOpenRunning, onOpenStrength, glance)
     }
 }
 
 @Composable
-private fun TrainingContent(overview: TrainingOverview, timeframe: PerformanceTimeframe, onOpenSessionDetail: (Long) -> Unit, onMarkTrail: (List<Long>) -> Unit) {
+private fun TrainingContent(
+    overview: TrainingOverview,
+    timeframe: PerformanceTimeframe,
+    onOpenSessionDetail: (Long) -> Unit,
+    onMarkTrail: (List<Long>) -> Unit,
+    onOpenRunning: () -> Unit,
+    onOpenStrength: () -> Unit,
+    glance: GlanceAnchors?,
+) {
+    val today = LocalDate.now()
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -118,9 +130,24 @@ private fun TrainingContent(overview: TrainingOverview, timeframe: PerformanceTi
         // (previously three separate top-level cards) per direct user
         // request -- both are running-related, and neither is per-session so
         // they read fine as sub-sections rather than their own cards.
-        RunningCard(overview, timeframe, onMarkTrail)
+        RunningCard(
+            overview, timeframe, onMarkTrail, onOpenRunning,
+            modifier = Modifier.glanceAnchor(
+                glance, "running",
+                GlanceChip(
+                    order = 2, label = "RUNNING",
+                    headline = if (overview.hasAnyRunning) "%.1f KM · 7D".format(sumDistanceKmSince(overview.runningSessions, today, 7)) else "NONE YET",
+                ),
+            ),
+        )
 
-        FTCard(title = "STRENGTH") {
+        FTCard(
+            title = "STRENGTH",
+            modifier = Modifier.glanceAnchor(
+                glance, "strength",
+                GlanceChip(order = 3, label = "STRENGTH", headline = if (overview.hasAnyStrength) "${overview.strengthSessionsThisWeek} THIS WEEK" else "NONE YET"),
+            ),
+        ) {
             if (overview.hasAnyStrength) {
                 FTMetricValue(
                     DisplayValue(
@@ -129,11 +156,7 @@ private fun TrainingContent(overview: TrainingOverview, timeframe: PerformanceTi
                     ),
                 )
                 FTMetricRow("This week", "${overview.strengthMinutesThisWeek} min")
-                Text(
-                    "Synced from Health Connect. Per-lift/set detail isn't shown here yet.",
-                    style = FTType.Caption,
-                    color = FT.TextSecondary,
-                )
+                SkillLink(summary = "STANDARDS · E1RM · VOLUME · PRs", label = "OPEN STRENGTH", onClick = onOpenStrength)
             } else {
                 Text(
                     text = "No strength sessions synced yet.",
@@ -149,7 +172,10 @@ private fun TrainingContent(overview: TrainingOverview, timeframe: PerformanceTi
             }
         }
 
-        SessionListCard(overview.recentSessions, onOpenSessionDetail)
+        SessionListCard(
+            overview.recentSessions, onOpenSessionDetail,
+            modifier = Modifier.glanceAnchor(glance, "sessions", GlanceChip(order = 4, label = "SESSIONS", headline = "${overview.recentSessions.take(20).size}")),
+        )
     }
 }
 
@@ -158,9 +184,9 @@ private fun TrainingContent(overview: TrainingOverview, timeframe: PerformanceTi
 // recentSessions fetch those cards already get (no new query) and the same
 // session_detail/{id} route the Log tab's EntryRow already opens.
 @Composable
-private fun SessionListCard(sessions: List<ExerciseSessionRow>, onOpenSessionDetail: (Long) -> Unit) {
+private fun SessionListCard(sessions: List<ExerciseSessionRow>, onOpenSessionDetail: (Long) -> Unit, modifier: Modifier = Modifier) {
     if (sessions.isEmpty()) return
-    FTCard(title = "ALL SESSIONS") {
+    FTCard(title = "ALL SESSIONS", modifier = modifier) {
         sessions.take(20).forEach { session -> SessionRow(session, onClick = { onOpenSessionDetail(session.id) }) }
     }
 }
@@ -178,7 +204,7 @@ private fun SessionRow(session: ExerciseSessionRow, onClick: () -> Unit) {
 
     Row(
         modifier = Modifier.fillMaxWidth()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick)
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -202,11 +228,11 @@ private fun SessionRow(session: ExerciseSessionRow, onClick: () -> Unit) {
 // No volume bar: a fixed km ceiling was arbitrary at any period, so the hero
 // value stands alone until a real personal baseline backs a comparison.
 @Composable
-private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimeframe, onMarkTrail: (List<Long>) -> Unit) {
+private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimeframe, onMarkTrail: (List<Long>) -> Unit, onOpenRunning: () -> Unit, modifier: Modifier = Modifier) {
     var period by remember { mutableStateOf(RunningPeriod.Week) }
     val today = LocalDate.now()
 
-    FTCard(title = "RUNNING") {
+    FTCard(title = "RUNNING", modifier = modifier) {
         if (!overview.hasAnyRunning) {
             Text("No running sessions logged yet.", style = FTType.Body, color = FT.TextSecondary)
         } else {
@@ -278,17 +304,33 @@ private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimefr
         // bug this reorder originally fixed: VO2max previously never showed
         // at all for a no-running-history account, despite coming from
         // wearable_daily, not exercise_sessions).
-        PerformanceSection(overview, timeframe)
-        RunEfficiencySection(overview, timeframe)
+        // The deep charts (VO2max / lactate threshold, efficiency, pace, form, weekly volume) moved to the User tab's
+        // Running page; this card keeps the weekly rollup and links there.
+        SkillLink(
+            summary = listOfNotNull(
+                overview.latestVo2Max?.let { "VO2MAX ${"%.0f".format(it)}" },
+                overview.efficiencyPoints.lastOrNull()?.second?.let { "EF ${"%.2f".format(it)}" },
+            ).joinToString("  ·  ").ifBlank { "VO2MAX · PACE · EFFICIENCY · FORM" },
+            label = "OPEN RUNNING",
+            onClick = onOpenRunning,
+        )
     }
 }
 
+// One-line pointer from a rollup card to its deep page on the User tab.
 @Composable
-private fun SectionDivider() {
-    Box(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder))
+private fun SkillLink(summary: String, label: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .ftClickable(onClick = onClick)
+            .padding(top = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(summary, style = FTType.MonoCaption, color = FT.TextSecondary, modifier = Modifier.weight(1f))
+        Text("$label ›", style = FTType.Label, color = FT.DomainTraining)
+    }
 }
-
-private val sectionLabelStyle = FTType.LabelCaps
 
 // Untagged runs that look like trail runs (Zepp said trail, or a steep
 // climb/km) -- collapsed by default, one tap to confirm each or all.
@@ -298,7 +340,7 @@ private fun SuspectedTrailRuns(suspected: List<SuspectedTrailRun>, onMark: (List
     var expanded by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { expanded = !expanded }
+            .ftClickable { expanded = !expanded }
             .padding(top = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -336,208 +378,11 @@ private fun TrailMarkButton(label: String, modifier: Modifier = Modifier, onClic
     Box(
         modifier = modifier
             .border(FT.BorderWidth, FT.DomainTraining, shape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick, shape = shape)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(label, style = FTType.Label, color = FT.DomainTraining)
-    }
-}
-
-// DAV-272: Efficiency Factor (grade-adjusted speed per heartbeat) from Zepp-synced
-// aerobic runs -- computed server-side, so this only reads scalars. Shown as a
-// 28-day rolling median once enough runs exist; a single run's EF swings too
-// much with heat, sleep and terrain to read on its own.
-@Composable
-private fun RunEfficiencySection(overview: TrainingOverview, timeframe: PerformanceTimeframe) {
-    if (overview.efficiencyPoints.isEmpty() && overview.latestGapMinPerKm == null) return
-    val today = LocalDate.now()
-    val rolling = efficiencyRollingMedian28(overview.efficiencyPoints)
-    val cutoff = today.minusMonths(timeframe.months)
-
-    SectionDivider()
-    Text("RUN EFFICIENCY", style = sectionLabelStyle, color = FT.TextMuted)
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Efficiency factor", style = FTType.Body, color = FT.TextSecondary)
-        InfoHelpButton("Efficiency factor", EF_HELP)
-    }
-    val median = rolling.lastOrNull()?.second
-    if (median != null) {
-        FTMetricValue(DisplayValue(primary = "%.2f".format(median), unit = "EF", secondary = "28-day median"))
-    } else {
-        val n = overview.efficiencyPoints.count { it.first.isAfter(today.minusDays(28)) }
-        Text(
-            "Building — needs $EF_MIN_RUNS_28D aerobic runs of 20+ min in 28 days ($n so far).",
-            style = FTType.Caption,
-            color = FT.TextSecondary,
-        )
-    }
-    overview.latestGapMinPerKm?.let { FTMetricRow("Latest grade-adjusted pace", formatPace(it)) }
-    overview.latestHrDecouplingPct?.let { FTMetricRow("Latest HR decoupling", "%+.1f%%".format(it)) }
-
-    val raw = overview.efficiencyPoints.filter { it.first >= cutoff }
-    if (raw.size >= 2) {
-        DateTrendLine(
-            series = listOf(
-                TrendSeries(raw, FT.TextMuted, "RUN"),
-                TrendSeries(rolling.filter { it.first >= cutoff }, FT.Emerald, "28D MEDIAN"),
-            ),
-            valueFormat = { "%.2f".format(it) },
-            unit = "EF (m/min per bpm)",
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            LegendItem("PER RUN", FT.TextMuted)
-            LegendItem("28D MEDIAN", FT.Emerald)
-        }
-    }
-}
-
-private const val EF_HELP =
-    "Efficiency factor is how much flat-ground running speed you produce per heartbeat: " +
-        "grade-adjusted speed (m/min) ÷ average heart rate.\n\n" +
-        "Rising over weeks usually means better aerobic fitness. Only easy/aerobic runs of 20+ minutes count " +
-        "(below your watch's lactate-threshold heart rate), because hard sessions aren't comparable.\n\n" +
-        "HR decoupling is how much that ratio drops from the first to the second half of a run — under ~5% suggests a solid aerobic base."
-
-private enum class PerformanceMetric(val label: String) {
-    VO2MAX("VO2MAX"),
-    LACTATE_THRESHOLD("LACTATE THRESHOLD"),
-}
-
-// DAV-115/123: VO2max and lactate threshold on one switchable card -- both
-// are slow-moving fitness estimates on the same 1M/3M/6M/1Y timeframe, not
-// per-session figures, so they share the toggle/chart rather than each
-// getting their own copy of it. Card is hidden entirely only when neither
-// metric has ever had a real reading.
-@Composable
-private fun PerformanceSection(overview: TrainingOverview, timeframe: PerformanceTimeframe) {
-    val available = listOfNotNull(
-        PerformanceMetric.VO2MAX.takeIf { overview.latestVo2Max != null },
-        PerformanceMetric.LACTATE_THRESHOLD.takeIf { overview.latestLactateThresholdPaceMinPerKm != null },
-    )
-    if (available.isEmpty()) return
-
-    var selected by remember(available) { mutableStateOf(available.first()) }
-    val vo2maxPersonal = overview.latestVo2Max?.let { latest ->
-        comparePersonal(
-            metric = "vo2max",
-            current = latest,
-            history = overview.vo2MaxSeries,
-            presentSources = setOf("wearable_daily"),
-            idealSources = setOf("wearable_daily"),
-            origin = "wearable_daily",
-        )
-    }
-
-    SectionDivider()
-    Text("PERFORMANCE", style = sectionLabelStyle, color = FT.TextMuted)
-    if (available.size > 1) {
-        SegmentedToggle(options = available, selected = selected, labelOf = { it.label }, onSelect = { selected = it })
-    }
-    when (selected) {
-        PerformanceMetric.VO2MAX -> {
-            FTMetricValue(DisplayValue(primary = "%.1f".format(overview.latestVo2Max), unit = "ML/KG/MIN"))
-            Text(
-                "Wearable-estimated, not lab-confirmed.",
-                style = FTType.Caption,
-                color = FT.TextSecondary,
-            )
-            vo2maxPersonal?.let { ComparisonStrip(personal = it) }
-        }
-        PerformanceMetric.LACTATE_THRESHOLD -> {
-            FTMetricValue(
-                DisplayValue(
-                    primary = formatPace(overview.latestLactateThresholdPaceMinPerKm!!),
-                    // DAV-284: HR is a second measurement of the same threshold, not a
-                    // separate metric -- shown paired, never fabricated when Zepp's
-                    // estimate for a given run didn't include it.
-                    secondary = overview.latestLactateThresholdHrBpm?.let { "%.0f bpm".format(it) } ?: "HR unavailable",
-                ),
-            )
-            Text(
-                "Zepp's own estimate, recomputed per qualifying run.",
-                style = FTType.Caption,
-                color = FT.TextSecondary,
-            )
-        }
-    }
-    PerformanceTrendChart(
-        series = when (selected) {
-            PerformanceMetric.VO2MAX -> overview.vo2MaxSeries
-            PerformanceMetric.LACTATE_THRESHOLD -> overview.lactateThresholdPaceSeries
-        },
-        timeframe = timeframe,
-        valueFormat = when (selected) {
-            PerformanceMetric.VO2MAX -> { v -> "%.1f".format(v) }
-            PerformanceMetric.LACTATE_THRESHOLD -> ::formatPace
-        },
-        unit = when (selected) {
-            PerformanceMetric.VO2MAX -> "ml/kg/min"
-            PerformanceMetric.LACTATE_THRESHOLD -> "pace · min:sec per km"
-        },
-    )
-}
-
-// DAV-80 / DAV-152 / DAV-115. Raw readings are the noisiest series so they
-// get the dimmest line; the 28-day average gets the emerald primary-signal
-// accent (DAV-99). Generalized to any (date, value) series -- VO2max and
-// lactate threshold pace both plot through this now, no metric-specific copy.
-@Composable
-private fun PerformanceTrendChart(
-    series: List<Pair<LocalDate, Double>>,
-    timeframe: PerformanceTimeframe,
-    valueFormat: (Double) -> String,
-    unit: String,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (series.size < 2) {
-            Text(
-                "Not enough readings yet to plot a trend.",
-                style = FTType.Caption,
-                color = FT.TextSecondary,
-                modifier = Modifier.padding(vertical = 10.dp),
-            )
-            return@Column
-        }
-        val trendData = preparePerformanceTrendData(series, timeframe)
-        if (trendData.raw.size >= 2) {
-            DateTrendLine(
-                series = listOf(
-                    TrendSeries(trendData.raw, FT.TextMuted, "RAW"),
-                    TrendSeries(trendData.avg7d, FT.Info, "7D"),
-                    TrendSeries(trendData.avg28d, FT.Emerald, "28D"),
-                ),
-                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
-                valueFormat = valueFormat,
-                unit = unit,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                LegendItem("RAW", FT.TextMuted)
-                LegendItem("7D AVG", FT.Info)
-                LegendItem("28D AVG", FT.Emerald)
-            }
-        } else {
-            Text(
-                "Not enough readings in the last ${timeframe.label.lowercase()} to plot a trend.",
-                style = FTType.Caption,
-                color = FT.TextSecondary,
-                modifier = Modifier.padding(vertical = 10.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun LegendItem(label: String, color: androidx.compose.ui.graphics.Color) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        Box(
-            modifier = Modifier
-                .padding(top = 1.dp)
-                .height(3.dp)
-                .width(12.dp)
-                .background(color),
-        )
-        Text(label, style = FTType.Micro, color = FT.TextSecondary)
     }
 }
 

@@ -30,14 +30,14 @@ private val TIER_DEMAND_LEVEL = mapOf(
     TrainingDemandTier.STRENGTH to 1,
 )
 
-// Unstable maps to null (not a level) rather than some arbitrary middle
-// value -- Dynamic Recovery's contributors genuinely disagreed, so there is
-// no clean recovery-capacity number to compare a demand tier against.
+// Analysis review A1: Unstable used to map to null, so whenever two contributors disagreed (one up, one down, which is
+// common) every READY FOR row fell back to BUILDING, as if data were missing. Mixed signals are information: they read as
+// the middle level here, and the card's pill says MIXED SIGNALS so the reader knows why it isn't higher.
 private fun recoveryLevel(state: EvalState): Int? = when (state) {
     EvalState.ShiftUp -> 2
-    EvalState.Stable -> 1
+    EvalState.Stable, EvalState.Unstable -> 1
     EvalState.ShiftDown -> 0
-    EvalState.Unstable, EvalState.Building, EvalState.NoData -> null
+    EvalState.Building, EvalState.NoData -> null
 }
 
 fun computeTrainingReadiness(recovery: DynamicRecoveryResult): TrainingReadinessResult {

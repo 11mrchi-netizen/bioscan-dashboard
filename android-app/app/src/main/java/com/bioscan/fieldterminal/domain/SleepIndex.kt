@@ -47,11 +47,22 @@ private fun closenessScore(baseline7d: Double?, mean60d: Double?): Double? {
     return (baseline7d / mean60d).coerceIn(0.0, 1.0) * 100.0
 }
 
+// Analysis review phase G: one set of cut-offs for the Sleep Index, used by its own word and by Today's recovery (which
+// used 70 and 50 against the card's 75 and 55), in the vocabulary every composite shares. The index measures how close
+// the week's sleep came to the person's own norms (duration and stages against their 60-day means, capped at 100) and how
+// regular it was, so it reads AS EXPECTED near the top, BELOW EXPECTED under 75 and UNUSUALLY LOW under 55. It has no
+// ABOVE EXPECTED: by construction a week cannot score better than its own norm.
+const val SLEEP_INDEX_AS_EXPECTED = 75.0
+const val SLEEP_INDEX_UNUSUALLY_LOW = 55.0
+
 fun sleepIndexBand(score: Double): String = when {
-    score >= 75.0 -> "Good"
-    score >= 55.0 -> "Fair"
-    else -> "Needs attention"
+    score >= SLEEP_INDEX_AS_EXPECTED -> "AS EXPECTED"
+    score >= SLEEP_INDEX_UNUSUALLY_LOW -> "BELOW EXPECTED"
+    else -> "UNUSUALLY LOW"
 }
+
+/** The Sleep Index's pull on Today's recovery, from the same cut-offs as its word: none when as expected, down below. */
+fun sleepIndexDirection(score: Double): Int = if (score >= SLEEP_INDEX_AS_EXPECTED) 0 else -1
 
 fun computeSleepIndex(
     hoursDaily: List<Pair<LocalDate, Double>>,

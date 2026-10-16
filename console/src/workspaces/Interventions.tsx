@@ -4,6 +4,8 @@
 // whatever exists. intervention_response and protocol_audit rows only exist once analysis-run is redeployed with
 // runInterventionResponse.ts wired in (docs/intervention-protocol-intelligence/README.md's "Still open") -- until
 // then this tab correctly shows interventions/protocols with no response/audit section, not an error.
+// Analysis review phase F adds intervention_its: each intervention read once, on its evaluation date, against a forecast
+// from the eight weeks before it started (the OBSERVED rung: what happened, not why).
 
 import { LoadBanner } from '../components/shared/LoadBanner'
 import { useCallback, useEffect, useState } from 'react'
@@ -41,6 +43,12 @@ interface MetricResponse { metric: string; label: string; verdict: ResponseVerdi
 interface ResponsePayload { interventionId: string; asOf: string; metrics: MetricResponse[] }
 interface ResponseRow { key: string; state: string; calculated_at: string; payload: ResponsePayload }
 
+type ItsState = 'collecting' | 'evaluated' | 'insufficient'
+type ItsVerdict = 'clear' | 'negligible' | 'unclear'
+interface ItsMetric { metric: string; label: string; state: ItsState; verdict: ItsVerdict | null; gap: Diff | null; zone: number; preDays: number; activeDays: number; evaluateOn: string; summary: string }
+interface ItsRow { key: string; calculated_at: string; payload: { preStart: string; activeStart: string; evaluateOn: string; state: ItsState; metrics: ItsMetric[] } }
+const ITS_LABEL: Record<ItsVerdict, string> = { clear: 'CLEAR', negligible: 'NEGLIGIBLE', unclear: 'UNCLEAR' }
+
 interface AuditFinding { code: string; severity: AuditSeverity; message: string; interventionIds: string[] }
 interface AuditRow { key: string; calculated_at: string; payload: { findings: AuditFinding[] } }
 
@@ -60,21 +68,24 @@ export function Interventions() {
   const [protocols, setProtocols] = useState<ProtocolRow[]>([])
   const [responses, setResponses] = useState<Map<string, ResponseRow>>(new Map())
   const [audits, setAudits] = useState<Map<string, AuditRow>>(new Map())
+  const [itsReads, setItsReads] = useState<Map<string, ItsRow>>(new Map())
   const [loading, setLoading] = useState(true)
 
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const loadInner = useCallback(async () => {
-    const [ivRes, protoRes, respRes, auditRes] = await Promise.all([
+    const [ivRes, protoRes, respRes, auditRes, itsRes] = await Promise.all([
       supabase.from('interventions').select('id, domain, name, lifecycle_state, baseline_started_at, started_at, ended_at, intended_outcomes').order('created_at', { ascending: false }),
       supabase.from('protocols').select('id, name, objective_outcome_key, lifecycle_state, template_key').order('created_at', { ascending: false }),
       supabase.from('analysis_results').select('key, state, calculated_at, payload').eq('kind', 'intervention_response'),
       supabase.from('analysis_results').select('key, calculated_at, payload').eq('kind', 'protocol_audit'),
+      supabase.from('analysis_results').select('key, calculated_at, payload').eq('kind', 'intervention_its'),
     ])
     warnOnError('interventions', ivRes.error)
     warnOnError('protocols', protoRes.error)
     warnOnError('intervention_response', respRes.error)
     warnOnError('protocol_audit', auditRes.error)
+    warnOnError('intervention_its', itsRes.error)
 
     setInterventions((ivRes.data ?? []) as unknown as InterventionRow[])
     setProtocols((protoRes.data ?? []) as unknown as ProtocolRow[])
@@ -91,6 +102,12 @@ export function Interventions() {
       if (!existing || r.calculated_at > existing.calculated_at) auditByKey.set(r.key, r)
     }
     setAudits(auditByKey)
+    const itsByKey = new Map<string, ItsRow>()
+    for (const r of (itsRes.data ?? []) as unknown as ItsRow[]) {
+      const existing = itsByKey.get(r.key)
+      if (!existing || r.calculated_at > existing.calculated_at) itsByKey.set(r.key, r)
+    }
+    setItsReads(itsByKey)
   }, [])
 
   const load = useCallback(async () => {
@@ -194,10 +211,40 @@ export function Interventions() {
               ) : (
                 <p className="conf-footnote mono">no response analysis yet</p>
               )}
+              <ItsSection read={itsReads.get(iv.id)} />
             </div>
           )
         })}
       </div>
+    </div>
+  )
+}
+
+// The interrupted-time-series read: once, on its date, against the forecast from before the start. Its interval is drawn
+// against the no-effect zone (shaded).
+function ItsSection({ read }: { read: ItsRow | undefined }) {
+  if (!read) return null
+  const p = read.payload
+  return (
+    <div className="conf-metric">
+      <div className="conf-title">OBSERVED AGAINST THE FORECAST · read {p.state === 'collecting' ? `on ${p.evaluateOn}` : `${p.evaluateOn}`}</div>
+      <p className="conf-footnote mono">forecast from {p.preStart} to the day before {p.activeStart}; what happened, not why</p>
+      {p.metrics.map((m) => (
+        <div key={m.metric}>
+          <div className="conf-card-head">
+            <span className="conf-title">{m.label}</span>
+            <span className="conf-state mono">{m.verdict ? ITS_LABEL[m.verdict] : m.state.toUpperCase()}</span>
+          </div>
+          <p className="conf-summary">{m.summary}</p>
+          {m.gap && <IntervalBar effect={m.gap} mde={m.zone} />}
+          {m.gap && (
+            <div className="conf-legend mono">
+              <span>{m.preDays} days before · {m.activeDays} days since the start</span>
+              <span>shaded: the ±{m.zone}{m.gap.unit === '%' ? '%' : ` ${m.gap.unit}`} no-effect zone</span>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }

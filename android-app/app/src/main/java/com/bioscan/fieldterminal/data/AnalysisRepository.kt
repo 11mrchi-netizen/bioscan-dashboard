@@ -1,10 +1,22 @@
 package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.data.model.HrPoint
+import com.bioscan.fieldterminal.domain.LoadSpans
+import com.bioscan.fieldterminal.domain.HeartRateDay
+import com.bioscan.fieldterminal.domain.plausibleMinutes
+import com.bioscan.fieldterminal.data.model.FitnessFatigueRow
+import com.bioscan.fieldterminal.domain.SCORECARD_HISTORY_DAYS
+import com.bioscan.fieldterminal.data.model.PlannedOutcomeRow
 import com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow
+import com.bioscan.fieldterminal.data.model.CaseCrossoverResultRow
+import com.bioscan.fieldterminal.data.model.EventCurveRow
+import com.bioscan.fieldterminal.data.model.ExpectedBandRow
+import com.bioscan.fieldterminal.data.model.LagCurveRow
+import com.bioscan.fieldterminal.data.model.LedgerEntry
+import com.bioscan.fieldterminal.data.model.NewRegisteredQuestion
+import com.bioscan.fieldterminal.data.model.RegisteredQuestion
 import com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow
 import com.bioscan.fieldterminal.data.model.LabResultAnalysisRow
-import com.bioscan.fieldterminal.data.model.MaxHrRow
 import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
@@ -21,8 +33,12 @@ import com.bioscan.fieldterminal.domain.EnduranceSessionInput
 import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.aggregateMealsByDay
 import com.bioscan.fieldterminal.domain.seriesBreakStartsFrom
-import com.bioscan.fieldterminal.domain.trimp
+import com.bioscan.fieldterminal.domain.INTENSITY_SPORTS
+import com.bioscan.fieldterminal.domain.IntensitySession
+import com.bioscan.fieldterminal.domain.TrimpAnchors
+import com.bioscan.fieldterminal.domain.mondayOf
 import io.github.jan.supabase.SupabaseClient
+import kotlinx.coroutines.async
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
@@ -49,8 +65,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         try {
             ReadCache.get("analysis.series_break") {
                 val rows = supabase.postgrest.from("analysis_results")
-                    .select(columns = Columns.list("key,payload")) { filter { eq("kind", "series_break") } }
+                    .select(columns = Columns.list("key,payload")) { filter { eq("kind", "series_break") }; newestFirst() }
                     .decodeList<SeriesBreakResultRow>()
+                    .distinctBy { it.key }
                 seriesBreakStartsFrom(rows.associate { it.key to it.payload.lastConfirmed })
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -64,8 +81,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         try {
             ReadCache.get("analysis.relationships") {
                 supabase.postgrest.from("analysis_results")
-                    .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "relationship") } }
+                    .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "relationship") }; newestFirst() }
                     .decodeList<RelationshipResultRow>()
+                    .distinctBy { it.key }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -78,7 +96,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         try {
             ReadCache.get("analysis.typicality") {
                 supabase.postgrest.from("analysis_results")
-                    .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "typicality") } }
+                    .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "typicality") }; newestFirst() }
                     .decodeList<TypicalityResultRow>()
                     .firstOrNull()
             }
@@ -86,6 +104,87 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             throw e
         } catch (e: Exception) {
             null
+        }
+
+    // Analysis review phase D. The evidence board's other views: event curves, case-crossover tables, lag curves. Each
+    // list is empty before the first run or if its read fails.
+    suspend fun loadEvidence(): EvidenceRows = kotlinx.coroutines.coroutineScope {
+        val events = async { softList("analysis.event_curve") { latestOf<EventCurveRow>("event_curve") } }
+        val crossover = async { softList("analysis.case_crossover") { latestOf<CaseCrossoverResultRow>("case_crossover") } }
+        val lags = async { softList("analysis.lag_curve") { latestOf<LagCurveRow>("lag_curve") } }
+        EvidenceRows(events.await(), crossover.await(), lags.await())
+    }
+
+    private suspend inline fun <reified T : Any> latestOf(kind: String): List<T> =
+        supabase.postgrest.from("analysis_results")
+            .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", kind) }; newestFirst() }
+            .decodeList<T>()
+
+    private suspend fun <T> softList(cacheKey: String, block: suspend () -> List<T>): List<T> =
+        try {
+            ReadCache.get(cacheKey) { block() }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+    // Analysis review phase E. Registered questions' results (kind registered_question), newest per key; empty before
+    // the first one is registered or if the read fails.
+    suspend fun loadRegisteredResults(): List<RelationshipResultRow> =
+        softList("analysis.registered_question") { latestOf<RelationshipResultRow>("registered_question").distinctBy { it.key } }
+
+    // The live registrations themselves (the result appears after the next nightly run).
+    suspend fun loadRegisteredQuestions(): List<RegisteredQuestion> =
+        softList("analysis.registered_questions") {
+            supabase.postgrest.from("registered_questions")
+                .select(columns = Columns.list("id,exposure,outcome,lag,registered_on,withdrawn_at"))
+                .decodeList<RegisteredQuestion>()
+                .filter { it.withdrawnAt == null }
+        }
+
+    // Registers a hint as a question tested only on days after today. Throws on failure (the caller shows it). Any write
+    // clears the read cache (ReadCache's CacheInvalidation), so the lists above reload.
+    suspend fun registerQuestion(q: NewRegisteredQuestion) {
+        supabase.postgrest.from("registered_questions").insert(q)
+    }
+
+    // Withdrawing keeps the row (and its ledger history); it just stops being tested.
+    suspend fun withdrawQuestion(id: Long) {
+        supabase.postgrest.from("registered_questions").update(mapOf("withdrawn_at" to java.time.Instant.now().toString())) { filter { eq("id", id) } }
+    }
+
+    // The verdict history of one question from the append-only ledger, newest first (empty if the read fails).
+    suspend fun loadLedger(questionId: String, limit: Long = 120): List<LedgerEntry> =
+        try {
+            supabase.postgrest.from("evidence_ledger")
+                .select(columns = Columns.list("question_id,as_of,verdict,estimate,lo,hi,unit")) {
+                    filter { eq("question_id", questionId) }
+                    order("as_of", Order.DESCENDING)
+                    limit(limit)
+                }
+                .decodeList<LedgerEntry>()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+    // Analysis review phase C. The latest expected band per metric (hrv, rhr, sleep_hours); empty before the first run
+    // or if the read fails, and every screen then falls back to what it showed before.
+    suspend fun loadExpectedBands(): Map<String, ExpectedBandRow> =
+        try {
+            ReadCache.get("analysis.expected_band") {
+                supabase.postgrest.from("analysis_results")
+                    .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "expected_band") }; newestFirst() }
+                    .decodeList<ExpectedBandRow>()
+                    .distinctBy { it.key }
+                    .associateBy { it.key }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyMap()
         }
 
     suspend fun loadWearableDaily(): List<WearableAnalysisRow> = ReadCache.get("analysis.WearableDaily") { fetchWearableDaily() }
@@ -99,22 +198,23 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<WearableAnalysisRow>()
             .reversed()
 
-    // The intraday heart-rate series of the day the Heart tab charts: the OLDEST day in the 200-row wearable window that
-    // has one (that is what `firstOrNull` on the ascending list always picked; kept unchanged, see HeartTileScreen).
-    // Fetched on its own because the column is ~50 kB of JSON per day and the other five screens never read it.
-    suspend fun loadHeartRateDay(windowStart: String?): List<HrPoint>? = ReadCache.get("analysis.hr_day.$windowStart") {
+    // The intraday heart-rate series the Heart tab charts: the NEWEST day that has one, with its date. It used to be the
+    // oldest day of the 200-row window (an ascending list's first row), so the card showed a day from months ago
+    // without saying which. Only plausible minutes are kept (MinuteHeartRate.kt). Fetched on its own because the column
+    // is ~50 kB of JSON per day and the other screens never read it.
+    suspend fun loadHeartRateDay(): HeartRateDay? = ReadCache.get("analysis.hr_day") {
         supabase.postgrest.from("wearable_daily")
             .select(columns = Columns.list("date,hr_timeseries")) {
                 filter {
-                    if (windowStart != null) gte("date", windowStart)
                     filterNot("hr_timeseries", io.github.jan.supabase.postgrest.query.filter.FilterOperator.IS, "null")
                 }
-                order("date", Order.ASCENDING)
-                limit(5)
+                order("date", Order.DESCENDING)
+                limit(3)
             }
             .decodeList<HrDayRow>()
-            .firstOrNull { it.hrTimeseries?.isNotEmpty() == true }
-            ?.hrTimeseries
+            .firstNotNullOfOrNull { row ->
+                plausibleMinutes(row.hrTimeseries.orEmpty()).takeIf { it.isNotEmpty() }?.let { HeartRateDay(LocalDate.parse(row.date), it) }
+            }
     }
 
     suspend fun loadSleepDaily(): List<SleepAnalysisRow> = ReadCache.get("analysis.SleepDaily") { fetchSleepDaily() }
@@ -144,28 +244,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // (19 real rows) than the other tables, but this stays consistent with
     // this repository's own "don't special-case the query, let the domain
     // layer's date filtering decide" convention.
-    // Session detail's HR zone breakdown (domain/HeartRateZones.kt): this
-    // account's own highest-ever recorded max_hr across every session, not
-    // limited to the 400-day Training Load window above -- a real measured
-    // ceiling, not an age-formula guess.
-    suspend fun loadPersonalMaxHr(): Double? = ReadCache.get("analysis.PersonalMaxHr") { fetchPersonalMaxHr() }
-
-    private suspend fun fetchPersonalMaxHr(): Double? =
-        supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("max_hr")) {
-                // gt(0) rather than an is-not-null filter -- excludes nulls the
-                // same way, using a filter already proven in this file, and
-                // Postgres sorts nulls first on DESC order anyway so a bare
-                // order+limit(1) would otherwise return a null row.
-                filter { gt("max_hr", 0) }
-                order("max_hr", Order.DESCENDING)
-                limit(1)
-            }
-            .decodeList<MaxHrRow>()
-            .firstOrNull()
-            ?.maxHr
-
-    suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> = ReadCache.get("analysis.ExerciseSessionsForTrainingLoad") { fetchExerciseSessionsForTrainingLoad() }
+    suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> = ReadCache.get("analysis.ExerciseSessionsForTrainingLoad", tables = setOf("exercise_sessions")) { fetchExerciseSessionsForTrainingLoad() }
 
     private suspend fun fetchExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> =
         supabase.postgrest.from("exercise_sessions")
@@ -180,6 +259,56 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             }
             .decodeList<TrainingLoadSessionRow>()
             .reversed()
+
+    // Weekly intensity (domain/IntensityDistribution.kt): the endurance sessions of the last [weeks] weeks, each with its
+    // Zepp heart-rate histogram when it has one (zepp_workout_detail.hr_histogram, migration 20261022).
+    suspend fun loadIntensitySessions(weeks: Int = 12): List<IntensitySession> = ReadCache.get("analysis.intensity.$weeks") {
+        val from = mondayOf(LocalDate.now()).minusWeeks(weeks - 1L)
+        supabase.postgrest.from("exercise_sessions")
+            .select(columns = Columns.raw("start_time,type,zepp_workout_detail(hr_histogram)")) {
+                filter { gte("start_time", from.toString()); gt("duration_min", 0); isIn("type", INTENSITY_SPORTS.toList()) }
+                order("start_time", Order.ASCENDING)
+            }
+            .decodeList<IntensitySessionRow>()
+            .map { row ->
+                IntensitySession(
+                    OffsetDateTime.parse(row.startTime).toLocalDate(),
+                    row.type,
+                    row.zepp.firstNotNullOfOrNull { it.histogram }?.mapNotNull { (bpm, secs) -> bpm.toIntOrNull()?.let { it to secs } }?.toMap(),
+                )
+            }
+    }
+
+    // Analysis review phase G: the personal fitness-fatigue result, and the spans every load chart uses (the standard 42 and
+    // 7 unless the personal pair was adopted; standard too when nothing is published or the read fails).
+    suspend fun loadFitnessFatigue(): FitnessFatigueRow? = ReadCache.get("analysis.FitnessFatigue") {
+        runCatching {
+            supabase.postgrest.from("analysis_results")
+                .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "fitness_fatigue"); eq("key", "hrv") }; newestFirst() }
+                .decodeList<FitnessFatigueRow>()
+                .firstOrNull()
+        }.getOrNull()
+    }
+
+    suspend fun loadLoadSpans(): LoadSpans = loadFitnessFatigue()?.payload?.let { p ->
+        val personal = p.personal
+        if (p.adopted && personal != null) LoadSpans(personal.ctl, personal.atl, personal = true) else null
+    } ?: LoadSpans.STANDARD
+
+    // Analysis review phase G: planned sessions of the scorecard's window that are already in the past, for READY FOR.
+    suspend fun loadPlannedOutcomes(): List<PlannedOutcomeRow> = ReadCache.get("analysis.PlannedOutcomes") {
+        val today = java.time.LocalDate.now()
+        supabase.postgrest.from("planned_sessions")
+            .select(columns = Columns.list("scheduled_date,status,exercise_session_id")) {
+                filter {
+                    gte("scheduled_date", today.minusDays(SCORECARD_HISTORY_DAYS.toLong()).toString())
+                    lt("scheduled_date", today.toString())
+                    neq("status", "superseded")
+                }
+                limit(2000)
+            }
+            .decodeList<PlannedOutcomeRow>()
+    }
 
     // Phase A4 (Category 3). 30-day baseline gate, same margin reasoning as
     // everything else here.
@@ -275,24 +404,57 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 // always agree on the same session_load numbers instead of drifting apart
 // like the toMetricState() mapping did before DAV-210. RPE-based load takes
 // priority when a session has one (a direct subjective-effort number);
-// TRIMP (domain/EnduranceLoad.kt, already implemented, never wired in
-// before this) is the fallback for the near-total majority of sessions with
-// real HR data but no RPE.
-// ponytail: one current resting-HR value applied to every session, not a
-// per-session-date lookup -- resting HR doesn't swing enough day-to-day for
-// that gap to matter here; revisit if it ever does.
-fun buildTrainingSessionLoads(sessions: List<TrainingLoadSessionRow>, latestRestingHr: Double?): List<Pair<LocalDate, Double>> =
-    sessions.mapNotNull { row ->
-        val duration = row.durationMin ?: return@mapNotNull null
-        val date = OffsetDateTime.parse(row.startTime).toLocalDateTime().toLocalDate()
-        val load = row.rpe?.let { duration * it }
-            ?: trimp(EnduranceSessionInput(duration, null, row.avgHr, row.maxHr, null, null, null), latestRestingHr)
+// TRIMP (domain/EnduranceLoad.kt) is the fallback for the near-total majority
+// of sessions with real HR data but no RPE. TRIMP's anchors are taken as of
+// each session's date (TrimpAnchors): the person's robust maximum from these
+// same rows' session maxima and the 30-day median resting heart rate from
+// [restingDaily]. Same rules as the server and the console: an RPE counts when
+// above 0, a session needs a duration above 0.
+fun buildTrainingSessionLoads(sessions: List<TrainingLoadSessionRow>, restingDaily: List<Pair<LocalDate, Double>>): List<Pair<LocalDate, Double>> {
+    fun dateOf(row: TrainingLoadSessionRow) = OffsetDateTime.parse(row.startTime).toLocalDateTime().toLocalDate()
+    val anchors = TrimpAnchors(sessions.mapNotNull { row -> row.maxHr?.let { dateOf(row) to it } }, restingDaily)
+    return sessions.mapNotNull { row ->
+        val duration = row.durationMin?.takeIf { it > 0 } ?: return@mapNotNull null
+        val date = dateOf(row)
+        val load = row.rpe?.takeIf { it > 0 }?.let { duration * it }
+            ?: anchors.trimpOn(date, EnduranceSessionInput(duration, null, row.avgHr, row.maxHr, null, null, null))
             ?: return@mapNotNull null
         date to load
     }
+}
+
+/** The daily resting heart rates of wearable rows, for buildTrainingSessionLoads. */
+fun restingSeries(wearable: List<WearableAnalysisRow>): List<Pair<LocalDate, Double>> =
+    wearable.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
+
+@kotlinx.serialization.Serializable
+private data class IntensitySessionRow(
+    @kotlinx.serialization.SerialName("start_time") val startTime: String,
+    val type: String? = null,
+    @kotlinx.serialization.SerialName("zepp_workout_detail") val zepp: List<HrHistogramRow> = emptyList(),
+)
+
+@kotlinx.serialization.Serializable
+private data class HrHistogramRow(@kotlinx.serialization.SerialName("hr_histogram") val histogram: Map<String, Double>? = null)
 
 @kotlinx.serialization.Serializable
 private data class HrDayRow(
     val date: String,
     @kotlinx.serialization.SerialName("hr_timeseries") val hrTimeseries: List<HrPoint>? = null,
+)
+
+// Analysis review A8 (docs/analysis-layer-3/contract-v3.md: "read the latest as_of for the current version"). Publishers
+// delete older rows today, but nothing guarantees that across an engine-version bump or a failed delete, and the readers
+// took whichever row came back first. Newest night first, then the newest run of that night; callers keep the first
+// row per key.
+private fun io.github.jan.supabase.postgrest.query.PostgrestRequestBuilder.newestFirst() {
+    order("as_of", Order.DESCENDING)
+    order("calculated_at", Order.DESCENDING)
+}
+
+// Analysis review phase D: the newest row per key of each evidence view (the reader keeps the first row per key).
+data class EvidenceRows(
+    val events: List<EventCurveRow> = emptyList(),
+    val crossover: List<CaseCrossoverResultRow> = emptyList(),
+    val lags: List<LagCurveRow> = emptyList(),
 )

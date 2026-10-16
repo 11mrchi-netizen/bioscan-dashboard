@@ -87,7 +87,7 @@ State colors must not be used interchangeably with domain accents.
 |---|---|
 | Training | Emerald `#10B981` |
 | Fuel | Cyan `#22D3EE` |
-| Heart | Rose `#F43F5E` |
+| Health | Rose `#F43F5E` |
 | Labs | Violet `#A78BFA` |
 | Map | Blue `#60A5FA` |
 | Log | Amber `#F59E0B` |
@@ -97,6 +97,10 @@ Domain accents identify sections or navigation; they do not encode health/warnin
 
 DAV-296: the User tab replaces Map in the bottom bar. Map's accent and screen stay in the
 codebase (unmounted from navigation, not deleted) for possible reuse elsewhere later.
+
+UX review 2026-10 (decision 3): the rose-accent domain is named **Health**, matching the Status tile. It holds cardio,
+recovery (sleep), wellbeing and sexual health, so "Heart" undersold it. The code's `DomainHeart` token and `HeartTab`
+enum keep their names; only the user-facing name changes.
 
 ### Category colors (third tier)
 
@@ -178,6 +182,12 @@ Screens use these named roles; hand-written `TextStyle(...)` is not used. A new 
 | `Label` / `LabelCaps` | Roboto Mono | Bold | 11 | Labels, pills, chips (`LabelCaps` adds 0.14em tracking) |
 | `MonoCaption` | Roboto Mono | Regular | 11 | Timestamps, metadata |
 | `Micro` | Roboto Mono | Regular | 10 | Smallest allowed; never for a primary metric |
+| `ButtonLabel` | Inter | SemiBold | 13 | Button labels (`FTButton`), add-entry type tiles |
+
+**Compact labels (A7, 2026-10).** Short telemetry-like labels that name a state or a destination in a few characters
+(dock tabs, sub-tab chips, segmented toggles, state pills, card eyebrows) use `LabelCaps`; that is established practice
+and reads as instrument text. Anything that is an action or a choice the person reads as words (buttons, add-entry type
+tiles, settings rows, list-row titles) uses Inter (`ButtonLabel`, `RowTitle`).
 
 ### Date and time entry
 
@@ -247,6 +257,19 @@ Examples:
 
 `LAB DIAGNOSTICS` → `LATEST PANEL · 14 MARKERS` → sparse/distribution-aware view
 
+### Card emphasis (A3, 2026-10)
+`FTCard` has two emphasis levels. **Hero**: the one lead card of a tab, strong glass fill, primary-colour title. **Supporting**:
+every other card, default glass, title in text-secondary. Card titles are never emerald by default; emerald stays a state
+signal. A long tab opens with a **glance strip** (`FTGlanceStrip`): one chip per card below, carrying that card's state
+pill or headline, tapping scrolls to the card.
+
+### Pushed screens (A4, 2026-10)
+- Every pushed screen shows a title and a context line (`TileHeader`), with the section's domain dot when it belongs to one.
+- On screens with a sub-tab rail, the header and the rail stay pinned and only the content scrolls.
+- The dock keeps the tab you came from lit while you are on a pushed screen (the nearest top-level route in the back
+  stack), so the dock always says where you are.
+- The Status hub may scroll, provided the first 390×844 frame still holds the hero and all four system tiles.
+
 ## 9. Component design-system contract
 
 Build the system in this order:
@@ -271,6 +294,19 @@ Bad: `Color=Green | Blue | Red | Purple | Orange` when those colors do not repre
 
 Use instance swap for icons instead of icon-specific variant matrices.
 
+### Buttons (A2, 2026-10)
+`FTButton`: `Emphasis = Primary | Secondary | Tertiary | Destructive`, `State = Default | Pressed | Focused | Disabled | Busy`.
+
+| Emphasis | Treatment | Use |
+|---|---|---|
+| Primary | Emerald 500 fill, base-colour label | The one main action of a screen or sheet (SAVE, PLAN A NEW BLOCK). At most one per screen or sheet. |
+| Secondary | Emerald outline, emerald label | Alternatives and navigation-like actions (PANTRY, EDIT, RETRY). The default. |
+| Tertiary | Label only | Low-emphasis inline actions (+ ADD ILLNESS). |
+| Destructive | Critical outline, critical label | Deleting or overwriting. Always followed by an inline confirm (CANCEL / filled critical CONFIRM); never a single tap. |
+
+Labels use `ButtonLabel` (Inter). Minimum 48 dp touch target. Disabled = muted border and label, not clickable. Busy =
+the label says what is happening (SAVING…) and the button ignores taps.
+
 ## 10. Data visualization contract
 
 - **Temporal data** → line/area trends when enough observations exist.
@@ -290,11 +326,28 @@ Expose provenance where useful: Health Connect, wearable, manual input, imported
 
 Confidence/state treatment must remain subordinate to the metric and must never make a low-confidence model output appear authoritative.
 
+### Freshness (A5, 2026-10)
+A hero or header that shows synced data carries a freshness line in `Micro`: when the reading is from (TODAY, YESTERDAY,
+or a date) and its source, plus the last sync time when the app knows it, e.g. `TODAY'S READING · WEARABLE · SYNCED 07:42`.
+When the reading is older than the sync layer's stale threshold (`STALE_AFTER_DAYS` in `data/StatusRepository.kt`,
+documented there), the line turns Warning and starts with STALE. The UI never invents the threshold; the wording lives in
+`domain/Freshness.kt`. This replaces the always-"SYNCED" pill removed in DAV-94 with a real signal.
+
 ## 12. Interaction and motion
 
 Prefer soft 120–240 ms transitions, short fades, subtle elevation changes, chart selection/reveal transitions, and smooth state changes.
 
 Avoid bounce-heavy motion, decorative parallax, long transitions, or motion that delays access to data.
+
+### Interaction states (A1, 2026-10)
+Every tappable element uses `Modifier.ftClickable` (never `indication = null`, which gave no feedback at all):
+- **Pressed**: strong glass fill (`GlassStrongFill`) drawn instantly on press, faded out over 120 ms on release, clipped to
+  the element's shape. No ripple, no scale.
+- **Focused** (keyboard, switch access): 2 dp emerald-300 ring at 70%, independent of the pressed state.
+- **Selected** stays the existing accent tint + accent border + label; pressed draws on top of it.
+- **Disabled**: muted text and border, not clickable.
+
+The old "no spring, no scale bounce" rule came from the superseded gunmetal README; the 120 ms fade satisfies both.
 
 ## 13. Accessibility
 

@@ -11,8 +11,11 @@
 // order top to bottom; the first one that matches decides the action -- there is no weighted scoring underneath.
 //
 // `verdict` accepts both 08.5's pre-registered vocabulary (`effect_detected`/`no_detectable_effect`) and 08.6's
-// observational one (`signal_observed`/`no_signal`) and treats the matching pair identically for this purpose --
-// the two differ in how strong a causal claim the *evidence* supports, not in what *action* follows from it.
+// observational one (`signal_observed`/`no_signal`) and reads the matching pair the same way -- except that, since
+// analysis review phase F, an observational verdict never changes a protocol on its own: what happened after a start is
+// not what the intervention did (anything else that changed at the same time counts too), so a proposal to stop, cut
+// back, pause or step up becomes 'reassess', with the reason and the way to get a tested answer (a randomised
+// self-experiment). Keeping things as they are, or giving it more time, still follows from an observed read.
 export type ProtocolAction = 'increase' | 'decrease' | 'maintain' | 'pause' | 'extend_evaluation' | 'terminate' | 'reassess'
 export type EvidenceStrength = 'strong' | 'moderate' | 'weak' | 'none'
 export type Burden = 'low' | 'medium' | 'high'
@@ -39,6 +42,8 @@ export interface ProtocolActionProposal {
 
 const SIGNAL: Verdict[] = ['signal_observed', 'effect_detected']
 const NO_SIGNAL: Verdict[] = ['no_signal', 'no_detectable_effect']
+const OBSERVED: Verdict[] = ['signal_observed', 'no_signal']
+const CHANGES: ProtocolAction[] = ['terminate', 'decrease', 'pause', 'increase']
 
 function propose(action: ProtocolAction, rationale: string[], inputs: ProtocolRuleInputs): ProtocolActionProposal {
   return { action, rationale, sourceInputs: inputs }
@@ -46,6 +51,17 @@ function propose(action: ProtocolAction, rationale: string[], inputs: ProtocolRu
 
 /** One explainable action proposal from already-computed readings. Deterministic: the first matching rule decides. */
 export function proposeProtocolAction(inputs: ProtocolRuleInputs): ProtocolActionProposal {
+  const p = firstMatchingRule(inputs)
+  if (inputs.verdict !== null && OBSERVED.includes(inputs.verdict) && CHANGES.includes(p.action)) {
+    const next = p.action === 'terminate'
+      ? 'This was observed, not tested. Stopping is always your call; to find out what it actually does, test it with a randomised self-experiment.'
+      : 'This was observed, not tested: test it with a randomised self-experiment before changing the protocol.'
+    return propose('reassess', [...p.rationale, next], inputs)
+  }
+  return p
+}
+
+function firstMatchingRule(inputs: ProtocolRuleInputs): ProtocolActionProposal {
   const { verdict, observedDirection, expectedDirection, adherenceRate, minAdherence, evidenceStrength, burden, confidenceHave, confidenceNeed } = inputs
 
   // 1. Not enough data to read anything yet -- keep collecting before acting on noise.

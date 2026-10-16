@@ -1,10 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
-import com.bioscan.fieldterminal.ui.components.launchSafe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,19 +21,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.NutritionGoals
-import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.UserProfileRepository
-import com.bioscan.fieldterminal.ui.components.AmberButton
-import com.bioscan.fieldterminal.ui.components.ClearChip
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.nav.UserTab
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -50,7 +45,7 @@ fun UserSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
     var tab by remember { mutableStateOf(UserTab.Profile) }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack)
+        TileHeader(onBack = onBack, title = "PROFILE & GOALS", subtitle = "PROFILE · NUTRITION GOALS · DATA CAPTURE")
         SubTabRow(items = UserTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
@@ -111,7 +106,7 @@ private fun ProfileCard(scope: CoroutineScope) {
                 SexChip("Female", selectedSex == "female") { selectedSex = if (selectedSex == "female") null else "female" }
             }
         }
-        AmberButton(label = if (profileSaving) "SAVING…" else "SAVE PROFILE") {
+        FTButton(label = if (profileSaving) "SAVING…" else "SAVE PROFILE", emphasis = FTButtonEmphasis.Primary) {
             val dob = dobInput.trim().ifBlank { null }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
             if (dobInput.isNotBlank() && dob == null) {
                 profileError = true
@@ -138,88 +133,6 @@ private fun ProfileCard(scope: CoroutineScope) {
     }
 }
 
-@Composable
-private fun NutritionGoalsCard() {
-    val context = LocalContext.current
-    val savedGoals = remember { mutableStateOf(NutritionGoalsStore.getGoals(context)) }
-    var caloriesInput by remember { mutableStateOf(savedGoals.value.caloriesKcal?.toString() ?: "") }
-    var proteinInput by remember { mutableStateOf(savedGoals.value.proteinG?.toString() ?: "") }
-    var carbsInput by remember { mutableStateOf(savedGoals.value.carbsG?.toString() ?: "") }
-    var fatInput by remember { mutableStateOf(savedGoals.value.fatG?.toString() ?: "") }
-    var hydrationMinInput by remember { mutableStateOf(savedGoals.value.hydrationMinMl?.toString() ?: "") }
-    var hydrationMaxInput by remember { mutableStateOf(savedGoals.value.hydrationMaxMl?.toString() ?: "") }
-    var goalsInputError by remember { mutableStateOf(false) }
-
-    FTCard(title = "NUTRITION GOALS") {
-        Text(
-            "Daily calorie and macro targets, used by Nutrition Analysis's goal-adherence view. " +
-                "Leave a field blank to clear just that target — stored on this device only.",
-            style = FTType.BodySmall,
-            color = FT.TextSecondary,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FieldTextField(caloriesInput, { caloriesInput = it }, "Calories (kcal)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
-            FieldTextField(proteinInput, { proteinInput = it }, "Protein (g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FieldTextField(carbsInput, { carbsInput = it }, "Carbs (g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
-            FieldTextField(fatInput, { fatInput = it }, "Fat (g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FieldTextField(hydrationMinInput, { hydrationMinInput = it }, "Water min (ml)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
-            FieldTextField(hydrationMaxInput, { hydrationMaxInput = it }, "Water max (ml)", keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
-        }
-        Text(
-            "Water is a range; set both ends, or leave both blank for the 2,500–3,500 ml reference range.",
-            style = FTType.Caption,
-            color = FT.TextMuted,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AmberButton(label = "SAVE GOALS") {
-                // Blank clears that one field; anything entered must be a positive number.
-                fun parse(input: String): Double? = input.trim().takeIf { it.isNotEmpty() }?.toDoubleOrNull()
-                val calories = parse(caloriesInput)
-                val protein = parse(proteinInput)
-                val carbs = parse(carbsInput)
-                val fat = parse(fatInput)
-                val hydrationMin = parse(hydrationMinInput)
-                val hydrationMax = parse(hydrationMaxInput)
-                val enteredButInvalid = listOf(
-                    caloriesInput to calories, proteinInput to protein, carbsInput to carbs, fatInput to fat,
-                    hydrationMinInput to hydrationMin, hydrationMaxInput to hydrationMax,
-                ).any { (input, parsed) -> input.isNotBlank() && (parsed == null || parsed <= 0) }
-                // A range needs both ends, in order.
-                val hydrationRangeInvalid = (hydrationMin == null) != (hydrationMax == null) ||
-                    (hydrationMin != null && hydrationMax != null && hydrationMin >= hydrationMax)
-                if (enteredButInvalid || hydrationRangeInvalid) {
-                    goalsInputError = true
-                } else {
-                    val goals = NutritionGoals(calories, protein, carbs, fat, hydrationMin, hydrationMax)
-                    NutritionGoalsStore.saveGoals(context, goals)
-                    savedGoals.value = goals
-                    goalsInputError = false
-                }
-            }
-            if (savedGoals.value.anySet) {
-                ClearChip {
-                    NutritionGoalsStore.clearGoals(context)
-                    savedGoals.value = NutritionGoals()
-                    caloriesInput = ""; proteinInput = ""; carbsInput = ""; fatInput = ""
-                    hydrationMinInput = ""; hydrationMaxInput = ""
-                    goalsInputError = false
-                }
-            }
-        }
-        if (goalsInputError) {
-            Text(
-                "Enter a positive number for each target you set (or leave it blank). Water needs both a min and a max, min below max.",
-                style = FTType.Caption,
-                color = FT.Critical,
-            )
-        }
-    }
-}
-
 // Tap-to-select chip -- tapping the already-selected chip clears it back to
 // null (matches AddEntrySheet.kt's TextChipRow, an optional field, not a
 // forced either/or).
@@ -229,7 +142,7 @@ private fun SexChip(label: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
             .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
             .padding(horizontal = 20.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {

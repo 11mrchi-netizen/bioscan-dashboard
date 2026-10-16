@@ -130,8 +130,8 @@ needed** — confirmed, not assumed. Concretely, before sign-in will work:
   Condensed — `res/font/`) came from Google's official open-source fonts
   repo; their OFL license text is in `licenses/fonts/`.
 - `ui/components/` — small shared pieces used across multiple screens
-  (`ScreenHeader`, `AmberButton`) so the header/button look isn't
-  copy-pasted per screen.
+  (`ScreenHeader`, `TileHeader`/`PinnedPage`, `FTButton`, `ftClickable`) so
+  the header/button look and tap feedback aren't copy-pasted per screen.
 - `ui/nav/` — the 4-tab structure (`FieldTerminalNavHost.kt`,
   `TopLevelTab.kt`) and Status's 5-sub-tab state (`StatusSubTab`).
 - `ui/screens/` — one file per top-level screen. All placeholder content

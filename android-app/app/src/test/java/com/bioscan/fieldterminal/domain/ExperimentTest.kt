@@ -6,49 +6,25 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDate
 
 class ExperimentTest {
     @Test
-    fun testBuildProtocol_abHasTwoBackToBackPhases() {
-        val p = buildProtocol(LocalDate.of(2026, 11, 1), "AB", 28, 3)
-        assertEquals(listOf("A", "B"), p.phases.map { it.label })
-        assertEquals("2026-11-01", p.phases[0].start)
-        assertEquals("2026-11-28", p.phases[0].end)
-        assertEquals("2026-11-29", p.phases[1].start)
-        assertEquals("2026-12-26", p.phases[1].end)
-        assertEquals(3, p.washoutDays)
-        assertTrue(p.excludeAlcoholDays)
-        assertEquals(0.7, p.minAdherence, 1e-9)
-    }
-
-    @Test
-    fun testBuildProtocol_ababRepeatsTheCycle() {
-        val p = buildProtocol(LocalDate.of(2026, 11, 1), "ABAB", 14, 0)
-        assertEquals(listOf("A", "B", "A", "B"), p.phases.map { it.label })
-        assertEquals("2026-11-15", p.phases[1].start)
-        assertEquals("2026-12-26", p.phases[3].end)
-    }
-
-    @Test
-    fun testProblems_requireOneOutcomeAndSaneLengths() {
-        assertTrue(experimentProblems("hrv", 28, "AB", 0).isEmpty())
-        assertEquals(1, experimentProblems(null, 28, "AB", 0).size)
-        assertEquals(1, experimentProblems("not_a_metric", 28, "AB", 0).size)
-        assertEquals(1, experimentProblems("hrv", 10, "AB", 0).size)
-        assertEquals(1, experimentProblems("hrv", 90, "AB", 0).size)
-        assertEquals(1, experimentProblems("hrv", 14, "AB", 7).size) // washout must be under half a phase
-        assertEquals(1, experimentProblems("hrv", 28, "ABA", 0).size)
-    }
-
-    @Test
-    fun testMdeText_andCaveats() {
+    fun testMdeCaveats() {
         val hrv = MdePreviewRow(metric = "hrv", unit = "%", mde = 12.74, usableDays = 90)
-        assertEquals("Smallest difference this design could detect: 12.7%", mdeText(hrv))
         assertNull(mdeCaveat(hrv))
-        assertEquals("Smallest difference this design could detect: 0.45 h", mdeText(MdePreviewRow(metric = "sleep_hours", unit = "h", mde = 0.451, usableDays = 90)))
         assertTrue(mdeCaveat(hrv.copy(unsettled = true))!!.contains("regime"))
         assertTrue(mdeCaveat(hrv.copy(usableDays = 40))!!.contains("40"))
+    }
+
+    // The Supabase client's JSON leaves out fields equal to their default; the registration settings must still be stored.
+    @Test
+    fun testProtocol_registrationDefaultsAreAlwaysWritten() {
+        val p = ExperimentProtocol(design = "randomized_pairs", phases = emptyList())
+        val encoded = Json { ignoreUnknownKeys = true }.encodeToString(ExperimentProtocol.serializer(), p)
+        assertTrue(encoded, encoded.contains("\"washoutDays\":0"))
+        assertTrue(encoded, encoded.contains("\"minAdherence\":0.7"))
+        assertTrue(encoded, encoded.contains("\"excludeAlcoholDays\":true"))
+        assertTrue("unset version 2 fields stay out", !encoded.contains("assignments"))
     }
 
     @Test

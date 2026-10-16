@@ -161,7 +161,7 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
 
         // DAV-205: TRIMP-fallback session loads, same shared builder TrainingTileScreen uses -- keeps the figure's leg
         // color and the Training tab's own Load card from ever disagreeing.
-        val sessionLoads = buildTrainingSessionLoads(loadSessionsD.await(), wearableAnalysis.lastOrNull()?.rhr)
+        val sessionLoads = buildTrainingSessionLoads(loadSessionsD.await(), rhrPoints)
         val trainingLoad = evaluateTrainingLoad(sessionLoads, spans = loadSpansD.await())
         val trainingState = trainingLoadStateWord(trainingLoad.state, trainingLoad.tsbBand).state
 

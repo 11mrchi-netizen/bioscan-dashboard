@@ -33,7 +33,7 @@ import com.bioscan.fieldterminal.domain.EnduranceSessionInput
 import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.aggregateMealsByDay
 import com.bioscan.fieldterminal.domain.seriesBreakStartsFrom
-import com.bioscan.fieldterminal.domain.trimp
+import com.bioscan.fieldterminal.domain.TrimpAnchors
 import io.github.jan.supabase.SupabaseClient
 import kotlinx.coroutines.async
 import io.github.jan.supabase.postgrest.postgrest
@@ -382,21 +382,28 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 // always agree on the same session_load numbers instead of drifting apart
 // like the toMetricState() mapping did before DAV-210. RPE-based load takes
 // priority when a session has one (a direct subjective-effort number);
-// TRIMP (domain/EnduranceLoad.kt, already implemented, never wired in
-// before this) is the fallback for the near-total majority of sessions with
-// real HR data but no RPE.
-// ponytail: one current resting-HR value applied to every session, not a
-// per-session-date lookup -- resting HR doesn't swing enough day-to-day for
-// that gap to matter here; revisit if it ever does.
-fun buildTrainingSessionLoads(sessions: List<TrainingLoadSessionRow>, latestRestingHr: Double?): List<Pair<LocalDate, Double>> =
-    sessions.mapNotNull { row ->
-        val duration = row.durationMin ?: return@mapNotNull null
-        val date = OffsetDateTime.parse(row.startTime).toLocalDateTime().toLocalDate()
-        val load = row.rpe?.let { duration * it }
-            ?: trimp(EnduranceSessionInput(duration, null, row.avgHr, row.maxHr, null, null, null), latestRestingHr)
+// TRIMP (domain/EnduranceLoad.kt) is the fallback for the near-total majority
+// of sessions with real HR data but no RPE. TRIMP's anchors are taken as of
+// each session's date (TrimpAnchors): the person's robust maximum from these
+// same rows' session maxima and the 30-day median resting heart rate from
+// [restingDaily]. Same rules as the server and the console: an RPE counts when
+// above 0, a session needs a duration above 0.
+fun buildTrainingSessionLoads(sessions: List<TrainingLoadSessionRow>, restingDaily: List<Pair<LocalDate, Double>>): List<Pair<LocalDate, Double>> {
+    fun dateOf(row: TrainingLoadSessionRow) = OffsetDateTime.parse(row.startTime).toLocalDateTime().toLocalDate()
+    val anchors = TrimpAnchors(sessions.mapNotNull { row -> row.maxHr?.let { dateOf(row) to it } }, restingDaily)
+    return sessions.mapNotNull { row ->
+        val duration = row.durationMin?.takeIf { it > 0 } ?: return@mapNotNull null
+        val date = dateOf(row)
+        val load = row.rpe?.takeIf { it > 0 }?.let { duration * it }
+            ?: anchors.trimpOn(date, EnduranceSessionInput(duration, null, row.avgHr, row.maxHr, null, null, null))
             ?: return@mapNotNull null
         date to load
     }
+}
+
+/** The daily resting heart rates of wearable rows, for buildTrainingSessionLoads. */
+fun restingSeries(wearable: List<WearableAnalysisRow>): List<Pair<LocalDate, Double>> =
+    wearable.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
 
 @kotlinx.serialization.Serializable
 private data class HrDayRow(

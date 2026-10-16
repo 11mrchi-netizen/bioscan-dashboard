@@ -1,7 +1,7 @@
 // I/O for the relationship engine: reads a user's raw rows through a duck-typed Supabase client (tested in Node with an
 // in-memory fake, run unchanged in the analysis-run Edge Function), builds the daily frame the catalogue refers to, runs
 // the catalogue and publishes one analysis_results row per hypothesis (kind 'relationship').
-import { sessionLoad } from './trainingLoad.ts'
+import { loadAnchorsByDate, sessionLoad } from './trainingLoad.ts'
 import { HYPOTHESES, CATALOGUE_VERSION, registeredHypothesis } from './hypotheses.ts'
 import type { RegisteredQuestionRow } from './hypotheses.ts'
 import { analyseHypothesis, MIN_PAIRS, runCatalogue } from './relationship.ts'
@@ -182,15 +182,24 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
     minutesByDay.set(d, (minutesByDay.get(d) ?? 0) + (num(s.duration_min) ?? 0))
   }
   series.training_min = axis.map((d) => (minutesByDay.has(d) ? (minutesByDay.get(d) as number) : watchDays.has(d) ? 0 : null))
-  // Analysis review phase G: the apps' session load (session RPE x minutes, else TRIMP against the latest resting heart
-  // rate, as on Android and in the console), summed per local day, for the personal fitness-fatigue fit; zero on watch days
-  // without a session.
-  const latestRhr = [...raw.wearable].reverse().map((w) => num(w.rhr)).find((v) => v !== null) ?? null
+  // Analysis review phase G: the apps' session load (session RPE x minutes, else TRIMP against the person's maximum and
+  // resting heart rate as of the session's date, as on Android and in the console), summed per local day, for the personal
+  // fitness-fatigue fit; zero on watch days without a session.
+  const sessionMaxima: [string, number][] = []
+  for (const s of raw.sessions) {
+    const max = num(s.max_hr)
+    if (max !== null) sessionMaxima.push([clock(s.start_time).date, max])
+  }
+  const restingDaily: [string, number][] = raw.wearable.flatMap((w) => {
+    const rhr = num(w.rhr)
+    return rhr === null ? [] : [[w.date, rhr] as [string, number]]
+  })
+  const anchorsOn = loadAnchorsByDate(sessionMaxima, restingDaily)
   const loadByDay = new Map<string, number>()
   for (const s of raw.sessions) {
-    const load = sessionLoad({ duration_min: num(s.duration_min), rpe: num(s.rpe), avg_hr: num(s.avg_hr), max_hr: num(s.max_hr) }, latestRhr)
-    if (load === null) continue
     const d = clock(s.start_time).date
+    const load = sessionLoad({ duration_min: num(s.duration_min), rpe: num(s.rpe), avg_hr: num(s.avg_hr), max_hr: num(s.max_hr) }, anchorsOn(d))
+    if (load === null) continue
     loadByDay.set(d, (loadByDay.get(d) ?? 0) + load)
   }
   series.training_load = axis.map((d) => (loadByDay.has(d) ? (loadByDay.get(d) as number) : watchDays.has(d) ? 0 : null))

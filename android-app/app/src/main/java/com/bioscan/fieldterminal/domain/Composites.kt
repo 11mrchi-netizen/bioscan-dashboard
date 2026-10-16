@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.domain
 
 import com.bioscan.fieldterminal.data.buildTrainingSessionLoads
+import com.bioscan.fieldterminal.data.restingSeries
 import com.bioscan.fieldterminal.data.model.PlannedOutcomeRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
@@ -63,7 +64,7 @@ fun compositeInputs(
             val wake = row.wakeTime?.let { runCatching { Instant.parse(it) }.getOrNull() }
             if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
         },
-        sessionLoads = buildTrainingSessionLoads(sessions, wearable.lastOrNull()?.rhr),
+        sessionLoads = buildTrainingSessionLoads(sessions, restingSeries(wearable)),
         energy = wellbeing.series({ it.date }) { it.energy?.toDouble() },
         stress = wellbeing.series({ it.date }) { it.stress?.toDouble() },
         soreness = wellbeing.series({ it.date }) { it.soreness?.toDouble() },

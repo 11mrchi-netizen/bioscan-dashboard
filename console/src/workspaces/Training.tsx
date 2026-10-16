@@ -8,7 +8,7 @@ import { useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRange, useInspect } from '../lib/analysisStore'
 import { ENDURANCE_TYPES, dayBounds, localDate, warnOnError } from '../lib/schema'
-import { sessionLoad, vo2maxFromPace, ema } from '../lib/training'
+import { loadAnchorsByDate, sessionLoad, vo2maxFromPace, ema } from '../lib/training'
 import { FTChart } from '../components/shared/FTChart'
 import type { MetricResult } from '../lib/metricAdapter'
 import type { ChartSpec } from '../lib/chartSpec'
@@ -39,6 +39,19 @@ interface TrainingData {
   spansSummary: string | null
 }
 
+// PostgREST stops at 1,000 rows (metricAdapter.ts does the same): ask for the next page until a short one comes back.
+async function paged<T>(page: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<{ rows: T[]; error: { message: string } | null }> {
+  const PAGE = 1000
+  const rows: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await page(from, from + PAGE - 1)
+    if (error) return { rows, error }
+    const got = (data ?? []) as T[]
+    rows.push(...got)
+    if (got.length < PAGE) return { rows, error: null }
+  }
+}
+
 function useTrainingData(start: string, end: string): { data: TrainingData | null; loading: boolean; error: string | null; retry: () => void } {
   const [data, setData] = useState<TrainingData | null>(null)
 
@@ -51,21 +64,30 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
     // exercise_sessions replaced the old `runs` table; only endurance types feed this run-based load model
     // (4,000+ auto-detected walks would otherwise dominate the TSS proxy).
     const { from, to } = dayBounds(warmupStr, end)
-    const [{ data: rows, error }, rhrRes, ffRes] = await Promise.all([
+    const [{ data: rows, error }, maximaRes, restingRes, ffRes] = await Promise.all([
       supabase.from('exercise_sessions')
         .select('id, start_time, distance_km, duration_min, type, avg_hr, max_hr, rpe, source')
         .in('type', ENDURANCE_TYPES)
         .gte('start_time', from).lte('start_time', to)
         .order('start_time', { ascending: true }),
-      // TRIMP needs a resting heart rate; Android uses the latest one, so this does too.
-      supabase.from('wearable_daily').select('rhr').not('rhr', 'is', null).order('date', { ascending: false }).limit(1),
+      // TRIMP's anchors, as on Android: every session's maximum (all types) for the robust maximum, and the daily resting
+      // heart rate, both over the same window, taken as of each session's date.
+      paged<{ start_time: string; max_hr: number }>((a, b) => supabase.from('exercise_sessions').select('start_time, max_hr')
+        .gt('max_hr', 0).gte('start_time', from).lte('start_time', to).order('start_time').range(a, b)),
+      paged<{ date: string; rhr: number }>((a, b) => supabase.from('wearable_daily').select('date, rhr')
+        .gt('rhr', 0).gte('date', warmupStr).lte('date', end).order('date').range(a, b)),
       // Analysis review phase G: the personal fitness-fatigue spans, used only when adopted (as on Android).
       supabase.from('analysis_results').select('payload, calculated_at').eq('kind', 'fitness_fatigue').eq('key', 'hrv').order('calculated_at', { ascending: false }).limit(1),
     ])
     type FfPayload = { adopted?: boolean; personal?: { ctl: number; atl: number } | null; summary?: string }
     const ff = ((ffRes.data ?? [])[0] as { payload?: FfPayload } | undefined)?.payload
     const spans = ff?.adopted && ff.personal ? { ctl: ff.personal.ctl, atl: ff.personal.atl, personal: true } : { ctl: 42, atl: 7, personal: false }
-    const restingHr = ((rhrRes.data ?? [])[0] as { rhr?: number } | undefined)?.rhr ?? null
+    warnOnError('session maxima', maximaRes.error)
+    warnOnError('resting heart rate', restingRes.error)
+    const anchorsOn = loadAnchorsByDate(
+      maximaRes.rows.map((r) => [localDate(r.start_time), r.max_hr] as [string, number]),
+      restingRes.rows.map((r) => [r.date, r.rhr] as [string, number]),
+    )
     {
         warnOnError('training sessions', error)
         if (error) throw new Error(error.message)
@@ -92,7 +114,7 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
 
         const tssMap = new Map<string, number>()
         for (const r of runs) {
-          const load = sessionLoad(r, restingHr)
+          const load = sessionLoad(r, anchorsOn(r.date))
           if (load !== null) tssMap.set(r.date, (tssMap.get(r.date) ?? 0) + load)
         }
         const dailyTss = allDates.map(dt => tssMap.get(dt) ?? 0)

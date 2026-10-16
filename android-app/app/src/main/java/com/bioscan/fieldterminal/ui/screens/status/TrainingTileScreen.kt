@@ -37,6 +37,7 @@ import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.buildTrainingSessionLoads
+import com.bioscan.fieldterminal.data.restingSeries
 import com.bioscan.fieldterminal.data.model.OstrcAnalysisRow
 import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
@@ -218,7 +219,7 @@ private fun InjuryTab() {
     ) {
         HealthEventsScreen()
         // DAV-205 (24/9 fixes): TRIMP fallback, same shared builder Load tab uses.
-        val sessionLoads = buildTrainingSessionLoads(s, w.lastOrNull()?.rhr)
+        val sessionLoads = buildTrainingSessionLoads(s, restingSeries(w))
         val trainingLoadEval = evaluateTrainingLoad(sessionLoads, spans = injuryLoadSpans)
         val restCadenceEval = evaluateRestCadence(sessionLoads, trainingLoadEval.tsb, trainingLoadEval.confidence.met)
         val sorenessEval = evaluateSubjective(wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } })

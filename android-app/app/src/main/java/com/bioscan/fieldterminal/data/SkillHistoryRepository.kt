@@ -133,11 +133,7 @@ class SkillHistoryRepository(private val supabase: SupabaseClient) {
             .decodeList<Vo2MaxRow>()
             .reversed()
 
-        val zepp = supabase.postgrest.from("zepp_workout_detail")
-            .select(columns = Columns.raw("start_time,summary:decoded->summary")) {
-                order("start_time", Order.ASCENDING)
-            }
-            .decodeList<ZeppWorkoutDetailSummaryRow>()
+        val zepp = loadZeppWorkoutSummaries(supabase)
         val form = zepp.mapNotNull { z ->
             val s = z.summary ?: return@mapNotNull null
             RunFormPoint(

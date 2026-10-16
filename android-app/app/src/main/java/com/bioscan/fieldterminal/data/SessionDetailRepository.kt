@@ -106,15 +106,26 @@ data class ZeppDecodedSeries(
 @Serializable
 data class ZeppWorkoutDetailRow(val decoded: ZeppDecodedSeries? = null)
 
-// start_time + only decoded->summary (aliased) -- used by TrainingRepository
-// for the lactate-threshold and efficiency trend series (one point per synced
-// Zepp workout). Selecting the summary alone avoids pulling every workout's
-// per-second series just to read a few scalars.
+// start_time + the workout summary -- used by TrainingRepository and SkillHistoryRepository for the lactate-threshold,
+// efficiency and run-form series (one point per synced Zepp workout).
 @Serializable
 data class ZeppWorkoutDetailSummaryRow(
     @SerialName("start_time") val startTime: String,
     val summary: ZeppWorkoutSummary? = null,
 )
+
+// Every Zepp workout's summary, oldest first, shared by the Training and Running pages (they used to fetch it twice).
+// Reads the stored `summary` column (decoded->summary, kept by migration 20261024): reading decoded->summary made
+// Postgres unpack every workout's per-second series and took about 3 s for ~400 workouts.
+// ponytail: one request caps at 1,000 rows; page it (as ZoneAnchorsRepository does) once the history passes that.
+suspend fun loadZeppWorkoutSummaries(supabase: SupabaseClient): List<ZeppWorkoutDetailSummaryRow> =
+    ReadCache.get("zepp.summaries", tables = setOf("zepp_workout_detail")) {
+        supabase.postgrest.from("zepp_workout_detail")
+            .select(columns = Columns.list("start_time,summary")) {
+                order("start_time", io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+            }
+            .decodeList<ZeppWorkoutDetailSummaryRow>()
+    }
 
 // Phase G4/G5. loadHeader() reads the session's real aggregates from Supabase
 // (same source Training/Log already use); loadTimeSeries() reads fresh from

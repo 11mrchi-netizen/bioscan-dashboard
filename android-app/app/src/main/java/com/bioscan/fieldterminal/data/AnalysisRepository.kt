@@ -244,7 +244,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // (19 real rows) than the other tables, but this stays consistent with
     // this repository's own "don't special-case the query, let the domain
     // layer's date filtering decide" convention.
-    suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> = ReadCache.get("analysis.ExerciseSessionsForTrainingLoad") { fetchExerciseSessionsForTrainingLoad() }
+    suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> = ReadCache.get("analysis.ExerciseSessionsForTrainingLoad", tables = setOf("exercise_sessions")) { fetchExerciseSessionsForTrainingLoad() }
 
     private suspend fun fetchExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> =
         supabase.postgrest.from("exercise_sessions")

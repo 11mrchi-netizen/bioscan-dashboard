@@ -91,6 +91,22 @@ exercise list only where it has none (`mergedSessionFields`); every table refere
 plan) is moved over before the copy is deleted. Two Health Connect copies of one workout (the source app wrote some
 twice) are not merged: neither is a Zepp copy, and the run list's own de-duplication keeps one.
 
+## Duplicates inside Health Connect and from Notion
+
+Migration `20261023_session_duplicates.sql`. The source app wrote many workouts to Health Connect twice, so two Health
+Connect sessions described one workout; same-type Health Connect sessions overlapping by at least half of the longer
+span are now folded into one per connected group (kept: the one linked to a Zepp workout, else one with exercises, RPE
+or notes, else the longer, else the oldest). The Notion archive import created strength sessions at a placeholder 12:00;
+one on a day with a Zepp-linked strength session of a similar length (within half of the longer) is the same workout,
+and folds into Zepp's session, which takes its exercise list. Notion conditioning sessions are not folded: Zepp's
+"other" sessions on those days are far shorter, different activities.
+
+A fold (`private.fold_exercise_session`) gives the kept session the dropped one's RPE, notes and exercise or drill list
+only where it has none, moves every reference over and deletes the copy. A dropped Health Connect copy's record id goes
+to `exercise_session_tombstones`, and a trigger skips any later insert of that record id, so a Health Connect re-sync of
+the period cannot bring it back. `private.exercise_session_duplicate_plan()` lists what would be folded and can be run
+again at any time.
+
 ## The whole history from Zepp
 
 Stored Zepp data started on 26 Aug 2026. The rest of the history is pulled on the server, with no

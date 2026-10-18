@@ -251,7 +251,17 @@ fun planRaceFuel(input: RaceFuelInput): RaceFuelPlan {
     } + sweatMean.mlPerHour * max(0.0, duration - (stepTimes.lastOrNull() ?: 0.0)) / 60
     val totalFluid = steps.sumOf { it.fluidMl }
     val lossPct = max(0.0, totalSweat - totalFluid) / (kg * 1000) * 100
-    if (lossPct > 3) warnings += "Even drinking to plan you may lose about %.1f %% of body weight: in this heat start slower and pre-cool.".format(lossPct)
+    if (lossPct > 3) {
+        warnings += when {
+            // Without a test the sweat estimate is wide and drinking is capped at its low end, so the loss looks large.
+            input.sweat.testCount == 0 -> ("With no sweat test yet the plan keeps drinking cautious (never more than you might sweat), so the " +
+                "estimated loss reaches about %.1f %% of body weight. Drink to thirst on top of the plan, up to about %d ml an hour, and " +
+                "do a sweat test in a long training session.").format(lossPct, (sweatMean.mlPerHour * MAX_REPLACEMENT_SHARE / 50).roundToInt() * 50)
+            band == HeatBand.HOT || band == HeatBand.VERY_HOT ->
+                "Even drinking to plan you may lose about %.1f %% of body weight: in this heat start slower and pre-cool.".format(lossPct)
+            else -> "Even drinking to plan you may lose about %.1f %% of body weight: drink to thirst on top of the plan, never more than you sweat.".format(lossPct)
+        }
+    }
     if (gph > 60 && products.none { (it.fructoseG ?: 0.0) > 0 }) {
         warnings += "Above 60 g an hour, use products that mix glucose (or maltodextrin) with fructose; check yours."
     }

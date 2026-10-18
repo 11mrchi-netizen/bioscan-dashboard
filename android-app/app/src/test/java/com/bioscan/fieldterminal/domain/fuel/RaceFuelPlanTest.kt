@@ -175,4 +175,12 @@ class RaceFuelPlanTest {
         assertEquals(23.1 * 5 * Math.pow(23.1 / 11, 0.06), est.minutes, 0.5)
         assertNull(estimateRunTime(21.1, 200.0, runs.take(3)))
     }
+
+    @Test
+    fun aLargeLossWithoutASweatTestSaysWhyAndWhatToDo() {
+        val plan = planRaceFuel(input(duration = 330.0))
+        assertTrue(plan.expectedLossPct > 3)
+        assertTrue(plan.warnings.any { "no sweat test" in it && "to thirst" in it })
+        assertTrue(plan.warnings.none { "this heat" in it })
+    }
 }

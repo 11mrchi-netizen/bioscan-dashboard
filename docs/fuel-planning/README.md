@@ -18,7 +18,7 @@ sets the week's energy and protein, the plan shapes each day.
 | 2 | Planned-day resolver and session demand | Done |
 | 3 | Day fuel engine: bands, the week, meal codes, the days before, safety | Done (engine; shown in phase 6) |
 | 4 | Weather (hourly, TYPICAL beyond 16 days), heat stress, sweat profile | Done |
-| 5 | Course time estimate; race and long-session fuel and hydration plans | |
+| 5 | Course time estimate; race and long-session fuel and hydration plans | Done (engine; shown in phase 6) |
 | 6 | `fuel_plans` snapshots; TODAY'S FUEL, the event FUEL tab | |
 | 7 | Reminders relative to sessions and race week | |
 | 8 | After the event: review, sweat rate and gut tolerance learned, periodisation index | |
@@ -95,6 +95,25 @@ sets the week's energy and protein, the plan shapes each day.
 - Daily fluid: `data/HydrationDemand.kt` `todaySweatRate` (the profile at today's daytime temperature at the home
   location in Setup › Connected services, 18 °C without one) replaces the fixed 500 ml/h in the Status FUEL preview and
   the Fuel hydration card alike.
+
+## Phase 5 notes: race and long-session plans
+
+- `domain/fuel/CourseTimeEstimate.kt`: the planned duration spread along the course by the Minetti (2002) cost of each
+  100 m relative to flat (downhill capped at 0.8, so never faster than 1.25 x flat pace; climbs at 5 x), giving the
+  elapsed time at every point and aid station; a run's likely time from the person's recent runs (minutes per
+  km-effort, median and interquartile range, Riegel 1.06 for longer efforts). A simple, labelled estimate: the TRAP
+  model was not built.
+- `domain/fuel/RaceFuelPlan.kt` (`planRaceFuel`): steps every 20 minutes from the 20th (the 15th after a short
+  loading) plus aid stations. Carbohydrate at the top of the duration's range for races (the first hour at 75 %),
+  under the tolerated rate, as the person's products (a drink mix covers fluid first; generic 25 g gels without a
+  catalog); fluid per step from the sweat rate at that hour's temperature and altitude; sodium per litre; caffeine by
+  opt-in (3 mg/kg, before the start up to 90 min, else a third at 40 % and the rest at 70 %). What to carry between
+  refill points (bottles rounded to 250 ml); cutoffs checked at the planned pace and the slow end of the range; the
+  expected body-mass loss with a warning above 3 %; glucose-plus-fructose warning above 60 g/h. Before: loading,
+  evening meal, breakfast 2 g/kg (3 after a short loading) 3 h out, 5-7 ml/kg 4 h out, pre-cooling in heat, the last
+  15 minutes. After: 1-1.2 g/kg/h for 4 h with 0.3 g/kg protein, 1.25-1.5 x the fluid lost, a weigh-in.
+- Each plan lists its assumptions: the duration and its basis, FORECAST / TYPICAL / no weather, the sweat estimate's
+  basis, the tolerance cap, generic products.
 
 ## Research
 

@@ -16,7 +16,7 @@ sets the week's energy and protein, the plan shapes each day.
 |---|---|---|
 | 1 | Events outside the training plan (`athlete_events`), event form and page, Training › Plan EVENTS card, + EVENT, Status NEXT UP, calendar suggestions, calendar sync wired | Done |
 | 2 | Planned-day resolver and session demand | Done |
-| 3 | Day fuel engine: bands, the week, meal codes, the days before, safety | |
+| 3 | Day fuel engine: bands, the week, meal codes, the days before, safety | Done (engine; shown in phase 6) |
 | 4 | Weather (hourly, TYPICAL beyond 16 days), heat stress, sweat profile | |
 | 5 | Course time estimate; race and long-session fuel and hydration plans | |
 | 6 | `fuel_plans` snapshots; TODAY'S FUEL, the event FUEL tab | |
@@ -55,6 +55,28 @@ sets the week's energy and protein, the plan shapes each day.
   over duration, 3 sessions or more), else the Compendium MET (Ainsworth 2011) less 1 MET at rest, scaled a little by
   class. Read-only check on live data: runs 11.4 kcal/min, strength 6.2 (last 180 days).
 - `data/PlannedDayRepository.kt` reads the four sources, 180 days of history (paged) and today's heart-rate anchors.
+
+## Phase 3 notes: the day engine
+
+- `domain/fuel/DayFuelPlan.kt` (`planFuelDay`, `planFuelDays`). Carbohydrate bands (Thomas 2016): rest or a short easy
+  session 3-5 g/kg; up to about 75 min 5-7; 75-240 min 6-10; over 240 min 8-12; easy days sit low in the band, hard
+  ones high, races at 90 %. The day before a hard, long or race session that starts before noon steps up one band. The
+  two days before an A or B race over 90 minutes load at 10-12 g/kg (low fibre the day before). The goal's calories
+  stay the weekly average: day = goal + that day's session energy − the week's mean session energy. Protein stays at the
+  goal (1.8 g/kg without one). Fat is the remainder with a 20 % floor; when it binds, carbohydrate gives way (the
+  step-up first, then to the low end of the day's own band) and only then does the day's energy rise, with a note.
+  Energy availability below 30 kcal/kg fat-free mass is named (IOC REDs 2023); a deficit goal on a key day is noted.
+- `domain/fuel/MealCodes.kt` (`codeMeals`): LOW / MEDIUM / HIGH per meal with the reason (HIGH 1-4 h before or 2 h
+  after a key session, the evening before a hard morning, all of a loading day; LOW on rest days and, by opt-in only,
+  before easy sessions, never on a deficit day). A meal falling inside a session moves before it; a pre-session or
+  recovery snack is added when no meal covers the window. In-session carbohydrate is taken off the day first; the rest
+  is split by weight (0.5 / 1 / 2) as ±15 % ranges. Protein 0.3-0.4 g/kg at main meals. Logged meals are matched to
+  the nearest slot within 2 h and read WITHIN / UNDER / OVER / NOT LOGGED.
+- `domain/fuel/SessionFuel.kt` (Jeukendrup 2014): none under 45 min; up to 15-30 g/h or a rinse to 75; 30-60 g/h to
+  2.5 h (45-60 for hard sessions and races); 60-90 g/h beyond, capped at the person's tolerated rate (60 by default).
+- `domain/fuel/IntakeHistory.kt`: the days before against plan, only on fully logged days (3 meals or more). A loading
+  shortfall before a race is carried by today's meals (up to 2 g/kg) and makes the race plan start fuelling early; a
+  day not logged is assumed as planned; a morning weight more than 1 % under the usual raises pre-hydration.
 
 ## Research
 

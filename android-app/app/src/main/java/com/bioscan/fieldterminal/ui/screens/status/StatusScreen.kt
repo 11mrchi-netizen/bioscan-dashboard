@@ -42,6 +42,7 @@ fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenToday: () -> Unit, onOpe
     var addStart by remember { mutableStateOf<AddEntryStart?>(null) }
     val guard = rememberLoadGuard()
     val repo = remember { StatusRepository(SupabaseClientProvider.client) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // Analysis review phase B: today's UTC offset and time zone, so the analysis engine can turn logged timestamps into
     // local dates and hours. Idempotent and silent on failure (an unapplied migration just skips it).
@@ -53,7 +54,7 @@ fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenToday: () -> Unit, onOpe
         guard.run {
             coroutineScope {
                 // The previews never fail the hub: each part is null when it cannot load (StatusRepository.softly).
-                val previewsD = async { repo.loadTodayPreviews() }
+                val previewsD = async { repo.loadTodayPreviews(com.bioscan.fieldterminal.data.MapSettingsStore.getHome(context)) }
                 overview = repo.loadOverview()
                 previews = previewsD.await()
             }

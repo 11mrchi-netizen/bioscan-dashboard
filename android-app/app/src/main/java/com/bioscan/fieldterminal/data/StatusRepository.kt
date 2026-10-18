@@ -198,7 +198,7 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
 
     // The FUEL and LABS previews, read in parallel with loadOverview(). Same sources and math as the tiles themselves:
     // NutritionRepository's today totals, the Fuel tile's exercise-demand rule, the reminder's supplements-due rule.
-    suspend fun loadTodayPreviews(): TodayPreviews = kotlinx.coroutines.coroutineScope {
+    suspend fun loadTodayPreviews(home: Pair<Double, Double>? = null): TodayPreviews = kotlinx.coroutines.coroutineScope {
         val analysis = AnalysisRepository(supabase)
         val today = LocalDate.now()
         val fuelD = async(Dispatchers.Default) {
@@ -211,7 +211,9 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
                 FuelToday(
                     kcal = nutrition.today?.calories,
                     waterMl = if (!anyWater) null else (nutrition.todayHydrationMl ?: 0) + nutrition.todayBeverageItems.mapNotNull { it.effectiveHydrationMl }.sum(),
-                    exerciseDemandMl = computeHydrationIntelligence(null, null, exerciseMinutes).inferredDemandMl ?: 0.0,
+                    exerciseDemandMl = (if (exerciseMinutes > 0) todaySweatRate(supabase, home) else null).let { sweat ->
+                        computeHydrationIntelligence(null, null, exerciseMinutes, sweat?.mlPerHour, sweat?.environmentKnown ?: false).inferredDemandMl ?: 0.0
+                    },
                 )
             }
         }

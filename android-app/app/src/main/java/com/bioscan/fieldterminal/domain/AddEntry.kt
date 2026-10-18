@@ -49,6 +49,8 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
     Grip("Grip strength", AddEntryGroup.Body),
     // The monthly sitting: grip, tape girths and skinfolds (BodyCheckin.kt).
     BodyCheckIn("Body check-in", AddEntryGroup.Body),
+    // Weigh-in before and after a session, for hydration plans (domain/fuel/SweatProfile.kt).
+    SweatTest("Sweat test", AddEntryGroup.Body),
     InjuryCheckIn("Injury check-in", AddEntryGroup.Training),
     Injury("Injury", AddEntryGroup.Training),
     Illness("Illness", AddEntryGroup.Training),
@@ -67,6 +69,7 @@ sealed interface AddEntryTarget {
     data object IllnessForm : AddEntryTarget
     data object BodyCheckIn : AddEntryTarget
     data object EventForm : AddEntryTarget
+    data object SweatTest : AddEntryTarget
 }
 
 val AddEntryChoice.target: AddEntryTarget
@@ -83,6 +86,7 @@ val AddEntryChoice.target: AddEntryTarget
         AddEntryChoice.Injury -> AddEntryTarget.InjuryForm
         AddEntryChoice.Illness -> AddEntryTarget.IllnessForm
         AddEntryChoice.Event -> AddEntryTarget.EventForm
+        AddEntryChoice.SweatTest -> AddEntryTarget.SweatTest
         AddEntryChoice.SexualActivity -> AddEntryTarget.Form(AddEntryType.SexualActivity)
         AddEntryChoice.Encounter -> AddEntryTarget.Form(AddEntryType.Encounter)
         AddEntryChoice.Note -> AddEntryTarget.Form(AddEntryType.Note)

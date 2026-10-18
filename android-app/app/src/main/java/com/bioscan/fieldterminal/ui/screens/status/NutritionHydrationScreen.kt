@@ -242,17 +242,25 @@ fun HydrationTabContent(overview: NutritionOverview) {
     // (today's exercise duration only), same "each subtab loads its own
     // data" convention TrainingTileScreen.kt's InjuryTab already follows.
     var todayExerciseMinutes by remember { mutableDoubleStateOf(0.0) }
+    var todaySweat by remember { mutableStateOf<com.bioscan.fieldterminal.data.TodaySweat?>(null) }
+    val homeContext = LocalContext.current
     LaunchedEffect(Unit) {
         val today = java.time.LocalDate.now()
         todayExerciseMinutes = AnalysisRepository(SupabaseClientProvider.client)
             .loadExerciseSessionsForTrainingLoad()
             .filter { runCatching { java.time.OffsetDateTime.parse(it.startTime).toLocalDate() == today }.getOrDefault(false) }
             .sumOf { it.durationMin ?: 0.0 }
+        // Fuel planning phase 4: the person's sweat profile at today's temperature at home, as the Status FUEL preview uses.
+        if (todayExerciseMinutes > 0) {
+            todaySweat = com.bioscan.fieldterminal.data.todaySweatRate(SupabaseClientProvider.client, com.bioscan.fieldterminal.data.MapSettingsStore.getHome(homeContext))
+        }
     }
     val hydrationIntelligence = computeHydrationIntelligence(
         measuredIntakeMl = overview.todayHydrationMl?.toDouble(),
         effectiveHydrationMl = overview.todayBeverageItems.mapNotNull { it.effectiveHydrationMl }.sum().takeIf { overview.todayBeverageItems.isNotEmpty() },
         exerciseDurationMinutesToday = todayExerciseMinutes,
+        sweatRateMlPerHour = todaySweat?.mlPerHour,
+        environmentKnown = todaySweat?.environmentKnown ?: false,
     )
 
     val context = LocalContext.current
@@ -457,7 +465,7 @@ private fun HydrationIntelligenceCard(result: HydrationIntelligenceResult) {
         }
         if (!result.environmentalContextAvailable) {
             Text(
-                "Environmental context (temperature/humidity) isn't available yet -- demand estimate is exercise-only.",
+                "Today's temperature isn't known (set a home location in Setup › Connected services) -- the estimate assumes a mild day.",
                 style = FTType.Caption,
                 color = FT.TextMuted,
             )

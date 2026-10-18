@@ -17,7 +17,7 @@ sets the week's energy and protein, the plan shapes each day.
 | 1 | Events outside the training plan (`athlete_events`), event form and page, Training › Plan EVENTS card, + EVENT, Status NEXT UP, calendar suggestions, calendar sync wired | Done |
 | 2 | Planned-day resolver and session demand | Done |
 | 3 | Day fuel engine: bands, the week, meal codes, the days before, safety | Done (engine; shown in phase 6) |
-| 4 | Weather (hourly, TYPICAL beyond 16 days), heat stress, sweat profile | |
+| 4 | Weather (hourly, TYPICAL beyond 16 days), heat stress, sweat profile | Done |
 | 5 | Course time estimate; race and long-session fuel and hydration plans | |
 | 6 | `fuel_plans` snapshots; TODAY'S FUEL, the event FUEL tab | |
 | 7 | Reminders relative to sessions and race week | |
@@ -77,6 +77,24 @@ sets the week's energy and protein, the plan shapes each day.
 - `domain/fuel/IntakeHistory.kt`: the days before against plan, only on fully logged days (3 meals or more). A loading
   shortfall before a race is carried by today's meals (up to 2 g/kg) and makes the race plan start fuelling early; a
   day not logged is assumed as planned; a morning weight more than 1 % under the usual raises pre-hydration.
+
+## Phase 4 notes: weather, heat and sweat
+
+- `WeatherRepository.fetchHourly`: Open-Meteo (no key), hourly temperature, humidity, dew point, apparent temperature,
+  solar radiation, wind and rain. Within 16 days the forecast; further out the TYPICAL weather of those dates
+  (`domain/fuel/HeatStress.kt` `climatology`: the same hours within 3 days either side over the last 10 years from the
+  archive, median per hour plus the 90th-percentile temperature), always labelled TYPICAL. Cached 30 minutes.
+- `HeatStress.kt`: the NWS heat index (Rothfusz), bands COLD / COOL / MILD / WARM / HOT / VERY HOT, strong sun named
+  (600 W/m² or more), temperature along a course by the 6.5 °C/km lapse rate. No simplified WBGT (Kong & Huber 2022).
+- `SweatProfile.kt`: a sweat test (weight before and after, fluid in, urine out; Sawka 2007) gives a rate; tests move a
+  prior (0.5 / 0.8 / 1.0 L/h easy / moderate / hard at 20 °C and 70 kg, by weight, +3 % per °C above 20, −2 % below)
+  by the median ratio measured / predicted, and narrow its range (±40 % with none, ±25 % with one or two, ±15 % with
+  three). `fluidPlan`: enough that the loss stays within 2 % of body weight, never more than 80 % of the low sweat
+  estimate (over-drinking causes hyponatraemia); sodium 500 mg/L, 700 in heat, 1,000 for a salty sweater (ISSN 2019).
+- `supabase/migrations/20261025_sweat_tests.sql`, `data/SweatTestsRepository.kt`, the SWEAT TEST sheet (+ › BODY).
+- Daily fluid: `data/HydrationDemand.kt` `todaySweatRate` (the profile at today's daytime temperature at the home
+  location in Setup › Connected services, 18 °C without one) replaces the fixed 500 ml/h in the Status FUEL preview and
+  the Fuel hydration card alike.
 
 ## Research
 

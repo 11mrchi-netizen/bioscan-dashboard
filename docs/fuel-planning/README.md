@@ -53,7 +53,7 @@ sets the week's energy and protein, the plan shapes each day.
   usual heart-rate load for the type (median Banister TRIMP per minute; 60 % of reserve is 1.2, 75 % is 2.0). Over
   90 minutes anything but strength is LONG. Energy: the person's median kcal per minute for the type (calories_active
   over duration, 3 sessions or more), else the Compendium MET (Ainsworth 2011) less 1 MET at rest, scaled a little by
-  class. Read-only check on live data: runs 11.4 kcal/min, strength 6.2 (last 180 days).
+  class (checked read-only against the owner's history; values not kept here).
 - `data/PlannedDayRepository.kt` reads the four sources, 180 days of history (paged) and today's heart-rate anchors.
 
 ## Phase 3 notes: the day engine

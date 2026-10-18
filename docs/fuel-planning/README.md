@@ -21,7 +21,7 @@ sets the week's energy and protein, the plan shapes each day.
 | 5 | Course time estimate; race and long-session fuel and hydration plans | Done (engine; shown in phase 6) |
 | 6 | `fuel_plans` snapshots; TODAY'S FUEL, the event FUEL tab | Done |
 | 7 | Reminders relative to sessions and race week | Done |
-| 8 | After the event: review, sweat rate and gut tolerance learned, periodisation index | |
+| 8 | After the event: review, sweat rate and gut tolerance learned, periodisation index | Done (index computed on the phone; see notes) |
 | 9 | Planner: build toward an event, taper | |
 
 ## Phase 1 notes: events
@@ -149,6 +149,26 @@ sets the week's energy and protein, the plan shapes each day.
 - The worker (`NotificationDispatchWorker`) reads the next three planned days and shows due prompts within the rules'
   limits and the daily cap; taps open Fuel. `supabase/migrations/20261027_fuel_notification_kinds.sql` widens the kind
   constraint and seeds both rules; Setup › Notifications switches each off.
+
+## Phase 8 notes: after the event
+
+- REVIEW FUELLING on a past event (`ui/screens/fuel/FuelReviewSheet.kt`, `data/FuelReviewRepository.kt`): the kept
+  plan's steps marked TAKEN / HALF / SKIPPED (or totals when no plan was kept), gut 0-10, energy 0-10, weigh-ins,
+  notes. The steps go into `fueling_intake_log` against the recorded session (source `fuel_plan`, keyed so a second
+  save does not duplicate; consumed and partial rows reach the day's nutrition totals through the existing trigger),
+  the review into `fuel_plan_reviews` (`supabase/migrations/20261028_fuel_plan_reviews.sql`, one per event; the app's
+  first gut-symptom records), and with both weights the race into `sweat_tests`.
+- `domain/fuel/Periodization.kt` `suggestTolerance`: a session within 5 g/h of the ceiling with gut 2 or less suggests
+  10 g/h more (90 at most); gut 6 or more suggests 10 less (30 at least). Shown after saving, applied only on SET.
+- Carbohydrate Periodization Index (Rothschild 2022) and code adherence: Fuel › Nutrition's PERIODISATION card, over the
+  fully logged days of the last 28 (index; daily carbohydrate per kg against the day's training energy) and 14 (HIGH /
+  MEDIUM / LOW meals within range). Computed on the phone, not nightly on the server as first planned: the server's
+  analysis frame carries no daily carbohydrate, and the phone already holds both inputs, so this needs no deploy. The
+  console does not show it.
+- Maintenance: once `evaluateTdee` (logged intake against the weight trend) is confident, its expenditure replaces
+  Mifflin-St Jeor times the activity factor, and the card says MAINTENANCE, FROM YOUR INTAKE AND WEIGHT.
+- Not built: adjusting the course time estimate from finished races (the review keeps the actual duration, which a
+  later change can use).
 
 ## Research
 

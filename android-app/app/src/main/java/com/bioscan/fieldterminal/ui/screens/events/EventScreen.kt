@@ -73,6 +73,7 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
     var editing by remember { mutableStateOf(false) }
     var actionError by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableStateOf(EventTab.Overview) }
+    var reviewing by remember { mutableStateOf(false) }
     val guard = rememberLoadGuard()
     LaunchedEffect(guard.attempt) { guard.run { event = repo.load(eventId) } }
 
@@ -138,7 +139,11 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
                 }
             }
             actionError?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
-            FTButton("EDIT EVENT", emphasis = FTButtonEmphasis.Primary) { editing = true }
+            // After the event: what of the fuel plan was taken, how the gut coped, the weigh-ins (fuel planning phase 8).
+            if (!e.date.isAfter(LocalDate.now()) && e.status != EventStatus.CANCELLED && e.status != EventStatus.DNS) {
+                FTButton("REVIEW FUELLING", emphasis = FTButtonEmphasis.Primary) { reviewing = true }
+            }
+            FTButton("EDIT EVENT", emphasis = if (e.date.isAfter(LocalDate.now())) FTButtonEmphasis.Primary else FTButtonEmphasis.Secondary) { editing = true }
             e.exerciseSessionId?.let { sid -> FTButton("OPEN THE RECORDED SESSION") { onOpenSession(sid) } }
             if (e.status == EventStatus.PLANNED && !e.date.isAfter(LocalDate.now())) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -151,6 +156,9 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
                 }
             }
         }
+    }
+    if (reviewing && e != null) {
+        com.bioscan.fieldterminal.ui.screens.fuel.FuelReviewSheet(e, onDismiss = { reviewing = false }, onSaved = { reviewing = false; guard.retry() })
     }
     if (editing && e != null) {
         EventFormSheet(

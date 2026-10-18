@@ -50,6 +50,8 @@ data class WeekEnergy(
     val fromGoal: Boolean,
     /** True when the goal is a deficit (below maintenance beyond the maintenance band). */
     val deficit: Boolean = false,
+    /** True when maintenance is the expenditure observed from intake and weight, false when it is the equation's. */
+    val observedMaintenance: Boolean = false,
 )
 
 data class DayFuelPlan(

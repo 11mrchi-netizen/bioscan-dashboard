@@ -97,7 +97,13 @@ private fun FuelContent(f: TodayFuel) {
         listOfNotNull(
             "PROTEIN ${p.proteinG.roundToInt()} G",
             p.fatG?.let { "FAT ${it.roundToInt()} G" },
-            p.kcal?.let { "${it.roundToInt()} KCAL" + if (f.energyFromGoal) " (GOAL, AS A WEEKLY AVERAGE)" else " (MAINTENANCE ESTIMATE)" },
+            p.kcal?.let {
+                "${it.roundToInt()} KCAL" + when {
+                    f.energyFromGoal -> " (GOAL, AS A WEEKLY AVERAGE)"
+                    f.observedMaintenance -> " (MAINTENANCE, FROM YOUR INTAKE AND WEIGHT)"
+                    else -> " (MAINTENANCE ESTIMATE)"
+                }
+            },
         ).joinToString(" · "),
         style = FTType.MonoCaption, color = FT.TextSecondary,
     )

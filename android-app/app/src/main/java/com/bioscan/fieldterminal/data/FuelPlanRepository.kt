@@ -69,6 +69,7 @@ data class TodayFuel(
     val history: IntakeHistoryResult,
     val changes: List<String>,
     val energyFromGoal: Boolean,
+    val observedMaintenance: Boolean,
     val adherence: Map<String, Pair<Double, MealAdherence>>,
     val longSessions: List<Pair<PlannedItem, RaceFuelPlan>>,
     /** An A or B race within 14 days that the plan loads for, with the date loading starts. */
@@ -80,6 +81,15 @@ sealed interface TodayFuelResult {
     data class Ready(val fuel: TodayFuel) : TodayFuelResult
     data object NeedsWeight : TodayFuelResult
 }
+
+data class PeriodizationView(
+    val index: com.bioscan.fieldterminal.domain.fuel.PeriodizationIndex?,
+    val fullyLoggedDays: Int,
+    val adherence: List<com.bioscan.fieldterminal.domain.fuel.CodeAdherence>,
+)
+
+@Serializable
+private data class MealCarbsRow(@SerialName("logged_at") val loggedAt: String, @SerialName("carbs_g") val carbsG: Double? = null)
 
 data class EventFuel(val event: AthleteEvent, val plan: RaceFuelPlan, val changes: List<String>, val loadedAt: ZonedDateTime)
 
@@ -117,13 +127,25 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
             .decodeList<BodyCompRow>()
     }
 
-    private suspend fun weekEnergy(context: Context, inputs: MaintenanceInputs): WeekEnergy {
+    // Maintenance: the expenditure observed from logged intake and the weight trend (evaluateTdee, the adaptive approach
+    // MacroFactor popularised) once that is confident; until then Mifflin-St Jeor times the activity factor.
+    private fun weekEnergy(context: Context, inputs: MaintenanceInputs, overview: NutritionOverview?, body: List<BodyCompRow>): WeekEnergy {
         val goals = NutritionGoalsStore.getGoals(context)
         val resting = restingEnergyKcal(inputs.sex, inputs.ageYears, inputs.heightCm, inputs.weightKg)
-        val maintenance = maintenanceEstimate(resting, ActivityLevel.of(goals.activityLevel), inputs.weeklyTrainingMin)?.kcal
+        val observed = overview?.allDays?.takeIf { it.isNotEmpty() }?.let { days ->
+            val weights = body.mapNotNull { r -> r.weightKg?.let { LocalDate.parse(r.date) to it } }
+            com.bioscan.fieldterminal.domain.evaluateTdee(
+                com.bioscan.fieldterminal.domain.evaluateNutrition(days),
+                com.bioscan.fieldterminal.domain.evaluateWeightTrend(weights),
+            ).takeIf { it.confidence.met }?.tdeeKcal
+        }
+        val maintenance = observed ?: maintenanceEstimate(resting, ActivityLevel.of(goals.activityLevel), inputs.weeklyTrainingMin)?.kcal
         val goalKcal = goals.caloriesKcal
         val deficit = goalKcal != null && maintenance != null && energyBalance(goalKcal, maintenance).kind == EnergyBalanceKind.DEFICIT
-        return WeekEnergy(dailyKcal = goalKcal ?: maintenance, proteinG = goals.proteinG, fromGoal = goalKcal != null, deficit = deficit)
+        return WeekEnergy(
+            dailyKcal = goalKcal ?: maintenance, proteinG = goals.proteinG, fromGoal = goalKcal != null, deficit = deficit,
+            observedMaintenance = observed != null,
+        )
     }
 
     suspend fun loadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult = coroutineScope {
@@ -138,7 +160,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         val kg = inputs.weightKg ?: body.firstNotNullOfOrNull { it.weightKg } ?: return@coroutineScope TodayFuelResult.NeedsWeight
         val latest = body.firstOrNull { it.leanMassKg != null || it.bodyFatPct != null }
         val ffm = fatFreeMass(kg, latest?.leanMassKg, latest?.bodyFatPct)
-        val energy = weekEnergy(context, inputs)
+        val energy = weekEnergy(context, inputs, overview, body)
         val days = daysD.await()
         val todayIdx = days.indexOfFirst { it.date == today }
         val week = days.drop(todayIdx).take(7)
@@ -201,7 +223,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         }
 
         TodayFuelResult.Ready(
-            TodayFuel(todayPlan, todayCoded, tomorrowPlan, tomorrowCoded, history, changes, energy.fromGoal, adherenceMap, longSessions, countdown, kg),
+            TodayFuel(todayPlan, todayCoded, tomorrowPlan, tomorrowCoded, history, changes, energy.fromGoal, energy.observedMaintenance, adherenceMap, longSessions, countdown, kg),
         )
     }
 
@@ -249,6 +271,60 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         }
         EventFuel(event, plan, changes, now)
     }
+
+    /**
+     * How the last weeks went: the Carbohydrate Periodization Index over the fully logged days of the last 28 (daily
+     * carbohydrate per kg against the day's training energy) and, over the last 14, how the logged meals kept their codes.
+     */
+    suspend fun loadPeriodization(context: Context, overview: NutritionOverview, now: ZonedDateTime = ZonedDateTime.now()): PeriodizationView? = coroutineScope {
+        val today = now.toLocalDate()
+        val zone = now.zone
+        val inputs = runCatching { NutritionTargetsRepository(supabase).loadMaintenanceInputs(today) }.getOrDefault(MaintenanceInputs())
+        val body = runCatching { bodyComposition() }.getOrDefault(emptyList())
+        val kg = inputs.weightKg ?: body.firstNotNullOfOrNull { it.weightKg } ?: return@coroutineScope null
+        val dayRepo = PlannedDayRepository(supabase)
+        val recordedD = async { runCatching { dayRepo.recordedSince(today.minusDays(28), zone) }.getOrDefault(emptyList()) }
+        val pastD = async { runCatching { dayRepo.load(today.minusDays(14), days = 14, now = now) }.getOrNull() }
+        val mealsD = async { runCatching { mealsSince(today.minusDays(14), zone) }.getOrDefault(emptyList()) }
+
+        val loadByDay = recordedD.await().filter { com.bioscan.fieldterminal.domain.fuel.isTrainingSession(it.type, it.durationMin) }
+            .groupBy { it.start.withZoneSameInstant(zone).toLocalDate() }
+            .mapValues { (_, s) -> s.sumOf { r -> r.caloriesActive?.takeIf { it > 0 } ?: com.bioscan.fieldterminal.domain.fuel.estimateSessionKcal(r.type, r.durationMin, Intensity.MODERATE, kg, emptyMap()) ?: 0.0 } }
+        val full = overview.allDays.mapNotNull { d -> runCatching { LocalDate.parse(d.date) to d }.getOrNull() }
+            .filter { (date, d) -> date.isBefore(today) && !date.isBefore(today.minusDays(28)) && d.mealCount >= com.bioscan.fieldterminal.domain.LOG_COMPLETE_MEALS }
+        val index = com.bioscan.fieldterminal.domain.fuel.carbPeriodizationIndex(
+            full.map { (date, d) -> com.bioscan.fieldterminal.domain.fuel.DayIntakeLoad(date, d.carbsG / kg, loadByDay[date] ?: 0.0) },
+        )
+
+        val outcomes = mutableListOf<com.bioscan.fieldterminal.domain.fuel.CodedMealOutcome>()
+        val past = pastD.await()
+        if (past != null) {
+            val settings = FuelSettingsStore.get(context)
+            val energy = weekEnergy(context, inputs, overview, body)
+            val plans = planFuelDays(past, energy, kg, null, week = past.takeLast(7))
+            val fullDates = full.map { it.first }.toSet()
+            val meals = mealsD.await()
+            past.forEachIndexed { i, day ->
+                if (day.date !in fullDates) return@forEachIndexed
+                val coded = codeMeals(plans[i], day, past.getOrNull(i + 1), kg, zone, settings.meals, settings.trainLow, energy.deficit, settings.toleratedGPerHour)
+                val bySlot = mutableMapOf<String, Double>()
+                meals.filter { it.first.toLocalDate() == day.date }.forEach { (at, carbs) ->
+                    mealForLog(coded.meals, at)?.let { bySlot[it.kind.name] = (bySlot[it.kind.name] ?: 0.0) + carbs }
+                }
+                coded.meals.forEach { m -> outcomes += com.bioscan.fieldterminal.domain.fuel.CodedMealOutcome(m.code, adherence(m, bySlot[m.kind.name])) }
+            }
+        }
+        PeriodizationView(index, full.size, com.bioscan.fieldterminal.domain.fuel.codeAdherence(outcomes))
+    }
+
+    private suspend fun mealsSince(since: LocalDate, zone: java.time.ZoneId): List<Pair<ZonedDateTime, Double>> =
+        supabase.postgrest.from("meals")
+            .select(Columns.list("logged_at,carbs_g")) {
+                filter { gte("logged_at", since.atStartOfDay(zone).toInstant().toString()) }
+                limit(1000)
+            }
+            .decodeList<MealCarbsRow>()
+            .mapNotNull { r -> runCatching { OffsetDateTime.parse(r.loggedAt).atZoneSameInstant(zone) to (r.carbsG ?: 0.0) }.getOrNull() }
 
     /** The person's fuel products with their newest recipe. */
     suspend fun products(): List<FuelProductOption> = ReadCache.get("fuel.products", tables = setOf("fueling_products", "fueling_recipe_versions")) {

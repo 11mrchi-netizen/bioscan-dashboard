@@ -144,6 +144,9 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
             }
         }
 
+    /** Recorded training sessions (walks left out) since [since], for the periodisation index. */
+    suspend fun recordedSince(since: LocalDate, zone: ZoneId = ZoneId.systemDefault()): List<RecordedSessionInput> = recorded(since, zone)
+
     private suspend fun latestWeight(): Double? =
         supabase.postgrest.from("body_metrics")
             .select(Columns.list("weight_kg")) {

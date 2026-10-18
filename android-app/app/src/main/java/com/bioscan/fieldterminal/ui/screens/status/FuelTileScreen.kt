@@ -140,6 +140,7 @@ fun FuelTileScreen(
                 FuelTab.Nutrition -> overview?.let {
                     // Fuel planning: today's carbohydrate plan leads the tab, also before anything is logged.
                     com.bioscan.fieldterminal.ui.screens.fuel.TodaysFuelCard(it, modifier = Modifier.padding(horizontal = 22.dp).padding(top = 16.dp))
+                    com.bioscan.fieldterminal.ui.screens.fuel.PeriodizationCard(it, modifier = Modifier.padding(horizontal = 22.dp).padding(top = 12.dp))
                     NutritionTabContent(it, onOpenNutrientBreakdown = onOpenNutrientBreakdown)
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp)) {
                         NutritionCard(evaluateNutrition(it.allDays))

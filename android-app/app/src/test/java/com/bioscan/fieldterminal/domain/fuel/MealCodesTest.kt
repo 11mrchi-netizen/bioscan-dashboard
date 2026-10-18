@@ -78,9 +78,51 @@ class MealCodesTest {
         val inSession = coded.sessions.sumOf { it.fuel.midG }
         assertTrue(inSession > 100)
         assertEquals(p.carbG - inSession, coded.meals.sumOf { it.carbMidG }, 1.0)
-        // Protein at main meals only.
-        assertNull(coded.meals.first { it.kind == MealSlotKind.SNACK }.proteinLowG)
-        assertEquals(21.0, coded.meals.first { it.kind == MealSlotKind.LUNCH }.proteinLowG!!, 1e-9)
+        // Protein and fat add up to the day.
+        assertEquals(p.proteinG, coded.meals.sumOf { it.proteinG }, 1e-6)
+        assertEquals(p.fatG!!, coded.meals.sumOf { it.fatG!! }, 1e-6)
+        val lunch = coded.meals.first { it.kind == MealSlotKind.LUNCH }
+        val snack = coded.meals.first { it.kind == MealSlotKind.SNACK }
+        assertEquals(lunch.proteinG / 2, snack.proteinG, 1e-6)
+        assertEquals(4 * lunch.carbMidG + 4 * lunch.proteinG + 9 * lunch.fatG!!, lunch.kcal!!, 1e-6)
+    }
+
+    @Test
+    fun fatIsCappedBeforeAndAfterKeySessionsAndTheRestGoesElsewhere() {
+        // 17:00 hard hour with breakfast at 05:00 and no snack: a pre-session snack at 15:30 and a recovery one at 18:30
+        // (dinner moved late so none falls within 2 h of the end).
+        val pd = PlannedDay(day, listOf(session(17, 60.0, Intensity.HARD)))
+        val p = planFuelDay(pd, null, listOf(pd), WeekEnergy(4000.0, 130.0, true), kg) // plenty of fat to share
+        val coded = codeMeals(p, pd, null, kg, zone, times = MealTimes(lunch = java.time.LocalTime.of(11, 0), snack = null, dinner = java.time.LocalTime.of(21, 30)))
+        val pre = coded.meals.first { it.kind == MealSlotKind.PRE_SESSION }
+        val rec = coded.meals.first { it.kind == MealSlotKind.RECOVERY }
+        assertTrue(pre.beforeKeySession)
+        assertEquals(PRE_SESSION_FAT_CAP_G, pre.fatG!!, 1e-9)
+        assertEquals(RECOVERY_FAT_CAP_G, rec.fatG!!, 1e-9)
+        assertEquals(p.fatG!!, coded.meals.sumOf { it.fatG!! }, 1e-6)
+    }
+
+    @Test
+    fun mainMealsKeepTheirProteinFloorWhenTheDayAllowsIt() {
+        val kinds = listOf(MealSlotKind.BREAKFAST, MealSlotKind.SNACK, MealSlotKind.LUNCH, MealSlotKind.PRE_SESSION, MealSlotKind.SNACK, MealSlotKind.DINNER)
+        // 70 kg: floor 21 g. 80 g by weight would give mains 80/4.5 = 17.8 g; the floor holds and snacks share 17 g.
+        val split = splitProtein(80.0, kinds, kg)
+        assertEquals(80.0, split.sum(), 1e-9)
+        kinds.indices.filter { kinds[it].main }.forEach { assertEquals(21.0, split[it], 1e-9) }
+        // Too little for the floor everywhere: plain weights.
+        val low = splitProtein(50.0, kinds, kg)
+        assertEquals(50.0, low.sum(), 1e-9)
+        assertTrue(low[0] < 21.0)
+    }
+
+    @Test
+    fun capsHoldAndWhatTheyLeaveIsSpread() {
+        val out = splitWithCaps(100.0, listOf(1.0, 1.0, 0.5), listOf(null, null, 5.0))
+        assertEquals(5.0, out[2], 1e-9)
+        assertEquals(47.5, out[0], 1e-9)
+        assertEquals(100.0, out.sum(), 1e-9)
+        // Everything capped: the caps are what is given.
+        assertEquals(listOf(10.0, 15.0), splitWithCaps(100.0, listOf(1.0, 1.0), listOf(10.0, 15.0)))
     }
 
     @Test

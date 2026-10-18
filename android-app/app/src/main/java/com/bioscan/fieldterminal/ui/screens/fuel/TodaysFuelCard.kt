@@ -160,7 +160,14 @@ private fun MealLine(m: CodedMeal, logged: Pair<Double, MealAdherence>?) {
                 CodeChip(m.code)
                 Text(gRange(m.carbLowG, m.carbHighG) + " CARBS", style = FTType.MonoCaption, color = FT.TextPrimary)
             }
-            m.proteinLowG?.let { Text("PROTEIN ${gRange(it, m.proteinHighG ?: it)}", style = FTType.MonoCaption, color = FT.TextSecondary) }
+            Text(
+                listOfNotNull(
+                    "PROTEIN ${gRange(m.proteinLowG, m.proteinHighG)}",
+                    m.fatG?.let { "FAT ~${it.roundToInt()} G" },
+                    m.kcal?.let { "~${it.roundToInt()} KCAL" },
+                ).joinToString(" · "),
+                style = FTType.MonoCaption, color = FT.TextSecondary,
+            )
             Text(m.reason, style = FTType.Caption, color = FT.TextSecondary)
             logged?.let { (g, a) ->
                 if (a != MealAdherence.NOT_LOGGED) Text("LOGGED ${g.roundToInt()} G · ${a.label}", style = FTType.LabelCaps, color = FT.TextSecondary)

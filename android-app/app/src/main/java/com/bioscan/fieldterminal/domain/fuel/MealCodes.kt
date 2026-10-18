@@ -18,8 +18,14 @@ import kotlin.math.roundToInt
 //   MEDIUM otherwise.
 //
 // The day's carbohydrate, less what is planned during sessions, is split across the meals by weight (LOW 0.5, MEDIUM 1,
-// HIGH 2) and shown as a range of +-15 %. Protein is 0.3-0.4 g/kg at each main meal (Areta 2013; Moore 2015). When no
-// meal falls 1-4 h before a key session, a pre-session snack is added; after one with no meal within 2 h, a recovery snack.
+// HIGH 2) and shown as a range of +-15 %. When no meal falls 1-4 h before a key session, a pre-session snack is added;
+// after one with no meal within 2 h, a recovery snack.
+//
+// Protein and fat are split too, so the meals add up to the day (fuel planning phase 10). Protein: weight 1 for main
+// meals and recovery, 0.5 for snacks, with at least 0.3 g/kg at each main meal when the day allows it (Areta 2013;
+// Moore 2015). Fat: weight 1 for main meals, 0.5 for snacks and for a HIGH meal in the 4 h before a key session, with a
+// pre-session snack capped at 10 g and recovery at 15 g (fat slows gastric emptying; ACSM 2016 advises low fat and fibre
+// before training); what a cap leaves goes to the other meals.
 
 enum class CarbCode(val label: String, val weight: Double) { LOW("LOW", 0.5), MEDIUM("MEDIUM", 1.0), HIGH("HIGH", 2.0) }
 
@@ -45,11 +51,44 @@ data class CodedMeal(
     val code: CarbCode,
     val carbLowG: Double,
     val carbHighG: Double,
-    val proteinLowG: Double?,
-    val proteinHighG: Double?,
+    /** Protein aimed at, g; the meals' protein adds up to the day's. */
+    val proteinG: Double,
+    /** Fat aimed at, g; null when the day has no fat target (no energy known). */
+    val fatG: Double?,
     val reason: String,
+    /** True for a meal in the 4 h before a key session: low in fat and fibre. */
+    val beforeKeySession: Boolean = false,
 ) {
     val carbMidG: Double get() = (carbLowG + carbHighG) / 2
+    val proteinLowG: Double get() = proteinG * 0.85
+    val proteinHighG: Double get() = proteinG * 1.15
+    /** Energy of the targets, kcal (4 / 4 / 9 per gram); null without a fat target. */
+    val kcal: Double? get() = fatG?.let { 4 * carbMidG + 4 * proteinG + 9 * it }
+}
+
+const val PRE_SESSION_FAT_CAP_G = 10.0
+const val RECOVERY_FAT_CAP_G = 15.0
+const val MAIN_MEAL_PROTEIN_MIN_G_PER_KG = 0.3
+
+/**
+ * Splits [total] across [weights], none above its cap ([caps], null = none): shares by weight; a share over its cap is
+ * held at the cap and the rest is split again among the others. When every meal is capped, the caps are what is given.
+ */
+fun splitWithCaps(total: Double, weights: List<Double>, caps: List<Double?>): List<Double> {
+    val out = MutableList(weights.size) { 0.0 }
+    val open = weights.indices.toMutableSet()
+    var left = total
+    while (open.isNotEmpty()) {
+        val w = open.sumOf { weights[it] }
+        if (w <= 0) break
+        val over = open.filter { i -> caps[i]?.let { left * weights[i] / w > it } == true }
+        if (over.isEmpty()) {
+            open.forEach { out[it] = left * weights[it] / w }
+            break
+        }
+        over.forEach { i -> out[i] = caps[i]!!; left -= caps[i]!!; open -= i }
+    }
+    return out
 }
 
 data class SessionWindow(val item: PlannedItem, val fuel: SessionFuel)
@@ -103,6 +142,7 @@ fun codeMeals(
         val before = sessions.firstOrNull { it.intensity.isKey && hoursBetween(t, it.start!!) in 1.0..4.0 }
         val beforeAny = sessions.firstOrNull { hoursBetween(t, it.start!!) in 0.5..4.0 }
         val after = sessions.lastOrNull { it.intensity.isKey && hoursBetween(it.end!!, t) in 0.0..2.0 }
+        val keyAhead = before != null || sessions.any { it.intensity.isKey && hoursBetween(t, it.start!!) in 0.0..4.0 }
         val (code, reason) = when {
             plan.loading -> CarbCode.HIGH to "Loading day: every meal carries carbohydrate."
             before != null -> CarbCode.HIGH to "${formatGap(t, before.start!!)} before ${before.title}: top up for the work."
@@ -114,24 +154,65 @@ fun codeMeals(
             day.isRest -> CarbCode.LOW to "Rest day: carbohydrate low, protein as usual."
             else -> CarbCode.MEDIUM to "Training day: a normal share."
         }
-        Triple(kind, t, code to reason)
+        Coded(kind, t, code, reason, keyAhead)
     }
 
     // In-session carbohydrate comes off the day's total first; the rest is split by weight.
     val inSession = windows.sumOf { it.fuel.midG }
     val forMeals = (plan.carbG - inSession).coerceAtLeast(plan.carbG * 0.5)
-    val totalWeight = coded.sumOf { it.third.first.weight }.coerceAtLeast(0.5)
-    val meals = coded.map { (kind, t, cr) ->
-        val share = forMeals * cr.first.weight / totalWeight
+    val totalWeight = coded.sumOf { it.code.weight }.coerceAtLeast(0.5)
+
+    val protein = splitProtein(plan.proteinG, coded.map { it.kind }, weightKg)
+    val fat = plan.fatG?.let { f ->
+        splitWithCaps(
+            f.coerceAtLeast(0.0),
+            coded.map { c -> if (!c.kind.main || (c.code == CarbCode.HIGH && c.beforeKey)) 0.5 else 1.0 },
+            coded.map { c ->
+                when (c.kind) {
+                    MealSlotKind.PRE_SESSION -> PRE_SESSION_FAT_CAP_G
+                    MealSlotKind.RECOVERY -> RECOVERY_FAT_CAP_G
+                    else -> if (c.beforeKey && !c.kind.main) PRE_SESSION_FAT_CAP_G else null
+                }
+            },
+        )
+    }
+    val meals = coded.mapIndexed { i, c ->
+        val share = forMeals * c.code.weight / totalWeight
         CodedMeal(
-            kind = kind, time = t, code = cr.first,
+            kind = c.kind, time = c.time, code = c.code,
             carbLowG = share * 0.85, carbHighG = share * 1.15,
-            proteinLowG = if (kind.main || kind == MealSlotKind.RECOVERY) 0.3 * weightKg else null,
-            proteinHighG = if (kind.main || kind == MealSlotKind.RECOVERY) 0.4 * weightKg else null,
-            reason = cr.second,
+            proteinG = protein[i], fatG = fat?.get(i),
+            reason = c.reason, beforeKeySession = c.beforeKey,
         )
     }
     return CodedDay(date, meals, windows)
+}
+
+private data class Coded(val kind: MealSlotKind, val time: ZonedDateTime, val code: CarbCode, val reason: String, val beforeKey: Boolean)
+
+/**
+ * The day's protein across the meals: weight 1 for main meals and recovery, 0.5 for snacks; each main meal gets at least
+ * [MAIN_MEAL_PROTEIN_MIN_G_PER_KG] g/kg when the day's protein covers that for all of them, the snacks sharing the rest.
+ */
+fun splitProtein(dayProteinG: Double, kinds: List<MealSlotKind>, weightKg: Double): List<Double> {
+    fun weight(k: MealSlotKind) = if (k.main || k == MealSlotKind.RECOVERY) 1.0 else 0.5
+    val total = kinds.sumOf { weight(it) }
+    if (total <= 0) return kinds.map { 0.0 }
+    val shares = kinds.map { dayProteinG * weight(it) / total }
+    val floor = MAIN_MEAL_PROTEIN_MIN_G_PER_KG * weightKg
+    val mains = kinds.indices.filter { kinds[it].main }
+    if (mains.none { shares[it] < floor } || dayProteinG < floor * mains.size) return shares
+    // Mains at the floor (or above it by weight); the others share what is left by weight.
+    val others = kinds.indices.filter { !kinds[it].main }
+    val left = (dayProteinG - floor * mains.size).coerceAtLeast(0.0)
+    val otherW = others.sumOf { weight(kinds[it]) }
+    return kinds.indices.map { i ->
+        when {
+            kinds[i].main && otherW > 0 -> floor
+            kinds[i].main -> dayProteinG / mains.size
+            else -> left * weight(kinds[i]) / otherW
+        }
+    }
 }
 
 private fun formatGap(a: ZonedDateTime, b: ZonedDateTime): String {

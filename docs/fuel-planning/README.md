@@ -23,6 +23,7 @@ sets the week's energy and protein, the plan shapes each day.
 | 7 | Reminders relative to sessions and race week | Done |
 | 8 | After the event: review, sweat rate and gut tolerance learned, periodisation index | Done (index computed on the phone; see notes) |
 | 9 | Planner: build toward an event, taper | Done |
+| 10 | Its own page (Fuel › PLAN), the next ten days, per-meal protein and fat, example plates by fixed rules | Done |
 
 ## Phase 1 notes: events
 
@@ -182,6 +183,55 @@ sets the week's energy and protein, the plan shapes each day.
 - Metric registry: `fuel_day_plan`, `sweat_rate`, `carb_periodization_index` (also in doc 02), shown behind the "?" of
   TODAY'S FUEL and PERIODISATION.
 
+## Phase 10 notes: the plan page, ten days, and what it looks like on the plate
+
+Owner requests: the plan on its own page under Fuel, at least the next ten days, and what each day's and meal's
+carbohydrate, protein and fat look like as food, with no language model in that layer. Owner decisions: suggestions
+from the person's usual foods first, then staples; two example plates per meal and a one-line summary per day.
+
+- **Page.** `FuelTab.Plan` is Fuel's first tab and where it opens (Today's FUEL line and the fuel reminders open Fuel, so
+  they land there). `ui/screens/fuel/FuelPlanPage.kt`: TODAY'S FUEL (as before, plus per-meal protein, fat and kcal and
+  the plates), NEXT 10 DAYS (a strip of carbohydrate g/kg per day against the day's band, one hue, labelled axis, tap or
+  drag to read a day; one row per day with class, main session, C / P / F / kcal and the day in everyday terms, opening
+  to where the plan comes from, reasons, meals and plates), and PERIODISATION. One load feeds the page; open days are
+  kept by the tile, so they survive a tab switch. Nutrition keeps what was logged.
+- **Ten days.** `loadToday` returns `horizon`: today and the next ten days, each a `HorizonDay` (planned day, plan,
+  coded meals, plates, summary). The read reaches 20 days (three back, the horizon, and what the last day's loading
+  check needs). The goal now holds as the average of each block of seven days from today (`planInWeekBlocks`); one
+  shared window gave days 7-10 the first week's mean session energy. Today's side effects (the `fuel_plans` snapshot,
+  the intake catch-up, long-session weather) stay on today only. The result is cached for a minute (key: the date, the
+  local settings and goal) and dropped by writes to the tables it reads, so the page and Today's line share one load.
+- **Per-meal targets.** `codeMeals` splits the day's protein (weight 1 for main meals and recovery, 0.5 for snacks; at
+  least 0.3 g/kg at each main meal when the day allows, Areta 2013, Moore 2015) and fat (weight 1 for main meals, 0.5
+  for snacks and for HIGH meals in the 4 h before a key session; at most 10 g pre-session and 15 g at recovery, low fat
+  before training per ACSM 2016, what a cap leaves going to the other meals). The meals now add up to the day.
+- **Plates, deterministic** (`domain/fuel/MealSuggestions.kt`). A template per meal (lunch and dinner: a weighed starch,
+  a protein, an optional fat and vegetables; breakfast: carbohydrate, protein, optional fat; snack: carbohydrate and an
+  optional protein; pre-session: low-fat, low-fibre carbohydrate and an optional lean protein; recovery: carbohydrate
+  and protein). Up to six candidates per role, the person's foods first. Grams by bounded least squares on carbohydrate,
+  protein and fat (fat weighted 0.6) with a pull towards the usual portion, then rounded to real servings (halves of a
+  banana, whole eggs and slices, 5-10 g steps). The score: distance outside each target's band, a penalty for fat or
+  fibre before a key session, a soft cap of 15 g fibre a meal, a small cost for a second starch and for repeating the
+  meal before, a small credit for the person's foods; ties by food id, so the same inputs give the same plates. Savoury
+  and sweet foods are not put on one plate. Two plates with different carbohydrate sources; a plate more than 25 % off a
+  target is not offered, and the meal says so. The day line puts three quarters of the day's carbohydrate in the
+  person's most eaten starch and a quarter in bananas.
+- **Foods.** `domain/fuel/StapleFoods.kt`: 50 staples, values per 100 g rounded from USDA FoodData Central SR Legacy
+  (whey: a typical label), each with role, taste, meals it suits, usual portion and bounds, and the names it goes by in
+  English and Chinese. `data/FoodHabitsRepository.kt` reads the last 120 days of meals: each meal's description and
+  item descriptions are matched against those names (longest first, whole words; one count per meal), so the staples
+  the person eats rank first for that meal slot; catalogue foods (`meal_items.food_id`) logged three times or more become
+  the person's own foods with their median portion and `food_nutrients` values. An item an AI estimate produced counts
+  only through its catalogue food or its description, never through the estimate's numbers.
+- **Found on the way.** Few logged items resolve to a catalogue food (most meals are dishes described in words), so the
+  description match is what carries "your usual foods" today; the catalogue path takes over as foods are picked from
+  search or a barcode. The plan reads the next days from planned sessions, calendar training and events: with none of
+  them, every day reads as a rest day.
+- **Verification.** Tests: meal splits add up and caps hold; plates hit targets, are deterministic, stay in bounds and on
+  servings, are low in fat and fibre before key sessions, put the person's foods first, report an unreachable target;
+  name matching; each seven-day block averages to the goal; ten days of plates in about 0.25 s on a desktop JVM (run off
+  the main thread on the phone).
+
 ## Read-only check on live data
 
 Run once through the real engine on the owner's data (values reported in the PR conversation, not kept in the repository,
@@ -197,7 +247,7 @@ main input.
    (new tables, RLS on; nothing else depends on them).
 2. `20261027_fuel_notification_kinds.sql` before the app build: the app seeds missing notification rules on start, and
    the seeding fails while the kind constraint does not yet allow the two new kinds.
-3. The app build. No edge function changes.
+3. The app build. No edge function changes. (Phase 10 is app-only: no migration.)
 
 Steps 1 and 2 were applied to the live project on 18 Oct 2026, in that order. The four tables were sent without their
 `drop … if exists` lines (they do nothing on a first apply); the files here keep them so they stay safe to re-run.

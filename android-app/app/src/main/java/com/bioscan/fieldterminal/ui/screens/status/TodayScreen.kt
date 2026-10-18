@@ -109,6 +109,7 @@ fun TodayScreen(
     onBack: () -> Unit,
     onOpenTrainingLoad: () -> Unit,
     onOpenCardio: () -> Unit,
+    onOpenFuel: () -> Unit = {},
     // Analysis review phase B: the 22:25 reminder lands here with the evening check-in open.
     openCheckIn: Boolean = false,
     onCheckInHandled: () -> Unit = {},
@@ -281,6 +282,8 @@ fun TodayScreen(
             // text, wrapping it one character per line. Fixing the layout
             // here rather than the shared components, which work correctly
             // everywhere else they're already used.
+            // Fuel planning: today's carbohydrate class and the next meal's code, opening Fuel › Nutrition.
+            com.bioscan.fieldterminal.ui.screens.fuel.TodayFuelLine(nut, onOpen = onOpenFuel)
             FTCard(title = "CALORIES TODAY") {
                 val today = nut.today
                 if (today == null) {

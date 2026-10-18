@@ -19,7 +19,7 @@ sets the week's energy and protein, the plan shapes each day.
 | 3 | Day fuel engine: bands, the week, meal codes, the days before, safety | Done (engine; shown in phase 6) |
 | 4 | Weather (hourly, TYPICAL beyond 16 days), heat stress, sweat profile | Done |
 | 5 | Course time estimate; race and long-session fuel and hydration plans | Done (engine; shown in phase 6) |
-| 6 | `fuel_plans` snapshots; TODAY'S FUEL, the event FUEL tab | |
+| 6 | `fuel_plans` snapshots; TODAY'S FUEL, the event FUEL tab | Done |
 | 7 | Reminders relative to sessions and race week | |
 | 8 | After the event: review, sweat rate and gut tolerance learned, periodisation index | |
 | 9 | Planner: build toward an event, taper | |
@@ -114,6 +114,29 @@ sets the week's energy and protein, the plan shapes each day.
   15 minutes. After: 1-1.2 g/kg/h for 4 h with 0.3 g/kg protein, 1.25-1.5 x the fluid lost, a weigh-in.
 - Each plan lists its assumptions: the duration and its basis, FORECAST / TYPICAL / no weather, the sweat estimate's
   basis, the tolerance cap, generic products.
+
+## Phase 6 notes: on screen
+
+- `data/FuelPlanRepository.kt` puts it together: 17 planned days from three days back, the goal (or the maintenance
+  estimate) and whether it is a deficit, weight and fat-free mass, the days before from the Log's daily totals, the
+  sweat profile, the home or course weather, the person's products, `FuelSettingsStore` (meal times, training low,
+  tolerated g/h, caffeine, salty sweater). `loadToday` codes today and tomorrow, places logged meals in their slots,
+  plans long sessions (90 min or more) of the next three days; `loadEvent` builds the event's plan with its duration
+  range (target ±5 %, expected ±10 %, or the run estimate) and, the day before or the day itself, the days-before check.
+- `supabase/migrations/20261026_fuel_plans.sql`: a compact copy (`domain/fuel/FuelSnapshot.kt`) is written only when a
+  plan changes; `describeChanges` says what changed (a session moved, added or dropped; the day's class; carbohydrate
+  by 30 g or more; a meal's code; for events the forecast arriving, heat, fluid, carbohydrate, duration, sodium). The
+  lines stay until the plan changes again. Append-only (no update policy).
+- Fuel › Nutrition leads with TODAY'S FUEL: the day's class chip and g/kg, protein, fat and energy (goal as a weekly
+  average, or the maintenance estimate), reasons and notes, the loading countdown, what changed, the meals and sessions
+  in time order (code chip, carbohydrate and protein ranges, reason, logged grams and WITHIN / UNDER / OVER; during each
+  session the g/h, and for long ones fluid, sodium, heat and the first steps), tomorrow in one line, FUEL SETTINGS.
+  Codes are one hue in three steps with the word (the contract keeps red, amber and green for status).
+- Today shows a FUEL line (class, g/kg, the key session, the next meal's code) that opens Fuel.
+- The event page gets OVERVIEW / FUEL. FUEL: per-hour targets, duration range, weather source and heat, sweat, expected
+  loss; what changed; WATCH (cutoffs, heat loss, glucose-fructose); the course profile with fuel stops and aid
+  stations; BEFORE, DURING, CARRY, AFTER, ASSUMPTIONS; SHARE (plain text, `domain/fuel/FuelText.kt`). The last plan's
+  text is kept on the phone and shown, with its time, when the plan cannot be built (no signal).
 
 ## Research
 

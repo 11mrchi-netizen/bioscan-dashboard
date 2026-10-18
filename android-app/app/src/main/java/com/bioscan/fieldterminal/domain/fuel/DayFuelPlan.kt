@@ -209,8 +209,13 @@ fun planFuelDay(
 }
 
 /** Plans for every day of [days] (ordered by date), each with the next day for the 72-hour step and all of them as the week. */
-fun planFuelDays(days: List<PlannedDay>, energy: WeekEnergy, weightKg: Double, fatFreeMassKg: Double? = null): List<DayFuelPlan> {
-    val week = days.take(7)
+fun planFuelDays(
+    days: List<PlannedDay>,
+    energy: WeekEnergy,
+    weightKg: Double,
+    fatFreeMassKg: Double? = null,
+    week: List<PlannedDay> = days.take(7),
+): List<DayFuelPlan> {
     return days.mapIndexed { i, d -> planFuelDay(d, days.getOrNull(i + 1), week, energy, weightKg, fatFreeMassKg, days) }
 }
 

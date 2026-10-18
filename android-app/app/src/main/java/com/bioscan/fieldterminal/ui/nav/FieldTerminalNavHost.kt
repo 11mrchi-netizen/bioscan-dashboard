@@ -156,6 +156,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     },
                     // Cardio is the Health tile's first tab, where a freshly pushed page opens.
                     onOpenCardio = { navController.navigate(TileRoute.Heart.route) { launchSingleTop = true } },
+                    onOpenFuel = { navController.navigate(TileRoute.Fuel.route) { launchSingleTop = true } },
                 )
             }
             // DAV-70 (First feedback fixes): the 4 tile pages, pushed routes

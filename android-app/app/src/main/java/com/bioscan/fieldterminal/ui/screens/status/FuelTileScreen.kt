@@ -138,6 +138,8 @@ fun FuelTileScreen(
                 // composables already render their own full-width padded
                 // Column, so they stack cleanly as-is.
                 FuelTab.Nutrition -> overview?.let {
+                    // Fuel planning: today's carbohydrate plan leads the tab, also before anything is logged.
+                    com.bioscan.fieldterminal.ui.screens.fuel.TodaysFuelCard(it, modifier = Modifier.padding(horizontal = 22.dp).padding(top = 16.dp))
                     NutritionTabContent(it, onOpenNutrientBreakdown = onOpenNutrientBreakdown)
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp)) {
                         NutritionCard(evaluateNutrition(it.allDays))

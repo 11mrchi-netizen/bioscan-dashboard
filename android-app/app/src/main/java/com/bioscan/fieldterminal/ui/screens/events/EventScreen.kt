@@ -63,6 +63,8 @@ fun eventSummaryLine(event: AthleteEvent): String = listOfNotNull(
     event.plannedDurationMin?.let { (if (event.targetTimeMin != null) "TARGET " else "~") + formatHoursMinutes(it) },
 ).joinToString(" · ")
 
+private enum class EventTab(val label: String) { Overview("OVERVIEW"), Fuel("FUEL") }
+
 @Composable
 fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
     val repo = remember { AthleteEventsRepository(SupabaseClientProvider.client) }
@@ -70,6 +72,7 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
     var event by remember { mutableStateOf<AthleteEvent?>(null) }
     var editing by remember { mutableStateOf(false) }
     var actionError by remember { mutableStateOf<String?>(null) }
+    var tab by remember { mutableStateOf(EventTab.Overview) }
     val guard = rememberLoadGuard()
     LaunchedEffect(guard.attempt) { guard.run { event = repo.load(eventId) } }
 
@@ -79,7 +82,13 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
         title = e?.name ?: "EVENT",
         subtitle = e?.let { eventWhenLabel(it) },
         accent = FT.DomainTraining,
+        rail = { com.bioscan.fieldterminal.ui.components.SubTabRow(items = EventTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
     ) {
+        if (tab == EventTab.Fuel) {
+            // Keyed on the event, rebuilt after an edit (the plan reads the course, times and aid stations).
+            androidx.compose.runtime.key(e) { com.bioscan.fieldterminal.ui.screens.fuel.EventFuelTab(eventId) }
+            return@PinnedPage
+        }
         Column(Modifier.padding(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (guard.error != null) {
                 LoadErrorCard(guard)

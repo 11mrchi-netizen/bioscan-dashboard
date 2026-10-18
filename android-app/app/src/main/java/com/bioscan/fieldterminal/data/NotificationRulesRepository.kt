@@ -83,6 +83,21 @@ private val DEFAULT_RULES = listOf(
         conditions = NotificationConditions(skipIfLogged = true),
         limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 60),
     ),
+    // Fuel planning: no clock times; the worker reads the planned sessions and races (domain/notifications/FuelPrompts.kt).
+    NewNotificationRuleRow(
+        kind = NotificationKind.FUEL_SESSION,
+        enabled = true,
+        schedule = NotificationSchedule(),
+        conditions = NotificationConditions(skipIfLogged = false),
+        limits = NotificationLimits(maxPerDay = 4, minGapMin = 60, snoozeMin = 30),
+    ),
+    NewNotificationRuleRow(
+        kind = NotificationKind.FUEL_EVENT,
+        enabled = true,
+        schedule = NotificationSchedule(),
+        conditions = NotificationConditions(skipIfLogged = false),
+        limits = NotificationLimits(maxPerDay = 3, minGapMin = 30, snoozeMin = 30),
+    ),
 )
 
 class NotificationRulesRepository(private val supabase: SupabaseClient) {
@@ -160,7 +175,7 @@ class NotificationRulesRepository(private val supabase: SupabaseClient) {
     // Used for daily cap / min-gap checks: what was actually shown since `since`.
     suspend fun loadShownSince(since: Instant): List<NotificationLogRow> =
         supabase.postgrest.from("notification_log")
-            .select(columns = Columns.list("rule_kind,fired_at,outcome")) {
+            .select(columns = Columns.list("rule_kind,fired_at,outcome,dedupe_key")) {
                 filter {
                     eq("outcome", NotificationOutcome.SHOWN)
                     gte("fired_at", since.toString())

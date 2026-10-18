@@ -22,6 +22,9 @@ import com.bioscan.fieldterminal.domain.notifications.wellbeingCheckinNeeded
 import com.bioscan.fieldterminal.domain.notifications.nextFireTime
 import com.bioscan.fieldterminal.domain.notifications.supplementsDueForBucket
 import com.bioscan.fieldterminal.domain.notifications.withinLimits
+import com.bioscan.fieldterminal.domain.notifications.FUEL_PROMPT_WINDOW_MIN
+import com.bioscan.fieldterminal.domain.notifications.dueFuelPrompts
+import com.bioscan.fieldterminal.domain.notifications.fuelPrompts
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -151,6 +154,37 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
 
             nm.notify(rule.kind.hashCode(), notification)
             runCatching { repo.appendLog(rule.kind, NotificationOutcome.SHOWN) }
+        }
+
+        // Fuel planning: reminders relative to planned sessions and races, not to clock times.
+        val fuelRules = rules.filter { it.enabled && it.kind in NotificationKind.FUEL }.associateBy { it.kind }
+        if (fuelRules.isNotEmpty() && prefs.masterEnabled) {
+            val days = runCatching { PlannedDayRepository(supabase).load(today, days = 3) }.getOrNull()
+            if (days != null) {
+                val shownKeys = runCatching { repo.loadShownSince(dayStart.minusSeconds(3 * 86_400L)) }.getOrElse { emptyList() }
+                    .mapNotNull { it.dedupeKey }.toSet()
+                val due = dueFuelPrompts(
+                    fuelPrompts(days, NotificationKind.FUEL_SESSION, NotificationKind.FUEL_EVENT),
+                    prefs, now.minusMinutes(FUEL_PROMPT_WINDOW_MIN), now, shownKeys,
+                )
+                val shown = shownToday.toMutableList()
+                for (p in due) {
+                    val rule = fuelRules[p.kind] ?: continue
+                    if (!withinLimits(rule, prefs, now, shown)) continue
+                    val n = NotificationCompat.Builder(applicationContext, p.kind)
+                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .setContentTitle(p.title)
+                        .setContentText(p.body)
+                        .setStyle(NotificationCompat.BigTextStyle().bigText(p.body))
+                        .setPriority(if (p.kind == NotificationKind.FUEL_EVENT) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+                        .setAutoCancel(true)
+                        .setContentIntent(NotificationActionReceiver.contentIntent(applicationContext, p.kind))
+                        .build()
+                    nm.notify(p.key.hashCode(), n)
+                    runCatching { repo.appendLog(p.kind, NotificationOutcome.SHOWN, dedupeKey = p.key) }
+                    shown += ShownEntry(p.kind, now)
+                }
+            }
         }
 
         return Result.success()

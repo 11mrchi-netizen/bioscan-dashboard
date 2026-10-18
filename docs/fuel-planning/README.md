@@ -20,7 +20,7 @@ sets the week's energy and protein, the plan shapes each day.
 | 4 | Weather (hourly, TYPICAL beyond 16 days), heat stress, sweat profile | Done |
 | 5 | Course time estimate; race and long-session fuel and hydration plans | Done (engine; shown in phase 6) |
 | 6 | `fuel_plans` snapshots; TODAY'S FUEL, the event FUEL tab | Done |
-| 7 | Reminders relative to sessions and race week | |
+| 7 | Reminders relative to sessions and race week | Done |
 | 8 | After the event: review, sweat rate and gut tolerance learned, periodisation index | |
 | 9 | Planner: build toward an event, taper | |
 
@@ -137,6 +137,18 @@ sets the week's energy and protein, the plan shapes each day.
   loss; what changed; WATCH (cutoffs, heat loss, glucose-fructose); the course profile with fuel stops and aid
   stations; BEFORE, DURING, CARRY, AFTER, ASSUMPTIONS; SHARE (plain text, `domain/fuel/FuelText.kt`). The last plan's
   text is kept on the phone and shown, with its time, when the plan cannot be built (no signal).
+
+## Phase 7 notes: reminders
+
+- `domain/notifications/FuelPrompts.kt`: `fuel_session` 3 h before a hard, long or race session of an hour or more (the
+  pre-session meal) and 30 min after its planned end (refuel); `fuel_event` for an A or B race over 90 minutes, 09:00
+  two days before (loading starts), 09:00 the day before (low fibre), 19:00 the evening before, 4 h before the start
+  (drink) and 3 h before (breakfast). A prompt in the quiet window moves to its end when that is still 30 minutes before
+  what it is about, and is dropped otherwise (an early race's morning prompts fall away: set an alarm). Each prompt has
+  a dedupe key, so it is shown once.
+- The worker (`NotificationDispatchWorker`) reads the next three planned days and shows due prompts within the rules'
+  limits and the daily cap; taps open Fuel. `supabase/migrations/20261027_fuel_notification_kinds.sql` widens the kind
+  constraint and seeds both rules; Setup › Notifications switches each off.
 
 ## Research
 

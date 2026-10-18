@@ -100,6 +100,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 bodyCheckInRequested = true
                 navController.navigate(TileRoute.Fuel.route) { launchSingleTop = true }
             }
+            NotificationDestination.FUEL -> navController.navigate(TileRoute.Fuel.route) { launchSingleTop = true }
             NotificationDestination.NONE -> Unit
         }
         onNotificationHandled()

@@ -14,7 +14,11 @@ object NotificationKind {
     const val EVENING_CHECKIN = "evening_checkin"
     // The monthly body check-in (grip, tape, skinfolds): Saturday 09:30, skipped until 28 days after the last one.
     const val BODY_CHECKIN = "body_checkin"
-    val ALL = listOf(SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG, EVENING_CHECKIN, BODY_CHECKIN)
+    // Fuel planning (domain/notifications/FuelPrompts.kt): relative to sessions and races, not clock times.
+    const val FUEL_SESSION = "fuel_session"
+    const val FUEL_EVENT = "fuel_event"
+    val FUEL = setOf(FUEL_SESSION, FUEL_EVENT)
+    val ALL = listOf(SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG, EVENING_CHECKIN, BODY_CHECKIN, FUEL_SESSION, FUEL_EVENT)
 }
 
 object NotificationOutcome {
@@ -85,6 +89,7 @@ data class NotificationLogRow(
     @SerialName("rule_kind") val ruleKind: String,
     @SerialName("fired_at") val firedAt: String,
     val outcome: String,
+    @SerialName("dedupe_key") val dedupeKey: String? = null,
 )
 
 @Serializable

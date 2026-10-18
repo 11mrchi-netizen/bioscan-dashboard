@@ -199,6 +199,11 @@ main input.
    the seeding fails while the kind constraint does not yet allow the two new kinds.
 3. The app build. No edge function changes.
 
+Steps 1 and 2 were applied to the live project on 18 Oct 2026, in that order. The four tables were sent without their
+`drop … if exists` lines (they do nothing on a first apply); the files here keep them so they stay safe to re-run.
+Checked afterwards: RLS on all four with 4, 4, 3 and 4 policies; the kind constraint lists nine kinds; the two new
+rules are seeded for existing users; the security advisors list nothing for the new tables.
+
 ## Research
 
 ## 1. What Hexis is

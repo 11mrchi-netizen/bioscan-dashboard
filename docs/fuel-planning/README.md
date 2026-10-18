@@ -15,7 +15,7 @@ sets the week's energy and protein, the plan shapes each day.
 | Phase | What | State |
 |---|---|---|
 | 1 | Events outside the training plan (`athlete_events`), event form and page, Training › Plan EVENTS card, + EVENT, Status NEXT UP, calendar suggestions, calendar sync wired | Done |
-| 2 | Planned-day resolver and session demand | |
+| 2 | Planned-day resolver and session demand | Done |
 | 3 | Day fuel engine: bands, the week, meal codes, the days before, safety | |
 | 4 | Weather (hourly, TYPICAL beyond 16 days), heat stress, sweat profile | |
 | 5 | Course time estimate; race and long-session fuel and hydration plans | |
@@ -41,6 +41,20 @@ sets the week's energy and protein, the plan shapes each day.
 - Found on the way: `CalendarSyncRepository.sync()` and `PlannedRouteRepository.runPipeline()` had no caller, so
   `calendar_events` and `planned_routes` were empty. `data/CalendarBackgroundSync.kt` runs both when NEXT UP has a Google
   token, at most every 6 hours; calendar race suggestions and calendar-linked GPX courses depend on it.
+
+## Phase 2 notes: the planned day
+
+- `domain/fuel/PlannedDay.kt` (`resolvePlannedDays`): events win; planned sessions; calendar training events (colour 8)
+  not already covered (pushed from a planned session, made into an event, or within an hour of another item); recorded
+  sessions replace the planned item they are (same type family, starting within two hours) and are the only source for
+  a past day. Walks and entries under 10 minutes are left out: the everyday baseline is in the activity factor.
+- `domain/fuel/SessionDemand.kt`: the intensity class (EASY / MODERATE / HARD / LONG / RACE) from, in order, the event,
+  the training domain, the calendar title, a recording's RPE or heart rate (share of heart-rate reserve), the person's
+  usual heart-rate load for the type (median Banister TRIMP per minute; 60 % of reserve is 1.2, 75 % is 2.0). Over
+  90 minutes anything but strength is LONG. Energy: the person's median kcal per minute for the type (calories_active
+  over duration, 3 sessions or more), else the Compendium MET (Ainsworth 2011) less 1 MET at rest, scaled a little by
+  class. Read-only check on live data: runs 11.4 kcal/min, strength 6.2 (last 180 days).
+- `data/PlannedDayRepository.kt` reads the four sources, 180 days of history (paged) and today's heart-rate anchors.
 
 ## Research
 

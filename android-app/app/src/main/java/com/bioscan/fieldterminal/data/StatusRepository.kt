@@ -120,12 +120,14 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
         // Small dedicated fetch (10 days of margin, filtered to 7 by date below)
         // rather than reusing TrainingLoadSessionRow, which carries no type/source.
         val recentD = async(Dispatchers.Default) {
-            supabase.postgrest.from("exercise_sessions")
-                .select(columns = Columns.list("id,type,start_time,duration_min,distance_km,avg_hr,source")) {
-                    order("start_time", Order.DESCENDING)
-                    limit(60)
-                }
-                .decodeList<ExerciseSessionRow>()
+            ReadCache.get("status.recent_sessions", tables = setOf("exercise_sessions")) {
+                supabase.postgrest.from("exercise_sessions")
+                    .select(columns = Columns.list("id,type,start_time,duration_min,distance_km,avg_hr,source")) {
+                        order("start_time", Order.DESCENDING)
+                        limit(60)
+                    }
+                    .decodeList<ExerciseSessionRow>()
+            }
         }
 
         val wearableAnalysis = wearableD.await()

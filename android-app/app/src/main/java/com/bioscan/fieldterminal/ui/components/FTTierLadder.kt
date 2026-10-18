@@ -3,7 +3,6 @@ package com.bioscan.fieldterminal.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
@@ -13,14 +12,14 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Position on a four-step ladder (the strength tiers): a rounded track in four equal segments with a divider at
 // each tier threshold, a fill up to `fraction`, and a thumb. `tierLabels` are the names of the four thresholds
-// (e.g. NOVICE..ELITE), printed under the right-hand edge of their segment; `reachedCount` highlights the tiers
+// (e.g. NOVICE..ELITE), printed centred under their divider; `reachedCount` highlights the tiers
 // already passed. `fraction` is the ladder fraction the domain computed -- this never decides what a value means.
 @Composable
 fun FTTierLadder(
@@ -51,16 +50,29 @@ fun FTTierLadder(
                 drawCircle(color, r, Offset(cx, size.height / 2f))
             }
         }
-        Row(modifier = Modifier.fillMaxWidth()) {
-            tierLabels.forEachIndexed { i, label ->
-                Text(
-                    label.uppercase(),
-                    style = FTType.Micro,
-                    color = if (i < reachedCount) FT.TextSecondary else FT.TextMuted,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f),
-                )
+        // Each label sits centred under its own threshold divider (the last one under the track's end). Right-aligned in
+        // equal cells they read as the name of the segment to their left, so a lift between Intermediate and Advanced
+        // seemed to sit in "Advanced".
+        Layout(
+            content = {
+                tierLabels.forEachIndexed { i, label ->
+                    Text(
+                        label.uppercase(),
+                        style = FTType.Micro,
+                        color = if (i < reachedCount) FT.TextSecondary else FT.TextMuted,
+                        maxLines = 1,
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { measurables, constraints ->
+            val width = constraints.maxWidth
+            val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0)) }
+            layout(width, placeables.maxOfOrNull { it.height } ?: 0) {
+                placeables.forEachIndexed { i, p ->
+                    val tick = width * (i + 1) / placeables.size
+                    p.placeRelative((tick - p.width / 2).coerceIn(0, (width - p.width).coerceAtLeast(0)), 0)
+                }
             }
         }
     }

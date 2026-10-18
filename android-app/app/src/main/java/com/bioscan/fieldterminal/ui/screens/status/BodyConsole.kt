@@ -33,10 +33,11 @@ import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -645,7 +646,7 @@ private fun NextUpSection(modifier: Modifier = Modifier, onOpenEvent: (Long) -> 
     val activity = LocalContext.current as Activity
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<NextUpState>(NextUpState.Loading) }
-    var attempt by remember { mutableStateOf(0) }
+    var attempt by remember { mutableIntStateOf(0) }
     var nextEvent by remember { mutableStateOf<com.bioscan.fieldterminal.domain.events.AthleteEvent?>(null) }
 
     LaunchedEffect(attempt) {

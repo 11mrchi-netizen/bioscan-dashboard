@@ -67,8 +67,8 @@ data class BandInputs(val row: ExpectedBandRow, val readings: List<Pair<LocalDat
 internal fun ThisMorningCard(
     metrics: Map<String, BandInputs>,
     today: LocalDate,
-    onOpenCardio: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onOpenCardio: (() -> Unit)? = null,
     // Analysis review phase D: last evening's exposures that the evidence board reads CLEAR about.
     contributors: List<Contributor> = emptyList(),
 ) {

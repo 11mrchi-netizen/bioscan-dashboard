@@ -38,7 +38,7 @@ private const val PAGE = 1000L
 
 class ZoneAnchorsRepository(private val supabase: SupabaseClient) {
 
-    suspend fun load(): ZoneAnchorSeries = ReadCache.get("zones.anchors") {
+    suspend fun load(): ZoneAnchorSeries = ReadCache.get("zones.anchors", tables = setOf("exercise_sessions", "wearable_daily", "zepp_workout_detail")) {
         val from = LocalDate.now().minusYears(YEARS_BACK).toString()
         val maxima = paged<SessionMaxRow>("exercise_sessions", "start_time,max_hr", "start_time") {
             filter { gte("start_time", from); gt("max_hr", 0) }
@@ -50,8 +50,9 @@ class ZoneAnchorsRepository(private val supabase: SupabaseClient) {
     }
 
     /** Zepp's lactate-threshold heart rate per qualifying run, oldest first: only that one number of each summary. */
-    suspend fun loadLthrSeries(): List<Pair<LocalDate, Double>> = ReadCache.get("zones.lthr") {
-        paged<LthrRow>("zepp_workout_detail", "start_time,lthr:decoded->summary->lactateThresholdHrBpm", "start_time") {
+    suspend fun loadLthrSeries(): List<Pair<LocalDate, Double>> = ReadCache.get("zones.lthr", tables = setOf("zepp_workout_detail")) {
+        // the stored summary column (migration 20261024), not decoded->summary: no per-second series unpacked
+        paged<LthrRow>("zepp_workout_detail", "start_time,lthr:summary->lactateThresholdHrBpm", "start_time") {
             filter { gte("start_time", LocalDate.now().minusYears(YEARS_BACK).toString()) }
         }.mapNotNull { r -> r.lthr?.let { OffsetDateTime.parse(r.startTime).toLocalDate() to it } }
     }

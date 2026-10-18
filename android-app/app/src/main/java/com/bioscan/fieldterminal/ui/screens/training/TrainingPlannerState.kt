@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.training
 
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -104,7 +105,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     // The build path: how the two templates share the week, and what each calendar week is.
     var layout by mutableStateOf<List<DayPlan>>(emptyList())
     var timeline by mutableStateOf<List<WeekKind>>(emptyList())
-    var weeks by mutableStateOf(8)
+    var weeks by mutableIntStateOf(8)
     var openSection by mutableStateOf<String?>(null)
     var startWithTest by mutableStateOf(false)
 

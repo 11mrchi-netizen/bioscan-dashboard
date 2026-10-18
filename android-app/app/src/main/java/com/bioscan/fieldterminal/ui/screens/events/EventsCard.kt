@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,7 +38,7 @@ fun EventsCard(onOpenEvent: (Long) -> Unit) {
     var events by remember { mutableStateOf<List<AthleteEvent>?>(null) }
     var suggestions by remember { mutableStateOf<List<EventSuggestion>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
-    var attempt by remember { mutableStateOf(0) }
+    var attempt by remember { mutableIntStateOf(0) }
     var adding by remember { mutableStateOf<AthleteEvent?>(null) }
     var addingBlank by remember { mutableStateOf(false) }
 

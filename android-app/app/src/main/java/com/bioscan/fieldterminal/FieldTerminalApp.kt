@@ -3,7 +3,6 @@ package com.bioscan.fieldterminal
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.os.Build
 import com.bioscan.fieldterminal.data.MetricRegistryStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.NotificationKind
@@ -27,7 +26,6 @@ class FieldTerminalApp : Application() {
     }
 
     private fun createNotificationChannels() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = getSystemService(NotificationManager::class.java)
         listOf(
             Triple(NotificationKind.SUPPLEMENT_DUE, "Supplement Reminders", NotificationManager.IMPORTANCE_DEFAULT),

@@ -122,13 +122,9 @@ class TrainingRepository(private val supabase: SupabaseClient) {
 
         // One row per synced Zepp workout; most won't have a lactate-threshold
         // estimate (only running workouts that qualify get one from Zepp),
-        // filtered out client-side rather than in the query since decoded is
+        // filtered out client-side rather than in the query since summary is
         // jsonb.
-        val lactateRows = supabase.postgrest.from("zepp_workout_detail")
-            .select(columns = Columns.raw("start_time,summary:decoded->summary")) {
-                order("start_time", Order.ASCENDING)
-            }
-            .decodeList<ZeppWorkoutDetailSummaryRow>()
+        val lactateRows = loadZeppWorkoutSummaries(supabase)
         val lactateThresholdPaceSecPerKmSeries = lactateRows.mapNotNull { row ->
             row.summary?.lactateThresholdPaceSecPerKm?.let { pace ->
                 OffsetDateTime.parse(row.startTime).toLocalDate() to pace

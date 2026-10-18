@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -240,7 +241,7 @@ fun HydrationTabContent(overview: NutritionOverview) {
     // 09.5 Hydration Intelligence: this tab's own small independent load
     // (today's exercise duration only), same "each subtab loads its own
     // data" convention TrainingTileScreen.kt's InjuryTab already follows.
-    var todayExerciseMinutes by remember { mutableStateOf(0.0) }
+    var todayExerciseMinutes by remember { mutableDoubleStateOf(0.0) }
     LaunchedEffect(Unit) {
         val today = java.time.LocalDate.now()
         todayExerciseMinutes = AnalysisRepository(SupabaseClientProvider.client)

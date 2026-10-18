@@ -12,6 +12,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,7 +55,7 @@ fun DailyExperimentSheet(choice: DailyChoice, onDismiss: () -> Unit, onRegistere
     val scope = rememberCoroutineScope()
     val spec = zoneSpec(choice.outcome)
     var zone by remember { mutableStateOf<Double?>(spec.zone) }
-    var weeks by remember { mutableStateOf(8) }
+    var weeks by remember { mutableIntStateOf(8) }
     var preview by remember { mutableStateOf<List<MdePreviewRow>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }

@@ -15,6 +15,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -74,9 +75,9 @@ fun ExperimentSheet(
     val scope = rememberCoroutineScope()
     var primary by remember { mutableStateOf<String?>(null) }
     var zone by remember { mutableStateOf<Double?>(null) }
-    var periodDays by remember { mutableStateOf(14) }
-    var pairs by remember { mutableStateOf(4) }
-    var washout by remember { mutableStateOf(3) }
+    var periodDays by remember { mutableIntStateOf(14) }
+    var pairs by remember { mutableIntStateOf(4) }
+    var washout by remember { mutableIntStateOf(3) }
     var blinded by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<List<MdePreviewRow>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }

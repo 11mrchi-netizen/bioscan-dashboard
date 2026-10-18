@@ -85,7 +85,7 @@ val STAPLE_FOODS: List<FoodOption> = listOf(
     staple("ricotta", "ricotta, part-skim", FoodRole.PROTEIN, setOf(B, S), 138.0, 5.1, 11.4, 7.9, 0.0, 100.0, 50.0, 250.0,
         aliases = listOf("ricotta"), taste = Taste.SWEET),
     staple("whey", "whey protein", FoodRole.PROTEIN, setOf(B, S, REC), 400.0, 8.0, 78.0, 6.0, 0.0, 30.0, 15.0, 60.0, stepG = 5.0,
-        serving = Serving("scoop whey", "scoops whey", 30.0, 0.5), aliases = listOf("whey", "protein shake", "protein powder", "乳清", "高蛋白"), taste = Taste.SWEET),
+        serving = Serving("scoop whey", "scoops whey", 30.0, 0.5), aliases = listOf("whey", "protein shake", "protein powder", "pea protein", "plant protein", "乳清", "高蛋白", "豌豆蛋白"), taste = Taste.SWEET),
     // Protein foods (cooked weights).
     staple("eggs", "eggs", FoodRole.PROTEIN, setOf(B, L, D, S), 155.0, 1.1, 12.6, 10.6, 0.0, 100.0, 50.0, 200.0,
         serving = Serving("egg", "eggs", 50.0, 1.0), aliases = listOf("egg", "eggs", "scrambled eggs", "omelette", "omelet", "雞蛋", "蛋", "荷包蛋", "蛋餅"), taste = Taste.SAVOURY),
@@ -109,6 +109,8 @@ val STAPLE_FOODS: List<FoodOption> = listOf(
         aliases = listOf("shrimp", "prawn", "prawns", "蝦", "蝦仁"), taste = Taste.SAVOURY),
     staple("tofu", "firm tofu", FoodRole.PROTEIN, MAINS + setOf(B), 144.0, 2.8, 17.3, 8.7, 2.3, 150.0, 75.0, 300.0,
         aliases = listOf("tofu", "豆腐", "豆干"), taste = Taste.SAVOURY),
+    staple("edamame", "edamame", FoodRole.PROTEIN, MAINS, 121.0, 8.9, 11.9, 5.2, 5.2, 120.0, 50.0, 250.0,
+        aliases = listOf("edamame", "毛豆"), taste = Taste.SAVOURY),
     staple("lentils", "cooked lentils", FoodRole.MIXED, MAINS, 116.0, 20.1, 9.0, 0.4, 7.9, 180.0, 80.0, 400.0,
         aliases = listOf("lentil", "lentils", "dal", "扁豆"), taste = Taste.SAVOURY),
     staple("chickpeas", "cooked chickpeas", FoodRole.MIXED, MAINS, 164.0, 27.4, 8.9, 2.6, 7.6, 160.0, 80.0, 350.0,
@@ -132,7 +134,7 @@ val STAPLE_FOODS: List<FoodOption> = listOf(
     staple("broccoli", "broccoli", FoodRole.VEG, MAINS, 35.0, 7.2, 2.4, 0.4, 3.3, 150.0, 100.0, 250.0,
         aliases = listOf("broccoli", "花椰菜", "青花菜"), taste = Taste.SAVOURY),
     staple("mixed_veg", "mixed vegetables", FoodRole.VEG, MAINS, 40.0, 7.5, 2.0, 0.3, 3.0, 150.0, 100.0, 250.0,
-        aliases = listOf("vegetables", "veggies", "carrot", "carrots", "bell pepper", "peppers", "eggplant", "mushroom", "mushrooms", "zucchini", "pumpkin", "蔬菜", "紅蘿蔔", "茄子", "香菇", "南瓜", "青椒"), taste = Taste.SAVOURY),
+        aliases = listOf("vegetables", "veggies", "carrot", "carrots", "bell pepper", "peppers", "eggplant", "mushroom", "mushrooms", "zucchini", "pumpkin", "squash", "cabbage", "salad", "onions", "onion", "蔬菜", "紅蘿蔔", "茄子", "香菇", "南瓜", "青椒", "高麗菜", "沙拉", "洋蔥"), taste = Taste.SAVOURY),
 )
 
 /** Ids of the staples [text] mentions, longest name first so "brown rice" is not also "rice". */

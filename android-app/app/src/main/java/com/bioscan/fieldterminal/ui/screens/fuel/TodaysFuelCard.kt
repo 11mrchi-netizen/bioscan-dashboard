@@ -10,7 +10,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -26,6 +25,7 @@ import com.bioscan.fieldterminal.data.TodayFuelResult
 import com.bioscan.fieldterminal.domain.fuel.CodedDay
 import com.bioscan.fieldterminal.domain.fuel.CodedMeal
 import com.bioscan.fieldterminal.domain.fuel.MealAdherence
+import com.bioscan.fieldterminal.domain.fuel.MealSuggestion
 import com.bioscan.fieldterminal.domain.fuel.SessionFuelKind
 import com.bioscan.fieldterminal.domain.fuel.SessionWindow
 import com.bioscan.fieldterminal.domain.fuel.formatGPerKg
@@ -33,58 +33,51 @@ import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
-import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
-// Fuel › Nutrition's lead card (docs/fuel-planning/README.md, phase 6): today's carbohydrate class and target, the meals
-// in order with their codes, ranges and reasons, the sessions with what to take during them, logged meals placed in their
-// slots, what changed since the plan was last shown, and tomorrow in one line.
+// Fuel › Plan's lead card (docs/fuel-planning/README.md, phases 6 and 10): today's carbohydrate class and target, the
+// meals in order with their codes, carbohydrate, protein and fat, reasons and two example plates, the sessions with what
+// to take during them, logged meals placed in their slots, and what changed since the plan was last shown. The days
+// ahead are on the same page (FuelPlanPage.kt).
 
 private val HM: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
 
+/** Today's plan as the plan page's lead card; the page loads it ([FuelPlanPage]) and shares it with the days ahead. */
 @Composable
-fun TodaysFuelCard(overview: NutritionOverview?, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    var result by remember { mutableStateOf<TodayFuelResult?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var attempt by remember { mutableIntStateOf(0) }
-    var settingsOpen by remember { mutableStateOf(false) }
-    LaunchedEffect(attempt, overview) {
-        error = null
-        try {
-            result = FuelPlanRepository(SupabaseClientProvider.client).loadToday(context, overview)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = describeLoadFailure(e)
-        }
-    }
-
+fun TodaysFuelCard(
+    result: TodayFuelResult?,
+    error: String?,
+    onRetry: () -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     FTCard(
         title = "TODAY'S FUEL",
         modifier = modifier,
         emphasis = FTCardEmphasis.Hero,
         methodology = "fuel_day_plan",
         info = "Carbohydrate follows the training of the next 72 hours (\"fuel for the work required\"): more before and after " +
-            "hard, long and race sessions, less on rest days. Your calorie goal stays the weekly average; protein stays at the goal.",
+            "hard, long and race sessions, less on rest days. Your calorie goal stays the weekly average; protein stays at the goal. " +
+            "Each meal shows two example plates, from foods you eat and a list of staples.",
         infoDetails = "Day bands from Thomas, Erdman & Burke 2016 (3-5 g/kg light, 5-7 about an hour, 6-10 for 1-3 hours, 8-12 over " +
             "4 hours); carbohydrate loading at 10-12 g/kg for the two days before an A or B race over 90 minutes (Burke 2011); 1-4 g/kg " +
             "in the 1-4 hours before key sessions and 1-1.2 g/kg/h after; during sessions 30-90 g/h by length (Jeukendrup 2014); " +
-            "protein 0.3-0.4 g/kg a meal. Fat stays at 20 % of energy or more. Codes are LOW / MEDIUM / HIGH with a ±15 % range.",
+            "protein spread over the meals with at least 0.3 g/kg at each main meal; fat at 20 % of energy or more, low before " +
+            "sessions. Codes are LOW / MEDIUM / HIGH with a ±15 % range. Plates are solved by fixed rules from food values " +
+            "(USDA FoodData Central and your food catalogue), never by a language model.",
     ) {
-        when (val r = result) {
+        when (result) {
             null -> Text(error?.let { "Couldn't plan today: $it" } ?: "Planning today…", style = FTType.BodySmall, color = if (error != null) FT.Critical else FT.TextSecondary)
             TodayFuelResult.NeedsWeight -> Text("Log a body weight (Fuel › Body) to plan carbohydrate per kilogram.", style = FTType.BodySmall, color = FT.TextSecondary)
-            is TodayFuelResult.Ready -> FuelContent(r.fuel)
+            is TodayFuelResult.Ready -> FuelContent(result.fuel)
         }
-        if (error != null) FTButton("RETRY", emphasis = FTButtonEmphasis.Tertiary) { attempt++ }
-        FTButton("FUEL SETTINGS", emphasis = FTButtonEmphasis.Tertiary) { settingsOpen = true }
+        if (error != null) FTButton("RETRY", emphasis = FTButtonEmphasis.Tertiary, onClick = onRetry)
+        FTButton("FUEL SETTINGS", emphasis = FTButtonEmphasis.Tertiary, onClick = onOpenSettings)
     }
-    if (settingsOpen) FuelSettingsSheet(onDismiss = { settingsOpen = false }, onSaved = { settingsOpen = false; attempt++ })
 }
 
 @Composable
@@ -117,18 +110,8 @@ private fun FuelContent(f: TodayFuel) {
         Text("CHANGED SINCE THE PLAN WAS LAST SHOWN", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(top = 6.dp))
         f.changes.forEach { Text("· $it", style = FTType.BodySmall, color = FT.TextPrimary) }
     }
-    Timeline(f.todayCoded, f.adherence, f.longSessions.associate { it.first.sourceId to it.second })
-    f.tomorrow?.let { t ->
-        val codes = f.tomorrowCoded?.meals.orEmpty().joinToString(" · ") { "${it.kind.label} ${it.code.label}" }
-        Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("TOMORROW", style = FTType.LabelCaps, color = FT.TextSecondary)
-                DayClassChip(t.dayClass)
-                Text(formatGPerKg(t.carbGPerKg), style = FTType.MonoCaption, color = FT.TextSecondary)
-            }
-            if (codes.isNotBlank()) Text(codes, style = FTType.MonoCaption, color = FT.TextSecondary)
-        }
-    }
+    f.horizon.firstOrNull()?.summary?.let { Text("CARBS $it", style = FTType.MonoCaption, color = FT.TextSecondary) }
+    Timeline(f.todayCoded, f.adherence, f.longSessions.associate { it.first.sourceId to it.second }, f.horizon.firstOrNull()?.suggestions)
 }
 
 private sealed interface Row2 {
@@ -137,13 +120,20 @@ private sealed interface Row2 {
     data class Session(val w: SessionWindow) : Row2 { override val key get() = w.item.start?.toEpochSecond() ?: Long.MAX_VALUE }
 }
 
+/** A day's meals and sessions in time order; [suggestions] (by meal, in the coded day's order) adds the example plates. */
 @Composable
-private fun Timeline(day: CodedDay, adherence: Map<String, Pair<Double, MealAdherence>>, longPlans: Map<String, com.bioscan.fieldterminal.domain.fuel.RaceFuelPlan>) {
+internal fun Timeline(
+    day: CodedDay,
+    adherence: Map<String, Pair<Double, MealAdherence>>,
+    longPlans: Map<String, com.bioscan.fieldterminal.domain.fuel.RaceFuelPlan>,
+    suggestions: List<MealSuggestion>? = null,
+) {
+    val plates = suggestions?.let { s -> day.meals.zip(s).toMap() }.orEmpty()
     val rows = (day.meals.map { Row2.Meal(it) } + day.sessions.map { Row2.Session(it) }).sortedBy { it.key }
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         rows.forEach { row ->
             when (row) {
-                is Row2.Meal -> MealLine(row.meal, adherence[row.meal.kind.name])
+                is Row2.Meal -> MealLine(row.meal, adherence[row.meal.kind.name], plates[row.meal])
                 is Row2.Session -> SessionLine(row.w, longPlans[row.w.item.sourceId])
             }
         }
@@ -151,7 +141,7 @@ private fun Timeline(day: CodedDay, adherence: Map<String, Pair<Double, MealAdhe
 }
 
 @Composable
-private fun MealLine(m: CodedMeal, logged: Pair<Double, MealAdherence>?) {
+private fun MealLine(m: CodedMeal, logged: Pair<Double, MealAdherence>?, plates: MealSuggestion? = null) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(m.time.format(HM), style = FTType.MonoCaption, color = FT.TextSecondary, modifier = Modifier.width(44.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -172,6 +162,26 @@ private fun MealLine(m: CodedMeal, logged: Pair<Double, MealAdherence>?) {
             logged?.let { (g, a) ->
                 if (a != MealAdherence.NOT_LOGGED) Text("LOGGED ${g.roundToInt()} G · ${a.label}", style = FTType.LabelCaps, color = FT.TextSecondary)
             }
+            plates?.let { PlateLines(it) }
+        }
+    }
+}
+
+/** The example plates under a meal: the portions, what they add up to, and which foods come from the person's meals. */
+@Composable
+private fun PlateLines(s: MealSuggestion) {
+    s.note?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
+    s.plates.forEachIndexed { i, plate ->
+        Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(if (i == 0) "ON THE PLATE" else "OR", style = FTType.LabelCaps, color = FT.TextSecondary)
+            Text(plate.label, style = FTType.BodySmall, color = FT.TextPrimary)
+            Text(
+                "C ${plate.carbG.roundToInt()} · P ${plate.proteinG.roundToInt()} · F ${plate.fatG.roundToInt()} G · ${plate.kcal.roundToInt()} KCAL · " +
+                    (if (plate.within) "WITHIN" else plate.gaps.joinToString(", ")),
+                style = FTType.MonoCaption, color = FT.TextSecondary,
+            )
+            val usual = plate.portions.filter { it.food.usual }.map { it.food.name }
+            if (usual.isNotEmpty()) Text("FROM YOUR MEALS: ${usual.joinToString(", ")}", style = FTType.Caption, color = FT.TextSecondary)
         }
     }
 }
@@ -204,7 +214,7 @@ private fun SessionLine(w: SessionWindow, long: com.bioscan.fieldterminal.domain
 }
 
 // Today's answer-first line (Today page): the day's class and target and the session it is built around, opening the
-// full plan on Fuel › Nutrition.
+// full plan on Fuel › Plan.
 @Composable
 fun TodayFuelLine(overview: NutritionOverview?, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current

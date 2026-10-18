@@ -45,6 +45,8 @@ enum class TileRoute(val route: String) {
 // out entirely to LabsTab (see below); Fuel is now just the two tabs whose
 // content is genuinely different in kind.
 enum class FuelTab(val label: String) {
+    // Fuel planning phase 10: today's plan, the next ten days and example plates; Fuel opens here.
+    Plan("PLAN"),
     Nutrition("NUTRITION"),
     // Weight, body fat, the monthly body check-in and digestion (renamed from DIGESTION when the check-in arrived).
     Body("BODY"),

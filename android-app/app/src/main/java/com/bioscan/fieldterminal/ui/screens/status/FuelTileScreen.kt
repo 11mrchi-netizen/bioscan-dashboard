@@ -88,7 +88,9 @@ fun FuelTileScreen(
     openBodyCheckIn: Boolean = false,
     onBodyCheckInHandled: () -> Unit = {},
 ) {
-    var tab by remember { mutableStateOf(if (openBodyCheckIn) FuelTab.Body else FuelTab.Nutrition) }
+    var tab by remember { mutableStateOf(if (openBodyCheckIn) FuelTab.Body else FuelTab.Plan) }
+    // The plan page's open days, kept here so they survive a tab switch.
+    var planOpenDays by remember { mutableStateOf(setOf<LocalDate>()) }
     var bodyCheckInOpen by remember { mutableStateOf(false) }
     // Bumped after a check-in is saved so the Body tab reads the new one.
     var bodyReload by remember { mutableIntStateOf(0) }
@@ -119,6 +121,7 @@ fun FuelTileScreen(
         onBack = onBack,
         title = "FUEL",
         subtitle = when (tab) {
+            FuelTab.Plan -> "TODAY · NEXT 10 DAYS · ON THE PLATE"
             FuelTab.Nutrition -> "TODAY · MACROS · HYDRATION"
             FuelTab.Body -> "WEIGHT · MEASUREMENTS · BODY FAT · STOOL"
         },
@@ -133,14 +136,17 @@ fun FuelTileScreen(
                 CircularProgressIndicator(color = FT.DomainFuel)
             }
             else -> when (tab) {
+                FuelTab.Plan -> com.bioscan.fieldterminal.ui.screens.fuel.FuelPlanPage(
+                    overview,
+                    openDays = planOpenDays,
+                    onToggleDay = { d -> planOpenDays = if (d in planOpenDays) planOpenDays - d else planOpenDays + d },
+                )
                 // DAV-207 (24/9 fixes): Hydration folded in as a second
                 // stacked section rather than its own subtab -- both
                 // composables already render their own full-width padded
                 // Column, so they stack cleanly as-is.
+                // Fuel planning moved to its own tab (Plan); Nutrition is what was logged.
                 FuelTab.Nutrition -> overview?.let {
-                    // Fuel planning: today's carbohydrate plan leads the tab, also before anything is logged.
-                    com.bioscan.fieldterminal.ui.screens.fuel.TodaysFuelCard(it, modifier = Modifier.padding(horizontal = 22.dp).padding(top = 16.dp))
-                    com.bioscan.fieldterminal.ui.screens.fuel.PeriodizationCard(it, modifier = Modifier.padding(horizontal = 22.dp).padding(top = 12.dp))
                     NutritionTabContent(it, onOpenNutrientBreakdown = onOpenNutrientBreakdown)
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp)) {
                         NutritionCard(evaluateNutrition(it.allDays))

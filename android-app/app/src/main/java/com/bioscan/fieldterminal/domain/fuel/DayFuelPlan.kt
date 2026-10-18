@@ -221,6 +221,23 @@ fun planFuelDays(
     return days.mapIndexed { i, d -> planFuelDay(d, days.getOrNull(i + 1), week, energy, weightKg, fatFreeMassKg, days) }
 }
 
+/**
+ * Plans for [days] when [todayIdx] is today: the goal holds as the average of each block of seven days counted from
+ * today (days 0-6, 7-13, ...), so a long horizon does not borrow the first week's mean; days before today use the first
+ * block.
+ */
+fun planInWeekBlocks(
+    days: List<PlannedDay>,
+    todayIdx: Int,
+    energy: WeekEnergy,
+    weightKg: Double,
+    fatFreeMassKg: Double? = null,
+): List<DayFuelPlan> = days.indices.map { i ->
+    val block = (i - todayIdx).coerceAtLeast(0) / 7
+    val week = days.drop(todayIdx + 7 * block).take(7)
+    planFuelDay(days[i], days.getOrNull(i + 1), week, energy, weightKg, fatFreeMassKg, days)
+}
+
 /** Fat-free mass from a lean-mass reading, else from weight and body fat; null without either. */
 fun fatFreeMass(weightKg: Double?, leanMassKg: Double?, bodyFatPct: Double?): Double? =
     leanMassKg?.takeIf { it > 0 } ?: weightKg?.let { w -> bodyFatPct?.takeIf { it in 2.0..60.0 }?.let { w * (1 - it / 100) } }

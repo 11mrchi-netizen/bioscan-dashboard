@@ -16,6 +16,10 @@ import com.bioscan.fieldterminal.domain.fuel.Intensity
 import com.bioscan.fieldterminal.domain.fuel.IntakeHistoryResult
 import com.bioscan.fieldterminal.domain.fuel.LoggedDay
 import com.bioscan.fieldterminal.domain.fuel.MealAdherence
+import com.bioscan.fieldterminal.domain.fuel.MealSuggestion
+import com.bioscan.fieldterminal.domain.fuel.daySummary
+import com.bioscan.fieldterminal.domain.fuel.planInWeekBlocks
+import com.bioscan.fieldterminal.domain.fuel.suggestDay
 import com.bioscan.fieldterminal.domain.fuel.PlannedDay
 import com.bioscan.fieldterminal.domain.fuel.PlannedItem
 import com.bioscan.fieldterminal.domain.fuel.RaceFuelInput
@@ -61,6 +65,18 @@ import java.time.ZonedDateTime
 
 const val FUEL_ENGINE_VERSION = "1"
 
+/** Days shown on the fuel plan page: today and the ten after it. */
+const val FUEL_HORIZON_DAYS = 11
+
+/** One day of the plan page: the plan, its coded meals, two example plates per meal and the day in everyday terms. */
+data class HorizonDay(
+    val day: PlannedDay,
+    val plan: DayFuelPlan,
+    val coded: CodedDay,
+    val suggestions: List<MealSuggestion>,
+    val summary: String,
+)
+
 data class TodayFuel(
     val today: DayFuelPlan,
     val todayCoded: CodedDay,
@@ -75,6 +91,8 @@ data class TodayFuel(
     /** An A or B race within 14 days that the plan loads for, with the date loading starts. */
     val loadingCountdown: Pair<PlannedItem, LocalDate>?,
     val weightKg: Double,
+    /** Today and the next ten days ([FUEL_HORIZON_DAYS]), today first (with the same plan as [today]). */
+    val horizon: List<HorizonDay> = emptyList(),
 )
 
 sealed interface TodayFuelResult {
@@ -119,6 +137,12 @@ private data class RunRow(
 
 private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+/** The tables today's plan reads: a write to any of them drops the cached plan. */
+private val FUEL_TABLES = setOf(
+    "meals", "meal_items", "planned_sessions", "calendar_events", "athlete_events", "exercise_sessions", "body_metrics",
+    "sweat_tests", "fueling_products", "fueling_recipe_versions", "fueling_intake_log", "user_profile",
+)
+
 class FuelPlanRepository(private val supabase: SupabaseClient) {
 
     private suspend fun bodyComposition(): List<BodyCompRow> = ReadCache.get("fuel.body_comp", tables = setOf("body_metrics")) {
@@ -148,11 +172,22 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         )
     }
 
-    suspend fun loadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult = coroutineScope {
+    /**
+     * Today's plan and the next ten days. Shared for a minute by the plan page and Today's line (the settings and the
+     * goal are local, so they are part of the key); a write to any table the plan reads drops it.
+     */
+    suspend fun loadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult {
+        val key = "fuel.today.${now.toLocalDate()}.${FuelSettingsStore.get(context).hashCode()}.${NutritionGoalsStore.getGoals(context).hashCode()}.${overview?.todaysMeals?.size}"
+        return ReadCache.get(key, ttlMs = 60_000L, tables = FUEL_TABLES) { computeToday(context, overview, now) }
+    }
+
+    private suspend fun computeToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime): TodayFuelResult = coroutineScope {
         val today = now.toLocalDate()
         val zone = now.zone
         val settings = FuelSettingsStore.get(context)
-        val daysD = async { PlannedDayRepository(supabase).load(today.minusDays(3), days = 17, now = now) }
+        // Three days back for the intake check; ahead, the horizon plus the six days the last block's week needs.
+        val daysD = async { PlannedDayRepository(supabase).load(today.minusDays(3), days = 3 + 14 + 3, now = now) }
+        val foodsD = async { FoodHabitsRepository(supabase).foods(settings.meals, zone) }
         val inputsD = async { runCatching { NutritionTargetsRepository(supabase).loadMaintenanceInputs(today) }.getOrDefault(MaintenanceInputs()) }
         val bodyD = async { runCatching { bodyComposition() }.getOrDefault(emptyList()) }
         val inputs = inputsD.await()
@@ -163,8 +198,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         val energy = weekEnergy(context, inputs, overview, body)
         val days = daysD.await()
         val todayIdx = days.indexOfFirst { it.date == today }
-        val week = days.drop(todayIdx).take(7)
-        val plans = planFuelDays(days, energy, kg, ffm, week = week)
+        val plans = planInWeekBlocks(days, todayIdx, energy, kg, ffm)
 
         // The days before, against what was planned for them.
         val logged = overview?.allDays.orEmpty().mapNotNull { d ->
@@ -222,8 +256,24 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
             describeChanges(json.decodeFromJsonElement<DaySnapshot>(old), snapshot)
         }
 
+        // The next ten days, each with two plates per meal (the solver runs off the main thread).
+        val foods = foodsD.await()
+        val horizon = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            (0 until FUEL_HORIZON_DAYS).mapNotNull { k ->
+                val i = todayIdx + k
+                val day = days.getOrNull(i) ?: return@mapNotNull null
+                val plan = if (k == 0) todayPlan else plans[i]
+                val coded = when (k) {
+                    0 -> todayCoded
+                    1 -> tomorrowCoded ?: code(i, plan)
+                    else -> code(i, plan)
+                }
+                HorizonDay(day, plan, coded, suggestDay(coded, foods), daySummary(plan.carbG, foods))
+            }
+        }
+
         TodayFuelResult.Ready(
-            TodayFuel(todayPlan, todayCoded, tomorrowPlan, tomorrowCoded, history, changes, energy.fromGoal, energy.observedMaintenance, adherenceMap, longSessions, countdown, kg),
+            TodayFuel(todayPlan, todayCoded, tomorrowPlan, tomorrowCoded, history, changes, energy.fromGoal, energy.observedMaintenance, adherenceMap, longSessions, countdown, kg, horizon),
         )
     }
 

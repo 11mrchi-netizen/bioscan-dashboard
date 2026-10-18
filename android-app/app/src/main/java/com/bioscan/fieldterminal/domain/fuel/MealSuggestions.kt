@@ -387,3 +387,55 @@ fun staplesWithUses(descriptions: List<Pair<MealSlotKind, String>>, staples: Lis
     }
     return staples.map { s -> counts[s.id]?.let { s.copy(uses = it) } ?: s }
 }
+
+/** The slot a meal eaten at [time] belongs to: the nearest of the person's meal times within 2 hours, else a snack. */
+fun slotForTime(time: java.time.LocalTime, times: MealTimes): MealSlotKind {
+    val slots = listOfNotNull(
+        MealSlotKind.BREAKFAST to times.breakfast, MealSlotKind.LUNCH to times.lunch,
+        times.snack?.let { MealSlotKind.SNACK to it }, MealSlotKind.DINNER to times.dinner,
+    )
+    val minute = time.toSecondOfDay() / 60
+    return slots.map { (k, t) -> k to abs(t.toSecondOfDay() / 60 - minute) }
+        .filter { it.second <= 120 }
+        .minByOrNull { it.second }?.first ?: MealSlotKind.SNACK
+}
+
+/** One logged catalogue food: its slot and amount in grams (or ml). */
+data class LoggedFood(val foodId: Long, val slot: MealSlotKind, val grams: Double)
+
+/** Per-100 g values and servings of a catalogue food, as stored. */
+data class CatalogueFood(
+    val id: Long,
+    val name: String,
+    val carbsPer100: Double?,
+    val proteinPer100: Double?,
+    val fatPer100: Double?,
+    val fibrePer100: Double?,
+    val kcalPer100: Double?,
+    val unit: String = "g",
+)
+
+const val OWN_FOOD_MIN_USES = 3
+
+/**
+ * The person's own foods: catalogue foods logged at least [OWN_FOOD_MIN_USES] times, each with the median amount as its
+ * usual portion and the slots it was eaten in. The numbers are the catalogue's, never an estimate's.
+ */
+fun ownFoods(logged: List<LoggedFood>, catalogue: Map<Long, CatalogueFood>): List<FoodOption> =
+    logged.groupBy { it.foodId }.filter { it.value.size >= OWN_FOOD_MIN_USES }.mapNotNull { (id, rows) ->
+        val f = catalogue[id] ?: return@mapNotNull null
+        val c = f.carbsPer100 ?: return@mapNotNull null
+        val p = f.proteinPer100 ?: return@mapNotNull null
+        val fat = f.fatPer100 ?: return@mapNotNull null
+        val grams = rows.map { it.grams }.sorted()
+        val median = grams[grams.size / 2].coerceAtLeast(5.0)
+        val step = if (median < 60) 5.0 else 10.0
+        val uses = rows.groupingBy { it.slot }.eachCount()
+        FoodOption(
+            id = "food:$id", name = f.name, role = roleFor(c / 100, p / 100, fat / 100), slots = uses.keys,
+            carbPerG = c / 100, proteinPerG = p / 100, fatPerG = fat / 100, fibrePerG = (f.fibrePer100 ?: 0.0) / 100,
+            kcalPerG = (f.kcalPer100 ?: (4 * c + 4 * p + 9 * fat)) / 100,
+            typicalG = median, minG = (median * 0.5 / step).roundToInt().coerceAtLeast(1) * step, maxG = median * 2,
+            stepG = step, unit = f.unit, yours = true, uses = uses,
+        )
+    }.sortedBy { it.id }

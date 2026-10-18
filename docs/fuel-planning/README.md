@@ -182,14 +182,14 @@ sets the week's energy and protein, the plan shapes each day.
 - Metric registry: `fuel_day_plan`, `sweat_rate`, `carb_periodization_index` (also in doc 02), shown behind the "?" of
   TODAY'S FUEL and PERIODISATION.
 
-## Read-only check on live data (18 Oct)
+## Read-only check on live data
 
-Through the real engine, values not stored anywhere: the periodisation index over 26 fully logged days is −0.14
-(correlation −0.09; daily carbohydrate 1.9-6.4 g/kg, mean 3.5), so logged carbohydrate does not follow the training
-yet; the longest days were logged at 2.8 and 4.1 g/kg. The run-time estimate from recent runs was within 3 % on an
-18.8 km / 1,053 m trail run and 17 % short on a 23.8 km / 1,302 m one, so the target or expected time stays the main
-input. A 5-hour plan at 22 °C without a sweat test capped drinking at 390-545 ml/h against an estimated 1,135 ml/h of
-sweat; the warning now says that this is caution for lack of a test (drink to thirst on top, do a sweat test), not heat.
+Run once through the real engine on the owner's data (values reported in the PR conversation, not kept in the repository,
+which is public): the periodisation index, the run-time estimate against finished trail runs, and a long-session plan
+without a sweat test. It led to one change: without a sweat test the plan caps drinking at the low end of a wide sweat
+estimate, and the warning now says that this is caution for lack of a test (drink to thirst on top, do a sweat test),
+not heat. The run-time estimate can fall well short on long, steep courses, so the target or expected time stays the
+main input.
 
 ## Deploy order
 

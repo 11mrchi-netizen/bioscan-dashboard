@@ -22,7 +22,7 @@ sets the week's energy and protein, the plan shapes each day.
 | 6 | `fuel_plans` snapshots; TODAY'S FUEL, the event FUEL tab | Done |
 | 7 | Reminders relative to sessions and race week | Done |
 | 8 | After the event: review, sweat rate and gut tolerance learned, periodisation index | Done (index computed on the phone; see notes) |
-| 9 | Planner: build toward an event, taper | |
+| 9 | Planner: build toward an event, taper | Done |
 
 ## Phase 1 notes: events
 
@@ -169,6 +169,26 @@ sets the week's energy and protein, the plan shapes each day.
   Mifflin-St Jeor times the activity factor, and the card says MAINTENANCE, FROM YOUR INTAKE AND WEIGHT.
 - Not built: adjusting the course time estimate from finished races (the review keeps the actual duration, which a
   later change can use).
+
+## Phase 9 notes: the planner and events
+
+- `domain/events/EventTaper.kt`: a block built toward an event ends in its week; the last weeks taper: two for an A
+  race or anything over 90 minutes, one for a B race, none for a C race (Bosquet 2007: 8-14 days, volume down 41-60 %,
+  intensity kept). The planner's lighter weeks are its deload weeks, which also lower intensity, so the step says to
+  keep a few short efforts at race pace. Only open A and B events at least 3 weeks after the block's start are offered.
+- Training › Plan › PLAN A NEW BLOCK › LENGTH AND DELOADS: BUILD TOWARD AN EVENT sets the length and the taper weeks
+  (and names the block when unnamed). The UPCOMING list marks a planned session on an event's day (EVENT DAY: move or
+  drop this session).
+- Metric registry: `fuel_day_plan`, `sweat_rate`, `carb_periodization_index` (also in doc 02), shown behind the "?" of
+  TODAY'S FUEL and PERIODISATION.
+
+## Deploy order
+
+1. `20261024_athlete_events.sql`, `20261025_sweat_tests.sql`, `20261026_fuel_plans.sql`, `20261028_fuel_plan_reviews.sql`
+   (new tables, RLS on; nothing else depends on them).
+2. `20261027_fuel_notification_kinds.sql` before the app build: the app seeds missing notification rules on start, and
+   the seeding fails while the kind constraint does not yet allow the two new kinds.
+3. The app build. No edge function changes.
 
 ## Research
 

@@ -68,6 +68,7 @@ fun TodaysFuelCard(overview: NutritionOverview?, modifier: Modifier = Modifier) 
         title = "TODAY'S FUEL",
         modifier = modifier,
         emphasis = FTCardEmphasis.Hero,
+        methodology = "fuel_day_plan",
         info = "Carbohydrate follows the training of the next 72 hours (\"fuel for the work required\"): more before and after " +
             "hard, long and race sessions, less on rest days. Your calorie goal stays the weekly average; protein stays at the goal.",
         infoDetails = "Day bands from Thomas, Erdman & Burke 2016 (3-5 g/kg light, 5-7 about an hour, 6-10 for 1-3 hours, 8-12 over " +

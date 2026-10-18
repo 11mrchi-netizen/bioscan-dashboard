@@ -52,6 +52,8 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {},
     val scope = rememberCoroutineScope()
     var blocks by remember { mutableStateOf<List<GeneratedBlockRow>?>(null) }
     var upcoming by remember { mutableStateOf<List<UpcomingSessionRow>>(emptyList()) }
+    // Fuel planning phase 9: a planned session on an event's day is shown as such (the event is the day's real work).
+    var eventDays by remember { mutableStateOf<Map<LocalDate, String>>(emptyMap()) }
     var cycles by remember { mutableStateOf<List<TrainingCycle>?>(null) }
     var history by remember { mutableStateOf<List<TrainingBlockSummaryRow>?>(null) }
     var confirmingDelete by remember { mutableStateOf<Long?>(null) }
@@ -67,6 +69,12 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {},
                 { upcoming = repo.loadUpcoming(LocalDate.now()) },
                 { cycles = cyclesRepo.loadCycles() },
                 { history = cyclesRepo.loadBlockSummaries() },
+                {
+                    eventDays = runCatching {
+                        com.bioscan.fieldterminal.data.AthleteEventsRepository(SupabaseClientProvider.client).loadUpcoming(LocalDate.now(), days = 120)
+                            .associate { it.date to it.name }
+                    }.getOrDefault(emptyMap())
+                },
             )
         }
     }
@@ -96,7 +104,12 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {},
                         LocalDate.parse(s.scheduledDate).format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)).uppercase(),
                         color = FT.DomainTraining, style = FTType.MonoCaption, modifier = Modifier.padding(top = 2.dp),
                     )
-                    Text(s.title, color = FT.TextPrimary, style = FTType.BodySmall)
+                    Column {
+                        Text(s.title, color = FT.TextPrimary, style = FTType.BodySmall)
+                        eventDays[LocalDate.parse(s.scheduledDate)]?.let { name ->
+                            Text("EVENT DAY: ${name.uppercase()} · move or drop this session", color = FT.Warning, style = FTType.MonoCaption)
+                        }
+                    }
                 }
             }
         }

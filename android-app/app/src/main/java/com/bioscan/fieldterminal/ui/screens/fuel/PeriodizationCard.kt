@@ -31,6 +31,7 @@ fun PeriodizationCard(overview: NutritionOverview, modifier: Modifier = Modifier
     FTCard(
         title = "PERIODISATION · LAST 4 WEEKS",
         modifier = modifier,
+        methodology = "carb_periodization_index",
         info = "How closely your logged carbohydrate rose and fell with your training, and how often meals stayed within their code's range.",
         infoDetails = "Carbohydrate Periodization Index (Rothschild et al. 2022, preprint): the correlation of daily carbohydrate (g/kg) " +
             "with the day's training energy, times the range of daily carbohydrate, divided by its monotony (mean / SD). Only days with " +

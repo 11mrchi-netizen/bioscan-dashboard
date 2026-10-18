@@ -1009,6 +1009,75 @@
       ],
       "productDefined": false,
       "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "fuel_day_plan",
+      "docName": "Daily carbohydrate plan",
+      "kind": "modeled",
+      "methodology": "Each day's carbohydrate target in g/kg follows the training of the next 72 hours: light days 3-5, about an hour of training 5-7, 1-3 hours 6-10, over 4 hours 8-12 (Thomas, Erdman & Burke 2016), easy days low in the band and hard days high, a step up before a hard morning, and 10-12 g/kg for the two days before an A or B race over 90 minutes (carbohydrate loading). The nutrition goal's calories stay the weekly average while each day moves with its session energy; protein stays at the goal (1.8 g/kg without one); fat is the remainder, never under 20 % of energy. Meals are coded LOW / MEDIUM / HIGH by their place around key sessions, with a +-15 % range and the reason.",
+      "limitations": [
+        "Session energy and intensity are estimates from the person's history or the Compendium of Physical Activities, not measured.",
+        "Bands are population guidance; individual needs differ, and the codes are a plan, not a prescription.",
+        "A day with fewer than 3 meals logged is not read as eaten (never as a deficit)."
+      ],
+      "references": [
+        {
+          "citation": "Thomas DT, Erdman KA, Burke LM. American College of Sports Medicine Joint Position Statement. Nutrition and Athletic Performance. Med Sci Sports Exerc 2016;48(3):543-568.",
+          "doi": "10.1249/MSS.0000000000000852"
+        },
+        {
+          "citation": "Impey SG, Hearris MA, Hammond KM, et al. Fuel for the Work Required: A Theoretical Framework for Carbohydrate Periodization and the Glycogen Threshold Hypothesis. Sports Med 2018;48(5):1031-1048.",
+          "doi": "10.1007/s40279-018-0867-7"
+        },
+        {
+          "citation": "Jeukendrup A. A step towards personalized sports nutrition: carbohydrate intake during exercise. Sports Med 2014;44(Suppl 1):S25-S33.",
+          "doi": "10.1007/s40279-014-0148-z"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "sweat_rate",
+      "docName": "Sweat rate",
+      "kind": "modeled",
+      "methodology": "From sweat tests: weight lost plus fluid drunk minus urine passed, over the session's duration. A prior (0.5 / 0.8 / 1.0 L/h easy / moderate / hard at 20 C and 70 kg, scaled by weight, +3 % per degree above 20, -2 % below) is moved by the median ratio of measured to predicted and narrowed with each test (+-40 % with none, +-25 % with one or two, +-15 % with three or more). Hydration plans keep the loss within 2 % of body weight and never drink more than the low estimate of sweat.",
+      "limitations": [
+        "A scale reading carries water from food and breathing, and a test measures one session's conditions.",
+        "The temperature scaling is a simple approximation, not a fitted model of the person.",
+        "Sweat sodium is not measured; plans use 500-1,000 mg per litre by heat and a salty-sweater setting."
+      ],
+      "references": [
+        {
+          "citation": "Sawka MN, Burke LM, Eichner ER, et al. American College of Sports Medicine position stand. Exercise and fluid replacement. Med Sci Sports Exerc 2007;39(2):377-390.",
+          "doi": "10.1249/mss.0b013e31802ca597"
+        },
+        {
+          "citation": "McCubbin AJ, et al. Sports Dietitians Australia Position Statement: Nutrition for Exercise in Hot Environments. Int J Sport Nutr Exerc Metab 2020;30(1):83-98.",
+          "doi": "10.1123/ijsnem.2019-0300"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "carb_periodization_index",
+      "docName": "Carbohydrate periodization index",
+      "kind": "derived",
+      "methodology": "Over the fully logged days (3 or more meals) of the last 28, at least 14: the Pearson correlation between daily carbohydrate (g/kg) and the day's training energy, times the range of daily carbohydrate (g/kg), divided by its monotony (mean / SD). High when carbohydrate rises and falls with the training over a real range; near zero when it is the same every day.",
+      "limitations": [
+        "Computed on the phone from the Log's daily totals; incomplete logging biases it.",
+        "Training energy is the recorded active energy (or an estimate), a proxy for the work done.",
+        "Presented descriptively; no target value is implied."
+      ],
+      "references": [
+        {
+          "citation": "Rothschild JA, et al. The quantification of daily carbohydrate periodization among endurance athletes during 12 weeks of self-selected training: presentation of a novel Carbohydrate Periodization Index. medRxiv 2022 (preprint).",
+          "doi": "10.1101/2022.06.21.22276725"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
     }
   ]
 }

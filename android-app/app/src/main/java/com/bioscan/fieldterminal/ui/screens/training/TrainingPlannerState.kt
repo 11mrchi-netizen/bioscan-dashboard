@@ -108,6 +108,9 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     var weeks by mutableIntStateOf(8)
     var openSection by mutableStateOf<String?>(null)
     var startWithTest by mutableStateOf(false)
+    // Fuel planning phase 9: the event the block builds toward (it ends in that week, the last weeks taper).
+    var events by mutableStateOf<List<com.bioscan.fieldterminal.domain.events.AthleteEvent>>(emptyList())
+    var targetEvent by mutableStateOf<com.bioscan.fieldterminal.domain.events.AthleteEvent?>(null)
 
     val index: DefinitionIndex? get() = catalog?.let { DefinitionIndex(it.definitions) }
 
@@ -132,6 +135,8 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
                 zoneMethod = repo.loadZoneMethod()
                 maxes = repo.loadMaxes()
             }.onFailure { error = it.message ?: "Could not load" }
+            events = runCatching { com.bioscan.fieldterminal.data.AthleteEventsRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).loadUpcoming(LocalDate.now()) }
+                .getOrDefault(emptyList())
             loading = false
         }
     }
@@ -205,6 +210,16 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     fun changeWeeks(n: Int) {
         weeks = n.coerceIn(1, 52)
         timeline = if (strengthModule == null) List(weeks) { WeekKind.Normal } else resizeTimeline(timeline, blockLength(), weeks)
+    }
+
+    /** Sets the length to end in [event]'s week and makes the last weeks a taper; null clears the target. */
+    fun buildToward(event: com.bioscan.fieldterminal.domain.events.AthleteEvent?) {
+        targetEvent = event
+        if (event == null) return
+        changeWeeks(com.bioscan.fieldterminal.domain.events.weeksToEvent(startDate, event.date))
+        resetTimeline()
+        timeline = com.bioscan.fieldterminal.domain.events.withTaper(timeline, com.bioscan.fieldterminal.domain.events.taperWeeks(event))
+        if (name.isBlank()) name = "Toward ${event.name}"
     }
 
     fun toggleWeek(i: Int) { timeline = timeline.mapIndexed { j, k -> if (j == i) cycleWeekKind(k) else k } }

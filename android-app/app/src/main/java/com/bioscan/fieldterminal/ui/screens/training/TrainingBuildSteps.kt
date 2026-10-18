@@ -171,6 +171,24 @@ private fun DayChip(label: String, active: Boolean, accent: Color, modifier: Mod
 internal fun TimelineStep(state: TrainingPlannerState) {
     val len = state.blockLength()
     val t = state.timeline
+    val buildable = com.bioscan.fieldterminal.domain.events.buildableEvents(state.events, state.startDate)
+    if (buildable.isNotEmpty()) {
+        Label("BUILD TOWARD AN EVENT")
+        Chips(buildable.map { it.id.toString() } + "none", setOfNotNull(state.targetEvent?.id?.toString() ?: "none"), { k ->
+            buildable.firstOrNull { it.id.toString() == k }?.let { "${it.name} · ${it.date}" } ?: "NO EVENT"
+        }) { k -> state.buildToward(buildable.firstOrNull { it.id.toString() == k }) }
+        state.targetEvent?.let { e ->
+            val taper = com.bioscan.fieldterminal.domain.events.taperWeeks(e)
+            Body(
+                "Ends in the week of ${e.name}." + if (taper > 0) {
+                    " The last $taper week${if (taper > 1) "s" else ""} taper (lighter weeks, about half the volume; Bosquet 2007): keep a few short efforts at race pace."
+                } else {
+                    ""
+                },
+                muted = true,
+            )
+        }
+    }
     Label("LENGTH")
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         FTButton("-", enabled = state.weeks > 1) { state.changeWeeks(state.weeks - 1) }

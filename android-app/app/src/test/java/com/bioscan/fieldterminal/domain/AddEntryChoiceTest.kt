@@ -15,6 +15,7 @@ class AddEntryChoiceTest {
         assertEquals(AddEntryTarget.Form(AddEntryType.Ostrc), AddEntryChoice.InjuryCheckIn.target)
         assertEquals(AddEntryTarget.InjuryForm, AddEntryChoice.Injury.target)
         assertEquals(AddEntryTarget.IllnessForm, AddEntryChoice.Illness.target)
+        assertEquals(AddEntryTarget.EventForm, AddEntryChoice.Event.target)
         // Every form the sheet has is reachable from the picker.
         val reachable = AddEntryChoice.entries.mapNotNull { (it.target as? AddEntryTarget.Form)?.type }.toSet()
         assertEquals(AddEntryType.entries.toSet(), reachable)

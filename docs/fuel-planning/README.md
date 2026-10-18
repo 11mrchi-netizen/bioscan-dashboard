@@ -1,0 +1,139 @@
+# Fuel planning: daily carbohydrate periodisation, race and long-session fuel and hydration plans
+
+Why this exists: the app logged what was eaten and drunk against one fixed daily goal, and in-session fuelling against
+completed sessions only. It could not represent a race or a hard day outside a training block, nor plan food and fluid
+around the training ahead. This feature plans each day's carbohydrate around the training of the next 72 hours ("fuel
+for the work required", Impey 2016/2018), codes each meal LOW / MEDIUM / HIGH with a gram range and a reason, and builds
+race and long-session fuel and hydration plans from the course, the expected weather and what was eaten in the days
+before. It was modelled on Hexis (hexis.live) and similar apps; the research behind it is below.
+
+Owner decisions: training is read from planned sessions, calendar training events and events, merged; the nutrition goal
+sets the week's energy and protein, the plan shapes each day.
+
+## Status
+
+| Phase | What | State |
+|---|---|---|
+| 1 | Events outside the training plan (`athlete_events`), event form and page, Training › Plan EVENTS card, + EVENT, Status NEXT UP, calendar suggestions, calendar sync wired | Done |
+| 2 | Planned-day resolver and session demand | |
+| 3 | Day fuel engine: bands, the week, meal codes, the days before, safety | |
+| 4 | Weather (hourly, TYPICAL beyond 16 days), heat stress, sweat profile | |
+| 5 | Course time estimate; race and long-session fuel and hydration plans | |
+| 6 | `fuel_plans` snapshots; TODAY'S FUEL, the event FUEL tab | |
+| 7 | Reminders relative to sessions and race week | |
+| 8 | After the event: review, sweat rate and gut tolerance learned, periodisation index | |
+| 9 | Planner: build toward an event, taper | |
+
+## Phase 1 notes: events
+
+- `supabase/migrations/20261024_athlete_events.sql`: one row per event (kind race / long_session / match / hike_day /
+  other_hard_day, sport, priority A/B/C, date, start, status, target time or expected duration, distance, ascent,
+  start point, a compact course profile, aid stations, the calendar entry it came from, the session that recorded it).
+  RLS own rows; safe to run again.
+- `domain/events/AthleteEvent.kt`: validation, `matchEventToSession` (same day, a type the sport is done as, starting
+  within two hours of the start, else the longest that day), `looksLikeRace` (conservative: "trail" and "vertical" are
+  training words too), `nextUpcomingEvent` / `eventTakesNextUp`, duration parsing.
+- `domain/trail/CourseProfile.kt`: a GPX route smoothed with the terrain engine's rules and sampled every 100 m (about a
+  thousand points for 100 km), so plans need no GPX file later; `trackpointsFromCourse` rebuilds it for the engine.
+- `data/AthleteEventsRepository.kt`; `ui/screens/events/` (EventFormSheet with a GPX picker and an aid-station editor,
+  EventScreen at `event/{id}`, EventsCard on Training › Plan). + › TRAINING › EVENT. Status's NEXT UP shows an event
+  when it comes first within 24 hours or the calendar has nothing (then up to 14 days ahead).
+- Found on the way: `CalendarSyncRepository.sync()` and `PlannedRouteRepository.runPipeline()` had no caller, so
+  `calendar_events` and `planned_routes` were empty. `data/CalendarBackgroundSync.kt` runs both when NEXT UP has a Google
+  token, at most every 6 hours; calendar race suggestions and calendar-linked GPX courses depend on it.
+
+## Research
+
+## 1. What Hexis is
+
+- **Company.** A UK start-up from Liverpool John Moores University (Prof James Morton, formerly head of nutrition at
+  Team Sky/INEOS; Dr Sam Impey). Launched in 2021. About €17–25 a month, or €130 a year.
+- **Carb Coding.** Every meal and snack is coded LOW, MEDIUM or HIGH carbohydrate (shown red, amber, green). The code
+  depends on how close the meal is to training and how hard that training is, over a 72-hour window.
+  - Carbohydrate scales with training. Protein stays roughly constant (reviewers quote 1.8–2 g/kg). Fat fills the rest.
+  - Rest days still get 3–4 g/kg of carbohydrate.
+  - During sessions it gives g/h targets (60 g/h, rising to 90 g/h on long rides).
+  - It has a competition carb-loading protocol.
+- **Inputs.** Planned workouts (TrainingPeaks, intervals.icu), completed workouts and wellness data from wearables,
+  body data and goal. The plan re-flows when a session moves or runs long.
+- **Architecture (Google Cloud case study).**
+  - Compute Engine managed instance groups sync device data into multi-region Cloud SQL Postgres.
+  - Gemini parses photos and voice notes into structured food data. That output is checked against Hexis's own food
+    database (about 5M items) before the Carb Coding engine runs: the model parses input and never sets the numbers.
+- **Repeated complaints.**
+  - Food logging: missing foods, failed barcode scans.
+  - Generic energy targets: few activity categories.
+  - A "deficit" reported on a day with nothing logged.
+  - Targets too high for someone trying to lose weight.
+
+## 2. The research it rests on, plus race, heat and hydration
+
+| Source | What it says | What we take |
+|---|---|---|
+| Impey 2016, *Physiol Rep* | "Fuel for the work required": the train-low approaches combined into one rule, matching carbohydrate to the upcoming session | The organising rule |
+| Impey 2018, *Sports Med* (glycogen threshold) | A window of muscle glycogen lets the work be done and still triggers adaptation. Signalling improved in 73–78% of studies, performance in only 37% of 11. The authors call for the glycogen cost of usual sessions to be quantified | Low codes only around easy sessions; never compromise a quality session |
+| Impey 2020, *MSSE* | Glycogen use differs between session types | A rough per-session carbohydrate cost |
+| Thomas, Erdman & Burke 2016 (ACSM/AND/DC) | Daily carbohydrate, g/kg: light 3–5, moderate 5–7, high 6–10, very high 8–12. Before exercise: 1–4 g/kg in the 1–4 h before. Recovery: 1–1.2 g/kg/h for 4 h | Day bands and timing |
+| Burke 2011; carb-loading literature | 10–12 g/kg/day for 36–48 h before events over 90 min; low fibre and low residue the day before | The race-loading mode |
+| Jeukendrup 2014, *Sports Med* | During exercise: under 45 min, none; 45–75 min, a mouth rinse; 1–2.5 h, 30–60 g/h; over 2.5 h, up to 90 g/h of glucose plus fructose. The gut can be trained | In-session g/h; a tolerance cap per person |
+| Tiller 2019, ISSN position stand on ultra-marathon | 150–300 kcal/h under 50 miles, 200–400 kcal/h above; fluid 450–750 mL/h by conditions; sodium 500–700 mg per litre; caffeine in the late stages; gut training and low-FODMAP options | Ultra and trail rules; caffeine timing |
+| Sawka 2007, ACSM fluid replacement | Start hydrated: 5–7 mL/kg about 4 h before. Keep the loss under 2% of body mass. Sweat rate is individual: weigh before and after | Fluid targets; the sweat test |
+| McCubbin 2020, Sports Dietitians Australia position on heat | Heat raises fluid and sodium needs and can lower gut tolerance. Acclimatise; start euhydrated; pre-cool with cold drinks or ice slurry; let thirst and gut tolerance guide drinking | Heat adjustments |
+| Kong & Huber 2022, *Earth's Future* | The simplified WBGT greatly overestimates heat stress in humid conditions | Don't use sWBGT: show temperature, dew point and humidity, plus a heat-index band |
+| Bosquet 2007 meta-analysis of tapering | Taper 8–14 days, cut volume 41–60%, keep intensity | Planner support for an event (phase 9) |
+| Areta 2013; Moore 2015 | Protein: 0.3–0.4 g/kg per meal, 4–5 meals | Protein spread across meals |
+| Rothschild 2022 (preprint) | Carbohydrate Periodization Index: correlation × range ÷ monotony of daily carbohydrate against training | Score how periodised the logged intake is |
+| Mountjoy 2023, IOC REDs consensus | Low energy availability is a spectrum; the 30 kcal/kg fat-free-mass cut-off is not firm for men; low carbohydrate adds risk | Safety limits |
+
+## 3. Similar apps
+
+| App | Approach | Worth copying |
+|---|---|---|
+| Fuelin | A daily plan from TrainingPeaks; traffic-light codes; before, during and after each session; sweat-rate tracker; carb-capacity test | Session windows; a gut-tolerance test |
+| Saturday | A session fuel and hydration plan from a sweat level. Users find its fluid targets generous (17 L for 14 h) | A tunable sweat profile; a hard cap on fluid |
+| Precision Fuel & Hydration planner | A race plan per hour or checkpoint from sweat testing (±20% error per test) | Plans per aid station and what to carry |
+| MAVR | Cheap, AI food logging | Quick logging |
+| MacroFactor | Expenditure learned each week from logged intake and the weight trend (equations can be off by more than 500 kcal) | Use the app's existing `evaluateTdee()` once it is confident |
+
+## 4. Design lessons
+
+1. Rules make the numbers; a model, if ever used, only parses input.
+2. Codes and ranges, not exact grams.
+3. A day with nothing logged reads NOT LOGGED, never as a deficit.
+4. Re-plan when sessions, events or the weather change, and say what changed.
+5. Low codes only around easy sessions.
+6. Every target carries its reason and its source.
+7. Fluid is capped by the estimated sweat rate (risk of hyponatraemia).
+8. Uncertain inputs (time estimate, sweat rate, a climate-average forecast) widen the range and are labelled.
+9. The codes use one hue in three steps plus the words; the contract keeps red, amber and green for status.
+10. Close the loop: every race and long run feeds sweat rate and gut tolerance back in.
+
+## Sources
+
+- **Hexis:**
+  - [LJMU launch](https://www.ljmu.ac.uk/about-us/news/articles/2021/10/5/researchers-launch-worlds-most-advanced-nutritional-app)
+  - [Google Cloud case study](https://cloud.google.com/customers/hexis)
+  - [App Store listing](https://apps.apple.com/gb/app/hexis/id1610334327)
+  - [220 Triathlon](https://www.220triathlon.com/news/i-used-a-pro-cycling-nutrition-app-for-a-month-and-raised-my-ftp-by-17-watts)
+  - [Roadman review](https://roadmancycling.com/blog/hexis-review) (affiliate)
+  - [Trustpilot](https://uk.trustpilot.com/review/hexis.live)
+  - [TrainerRoad thread](https://www.trainerroad.com/forum/t/anyone-with-experience-using-nutrition-app-hexis/85624)
+  - [Ride Revolution](https://www.riderevolution.co.uk/hexis-cycling-nutrition-coach/)
+- **Papers:**
+  - [Impey 2018](https://pmc.ncbi.nlm.nih.gov/articles/PMC5889771)
+  - [Impey 2016](https://pmc.ncbi.nlm.nih.gov/articles/PMC4886170)
+  - [Impey MSSE](https://researchonline.ljmu.ac.uk/12507/1/ACCEPTED%20R2%20Impey%20et%20al%20MSSE%202019%20%281%29.pdf)
+  - [Rothschild CPI](https://www.medrxiv.org/content/10.1101/2022.06.21.22276725v1)
+  - [ISSN ultra-marathon 2019](https://jissn.biomedcentral.com/articles/10.1186/s12970-019-0312-9)
+  - [ACSM fluid replacement 2007](https://pubmed.ncbi.nlm.nih.gov/17277604/)
+  - [SDA heat 2020](https://research.bond.edu.au/en/publications/sports-dietitians-australia-position-statement-nutrition-for-exer/)
+  - [Kong & Huber WBGT](https://doaj.org/article/a5fe52ebce2d4f50b76c9ea31ae3b91a)
+  - [IOC REDs 2023](https://humanperformancealliance.org/news/2023-international-olympic-committee-consensus-statement-on-reds/)
+  - [Burke 2001](https://pubmed.ncbi.nlm.nih.gov/11310548/)
+  - Thomas 2016, Jeukendrup 2014 and Bosquet 2007 are cited from the published papers; search did not reach their
+    full texts.
+- **Other apps:**
+  - [Fuelin × TrainingPeaks](https://help.trainingpeaks.com/hc/en-us/articles/9201819207181-How-to-connect-Fuelin-to-TrainingPeaks)
+  - [Hexis vs PF&H](https://roadmancycling.com/compare/hexis-vs-precision-fuel-hydration)
+  - [Saturday thread](https://www.trainerroad.com/forum/t/saturday-pro-fuel-and-hydration-app-user-inquiries/76366)
+  - [MacroFactor](https://macrofactor.com/algorithm-accuracy/)

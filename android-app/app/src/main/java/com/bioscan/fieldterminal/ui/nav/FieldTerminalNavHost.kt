@@ -141,6 +141,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                         trainingRequestedTab = TrainingTab.Injury
                         navController.navigate(TileRoute.Training.route) { launchSingleTop = true }
                     },
+                    onOpenEvent = { id -> navController.navigate("event/$id") },
                 )
             }
             // UX review P6: the Today page (was Daily Readiness) links to the cards it no longer repeats.
@@ -170,6 +171,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     onOpenRunning = { navController.navigate("skill_running") },
                     onOpenStrength = { navController.navigate("skill_strength") },
                     onOpenTrainingBlocks = { navController.navigate("training_blocks") },
+                    onOpenEvent = { id -> navController.navigate("event/$id") },
                     requestedTab = trainingRequestedTab,
                     onRequestedTabConsumed = { trainingRequestedTab = null },
                 )
@@ -244,6 +246,17 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             // screen so far is a flat tab or a bottom sheet) -- a session's
             // on-demand Health Connect time-series detail, reached by
             // tapping an Exercise entry's DETAIL action in the Log tab.
+            // Events outside the training plan (races, long days): the event page, from Training › Plan, Next up and +.
+            composable("event/{eventId}") { backStackEntry ->
+                val eventId = backStackEntry.arguments?.getString("eventId")?.toLongOrNull()
+                if (eventId != null) {
+                    com.bioscan.fieldterminal.ui.screens.events.EventScreen(
+                        eventId = eventId,
+                        onBack = { navController.popBackStack() },
+                        onOpenSession = { id -> navController.navigate("session_detail/$id") },
+                    )
+                }
+            }
             composable("session_detail/{sessionId}") { backStackEntry ->
                 val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull()
                 if (sessionId != null) {

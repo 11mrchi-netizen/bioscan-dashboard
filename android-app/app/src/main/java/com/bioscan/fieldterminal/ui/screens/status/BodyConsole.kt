@@ -117,12 +117,13 @@ fun BodyConsole(
     onOpenToday: () -> Unit,
     onOpenInjury: () -> Unit = {},
     onQuickLog: (AddEntryStart) -> Unit = {},
+    onOpenEvent: (Long) -> Unit = {},
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val figureHeight = (maxHeight * 0.30f).coerceIn(160.dp, 280.dp)
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             ConditionField(overview, isLoading, figureHeight, onOpenToday, onOpenInjury)
-            NextUpSection()
+            NextUpSection(onOpenEvent = onOpenEvent)
             SystemTileGrid(overview, previews, onOpenTile)
             QuickLogRow(previews, onQuickLog)
         }
@@ -615,23 +616,41 @@ private fun LabelAt(x: Float, y: Float, scale: Float, align: Alignment, content:
 private sealed interface NextUpState {
     data object Loading : NextUpState
     data class Found(val event: MapEvent) : NextUpState
+    // An event outside the training plan (domain/events): first within the next 24 hours, or the calendar has nothing.
+    data class EventNext(val event: com.bioscan.fieldterminal.domain.events.AthleteEvent) : NextUpState
     data object None : NextUpState
     data class NeedsConsent(val pendingIntent: android.app.PendingIntent) : NextUpState
     data class Error(val message: String) : NextUpState
 }
 
-private suspend fun loadNextUp(token: String): NextUpState =
-    MapRepository(token).fetchUpcomingEvents().firstOrNull()?.let { NextUpState.Found(it) } ?: NextUpState.None
+private suspend fun loadNextUp(token: String, event: com.bioscan.fieldterminal.domain.events.AthleteEvent?): NextUpState {
+    val next = MapRepository(token).fetchUpcomingEvents().firstOrNull()
+    val calendarStart = next?.let { runCatching { parseSessionZonedDateTime(it.startIso) }.getOrNull() }
+    val now = ZonedDateTime.now()
+    return when {
+        com.bioscan.fieldterminal.domain.events.eventTakesNextUp(event, calendarStart, now) -> NextUpState.EventNext(event!!)
+        next != null -> NextUpState.Found(next)
+        else -> NextUpState.None
+    }
+}
+
+private suspend fun loadNextEvent(): com.bioscan.fieldterminal.domain.events.AthleteEvent? = runCatching {
+    val events = com.bioscan.fieldterminal.data.AthleteEventsRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client)
+        .loadUpcoming(java.time.LocalDate.now(), days = 15)
+    com.bioscan.fieldterminal.domain.events.nextUpcomingEvent(events, ZonedDateTime.now())
+}.getOrNull()
 
 @Composable
-private fun NextUpSection(modifier: Modifier = Modifier) {
+private fun NextUpSection(modifier: Modifier = Modifier, onOpenEvent: (Long) -> Unit = {}) {
     val activity = LocalContext.current as Activity
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<NextUpState>(NextUpState.Loading) }
     var attempt by remember { mutableStateOf(0) }
+    var nextEvent by remember { mutableStateOf<com.bioscan.fieldterminal.domain.events.AthleteEvent?>(null) }
 
     LaunchedEffect(attempt) {
         state = NextUpState.Loading
+        nextEvent = loadNextEvent()
         state = try {
             val authResult = GoogleAuthorizationManager.authorize(activity)
             val token = authResult.accessToken
@@ -639,7 +658,11 @@ private fun NextUpSection(modifier: Modifier = Modifier) {
             when {
                 authResult.hasResolution() && pendingIntent != null -> NextUpState.NeedsConsent(pendingIntent)
                 token == null -> NextUpState.Error("Could not get a Google access token.")
-                else -> loadNextUp(token)
+                else -> {
+                    // Keeps the calendar cache and its GPX course previews current (both had no caller before).
+                    scope.launch { runCatching { com.bioscan.fieldterminal.data.CalendarBackgroundSync.runIfDue(activity, token) } }
+                    loadNextUp(token, nextEvent)
+                }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -652,7 +675,7 @@ private fun NextUpSection(modifier: Modifier = Modifier) {
         scope.launch {
             state = try {
                 val token = GoogleAuthorizationManager.resultFromIntent(activity, result.data).accessToken
-                if (token == null) NextUpState.Error("Calendar access was not granted.") else loadNextUp(token)
+                if (token == null) NextUpState.Error("Calendar access was not granted.") else loadNextUp(token, nextEvent)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -664,6 +687,7 @@ private fun NextUpSection(modifier: Modifier = Modifier) {
     // Found: opens the calendar app at the event's time. NeedsConsent: asks for Calendar access. Error: retries.
     val onTap: (() -> Unit)? = when (val s = state) {
         is NextUpState.Found -> { { openCalendarAt(activity, s.event) } }
+        is NextUpState.EventNext -> { { s.event.id?.let(onOpenEvent) } }
         is NextUpState.NeedsConsent -> { { consentLauncher.launch(IntentSenderRequest.Builder(s.pendingIntent.intentSender).build()) } }
         is NextUpState.Error -> { { attempt++ } }
         else -> null
@@ -700,6 +724,7 @@ private fun NextUpSection(modifier: Modifier = Modifier) {
 private fun nextUpLabel(state: NextUpState): String = when (state) {
     NextUpState.Loading -> "NEXT UP — loading…"
     is NextUpState.Found -> "NEXT UP — ${state.event.title.trim().ifBlank { "Untitled event" }} · ${relativeTimeLabel(state.event)}"
+    is NextUpState.EventNext -> "NEXT UP — ${state.event.name} · ${eventRelativeLabel(state.event)}"
     NextUpState.None -> "NEXT UP — nothing in the next 24h"
     is NextUpState.NeedsConsent -> "NEXT UP — tap to connect Google Calendar"
     is NextUpState.Error -> "NEXT UP — couldn't load · tap to retry"
@@ -719,6 +744,21 @@ private fun relativeTimeLabel(event: MapEvent): String {
         minutesUntil <= 0 -> "NOW"
         minutesUntil < 60 -> "IN $minutesUntil MIN"
         else -> "IN ${minutesUntil / 60}H ${minutesUntil % 60}M"
+    }
+}
+
+private fun eventRelativeLabel(event: com.bioscan.fieldterminal.domain.events.AthleteEvent): String {
+    val now = ZonedDateTime.now()
+    val start = event.start?.withZoneSameInstant(now.zone)
+    val days = ChronoUnit.DAYS.between(now.toLocalDate(), event.date)
+    return when {
+        start != null && ChronoUnit.MINUTES.between(now, start) in 0..(24 * 60) -> {
+            val m = ChronoUnit.MINUTES.between(now, start)
+            if (m < 60) "IN $m MIN" else "IN ${m / 60}H ${m % 60}M"
+        }
+        days == 0L -> "TODAY"
+        days == 1L -> "TOMORROW"
+        else -> "IN $days DAYS"
     }
 }
 

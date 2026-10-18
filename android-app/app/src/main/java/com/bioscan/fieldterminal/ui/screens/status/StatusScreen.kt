@@ -35,7 +35,7 @@ import kotlinx.coroutines.coroutineScope
 // UX review P1: the hub scrolls now (BodyConsole), the FUEL and LABS tiles preview today's data, and the quick-log row
 // opens the add sheet here, on the right form; a save reloads the hub so the tiles show it at once.
 @Composable
-fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenToday: () -> Unit, onOpenInjury: () -> Unit = {}) {
+fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenToday: () -> Unit, onOpenInjury: () -> Unit = {}, onOpenEvent: (Long) -> Unit = {}) {
     var overview by remember { mutableStateOf<StatusOverview?>(null) }
     var previews by remember { mutableStateOf<TodayPreviews?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -73,6 +73,7 @@ fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenToday: () -> Unit, onOpe
                 onOpenToday = onOpenToday,
                 onOpenInjury = onOpenInjury,
                 onQuickLog = { addStart = it },
+                onOpenEvent = onOpenEvent,
             )
         }
     }

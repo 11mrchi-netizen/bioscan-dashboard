@@ -46,7 +46,7 @@ import java.util.Locale
 // NEW BLOCK, what is coming up, the planned blocks and the history (moved from the User tab) all live on this tab; the
 // User tab keeps a compact card that opens it, and Setup keeps only equipment and session times.
 @Composable
-fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {}) {
+fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {}, onOpenEvent: (Long) -> Unit = {}) {
     val repo = remember { TrainingProgramRepository(SupabaseClientProvider.client) }
     val cyclesRepo = remember { TrainingCyclesRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
@@ -87,6 +87,7 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
             )
         }
         FTButton("PLAN A NEW BLOCK", onClick = onOpenPlanner, emphasis = FTButtonEmphasis.Primary)
+        com.bioscan.fieldterminal.ui.screens.events.EventsCard(onOpenEvent = onOpenEvent)
         FTCard(title = "UPCOMING") {
             if (upcoming.isEmpty()) Text("No planned sessions yet.", color = FT.TextSecondary, style = FTType.BodySmall)
             upcoming.forEach { s ->

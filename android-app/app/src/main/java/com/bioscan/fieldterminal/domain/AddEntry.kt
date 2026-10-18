@@ -52,6 +52,8 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
     InjuryCheckIn("Injury check-in", AddEntryGroup.Training),
     Injury("Injury", AddEntryGroup.Training),
     Illness("Illness", AddEntryGroup.Training),
+    // A race, long day or other hard day outside the training plan (domain/events/AthleteEvent.kt).
+    Event("Event", AddEntryGroup.Training),
     SexualActivity("Sexual activity", AddEntryGroup.Intimacy),
     Encounter("Encounter", AddEntryGroup.Intimacy),
     Note("Note", AddEntryGroup.Other),
@@ -64,6 +66,7 @@ sealed interface AddEntryTarget {
     data object InjuryForm : AddEntryTarget
     data object IllnessForm : AddEntryTarget
     data object BodyCheckIn : AddEntryTarget
+    data object EventForm : AddEntryTarget
 }
 
 val AddEntryChoice.target: AddEntryTarget
@@ -79,6 +82,7 @@ val AddEntryChoice.target: AddEntryTarget
         AddEntryChoice.InjuryCheckIn -> AddEntryTarget.Form(AddEntryType.Ostrc)
         AddEntryChoice.Injury -> AddEntryTarget.InjuryForm
         AddEntryChoice.Illness -> AddEntryTarget.IllnessForm
+        AddEntryChoice.Event -> AddEntryTarget.EventForm
         AddEntryChoice.SexualActivity -> AddEntryTarget.Form(AddEntryType.SexualActivity)
         AddEntryChoice.Encounter -> AddEntryTarget.Form(AddEntryType.Encounter)
         AddEntryChoice.Note -> AddEntryTarget.Form(AddEntryType.Note)

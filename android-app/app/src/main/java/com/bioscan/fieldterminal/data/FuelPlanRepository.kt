@@ -19,6 +19,7 @@ import com.bioscan.fieldterminal.domain.fuel.MealAdherence
 import com.bioscan.fieldterminal.domain.fuel.MealSuggestion
 import com.bioscan.fieldterminal.domain.fuel.daySummary
 import com.bioscan.fieldterminal.domain.fuel.planInWeekBlocks
+import com.bioscan.fieldterminal.domain.fuel.plateTarget
 import com.bioscan.fieldterminal.domain.fuel.suggestDay
 import com.bioscan.fieldterminal.domain.fuel.PlannedDay
 import com.bioscan.fieldterminal.domain.fuel.PlannedItem
@@ -75,7 +76,12 @@ data class HorizonDay(
     val coded: CodedDay,
     val suggestions: List<MealSuggestion>,
     val summary: String,
+    /** The day's prepped containers, scaled breakfast and snack remainder, when a prep week or a breakfast is set up. */
+    val prep: com.bioscan.fieldterminal.domain.fuel.PreppedDay? = null,
 )
+
+/** A prep week's days (Monday to Sunday) with their coded meals, and the foods to portion from. */
+data class WeekPlan(val days: List<CodedDay>, val foods: List<com.bioscan.fieldterminal.domain.fuel.FoodOption>, val weightKg: Double)
 
 data class TodayFuel(
     val today: DayFuelPlan,
@@ -256,8 +262,14 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
             describeChanges(json.decodeFromJsonElement<DaySnapshot>(old), snapshot)
         }
 
-        // The next ten days, each with two plates per meal (the solver runs off the main thread).
+        // The next ten days, each with two plates per meal (the solver runs off the main thread), and the prep weeks they
+        // fall in with the fixed breakfast (none before the meal-prep migration is applied).
         val foods = foodsD.await()
+        val prepRepo = MealPrepRepository(supabase)
+        val weeks = runCatching {
+            prepRepo.loadWeeks(listOf(com.bioscan.fieldterminal.domain.fuel.currentPrepWeek(today), com.bioscan.fieldterminal.domain.fuel.upcomingPrepWeek(today)).distinct())
+        }.getOrDefault(emptyList())
+        val breakfast = runCatching { prepRepo.loadBreakfast() }.getOrDefault(emptyList())
         val horizon = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             (0 until FUEL_HORIZON_DAYS).mapNotNull { k ->
                 val i = todayIdx + k
@@ -269,12 +281,63 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
                     else -> code(i, plan)
                 }
                 HorizonDay(day, plan, coded, suggestDay(coded, foods), daySummary(plan.carbG, foods))
-            }
+            }.let { days -> withPrep(days, weeks, breakfast, foods) }
         }
 
         TodayFuelResult.Ready(
             TodayFuel(todayPlan, todayCoded, tomorrowPlan, tomorrowCoded, history, changes, energy.fromGoal, energy.observedMaintenance, adherenceMap, longSessions, countdown, kg, horizon),
         )
+    }
+
+    /** Each day's containers (cooked: as stored; planned: portioned for the day), scaled breakfast and snack remainder. */
+    private fun withPrep(
+        days: List<HorizonDay>,
+        weeks: List<MealPrepWeek>,
+        breakfast: List<com.bioscan.fieldterminal.domain.fuel.BreakfastItem>,
+        foods: List<com.bioscan.fieldterminal.domain.fuel.FoodOption>,
+    ): List<HorizonDay> {
+        if (weeks.isEmpty() && breakfast.isEmpty()) return days
+        val byId = foods.associateBy { it.id }
+        val coded = days.associate { it.day.date to it.coded }
+        fun mealFor(date: LocalDate, slot: com.bioscan.fieldterminal.domain.fuel.PrepSlot) = coded[date]?.meals?.firstOrNull { it.kind == slot.kind }
+        return days.map { d ->
+            val date = d.day.date
+            val week = weeks.firstOrNull { !date.isBefore(it.weekStart) && date.isBefore(it.weekStart.plusDays(7)) }
+            val containers = when {
+                week == null -> emptyList()
+                week.containers != null -> week.containers.filter { it.date == date }.mapNotNull { s ->
+                    mealFor(date, s.slot)?.let { com.bioscan.fieldterminal.domain.fuel.containerFromStored(s, byId, it.plateTarget()) }
+                }
+                else -> com.bioscan.fieldterminal.domain.fuel.planContainers(week.weekStart, week.recipes, week.skipped, byId, ::mealFor).filter { it.date == date }
+            }
+            val skipped = com.bioscan.fieldterminal.domain.fuel.PrepSlot.entries
+                .filter { week != null && com.bioscan.fieldterminal.domain.fuel.slotKey(date, it) in week.skipped }.toSet()
+            if (containers.isEmpty() && breakfast.isEmpty() && skipped.isEmpty()) d
+            else d.copy(prep = com.bioscan.fieldterminal.domain.fuel.prepDay(d.coded, breakfast, containers, skipped, byId))
+        }
+    }
+
+    /**
+     * A prep week's days, Monday to Sunday, coded with the goal holding over that week, and the foods to portion from:
+     * what the PREP page portions its containers and breakfasts for.
+     */
+    suspend fun loadWeekPlan(context: Context, overview: NutritionOverview?, weekStart: LocalDate, now: ZonedDateTime = ZonedDateTime.now()): WeekPlan? = coroutineScope {
+        val zone = now.zone
+        val settings = FuelSettingsStore.get(context)
+        val daysD = async { PlannedDayRepository(supabase).load(weekStart, days = 7 + 3, now = now) }
+        val foodsD = async { FoodHabitsRepository(supabase).foods(settings.meals, zone) }
+        val inputs = runCatching { NutritionTargetsRepository(supabase).loadMaintenanceInputs(now.toLocalDate()) }.getOrDefault(MaintenanceInputs())
+        val body = runCatching { bodyComposition() }.getOrDefault(emptyList())
+        val kg = inputs.weightKg ?: body.firstNotNullOfOrNull { it.weightKg } ?: return@coroutineScope null
+        val latest = body.firstOrNull { it.leanMassKg != null || it.bodyFatPct != null }
+        val ffm = fatFreeMass(kg, latest?.leanMassKg, latest?.bodyFatPct)
+        val energy = weekEnergy(context, inputs, overview, body)
+        val days = daysD.await()
+        val plans = planInWeekBlocks(days, 0, energy, kg, ffm)
+        val coded = (0 until 7).map { i ->
+            codeMeals(plans[i], days[i], days.getOrNull(i + 1), kg, zone, settings.meals, settings.trainLow, energy.deficit, settings.toleratedGPerHour)
+        }
+        WeekPlan(coded, foodsD.await(), kg)
     }
 
     /** The race or long-day plan for an event. */

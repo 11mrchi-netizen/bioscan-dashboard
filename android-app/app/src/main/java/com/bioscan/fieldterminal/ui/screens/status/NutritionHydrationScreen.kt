@@ -86,18 +86,14 @@ import kotlin.math.roundToInt
 fun NutritionTabContent(overview: NutritionOverview, onOpenNutrientBreakdown: () -> Unit = {}) {
     val goals = NutritionGoalsStore.getGoals(LocalContext.current)
     val today = overview.today
-    if (today == null) {
-        Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("No meals logged yet.", style = FTType.Body, color = FT.TextSecondary)
-        }
-        return
-    }
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        // Calories headline
-        Column {
+        // App restructure: trends over spot metrics, so a day with nothing logged yet keeps the averages and trend below.
+        if (today == null) {
+            Text("No meals logged yet today.", style = FTType.Body, color = FT.TextSecondary)
+        } else Column {
             FTMetricValue(DisplayValue(primary = today.calories.roundToInt().toString(), unit = "KCAL"))
             FTRangeIndicator(dailyRange("CALORIES", today.calories, goals.caloriesKcal, 3500.0))
             Text(
@@ -108,18 +104,15 @@ fun NutritionTabContent(overview: NutritionOverview, onOpenNutrientBreakdown: ()
             )
         }
 
-        FTCard(title = "MACROS") {
-            FTRangeIndicator(dailyRange("PROTEIN (G)", today.proteinG, goals.proteinG, 220.0))
-            FTRangeIndicator(dailyRange("CARBS (G)", today.carbsG, goals.carbsG, 450.0))
-            FTRangeIndicator(dailyRange("FAT (G)", today.fatG, goals.fatG, 180.0))
-            NutrientBreakdownButton(onClick = onOpenNutrientBreakdown)
-        }
-
-        if (overview.todaysMeals.isNotEmpty()) {
-            FTCard(title = "MEALS TODAY") {
-                overview.todaysMeals.forEach { meal -> MealRowItem(meal) }
+        if (today != null) {
+            FTCard(title = "MACROS") {
+                FTRangeIndicator(dailyRange("PROTEIN (G)", today.proteinG, goals.proteinG, 220.0))
+                FTRangeIndicator(dailyRange("CARBS (G)", today.carbsG, goals.carbsG, 450.0))
+                FTRangeIndicator(dailyRange("FAT (G)", today.fatG, goals.fatG, 180.0))
+                NutrientBreakdownButton(onClick = onOpenNutrientBreakdown)
             }
         }
+        // MEALS TODAY moved to the Today page's NUTRITION TODAY card.
 
         NutritionAveragesCard(overview.allDays)
         NutritionGoalAdherenceCard(overview.allDays)
@@ -136,7 +129,7 @@ fun NutritionTabContent(overview: NutritionOverview, onOpenNutrientBreakdown: ()
 }
 
 @Composable
-private fun MealRowItem(meal: MealRow) {
+internal fun MealRowItem(meal: MealRow) {
     val time = runCatching { OffsetDateTime.parse(meal.loggedAt).format(DateTimeFormatter.ofPattern("HH:mm")) }.getOrDefault("—")
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Column(Modifier.weight(1f).padding(end = 10.dp)) {

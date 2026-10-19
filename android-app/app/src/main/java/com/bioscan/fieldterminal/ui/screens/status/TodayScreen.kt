@@ -96,14 +96,14 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlin.math.roundToInt
 
-// The Today page (UX review P6; was Daily Readiness), reached from TODAY › on the Status hero. One vocabulary for "how am I
-// today": THIS MORNING leads (analysis review phase C: each core metric against the band expected for you, answer first,
-// with what last evening brought), then TODAY'S RECOVERY, READY FOR (it is built on recovery), today's fuel, then the
-// evidence board (phase D), what came before off mornings, and typicality. Training load and HRV / resting HR are linked (Training › Load, Health › Cardio) instead of repeated here.
-// Every section reuses the exact domain chain + render card its own tile screen already uses (DynamicRecoveryCard in
-// HealthTileScreen.kt, TrainingReadinessCard in TrainingTileScreen.kt, the hydration/macro totals in
-// NutritionHydrationScreen.kt) -- this screen just composes them, loading its own data independently per this app's
-// established per-screen-loader convention.
+// The Today page (UX review P6; was Daily Readiness), reached from TODAY › on the Status hero: how today is.
+// App restructure, in the owner's order: THIS MORNING (each core metric against the band expected for you, with what
+// last evening brought), IS TODAY TYPICAL?, TODAY'S RECOVERY (it lives only here now), READY FOR (built on recovery),
+// the training-load and cardio links, and NUTRITION TODAY (today's fuel line, progress against the day's targets and the
+// meals logged). Last evening's check-in is a header button instead of a card; the evidence board, case-crossover,
+// experiments and scorecards moved to Lab › N=1.
+// Every section reuses the domain chain and card its own tile already uses -- this screen composes them, loading its
+// own data independently per this app's per-screen-loader convention.
 @Composable
 fun TodayScreen(
     onBack: () -> Unit,
@@ -128,23 +128,12 @@ fun TodayScreen(
     var typicality by remember { mutableStateOf<TypicalityResultRow?>(null) }
     // Analysis review phase C: the published expected band per metric (empty before the first run).
     var bands by remember { mutableStateOf<Map<String, ExpectedBandRow>>(emptyMap()) }
-    // Analysis review phase D: event curves, case-crossover tables and lag curves for the evidence board.
+    // Analysis review phase D: the event curves behind THIS MORNING's "what last evening brought".
     var evidence by remember { mutableStateOf(EvidenceRows()) }
-    // Analysis review phase E: questions registered from a hint, and their results.
-    var registeredResults by remember { mutableStateOf<List<RelationshipResultRow>>(emptyList()) }
-    var registeredQuestions by remember { mutableStateOf<List<RegisteredQuestion>>(emptyList()) }
-    var registerError by remember { mutableStateOf<String?>(null) }
-    // Analysis review phase F: randomised experiments -- what today's draw asks for, and the daily tests of a behaviour.
-    var experiments by remember { mutableStateOf<List<ExperimentRow>>(emptyList()) }
-    var experimentResults by remember { mutableStateOf<Map<String, ExperimentResultRow>>(emptyMap()) }
-    var experimentsKey by remember { mutableIntStateOf(0) }
-    var testing by remember { mutableStateOf<DailyChoice?>(null) }
     // Analysis review phase G: past planned sessions, for READY FOR's scorecard (null while loading or if the read fails).
     var planned by remember { mutableStateOf<List<PlannedOutcomeRow>?>(null) }
     // Phase G: the fitness and fatigue spans load is drawn with (standard unless the personal pair was adopted).
     var loadSpans by remember { mutableStateOf(LoadSpans.STANDARD) }
-    var experimentError by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
     // Analysis review phase B: last evening's check-in (null until answered or if the read fails) and the open sheet.
     var lastEvening by remember { mutableStateOf<EveningCheckin?>(null) }
     var checkInDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -153,13 +142,6 @@ fun TodayScreen(
             checkInDate = checkinDateFor(LocalDateTime.now())
             onCheckInHandled()
         }
-    }
-
-    // Optional enrichment, reloaded after a registration or a delete: a failed read just leaves the experiment cards out.
-    LaunchedEffect(experimentsKey) {
-        val repo = ExperimentsRepository(SupabaseClientProvider.client)
-        runCatching { experiments = repo.loadExperiments() }
-        runCatching { experimentResults = repo.loadResults() }
     }
 
     val guard = rememberLoadGuard()
@@ -180,8 +162,6 @@ fun TodayScreen(
                     { typicality = repo.loadTypicality() },
                     { bands = repo.loadExpectedBands() },
                     { evidence = repo.loadEvidence() },
-                    { registeredResults = repo.loadRegisteredResults() },
-                    { registeredQuestions = repo.loadRegisteredQuestions() },
                     { planned = runCatching { repo.loadPlannedOutcomes() }.getOrNull() },
                     { loadSpans = repo.loadLoadSpans() },
                     // A missing table (migration not yet applied) or a failed read just leaves the card asking.
@@ -198,7 +178,7 @@ fun TodayScreen(
     val nut = nutrition
     if (s == null || w == null || sl == null || wb == null || nut == null) {
         Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-            TileHeader(onBack = onBack, title = "TODAY", subtitle = todayContextLine())
+            TileHeader(onBack = onBack, title = "TODAY", subtitle = todayContextLine(), action = { LastEveningButton(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) } })
             if (guard.error != null) {
                 LoadErrorCard(guard)
             } else {
@@ -227,12 +207,10 @@ fun TodayScreen(
     // Phase G: each composite's scorecard on this history, worked out off the main thread (null until ready).
     val scorecards by rememberScorecards(w, sl, wb, s, breakStarts, loadSpans, planned)
 
-    val waterMl = nut.todayHydrationMl?.toDouble() ?: 0.0
-    val beverageMl = nut.todayBeverageItems.mapNotNull { it.effectiveHydrationMl }.sum()
-    val todayCaffeineMg = nut.todayBeverageItems.mapNotNull { it.caffeineMg }.takeIf { it.isNotEmpty() }?.sum()
+    val fuel = com.bioscan.fieldterminal.ui.screens.fuel.rememberTodayFuel(nut)
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
-        TileHeader(onBack = onBack, title = "TODAY", subtitle = todayContextLine())
+        TileHeader(onBack = onBack, title = "TODAY", subtitle = todayContextLine(), action = { LastEveningButton(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) } })
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -250,9 +228,7 @@ fun TodayScreen(
                 // Analysis review phase D: what last evening brought, with the board's evidence about it.
                 contributors = contributors(lastEvening, relationships, evidence.events.map { it.payload }),
             )
-            val eveningAnswered = lastEvening?.isComplete == true
-            if (!eveningAnswered) LastEveningCard(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) }
-            TodaysDrawCard(experiments, LocalDate.now())
+            TypicalityCard(typicalityView(typicality))
             DynamicRecoveryCard(recovery, emphasis = if (bandInputs.isEmpty()) FTCardEmphasis.Hero else FTCardEmphasis.Supporting, scorecard = scorecards?.recovery)
             TrainingReadinessCard(computeTrainingReadiness(recovery), scorecard = scorecards?.readyFor)
             // The inputs behind recovery and READY FOR, one tap away instead of repeated on this page.
@@ -275,83 +251,10 @@ fun TodayScreen(
                 )
             }
 
-            // Stacked full-width, not side-by-side -- MacroDonutChart/
-            // HydrationSourceDonutChart's fixed 110dp canvas + legend row is
-            // sized for a full-width card (as NutritionAveragesCard already
-            // uses them); a half-width column left no room for the legend
-            // text, wrapping it one character per line. Fixing the layout
-            // here rather than the shared components, which work correctly
-            // everywhere else they're already used.
-            // Fuel planning: today's carbohydrate class and the next meal's code, opening Fuel › Nutrition.
-            com.bioscan.fieldterminal.ui.screens.fuel.TodayFuelLine(nut, onOpen = onOpenFuel)
-            FTCard(title = "CALORIES TODAY") {
-                val today = nut.today
-                if (today == null) {
-                    Text("No meals logged yet.", style = FTType.BodySmall, color = FT.TextSecondary)
-                } else {
-                    FTMetricValue(DisplayValue(primary = today.calories.roundToInt().toString(), unit = "KCAL"))
-                    MacroDonutChart(carbsG = today.carbsG, proteinG = today.proteinG, fatG = today.fatG, modifier = Modifier.padding(top = 10.dp))
-                }
-            }
-            FTCard(title = "HYDRATION TODAY") {
-                if (waterMl + beverageMl <= 0.0) {
-                    Text("No hydration logged yet today.", style = FTType.BodySmall, color = FT.TextSecondary)
-                } else {
-                    FTMetricValue(DisplayValue(primary = "%.1f".format((waterMl + beverageMl) / 1000.0), unit = "L"))
-                    HydrationSourceDonutChart(waterMl = waterMl, beverageMl = beverageMl, modifier = Modifier.padding(top = 10.dp))
-                }
-            }
-
-            if (todayCaffeineMg != null) {
-                FTCard(title = "CAFFEINE TODAY") {
-                    FTMetricValue(DisplayValue(primary = "%.0f".format(todayCaffeineMg), unit = "MG"))
-                    Text(
-                        "Total from logged beverages",
-                        style = FTType.Caption,
-                        color = FT.TextMuted,
-                    )
-                }
-            }
-
-            if (eveningAnswered) LastEveningCard(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) }
-            EvidenceBoardCard(evidenceBoard(relationships, registeredResults), evidence, onTest = { testing = it })
-            ExperimentsSection(
-                experiments.filter { it.protocol?.behaviour != null },
-                experimentResults,
-                title = "DAILY TESTS",
-                onDelete = { e ->
-                    experimentError = null
-                    scope.launchSafe(onError = { err -> experimentError = describeLoadFailure(err) }) {
-                        ExperimentsRepository(SupabaseClientProvider.client).delete(e.id)
-                        experimentsKey++
-                    }
-                },
-            )
-            experimentError?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
-            CaseCrossoverCard(
-                evidence.crossover,
-                registered = registeredQuestions,
-                registerError = registerError,
-                onRegister = { exposure, outcome ->
-                    registerError = null
-                    scope.launchSafe(onError = { e -> registerError = describeLoadFailure(e) }) {
-                        val repo = AnalysisRepository(SupabaseClientProvider.client)
-                        repo.registerQuestion(
-                            NewRegisteredQuestion(exposure = exposure, outcome = outcome, noEffect = defaultZone(outcome), registeredOn = LocalDate.now().toString()),
-                        )
-                        registeredQuestions = repo.loadRegisteredQuestions()
-                    }
-                },
-            )
-            val typicalityView = typicalityView(typicality)
-            TypicalityCard(typicalityView)
-            ScorecardsCard(scorecards, typicality = typicalityView.scorecard)
+            NutritionTodayCard(nut, fuel, onOpenPlan = onOpenFuel)
         }
     }
 
-    testing?.let { choice ->
-        DailyExperimentSheet(choice, onDismiss = { testing = null }, onRegistered = { testing = null; experimentsKey++ })
-    }
     checkInDate?.let { date ->
         EveningCheckInSheet(
             date = date,
@@ -364,23 +267,14 @@ fun TodayScreen(
     }
 }
 
-// Analysis review phase B: the morning catch-up for last evening's check-in. Unanswered, it leads the page; answered,
-// it sits above the patterns as a one-line summary with EDIT.
+// Analysis review phase B: the morning catch-up for last evening's check-in. App restructure, fix 2: a header button
+// instead of a card -- ADD ABOUT LAST EVENING until answered, then LAST EVENING ✓, which reopens it to edit.
 @Composable
-private fun LastEveningCard(checkin: EveningCheckin?, onOpen: () -> Unit) {
-    FTCard(title = "LAST EVENING") {
-        if (checkin?.isComplete == true) {
-            Text(checkin.summary().replaceFirstChar { it.uppercase() }, style = FTType.BodySmall, color = FT.TextPrimary)
-            FTButton("EDIT", emphasis = FTButtonEmphasis.Tertiary, onClick = onOpen)
-        } else {
-            Text(
-                "Drinks, caffeine after 14:00, a late meal: one tap each. A quiet evening then counts as a real none, which is what " +
-                    "lets the app tell whether any of them goes with your next morning.",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
-            FTButton("ANSWER", emphasis = FTButtonEmphasis.Primary, onClick = onOpen)
-        }
+private fun LastEveningButton(checkin: EveningCheckin?, onOpen: () -> Unit) {
+    if (checkin?.isComplete == true) {
+        FTButton("LAST EVENING ✓", emphasis = FTButtonEmphasis.Tertiary, onClick = onOpen)
+    } else {
+        FTButton("ADD ABOUT LAST EVENING", emphasis = FTButtonEmphasis.Primary, onClick = onOpen)
     }
 }
 

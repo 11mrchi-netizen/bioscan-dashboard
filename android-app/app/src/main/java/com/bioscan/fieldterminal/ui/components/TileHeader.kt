@@ -33,7 +33,8 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // line, so a pushed page always says where you are. Before the UX review most tile and settings pages passed no title and
 // showed a bare arrow, because "the sub-tab rail says where you are" -- but LOAD / PLAN / INJURY never named the section.
 @Composable
-fun TileHeader(onBack: () -> Unit, title: String? = null, subtitle: String? = null, accent: Color? = null) {
+// App restructure: [action] sits at the header's end (Today's "ADD ABOUT LAST EVENING").
+fun TileHeader(onBack: () -> Unit, title: String? = null, subtitle: String? = null, accent: Color? = null, action: (@Composable () -> Unit)? = null) {
     Row(
         modifier = Modifier.fillMaxWidth().background(FT.Surface).padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -44,11 +45,12 @@ fun TileHeader(onBack: () -> Unit, title: String? = null, subtitle: String? = nu
         if (title != null) {
             // Domain accents identify a section (contract §4); the dot is identity only, never state.
             accent?.let { Box(Modifier.padding(start = 2.dp, end = 6.dp).size(8.dp).clip(CircleShape).background(it)) }
-            Column(modifier = Modifier.padding(start = 4.dp, end = 12.dp)) {
+            Column(modifier = Modifier.weight(1f, fill = action != null).padding(start = 4.dp, end = 12.dp)) {
                 Text(title, style = FTType.SectionTitle, color = FT.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 subtitle?.let { Text(it, style = FTType.MonoCaption, color = FT.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         }
+        action?.let { Box(Modifier.padding(end = 6.dp)) { it() } }
     }
 }
 

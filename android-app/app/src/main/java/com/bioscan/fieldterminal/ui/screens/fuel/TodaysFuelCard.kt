@@ -34,6 +34,7 @@ import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.format.DateTimeFormatter
@@ -263,19 +264,13 @@ private fun SessionLine(w: SessionWindow, long: com.bioscan.fieldterminal.domain
     }
 }
 
-// Today's answer-first line (Today page): the day's class and target and the session it is built around, opening the
-// full plan on Fuel › Plan.
+// Today's answer-first line: the day's class and target and the session it is built around, then the next meal's code.
+// App restructure: it heads the Today page's NUTRITION TODAY card (no card of its own), and opens Nutrition › Plan.
 @Composable
-fun TodayFuelLine(overview: NutritionOverview?, onOpen: () -> Unit, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    var result by remember { mutableStateOf<TodayFuelResult?>(null) }
-    LaunchedEffect(overview) {
-        result = runCatching { FuelPlanRepository(SupabaseClientProvider.client).loadToday(context, overview) }.getOrNull()
-    }
-    val fuel = (result as? TodayFuelResult.Ready)?.fuel ?: return
+fun TodayFuelSummary(fuel: TodayFuel, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val p = fuel.today
     val key = fuel.todayCoded.sessions.map { it.item }.filter { it.intensity.isKey }.maxByOrNull { it.durationMin }
-    FTCard(title = "FUEL", modifier = modifier, onClick = onOpen) {
+    Column(modifier.fillMaxWidth().ftClickable(onClick = onOpen), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             DayClassChip(p.dayClass)
             Text(
@@ -287,4 +282,15 @@ fun TodayFuelLine(overview: NutritionOverview?, onOpen: () -> Unit, modifier: Mo
             Text("NEXT: ${next.kind.label} ${next.code.label} · ${gRange(next.carbLowG, next.carbHighG)} CARBS", style = FTType.MonoCaption, color = FT.TextSecondary)
         }
     }
+}
+
+/** Today's fuel plan for the Today page, or null while it loads, without a weight, or when the read fails. */
+@Composable
+fun rememberTodayFuel(overview: NutritionOverview?): TodayFuel? {
+    val context = LocalContext.current
+    var result by remember { mutableStateOf<TodayFuelResult?>(null) }
+    LaunchedEffect(overview) {
+        result = runCatching { FuelPlanRepository(SupabaseClientProvider.client).loadToday(context, overview) }.getOrNull()
+    }
+    return (result as? TodayFuelResult.Ready)?.fuel
 }

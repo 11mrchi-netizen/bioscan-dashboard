@@ -93,3 +93,15 @@ val NullableEventSaver: Saver<AthleteEvent?, String> = Saver(
     save = { it?.let(::encodeEvent) ?: "" },
     restore = { s -> if (s.isEmpty()) null else runCatching { decodeEvent(s) }.getOrNull() },
 )
+
+val AddEntryStartSaver: Saver<com.bioscan.fieldterminal.domain.AddEntryStart?, String> =
+    Saver(save = { com.bioscan.fieldterminal.domain.encodeStart(it) }, restore = { com.bioscan.fieldterminal.domain.decodeStart(it) })
+
+val AddEntryTargetSaver: Saver<com.bioscan.fieldterminal.domain.AddEntryTarget?, String> =
+    Saver(save = { com.bioscan.fieldterminal.domain.encodeTarget(it) }, restore = { com.bioscan.fieldterminal.domain.decodeTarget(it) })
+
+/** Photo Uris as their strings (a list of Uris is not Bundle-safe as a Serializable). */
+val UriListSaver: Saver<List<android.net.Uri>, ArrayList<String>> = Saver(
+    save = { list -> ArrayList(list.map { it.toString() }) },
+    restore = { saved -> saved.map { android.net.Uri.parse(it) } },
+)

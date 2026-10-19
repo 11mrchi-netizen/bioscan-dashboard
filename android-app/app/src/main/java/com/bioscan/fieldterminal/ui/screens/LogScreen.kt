@@ -75,7 +75,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     var feed by remember { mutableStateOf<LogFeed?>(null) }
     var visibleDays by remember { mutableIntStateOf(LOG_PAGE_DAYS) }
     var reloadKey by remember { mutableIntStateOf(0) }
-    var showAddSheet by remember { mutableStateOf(false) }
+    var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var actionEntry by remember { mutableStateOf<LogEntry?>(null) }
     var editingEntry by remember { mutableStateOf<LogEntry?>(null) }
     var sleepDetailEntryId by remember { mutableStateOf<Long?>(null) }

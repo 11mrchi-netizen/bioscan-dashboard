@@ -39,7 +39,8 @@ fun StatusScreen(onOpenTile: (TileRoute) -> Unit, onOpenToday: () -> Unit, onOpe
     var overview by remember { mutableStateOf<StatusOverview?>(null) }
     var previews by remember { mutableStateOf<TodayPreviews?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var addStart by remember { mutableStateOf<AddEntryStart?>(null) }
+    // Saveable: the add sheet can open the camera or a picker, and the app may be restored while they are open.
+    var addStart by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.AddEntryStartSaver) { mutableStateOf<AddEntryStart?>(null) }
     val guard = rememberLoadGuard()
     val repo = remember { StatusRepository(SupabaseClientProvider.client) }
     val context = androidx.compose.ui.platform.LocalContext.current

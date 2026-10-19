@@ -32,4 +32,24 @@ class SaversTest {
         )
         assertEquals(e, decodeEvent(encodeEvent(e)))
     }
+
+    @Test
+    fun theAddSheetsStartsAndTargetsSurvive() {
+        val starts = listOf(null, com.bioscan.fieldterminal.domain.AddEntryStart.SayIt,
+            com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Supplements, "morning"),
+            com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Food))
+        starts.forEach { assertEquals(it, com.bioscan.fieldterminal.domain.decodeStart(com.bioscan.fieldterminal.domain.encodeStart(it))) }
+        val targets = listOf(null, com.bioscan.fieldterminal.domain.AddEntryTarget.EventForm, com.bioscan.fieldterminal.domain.AddEntryTarget.SweatTest,
+            com.bioscan.fieldterminal.domain.AddEntryTarget.Form(com.bioscan.fieldterminal.domain.AddEntryType.Fuel, com.bioscan.fieldterminal.domain.FuelSubType.Drink),
+            com.bioscan.fieldterminal.domain.AddEntryTarget.Form(com.bioscan.fieldterminal.domain.AddEntryType.Note))
+        targets.forEach { assertEquals(it, com.bioscan.fieldterminal.domain.decodeTarget(com.bioscan.fieldterminal.domain.encodeTarget(it))) }
+    }
+
+    @Test
+    fun aStrandedCameraPhotoIsOfferedOnlyWhenRecentAndNotEmpty() {
+        assertEquals(true, com.bioscan.fieldterminal.util.isUsableCapture(120_000, 60_000))
+        assertEquals(false, com.bioscan.fieldterminal.util.isUsableCapture(0, 60_000)) // the camera wrote nothing (cancelled)
+        assertEquals(false, com.bioscan.fieldterminal.util.isUsableCapture(120_000, 16 * 60_000)) // too old
+        assertEquals(false, com.bioscan.fieldterminal.util.isUsableCapture(120_000, -1)) // clock went back
+    }
 }

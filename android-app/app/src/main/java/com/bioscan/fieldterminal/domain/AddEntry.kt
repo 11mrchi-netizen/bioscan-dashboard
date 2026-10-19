@@ -103,3 +103,45 @@ fun parseRecentChoices(stored: String?): List<AddEntryChoice> =
     stored.orEmpty().split(',').mapNotNull { name -> AddEntryChoice.entries.firstOrNull { it.name == name } }.distinct().take(RECENT_ADD_CHOICES)
 
 fun formatRecentChoices(recent: List<AddEntryChoice>): String = recent.joinToString(",") { it.name }
+
+
+// Kept as strings across a restore (the add sheet's forms can open the camera, where the app can be killed).
+fun encodeStart(s: AddEntryStart?): String = when (s) {
+    null -> ""
+    AddEntryStart.SayIt -> "SAYIT"
+    is AddEntryStart.Fuel -> "FUEL|${s.subType.name}|${s.supplementBundle.orEmpty()}"
+}
+
+fun decodeStart(s: String): AddEntryStart? {
+    val f = s.split('|')
+    return when (f[0]) {
+        "SAYIT" -> AddEntryStart.SayIt
+        "FUEL" -> FuelSubType.entries.firstOrNull { it.name == f.getOrNull(1) }?.let { AddEntryStart.Fuel(it, f.getOrNull(2)?.ifEmpty { null }) }
+        else -> null
+    }
+}
+
+fun encodeTarget(t: AddEntryTarget?): String = when (t) {
+    null -> ""
+    is AddEntryTarget.Form -> "FORM|${t.type.name}|${t.fuel?.name.orEmpty()}"
+    AddEntryTarget.InjuryForm -> "INJURY"
+    AddEntryTarget.IllnessForm -> "ILLNESS"
+    AddEntryTarget.BodyCheckIn -> "BODY"
+    AddEntryTarget.EventForm -> "EVENT"
+    AddEntryTarget.SweatTest -> "SWEAT"
+}
+
+fun decodeTarget(s: String): AddEntryTarget? {
+    val f = s.split('|')
+    return when (f[0]) {
+        "FORM" -> AddEntryType.entries.firstOrNull { it.name == f.getOrNull(1) }?.let { type ->
+            AddEntryTarget.Form(type, FuelSubType.entries.firstOrNull { it.name == f.getOrNull(2) })
+        }
+        "INJURY" -> AddEntryTarget.InjuryForm
+        "ILLNESS" -> AddEntryTarget.IllnessForm
+        "BODY" -> AddEntryTarget.BodyCheckIn
+        "EVENT" -> AddEntryTarget.EventForm
+        "SWEAT" -> AddEntryTarget.SweatTest
+        else -> null
+    }
+}

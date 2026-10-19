@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -145,17 +146,18 @@ private val sheetActionLabelStyle = FTType.LabelCaps
 fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntryStart? = null) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // UX review P1: the Status quick-log row opens the sheet on the right form; back from it still leads to the picker.
-    var selectedType by remember { mutableStateOf(if (start is AddEntryStart.Fuel) AddEntryType.Fuel else null) }
+    // Saveable: the forms here can open the camera, file and photo pickers, and the app may be restored meanwhile.
+    var selectedType by rememberSaveable { mutableStateOf(if (start is AddEntryStart.Fuel) AddEntryType.Fuel else null) }
     // Cleared on back, so picking FUEL again from the picker opens on FOOD as usual.
-    var fuelStart by remember { mutableStateOf(start as? AddEntryStart.Fuel) }
+    var fuelStart by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.AddEntryStartSaver) { mutableStateOf<AddEntryStart?>(start as? AddEntryStart.Fuel) }
     // UX review P3: the last three choices are one tap away in a RECENT row (was a single LAST button).
     val addPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("ft_ui", android.content.Context.MODE_PRIVATE)
     var recent by remember { mutableStateOf(parseRecentChoices(addPrefs.getString("recent_add_choices", null))) }
     // Injury and illness have their own form sheets (shared with Training › Injury); picking one swaps this sheet for it.
-    var healthForm by remember { mutableStateOf<AddEntryTarget?>(null) }
+    var healthForm by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.AddEntryTargetSaver) { mutableStateOf<AddEntryTarget?>(null) }
     // Analysis Layer 3 / R2: "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
-    var sayIt by remember { mutableStateOf(start is AddEntryStart.SayIt) }
-    var foodPrefill by remember { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
+    var sayIt by rememberSaveable { mutableStateOf(start is AddEntryStart.SayIt) }
+    var foodPrefill by rememberSaveable { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
     val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var saving by remember { mutableStateOf(false) }
@@ -250,8 +252,8 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                     when (type) {
                         AddEntryType.Fuel -> FuelForm(
                             saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill,
-                            initialSubType = fuelStart?.subType ?: FuelSubType.Food,
-                            supplementBundle = fuelStart?.supplementBundle,
+                            initialSubType = (fuelStart as? AddEntryStart.Fuel)?.subType ?: FuelSubType.Food,
+                            supplementBundle = (fuelStart as? AddEntryStart.Fuel)?.supplementBundle,
                         )
                         AddEntryType.Encounter -> EncounterForm(
                             saving,
@@ -736,7 +738,7 @@ private fun FuelForm(
     supplementBundle: String? = null,
 ) {
     // A "say it" food hand-off always lands on FOOD, whatever the sheet was opened on.
-    var subType by remember { mutableStateOf(if (foodPrefill != null) FuelSubType.Food else initialSubType) }
+    var subType by rememberSaveable { mutableStateOf(if (foodPrefill != null) FuelSubType.Food else initialSubType) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -804,25 +806,32 @@ private fun FoodForm(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var dateTime by remember { mutableStateOf(initialDateTime) }
-    var description by remember { mutableStateOf(initialDescription) }
-    var calories by remember { mutableStateOf(initialCalories?.toString() ?: "") }
-    var protein by remember { mutableStateOf(initialProtein?.toString() ?: "") }
-    var carbs by remember { mutableStateOf(initialCarbs?.toString() ?: "") }
-    var fat by remember { mutableStateOf(initialFat?.toString() ?: "") }
-    var fiber by remember { mutableStateOf(initialFiber?.toString() ?: "") }
-    var sugar by remember { mutableStateOf(initialSugar?.toString() ?: "") }
-    var sodium by remember { mutableStateOf(initialSodium?.toString() ?: "") }
+    // Saveable: TAKE PHOTO hands the screen to the camera app, which can get this app killed and restored.
+    var dateTime by rememberSaveable { mutableStateOf(initialDateTime) }
+    var description by rememberSaveable { mutableStateOf(initialDescription) }
+    var calories by rememberSaveable { mutableStateOf(initialCalories?.toString() ?: "") }
+    var protein by rememberSaveable { mutableStateOf(initialProtein?.toString() ?: "") }
+    var carbs by rememberSaveable { mutableStateOf(initialCarbs?.toString() ?: "") }
+    var fat by rememberSaveable { mutableStateOf(initialFat?.toString() ?: "") }
+    var fiber by rememberSaveable { mutableStateOf(initialFiber?.toString() ?: "") }
+    var sugar by rememberSaveable { mutableStateOf(initialSugar?.toString() ?: "") }
+    var sodium by rememberSaveable { mutableStateOf(initialSodium?.toString() ?: "") }
 
     var estimating by remember { mutableStateOf(false) }
     var estimationError by remember { mutableStateOf<String?>(null) }
-    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     // User request (2026-09-30): one or more photos of the same meal queue up
     // here before a single ESTIMATE tap -- was "first photo taken/picked
     // auto-runs estimate," now a real batch since the whole point is letting
     // Gemini see everything on the plate at once.
-    var pendingPhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var pendingPhotos by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.UriListSaver) { mutableStateOf<List<Uri>>(emptyList()) }
+    // A photo taken just before the app was killed, whose result never arrived (util/ImageUtils.kt PendingCameraCapture).
+    var strandedPhoto by remember { mutableStateOf<Uri?>(null) }
+    LaunchedEffect(Unit) {
+        val stranded = com.bioscan.fieldterminal.util.PendingCameraCapture.stranded(context)
+        if (stranded != null && stranded !in pendingPhotos) strandedPhoto = stranded
+    }
     var mealEstimate by remember { mutableStateOf<NutritionMealEstimate?>(null) }
     var mealEstimateId by remember { mutableStateOf<Long?>(null) }
     var cronometerEnrichment by remember { mutableStateOf<CronometerEnrichment?>(null) }
@@ -969,7 +978,8 @@ private fun FoodForm(
 
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         externalActivityActive?.value = false
-        if (success) pendingCameraUri?.let { pendingPhotos = pendingPhotos + it }
+        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
+        if (success) pendingCameraUri?.let { if (it !in pendingPhotos) pendingPhotos = pendingPhotos + it }
     }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
@@ -1013,6 +1023,20 @@ private fun FoodForm(
                 PhotoActionButton(label = "CHOOSE PHOTOS", modifier = Modifier.weight(1f)) {
                     externalActivityActive?.value = true
                     pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+            }
+            strandedPhoto?.let { photo ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 10.dp)) {
+                    Text("PHOTO JUST TAKEN", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.weight(1f))
+                    com.bioscan.fieldterminal.ui.components.FTButton("USE IT", emphasis = com.bioscan.fieldterminal.ui.components.FTButtonEmphasis.Secondary) {
+                        pendingPhotos = pendingPhotos + photo
+                        strandedPhoto = null
+                        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
+                    }
+                    com.bioscan.fieldterminal.ui.components.FTButton("DISCARD", emphasis = com.bioscan.fieldterminal.ui.components.FTButtonEmphasis.Tertiary) {
+                        strandedPhoto = null
+                        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
+                    }
                 }
             }
             if (pendingPhotos.isNotEmpty()) {

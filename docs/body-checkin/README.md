@@ -1,7 +1,7 @@
 # Monthly body check-in
 
 Grip strength, tape girths and self-measured skinfolds in one sitting, once a month, so one month can be compared with
-the next. Built in the app (Fuel › Body › BODY MEASUREMENTS, or + › BODY › Body check-in); a reminder on Saturday at
+the next. Built in the app (Health › Body › BODY MEASUREMENTS, Lab › Tests, or + › BODY › Body check-in; the app restructure moved it from Fuel › Body); a reminder on Saturday at
 09:30 fires once four weeks have passed since the last check-in.
 
 ## Why these choices

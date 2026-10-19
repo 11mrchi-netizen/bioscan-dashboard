@@ -263,6 +263,20 @@ every other card, default glass, title in text-secondary. Card titles are never 
 signal. A long tab opens with a **glance strip** (`FTGlanceStrip`): one chip per card below, carrying that card's state
 pill or headline, tapping scrolls to the card.
 
+### One pill per card (A8, 2026-10, app restructure)
+A card shows one state pill: the direction or verdict. How much data backs it (the DATA: GOOD / PARTIAL / THIN chip under
+the pill) is a line in the card's "?" (`FTCard(dataQuality = …)`), not a second pill. Where the pill's reading needs
+explaining (THIS MORNING's ranges, how many mornings fell inside, how well the band held; IS TODAY TYPICAL?'s drivers),
+the pill is tappable (`FTStatePill(onClick = …)`, marked with "›") and opens the shared `InfoDialog`; the sentences do
+not sit beside it.
+
+### Movements (A9, 2026-10, app restructure)
+A contributor's or a composite's **movement** may be tinted by its direction: a faint green fill (`color/primary` at low
+alpha) when it supports recovery or readiness, a faint red fill (`color/state/critical` at low alpha) when it holds it
+back, no tint when neutral (`FTMovementChip`). This amends the rule that red, amber and green are status only: a
+movement counts as status here. The arrow and the word always say it too (↑ SUPPORTS, ↓ HOLDS BACK, = NEUTRAL; ABOVE /
+BELOW / AS EXPECTED), so colour is never the only signal. Used on TODAY'S RECOVERY and READY FOR.
+
 ### Pushed screens (A4, 2026-10)
 - Every pushed screen shows a title and a context line (`TileHeader`), with the section's domain dot when it belongs to one.
 - On screens with a sub-tab rail, the header and the rail stay pinned and only the content scrolls.

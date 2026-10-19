@@ -1,5 +1,10 @@
 # Fuel planning: daily carbohydrate periodisation, race and long-session fuel and hydration plans
 
+> **App restructure (Oct 2026):** the screens named below moved. Fuel › PLAN and PREP are **Lab › Planning › Food plan**
+> (NEXT 10 DAYS and MEAL PREP); **Nutrition › PLAN** shows today and the next two days with a link there; the fuel
+> reminder opens Lab › Planning › Food plan; Today's fuel line heads the NUTRITION TODAY card and opens Nutrition › PLAN;
+> race fuel plans are reached from Lab › Planning › Race fuel (each event's FUEL tab). See docs/app-structure/README.md.
+
 Why this exists: the app logged what was eaten and drunk against one fixed daily goal, and in-session fuelling against
 completed sessions only. It could not represent a race or a hard day outside a training block, nor plan food and fluid
 around the training ahead. This feature plans each day's carbohydrate around the training of the next 72 hours ("fuel

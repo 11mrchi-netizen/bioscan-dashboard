@@ -44,6 +44,21 @@ Four tabs: `STATUS | USER | LOG | SETUP`. (DAV-296: USER replaced MAP in the bot
 > are called **HEALTH** (the code keeps `TileRoute.Heart` / `HeartTab`); §7's tab mapping is unchanged. On a pushed
 > screen the dock lights the tab whose stack you are in.
 
+> **Update 2026-10 (app restructure, the owner's "Field terminal new structure"; supersedes the tab notes below):**
+> the Status hero opens **Today**; the four tiles are **Training**, **Nutrition** (was Fuel), **Health** (was Heart) and
+> **Lab** (was Labs). Tile route strings are unchanged. Tabs (`ui/nav/TopLevelTab.kt`):
+> - Today: THIS MORNING · IS TODAY TYPICAL? · TODAY'S RECOVERY · READY FOR · links to Training › Load and Health › Cardio ·
+>   NUTRITION TODAY (fuel line, progress against the day's targets, meals). Last evening's check-in is a header button.
+> - `TrainingTab`: LOAD (training load, intensity) · RUNNING · STRENGTH (the former User skill pages) · SESSIONS (ten at a
+>   time) · INJURY.
+> - `NutritionTab`: NUTRITION (with protein on target) · HYDRATION · PLAN (today and the next two days).
+> - `HealthTab`: CARDIO · SLEEP (was Recovery) · BODY (from Fuel) · WELLBEING · SEXUAL HEALTH · BLOODWORK (from Labs).
+> - `LabTab`: N=1 (what goes with what, what came before off mornings, experiments, the scorecards, sexual-health
+>   correlations) · SUPPLEMENTS · PLANNING (`PlanningSection`: training block, food plan with meal prep, race fuel) ·
+>   TESTS (grip, body check-in, sweat test; running form analyser to come).
+> - User keeps Healthspan, Aging, the level buttons (Running and Strength open Training's tabs) and the block card (opens
+>   Lab › Planning). Training blocks' one home moved with the planner from Training › Plan to Lab › Planning › Training.
+
 > **Update 2026-10:** the tab sets in §6/§7 below were implemented differently — see `TopLevelTab.kt`: `FuelTab` = Nutrition, Digestion; `HeartTab` = Cardio, Recovery, Wellbeing; `TrainingTab` = Load, Injury; `LabsTab` = Bloodwork, Supplements (Hydration and Body folded into Fuel/Nutrition; Supplements moved under Labs; Injury moved under Training — DAV-207/208/209/216). The code is authoritative where it differs.
 
 ## 4. Status IA — Body/Condition as hub

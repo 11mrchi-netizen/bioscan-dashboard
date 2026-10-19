@@ -63,21 +63,27 @@ fun FTStatePill(state: MetricState, modifier: Modifier = Modifier) = FTStatePill
 
 // Contract amendment "State words" (analysis review A1): the evaluation may name its comparison (STEADY, ABOVE
 // BASELINE, MIXED SIGNALS...). The semantic state still sets colour and symbol, and screen readers hear both.
+// App restructure, fix 1: with [onClick] the pill opens its explanation (a "›" marks it tappable); the details that
+// used to sit in sentences beside it live there.
 @Composable
-fun FTStatePill(word: StateWord, modifier: Modifier = Modifier) {
+fun FTStatePill(word: StateWord, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
     val treatment = stateTreatment(word.state)
     val label = word.word ?: treatment.label
+    val shape = RoundedCornerShape(FT.RadiusSmall)
     Row(
         modifier = modifier
             .semantics { contentDescription = if (word.word != null) "$label, ${treatment.label.lowercase()}" else label }
-            .border(FT.BorderWidth, treatment.color.copy(alpha = 0.65f), RoundedCornerShape(FT.RadiusSmall))
-            .background(treatment.color.copy(alpha = 0.12f), RoundedCornerShape(FT.RadiusSmall))
+            .clip(shape)
+            .border(FT.BorderWidth, treatment.color.copy(alpha = 0.65f), shape)
+            .background(treatment.color.copy(alpha = 0.12f), shape)
+            .then(if (onClick != null) Modifier.ftClickable(shape = shape, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Explain", onClick = onClick) else Modifier)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(treatment.symbol, color = treatment.color, style = FTType.Label)
         Spacer(Modifier.width(5.dp))
         Text(label, color = treatment.color, style = FTType.Label)
+        if (onClick != null) Text("  ›", color = treatment.color, style = FTType.Label)
     }
 }
 
@@ -118,6 +124,17 @@ fun FTDataChip(confidence: Confidence, modifier: Modifier = Modifier) {
         color = color,
         style = FTType.Label,
     )
+}
+
+// The data-quality line of a card's help (fix 3): the same GOOD / PARTIAL / THIN cut-offs the chip used.
+fun dataQualityLine(confidence: Confidence): String {
+    val ratio = if (confidence.need > 0) confidence.have.toDouble() / confidence.need else 0.0
+    val word = when {
+        ratio >= 0.8 -> "good"
+        ratio >= 0.5 -> "partial"
+        else -> "thin"
+    }
+    return "Data behind it: $word, ${confidence.have} of the ${confidence.need} observations its rule needs."
 }
 
 @Composable
@@ -237,6 +254,9 @@ fun FTCard(
     onClick: (() -> Unit)? = null,
     // Contract A3: one Hero card leads a tab; every other card is Supporting.
     emphasis: FTCardEmphasis = FTCardEmphasis.Supporting,
+    // App restructure, fix 3: how much data backs the card (was a DATA: GOOD / PARTIAL / THIN pill under the state pill,
+    // two pills on two lines). It is a line in the card's "?" now, which appears for it when the card has no other help.
+    dataQuality: Confidence? = null,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(FT.RadiusCard)
@@ -247,7 +267,8 @@ fun FTCard(
     }
     // The dialog opens on the card's own short text (or, without one, the registry's opening sentences); the details and
     // the registry's full methodology, limits and references are one tap further.
-    val helpBody = (info ?: registryEntry?.summary())?.ifBlank { null }
+    val helpBody = listOfNotNull((info ?: registryEntry?.summary())?.ifBlank { null }, dataQuality?.let(::dataQualityLine))
+        .joinToString("\n\n").ifBlank { null }
     val helpDetails = listOfNotNull(infoDetails, registryEntry?.helpText()).joinToString("\n\n").ifBlank { null }
     Column(
         modifier = modifier

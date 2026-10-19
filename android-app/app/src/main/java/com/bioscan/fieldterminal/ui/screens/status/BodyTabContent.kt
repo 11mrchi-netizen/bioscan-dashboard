@@ -117,9 +117,8 @@ fun BodyTabContent(openCheckIn: Boolean = false, onCheckInHandled: () -> Unit = 
 // comment, the shape across days is the signal.
 @Composable
 private fun BristolCard(eval: BristolEvaluation, entries: List<Pair<LocalDate, Int>>) {
-    FTCard(title = "DIGESTIVE PATTERN (BRISTOL)", info = "Descriptive pattern only — not a diagnostic tool.") {
+    FTCard(dataQuality = eval.confidence, title = "DIGESTIVE PATTERN (BRISTOL)", info = "Descriptive pattern only — not a diagnostic tool.") {
         FTMetricRow("Frequency (14d)", "${eval.confidence.have} entries logged")
-        FTDataChip(eval.confidence)
         eval.pattern?.let { FTMetricRow("Pattern", bristolPatternLabel(it)) }
         // Bristol type is an ordinal category (1-7), so the shape across days is
         // shown as a hard / normal / loose distribution, not a continuous line.
@@ -209,9 +208,8 @@ private const val TREND_WINDOW_DAYS = 90L
 
 @Composable
 private fun WeightCard(eval: WeightEvaluation) {
-    FTCard(title = "WEIGHT TREND") {
+    FTCard(dataQuality = eval.confidence, title = "WEIGHT TREND") {
         FTStatePill(trendStateWord(eval.state))
-        FTDataChip(eval.confidence)
         eval.emaToday?.let { FTMetricRow("EMA (today)", "%.1f kg".format(it)) }
         eval.rateKgPerWeek?.let { FTMetricRow("Rate", "%+.2f kg/week".format(it)) }
         val today = LocalDate.now()
@@ -222,9 +220,8 @@ private fun WeightCard(eval: WeightEvaluation) {
 
 @Composable
 private fun BodyFatCard(eval: BodyFatEvaluation) {
-    FTCard(title = "BODY FAT %") {
+    FTCard(dataQuality = eval.confidence, title = "BODY FAT %") {
         FTStatePill(trendStateWord(eval.state))
-        FTDataChip(eval.confidence)
         eval.latest?.let { FTMetricRow("Latest", "%.1f%%".format(it)) }
         eval.previous?.let { FTMetricRow("Previous (≥30d prior)", "%.1f%%".format(it)) }
         eval.delta?.let { FTMetricRow("Delta", "%+.1f pp".format(it)) }
@@ -238,11 +235,10 @@ private fun BodyFatCard(eval: BodyFatEvaluation) {
 // the data gate does not support."
 @Composable
 private fun TdeeCard(eval: TdeeEvaluation) {
-    FTCard(
+    FTCard(dataQuality = eval.confidence,
         title = "ENERGY BALANCE (TDEE ESTIMATE)",
         info = "Post-fact estimate from your own logged intake and real weight trend — not a predictive formula, and not a target to hit.",
     ) {
-        FTDataChip(eval.confidence)
         if (eval.state == EvalState.Stable && eval.tdeeKcal != null && eval.rangeLowKcal != null && eval.rangeHighKcal != null) {
             FTMetricValue(
                 DisplayValue(

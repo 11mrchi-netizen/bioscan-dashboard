@@ -179,9 +179,8 @@ private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) 
 // not because nothing moves but because there's no rule to judge it by.
 @Composable
 private fun NutritionCard(eval: NutritionEvaluation) {
-    FTCard(title = "NUTRITION (ANALYSIS)") {
+    FTCard(dataQuality = eval.confidence, title = "NUTRITION (ANALYSIS)") {
         FTStatePill(gateStateWord(eval.state))
-        FTDataChip(eval.confidence)
         eval.energyTrend14d?.let { FTMetricRow("14-day energy trend", "%.0f kcal".format(it)) }
         eval.energyCv28d?.let { FTMetricRow("28-day energy CV", "%.1f%%".format(it)) }
         eval.proteinAdherence14d?.let { FTMetricRow("Protein in AMDR band (10-35% kcal)", "%.0f%%".format(it)) }

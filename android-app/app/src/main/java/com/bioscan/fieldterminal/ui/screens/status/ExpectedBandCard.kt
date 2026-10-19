@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -18,12 +22,13 @@ import com.bioscan.fieldterminal.domain.MetricState
 import com.bioscan.fieldterminal.domain.Verdict
 import com.bioscan.fieldterminal.domain.MorningReadout
 import com.bioscan.fieldterminal.domain.SLEEP_HOURS_RANGE
+import com.bioscan.fieldterminal.domain.StateWord
+import com.bioscan.fieldterminal.ui.components.InfoDialog
 import com.bioscan.fieldterminal.domain.bandLine
 import com.bioscan.fieldterminal.domain.bandPointFor
 import com.bioscan.fieldterminal.domain.expectedStateWord
 import com.bioscan.fieldterminal.domain.flagLine
 import com.bioscan.fieldterminal.domain.headline
-import com.bioscan.fieldterminal.domain.leadReadout
 import com.bioscan.fieldterminal.domain.morningReadout
 import com.bioscan.fieldterminal.domain.rarityLine
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
@@ -75,11 +80,10 @@ internal fun ThisMorningCard(
     if (metrics.isEmpty()) return
     val ordered = METRIC_ORDER.mapNotNull { key -> metrics[key]?.let { key to it } }
     val readouts = ordered.mapNotNull { (_, m) -> morningReadout(m.row.payload, today, m.readings.lastOrNull()) }
-    val lead = leadReadout(readouts)
     FTCard(title = "THIS MORNING", info = BAND_INFO, infoDetails = BAND_DETAILS, emphasis = FTCardEmphasis.Hero, modifier = modifier) {
         ordered.forEach { (key, m) ->
             val readout = readouts.firstOrNull { it.metric == key }
-            BandSection(METRIC_TITLES[key] ?: key.uppercase(), m, readout, today, chart = readout != null && readout === lead)
+            BandSection(METRIC_TITLES[key] ?: key.uppercase(), m, readout, today)
         }
         contributors.forEach { c ->
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -94,63 +98,65 @@ internal fun ThisMorningCard(
     }
 }
 
-// Health › Cardio's lead card: HRV and resting heart rate, each with its band chart.
+// App restructure, fix 1: each metric is its title and its pill, then its chart. The sentences that sat beside the pill
+// ("as expected for a Monday", the range, how rare, the run) are in the pill's pop-up, with how many recent mornings fell
+// inside the range and how well the band has held.
 @Composable
-internal fun CardioMorningCard(metrics: Map<String, BandInputs>, today: LocalDate, modifier: Modifier = Modifier) {
-    val ordered = listOf("hrv", "rhr").mapNotNull { key -> metrics[key]?.let { key to it } }
-    if (ordered.isEmpty()) return
-    FTCard(title = "THIS MORNING", info = BAND_INFO, infoDetails = BAND_DETAILS, emphasis = FTCardEmphasis.Hero, modifier = modifier) {
-        ordered.forEach { (key, m) ->
-            val readout = morningReadout(m.row.payload, today, m.readings.lastOrNull())
-            BandSection(METRIC_TITLES[key] ?: key.uppercase(), m, readout, today, chart = true)
-        }
-    }
-}
-
-@Composable
-private fun BandSection(title: String, inputs: BandInputs, readout: MorningReadout?, today: LocalDate, chart: Boolean) {
+private fun BandSection(title: String, inputs: BandInputs, readout: MorningReadout?, today: LocalDate) {
     val p = inputs.row.payload
+    var open by remember { mutableStateOf(false) }
+    val word = when {
+        readout != null -> expectedStateWord(readout)
+        p.state == "building" -> StateWord(MetricState.Building, "BUILDING")
+        else -> StateWord(MetricState.Neutral, "NO READING YET")
+    }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(title, style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.weight(1f))
-            if (readout != null) FTStatePill(expectedStateWord(readout))
+            FTStatePill(word, onClick = { open = true })
         }
-        when {
-            p.state == "building" -> Text(
-                "The expected range is still being learnt: ${p.have} of ${p.need} mornings so far" +
-                    (p.regimeStart?.let { " (since $it)" } ?: "") + ".",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
-            readout == null -> {
-                val point = bandPointFor(p, today)
-                val range = if (point?.lo80 != null && point.hi80 != null) {
-                    if (p.unit == "h") "%.1f–%.1f h".format(point.lo80, point.hi80) else "%.0f–%.0f %s".format(point.lo80, point.hi80, p.unit)
-                } else {
-                    null
-                }
-                Text(
-                    "No reading yet this morning." + (range?.let { " Expected $it: 8 mornings in 10 fall inside." } ?: ""),
-                    style = FTType.BodySmall,
-                    color = FT.TextSecondary,
-                )
-            }
-            else -> {
-                Text(readout.headline(), style = FTType.RowTitle, color = FT.TextPrimary)
-                Text(readout.bandLine(), style = FTType.Caption, color = FT.TextSecondary)
-                if (readout.excluded) {
-                    Text("Illness logged: shown against the band, not judged.", style = FTType.Caption, color = FT.TextSecondary)
-                } else {
-                    readout.rarityLine()?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
-                    readout.flagLine()?.let {
-                        val unfavorable = expectedStateWord(readout).state == MetricState.Warning
-                        Text(it, style = FTType.Caption, color = if (unfavorable) FT.Warning else FT.TextSecondary)
-                    }
-                }
-            }
-        }
-        if (chart && p.state != "building") BandChart(p, inputs.readings, readout, today)
+        if (p.state != "building") BandChart(p, inputs.readings, readout, today)
     }
+    if (open) InfoDialog(title, bandExplanation(p, readout, today), details = BAND_INFO + "\n\n" + BAND_DETAILS) { open = false }
+}
+
+// The pop-up text for one metric: the answer, the range, how rare, any run or flag, how many recent mornings fell inside
+// the range, and how often the band has held.
+private fun bandExplanation(p: ExpectedBandPayload, readout: MorningReadout?, today: LocalDate): String {
+    val lines = mutableListOf<String>()
+    when {
+        p.state == "building" -> lines += "The expected range is still being learnt: ${p.have} of ${p.need} mornings so far" +
+            (p.regimeStart?.let { " (since $it)" } ?: "") + "."
+        readout == null -> {
+            val point = bandPointFor(p, today)
+            val range = if (point?.lo80 != null && point.hi80 != null) {
+                if (p.unit == "h") "%.1f–%.1f h".format(point.lo80, point.hi80) else "%.0f–%.0f %s".format(point.lo80, point.hi80, p.unit)
+            } else {
+                null
+            }
+            lines += "No reading yet this morning." + (range?.let { " Expected $it: 8 mornings in 10 fall inside." } ?: "")
+        }
+        else -> {
+            lines += readout.headline()
+            lines += readout.bandLine()
+            if (readout.excluded) {
+                lines += "Illness logged: shown against the band, not judged."
+            } else {
+                readout.rarityLine()?.let { lines += it }
+                readout.flagLine()?.let { lines += it }
+            }
+        }
+    }
+    val judged = p.recent.filter { !it.excluded && it.value != null && it.lo80 != null && it.hi80 != null }
+    if (judged.isNotEmpty()) {
+        val inside = judged.count { it.value!! in it.lo80!!..it.hi80!! }
+        lines += "$inside of the last ${judged.size} mornings fell inside their expected range."
+    }
+    val c = p.calibration
+    if (c.days >= 30 && c.inside80 != null) {
+        lines += "Over the last ${c.days} mornings the band held %.0f%% of them (it should hold about 80%%).".format(c.inside80 * 100)
+    }
+    return lines.joinToString("\n\n")
 }
 
 // The band over the last four weeks on the person's usual scale: each morning a dot against its own band, flagged ones
@@ -198,14 +204,6 @@ private fun BandChart(p: ExpectedBandPayload, readings: List<Pair<LocalDate, Dou
         markLabel = "FLAGGED",
         chartHeight = 120.dp,
     )
-    val c = p.calibration
-    if (c.days >= 30 && c.inside80 != null) {
-        Text(
-            "Over the last ${c.days} mornings the band held %.0f%% of them (it should hold about 80%%).".format(c.inside80 * 100),
-            style = FTType.Micro,
-            color = FT.TextMuted,
-        )
-    }
 }
 
 private fun flagColor(p: ExpectedBandPayload, low: Boolean, value: Double): Color {

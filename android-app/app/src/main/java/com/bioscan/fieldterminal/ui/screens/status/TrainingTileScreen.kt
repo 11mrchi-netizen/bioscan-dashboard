@@ -236,11 +236,10 @@ private fun InjuryTab() {
 // DAV-216 (24/9 fixes): moved verbatim from HeartTileScreen.kt.
 @Composable
 private fun OstrcCard(eval: OstrcEvaluation, tsb: Double?, daysWithoutRest: Int, sorenessMedian: Double?, weeklyRestCadence: List<WeeklyRestCadencePoint>) {
-    FTCard(
+    FTCard(dataQuality = eval.confidence,
         title = "OSTRC-H2 · ${eval.bodyArea.uppercase()}",
         info = "No injury risk score — single-factor screening doesn't predict injury. You do the synthesis; this doesn't.",
     ) {
-        FTDataChip(eval.confidence)
         eval.latestSeverityScore?.let { FTMetricRow("Latest severity", "$it / 100") }
         eval.latestCheckDate?.let { FTMetricRow("Last check-in", it.toString()) }
         Text(
@@ -290,10 +289,9 @@ private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
 internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Modifier = Modifier, scorecard: ScorecardResult? = null) {
     // UX review P6: "READY FOR" (was "TODAY'S READINESS"): readiness per kind of session, built on Today's Recovery.
     // Analysis review phase G: scored against whether planned sessions were done; demoted, it shows no per-session words.
-    FTCard(title = "READY FOR", methodology = "dynamic_recovery", modifier = modifier) {
+    FTCard(dataQuality = result.confidence, title = "READY FOR", methodology = "dynamic_recovery", modifier = modifier) {
         val demoted = scorecard.demotes()
         FTStatePill(if (demoted) INPUTS_ONLY else recoveryStateWord(result.generalState))
-        FTDataChip(result.confidence)
         if (demoted) {
             Text("Its per-session words did not foresee your planned sessions better than one of its inputs: see the inputs under TODAY'S RECOVERY.", style = FTType.BodySmall, color = FT.TextSecondary)
         } else result.demandRelative.forEach { (tier, state) ->
@@ -389,7 +387,7 @@ internal fun TrainingLoadCard(
     val visible = series.filter { it.date >= cutoff }
 
     // Contract A3: the Load tab's lead card.
-    FTCard(title = "TRAINING LOAD", methodology = "training_load", emphasis = FTCardEmphasis.Hero, modifier = modifier) {
+    FTCard(dataQuality = eval.confidence, title = "TRAINING LOAD", methodology = "training_load", emphasis = FTCardEmphasis.Hero, modifier = modifier) {
         // One banded gauge on the TSB axis replaces the old State pill and
         // "TSB band" row -- the band name IS the state, and the gauge shows
         // where inside the band you sit. Building/NoData has no TSB yet, so
@@ -414,7 +412,6 @@ internal fun TrainingLoadCard(
                 FTStatePill(trainingLoadStateWord(eval.state, eval.tsbBand))
             }
         }
-        FTDataChip(eval.confidence)
         // Supporting levels beside the TSB hero above: current fitness (CTL)
         // and fatigue (ATL), each at one step below the hero's size.
         if (eval.ctl != null || eval.atl != null) {

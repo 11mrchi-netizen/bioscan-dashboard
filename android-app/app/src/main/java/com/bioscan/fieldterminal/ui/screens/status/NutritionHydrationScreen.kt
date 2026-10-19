@@ -443,8 +443,7 @@ private fun targetRange(label: String, current: Double, target: Double): Persona
 
 @Composable
 private fun HydrationIntelligenceCard(result: HydrationIntelligenceResult) {
-    FTCard(title = "HYDRATION INTELLIGENCE") {
-        FTDataChip(result.confidence)
+    FTCard(dataQuality = result.confidence, title = "HYDRATION INTELLIGENCE") {
         result.measuredIntakeMl?.let { FTMetricRow("Measured intake", "%.0f ml".format(it)) }
         result.effectiveHydrationMl?.let { FTMetricRow("Effective hydration (modeled)", "%.0f ml".format(it)) }
         if (result.inferredDemandMl != null) {

@@ -52,12 +52,13 @@ fun InfoHelpButton(title: String, body: String, modifier: Modifier = Modifier, d
         Text("?", style = FTType.Label, color = FT.TextSecondary)
     }
     if (open) {
-        HelpDialog(title, body, details) { open = false }
+        InfoDialog(title, body, details) { open = false }
     }
 }
 
+// App restructure: also opened by a tappable state pill (FTStatePill's onClick), e.g. THIS MORNING's rows.
 @Composable
-private fun HelpDialog(title: String, body: String, details: String?, onDismiss: () -> Unit) {
+fun InfoDialog(title: String, body: String, details: String?, onDismiss: () -> Unit) {
     var showDetails by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
     val textStyle = FTType.BodySmall.copy(lineHeight = 20.sp)

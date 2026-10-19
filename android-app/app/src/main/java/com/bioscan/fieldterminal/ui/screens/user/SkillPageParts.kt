@@ -68,7 +68,7 @@ fun <T : Any> LoadedContent(load: suspend () -> T, content: @Composable (T) -> U
 
 @Composable
 fun SkillHeroCard(skill: Skill, level: SkillLevel, info: String, extra: @Composable ColumnScope.() -> Unit = {}) {
-    FTCard(title = "${skill.title} LEVEL", info = info) {
+    FTCard(dataQuality = level.confidence, title = "${skill.title} LEVEL", info = info) {
         val position = level.position
         if (position == null) {
             FTDataState(DataAvailability.Building, level.reason)
@@ -81,7 +81,6 @@ fun SkillHeroCard(skill: Skill, level: SkillLevel, info: String, extra: @Composa
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(level.basis?.chip ?: "", style = FTType.Micro, color = FT.TextMuted)
                 if (level.provisional) Text("PROVISIONAL", style = FTType.Micro, color = FT.Warning)
-                FTDataChip(level.confidence)
             }
         }
         extra()

@@ -65,6 +65,7 @@ data class CalendarSessionInput(
     val start: ZonedDateTime,
     val end: ZonedDateTime?,
     val colorId: String?,
+    val description: String? = null,
 )
 
 data class RecordedSessionInput(
@@ -75,6 +76,8 @@ data class RecordedSessionInput(
     val caloriesActive: Double? = null,
     val avgHr: Double? = null,
     val rpe: Int? = null,
+    val distanceKm: Double? = null,
+    val ascentM: Double? = null,
 )
 
 /** What the person's history says about their sessions: kcal and TRIMP per minute by type, and heart-rate anchors. */
@@ -84,6 +87,8 @@ data class DemandHistory(
     val restingHr: Double? = null,
     val maxHr: Double? = null,
     val weightKg: Double? = null,
+    /** Recent runs with a distance, for the pace calendar entries are timed at (CalendarWorkout.kt). */
+    val recentRuns: List<RecentRun> = emptyList(),
 )
 
 /** The sessions of a day of training: everything except walks and very short entries. */
@@ -174,8 +179,11 @@ private fun resolveDay(
             val start = c.start.withZoneSameInstant(zone)
             if (items.any { startsClose(it.start, start, 60) && it.start != null }) return@forEach
             val type = typeFromCalendarTitle(c.title)
-            val duration = c.end?.let { Duration.between(c.start, it).toMinutes().toDouble() }?.takeIf { it in 5.0..1440.0 } ?: DEFAULT_PLANNED_MIN
-            val k = finalIntensity(type, duration, intensityForTitle(c.title), intensityForTypical(type, history.trimpPerMinByType))
+            // The entry's text (distance, intervals, sets) beats its clock length: training entries are often placeholders.
+            val read = estimateCalendarWorkout(parseCalendarWorkout(c.title, c.description, type), type, history.recentRuns)
+            val duration = read?.durationMin
+                ?: c.end?.let { Duration.between(c.start, it).toMinutes().toDouble() }?.takeIf { it in 5.0..1440.0 } ?: DEFAULT_PLANNED_MIN
+            val k = finalIntensity(type, duration, read?.classified, intensityForTitle(c.title), intensityForTypical(type, history.trimpPerMinByType))
             items += PlannedItem(
                 PlanSource.CALENDAR, "calendar:${c.eventId}", c.title.trim().ifBlank { "Training" }, type, start, duration, k.intensity, k.reason,
                 estimateSessionKcal(type, duration, k.intensity, history.weightKg, history.kcalPerMinByType),

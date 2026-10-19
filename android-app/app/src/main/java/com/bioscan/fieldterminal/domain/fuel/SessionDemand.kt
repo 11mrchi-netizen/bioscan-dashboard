@@ -37,7 +37,7 @@ private val DOMAIN_INTENSITY = mapOf(
 )
 
 private val HARD_WORDS = Regex("interval|ripetut|tempo|threshold|soglia|vo2|fartlek|repeats|progressiv|hiit|crossfit|wod|sprint", RegexOption.IGNORE_CASE)
-private val EASY_WORDS = Regex("easy|recovery|rigenerant|\\bz2\\b|zone ?2|lento|shakeout|mobility|yoga|stretch", RegexOption.IGNORE_CASE)
+private val EASY_WORDS = Regex("easy|\\blss\\b|deload|recovery|rigenerant|\\bz2\\b|zone ?2|lento|shakeout|mobility|yoga|stretch", RegexOption.IGNORE_CASE)
 private val LONG_WORDS = Regex("\\blong\\b|lungo|lunghissim|long run|long ride", RegexOption.IGNORE_CASE)
 
 /** The class an event sets: a race at A or B priority is a RACE; anything else at an event is at least HARD. */

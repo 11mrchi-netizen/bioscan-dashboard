@@ -59,7 +59,8 @@ class PlannedDayTest {
         val item = resolve(calendar = cal)[0].items.single()
         assertEquals(PlanSource.CALENDAR, item.source)
         assertEquals(Intensity.HARD, item.intensity)
-        assertEquals(60.0, item.durationMin, 0.0)
+        // Timed from the text (6 × 800 m with warm-up, recoveries and cool-down), not the one-hour entry.
+        assertTrue(item.durationMin > 60.0)
     }
 
     @Test

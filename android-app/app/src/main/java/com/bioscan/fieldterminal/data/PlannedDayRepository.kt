@@ -45,6 +45,7 @@ private data class CalendarTimesRow(
     @SerialName("start_time") val startTime: String? = null,
     @SerialName("end_time") val endTime: String? = null,
     @SerialName("color_id") val colorId: String? = null,
+    val description: String? = null,
 )
 
 @Serializable
@@ -56,6 +57,8 @@ private data class RecordedRow(
     @SerialName("calories_active") val caloriesActive: Double? = null,
     @SerialName("avg_hr") val avgHr: Double? = null,
     val rpe: Int? = null,
+    @SerialName("distance_km") val distanceKm: Double? = null,
+    @SerialName("elevation_gain_m") val elevationGainM: Double? = null,
 )
 
 @Serializable
@@ -105,7 +108,7 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
 
     private suspend fun calendar(from: LocalDate, to: LocalDate, zone: ZoneId): List<CalendarSessionInput> =
         supabase.postgrest.from("calendar_events")
-            .select(Columns.list("event_id,title,start_time,end_time,color_id")) {
+            .select(Columns.list("event_id,title,description,start_time,end_time,color_id")) {
                 filter {
                     eq("is_cancelled", false)
                     gte("start_time", from.atStartOfDay(zone).toInstant().toString())
@@ -115,7 +118,7 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
             .decodeList<CalendarTimesRow>()
             .mapNotNull { r ->
                 val start = r.startTime?.let { runCatching { OffsetDateTime.parse(it).atZoneSameInstant(zone) }.getOrNull() } ?: return@mapNotNull null
-                CalendarSessionInput(r.eventId, r.title.orEmpty(), start, r.endTime?.let { runCatching { OffsetDateTime.parse(it).atZoneSameInstant(zone) }.getOrNull() }, r.colorId)
+                CalendarSessionInput(r.eventId, r.title.orEmpty(), start, r.endTime?.let { runCatching { OffsetDateTime.parse(it).atZoneSameInstant(zone) }.getOrNull() }, r.colorId, r.description)
             }
 
     // Paged: 180 days of sessions without walks can pass the API's 1,000-row cap.
@@ -125,7 +128,7 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
             var start = 0L
             while (true) {
                 val page = supabase.postgrest.from("exercise_sessions")
-                    .select(Columns.list("id,type,start_time,duration_min,calories_active,avg_hr,rpe")) {
+                    .select(Columns.list("id,type,start_time,duration_min,calories_active,avg_hr,rpe,distance_km,elevation_gain_m")) {
                         filter {
                             gte("start_time", since.atStartOfDay(zone).toInstant().toString())
                             neq("type", "walk")
@@ -140,7 +143,7 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
             }
             out.mapNotNull { r ->
                 val s = runCatching { OffsetDateTime.parse(r.startTime).atZoneSameInstant(zone) }.getOrNull() ?: return@mapNotNull null
-                RecordedSessionInput(r.id, r.type, s, r.durationMin ?: 0.0, r.caloriesActive, r.avgHr, r.rpe)
+                RecordedSessionInput(r.id, r.type, s, r.durationMin ?: 0.0, r.caloriesActive, r.avgHr, r.rpe, r.distanceKm, r.elevationGainM)
             }
         }
 
@@ -169,5 +172,9 @@ fun demandHistory(recorded: List<RecordedSessionInput>, restingHr: Double?, maxH
     } else {
         emptyMap()
     }
-    return DemandHistory(kcal, trimp, restingHr, maxHr, weightKg)
+    // Runs of the last 120 days with a distance, for timing calendar runs at the person's pace.
+    val since = recorded.maxOfOrNull { it.start }?.minusDays(120)
+    val runs = training.filter { it.type == "run" && (it.distanceKm ?: 0.0) > 0 && (since == null || it.start.isAfter(since)) }
+        .map { com.bioscan.fieldterminal.domain.fuel.RecentRun(it.distanceKm!!, it.ascentM ?: 0.0, it.durationMin) }
+    return DemandHistory(kcal, trimp, restingHr, maxHr, weightKg, runs)
 }

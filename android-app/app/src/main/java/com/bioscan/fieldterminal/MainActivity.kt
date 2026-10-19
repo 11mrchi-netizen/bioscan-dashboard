@@ -34,6 +34,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
+import com.bioscan.fieldterminal.domain.AuthState
+import com.bioscan.fieldterminal.domain.GateView
+import com.bioscan.fieldterminal.domain.gateView
+import com.bioscan.fieldterminal.domain.showsApp
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import com.bioscan.fieldterminal.data.HealthConnectSyncWorker
 import com.bioscan.fieldterminal.data.NotificationActionReceiver
 import com.bioscan.fieldterminal.data.NotificationDispatchWorker
@@ -115,37 +121,64 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
         }
     }
 
+    // Set once the app has been composed in this composition: from then on a transient session state (the reload and
+    // refresh supabase-kt runs on every return to the foreground) keeps it on screen instead of replacing it, so the open
+    // page, sheets and forms survive the camera, file pickers and time in the background (domain/AuthGateView.kt).
+    // Not saveable on purpose: after the process is restored the app waits for the session before composing, and then
+    // restores its saved back stack and form state.
+    var appShown by remember { mutableStateOf(false) }
+    val state = when (val s = sessionStatus) {
+        is SessionStatus.Authenticated -> AuthState.AUTHENTICATED
+        is SessionStatus.Initializing -> AuthState.INITIALIZING
+        is SessionStatus.NotAuthenticated -> AuthState.NOT_AUTHENTICATED
+        is SessionStatus.RefreshFailure ->
+            if (s.cause is RefreshFailureCause.NetworkError) AuthState.REFRESH_NETWORK_ERROR else AuthState.REFRESH_FAILED
+    }
+    val view = gateView(state, appShown)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(FT.Base),
         contentAlignment = Alignment.Center,
     ) {
-        when (sessionStatus) {
-            is SessionStatus.Authenticated -> FieldTerminalNavHost(
-                pendingNotificationKind = pendingNotificationKind,
-                onNotificationHandled = onNotificationHandled,
-            )
-            is SessionStatus.NotAuthenticated -> {
-                androidx.compose.runtime.LaunchedEffect(Unit) { com.bioscan.fieldterminal.data.ReadCache.invalidateAll() } // nothing of the last user survives sign-out
+        when (view) {
+            GateView.APP, GateView.APP_RECONNECTING -> {
+                LaunchedEffect(Unit) { appShown = true }
+                FieldTerminalNavHost(
+                    pendingNotificationKind = pendingNotificationKind,
+                    onNotificationHandled = onNotificationHandled,
+                )
+                if (view == GateView.APP_RECONNECTING) {
+                    Text(
+                        if (state == AuthState.REFRESH_NETWORK_ERROR) "OFFLINE · RECONNECTING WHEN THE NETWORK IS BACK" else "RECONNECTING…",
+                        style = FTType.LabelCaps, color = FT.TextSecondary,
+                        modifier = Modifier.align(Alignment.TopCenter).background(FT.Elevated).fillMaxWidth().padding(vertical = 6.dp),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+            GateView.SIGN_IN -> {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    appShown = false
+                    com.bioscan.fieldterminal.data.ReadCache.invalidateAll() // nothing of the last user survives sign-out
+                }
                 SignInPrompt("SIGN IN WITH GOOGLE", FTButtonEmphasis.Primary, signInError) {
                     scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
                 }
             }
-            is SessionStatus.Initializing -> CircularProgressIndicator(color = FT.Emerald)
-            is SessionStatus.RefreshFailure -> {
-                // supabase-kt keeps retrying the refresh by itself when the cause is the network, so an offline phone
-                // with an expired access token is not a lost session: say so instead of demanding a sign-in. Only a
-                // real auth failure (revoked or dead refresh token, mirrors the web dashboard's own handling) asks to sign in.
-                if ((sessionStatus as SessionStatus.RefreshFailure).cause is RefreshFailureCause.NetworkError) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CircularProgressIndicator(color = FT.Emerald)
-                        Text("Offline. Reconnecting when the network is back.", style = FTType.BodySmall, color = FT.TextSecondary)
-                    }
-                } else {
-                    SignInPrompt("SESSION EXPIRED — SIGN IN AGAIN", FTButtonEmphasis.Secondary, signInError) {
-                        scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
-                    }
+            GateView.LOADING -> CircularProgressIndicator(color = FT.Emerald)
+            // supabase-kt keeps retrying the refresh by itself when the cause is the network, so an offline phone with an
+            // expired access token is not a lost session: say so instead of demanding a sign-in. Only a real auth failure
+            // (revoked or dead refresh token, mirrors the web dashboard's own handling) asks to sign in.
+            GateView.OFFLINE -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator(color = FT.Emerald)
+                Text("Offline. Reconnecting when the network is back.", style = FTType.BodySmall, color = FT.TextSecondary)
+            }
+            GateView.SESSION_EXPIRED -> {
+                LaunchedEffect(Unit) { appShown = false }
+                SignInPrompt("SESSION EXPIRED — SIGN IN AGAIN", FTButtonEmphasis.Secondary, signInError) {
+                    scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
                 }
             }
         }

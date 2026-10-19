@@ -140,7 +140,7 @@ private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 /** The tables today's plan reads: a write to any of them drops the cached plan. */
 private val FUEL_TABLES = setOf(
     "meals", "meal_items", "planned_sessions", "calendar_events", "athlete_events", "exercise_sessions", "body_metrics",
-    "sweat_tests", "fueling_products", "fueling_recipe_versions", "fueling_intake_log", "user_profile",
+    "sweat_tests", "fueling_products", "fueling_recipe_versions", "fueling_intake_log", "user_profile", "calendar_event_overrides", "meal_prep_weeks", "breakfast_templates",
 )
 
 class FuelPlanRepository(private val supabase: SupabaseClient) {

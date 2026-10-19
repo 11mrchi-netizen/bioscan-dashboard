@@ -42,7 +42,26 @@ data class PlannedItem(
     val end: ZonedDateTime? get() = start?.plusSeconds((durationMin * 60).toLong())
 }
 
-data class PlannedDay(val date: LocalDate, val items: List<PlannedItem>) {
+/**
+ * A training-colour calendar entry the rules cannot read that runs over [REVIEW_OVER_MIN] minutes ("Resurrected",
+ * 13:00-06:00): left out of the day's training until the person says what it is.
+ */
+data class CalendarReview(val eventId: String, val title: String, val description: String?, val start: ZonedDateTime, val end: ZonedDateTime?, val clockMin: Double)
+
+enum class OverrideKind(val key: String) {
+    IGNORE("ignore"), LONG_SESSION("long_session");
+
+    companion object {
+        fun of(key: String?): OverrideKind? = entries.firstOrNull { it.key == key }
+    }
+}
+
+/** The person's answer for one calendar entry: leave it out, or count it as a session of this length and class. */
+data class CalendarOverride(val eventId: String, val kind: OverrideKind, val durationMin: Double? = null, val intensity: Intensity? = null)
+
+const val REVIEW_OVER_MIN = 240.0
+
+data class PlannedDay(val date: LocalDate, val items: List<PlannedItem>, val reviews: List<CalendarReview> = emptyList()) {
     val trainingMin: Double get() = items.sumOf { it.durationMin }
     val sessionKcal: Double get() = items.sumOf { it.kcal ?: 0.0 }
     val hardest: Intensity? get() = items.maxByOrNull { it.intensity.ordinal }?.intensity
@@ -129,12 +148,13 @@ fun resolvePlannedDays(
     recorded: List<RecordedSessionInput>,
     history: DemandHistory,
     now: ZonedDateTime,
+    overrides: Map<String, CalendarOverride> = emptyMap(),
 ): List<PlannedDay> {
     val zone = now.zone
     val today = now.toLocalDate()
     return (0 until days).map { offset ->
         val date = from.plusDays(offset.toLong())
-        resolveDay(date, today, zone, events, planned, calendar, recorded, history)
+        resolveDay(date, today, zone, events, planned, calendar, recorded, history, overrides)
     }
 }
 
@@ -147,8 +167,10 @@ private fun resolveDay(
     calendar: List<CalendarSessionInput>,
     recorded: List<RecordedSessionInput>,
     history: DemandHistory,
+    overrides: Map<String, CalendarOverride>,
 ): PlannedDay {
     val items = mutableListOf<PlannedItem>()
+    val reviews = mutableListOf<CalendarReview>()
 
     events.filter { it.date == date && it.status != EventStatus.CANCELLED && it.status != EventStatus.DNS }.forEach { e ->
         val duration = e.plannedDurationMin ?: DEFAULT_PLANNED_MIN
@@ -178,12 +200,31 @@ private fun resolveDay(
         .forEach { c ->
             val start = c.start.withZoneSameInstant(zone)
             if (items.any { startsClose(it.start, start, 60) && it.start != null }) return@forEach
+            val override = overrides[c.eventId]
+            if (override?.kind == OverrideKind.IGNORE) return@forEach
             val type = typeFromCalendarTitle(c.title)
+            val clockMin = c.end?.let { Duration.between(c.start, it).toMinutes().toDouble() }
+            if (override?.kind == OverrideKind.LONG_SESSION) {
+                val minutes = override.durationMin ?: clockMin?.coerceAtMost(600.0) ?: DEFAULT_PLANNED_MIN
+                val intensity = override.intensity ?: Intensity.LONG
+                items += PlannedItem(
+                    PlanSource.CALENDAR, "calendar:${c.eventId}", c.title.trim().ifBlank { "Training" }, type, start, minutes, intensity,
+                    "you set it as ${minutes.toInt()} min, ${intensity.label.lowercase()}",
+                    estimateSessionKcal(type, minutes, intensity, history.weightKg, history.kcalPerMinByType),
+                )
+                return@forEach
+            }
             // The entry's text (distance, intervals, sets) beats its clock length: training entries are often placeholders.
             val read = estimateCalendarWorkout(parseCalendarWorkout(c.title, c.description, type), type, history.recentRuns)
             val duration = read?.durationMin
                 ?: c.end?.let { Duration.between(c.start, it).toMinutes().toDouble() }?.takeIf { it in 5.0..1440.0 } ?: DEFAULT_PLANNED_MIN
-            val k = finalIntensity(type, duration, read?.classified, intensityForTitle(c.title), intensityForTypical(type, history.trimpPerMinByType))
+            val titled = intensityForTitle(c.title)
+            // Over four hours with nothing the rules can read: asked about, not counted as hours of training.
+            if (read == null && titled == null && (clockMin ?: 0.0) > REVIEW_OVER_MIN) {
+                reviews += CalendarReview(c.eventId, c.title.trim().ifBlank { "Untitled" }, c.description, start, c.end?.withZoneSameInstant(zone), clockMin!!)
+                return@forEach
+            }
+            val k = finalIntensity(type, duration, read?.classified, titled, intensityForTypical(type, history.trimpPerMinByType))
             items += PlannedItem(
                 PlanSource.CALENDAR, "calendar:${c.eventId}", c.title.trim().ifBlank { "Training" }, type, start, duration, k.intensity, k.reason,
                 estimateSessionKcal(type, duration, k.intensity, history.weightKg, history.kcalPerMinByType),
@@ -222,7 +263,7 @@ private fun resolveDay(
         if (date.isBefore(today)) items.removeAll { !it.recorded }
     }
 
-    return PlannedDay(date, items.sortedBy { it.start?.toEpochSecond() ?: Long.MAX_VALUE })
+    return PlannedDay(date, items.sortedBy { it.start?.toEpochSecond() ?: Long.MAX_VALUE }, reviews)
 }
 
 private fun compatible(plannedType: String, recordedType: String): Boolean = when (plannedType) {

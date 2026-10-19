@@ -77,8 +77,9 @@ fun FuelPlanPage(
     }
 
     Column(modifier.padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        TodaysFuelCard(result, error, onRetry = { attempt++ }, onOpenSettings = { settingsOpen = true })
         val horizon = (result as? TodayFuelResult.Ready)?.fuel?.horizon.orEmpty()
+        CalendarReviewCard(horizon.flatMap { it.day.reviews }, onAnswered = { attempt++ })
+        TodaysFuelCard(result, error, onRetry = { attempt++ }, onOpenSettings = { settingsOpen = true })
         if (horizon.size > 1) NextDaysCard(horizon, openDays, onToggleDay)
         overview?.let { PeriodizationCard(it) }
     }

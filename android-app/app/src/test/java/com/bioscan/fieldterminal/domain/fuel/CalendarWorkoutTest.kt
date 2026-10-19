@@ -93,4 +93,25 @@ class CalendarWorkoutTest {
         assertTrue(item.durationMin > 120)
         assertTrue(item.intensityReason.contains("from the calendar"))
     }
+
+    @Test
+    fun anUnreadableLongEntryIsAskedAboutAndAnswersAreKept() {
+        val zone = ZoneId.of("Asia/Taipei")
+        val day = LocalDate.of(2026, 11, 7)
+        val start = ZonedDateTime.of(day.atTime(13, 0), zone)
+        val entry = CalendarSessionInput("e9", "Party", start, start.plusHours(17), "8")
+        val history = DemandHistory(recentRuns = runs, weightKg = 70.0)
+        fun resolve(o: Map<String, CalendarOverride> = emptyMap()) =
+            resolvePlannedDays(day, 1, emptyList(), emptyList(), listOf(entry), emptyList(), history, start.minusDays(2), o).single()
+        val asked = resolve()
+        assertTrue(asked.items.isEmpty())
+        assertEquals("e9", asked.reviews.single().eventId)
+        assertTrue(resolve(mapOf("e9" to CalendarOverride("e9", OverrideKind.IGNORE))).let { it.items.isEmpty() && it.reviews.isEmpty() })
+        val counted = resolve(mapOf("e9" to CalendarOverride("e9", OverrideKind.LONG_SESSION, 180.0, Intensity.LONG))).items.single()
+        assertEquals(180.0, counted.durationMin, 1e-9)
+        assertEquals(Intensity.LONG, counted.intensity)
+        // A short unknown entry is still a session (the placeholder's hour).
+        val short = CalendarSessionInput("e10", "Session", start, start.plusHours(1), "8")
+        assertEquals(1, resolvePlannedDays(day, 1, emptyList(), emptyList(), listOf(short), emptyList(), history, start.minusDays(2)).single().items.size)
+    }
 }

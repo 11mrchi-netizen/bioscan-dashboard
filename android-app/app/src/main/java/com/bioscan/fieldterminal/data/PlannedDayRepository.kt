@@ -79,13 +79,15 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
         val recordedD = async { recorded(from.minusDays(HISTORY_DAYS), zone) }
         val anchorsD = async { runCatching { ZoneAnchorsRepository(supabase).load().anchorsFor(from) }.getOrNull() }
         val weightD = async { runCatching { latestWeight() }.getOrNull() }
+        // Before the migration that adds it, the table is missing: no overrides.
+        val overridesD = async { runCatching { CalendarOverridesRepository(supabase).load() }.getOrDefault(emptyMap()) }
 
         val recorded = recordedD.await()
         val anchors = anchorsD.await()
         val history = demandHistory(recorded, anchors?.restingHr, anchors?.maxHr, weightD.await())
         resolvePlannedDays(
             from, days, eventsD.await(), plannedD.await(), calendarD.await(),
-            recorded.filter { !it.start.toLocalDate().isBefore(from) }, history, now,
+            recorded.filter { !it.start.toLocalDate().isBefore(from) }, history, now, overridesD.await(),
         )
     }
 

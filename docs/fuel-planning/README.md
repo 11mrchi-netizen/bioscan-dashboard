@@ -24,6 +24,7 @@ sets the week's energy and protein, the plan shapes each day.
 | 8 | After the event: review, sweat rate and gut tolerance learned, periodisation index | Done (index computed on the phone; see notes) |
 | 9 | Planner: build toward an event, taper | Done |
 | 10 | Its own page (Fuel › PLAN), the next ten days, per-meal protein and fat, example plates by fixed rules | Done |
+| 11 | Calendar training read from its text; WHAT IS THIS? for unreadable long entries; Sunday meal prep (Fuel › PREP) and the fixed breakfast | Done |
 
 ## Phase 1 notes: events
 
@@ -232,6 +233,49 @@ from the person's usual foods first, then staples; two example plates per meal a
   name matching; each seven-day block averages to the goal; ten days of plates in about 0.25 s on a desktop JVM (run off
   the main thread on the phone).
 
+## Phase 11 notes: the calendar's text, and Sunday meal prep
+
+Owner requests: tailor each day from the training in the calendar; a meal-prep feature for cooking on Sunday (up to five
+proteins, vegetables and carbohydrates; four meals, lunch A-B-A-B-A and dinner C-D-C-D-C; some meals skipped; a fixed
+breakfast whose amounts follow the day; snacks at discretion; how much to buy and prepare). Owner decisions: Monday to
+Friday with skippable meals; stored in Supabase; unreadable long calendar entries are asked about on the plan.
+
+- **The calendar's text** (`domain/fuel/CalendarWorkout.kt`). Training entries are often one-hour placeholders whose
+  session is in the title and description. Fixed rules read the distance ("25.7km", the title's before a route's), the
+  climb ("+868m"), interval rounds and repetition length ("800m Repeats — 5-8 rounds" → 6.5 × 800 m; "6x400"), strength
+  sets, reps and load ("4x4 @47.5kg", "3-5x3 @85%", "(85%)"), deload, easy (LSS, Z2), long and back-to-back, and the GPX
+  link. Runs are timed by `estimateRunTime` on the person's runs of the last 120 days with a distance (easy runs at the
+  slower half of their paces), intervals as warm-up + rounds × (repetition at the faster quarter of their paces less 15 % +
+  4 min) + cool-down, strength as 10 min + 3 min a set (HARD at 85 % or heavy sets of five or fewer), a deload as 30 easy
+  minutes. The reason names what was read. The calendar read now includes the description; recorded sessions carry
+  distance and climb.
+- **WHAT IS THIS?** A training-colour entry over four hours with nothing the rules can read is left out of the day and
+  listed on Fuel › Plan: MAKE IT AN EVENT (the event form, prefilled), A SESSION (hours and class) or IGNORE; answers in
+  `calendar_event_overrides`, applied by the resolver.
+- **Meal prep** (`domain/fuel/MealPrep.kt`). Recipes: one protein, carbohydrate and vegetable each from the picks;
+  proteins rotate so a day's lunch and dinner differ, carbohydrates on another pattern so two of each still make four
+  pairings; a fifth pick joins a recipe. Containers: each weekday lunch and dinner not marked OUT, portioned for that
+  day's coded meal (`solvePortions`: 150 g vegetables fixed; starch, protein and oil solved and rounded), so the dinner
+  before a long run carries more starch. Breakfast: the person's usual foods and amounts, each day between 0.5 and 1.75
+  times them. Once cooked (MARK AS COOKED) the containers' grams are stored and fixed; breakfast and then the snacks take
+  up what they miss (`prepDay`). The shopping list adds the containers and a week of breakfasts, raw weight by USDA
+  cooking yields (rice about 0.37-0.40 dry per cooked, pasta 0.45, meat 1.35 raw per cooked, fish 1.25, greens 1.2),
+  rounded up to 50 g, whole items or tablespoons; the cook sheet gives each recipe's raw and cooked amounts and its split
+  across containers; SHARE sends all of it as text.
+- **Screens.** Fuel › PREP: THIS WEEK / NEXT WEEK, 1 PICK, 2 RECIPES (tap to swap), 3 WEEK (tap a meal for OUT), 4 SHOP &
+  COOK, BREAKFAST. Fuel › Plan: on a prepped day, CONTAINER A-D (or OUT with what to aim for), YOUR BREAKFAST at the day's
+  amounts, LEFT FOR SNACKS TODAY with the plates as ideas, and the containers on each day row.
+- **Storage.** `supabase/migrations/20261029_meal_prep.sql`: `meal_prep_weeks` (one per person and Monday; picks,
+  recipes, meals out, containers once cooked, status), `breakfast_templates`, `calendar_event_overrides`; owner-only RLS
+  and shape checks. Only choices and cooked grams are stored; the numbers are worked out each time.
+- **Verification.** Parser tests on synthetic titles shaped like real ones (long runs, routes with climb, LSS, repeats,
+  strength waves, deload, plain text); the resolver uses the parsed session, asks about an unreadable 17-hour entry and
+  applies IGNORE / A SESSION. Prep tests: rotation and four distinct pairings; A-B-A-B-A / C-D-C-D-C and skipped meals;
+  every container within a quarter of its targets and the pre-long-run dinner larger than the deload one; the shopping
+  list equals containers plus breakfasts in raw weight; breakfast within its bounds; after cooking, a changed day still
+  adds up through breakfast and snacks. The migration was applied twice on a local Postgres 16 (policies, checks,
+  uniqueness, other users) and then live.
+
 ## Read-only check on live data
 
 Run once through the real engine on the owner's data (values reported in the PR conversation, not kept in the repository,
@@ -248,11 +292,14 @@ main input.
 2. `20261027_fuel_notification_kinds.sql` before the app build: the app seeds missing notification rules on start, and
    the seeding fails while the kind constraint does not yet allow the two new kinds.
 3. The app build. No edge function changes. (Phase 10 is app-only: no migration.)
+4. Phase 11: `20261029_meal_prep.sql` (new tables only); the app reads them quietly as empty until it is applied.
 
 Steps 1 and 2 were applied to the live project on 18 Oct 2026, in that order. The four tables were sent without their
 `drop … if exists` lines (they do nothing on a first apply); the files here keep them so they stay safe to re-run.
 Checked afterwards: RLS on all four with 4, 4, 3 and 4 policies; the kind constraint lists nine kinds; the two new
-rules are seeded for existing users; the security advisors list nothing for the new tables.
+rules are seeded for existing users; the security advisors list nothing for the new tables. Step 4 was applied live on
+19 Oct 2026 the same way (without the `drop … if exists` lines): RLS on all three tables with 4 policies each, no new
+advisor findings.
 
 ## Research
 

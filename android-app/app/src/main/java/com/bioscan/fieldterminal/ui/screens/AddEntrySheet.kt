@@ -147,7 +147,13 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // UX review P1: the Status quick-log row opens the sheet on the right form; back from it still leads to the picker.
     // Saveable: the forms here can open the camera, file and photo pickers, and the app may be restored meanwhile.
-    var selectedType by rememberSaveable { mutableStateOf(if (start is AddEntryStart.Fuel) AddEntryType.Fuel else null) }
+    var selectedType by rememberSaveable { mutableStateOf(
+        when (start) {
+            is AddEntryStart.Fuel -> AddEntryType.Fuel
+            is AddEntryStart.Form -> start.type
+            else -> null
+        },
+    ) }
     // Cleared on back, so picking FUEL again from the picker opens on FOOD as usual.
     var fuelStart by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.AddEntryStartSaver) { mutableStateOf<AddEntryStart?>(start as? AddEntryStart.Fuel) }
     // UX review P3: the last three choices are one tap away in a RECENT row (was a single LAST button).

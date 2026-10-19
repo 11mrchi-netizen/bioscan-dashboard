@@ -101,7 +101,7 @@ import kotlin.math.roundToInt
 // with what last evening brought), then TODAY'S RECOVERY, READY FOR (it is built on recovery), today's fuel, then the
 // evidence board (phase D), what came before off mornings, and typicality. Training load and HRV / resting HR are linked (Training › Load, Health › Cardio) instead of repeated here.
 // Every section reuses the exact domain chain + render card its own tile screen already uses (DynamicRecoveryCard in
-// HeartTileScreen.kt, TrainingReadinessCard in TrainingTileScreen.kt, the hydration/macro totals in
+// HealthTileScreen.kt, TrainingReadinessCard in TrainingTileScreen.kt, the hydration/macro totals in
 // NutritionHydrationScreen.kt) -- this screen just composes them, loading its own data independently per this app's
 // established per-screen-loader convention.
 @Composable

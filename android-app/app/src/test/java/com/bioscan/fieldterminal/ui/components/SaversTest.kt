@@ -37,7 +37,8 @@ class SaversTest {
     fun theAddSheetsStartsAndTargetsSurvive() {
         val starts = listOf(null, com.bioscan.fieldterminal.domain.AddEntryStart.SayIt,
             com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Supplements, "morning"),
-            com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Food))
+            com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Food),
+            com.bioscan.fieldterminal.domain.AddEntryStart.Form(com.bioscan.fieldterminal.domain.AddEntryType.Grip))
         starts.forEach { assertEquals(it, com.bioscan.fieldterminal.domain.decodeStart(com.bioscan.fieldterminal.domain.encodeStart(it))) }
         val targets = listOf(null, com.bioscan.fieldterminal.domain.AddEntryTarget.EventForm, com.bioscan.fieldterminal.domain.AddEntryTarget.SweatTest,
             com.bioscan.fieldterminal.domain.AddEntryTarget.Form(com.bioscan.fieldterminal.domain.AddEntryType.Fuel, com.bioscan.fieldterminal.domain.FuelSubType.Drink),

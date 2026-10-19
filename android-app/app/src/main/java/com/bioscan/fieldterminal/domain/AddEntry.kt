@@ -31,6 +31,8 @@ enum class FuelSubType(val label: String) {
 sealed interface AddEntryStart {
     data object SayIt : AddEntryStart
     data class Fuel(val subType: FuelSubType, val supplementBundle: String? = null) : AddEntryStart
+    // App restructure: Lab › Tests opens a test's own form (grip strength) directly.
+    data class Form(val type: AddEntryType) : AddEntryStart
 }
 
 // UX review P3: the add sheet's picker lists what you log, grouped by what it is, with Fuel's four forms at the top level
@@ -110,6 +112,7 @@ fun encodeStart(s: AddEntryStart?): String = when (s) {
     null -> ""
     AddEntryStart.SayIt -> "SAYIT"
     is AddEntryStart.Fuel -> "FUEL|${s.subType.name}|${s.supplementBundle.orEmpty()}"
+    is AddEntryStart.Form -> "FORM|${s.type.name}"
 }
 
 fun decodeStart(s: String): AddEntryStart? {
@@ -117,6 +120,7 @@ fun decodeStart(s: String): AddEntryStart? {
     return when (f[0]) {
         "SAYIT" -> AddEntryStart.SayIt
         "FUEL" -> FuelSubType.entries.firstOrNull { it.name == f.getOrNull(1) }?.let { AddEntryStart.Fuel(it, f.getOrNull(2)?.ifEmpty { null }) }
+        "FORM" -> AddEntryType.entries.firstOrNull { it.name == f.getOrNull(1) }?.let { AddEntryStart.Form(it) }
         else -> null
     }
 }

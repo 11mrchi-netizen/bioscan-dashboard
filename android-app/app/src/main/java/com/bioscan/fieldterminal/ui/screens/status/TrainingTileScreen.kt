@@ -114,12 +114,8 @@ import java.time.LocalDate
 fun TrainingTileScreen(
     onBack: () -> Unit,
     onOpenSessionDetail: (Long) -> Unit = {},
-    onOpenPlanner: () -> Unit = {},
-    onOpenRunning: () -> Unit = {},
-    onOpenStrength: () -> Unit = {},
-    onOpenTrainingBlocks: () -> Unit = {},
-    onOpenEvent: (Long) -> Unit = {},
-    // Set by a deep link (Status's injury flag -> INJURY); applied once, then cleared via the callback.
+    // Set by a deep link (Status's injury flag -> INJURY, the User tab's level buttons -> RUNNING / STRENGTH); applied
+    // once, then cleared via the callback.
     requestedTab: TrainingTab? = null,
     onRequestedTabConsumed: () -> Unit = {},
 ) {
@@ -130,8 +126,7 @@ fun TrainingTileScreen(
             onRequestedTabConsumed()
         }
     }
-    // 25/9 rework: one switch for the whole Load tab -- drives the CTL/ATL/TSB
-    // charts and the PERFORMANCE chart (RUNNING keeps its own 7D-1Y toggle).
+    // 25/9 rework: one switch for the Load tab's CTL/ATL/TSB charts (RUNNING and STRENGTH keep their own).
     var timeframe by remember { mutableStateOf(PerformanceTimeframe.ThreeMonths) }
 
     // Contract A4: title, context line and sub-tab rail stay pinned; only the tab's content scrolls, from the top on a tab change.
@@ -141,12 +136,14 @@ fun TrainingTileScreen(
         onBack = onBack,
         title = "TRAINING",
         subtitle = when (tab) {
-            TrainingTab.Load -> "LOAD · " + when (timeframe.months) {
+            TrainingTab.Load -> "LOAD · INTENSITY · " + when (timeframe.months) {
                 1L -> "LAST MONTH"
                 12L -> "LAST YEAR"
                 else -> "LAST ${timeframe.months} MONTHS"
             }
-            TrainingTab.Plan -> "BLOCKS · UPCOMING SESSIONS"
+            TrainingTab.Running -> "LEVEL · VOLUME · PACE · FITNESS · FORM · RECORDS"
+            TrainingTab.Strength -> "LEVEL · STANDARDS · E1RM · VOLUME · PRs"
+            TrainingTab.Sessions -> "EVERY SESSION, NEWEST FIRST"
             TrainingTab.Injury -> "INJURIES · ILLNESSES · CHECK-INS"
         },
         accent = FT.DomainTraining,
@@ -155,15 +152,12 @@ fun TrainingTileScreen(
     ) {
 
         when (tab) {
-            TrainingTab.Load -> {
-                // UX review P2 / F10: a glance strip indexes the cards below; TRAINING LOAD leads (IA contract §5) with
-                // the timeframe toggle on the card whose charts it controls.
-                val glance = rememberGlanceAnchors()
-                FTGlanceStrip(glance)
-                TrainingLoadSection(timeframe, onTimeframeChange = { timeframe = it }, glance = glance)
-                TrainingScreen(timeframe, onOpenSessionDetail, onOpenRunning, onOpenStrength, glance = glance)
-            }
-            TrainingTab.Plan -> com.bioscan.fieldterminal.ui.screens.training.TrainingPlanTab(onOpenPlanner, onOpenAllBlocks = onOpenTrainingBlocks, onOpenEvent = onOpenEvent)
+            // App restructure: TRAINING LOAD then INTENSITY. READY FOR lives on Today only; the running and strength
+            // rollups gave way to their own tabs.
+            TrainingTab.Load -> TrainingLoadSection(timeframe, onTimeframeChange = { timeframe = it })
+            TrainingTab.Running -> com.bioscan.fieldterminal.ui.screens.user.RunningTab(top = { SuspectedTrailRunsCard() })
+            TrainingTab.Strength -> com.bioscan.fieldterminal.ui.screens.user.StrengthTab()
+            TrainingTab.Sessions -> TrainingSessionsTab(onOpenSessionDetail)
             TrainingTab.Injury -> InjuryTab()
         }
     }
@@ -322,22 +316,11 @@ internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Mo
 }
 
 @Composable
-private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChange: (PerformanceTimeframe) -> Unit, glance: GlanceAnchors? = null) {
+private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChange: (PerformanceTimeframe) -> Unit) {
     var sessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
     var cycleLoaded by remember { mutableStateOf(false) }
-    // 09.4 Training Readiness needs Dynamic Recovery's full contributor set
-    // -- each subtab in this file already loads its own data independently
-    // (see InjuryTab()'s own comment), so this follows the same convention
-    // rather than sharing state with HeartTileScreen.kt.
-    var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
-    var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
-    var stressDays by remember { mutableStateOf<List<StressDay>>(emptyList()) }
-    // Analysis Layer 3 / R1: start of each metric's current regime (last confirmed series break); NONE until loaded.
-    var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
-    // Analysis review phase G: past planned sessions, for READY FOR's scorecard (null while loading or if the read fails).
-    var planned by remember { mutableStateOf<List<PlannedOutcomeRow>?>(null) }
     // Analysis review phase G: the spans load is drawn with, and the personal fit behind them.
     var fitnessFatigue by remember { mutableStateOf<FitnessFatigueRow?>(null) }
     var loadSpans by remember { mutableStateOf(LoadSpans.STANDARD) }
@@ -351,11 +334,6 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChan
                     { sessions = repo.loadExerciseSessionsForTrainingLoad() },
                     { wearable = repo.loadWearableDaily() },
                     { activeCycle = TrainingCyclesRepository(SupabaseClientProvider.client).loadActiveCycle(); cycleLoaded = true },
-                    { sleep = repo.loadSleepDaily() },
-                    { wellbeing = repo.loadWellbeingDaily() },
-                    { stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays() },
-                    { breakStarts = repo.loadSeriesBreakStarts() },
-                    { planned = runCatching { repo.loadPlannedOutcomes() }.getOrNull() },
                     { fitnessFatigue = repo.loadFitnessFatigue(); loadSpans = repo.loadLoadSpans() },
                 )
             }
@@ -364,9 +342,7 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChan
 
     val s = sessions
     val w = wearable
-    val sl = sleep
-    val wb = wellbeing
-    if (s == null || w == null || !cycleLoaded || sl == null || wb == null) {
+    if (s == null || w == null || !cycleLoaded) {
         if (loadGuard.error != null) {
             LoadErrorCard(loadGuard)
         } else {
@@ -378,27 +354,15 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChan
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        // DAV-205 (24/9 fixes): TRIMP fallback for sessions with no RPE --
-        // see AnalysisRepository.buildTrainingSessionLoads()'s own comment.
-        // Perf pass: these evaluations are pure functions of the loaded rows; compute them once per load, not on every
-        // recomposition (timeframe taps, tab changes).
-        // Analysis review phase G: assembled by the shared builder (domain/Composites.kt), as on Today and the Heart tile.
-        val (sessionLoads, trainingLoadEval, recovery) = remember(s, w, sl, wb, stressDays, breakStarts, loadSpans) {
-            val composite = compositeInputs(w, sl, wb, s, breakStarts, loadSpans)
-            val evaluations = composite.evaluations()
-            val exerciseWindows = s.mapNotNull { session ->
-                val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
-                val durationMin = session.durationMin ?: return@mapNotNull null
-                start to start.plusSeconds((durationMin * 60).toLong())
-            }
-            val physiologicalStress = stressDays.firstOrNull()?.let { analyzeStressDay(it, stressDays.drop(1), exerciseWindows) }
-            Triple(composite.sessionLoads, evaluations.load, recoveryFrom(evaluations, physiologicalStress))
+        // DAV-205 (24/9 fixes): TRIMP fallback for sessions with no RPE, the same shared builder Injury uses. Pure functions
+        // of the loaded rows, computed once per load, not on every timeframe tap.
+        val (sessionLoads, trainingLoadEval) = remember(s, w, loadSpans) {
+            val loads = buildTrainingSessionLoads(s, restingSeries(w))
+            loads to evaluateTrainingLoad(loads, spans = loadSpans)
         }
-        // Phase G: READY FOR's scorecard against the planned sessions it should foresee (null while worked out).
-        val scorecards by rememberScorecards(w, sl, wb, s, breakStarts, loadSpans, planned)
         TrainingLoadCard(
             trainingLoadEval,
             resolveTier(MetricCategory.TrainingLoad, activeCycle),
@@ -406,19 +370,8 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChan
             timeframe,
             onTimeframeChange = onTimeframeChange,
             fitnessFatigue = fitnessFatigue,
-            modifier = Modifier.glanceAnchor(
-                glance, "load",
-                GlanceChip(order = 0, label = "LOAD", state = trainingLoadStateWord(trainingLoadEval.state, trainingLoadEval.tsbBand).state, headline = trainingLoadEval.tsbBand?.uppercase()),
-            ),
         )
         IntensityCard()
-        val readiness = computeTrainingReadiness(recovery)
-        val readyWord = if (scorecards?.readyFor.demotes()) INPUTS_ONLY else recoveryStateWord(readiness.generalState)
-        TrainingReadinessCard(
-            readiness,
-            scorecard = scorecards?.readyFor,
-            modifier = Modifier.glanceAnchor(glance, "ready", GlanceChip(order = 1, label = "READY FOR", state = readyWord.state, headline = readyWord.word)),
-        )
     }
 }
 

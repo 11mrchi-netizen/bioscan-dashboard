@@ -146,20 +146,21 @@ private data class SystemTileSpec(
 // overview really has a state for that system.
 private val SYSTEM_TILES = listOf(
     SystemTileSpec(TileRoute.Training, "TRAINING", Icons.Filled.FitnessCenter, FT.DomainTraining) { it.trainingState },
-    SystemTileSpec(TileRoute.Fuel, "FUEL", Icons.Filled.Restaurant, FT.DomainFuel) { null },
-    SystemTileSpec(TileRoute.Heart, "HEALTH", Icons.Filled.Favorite, FT.DomainHeart) { it.cardioState },
-    SystemTileSpec(TileRoute.Labs, "LABS", Icons.Filled.Science, FT.DomainLabs) { null },
+    SystemTileSpec(TileRoute.Nutrition, "NUTRITION", Icons.Filled.Restaurant, FT.DomainFuel) { null },
+    SystemTileSpec(TileRoute.Health, "HEALTH", Icons.Filled.Favorite, FT.DomainHeart) { it.cardioState },
+    SystemTileSpec(TileRoute.Lab, "LAB", Icons.Filled.Science, FT.DomainLabs) { null },
 )
 
 // Two preview lines per tile, real data only: a missing reading is "—", never a made-up number. Short lines (not one
-// "HRV64·RHR57" string) so each reads alone. FUEL uses the same goal and hydration range as the Fuel tile, LABS the same
-// supplements-due rule as the reminder (domain/SupplementsToday.kt).
+// "HRV64·RHR57" string) so each reads alone. NUTRITION uses the same goal and hydration range as the Nutrition tile, LAB
+// the same supplements-due rule as the reminder (domain/SupplementsToday.kt). App restructure: the last lab draw moved
+// to HEALTH with bloodwork.
 private fun previewLines(route: TileRoute, overview: StatusOverview?, previews: TodayPreviews?, goals: NutritionGoals): List<String> = when (route) {
     TileRoute.Training -> listOf(
         overview?.let { "${it.sessionsLast7Days} SESSION${if (it.sessionsLast7Days == 1) "" else "S"} · 7D" } ?: "SESSIONS —",
         overview?.let { o -> o.trainingLoadBand?.uppercase() ?: "LOAD ${metricStateLabel(o.trainingState)}" } ?: "LOAD —",
     )
-    TileRoute.Fuel -> {
+    TileRoute.Nutrition -> {
         val fuel = previews?.fuel
         val goal = goals.caloriesKcal
         val kcal = fuel?.kcal?.let(::thousands) ?: "—"
@@ -170,14 +171,15 @@ private fun previewLines(route: TileRoute, overview: StatusOverview?, previews: 
             "WATER $water / " + "%.1f–%.1f L".format(Locale.ENGLISH, bounds.start / 1000.0, bounds.endInclusive / 1000.0),
         )
     }
-    TileRoute.Heart -> listOf(
+    TileRoute.Health -> listOf(
         "HRV " + (overview?.latestHrv?.let { "%.0f".format(it) } ?: "—") + " · RHR " + (overview?.latestRhr?.let { "%.0f".format(it) } ?: "—"),
         "SLEEP " + (overview?.sleepHours?.let { formatHours(it) } ?: "—"),
-    )
-    TileRoute.Labs -> listOf(
-        previews?.supplements?.let { supplementsTodayLine(it) } ?: "SUPPS —",
         previews?.lastLabDraw?.let { "LAST DRAW " + it.format(DRAW_DATE).uppercase() }
             ?: if (previews?.labDrawsLoaded == true) "NO LAB DRAWS YET" else "LAST DRAW —",
+    )
+    TileRoute.Lab -> listOf(
+        previews?.supplements?.let { supplementsTodayLine(it) } ?: "SUPPS —",
+        "N=1 · PLANNING · TESTS",
     )
 }
 

@@ -64,123 +64,48 @@ import com.bioscan.fieldterminal.ui.components.PinnedPage
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import java.time.OffsetDateTime
-import com.bioscan.fieldterminal.ui.nav.FuelTab
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 
-// DAV-72 (First feedback fixes): Fuel tile page, tabs Nutrition/Hydration/
-// Supplements/Weight-TDEE. Nutrition+Hydration migrated from the old
-// combined NutritionHydrationScreen.kt (split into NutritionTabContent/
-// HydrationTabContent there); Supplements reuses SupplementsScreen()
-// untouched; Weight/TDEE folds in Category 5's Weight + Body Fat evaluations
-// (previously stranded on the old Analysis sub-tab). No real TDEE
-// calculation exists anywhere in this project yet (Category 10 is still
-// backlog per ROADMAP.md) -- this tab shows the real weight/body-fat trend
-// data that does exist rather than fabricate a TDEE number.
+// App restructure: Health › BODY (was Fuel › BODY): weight trend, the monthly body check-in, body fat, energy balance and
+// digestion. Protein on target moved to Nutrition. It loads its own nutrition overview (energy balance needs the logged
+// days) and stool log, so the Health tile's shared load stays what its other tabs need.
 @Composable
-fun FuelTileScreen(
-    onBack: () -> Unit,
-    onOpenNutrientBreakdown: () -> Unit = {},
-    // The monthly body check-in reminder lands on Body with the check-in sheet up.
-    openBodyCheckIn: Boolean = false,
-    onBodyCheckInHandled: () -> Unit = {},
-) {
-    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(if (openBodyCheckIn) FuelTab.Body else FuelTab.Plan) }
-    // The plan page's open days, kept here so they survive a tab switch.
-    var planOpenDays by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(setOf<LocalDate>()) }
-    var bodyCheckInOpen by remember { mutableStateOf(false) }
-    // Bumped after a check-in is saved so the Body tab reads the new one.
-    var bodyReload by remember { mutableIntStateOf(0) }
-    LaunchedEffect(openBodyCheckIn) {
-        if (openBodyCheckIn) {
-            tab = FuelTab.Body
-            bodyCheckInOpen = true
-            onBodyCheckInHandled()
-        }
-    }
+fun BodyTabContent(openCheckIn: Boolean = false, onCheckInHandled: () -> Unit = {}) {
     var overview by remember { mutableStateOf<NutritionOverview?>(null) }
     var stool by remember { mutableStateOf<List<StoolAnalysisRow>?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        guard.run {
-            overview = NutritionRepository(SupabaseClientProvider.client).loadOverview()
-            stool = AnalysisRepository(SupabaseClientProvider.client).loadStoolLog()
+    var checkInOpen by remember { mutableStateOf(false) }
+    // Bumped after a check-in is saved so the measurements card reads the new one.
+    var reload by remember { mutableIntStateOf(0) }
+    LaunchedEffect(openCheckIn) {
+        if (openCheckIn) {
+            checkInOpen = true
+            onCheckInHandled()
         }
-        isLoading = false
+    }
+    // A failed read leaves energy balance on its building state and digestion out, rather than failing the tab.
+    LaunchedEffect(Unit) {
+        overview = runCatching { NutritionRepository(SupabaseClientProvider.client).loadOverview() }.getOrNull()
+        stool = runCatching { AnalysisRepository(SupabaseClientProvider.client).loadStoolLog() }.getOrNull()
     }
 
-    // Contract A4: title, context line and sub-tab rail stay pinned; only the tab's content scrolls, from the top on a tab change.
-    val scroll = rememberScrollState()
-    LaunchedEffect(tab) { scroll.scrollTo(0) }
-    PinnedPage(
-        onBack = onBack,
-        title = "FUEL",
-        subtitle = when (tab) {
-            FuelTab.Plan -> "TODAY · NEXT 10 DAYS · ON THE PLATE"
-            FuelTab.Prep -> "PICK · RECIPES · WEEK · SHOP & COOK"
-            FuelTab.Nutrition -> "TODAY · MACROS · HYDRATION"
-            FuelTab.Body -> "WEIGHT · MEASUREMENTS · BODY FAT · STOOL"
-        },
-        accent = FT.DomainFuel,
-        rail = { SubTabRow(items = FuelTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
-        scrollState = scroll,
-    ) {
-
-        when {
-            guard.error != null && !isLoading -> LoadErrorCard(guard)
-            isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FT.DomainFuel)
-            }
-            else -> when (tab) {
-                FuelTab.Plan -> com.bioscan.fieldterminal.ui.screens.fuel.FuelPlanPage(
-                    overview,
-                    openDays = planOpenDays,
-                    onToggleDay = { d -> planOpenDays = if (d in planOpenDays) planOpenDays - d else planOpenDays + d },
-                )
-                FuelTab.Prep -> com.bioscan.fieldterminal.ui.screens.fuel.MealPrepPage(overview)
-                // DAV-207 (24/9 fixes): Hydration folded in as a second
-                // stacked section rather than its own subtab -- both
-                // composables already render their own full-width padded
-                // Column, so they stack cleanly as-is.
-                // Fuel planning moved to its own tab (Plan); Nutrition is what was logged.
-                FuelTab.Nutrition -> overview?.let {
-                    NutritionTabContent(it, onOpenNutrientBreakdown = onOpenNutrientBreakdown)
-                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp)) {
-                        NutritionCard(evaluateNutrition(it.allDays))
-                    }
-                    HydrationTabContent(it)
-                }
-                // DAV-96/100: relocated from Heart's old Stool tab -- frequency
-                // and longitudinal pattern, descriptive only, no food->stool
-                // causal link implied or computed (room is left for a future
-                // correlation analysis once enough nutrition+digestion history
-                // exists, per the ticket's own framing -- not built here).
-                // DAV-208 (24/9 fixes): Body (weight/body-fat/TDEE) folded in
-                // as a second stacked section, same reasoning as Hydration above.
-                FuelTab.Body -> {
-                    BodyTab(allDays = overview?.allDays ?: emptyList(), reloadKey = bodyReload, onStartCheckIn = { bodyCheckInOpen = true })
-                    stool?.let { rows ->
-                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                            val stoolEntries = rows.mapNotNull { row -> row.bristolType?.let { OffsetDateTime.parse(row.occurredAt).toLocalDateTime().toLocalDate() to it } }
-                            BristolCard(evaluateBristol(stoolEntries), stoolEntries)
-                        }
-                    }
-                }
-            }
+    BodyTab(allDays = overview?.allDays ?: emptyList(), reloadKey = reload, onStartCheckIn = { checkInOpen = true })
+    stool?.let { rows ->
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            val stoolEntries = rows.mapNotNull { row -> row.bristolType?.let { OffsetDateTime.parse(row.occurredAt).toLocalDateTime().toLocalDate() to it } }
+            BristolCard(evaluateBristol(stoolEntries), stoolEntries)
         }
     }
 
-    if (bodyCheckInOpen) {
+    if (checkInOpen) {
         BodyCheckInSheet(
-            onDismiss = { bodyCheckInOpen = false },
+            onDismiss = { checkInOpen = false },
             onSaved = {
-                bodyCheckInOpen = false
-                bodyReload++
+                checkInOpen = false
+                reload++
             },
         )
     }
@@ -247,7 +172,7 @@ private fun BodyTab(allDays: List<DailyNutrition>, reloadKey: Int, onStartCheckI
         return
     } else if (b == null) {
         Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.DomainFuel)
+            CircularProgressIndicator(color = FT.DomainHeart)
         }
         return
     }
@@ -269,13 +194,6 @@ private fun BodyTab(allDays: List<DailyNutrition>, reloadKey: Int, onStartCheckI
             onStart = onStartCheckIn,
         )
 
-        // DAV-76: read alongside weight rather than as a disconnected number
-        // -- no numeric calorie/macro goal exists anywhere in this project
-        // (see NutritionEvaluation.kt's own note on that), so "on-target"
-        // here is the one real target this project already has: the AMDR
-        // protein band evaluateNutrition() already gates proteinAdherence14d
-        // on, shown day-by-day instead of rolled into one percentage.
-        NutritionOnTargetCard(proteinPercentSeries(allDays))
 
         val bodyFatPoints = b.mapNotNull { row -> row.bodyFatPct?.let { LocalDate.parse(row.date) to it } }
         BodyFatCard(evaluateBodyFat(bodyFatPoints))
@@ -299,47 +217,6 @@ private fun WeightCard(eval: WeightEvaluation) {
         val today = LocalDate.now()
         val recentSeries = eval.emaSeries.filter { ChronoUnit.DAYS.between(it.first, today) <= TREND_WINDOW_DAYS }
         DateTrendLine(points = recentSeries, color = FT.DomainFuel, modifier = Modifier.padding(top = 6.dp), unit = "kg (EMA)")
-    }
-}
-
-// DAV-76. Green ("on-target here") already means "in range" everywhere else
-// in this app (BLOODWORK STABLE, 0 FLAGS), not a color picked fresh for
-// this card.
-@Composable
-private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) {
-    FTCard(title = "PROTEIN ON-TARGET (AMDR 10–35%)") {
-        if (proteinSeries.size < 2) {
-            Text(
-                "Not enough complete-day nutrition logs yet to chart a trend.",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
-        } else {
-            DateTrendLine(
-                points = proteinSeries,
-                color = FT.DomainFuel,
-                refLow = PROTEIN_PCT_LOW * 100,
-                refHigh = PROTEIN_PCT_HIGH * 100,
-                unit = "% of calories from protein",
-                // Chart rules: a day without a complete log is a gap, not a straight line across it.
-                maxGapDays = 1,
-            )
-        }
-    }
-}
-
-// Phase A4 (Category 4). No SHIFT_UP/SHIFT_DOWN here -- the spec never
-// defines a threshold for calling an energy-trend move a "shift" the way it
-// does for Categories 1/2/3/5/6, so `Stable` is shown once the gate is met,
-// not because nothing moves but because there's no rule to judge it by.
-@Composable
-private fun NutritionCard(eval: NutritionEvaluation) {
-    FTCard(title = "NUTRITION (ANALYSIS)") {
-        FTStatePill(gateStateWord(eval.state))
-        FTDataChip(eval.confidence)
-        eval.energyTrend14d?.let { FTMetricRow("14-day energy trend", "%.0f kcal".format(it)) }
-        eval.energyCv28d?.let { FTMetricRow("28-day energy CV", "%.1f%%".format(it)) }
-        eval.proteinAdherence14d?.let { FTMetricRow("Protein in AMDR band (10-35% kcal)", "%.0f%%".format(it)) }
     }
 }
 

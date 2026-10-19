@@ -123,7 +123,7 @@ private fun Section(title: String, items: List<PantryItem>, onOpen: (Long) -> Un
 @Composable
 private fun PantryRow(item: PantryItem, onClick: () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().background(FT.GlassFill).border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
+        Modifier.fillMaxWidth().background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule)).border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
             .ftClickable(shape = RoundedCornerShape(FT.RadiusModule), onClick = onClick).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {

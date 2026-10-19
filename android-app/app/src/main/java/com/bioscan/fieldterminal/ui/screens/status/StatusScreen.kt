@@ -28,7 +28,7 @@ import kotlinx.coroutines.coroutineScope
 // four system tiles attach to it inside BodyConsole (see that file) rather
 // than sitting in their own section here, per
 // design/FIELD_TERMINAL_IA_CONTRACT.md section 4. Each tile is still its
-// own pushed page with its own internal tabs (see TileRoute/FuelTab/HeartTab
+// own pushed page with its own internal tabs (see TileRoute/NutritionTab/HealthTab
 // in ui/nav/TopLevelTab.kt) -- this is a compositional change, not a new
 // navigation destination.
 //

@@ -3,6 +3,8 @@ package com.bioscan.fieldterminal.ui.screens.user
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,9 +44,15 @@ private enum class FitnessMetric(val label: String) { VO2MAX("VO2MAX"), LACTATE_
 
 private val DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy")
 
+// App restructure: the Running page is Training's RUNNING tab (it was pushed from the User tab's level buttons, which
+// now open the tab). [top] goes under nothing but above the level card: the suspected-trail-run review.
 @Composable
-fun RunningSkillScreen(onBack: () -> Unit) {
-    SkillPage("RUNNING", "VOLUME · PACE · FITNESS · EFFICIENCY · FORM", onBack) {
+fun RunningTab(top: @Composable () -> Unit = {}) {
+    Column(
+        modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        top()
         LoadedContent(load = { UserDataCache.running() }) { RunningContent(it) }
     }
 }

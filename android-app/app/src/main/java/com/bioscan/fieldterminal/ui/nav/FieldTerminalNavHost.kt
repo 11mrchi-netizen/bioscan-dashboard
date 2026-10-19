@@ -49,13 +49,11 @@ import com.bioscan.fieldterminal.ui.screens.settings.UserSettingsScreen
 import com.bioscan.fieldterminal.ui.screens.TrainingBlocksScreen
 import com.bioscan.fieldterminal.ui.screens.UserProfileScreen
 import com.bioscan.fieldterminal.ui.screens.user.ConditioningSkillScreen
-import com.bioscan.fieldterminal.ui.screens.user.RunningSkillScreen
 import com.bioscan.fieldterminal.ui.screens.user.Skill
-import com.bioscan.fieldterminal.ui.screens.user.StrengthSkillScreen
-import com.bioscan.fieldterminal.ui.screens.status.FuelTileScreen
-import com.bioscan.fieldterminal.ui.screens.status.HeartTileScreen
+import com.bioscan.fieldterminal.ui.screens.status.HealthTileScreen
+import com.bioscan.fieldterminal.ui.screens.status.LabTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.NutrientBreakdownScreen
-import com.bioscan.fieldterminal.ui.screens.status.LabsTileScreen
+import com.bioscan.fieldterminal.ui.screens.status.NutritionTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.PantryScreen
 import com.bioscan.fieldterminal.ui.screens.status.StatusScreen
 import com.bioscan.fieldterminal.ui.screens.status.TodayScreen
@@ -67,13 +65,17 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotificationHandled: () -> Unit = {}) {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
-    // Set when a notification tap should land on a specific Labs subtab; LabsTileScreen consumes it.
-    var labsRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<LabsTab?>(null) }
-    // Same hand-off for Training's subtabs (UX review F1: the Status injury flag lands on Training › Injury).
+    // Set when a link should land on a specific tab of a tile; the tile consumes it. App restructure: Lab's (the
+    // supplement reminder -> SUPPLEMENTS, the fuel reminder and the User block card -> PLANNING), Training's (the injury
+    // flag -> INJURY, the User level buttons -> RUNNING / STRENGTH), Nutrition's (Today's fuel line -> PLAN) and Health's.
+    var labsRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<LabTab?>(null) }
+    var planningRequestedSection by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<PlanningSection?>(null) }
     var trainingRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<TrainingTab?>(null) }
+    var nutritionRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<NutritionTab?>(null) }
+    var healthRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<HealthTab?>(null) }
     // Analysis review phase B: the 22:25 evening check-in reminder opens Today with the check-in sheet up.
     var checkInRequested by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    // The monthly body check-in reminder opens Fuel › Body with the check-in sheet up.
+    // The monthly body check-in reminder opens Lab › Tests with the check-in sheet up.
     var bodyCheckInRequested by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     // Contract A4: the dock keeps lit the tab whose stack you are in, also on pushed screens (tiles, settings and detail
     // pages), which used to light nothing. Set whenever a top-level destination is shown and when a dock tab is tapped,
@@ -84,8 +86,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
         val kind = pendingNotificationKind ?: return@LaunchedEffect
         when (notificationDestination(kind)) {
             NotificationDestination.SUPPLEMENTS -> {
-                labsRequestedTab = LabsTab.Supplements
-                navController.navigate(TileRoute.Labs.route) { launchSingleTop = true }
+                labsRequestedTab = LabTab.Supplements
+                navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
             }
             NotificationDestination.LOG -> navController.navigate(TopLevelTab.Log.route) {
                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -98,9 +100,12 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             }
             NotificationDestination.BODY_CHECKIN -> {
                 bodyCheckInRequested = true
-                navController.navigate(TileRoute.Fuel.route) { launchSingleTop = true }
+                navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
             }
-            NotificationDestination.FUEL -> navController.navigate(TileRoute.Fuel.route) { launchSingleTop = true }
+            NotificationDestination.FUEL -> {
+                planningRequestedSection = PlanningSection.Food
+                navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
+            }
             NotificationDestination.NONE -> Unit
         }
         onNotificationHandled()
@@ -155,9 +160,14 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                         trainingRequestedTab = TrainingTab.Load
                         navController.navigate(TileRoute.Training.route) { launchSingleTop = true }
                     },
-                    // Cardio is the Health tile's first tab, where a freshly pushed page opens.
-                    onOpenCardio = { navController.navigate(TileRoute.Heart.route) { launchSingleTop = true } },
-                    onOpenFuel = { navController.navigate(TileRoute.Fuel.route) { launchSingleTop = true } },
+                    onOpenCardio = {
+                        healthRequestedTab = HealthTab.Cardio
+                        navController.navigate(TileRoute.Health.route) { launchSingleTop = true }
+                    },
+                    onOpenFuel = {
+                        nutritionRequestedTab = NutritionTab.Plan
+                        navController.navigate(TileRoute.Nutrition.route) { launchSingleTop = true }
+                    },
                 )
             }
             // DAV-70 (First feedback fixes): the 4 tile pages, pushed routes
@@ -169,11 +179,6 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 TrainingTileScreen(
                     onBack = { navController.popBackStack() },
                     onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") },
-                    onOpenPlanner = { navController.navigate("training_planner") },
-                    onOpenRunning = { navController.navigate("skill_running") },
-                    onOpenStrength = { navController.navigate("skill_strength") },
-                    onOpenTrainingBlocks = { navController.navigate("training_blocks") },
-                    onOpenEvent = { id -> navController.navigate("event/$id") },
                     requestedTab = trainingRequestedTab,
                     onRequestedTabConsumed = { trainingRequestedTab = null },
                 )
@@ -181,47 +186,62 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             composable("training_planner") {
                 com.bioscan.fieldterminal.ui.screens.training.TrainingPlannerScreen(onBack = { navController.popBackStack() }, onCreated = { navController.popBackStack() })
             }
-            composable(TileRoute.Fuel.route) {
-                FuelTileScreen(
+            composable(TileRoute.Nutrition.route) {
+                NutritionTileScreen(
                     onBack = { navController.popBackStack() },
                     onOpenNutrientBreakdown = { navController.navigate("nutrient_breakdown") },
-                    openBodyCheckIn = bodyCheckInRequested,
-                    onBodyCheckInHandled = { bodyCheckInRequested = false },
+                    onOpenFullPlan = {
+                        planningRequestedSection = PlanningSection.Food
+                        navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
+                    },
+                    requestedTab = nutritionRequestedTab,
+                    onRequestedTabConsumed = { nutritionRequestedTab = null },
                 )
             }
             composable("nutrient_breakdown") { NutrientBreakdownScreen(onBack = { navController.popBackStack() }) }
-            composable(TileRoute.Heart.route) { HeartTileScreen(onBack = { navController.popBackStack() }) }
-            composable(TileRoute.Labs.route) {
-                LabsTileScreen(
+            composable(TileRoute.Health.route) {
+                HealthTileScreen(
+                    onBack = { navController.popBackStack() },
+                    requestedTab = healthRequestedTab,
+                    onRequestedTabConsumed = { healthRequestedTab = null },
+                )
+            }
+            composable(TileRoute.Lab.route) {
+                LabTileScreen(
                     onBack = { navController.popBackStack() },
                     onOpenPantry = { navController.navigate("pantry") },
+                    onOpenPlanner = { navController.navigate("training_planner") },
+                    onOpenAllBlocks = { navController.navigate("training_blocks") },
+                    onOpenEvent = { id -> navController.navigate("event/$id") },
                     requestedTab = labsRequestedTab,
-                    onRequestedTabConsumed = { labsRequestedTab = null },
+                    requestedSection = planningRequestedSection,
+                    onRequestedTabConsumed = { labsRequestedTab = null; planningRequestedSection = null },
+                    openBodyCheckIn = bodyCheckInRequested,
+                    onBodyCheckInHandled = { bodyCheckInRequested = false },
                 )
             }
             composable("pantry") { PantryScreen(onBack = { navController.popBackStack() }) }
             composable(TopLevelTab.User.route) {
                 UserProfileScreen(
                     onOpenAging = { navController.navigate("aging_profile") },
-                    // UX review P5: the User tab's block card opens Training › Plan, the block's one home.
+                    // UX review P5: the User tab's block card opens the block's one home, now Lab › Planning › Training.
                     onOpenTrainingPlan = {
-                        trainingRequestedTab = TrainingTab.Plan
-                        navController.navigate(TileRoute.Training.route) { launchSingleTop = true }
+                        planningRequestedSection = PlanningSection.Training
+                        navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
                     },
+                    // App restructure: Running and Strength are Training's tabs; Conditioning keeps its own page.
                     onOpenSkill = { skill ->
-                        navController.navigate(
-                            when (skill) {
-                                Skill.RUNNING -> "skill_running"
-                                Skill.STRENGTH -> "skill_strength"
-                                Skill.CONDITIONING -> "skill_conditioning"
-                            },
-                        )
+                        when (skill) {
+                            Skill.RUNNING, Skill.STRENGTH -> {
+                                trainingRequestedTab = if (skill == Skill.RUNNING) TrainingTab.Running else TrainingTab.Strength
+                                navController.navigate(TileRoute.Training.route) { launchSingleTop = true }
+                            }
+                            Skill.CONDITIONING -> navController.navigate("skill_conditioning")
+                        }
                     },
                 )
             }
             composable("aging_profile") { AgingProfileScreen(onBack = { navController.popBackStack() }) }
-            composable("skill_running") { RunningSkillScreen(onBack = { navController.popBackStack() }) }
-            composable("skill_strength") { StrengthSkillScreen(onBack = { navController.popBackStack() }) }
             composable("skill_conditioning") { ConditioningSkillScreen(onBack = { navController.popBackStack() }) }
             composable("training_blocks") {
                 TrainingBlocksScreen(onBack = { navController.popBackStack() })
@@ -248,7 +268,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             // screen so far is a flat tab or a bottom sheet) -- a session's
             // on-demand Health Connect time-series detail, reached by
             // tapping an Exercise entry's DETAIL action in the Log tab.
-            // Events outside the training plan (races, long days): the event page, from Training › Plan, Next up and +.
+            // Events outside the training plan (races, long days): the event page, from Lab › Planning › Race fuel, Next up and +.
             composable("event/{eventId}") { backStackEntry ->
                 val eventId = backStackEntry.arguments?.getString("eventId")?.toLongOrNull()
                 if (eventId != null) {

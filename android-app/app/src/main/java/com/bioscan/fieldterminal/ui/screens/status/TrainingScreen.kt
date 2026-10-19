@@ -58,22 +58,13 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
-// Step 7 (Phase C), generalized in Phase G3 from runs-only to any exercise
-// type via `exercise_sessions` (see data/TrainingRepository.kt). STRENGTH
-// finally has a real data source -- Step 7's own finding was that none
-// existed anywhere in this project; Health Connect is the first. Kept
-// basic here per the user's own framing: counts/minutes this week, not a
-// full per-lift breakdown -- that's Phase G5's "combined session detail"
-// view, once one exists to link to.
+// Step 7 (Phase C), generalized in Phase G3 from runs-only to any exercise type via `exercise_sessions` (see
+// data/TrainingRepository.kt).
+// App restructure: the weekly RUNNING and STRENGTH rollup cards gave way to Training's RUNNING and STRENGTH tabs (the
+// former User-tab skill pages). What is left here is the SESSIONS tab and the suspected-trail-run review, which RUNNING
+// shows on top.
 @Composable
-fun TrainingScreen(
-    timeframe: PerformanceTimeframe,
-    onOpenSessionDetail: (Long) -> Unit = {},
-    onOpenRunning: () -> Unit = {},
-    onOpenStrength: () -> Unit = {},
-    // The Load tab's glance strip (UX review P2); each card below registers its chip.
-    glance: GlanceAnchors? = null,
-) {
+private fun TrainingOverviewLoaded(quiet: Boolean = false, content: @Composable (TrainingOverview, (List<Long>) -> Unit) -> Unit) {
     var overview by remember { mutableStateOf<TrainingOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -90,8 +81,7 @@ fun TrainingScreen(
         isLoading = false
     }
 
-    // Tags every copy (HC/manual/Zepp) of each run as trail, then reloads so the
-    // RUNNING card's trail count/elevation and the suspected list update.
+    // Tags every copy (HC/manual/Zepp) of each run as trail, then reloads so the suspected list updates.
     val onMarkTrail: (List<Long>) -> Unit = { ids ->
         scope.launchSafe {
             val repo = AddEntryRepository(SupabaseClientProvider.client)
@@ -100,94 +90,60 @@ fun TrainingScreen(
         }
     }
 
+    val o = overview
     when {
+        quiet && o == null -> Unit
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FT.DomainTraining)
         }
-        error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
+        error != null || o == null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            Text("Failed to load: ${error ?: "no data"}", style = FTType.BodySmall, color = FT.Critical)
         }
-        else -> TrainingContent(overview!!, timeframe, onOpenSessionDetail, onMarkTrail, onOpenRunning, onOpenStrength, glance)
+        else -> content(o, onMarkTrail)
     }
 }
 
+// Training › SESSIONS: every session, newest first, ten at a time (it listed twenty at once on the Load tab).
 @Composable
-private fun TrainingContent(
-    overview: TrainingOverview,
-    timeframe: PerformanceTimeframe,
-    onOpenSessionDetail: (Long) -> Unit,
-    onMarkTrail: (List<Long>) -> Unit,
-    onOpenRunning: () -> Unit,
-    onOpenStrength: () -> Unit,
-    glance: GlanceAnchors?,
-) {
-    val today = LocalDate.now()
+fun TrainingSessionsTab(onOpenSessionDetail: (Long) -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        // 28/9: PERFORMANCE and RUN EFFICIENCY folded into one RUNNING card
-        // (previously three separate top-level cards) per direct user
-        // request -- both are running-related, and neither is per-session so
-        // they read fine as sub-sections rather than their own cards.
-        RunningCard(
-            overview, timeframe, onMarkTrail, onOpenRunning,
-            modifier = Modifier.glanceAnchor(
-                glance, "running",
-                GlanceChip(
-                    order = 2, label = "RUNNING",
-                    headline = if (overview.hasAnyRunning) "%.1f KM · 7D".format(sumDistanceKmSince(overview.runningSessions, today, 7)) else "NONE YET",
-                ),
-            ),
-        )
-
-        FTCard(
-            title = "STRENGTH",
-            modifier = Modifier.glanceAnchor(
-                glance, "strength",
-                GlanceChip(order = 3, label = "STRENGTH", headline = if (overview.hasAnyStrength) "${overview.strengthSessionsThisWeek} THIS WEEK" else "NONE YET"),
-            ),
-        ) {
-            if (overview.hasAnyStrength) {
-                FTMetricValue(
-                    DisplayValue(
-                        primary = "${overview.strengthSessionsThisWeek}",
-                        unit = if (overview.strengthSessionsThisWeek == 1) "SESSION" else "SESSIONS",
-                    ),
-                )
-                FTMetricRow("This week", "${overview.strengthMinutesThisWeek} min")
-                SkillLink(summary = "STANDARDS · E1RM · VOLUME · PRs", label = "OPEN STRENGTH", onClick = onOpenStrength)
-            } else {
-                Text(
-                    text = "No strength sessions synced yet.",
-                    style = FTType.RowTitle,
-                    color = FT.TextSecondary,
-                )
-                Text(
-                    text = "Health Connect is this app's real data source for strength training now — " +
-                        "log a workout with any Health-Connect-aware app on your phone and it'll show up here after the next sync.",
-                    style = FTType.Caption,
-                    color = FT.TextSecondary,
-                )
-            }
-        }
-
-        SessionListCard(
-            overview.recentSessions, onOpenSessionDetail,
-            modifier = Modifier.glanceAnchor(glance, "sessions", GlanceChip(order = 4, label = "SESSIONS", headline = "${overview.recentSessions.take(20).size}")),
-        )
+        TrainingOverviewLoaded { overview, _ -> SessionListCard(overview.recentSessions, onOpenSessionDetail) }
     }
 }
 
-// Live check: nothing on this tab showed a plain "everything you did"
-// list -- RUNNING/STRENGTH above are weekly rollups only. Reuses the same
-// recentSessions fetch those cards already get (no new query) and the same
-// session_detail/{id} route the Log tab's EntryRow already opens.
+// Training › RUNNING's first card, only when a run looks like trail but is not tagged so; nothing while it loads.
+@Composable
+fun SuspectedTrailRunsCard() {
+    TrainingOverviewLoaded(quiet = true) { overview, onMarkTrail ->
+        if (overview.suspectedTrailRuns.isNotEmpty()) {
+            FTCard(title = "TRAIL RUNS TO CONFIRM") { SuspectedTrailRuns(overview.suspectedTrailRuns, onMarkTrail) }
+        }
+    }
+}
+
+const val SESSIONS_PAGE = 10
+
 @Composable
 private fun SessionListCard(sessions: List<ExerciseSessionRow>, onOpenSessionDetail: (Long) -> Unit, modifier: Modifier = Modifier) {
-    if (sessions.isEmpty()) return
+    if (sessions.isEmpty()) {
+        FTCard(title = "ALL SESSIONS", modifier = modifier) {
+            Text("No sessions synced or logged yet.", style = FTType.BodySmall, color = FT.TextSecondary)
+        }
+        return
+    }
+    var shown by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(SESSIONS_PAGE) }
     FTCard(title = "ALL SESSIONS", modifier = modifier) {
-        sessions.take(20).forEach { session -> SessionRow(session, onClick = { onOpenSessionDetail(session.id) }) }
+        sessions.take(shown).forEach { session -> SessionRow(session, onClick = { onOpenSessionDetail(session.id) }) }
+        val left = sessions.size - shown
+        if (left > 0) {
+            com.bioscan.fieldterminal.ui.components.FTButton(
+                "LOAD ${minOf(left, SESSIONS_PAGE)} MORE · $left LEFT",
+                emphasis = com.bioscan.fieldterminal.ui.components.FTButtonEmphasis.Tertiary,
+            ) { shown += SESSIONS_PAGE }
+        }
     }
 }
 
@@ -213,122 +169,6 @@ private fun SessionRow(session: ExerciseSessionRow, onClick: () -> Unit) {
             Text(when_, style = FTType.Caption, color = FT.TextSecondary)
         }
         Text(detail, style = FTType.Value, color = FT.TextSecondary)
-    }
-}
-
-// Distance run over a selectable window -- computed client-side from the
-// same `exercise_sessions` rows the RUNNING card above already fetched,
-// using the existing sumDistanceKmSince(). No new query per period switch.
-// DAV-115/123: RUNNING — THIS WEEK and DISTANCE TOTALS combined into one
-// card per direct user request -- both were showing the same underlying
-// runningSessions rows, just at a fixed week vs. a switchable period.
-// "4-week avg km/wk" is dropped as its own fixed stat since selecting "1M"
-// on the same toggle now covers that; longest run stays all-time (its own
-// label already says so, not something a timeframe toggle should touch).
-// No volume bar: a fixed km ceiling was arbitrary at any period, so the hero
-// value stands alone until a real personal baseline backs a comparison.
-@Composable
-private fun RunningCard(overview: TrainingOverview, timeframe: PerformanceTimeframe, onMarkTrail: (List<Long>) -> Unit, onOpenRunning: () -> Unit, modifier: Modifier = Modifier) {
-    var period by remember { mutableStateOf(RunningPeriod.Week) }
-    val today = LocalDate.now()
-
-    FTCard(title = "RUNNING", modifier = modifier) {
-        if (!overview.hasAnyRunning) {
-            Text("No running sessions logged yet.", style = FTType.Body, color = FT.TextSecondary)
-        } else {
-            val totalKm = sumDistanceKmSince(overview.runningSessions, today, period.days)
-            val avgPace = averagePaceMinPerKmSince(overview.runningSessions, today, period.days)
-            val trailRuns = overview.runningSessions.filter {
-                it.details.routeType == "trail" &&
-                    ChronoUnit.DAYS.between(OffsetDateTime.parse(it.startTime).toLocalDate(), today) < period.days
-            }
-
-            SegmentedToggle(options = RunningPeriod.entries, selected = period, labelOf = { it.label }, onSelect = { period = it })
-            FTMetricValue(DisplayValue(primary = "%.1f".format(totalKm), unit = "KM"))
-
-            avgPace?.let { FTMetricRow("Avg pace", formatPace(it)) }
-
-            // DAV-198: pace is genuinely session-shaped (unlike HRV/RHR's
-            // daily wearable readings, which have no context to filter on --
-            // see ComparableSet.kt's own header comment) -- a 5K and a
-            // marathon aren't comparable regardless of fitness, so history is
-            // restricted to similar-distance runs before comparePersonal ever
-            // sees it.
-            val comparableRuns = overview.runningSessions.filter {
-                it.details.routeType != "trail" && hasPlausiblePace(it.distanceKm, it.durationMin)
-            }
-            val latestRun = comparableRuns.maxByOrNull { OffsetDateTime.parse(it.startTime) }
-            val latestDistance = latestRun?.distanceKm
-            val latestDuration = latestRun?.durationMin
-            if (latestRun != null && latestDistance != null && latestDistance > 0 && latestDuration != null) {
-                val paceHistory = comparableSet(comparableRuns.filter { it.id != latestRun.id }) { s ->
-                    s.distanceKm?.let { isComparableSessionDistance(latestDistance, it) } == true
-                }.comparable.mapNotNull { s ->
-                    val d = s.distanceKm ?: return@mapNotNull null
-                    val dur = s.durationMin ?: return@mapNotNull null
-                    OffsetDateTime.parse(s.startTime).toLocalDate() to (dur / d)
-                }
-                val paceComparison = comparePersonal(
-                    metric = "pace",
-                    current = latestDuration / latestDistance,
-                    history = paceHistory,
-                    presentSources = setOf("exercise_sessions"),
-                    idealSources = setOf("exercise_sessions"),
-                    origin = "exercise_sessions",
-                )
-                ComparisonStrip(personal = paceComparison)
-            }
-
-            overview.longestRunKm?.let { longest ->
-                FTMetricRow("Longest run (all-time)", "%.2f km".format(longest))
-            }
-
-            // DAV-144. No per-session list exists on this tab (see
-            // docs/trail-intelligence/05-trail-metrics-ui-presentation.md) --
-            // this is the same rollup shape every other figure here uses, only
-            // shown when a real trail run happened in the selected period.
-            if (trailRuns.isNotEmpty()) {
-                FTMetricRow("Trail runs", "${trailRuns.size}")
-                trailRuns.mapNotNull { it.elevationGainM }.takeIf { it.isNotEmpty() }?.sum()?.let { gain ->
-                    FTMetricRow("Elevation gained", "${gain.toInt()} m")
-                }
-            }
-
-            SuspectedTrailRuns(overview.suspectedTrailRuns, onMarkTrail)
-        }
-
-        // 28/9: folded in from the old standalone PERFORMANCE/RUN EFFICIENCY
-        // cards -- a wearable/Zepp-derived trend independent of whether any
-        // running session has been logged, so each self-hides on no data
-        // rather than being gated behind hasAnyRunning above (a real display
-        // bug this reorder originally fixed: VO2max previously never showed
-        // at all for a no-running-history account, despite coming from
-        // wearable_daily, not exercise_sessions).
-        // The deep charts (VO2max / lactate threshold, efficiency, pace, form, weekly volume) moved to the User tab's
-        // Running page; this card keeps the weekly rollup and links there.
-        SkillLink(
-            summary = listOfNotNull(
-                overview.latestVo2Max?.let { "VO2MAX ${"%.0f".format(it)}" },
-                overview.efficiencyPoints.lastOrNull()?.second?.let { "EF ${"%.2f".format(it)}" },
-            ).joinToString("  ·  ").ifBlank { "VO2MAX · PACE · EFFICIENCY · FORM" },
-            label = "OPEN RUNNING",
-            onClick = onOpenRunning,
-        )
-    }
-}
-
-// One-line pointer from a rollup card to its deep page on the User tab.
-@Composable
-private fun SkillLink(summary: String, label: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .ftClickable(onClick = onClick)
-            .padding(top = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(summary, style = FTType.MonoCaption, color = FT.TextSecondary, modifier = Modifier.weight(1f))
-        Text("$label ›", style = FTType.Label, color = FT.DomainTraining)
     }
 }
 
@@ -384,10 +224,4 @@ private fun TrailMarkButton(label: String, modifier: Modifier = Modifier, onClic
     ) {
         Text(label, style = FTType.Label, color = FT.DomainTraining)
     }
-}
-
-private fun formatPace(minPerKm: Double): String {
-    val min = minPerKm.toInt()
-    val sec = ((minPerKm - min) * 60).toInt()
-    return "%d:%02d /km".format(min, sec)
 }

@@ -34,6 +34,8 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TodayFuelResult
 import com.bioscan.fieldterminal.domain.fuel.PlanSource
 import com.bioscan.fieldterminal.domain.fuel.formatGPerKg
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
@@ -52,13 +54,19 @@ import kotlin.math.roundToInt
 private val DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)
 private val WEEKDAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEEE", Locale.ENGLISH)
 
-/** [openDays] and [onToggleDay] are kept by the Fuel tile, so open days survive a tab switch. */
+/**
+ * [openDays] and [onToggleDay] are kept by the page that hosts it, so open days survive a tab switch. App restructure:
+ * Lab › Planning shows the whole horizon; Nutrition › PLAN passes [days] = 3 (today and the next two) and
+ * [onOpenFullPlan], which links to the full plan instead of the periodization card.
+ */
 @Composable
 fun FuelPlanPage(
     overview: NutritionOverview?,
     openDays: Set<LocalDate>,
     onToggleDay: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
+    days: Int = Int.MAX_VALUE,
+    onOpenFullPlan: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var result by remember { mutableStateOf<TodayFuelResult?>(null) }
@@ -77,11 +85,15 @@ fun FuelPlanPage(
     }
 
     Column(modifier.padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        val horizon = (result as? TodayFuelResult.Ready)?.fuel?.horizon.orEmpty()
+        val horizon = (result as? TodayFuelResult.Ready)?.fuel?.horizon.orEmpty().take(days)
         CalendarReviewCard(horizon.flatMap { it.day.reviews }, onAnswered = { attempt++ })
         TodaysFuelCard(result, error, onRetry = { attempt++ }, onOpenSettings = { settingsOpen = true })
         if (horizon.size > 1) NextDaysCard(horizon, openDays, onToggleDay)
-        overview?.let { PeriodizationCard(it) }
+        if (onOpenFullPlan != null) {
+            FTButton("OPEN THE FULL PLAN · 10 DAYS AND MEAL PREP", emphasis = FTButtonEmphasis.Secondary, modifier = Modifier.fillMaxWidth(), onClick = onOpenFullPlan)
+        } else {
+            overview?.let { PeriodizationCard(it) }
+        }
     }
     if (settingsOpen) FuelSettingsSheet(onDismiss = { settingsOpen = false }, onSaved = { settingsOpen = false; attempt++ })
 }

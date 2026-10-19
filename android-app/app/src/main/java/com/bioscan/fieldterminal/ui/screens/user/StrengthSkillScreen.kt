@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,9 +49,13 @@ import java.time.format.DateTimeFormatter
 private val DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy")
 private val TIER_LABELS = listOf("Novice", "Interm.", "Advanced", "Elite")
 
+// App restructure: the Strength page is Training's STRENGTH tab (was pushed from the User tab's level buttons).
 @Composable
-fun StrengthSkillScreen(onBack: () -> Unit) {
-    SkillPage("STRENGTH", "STANDARDS · E1RM · VOLUME · PRs", onBack) {
+fun StrengthTab() {
+    androidx.compose.foundation.layout.Column(
+        modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(18.dp),
+    ) {
         LoadedContent(load = { UserDataCache.strength() }) { StrengthContent(it) }
     }
 }

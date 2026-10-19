@@ -45,8 +45,9 @@ import java.util.Locale
 // UX review P5 / F6: the one home of the training block. The current block (edited here, moved from the User tab), PLAN A
 // NEW BLOCK, what is coming up, the planned blocks and the history (moved from the User tab) all live on this tab; the
 // User tab keeps a compact card that opens it, and Setup keeps only equipment and session times.
+// App restructure: it is Lab › Planning › TRAINING; the events list moved to Planning's RACE FUEL section.
 @Composable
-fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {}, onOpenEvent: (Long) -> Unit = {}) {
+fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {}) {
     val repo = remember { TrainingProgramRepository(SupabaseClientProvider.client) }
     val cyclesRepo = remember { TrainingCyclesRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
@@ -95,7 +96,6 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {},
             )
         }
         FTButton("PLAN A NEW BLOCK", onClick = onOpenPlanner, emphasis = FTButtonEmphasis.Primary)
-        com.bioscan.fieldterminal.ui.screens.events.EventsCard(onOpenEvent = onOpenEvent)
         FTCard(title = "UPCOMING") {
             if (upcoming.isEmpty()) Text("No planned sessions yet.", color = FT.TextSecondary, style = FTType.BodySmall)
             upcoming.forEach { s ->

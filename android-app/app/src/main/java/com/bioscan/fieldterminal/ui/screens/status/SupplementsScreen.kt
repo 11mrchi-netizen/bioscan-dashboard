@@ -1,6 +1,8 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -206,7 +208,9 @@ private fun SupplementsContent(
                     val items = grouped[timeOfDay] ?: return@forEach
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(timeOfDay.uppercase(), style = sectionLabelStyle, color = FT.TextSecondary)
-                        Column(modifier = Modifier.fillMaxWidth().background(FT.GlassFill)) {
+                        // App restructure: the time-of-day groups had square corners; they use the module radius like every other block.
+                        val groupShape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusModule)
+                        Column(modifier = Modifier.fillMaxWidth().clip(groupShape).background(FT.GlassFill, groupShape).border(FT.BorderWidth, FT.GlassBorder, groupShape)) {
                             items.forEachIndexed { i, s ->
                                 ActiveRow(s, outcomes[s.id].orEmpty(), showDivider = i < items.lastIndex, onClick = { onSupplementClick(s) }, onExperiment = { onExperiment(s) })
                             }

@@ -76,7 +76,9 @@ private const val BOARD_INFO =
         "randomised self-experiment tests one."
 
 private const val BOARD_DETAILS =
-    "No-effect zones: HRV 2%, resting heart rate 1 bpm, sleep 10 minutes. ASSOCIATED is the second rung of the evidence " +
+    "Reading a row: the dot is the estimate, the line its 95% interval, the grey block the no-effect zone, the ticks the " +
+        "smallest effect the data could detect. Tap a row for its sentence, what was adjusted for, the checks and its curves.\n\n" +
+        "No-effect zones: HRV 2%, resting heart rate 1 bpm, sleep 10 minutes. ASSOCIATED is the second rung of the evidence " +
         "ladder; a randomised self-experiment reaches TESTED."
 
 @Composable
@@ -88,14 +90,18 @@ internal fun EvidenceBoardCard(groups: List<EvidenceGroup>, evidence: EvidenceRo
             return@FTCard
         }
         Text(evidenceTally(groups), style = FTType.Caption, color = FT.TextMuted)
+        // App restructure, fix 6: one line per question (label, its forest row, the verdict), grouped by outcome; the
+        // sentences and numbers are one tap away.
         groups.forEach { g ->
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(g.title, style = FTType.LabelCaps, color = FT.TextSecondary)
                 g.rows.forEach { row -> EvidenceRow(row, g.scale) { open = row } }
-                AxisLabels(g.scale, g.unit)
+                Row(Modifier.fillMaxWidth()) {
+                    Box(Modifier.weight(0.38f))
+                    Box(Modifier.weight(0.62f)) { AxisLabels(g.scale, g.unit) }
+                }
             }
         }
-        Text("Dot: estimate · line: 95% interval · grey: no-effect zone · ticks: smallest detectable effect", style = FTType.Micro, color = FT.TextMuted)
     }
     open?.let { row ->
         EvidenceDetailSheet(
@@ -111,32 +117,35 @@ internal fun EvidenceBoardCard(groups: List<EvidenceGroup>, evidence: EvidenceRo
 @Composable
 private fun EvidenceRow(row: EvidenceRowView, scale: Double, onOpen: () -> Unit) {
     val shape = RoundedCornerShape(FT.RadiusSmall)
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
             .ftClickable(shape = shape, role = Role.Button, onClickLabel = "Open ${row.label}", onClick = onOpen)
-            .padding(vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(row.label, style = FTType.Label, color = FT.TextPrimary, modifier = Modifier.weight(1f))
-            VerdictChip(row.verdict)
+        Text(row.label, style = FTType.Caption, color = FT.TextPrimary, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(0.38f))
+        Box(Modifier.weight(0.62f)) {
+            if (row.verdict == Verdict.NotYet) row.progress?.let { ProgressBar(it.fraction) } ?: Box(Modifier.height(22.dp)) else ForestRow(row, scale)
         }
-        if (row.verdict == Verdict.NotYet) {
-            row.progress?.let { ProgressLine(it.fraction, it.text) }
-        } else {
-            ForestRow(row, scale)
-            row.sizeLine?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
-            if (row.verdict == Verdict.Unclear) row.progress?.let { ProgressLine(it.fraction, "${it.text} to settle it") }
+        VerdictChip(row.verdict, rung = false)
+    }
+}
+
+// The not-yet row's progress toward enough days, the same height as a forest row.
+@Composable
+private fun ProgressBar(fraction: Float) {
+    Box(Modifier.fillMaxWidth().height(22.dp), contentAlignment = Alignment.CenterStart) {
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(FT.GlassBorder)) {
+            Box(Modifier.fillMaxWidth(fraction).height(4.dp).background(FT.Analysis))
         }
-        row.registeredLine?.let { Text(it, style = FTType.Caption, color = FT.TextMuted) }
-        row.warning?.let { Text(it, style = FTType.Caption, color = FT.Warning) }
     }
 }
 
 @Composable
-internal fun VerdictChip(verdict: Verdict) {
+internal fun VerdictChip(verdict: Verdict, rung: Boolean = true) {
     val shape = RoundedCornerShape(FT.RadiusSmall)
     val (border, text, fill) = when (verdict) {
         Verdict.Clear -> Triple(FT.TextPrimary, FT.TextPrimary, FT.TextPrimary.copy(alpha = 0.10f))
@@ -151,12 +160,14 @@ internal fun VerdictChip(verdict: Verdict) {
             color = text,
             modifier = Modifier.clip(shape).background(fill).border(1.dp, border, shape).padding(horizontal = 6.dp, vertical = 2.dp),
         )
-        Text(
-            "ASSOCIATED",
-            style = FTType.Micro,
-            color = FT.TextMuted,
-            modifier = Modifier.border(1.dp, FT.GlassBorder, shape).padding(horizontal = 6.dp, vertical = 2.dp),
-        )
+        if (rung) {
+            Text(
+                "ASSOCIATED",
+                style = FTType.Micro,
+                color = FT.TextMuted,
+                modifier = Modifier.border(1.dp, FT.GlassBorder, shape).padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
     }
 }
 
@@ -217,6 +228,9 @@ private fun EvidenceDetailSheet(row: EvidenceRowView, curve: EventCurvePayload?,
             Text(row.label.uppercase(), style = FTType.SectionTitle, color = FT.TextPrimary)
             VerdictChip(row.verdict)
             Text(row.summary, style = FTType.Body, color = FT.TextPrimary)
+            if (row.verdict != Verdict.NotYet) ForestRow(row, row.zone?.let { maxOf(it * 3, abs(row.lo ?: 0.0), abs(row.hi ?: 0.0)) * 1.1 } ?: 1.0)
+            row.sizeLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
+            row.warning?.let { Text(it, style = FTType.BodySmall, color = FT.Warning) }
             row.registeredLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
             row.verdictIntervalLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
             if (row.adjustments.isNotEmpty()) Text("Adjusted for ${row.adjustments.joinToString(", ")}.", style = FTType.BodySmall, color = FT.TextSecondary)
@@ -342,6 +356,8 @@ private fun OffsetCurveChart(points: List<OffsetPoint>, unit: String, xLabel: (I
 
 // Analysis review phase D (P5): what came before mornings outside the expected range on the unfavourable side,
 // against reference days on the same weekday in the same month. Exploratory: a hint of what to test next.
+// App restructure, fix 6: per outcome, one line per exposure -- how much more often it came the evening before, as an
+// odds ratio on a log scale around 1× with its interval -- and the word; numbers and REGISTER are behind a tap.
 @Composable
 internal fun CaseCrossoverCard(
     rows: List<CaseCrossoverResultRow>,
@@ -351,55 +367,102 @@ internal fun CaseCrossoverCard(
     registerError: String? = null,
 ) {
     if (rows.isEmpty()) return
+    var open by remember { mutableStateOf<Pair<String, com.bioscan.fieldterminal.data.model.CaseCrossoverEntry>?>(null) }
     FTCard(
         title = "WHAT CAME BEFORE OFF MORNINGS",
-        info = "Each off morning (outside its expected range on the unfavourable side) is compared with days on the same weekday in the same month, so habits and season cancel out. The number is how much more often the exposure came the evening before (an odds ratio, 95% interval). Many exposures are screened at once: a hint of what to test, not an answer.",
+        info = "Each off morning (outside its expected range on the unfavourable side) is compared with days on the same weekday in the same month, so habits and season cancel out. Each line is how much more often the exposure came the evening before (an odds ratio: right of 1× more often, left less often, with its 95% interval). Many exposures are screened at once: a hint of what to test, not an answer.",
         methodology = "case_crossover",
     ) {
-        Text("EXPLORATORY", style = FTType.Micro, color = FT.TextMuted)
+        Text("EXPLORATORY · TAP A LINE FOR ITS NUMBERS", style = FTType.Micro, color = FT.TextMuted)
         registerError?.let { Text("Couldn't register: $it", style = FTType.Caption, color = FT.Critical) }
-        if (registered.isNotEmpty()) {
-            Text(
-                "Registered: " + registered.joinToString(", ") { "${it.exposure.replace('_', ' ')} and ${it.outcome.replace('_', ' ')} (since ${it.registeredOn})" } +
-                    ". Each is tested only on days after its registration; results appear under QUESTIONS YOU REGISTERED.",
-                style = FTType.Caption,
-                color = FT.TextSecondary,
-            )
-        }
+        if (registered.isNotEmpty()) Text("${registered.size} registered to test on new days", style = FTType.Caption, color = FT.TextSecondary)
         rows.sortedBy { listOf("hrv", "rhr", "sleep_hours").indexOf(it.key) }.forEach { r ->
             val p = r.payload
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(p.text.ifBlank { r.key }, style = FTType.Label, color = FT.TextPrimary)
-                val ready = p.rows.filter { it.verdict != "not_yet" }
+                Text(p.text.ifBlank { r.key }, style = FTType.LabelCaps, color = FT.TextSecondary)
+                val ready = p.rows.filter { it.verdict != "not_yet" && it.oddsRatio != null }
                 if (ready.isEmpty()) {
                     val best = p.rows.maxOfOrNull { it.cases } ?: 0
-                    Text("Not yet: $best of ${p.rows.firstOrNull()?.need ?: 15} such mornings with a known evening before.", style = FTType.Caption, color = FT.TextMuted)
+                    val need = p.rows.firstOrNull()?.need ?: 15
+                    Text("Not yet: $best of $need off mornings", style = FTType.Caption, color = FT.TextMuted)
+                    ProgressBar((best.toFloat() / need).coerceIn(0f, 1f))
                 }
-                ready.forEach { e ->
-                    val word = when (e.verdict) {
-                        "more_often" -> "MORE OFTEN BEFORE"
-                        "less_often" -> "LESS OFTEN BEFORE"
-                        else -> "NO CLEAR DIFFERENCE"
+                val top = ready.maxOfOrNull { maxOf(abs(kotlin.math.ln(it.hi ?: 1.0)), abs(kotlin.math.ln(it.lo ?: 1.0))) }?.coerceIn(kotlin.math.ln(2.0), kotlin.math.ln(20.0)) ?: kotlin.math.ln(4.0)
+                ready.sortedByDescending { abs(kotlin.math.ln(it.oddsRatio ?: 1.0)) }.forEach { e ->
+                    val shape = RoundedCornerShape(FT.RadiusSmall)
+                    Row(
+                        Modifier.fillMaxWidth().clip(shape).ftClickable(shape = shape, role = Role.Button, onClickLabel = "Open ${e.label}") { open = r.key to e }.padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(e.label, style = FTType.Caption, color = FT.TextPrimary, maxLines = 2, modifier = Modifier.weight(0.38f))
+                        Box(Modifier.weight(0.62f)) { OddsRow(e, top) }
+                        Text(crossoverWord(e.verdict), style = FTType.Micro, color = if (e.verdict == "no_clear_difference") FT.TextMuted else FT.TextPrimary)
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(e.label, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.weight(1f))
-                        Text(
-                            "${"%.1f".format(e.oddsRatio)}× (${"%.1f".format(e.lo)} to ${"%.1f".format(e.hi)})",
-                            style = FTType.MonoCaption,
-                            color = FT.TextSecondary,
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
-                        Text(word, style = FTType.Micro, color = if (e.verdict == "no_clear_difference") FT.TextMuted else FT.TextPrimary)
-                    }
-                    if (onRegister != null && canRegister(e.exposure, r.key, e.verdict, registered)) {
-                        FTButton(
-                            "REGISTER TO TEST ON NEW DAYS",
-                            emphasis = FTButtonEmphasis.Tertiary,
-                            onClick = { onRegister(e.exposure, r.key) },
-                        )
+                }
+                if (ready.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth()) {
+                        Box(Modifier.weight(0.38f))
+                        Row(Modifier.weight(0.62f)) {
+                            Text("%.1f×".format(kotlin.math.exp(-top)), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
+                            Text("1×", style = FTType.Micro, color = FT.TextMuted)
+                            Text("%.0f×".format(kotlin.math.exp(top)), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                        }
                     }
                 }
             }
         }
+    }
+    open?.let { (outcome, e) ->
+        val canReg = onRegister != null && canRegister(e.exposure, outcome, e.verdict, registered)
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { open = null },
+            containerColor = FT.Surface,
+            title = { Text(e.label.uppercase(), style = FTType.SectionTitle, color = FT.TextPrimary) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(crossoverWord(e.verdict), style = FTType.LabelCaps, color = FT.TextPrimary)
+                    Text(
+                        "It came the evening before ${"%.1f".format(e.oddsRatio)}× as often as on comparable days (95% interval " +
+                            "${"%.1f".format(e.lo)} to ${"%.1f".format(e.hi)}), over ${e.cases} off mornings.",
+                        style = FTType.BodySmall, color = FT.TextSecondary,
+                    )
+                    if (canReg) Text("Registering makes it a question of its own, tested only on days after today; its result appears under WHAT GOES WITH WHAT.", style = FTType.Caption, color = FT.TextMuted)
+                }
+            },
+            confirmButton = {
+                if (canReg) {
+                    androidx.compose.material3.TextButton(onClick = { onRegister?.invoke(e.exposure, outcome); open = null }) { Text("REGISTER TO TEST", color = FT.DomainTraining) }
+                } else {
+                    androidx.compose.material3.TextButton(onClick = { open = null }) { Text("GOT IT", color = FT.DomainTraining) }
+                }
+            },
+            dismissButton = if (canReg) ({ androidx.compose.material3.TextButton(onClick = { open = null }) { Text("CLOSE", color = FT.TextSecondary) } }) else null,
+        )
+    }
+}
+
+private fun crossoverWord(verdict: String) = when (verdict) {
+    "more_often" -> "MORE OFTEN"
+    "less_often" -> "LESS OFTEN"
+    else -> "NO CLEAR DIFF."
+}
+
+// One exposure's odds ratio on a log scale around 1×: interval line, estimate dot.
+@Composable
+private fun OddsRow(e: com.bioscan.fieldterminal.data.model.CaseCrossoverEntry, top: Double) {
+    val or = e.oddsRatio ?: return
+    Canvas(modifier = Modifier.fillMaxWidth().height(22.dp).semantics { contentDescription = "%.1f times as often".format(or) }) {
+        val pad = 8f
+        val mid = size.width / 2f
+        val half = size.width / 2f - pad
+        fun x(v: Double) = mid + (kotlin.math.ln(v.coerceAtLeast(1e-3)) / top).toFloat().coerceIn(-1.05f, 1.05f) * half
+        val y = size.height / 2f
+        drawLine(FT.TextMuted, Offset(mid, 0f), Offset(mid, size.height), strokeWidth = 1.5f)
+        val lo = e.lo
+        val hi = e.hi
+        if (lo != null && hi != null) drawLine(FT.TextPrimary, Offset(x(lo), y), Offset(x(hi), y), strokeWidth = 3f)
+        drawCircle(FT.Surface, radius = 7f, center = Offset(x(or), y))
+        drawCircle(FT.TextPrimary, radius = 5f, center = Offset(x(or), y))
     }
 }

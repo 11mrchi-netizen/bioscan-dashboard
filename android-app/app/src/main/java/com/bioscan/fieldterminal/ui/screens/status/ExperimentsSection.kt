@@ -74,7 +74,7 @@ fun TodaysDrawCard(experiments: List<ExperimentRow>, today: LocalDate) {
 }
 
 @Composable
-private fun ExperimentEntry(e: ExperimentRow, res: ExperimentResultRow?, today: LocalDate, onDelete: ((ExperimentRow) -> Unit)?) {
+internal fun ExperimentEntry(e: ExperimentRow, res: ExperimentResultRow?, today: LocalDate, onDelete: ((ExperimentRow) -> Unit)?) {
     var confirming by remember { mutableStateOf(false) }
     var reveal by remember { mutableStateOf(false) }
     val primary = res?.payload?.metrics?.firstOrNull()

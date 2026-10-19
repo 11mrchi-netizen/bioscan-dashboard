@@ -228,7 +228,7 @@ fun TodayScreen(
                 // Analysis review phase D: what last evening brought, with the board's evidence about it.
                 contributors = contributors(lastEvening, relationships, evidence.events.map { it.payload }),
             )
-            TypicalityCard(typicalityView(typicality))
+            TypicalityCompactCard(typicalityView(typicality), typicality)
             DynamicRecoveryCard(recovery, emphasis = if (bandInputs.isEmpty()) FTCardEmphasis.Hero else FTCardEmphasis.Supporting, scorecard = scorecards?.recovery)
             TrainingReadinessCard(computeTrainingReadiness(recovery), scorecard = scorecards?.readyFor)
             // The inputs behind recovery and READY FOR, one tap away instead of repeated on this page.

@@ -128,7 +128,6 @@ fun N1Tab() {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        TodaysDrawCard(experiments, LocalDate.now())
         EvidenceBoardCard(evidenceBoard(relationships, registeredResults), evidence, onTest = { testing = it })
         CaseCrossoverCard(
             evidence.crossover,
@@ -145,7 +144,8 @@ fun N1Tab() {
                 }
             },
         )
-        ExperimentsSection(
+        // Fix 6: today's draw sits on top of the experiments card as chips.
+        N1ExperimentsCard(
             experiments.filter { it.protocol?.behaviour != null },
             experimentResults,
             title = "DAILY TESTS",
@@ -158,7 +158,7 @@ fun N1Tab() {
             },
         )
         experimentError?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
-        ScorecardsCard(scorecards, typicality = typicalityView(typicality).scorecard)
+        N1ScorecardsCard(scorecards, typicality = typicalityView(typicality).scorecard)
         if (sexualActivity.isNotEmpty()) SexualHealthCorrelationsCard(wb, sexualActivity, w, sl)
     }
 

@@ -320,6 +320,17 @@ private fun rounded(t: PlateTarget, foods: List<FoodOption>, x: DoubleArray, fix
 }
 
 /**
+ * One plate for [t] from exactly [foods] (all used, each within its bounds) plus the [fixed] portions: the meal-prep
+ * containers and the breakfast template, whose foods are chosen by the person rather than by [combinations].
+ */
+fun solvePortions(t: PlateTarget, foods: List<FoodOption>, fixed: List<Portion> = emptyList()): Plate {
+    if (foods.isEmpty()) return Plate(fixed, gaps(t, fixed))
+    val x = solveGrams(t, foods, fixed)
+    val plate = rounded(t, foods, x, fixed, emptySet())
+    return Plate(plate, gaps(t, plate))
+}
+
+/**
  * Up to [count] plates for [t] from [foods], best first, each with a different main carbohydrate source. [recent] are
  * foods already suggested at the meal before (a small nudge for variety).
  */

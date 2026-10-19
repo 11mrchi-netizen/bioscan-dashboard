@@ -291,7 +291,7 @@ internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Mo
     // Analysis review phase G: scored against whether planned sessions were done; demoted, it shows no per-session words.
     FTCard(dataQuality = result.confidence, title = "READY FOR", methodology = "dynamic_recovery", modifier = modifier) {
         val demoted = scorecard.demotes()
-        FTStatePill(if (demoted) INPUTS_ONLY else recoveryStateWord(result.generalState))
+        if (demoted) FTStatePill(INPUTS_ONLY) else RecoveryStatePill(result.generalState)
         if (demoted) {
             Text("Its per-session words did not foresee your planned sessions better than one of its inputs: see the inputs under TODAY'S RECOVERY.", style = FTType.BodySmall, color = FT.TextSecondary)
         } else result.demandRelative.forEach { (tier, state) ->
@@ -301,13 +301,17 @@ internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Mo
                 TrainingDemandTier.LONG_HIGH_LOAD -> "Long / high-load"
                 TrainingDemandTier.STRENGTH -> "Strength"
             }
-            val symbol = when (state) {
-                EvalState.ShiftUp -> "Ready"
-                EvalState.Stable -> "Matched"
-                EvalState.ShiftDown -> "Caution"
-                else -> "Building"
+            // Fix 4: tinted like recovery's movements (faint green ready, faint red caution), always with the word.
+            val (direction, word) = when (state) {
+                EvalState.ShiftUp -> 1 to "READY"
+                EvalState.Stable -> 0 to "MATCHED"
+                EvalState.ShiftDown -> -1 to "CAUTION"
+                else -> null to "BUILDING"
             }
-            FTMetricRow(label, symbol)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, style = FTType.Body, color = FT.TextSecondary, modifier = Modifier.weight(1f))
+                com.bioscan.fieldterminal.ui.components.FTMovementChip(direction, word)
+            }
         }
         ScorecardLine(scorecard)
     }

@@ -257,6 +257,8 @@ fun FTCard(
     // App restructure, fix 3: how much data backs the card (was a DATA: GOOD / PARTIAL / THIN pill under the state pill,
     // two pills on two lines). It is a line in the card's "?" now, which appears for it when the card has no other help.
     dataQuality: Confidence? = null,
+    // A line about this reading for the card's "?" (Today's recovery: how its votes fell), after the explanation.
+    helpExtra: String? = null,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(FT.RadiusCard)
@@ -267,7 +269,7 @@ fun FTCard(
     }
     // The dialog opens on the card's own short text (or, without one, the registry's opening sentences); the details and
     // the registry's full methodology, limits and references are one tap further.
-    val helpBody = listOfNotNull((info ?: registryEntry?.summary())?.ifBlank { null }, dataQuality?.let(::dataQualityLine))
+    val helpBody = listOfNotNull(helpExtra, (info ?: registryEntry?.summary())?.ifBlank { null }, dataQuality?.let(::dataQualityLine))
         .joinToString("\n\n").ifBlank { null }
     val helpDetails = listOfNotNull(infoDetails, registryEntry?.helpText()).joinToString("\n\n").ifBlank { null }
     Column(

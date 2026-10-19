@@ -143,4 +143,76 @@ class DynamicRecoveryTest {
         assertEquals(1, result.contributors.first { it.dimension == "morning_wood" }.direction)
         assertEquals(-1, result.contributors.first { it.dimension == "arousal" }.direction)
     }
+
+    // v2 (fix 4): the morning that read MIXED SIGNALS all through training. Load points down as it always does in a block;
+    // HRV, resting HR and the answers point up, sleep as expected. Weighted, that is a clear lean up.
+    @Test
+    fun aGoodMorningInATrainingBlockIsAboveExpected() {
+        val result = computeDynamicRecovery(
+            sleepIndex = goodSleep,
+            hrvEval = swc(EvalState.ShiftUp),
+            rhrEval = swc(EvalState.ShiftDown),
+            trainingLoadEval = trainingLoad(EvalState.ShiftDown), // loaded
+            energyEval = subjective(1),
+            stressEval = subjective(-1),
+            sorenessEval = subjective(null),
+        )
+        assertEquals(EvalState.ShiftUp, result.state)
+        // Five votes: sleep 0, HRV +1, RHR +1, load -1, the answers together +1.
+        assertEquals(5.0, result.balance!!.votes, 1e-9)
+        assertEquals(0.4, result.balance!!.net, 1e-9)
+    }
+
+    @Test
+    fun theAnswersAreOneVoteTogether() {
+        // Three answers up cannot outweigh HRV and resting HR both down.
+        val result = computeDynamicRecovery(
+            sleepIndex = goodSleep,
+            hrvEval = swc(EvalState.ShiftDown),
+            rhrEval = swc(EvalState.ShiftUp),
+            trainingLoadEval = trainingLoad(EvalState.Stable),
+            energyEval = subjective(1),
+            stressEval = subjective(-1),
+            sorenessEval = subjective(-1),
+        )
+        assertEquals(-0.2, result.balance!!.net, 1e-9)
+        assertEquals(EvalState.Stable, result.state)
+    }
+
+    @Test
+    fun oneUpAndOneDownAmongNeutralsIsAsExpectedNotMixed() {
+        val result = computeDynamicRecovery(
+            sleepIndex = goodSleep,
+            hrvEval = swc(EvalState.ShiftUp),
+            rhrEval = swc(EvalState.Stable),
+            trainingLoadEval = trainingLoad(EvalState.ShiftDown),
+            energyEval = subjective(null, unmet),
+            stressEval = subjective(null, unmet),
+            sorenessEval = subjective(null, unmet),
+        )
+        // A quarter each way: neither side reaches a third, and they cancel.
+        assertEquals(EvalState.Stable, result.state)
+    }
+
+    @Test
+    fun aRealSplitIsStillMixed() {
+        val result = computeDynamicRecovery(
+            sleepIndex = SleepIndexResult(45.0, sleepIndexBand(45.0), EvalState.Stable, met, emptyMap()), // holds back
+            hrvEval = swc(EvalState.ShiftUp),
+            rhrEval = swc(EvalState.ShiftDown),
+            trainingLoadEval = trainingLoad(EvalState.Unstable), // heavily loaded
+            energyEval = subjective(null, unmet),
+            stressEval = subjective(null, unmet),
+            sorenessEval = subjective(null, unmet),
+        )
+        assertEquals(EvalState.Unstable, result.state)
+    }
+
+    @Test
+    fun theLeanThresholdIsAQuarter() {
+        assertEquals(EvalState.ShiftUp, recoveryStateOf(RecoveryBalance(up = 0.25, down = 0.0, votes = 4.0)))
+        assertEquals(EvalState.Stable, recoveryStateOf(RecoveryBalance(up = 0.2, down = 0.0, votes = 5.0)))
+        assertEquals(EvalState.ShiftDown, recoveryStateOf(RecoveryBalance(up = 0.0, down = 0.25, votes = 4.0)))
+        assertEquals(EvalState.Building, recoveryStateOf(null))
+    }
 }

@@ -694,8 +694,13 @@ internal fun DynamicRecoveryCard(
     // Contract A3: the lead card of Health › Recovery; on Today it follows THIS MORNING when the expected band exists.
     // Analysis review phase G: when its scorecard says it forecasts no better than one of its inputs, it drops its own
     // word (INPUTS ONLY) and shows the inputs.
-    FTCard(dataQuality = result.confidence, title = "TODAY'S RECOVERY", methodology = "dynamic_recovery", emphasis = emphasis, modifier = modifier) {
-        FTStatePill(if (scorecard.demotes()) INPUTS_ONLY else recoveryStateWord(result.state))
+    // Fix 4: the state and each contributor are tinted by direction (faint green up, faint red down, contract A9), and the
+    // "?" says how the votes fell.
+    FTCard(
+        dataQuality = result.confidence, title = "TODAY'S RECOVERY", methodology = "dynamic_recovery", emphasis = emphasis, modifier = modifier,
+        helpExtra = result.balance?.let { recoveryBalanceLine(it) },
+    ) {
+        if (scorecard.demotes()) FTStatePill(INPUTS_ONLY) else RecoveryStatePill(result.state)
         if (result.contributors.isEmpty()) {
             Text(
                 "Not enough contributors yet -- needs at least 2 of sleep/HRV/RHR/training load/subjective state.",
@@ -704,19 +709,35 @@ internal fun DynamicRecoveryCard(
             )
         } else {
             result.contributors.forEach { contributor ->
-                // Arrow + word, so direction never rests on glyph or color alone.
                 val effect = when (contributor.direction) {
-                    1 -> "↑ SUPPORTS RECOVERY"
-                    -1 -> "↓ HOLDS RECOVERY BACK"
-                    0 -> "= NEUTRAL"
-                    else -> "— NO SIGNAL YET"
+                    1 -> "SUPPORTS"
+                    -1 -> "HOLDS BACK"
+                    0 -> "NEUTRAL"
+                    else -> "NO SIGNAL YET"
                 }
-                FTMetricRow(contributor.dimension.replace('_', ' ').replaceFirstChar { it.uppercase() }, effect)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(contributor.dimension.replace('_', ' ').replaceFirstChar { it.uppercase() }, style = FTType.Body, color = FT.TextSecondary, modifier = Modifier.weight(1f))
+                    com.bioscan.fieldterminal.ui.components.FTMovementChip(contributor.direction, effect)
+                }
             }
         }
         ScorecardLine(scorecard)
     }
 }
+
+// The recovery word as a movement: ABOVE in faint green, BELOW in faint red, AS EXPECTED and MIXED untinted.
+@Composable
+internal fun RecoveryStatePill(state: EvalState) {
+    when (state) {
+        EvalState.ShiftUp -> com.bioscan.fieldterminal.ui.components.FTMovementChip(1, "ABOVE EXPECTED")
+        EvalState.ShiftDown -> com.bioscan.fieldterminal.ui.components.FTMovementChip(-1, "BELOW EXPECTED")
+        EvalState.Stable -> com.bioscan.fieldterminal.ui.components.FTMovementChip(0, "AS EXPECTED")
+        else -> FTStatePill(recoveryStateWord(state))
+    }
+}
+
+private fun recoveryBalanceLine(b: com.bioscan.fieldterminal.domain.RecoveryBalance): String =
+    "This morning: %.0f votes, %.0f%% of them up and %.0f%% down (net %+.2f; ABOVE or BELOW from ±0.25).".format(b.votes, b.up * 100, b.down * 100, b.net)
 
 @Composable
 private fun SleepIndexCard(

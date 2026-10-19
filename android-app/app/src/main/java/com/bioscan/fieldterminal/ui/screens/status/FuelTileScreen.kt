@@ -122,6 +122,7 @@ fun FuelTileScreen(
         title = "FUEL",
         subtitle = when (tab) {
             FuelTab.Plan -> "TODAY · NEXT 10 DAYS · ON THE PLATE"
+            FuelTab.Prep -> "PICK · RECIPES · WEEK · SHOP & COOK"
             FuelTab.Nutrition -> "TODAY · MACROS · HYDRATION"
             FuelTab.Body -> "WEIGHT · MEASUREMENTS · BODY FAT · STOOL"
         },
@@ -141,6 +142,7 @@ fun FuelTileScreen(
                     openDays = planOpenDays,
                     onToggleDay = { d -> planOpenDays = if (d in planOpenDays) planOpenDays - d else planOpenDays + d },
                 )
+                FuelTab.Prep -> com.bioscan.fieldterminal.ui.screens.fuel.MealPrepPage(overview)
                 // DAV-207 (24/9 fixes): Hydration folded in as a second
                 // stacked section rather than its own subtab -- both
                 // composables already render their own full-width padded

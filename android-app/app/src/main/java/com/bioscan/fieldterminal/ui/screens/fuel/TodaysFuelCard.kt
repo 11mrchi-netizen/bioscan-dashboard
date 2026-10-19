@@ -25,6 +25,7 @@ import com.bioscan.fieldterminal.data.TodayFuelResult
 import com.bioscan.fieldterminal.domain.fuel.CodedDay
 import com.bioscan.fieldterminal.domain.fuel.CodedMeal
 import com.bioscan.fieldterminal.domain.fuel.MealAdherence
+import com.bioscan.fieldterminal.domain.fuel.MealSlotKind
 import com.bioscan.fieldterminal.domain.fuel.MealSuggestion
 import com.bioscan.fieldterminal.domain.fuel.SessionFuelKind
 import com.bioscan.fieldterminal.domain.fuel.SessionWindow
@@ -111,7 +112,7 @@ private fun FuelContent(f: TodayFuel) {
         f.changes.forEach { Text("· $it", style = FTType.BodySmall, color = FT.TextPrimary) }
     }
     f.horizon.firstOrNull()?.summary?.let { Text("CARBS $it", style = FTType.MonoCaption, color = FT.TextSecondary) }
-    Timeline(f.todayCoded, f.adherence, f.longSessions.associate { it.first.sourceId to it.second }, f.horizon.firstOrNull()?.suggestions)
+    Timeline(f.todayCoded, f.adherence, f.longSessions.associate { it.first.sourceId to it.second }, f.horizon.firstOrNull()?.suggestions, f.horizon.firstOrNull()?.prep)
 }
 
 private sealed interface Row2 {
@@ -127,13 +128,16 @@ internal fun Timeline(
     adherence: Map<String, Pair<Double, MealAdherence>>,
     longPlans: Map<String, com.bioscan.fieldterminal.domain.fuel.RaceFuelPlan>,
     suggestions: List<MealSuggestion>? = null,
+    prep: com.bioscan.fieldterminal.domain.fuel.PreppedDay? = null,
 ) {
     val plates = suggestions?.let { s -> day.meals.zip(s).toMap() }.orEmpty()
+    // The snack remainder is shown once, under the first snack of the day.
+    val firstSnack = day.meals.firstOrNull { !it.kind.main }
     val rows = (day.meals.map { Row2.Meal(it) } + day.sessions.map { Row2.Session(it) }).sortedBy { it.key }
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         rows.forEach { row ->
             when (row) {
-                is Row2.Meal -> MealLine(row.meal, adherence[row.meal.kind.name], plates[row.meal])
+                is Row2.Meal -> MealLine(row.meal, adherence[row.meal.kind.name], plates[row.meal], prep, row.meal == firstSnack)
                 is Row2.Session -> SessionLine(row.w, longPlans[row.w.item.sourceId])
             }
         }
@@ -141,7 +145,13 @@ internal fun Timeline(
 }
 
 @Composable
-private fun MealLine(m: CodedMeal, logged: Pair<Double, MealAdherence>?, plates: MealSuggestion? = null) {
+private fun MealLine(
+    m: CodedMeal,
+    logged: Pair<Double, MealAdherence>?,
+    plates: MealSuggestion? = null,
+    prep: com.bioscan.fieldterminal.domain.fuel.PreppedDay? = null,
+    showSnackRemainder: Boolean = false,
+) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(m.time.format(HM), style = FTType.MonoCaption, color = FT.TextSecondary, modifier = Modifier.width(44.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -162,8 +172,48 @@ private fun MealLine(m: CodedMeal, logged: Pair<Double, MealAdherence>?, plates:
             logged?.let { (g, a) ->
                 if (a != MealAdherence.NOT_LOGGED) Text("LOGGED ${g.roundToInt()} G · ${a.label}", style = FTType.LabelCaps, color = FT.TextSecondary)
             }
-            plates?.let { PlateLines(it) }
+            val prepped = prep?.let { prepLine(m, it) }
+            when {
+                prepped != null -> prepped.forEach { (label, text) ->
+                    Text(label, style = FTType.LabelCaps, color = FT.DomainFuel, modifier = Modifier.padding(top = 4.dp))
+                    Text(text, style = FTType.BodySmall, color = FT.TextPrimary)
+                }
+                else -> {
+                    if (prep != null && showSnackRemainder) {
+                        val r = prep.snack
+                        Text("LEFT FOR SNACKS TODAY", style = FTType.LabelCaps, color = FT.DomainFuel, modifier = Modifier.padding(top = 4.dp))
+                        Text(
+                            "C ${r.carbG.roundToInt()} · P ${r.proteinG.roundToInt()}" + (r.fatG?.let { " · F ${it.roundToInt()}" } ?: "") + " G, as you like; ideas below",
+                            style = FTType.MonoCaption, color = FT.TextPrimary,
+                        )
+                    }
+                    plates?.let { PlateLines(it) }
+                }
+            }
+            if (prep != null && (m.kind == MealSlotKind.LUNCH || m.kind == MealSlotKind.DINNER || m.kind == MealSlotKind.BREAKFAST)) {
+                prep.notes.takeIf { m.kind == MealSlotKind.BREAKFAST }?.forEach { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
+            }
         }
+    }
+}
+
+/** What a prepped day puts in [m]'s slot: the scaled breakfast, the container, or OUT with the targets; null otherwise. */
+private fun prepLine(m: CodedMeal, prep: com.bioscan.fieldterminal.domain.fuel.PreppedDay): List<Pair<String, String>>? {
+    fun totals(p: com.bioscan.fieldterminal.domain.fuel.Plate) = "C ${p.carbG.roundToInt()} · P ${p.proteinG.roundToInt()} · F ${p.fatG.roundToInt()} G"
+    return when (m.kind) {
+        MealSlotKind.BREAKFAST -> prep.breakfast?.let { listOf("YOUR BREAKFAST" to "${it.label} · ${totals(it)}") }
+        MealSlotKind.LUNCH, MealSlotKind.DINNER -> {
+            val slot = if (m.kind == MealSlotKind.LUNCH) com.bioscan.fieldterminal.domain.fuel.PrepSlot.LUNCH else com.bioscan.fieldterminal.domain.fuel.PrepSlot.DINNER
+            val c = if (slot == com.bioscan.fieldterminal.domain.fuel.PrepSlot.LUNCH) prep.lunch else prep.dinner
+            when {
+                c != null -> listOf("CONTAINER ${c.letter}" to "${c.plate.label} · ${totals(c.plate)}")
+                slot in prep.skipped -> listOf(
+                    "OUT" to "Aim for about ${m.carbMidG.roundToInt()} g carbs, ${m.proteinG.roundToInt()} g protein" + (m.fatG?.let { ", ${it.roundToInt()} g fat" } ?: ""),
+                )
+                else -> null
+            }
+        }
+        else -> null
     }
 }
 

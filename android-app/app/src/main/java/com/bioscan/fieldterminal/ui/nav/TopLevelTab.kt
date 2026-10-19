@@ -47,6 +47,8 @@ enum class TileRoute(val route: String) {
 enum class FuelTab(val label: String) {
     // Fuel planning phase 10: today's plan, the next ten days and example plates; Fuel opens here.
     Plan("PLAN"),
+    // Fuel planning phase 11: Sunday meal prep (picks, recipes, week, shopping list) and the fixed breakfast.
+    Prep("PREP"),
     Nutrition("NUTRITION"),
     // Weight, body fat, the monthly body check-in and digestion (renamed from DIGESTION when the check-in arrived).
     Body("BODY"),

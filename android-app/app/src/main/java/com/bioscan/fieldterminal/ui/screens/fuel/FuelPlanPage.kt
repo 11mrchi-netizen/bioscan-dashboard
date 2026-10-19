@@ -199,6 +199,10 @@ private fun DayRow(d: HorizonDay, open: Boolean, onToggle: () -> Unit) {
             style = FTType.MonoCaption, color = FT.TextPrimary,
         )
         Text("CARBS ${d.summary}", style = FTType.Caption, color = FT.TextSecondary)
+        d.prep?.let { pr ->
+            val bits = listOfNotNull(pr.lunch?.let { "LUNCH ${it.letter}" }, pr.dinner?.let { "DINNER ${it.letter}" }) + pr.skipped.map { "${it.label} OUT" }
+            if (bits.isNotEmpty()) Text("PREP: " + bits.joinToString(" · "), style = FTType.LabelCaps, color = FT.DomainFuel)
+        }
         if (open) {
             val sources = d.day.items.map { it.source }.distinct()
             Text(
@@ -210,7 +214,7 @@ private fun DayRow(d: HorizonDay, open: Boolean, onToggle: () -> Unit) {
             if (d.day.items.any { it.durationMin >= 90 && it.eventId == null }) {
                 Text("Fuel steps and weather for the long session appear in TODAY'S FUEL from three days before.", style = FTType.Caption, color = FT.TextSecondary)
             }
-            Timeline(d.coded, emptyMap(), emptyMap(), d.suggestions)
+            Timeline(d.coded, emptyMap(), emptyMap(), d.suggestions, d.prep)
         }
     }
 }

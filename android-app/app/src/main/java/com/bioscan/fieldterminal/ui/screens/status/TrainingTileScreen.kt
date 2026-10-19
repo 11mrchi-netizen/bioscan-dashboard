@@ -123,7 +123,7 @@ fun TrainingTileScreen(
     requestedTab: TrainingTab? = null,
     onRequestedTabConsumed: () -> Unit = {},
 ) {
-    var tab by remember { mutableStateOf(requestedTab ?: TrainingTab.Load) }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(requestedTab ?: TrainingTab.Load) }
     LaunchedEffect(requestedTab) {
         if (requestedTab != null) {
             tab = requestedTab

@@ -88,9 +88,9 @@ fun FuelTileScreen(
     openBodyCheckIn: Boolean = false,
     onBodyCheckInHandled: () -> Unit = {},
 ) {
-    var tab by remember { mutableStateOf(if (openBodyCheckIn) FuelTab.Body else FuelTab.Plan) }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(if (openBodyCheckIn) FuelTab.Body else FuelTab.Plan) }
     // The plan page's open days, kept here so they survive a tab switch.
-    var planOpenDays by remember { mutableStateOf(setOf<LocalDate>()) }
+    var planOpenDays by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(setOf<LocalDate>()) }
     var bodyCheckInOpen by remember { mutableStateOf(false) }
     // Bumped after a check-in is saved so the Body tab reads the new one.
     var bodyReload by remember { mutableIntStateOf(0) }

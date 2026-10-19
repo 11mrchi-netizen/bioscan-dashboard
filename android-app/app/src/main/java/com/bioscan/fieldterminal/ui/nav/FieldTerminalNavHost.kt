@@ -68,13 +68,13 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
     // Set when a notification tap should land on a specific Labs subtab; LabsTileScreen consumes it.
-    var labsRequestedTab by remember { mutableStateOf<LabsTab?>(null) }
+    var labsRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<LabsTab?>(null) }
     // Same hand-off for Training's subtabs (UX review F1: the Status injury flag lands on Training › Injury).
-    var trainingRequestedTab by remember { mutableStateOf<TrainingTab?>(null) }
+    var trainingRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<TrainingTab?>(null) }
     // Analysis review phase B: the 22:25 evening check-in reminder opens Today with the check-in sheet up.
-    var checkInRequested by remember { mutableStateOf(false) }
+    var checkInRequested by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     // The monthly body check-in reminder opens Fuel › Body with the check-in sheet up.
-    var bodyCheckInRequested by remember { mutableStateOf(false) }
+    var bodyCheckInRequested by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     // Contract A4: the dock keeps lit the tab whose stack you are in, also on pushed screens (tiles, settings and detail
     // pages), which used to light nothing. Set whenever a top-level destination is shown and when a dock tab is tapped,
     // so a deep link pushed onto the current stack keeps that stack's tab.

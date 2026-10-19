@@ -42,7 +42,7 @@ import kotlinx.coroutines.launch
 // Setup > User: opens on Profile, then Nutrition Goals.
 @Composable
 fun UserSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
-    var tab by remember { mutableStateOf(UserTab.Profile) }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(UserTab.Profile) }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         TileHeader(onBack = onBack, title = "PROFILE & GOALS", subtitle = "PROFILE · NUTRITION GOALS · DATA CAPTURE")

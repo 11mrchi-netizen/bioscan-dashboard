@@ -141,7 +141,7 @@ import java.time.temporal.ChronoUnit
 // (Cardio/Recovery/Wellbeing) now.
 @Composable
 fun HeartTileScreen(onBack: () -> Unit) {
-    var tab by remember { mutableStateOf(HeartTab.Cardio) }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(HeartTab.Cardio) }
 
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     // Intraday HR of the newest day that has one, for the DAILY HEART RATE card; loaded apart from the daily list (it is

@@ -53,7 +53,7 @@ import kotlinx.coroutines.launch
 // Setup > Connected Services: AI Nutrition Estimation, Map, Health Connect, Zepp.
 @Composable
 fun ConnectedServicesScreen(scope: CoroutineScope, onBack: () -> Unit) {
-    var tab by remember { mutableStateOf(ConnectedServicesTab.AiNutrition) }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(ConnectedServicesTab.AiNutrition) }
     val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {

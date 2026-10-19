@@ -57,7 +57,7 @@ fun LabsTileScreen(
     requestedTab: LabsTab? = null,
     onRequestedTabConsumed: () -> Unit = {},
 ) {
-    var tab by remember { mutableStateOf(requestedTab ?: LabsTab.Bloodwork) }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(requestedTab ?: LabsTab.Bloodwork) }
     LaunchedEffect(requestedTab) {
         if (requestedTab != null) {
             tab = requestedTab

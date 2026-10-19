@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,8 +40,9 @@ fun EventsCard(onOpenEvent: (Long) -> Unit) {
     var suggestions by remember { mutableStateOf<List<EventSuggestion>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
-    var adding by remember { mutableStateOf<AthleteEvent?>(null) }
-    var addingBlank by remember { mutableStateOf(false) }
+    // Saveable: the event form can open the file picker, and the app may be restored while it is open.
+    var adding by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.NullableEventSaver) { mutableStateOf<AthleteEvent?>(null) }
+    var addingBlank by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(attempt) {
         error = null

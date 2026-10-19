@@ -70,9 +70,9 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
     val repo = remember { AthleteEventsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var event by remember { mutableStateOf<AthleteEvent?>(null) }
-    var editing by remember { mutableStateOf(false) }
+    var editing by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var actionError by remember { mutableStateOf<String?>(null) }
-    var tab by remember { mutableStateOf(EventTab.Overview) }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(EventTab.Overview) }
     var reviewing by remember { mutableStateOf(false) }
     val guard = rememberLoadGuard()
     LaunchedEffect(guard.attempt) { guard.run { event = repo.load(eventId) } }

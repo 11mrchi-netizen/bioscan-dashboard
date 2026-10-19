@@ -44,14 +44,16 @@ private val WHEN: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM HH:
 @Composable
 fun CalendarReviewCard(reviews: List<CalendarReview>, onAnswered: () -> Unit, modifier: Modifier = Modifier) {
     if (reviews.isEmpty()) return
-    var making by remember { mutableStateOf<CalendarReview?>(null) }
+    // Kept by entry id across a restore (the event form can open the file picker).
+    var makingId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    val making = reviews.firstOrNull { it.eventId == makingId }
     FTCard(
         title = "WHAT IS THIS?",
         modifier = modifier,
         info = "A training-colour entry in your calendar that runs over four hours and doesn't say what it is. It isn't counted " +
             "in the plan until you say.",
     ) {
-        reviews.forEach { r -> ReviewRow(r, onMakeEvent = { making = r }, onAnswered = onAnswered) }
+        reviews.forEach { r -> ReviewRow(r, onMakeEvent = { makingId = r.eventId }, onAnswered = onAnswered) }
     }
     making?.let { r ->
         EventFormSheet(
@@ -59,8 +61,8 @@ fun CalendarReviewCard(reviews: List<CalendarReview>, onAnswered: () -> Unit, mo
                 name = r.title, kind = EventKind.OTHER_HARD_DAY, sport = EventSport.RUN, date = r.start.toLocalDate(), start = r.start,
                 expectedDurationMin = r.clockMin, calendarEventId = r.eventId, notes = r.description?.take(500),
             ),
-            onDismiss = { making = null },
-            onSaved = { making = null; onAnswered() },
+            onDismiss = { makingId = null },
+            onSaved = { makingId = null; onAnswered() },
         )
     }
 }

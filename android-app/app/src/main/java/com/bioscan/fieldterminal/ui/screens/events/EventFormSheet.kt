@@ -20,6 +20,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.bioscan.fieldterminal.ui.components.CourseSaver
+import com.bioscan.fieldterminal.ui.components.NullableEventSaver
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -64,6 +67,18 @@ import java.time.ZoneId
 // Add or edit an event (domain/events/AthleteEvent.kt): what it is, when, how long it should take, the course (a GPX file
 // picked from the phone, kept as a compact profile) and the aid stations. Fuel and hydration plans are built from this.
 
+private val StationsSaver = androidx.compose.runtime.saveable.listSaver<androidx.compose.runtime.snapshots.SnapshotStateList<AidStationDraft>, String>(
+    save = { list -> list.map { listOf(it.name, it.km, it.cutoff, it.water.toString(), it.food.toString(), it.dropBag.toString()).joinToString("\u001F") } },
+    restore = { saved ->
+        mutableStateListOf<AidStationDraft>().apply {
+            saved.forEach { s ->
+                val f = s.split('\u001F')
+                add(AidStationDraft(f.getOrElse(0) { "" }, f.getOrElse(1) { "" }, f.getOrElse(2) { "" }, f.getOrElse(3) { "true" } == "true", f.getOrElse(4) { "false" } == "true", f.getOrElse(5) { "false" } == "true"))
+            }
+        }
+    },
+)
+
 private class AidStationDraft(name: String = "", km: String = "", cutoff: String = "", water: Boolean = true, food: Boolean = false, dropBag: Boolean = false) {
     var name by mutableStateOf(name)
     var km by mutableStateOf(km)
@@ -89,23 +104,24 @@ fun EventFormSheet(
     val context = LocalContext.current
     val zone = remember { ZoneId.systemDefault() }
 
-    var name by remember { mutableStateOf(initial?.name.orEmpty()) }
-    var kind by remember { mutableStateOf(initial?.kind ?: EventKind.RACE) }
-    var sport by remember { mutableStateOf(initial?.sport ?: EventSport.RUN) }
-    var priority by remember { mutableStateOf(initial?.priority ?: EventPriority.B) }
-    var date by remember { mutableStateOf(initial?.date ?: LocalDate.now().plusWeeks(4)) }
-    var hasStart by remember { mutableStateOf(initial?.start != null) }
-    var startTime by remember { mutableStateOf(initial?.start?.withZoneSameInstant(zone)?.toLocalTime() ?: LocalTime.of(9, 0)) }
-    var target by remember { mutableStateOf(initial?.targetTimeMin?.let(::formatHoursMinutes).orEmpty()) }
-    var expected by remember { mutableStateOf(initial?.expectedDurationMin?.let(::formatHoursMinutes).orEmpty()) }
-    var distance by remember { mutableStateOf(initial?.distanceKm?.trimmed().orEmpty()) }
-    var ascent by remember { mutableStateOf(initial?.ascentM?.trimmed().orEmpty()) }
-    var location by remember { mutableStateOf(initial?.locationName.orEmpty()) }
-    var latLon by remember { mutableStateOf(initial?.startLat?.let { lat -> initial.startLon?.let { lat to it } }) }
-    var course by remember { mutableStateOf(initial?.course.orEmpty()) }
-    var courseFromFile by remember { mutableStateOf<AthleteEvent?>(null) }
-    var notes by remember { mutableStateOf(initial?.notes.orEmpty()) }
-    val stations = remember {
+    var name by rememberSaveable { mutableStateOf(initial?.name.orEmpty()) }
+    var kind by rememberSaveable { mutableStateOf(initial?.kind ?: EventKind.RACE) }
+    var sport by rememberSaveable { mutableStateOf(initial?.sport ?: EventSport.RUN) }
+    var priority by rememberSaveable { mutableStateOf(initial?.priority ?: EventPriority.B) }
+    var date by rememberSaveable { mutableStateOf(initial?.date ?: LocalDate.now().plusWeeks(4)) }
+    var hasStart by rememberSaveable { mutableStateOf(initial?.start != null) }
+    var startTime by rememberSaveable { mutableStateOf(initial?.start?.withZoneSameInstant(zone)?.toLocalTime() ?: LocalTime.of(9, 0)) }
+    var target by rememberSaveable { mutableStateOf(initial?.targetTimeMin?.let(::formatHoursMinutes).orEmpty()) }
+    var expected by rememberSaveable { mutableStateOf(initial?.expectedDurationMin?.let(::formatHoursMinutes).orEmpty()) }
+    var distance by rememberSaveable { mutableStateOf(initial?.distanceKm?.trimmed().orEmpty()) }
+    var ascent by rememberSaveable { mutableStateOf(initial?.ascentM?.trimmed().orEmpty()) }
+    var location by rememberSaveable { mutableStateOf(initial?.locationName.orEmpty()) }
+    var latLon by rememberSaveable { mutableStateOf(initial?.startLat?.let { lat -> initial.startLon?.let { lat to it } }) }
+    var course by rememberSaveable(stateSaver = CourseSaver) { mutableStateOf(initial?.course.orEmpty()) }
+    var courseFromFile by rememberSaveable(stateSaver = NullableEventSaver) { mutableStateOf<AthleteEvent?>(null) }
+    var notes by rememberSaveable { mutableStateOf(initial?.notes.orEmpty()) }
+    // State kept across the file picker: the app can be stopped, or killed and restored, while it is open.
+    val stations = rememberSaveable(saver = StationsSaver) {
         mutableStateListOf<AidStationDraft>().apply {
             initial?.aidStations?.forEach {
                 add(AidStationDraft(it.name, it.km.trimmed(), it.cutoffMin?.let(::formatHoursMinutes).orEmpty(), it.water, it.food, it.dropBag))
@@ -114,10 +130,10 @@ fun EventFormSheet(
     }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var info by remember { mutableStateOf<String?>(null) }
+    var info by rememberSaveable { mutableStateOf<String?>(null) }
     var confirmingDelete by remember { mutableStateOf(false) }
     // The file picker takes the foreground, which makes the sheet ask to be dismissed; ignored while it is open.
-    var picking by remember { mutableStateOf(false) }
+    var picking by rememberSaveable { mutableStateOf(false) }
 
     fun build(): AthleteEvent {
         val base = AthleteEvent(

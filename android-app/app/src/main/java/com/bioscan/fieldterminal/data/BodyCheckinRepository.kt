@@ -119,7 +119,7 @@ class BodyCheckinRepository(private val supabase: SupabaseClient) {
     }
 
     /** Every check-in with its measurements and grip, oldest first. */
-    suspend fun loadHistory(): List<BodyCheckinRecord> = ReadCache.get(CACHE_KEY) {
+    suspend fun loadHistory(): List<BodyCheckinRecord> = ReadCache.get(CACHE_KEY, tables = setOf("body_checkins", "body_measurements", "grip_strength_log")) {
         val checkins = supabase.postgrest.from("body_checkins")
             .select(Columns.list("id,occurred_at,fasted,before_training,caliper,notes")) {
                 order("occurred_at", Order.DESCENDING)

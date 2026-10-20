@@ -63,7 +63,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // or if the read fails, every baseline behaves exactly as before (NONE), never blocks a screen.
     suspend fun loadSeriesBreakStarts(): SeriesBreakStarts =
         try {
-            ReadCache.get("analysis.series_break") {
+            ReadCache.get("analysis.series_break", tables = setOf("analysis_results")) {
                 val rows = supabase.postgrest.from("analysis_results")
                     .select(columns = Columns.list("key,payload")) { filter { eq("kind", "series_break") }; newestFirst() }
                     .decodeList<SeriesBreakResultRow>()
@@ -79,7 +79,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Analysis Layer 3 / Phase 3. The latest published relationship results; empty before the first run or if the read fails.
     suspend fun loadRelationships(): List<RelationshipResultRow> =
         try {
-            ReadCache.get("analysis.relationships") {
+            ReadCache.get("analysis.relationships", tables = setOf("analysis_results")) {
                 supabase.postgrest.from("analysis_results")
                     .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "relationship") }; newestFirst() }
                     .decodeList<RelationshipResultRow>()
@@ -94,7 +94,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Analysis Layer 3 / Phase 4. The latest "is today typical for you" result, or null before the first run / on failure.
     suspend fun loadTypicality(): TypicalityResultRow? =
         try {
-            ReadCache.get("analysis.typicality") {
+            ReadCache.get("analysis.typicality", tables = setOf("analysis_results")) {
                 supabase.postgrest.from("analysis_results")
                     .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "typicality") }; newestFirst() }
                     .decodeList<TypicalityResultRow>()
@@ -122,7 +122,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     private suspend fun <T> softList(cacheKey: String, block: suspend () -> List<T>): List<T> =
         try {
-            ReadCache.get(cacheKey) { block() }
+            ReadCache.get(cacheKey, tables = setOf("analysis_results")) { block() }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -174,7 +174,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // or if the read fails, and every screen then falls back to what it showed before.
     suspend fun loadExpectedBands(): Map<String, ExpectedBandRow> =
         try {
-            ReadCache.get("analysis.expected_band") {
+            ReadCache.get("analysis.expected_band", tables = setOf("analysis_results")) {
                 supabase.postgrest.from("analysis_results")
                     .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "expected_band") }; newestFirst() }
                     .decodeList<ExpectedBandRow>()
@@ -187,7 +187,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             emptyMap()
         }
 
-    suspend fun loadWearableDaily(): List<WearableAnalysisRow> = ReadCache.get("analysis.WearableDaily") { fetchWearableDaily() }
+    suspend fun loadWearableDaily(): List<WearableAnalysisRow> = ReadCache.get("analysis.WearableDaily", tables = setOf("wearable_daily")) { fetchWearableDaily() }
 
     private suspend fun fetchWearableDaily(): List<WearableAnalysisRow> =
         supabase.postgrest.from("wearable_daily")
@@ -202,7 +202,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // oldest day of the 200-row window (an ascending list's first row), so the card showed a day from months ago
     // without saying which. Only plausible minutes are kept (MinuteHeartRate.kt). Fetched on its own because the column
     // is ~50 kB of JSON per day and the other screens never read it.
-    suspend fun loadHeartRateDay(): HeartRateDay? = ReadCache.get("analysis.hr_day") {
+    suspend fun loadHeartRateDay(): HeartRateDay? = ReadCache.get("analysis.hr_day", tables = setOf("wearable_daily")) {
         supabase.postgrest.from("wearable_daily")
             .select(columns = Columns.list("date,hr_timeseries")) {
                 filter {
@@ -217,7 +217,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             }
     }
 
-    suspend fun loadSleepDaily(): List<SleepAnalysisRow> = ReadCache.get("analysis.SleepDaily") { fetchSleepDaily() }
+    suspend fun loadSleepDaily(): List<SleepAnalysisRow> = ReadCache.get("analysis.SleepDaily", tables = setOf("sleep_daily")) { fetchSleepDaily() }
 
     private suspend fun fetchSleepDaily(): List<SleepAnalysisRow> =
         supabase.postgrest.from("sleep_daily")
@@ -228,7 +228,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<SleepAnalysisRow>()
             .reversed()
 
-    suspend fun loadBodyMetrics(): List<BodyMetricsAnalysisRow> = ReadCache.get("analysis.BodyMetrics") { fetchBodyMetrics() }
+    suspend fun loadBodyMetrics(): List<BodyMetricsAnalysisRow> = ReadCache.get("analysis.BodyMetrics", tables = setOf("body_metrics")) { fetchBodyMetrics() }
 
     private suspend fun fetchBodyMetrics(): List<BodyMetricsAnalysisRow> =
         supabase.postgrest.from("body_metrics")
@@ -262,7 +262,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Weekly intensity (domain/IntensityDistribution.kt): the endurance sessions of the last [weeks] weeks, each with its
     // Zepp heart-rate histogram when it has one (zepp_workout_detail.hr_histogram, migration 20261022).
-    suspend fun loadIntensitySessions(weeks: Int = 12): List<IntensitySession> = ReadCache.get("analysis.intensity.$weeks") {
+    suspend fun loadIntensitySessions(weeks: Int = 12): List<IntensitySession> = ReadCache.get("analysis.intensity.$weeks", tables = setOf("exercise_sessions")) {
         val from = mondayOf(LocalDate.now()).minusWeeks(weeks - 1L)
         supabase.postgrest.from("exercise_sessions")
             .select(columns = Columns.raw("start_time,type,zepp_workout_detail(hr_histogram)")) {
@@ -281,7 +281,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Analysis review phase G: the personal fitness-fatigue result, and the spans every load chart uses (the standard 42 and
     // 7 unless the personal pair was adopted; standard too when nothing is published or the read fails).
-    suspend fun loadFitnessFatigue(): FitnessFatigueRow? = ReadCache.get("analysis.FitnessFatigue") {
+    suspend fun loadFitnessFatigue(): FitnessFatigueRow? = ReadCache.get("analysis.FitnessFatigue", tables = setOf("analysis_results")) {
         runCatching {
             supabase.postgrest.from("analysis_results")
                 .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "fitness_fatigue"); eq("key", "hrv") }; newestFirst() }
@@ -296,7 +296,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     } ?: LoadSpans.STANDARD
 
     // Analysis review phase G: planned sessions of the scorecard's window that are already in the past, for READY FOR.
-    suspend fun loadPlannedOutcomes(): List<PlannedOutcomeRow> = ReadCache.get("analysis.PlannedOutcomes") {
+    suspend fun loadPlannedOutcomes(): List<PlannedOutcomeRow> = ReadCache.get("analysis.PlannedOutcomes", tables = setOf("planned_sessions")) {
         val today = java.time.LocalDate.now()
         supabase.postgrest.from("planned_sessions")
             .select(columns = Columns.list("scheduled_date,status,exercise_session_id")) {
@@ -312,7 +312,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Phase A4 (Category 3). 30-day baseline gate, same margin reasoning as
     // everything else here.
-    suspend fun loadWellbeingDaily(): List<WellbeingAnalysisRow> = ReadCache.get("analysis.WellbeingDaily") { fetchWellbeingDaily() }
+    suspend fun loadWellbeingDaily(): List<WellbeingAnalysisRow> = ReadCache.get("analysis.WellbeingDaily", tables = setOf("wellbeing_daily")) { fetchWellbeingDaily() }
 
     private suspend fun fetchWellbeingDaily(): List<WellbeingAnalysisRow> =
         supabase.postgrest.from("wellbeing_daily")
@@ -339,7 +339,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Phase A4 (Category 8, Bristol half). Same generous margin as every
     // other read here.
-    suspend fun loadStoolLog(): List<StoolAnalysisRow> = ReadCache.get("analysis.StoolLog") { fetchStoolLog() }
+    suspend fun loadStoolLog(): List<StoolAnalysisRow> = ReadCache.get("analysis.StoolLog", tables = setOf("stool_log")) { fetchStoolLog() }
 
     private suspend fun fetchStoolLog(): List<StoolAnalysisRow> =
         supabase.postgrest.from("stool_log")
@@ -352,7 +352,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Arousal folded into wellbeing_daily -- see loadWellbeingDaily() above;
     // morning-wood/arousal history now reads from the same wellbeing rows.
-    suspend fun loadSexualActivityDaily(): List<LogSexualActivityRow> = ReadCache.get("analysis.SexualActivityDaily") { fetchSexualActivityDaily() }
+    suspend fun loadSexualActivityDaily(): List<LogSexualActivityRow> = ReadCache.get("analysis.SexualActivityDaily", tables = setOf("sexual_activity_daily")) { fetchSexualActivityDaily() }
 
     private suspend fun fetchSexualActivityDaily(): List<LogSexualActivityRow> =
         supabase.postgrest.from("sexual_activity_daily")
@@ -364,7 +364,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .reversed()
 
     // Phase A4 (Category 8, OSTRC-H2 half).
-    suspend fun loadOstrcCheckins(): List<OstrcAnalysisRow> = ReadCache.get("analysis.OstrcCheckins") { fetchOstrcCheckins() }
+    suspend fun loadOstrcCheckins(): List<OstrcAnalysisRow> = ReadCache.get("analysis.OstrcCheckins", tables = setOf("ostrc_checkins")) { fetchOstrcCheckins() }
 
     private suspend fun fetchOstrcCheckins(): List<OstrcAnalysisRow> =
         supabase.postgrest.from("ostrc_checkins")
@@ -378,7 +378,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Phase A4 (Category 9). Two small real tables (2 draws, 77 results
     // today) -- no server-side date filtering needed at this account's real
     // volume, same "generous margin" reasoning as everywhere else here.
-    suspend fun loadLabDraws(): List<LabDrawAnalysisRow> = ReadCache.get("analysis.LabDraws") { fetchLabDraws() }
+    suspend fun loadLabDraws(): List<LabDrawAnalysisRow> = ReadCache.get("analysis.LabDraws", tables = setOf("lab_draws")) { fetchLabDraws() }
 
     private suspend fun fetchLabDraws(): List<LabDrawAnalysisRow> =
         supabase.postgrest.from("lab_draws")
@@ -389,7 +389,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<LabDrawAnalysisRow>()
             .reversed()
 
-    suspend fun loadLabResults(): List<LabResultAnalysisRow> = ReadCache.get("analysis.LabResults") { fetchLabResults() }
+    suspend fun loadLabResults(): List<LabResultAnalysisRow> = ReadCache.get("analysis.LabResults", tables = setOf("lab_results")) { fetchLabResults() }
 
     private suspend fun fetchLabResults(): List<LabResultAnalysisRow> =
         supabase.postgrest.from("lab_results")

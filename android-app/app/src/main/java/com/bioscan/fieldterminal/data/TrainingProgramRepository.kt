@@ -146,7 +146,7 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
 
     // The default heart-rate zone method (20261021_hr_zone_method.sql), read and written on its own: a database without
     // the column yet still opens the planner and its settings, and the zones fall back to AUTO.
-    suspend fun loadZoneMethod(): ZoneMethod = ReadCache.get("training.zone_method") {
+    suspend fun loadZoneMethod(): ZoneMethod = ReadCache.get("training.zone_method", tables = setOf("training_settings")) {
         runCatching {
             supabase.postgrest.from("training_settings")
                 .select(columns = Columns.list("hr_zone_method"))

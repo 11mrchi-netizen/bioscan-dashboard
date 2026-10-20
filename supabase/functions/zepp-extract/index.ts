@@ -10,6 +10,11 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { computeEffort } from "./effort.ts";
 import { decodeMinuteHr, type HrMinutePoint } from "./minuteHr.ts";
 import { hrHistogram } from "./hrHistogram.ts";
+import { redecodeReport, sessionStartMatches } from "./redecode.ts";
+import {
+  decodeAltitude, decodeCadenceAndVerticalRatio, decodeHeartRate, decodePauses, decodeSpeedKmh, decodeTrack, type DecodedPoint,
+  gpsOffsets, type Pause, type RoutePoint, splitEntries, workoutStartSec,
+} from "./decodeSeries.ts";
 import { mergedSessionFields, pickSessionMatch, type SessionCandidate, type Span, spanOf, START_TOLERANCE_MS } from "./sessionMatch.ts";
 import { exerciseTypeForZeppSport, summaryDistanceM, takesDistance, zeppDistanceKm } from "./workoutDistance.ts";
 import { afterWindow, HISTORY_METRICS, type HistoryState, windowDates } from "./historyPull.ts";
@@ -86,10 +91,6 @@ async function recordFieldProvenance(supabase: any, userId: string, date: string
 // cycling confirmed the encoding is identical, just with different fields
 // left empty (e.g. strength has no GPS/pace/speed) -- no per-type branching
 // needed, only per-field presence checks.
-interface DecodedPoint {
-  offsetSeconds: number;
-  value: number;
-}
 
 interface WorkoutSummaryFields {
   // DAV-272, computed here from the per-second series (see effort.ts); only
@@ -115,122 +116,16 @@ interface DecodedSeries {
   cadenceSpm: DecodedPoint[];
   verticalStrideRatioPct: DecodedPoint[];
   routePoints: RoutePoint[];
+  // Seconds from the start at which each pause began, and how long it lasted.
+  pauses: Pause[];
+  // 2: every series timed by its own steps (decodeSeries.ts); absent on rows decoded before.
+  decoderVersion: number;
   summary: WorkoutSummaryFields;
 }
 
-interface RoutePoint { offsetSeconds: number; lat: number; lon: number; }
+const DECODER_VERSION = 2;
 
-function splitEntries(raw: unknown): string[] {
-  if (typeof raw !== "string" || raw.length === 0) return [];
-  return raw.replace(/;$/, "").split(";").filter((e) => e.length > 0);
-}
-
-// heart_rate: first entry is the absolute starting bpm; every entry after
-// that is a signed delta to add to the running total. The flag before the
-// comma (seen: empty, 0, 2, 7 on entry 1 only) doesn't gate the decode.
-function decodeHeartRate(raw: unknown): DecodedPoint[] {
-  const entries = splitEntries(raw);
-  const out: DecodedPoint[] = [];
-  let running = 0;
-  entries.forEach((entry, i) => {
-    const parts = entry.split(",");
-    const v = Number(parts[1] ?? parts[0]);
-    if (!Number.isFinite(v)) return;
-    running = i === 0 ? v : running + v;
-    out.push({ offsetSeconds: i, value: running });
-  });
-  return out;
-}
-
-// speed: "<flag>,<m/s>" per second, no delta encoding -- convert straight to km/h.
-function decodeSpeedKmh(raw: unknown): DecodedPoint[] {
-  const entries = splitEntries(raw);
-  const out: DecodedPoint[] = [];
-  entries.forEach((entry, i) => {
-    const parts = entry.split(",");
-    const ms = Number(parts[1] ?? parts[0]);
-    if (!Number.isFinite(ms)) return;
-    out.push({ offsetSeconds: i, value: ms * 3.6 });
-  });
-  return out;
-}
-
-// altitude: plain per-second value, no delta encoding, in CENTIMETRES (checked
-// 2026-09-25: a run with ~20 m of real ascent spans 922..2054; a trail run
-// tops out at 30716 = 307 m) -- converted to metres here. Zepp writes about
-// -2,000,000 when it has no fix; those samples are dropped, not decoded.
-const ALTITUDE_INVALID_BELOW_CM = -1_000_000;
-function decodeAltitude(raw: unknown): DecodedPoint[] {
-  const entries = splitEntries(raw);
-  const out: DecodedPoint[] = [];
-  entries.forEach((entry, i) => {
-    const v = Number(entry);
-    if (!Number.isFinite(v) || v < ALTITUDE_INVALID_BELOW_CM) return;
-    out.push({ offsetSeconds: i, value: v / 100 });
-  });
-  return out;
-}
-
-// gait: "<f1>,<f2>,<vertRatio_x10>,<cadence_spm>" per second -- f1/f2 look
-// like run-state flags (0 before the run starts, settling to 1/2 once
-// steady), not decoded since neither has a summary field to check against.
-// Confirmed 2026-09-25: avg cadence (f4) = 175.5 vs summary avg_frequency
-// 173.0; max f4 = 200 vs summary max_frequency 201; avg f3/10 = 8.89% vs
-// summary avgVertStrideRatio/10 = 8.6% -- both close enough (same
-// time-vs-distance-weighting gap as pace/speed) to trust. No ground-contact-
-// time or stride-length per-second series found in this or any other field;
-// those exist only as this workout's summary averages (see WorkoutSummaryFields).
-function decodeCadenceAndVerticalRatio(raw: unknown): { cadenceSpm: DecodedPoint[]; verticalStrideRatioPct: DecodedPoint[] } {
-  const entries = splitEntries(raw);
-  const cadenceSpm: DecodedPoint[] = [];
-  const verticalStrideRatioPct: DecodedPoint[] = [];
-  entries.forEach((entry, i) => {
-    const parts = entry.split(",");
-    const vertRatio = Number(parts[2]);
-    const cadence = Number(parts[3]);
-    if (Number.isFinite(cadence) && cadence > 0) cadenceSpm.push({ offsetSeconds: i, value: cadence });
-    if (Number.isFinite(vertRatio) && cadence > 0) verticalStrideRatioPct.push({ offsetSeconds: i, value: vertRatio / 10 });
-  });
-  return { cadenceSpm, verticalStrideRatioPct };
-}
-
-function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.asin(Math.sqrt(a));
-}
-
-// longitude_latitude: first pair is absolute (lat*1e8, lon*1e8); every pair
-// after that is (dlat*1e8, dlon*1e8) to cumulatively sum. Produces cumulative
-// distance (km), not the raw lat/lon track -- that's all SessionDetail needs
-// today; the reconstructed positions themselves aren't kept.
-function decodeDistanceKm(raw: unknown): DecodedPoint[] {
-  const entries = splitEntries(raw);
-  const out: DecodedPoint[] = [];
-  let lat = 0, lon = 0, cumMeters = 0;
-  entries.forEach((entry, i) => {
-    const parts = entry.split(",");
-    const a = Number(parts[0]);
-    const b = Number(parts[1]);
-    if (!Number.isFinite(a) || !Number.isFinite(b)) return;
-    if (i === 0) {
-      lat = a / 1e8;
-      lon = b / 1e8;
-    } else {
-      const newLat = lat + a / 1e8;
-      const newLon = lon + b / 1e8;
-      cumMeters += haversineMeters(lat, lon, newLat, newLon);
-      lat = newLat;
-      lon = newLon;
-    }
-    out.push({ offsetSeconds: i, value: cumMeters / 1000 });
-  });
-  return out;
-}
+// The per-second series decoders live in decodeSeries.ts (each series timed by its own steps; tested there).
 
 // Gadgetbridge Zepp OS exercise catalog (Freeyourgadget/Gadgetbridge, zeppos.json)
 // actionType → display name. Extracted 2026-10-08. Fallback: "Exercise ${code}".
@@ -290,41 +185,31 @@ function parseStrengthAssess(assessStr: unknown): Array<{
 // Minetti's cost curve is a running model -- cycling/strength get no GAP/EF.
 const RUN_SPORT_TYPES = new Set(["1", "7"]);
 
-function decodeRoute(raw: unknown): RoutePoint[] {
-  const entries = splitEntries(raw);
-  const out: RoutePoint[] = [];
-  let lat = 0, lon = 0;
-  entries.forEach((entry, i) => {
-    const parts = entry.split(",");
-    const a = Number(parts[0]), b = Number(parts[1]);
-    if (!Number.isFinite(a) || !Number.isFinite(b)) return;
-    if (i === 0) { lat = a / 1e8; lon = b / 1e8; }
-    else { lat += a / 1e8; lon += b / 1e8; }
-    out.push({ offsetSeconds: i, lat, lon });
-  });
-  return out;
-}
-
 function decodeWorkoutDetail(detailRawBody: unknown, summary: WorkoutSummaryFields, sportType: string): DecodedSeries | null {
   if (!detailRawBody || typeof detailRawBody !== "object") return null;
   const data = (detailRawBody as Record<string, unknown>).data;
   if (!data || typeof data !== "object") return null;
   const d = data as Record<string, unknown>;
   const { cadenceSpm, verticalStrideRatioPct } = decodeCadenceAndVerticalRatio(d.gait);
-  const routePoints = sportType !== "52" ? decodeRoute(d.longitude_latitude) : [];
+  // GPS points and altitude are timed by the `time` field; every other series by its own steps (decodeSeries.ts).
+  const gpsCount = Math.max(splitEntries(d.longitude_latitude).length, splitEntries(d.altitude).length);
+  const offsets = gpsOffsets(d.time, gpsCount);
+  const track = decodeTrack(d.longitude_latitude, offsets);
+  const trackStart = Number(d.trackid);
   const series = {
     heartRate: decodeHeartRate(d.heart_rate),
     speedKmh: decodeSpeedKmh(d.speed),
-    altitudeM: decodeAltitude(d.altitude),
-    distanceKm: decodeDistanceKm(d.longitude_latitude),
+    altitudeM: decodeAltitude(d.altitude, offsets),
+    distanceKm: track.distanceKm,
     cadenceSpm,
     verticalStrideRatioPct,
-    routePoints,
+    routePoints: sportType !== "52" ? track.routePoints : [],
+    pauses: decodePauses(d.pause, Number.isFinite(trackStart) && trackStart > 0 ? trackStart : null),
   };
   const effort = RUN_SPORT_TYPES.has(sportType)
     ? computeEffort({ ...series, lactateThresholdHrBpm: summary.lactateThresholdHrBpm })
     : null;
-  return { ...series, summary: { ...summary, ...(effort ?? {}) } };
+  return { ...series, decoderVersion: DECODER_VERSION, summary: { ...summary, ...(effort ?? {}) } };
 }
 
 // DAV-112/123: a workout's real per-point pace/power/GPS lives behind a *second*
@@ -368,6 +253,8 @@ interface WorkoutRef {
   // compute per-set startOffsetSec for strength data (strengthAssess.time is
   // also real epoch ms). Distinct from startTimeIso which is local-labeled-UTC.
   realStartMs: number;
+  // Moving time (the list entry's run_time), minutes: a session's duration, so a pause does not add training time.
+  movingMin: number | null;
 }
 
 function numOrNull(v: unknown): number | null {
@@ -446,7 +333,9 @@ function extractWorkoutRefs(historyResponse: unknown): WorkoutRef[] {
     const hasRun = Number.isFinite(runSec) && runSec >= 0;
     const tz = typeof e.syncedTimezone === "string" && e.syncedTimezone ? e.syncedTimezone : FALLBACK_TIMEZONE;
     const endTimeIso = hasEnd ? toLocalLabeledUtcIso(endSec * 1000, tz) : "";
-    const startTimeIso = hasEnd && hasRun ? toLocalLabeledUtcIso((endSec - runSec) * 1000, tz) : "";
+    // run_time is moving time; the trackid is the real start (a paused workout started earlier than end - run_time).
+    const startSec = hasEnd && hasRun ? workoutStartSec(rawId, endSec, runSec) : 0;
+    const startTimeIso = hasEnd && hasRun ? toLocalLabeledUtcIso(startSec * 1000, tz) : "";
 
     refs.push({
       trackId: String(rawId),
@@ -470,7 +359,8 @@ function extractWorkoutRefs(historyResponse: unknown): WorkoutRef[] {
       avgPaceSecPerKm: numOrNull(e.avg_pace),
       // Zepp's summary carries `dis` / `highPrecisionDistance` (metres); there is no `distance` key (workoutDistance.ts).
       distanceSummaryM: summaryDistanceM(e),
-      realStartMs: hasEnd && hasRun ? (endSec - runSec) * 1000 : 0,
+      realStartMs: hasEnd && hasRun ? startSec * 1000 : 0,
+      movingMin: hasRun ? runSec / 60 : null,
     });
   }
   return refs;
@@ -821,7 +711,7 @@ async function extract(
           source: "zepp",
           start_time: ref.startTimeIso,
           end_time: ref.endTimeIso,
-          duration_min: Math.round((new Date(ref.endTimeIso).getTime() - startMs) / 60000),
+          duration_min: Math.round(ref.movingMin ?? (new Date(ref.endTimeIso).getTime() - startMs) / 60000),
         })
         .select("id")
         .single();
@@ -911,7 +801,7 @@ async function extract(
       if (match?.kind === "overlap") {
         timing.start_time = ref.startTimeIso;
         timing.end_time = ref.endTimeIso;
-        timing.duration_min = Math.round((zeppSpan.endMs - startMs) / 60000);
+        timing.duration_min = Math.round(ref.movingMin ?? (zeppSpan.endMs - startMs) / 60000);
       }
       Object.assign(aggregates, timing);
 
@@ -1278,6 +1168,75 @@ async function runHistoryPull(secret: string): Promise<Response> {
   return json({ status: "started", users: rows.length }, 202);
 }
 
+// Re-decoding stored workouts with the timed decoder (redecode.ts), from their stored raw detail: nothing is fetched
+// from Zepp. Called from SQL with the history pull's Vault secret in x-zepp-redecode (same check as runHistoryPull).
+// Body: { dryRun?: boolean, limit?: number, afterId?: number }. A dry run reports and writes nothing; a live run writes
+// each workout's decoded series, its heart-rate histogram and, for a paused workout, the real start on the detail row
+// and on its session (only when the session still has the old start). Live runs take rows not yet at DECODER_VERSION,
+// so calling again carries on; a dry run pages with afterId. Synchronous: the answer is the report.
+const REDECODE_MAX_BATCH = 25;
+
+async function runRedecode(secret: string, req: Request): Promise<Response> {
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const { data: ok } = await admin.rpc("zepp_history_secret_ok", { candidate: secret });
+  if (ok !== true) return json({ error: "unauthorized" }, 401);
+  let body: Record<string, unknown> = {};
+  try { body = JSON.parse(await req.text() || "{}"); } catch { /* defaults */ }
+  const dryRun = body.dryRun !== false;
+  const limit = Math.min(REDECODE_MAX_BATCH, Math.max(1, Number(body.limit) || REDECODE_MAX_BATCH));
+  const afterId = Number(body.afterId) || 0;
+
+  let q = admin.from("zepp_workout_detail")
+    .select("id,user_id,exercise_session_id,sport_type,start_time,end_time,raw,decoded")
+    .not("raw", "is", null).gt("id", afterId).order("id").limit(limit);
+  if (!dryRun) q = q.or(`decoded.is.null,decoded->>decoderVersion.is.null,decoded->>decoderVersion.neq.${DECODER_VERSION}`);
+  const { data: rows, error } = await q;
+  if (error) return json({ error: "read_failed", message: error.message }, 500);
+
+  const reports: Record<string, unknown>[] = [];
+  for (const row of (rows ?? []) as Array<Record<string, unknown>>) {
+    const old = row.decoded as Record<string, unknown> | null;
+    const oldSummary = (old?.summary ?? {}) as Record<string, unknown>;
+    const pick = (k: string) => (typeof oldSummary[k] === "number" ? oldSummary[k] as number : null);
+    const next = decodeWorkoutDetail(row.raw, {
+      avgCadenceSpm: pick("avgCadenceSpm"),
+      maxCadenceSpm: pick("maxCadenceSpm"),
+      avgStrideLengthCm: pick("avgStrideLengthCm"),
+      avgGroundContactMs: pick("avgGroundContactMs"),
+      avgVerticalStrideRatioPct: pick("avgVerticalStrideRatioPct"),
+      lactateThresholdHrBpm: pick("lactateThresholdHrBpm"),
+      lactateThresholdPaceSecPerKm: pick("lactateThresholdPaceSecPerKm"),
+    }, String(row.sport_type ?? ""));
+    if (!next) {
+      reports.push({ id: row.id, skipped: "no decodable detail" });
+      continue;
+    }
+    const report = redecodeReport(old as never, next, row.start_time as string | null, row.end_time as string | null);
+    const entry: Record<string, unknown> = { id: row.id, sessionId: row.exercise_session_id, sport: row.sport_type, ...report };
+    if (!dryRun) {
+      // Keep what the decode does not produce (the strength sets written by reconcileStrengthData).
+      const decoded = old?.strengthData ? { ...next, strengthData: old.strengthData } : next;
+      const patch: Record<string, unknown> = { decoded, hr_histogram: hrHistogram(next.heartRate) };
+      if (report.newStartIso) patch.start_time = report.newStartIso;
+      const { error: upErr } = await admin.from("zepp_workout_detail").update(patch).eq("id", row.id);
+      if (upErr) { entry.error = upErr.message; reports.push(entry); continue; }
+      if (report.newStartIso && row.exercise_session_id) {
+        const { data: session } = await admin.from("exercise_sessions").select("start_time").eq("id", row.exercise_session_id).maybeSingle();
+        if (sessionStartMatches((session as { start_time?: string } | null)?.start_time ?? null, row.start_time as string | null)) {
+          const { error: sErr } = await admin.from("exercise_sessions").update({ start_time: report.newStartIso }).eq("id", row.exercise_session_id);
+          entry.sessionStartMoved = !sErr;
+          if (sErr) entry.error = sErr.message;
+        } else {
+          entry.sessionStartMoved = false;
+        }
+      }
+    }
+    reports.push(entry);
+  }
+  const lastId = rows && rows.length ? (rows[rows.length - 1] as { id: number }).id : null;
+  return json({ dryRun, count: reports.length, lastId, reports }, 200);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1286,6 +1245,8 @@ Deno.serve(async (req: Request) => {
   try {
     const historySecret = req.headers.get("x-zepp-history");
     if (historySecret) return await runHistoryPull(historySecret);
+    const redecodeSecret = req.headers.get("x-zepp-redecode");
+    if (redecodeSecret) return await runRedecode(redecodeSecret, req);
 
     // --- Auth ---
     const authHeader = req.headers.get("Authorization");

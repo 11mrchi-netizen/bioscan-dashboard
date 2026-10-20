@@ -137,6 +137,26 @@ class LogDaysTest {
     }
 
     @Test
+    fun aWindowedFeedIsKnownFromItsFirstDayOnly() {
+        fun meal(id: Long, iso: String) = LogMealRow(id = id, loggedAt = iso)
+        val since = LocalDate.of(2026, 9, 22)
+        val rows = listOf(meal(1, "2026-09-25T12:00:00+00:00"), meal(2, "2026-10-13T12:00:00+00:00"))
+        val windowed = logCoverage(rows, emptyList(), emptyList(), emptyList(), emptyList(), limit = 1000, since = since)
+        // Every source starts at the window, empty ones included: an older day is never called missing.
+        assertEquals(since, windowed[LogMark.FOOD])
+        assertEquals(since, windowed[LogMark.SUPP])
+        // A source that hit its cap inside the window is known only from the day after its oldest row.
+        val capped = logCoverage(rows, emptyList(), emptyList(), emptyList(), emptyList(), limit = 2, since = since)
+        assertEquals(LocalDate.of(2026, 9, 26), capped[LogMark.FOOD])
+        // Days before the window get no row; inside it an empty finished day is a gap.
+        val today = LocalDate.of(2026, 10, 14)
+        val days = buildLogDays(emptyList(), today, windowed, from = since)
+        assertEquals(today, days.first().date)
+        assertEquals(since, days.last().date)
+        assertTrue(days.drop(1).all { it.hasGap })
+    }
+
+    @Test
     fun onlyDailySupplementsWithAKnownRangeAreExpected() {
         val daily = SupplementScheduleRow(1, "active", "2026-09-01", null, null)
         val ended = SupplementScheduleRow(2, "ended", "2026-09-01", "2026-09-30", null)

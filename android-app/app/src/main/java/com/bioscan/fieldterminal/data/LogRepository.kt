@@ -25,113 +25,128 @@ import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
-// Pagination decision for Step 11's flagged open question: fetch a generous
-// window from every source table up front (60 rows each, well past this
-// account's current real volume), merge + sort once, then reveal the merged
-// pool 20 entries at a time via "LOAD OLDER" -- client-side windowing over
-// one real fetch, not unbounded, and not a fake infinite-scroll illusion. The reveal is now by whole days (LOG_PAGE_DAYS).
-// Notes, hydration (as a "day total" entry), wellbeing and supplement-taken
-// confirmations all gained real Log presence across Steps 12 and this
-// follow-up pass -- `supplement_log` in particular is a new table (a
-// supplement's roster row isn't itself a loggable event; a taken
-// confirmation is). Every row now also selects `id`, needed for Log tab
-// edit/delete.
-private const val FETCH_LIMIT_PER_SOURCE = 60L
+// The feed loads a window of days, not a number of rows. It used to take the newest 60 rows of every table, which on this
+// account reached back only two days for supplements (about 10 a day) and ten for meals (about 6 a day), so everything
+// older looked unlogged. Now every table is read from the window's first day (`since`), and LOAD OLDER widens the window
+// by LOG_WINDOW_DAYS once the loaded days are all shown. A per-table safety cap stays (the API returns at most 1,000 rows
+// a call); a table that hits it is only known back to its oldest row (logCoverage). Every row also selects `id`, needed
+// for Log tab edit/delete.
+private const val FETCH_CAP_PER_SOURCE = 1000L
 // Days revealed per "LOAD OLDER" tap (whole days, so a day is never half-shown).
 const val LOG_PAGE_DAYS = 14
+// Days each fetch reaches back; the window grows by this much when LOAD OLDER runs past the loaded days.
+const val LOG_WINDOW_DAYS = 28
 
-// The merged entries, how far back each flaggable mark's source is known to be complete, and the supplement roster.
+// The merged entries from `since` on, how far back each flaggable mark's source is known to be complete, and the
+// supplement roster.
 data class LogFeed(
     val entries: List<LogEntry>,
     val coverage: Map<LogMark, LocalDate?>,
     val supplementSchedule: List<SupplementScheduleRow>,
+    val since: LocalDate,
 )
 
 class LogRepository(private val supabase: SupabaseClient) {
 
-    suspend fun loadFeed(): LogFeed = coroutineScope {
+    suspend fun loadFeed(since: LocalDate): LogFeed = coroutineScope {
+        // Date columns from `since`; timestamps from the day before, so an entry near midnight is not lost to the stored
+        // offset, then trimmed to `since` once parsed (entries are grouped by their own wall-clock day).
+        val fromDate = since.toString()
+        val fromTimestamp = since.minusDays(1).toString()
         val meals = async {
             supabase.postgrest.from("meals")
                 .select(columns = Columns.list("id,logged_at,description,calories,protein_g,carbs_g,fat_g")) {
+                    filter { gte("logged_at", fromTimestamp) }
                     order("logged_at", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
+                    limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogMealRow>()
         }
         val exerciseSessions = async {
             supabase.postgrest.from("exercise_sessions")
                 .select(columns = Columns.list("id,type,start_time,distance_km,duration_min,avg_hr,source")) {
+                    filter { gte("start_time", fromTimestamp) }
                     order("start_time", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
+                    limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogExerciseRow>()
         }
         val sleep = async {
             supabase.postgrest.from("sleep_daily")
                 .select(columns = Columns.list("id,date,hours,score")) {
+                    filter { gte("date", fromDate) }
                     order("date", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
+                    limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogSleepRow>()
         }
         val stool = async {
             supabase.postgrest.from("stool_log")
                 .select(columns = Columns.list("id,occurred_at,bristol_type,discomfort")) {
+                    filter { gte("occurred_at", fromTimestamp) }
                     order("occurred_at", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
+                    limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogStoolRow>()
         }
         val encounters = async {
             supabase.postgrest.from("encounters")
                 .select(columns = Columns.list("id,date,status,occurred_at,encounter_type,notes,calendar_event_title,my_rating")) {
+                    filter { gte("date", fromDate) }
                     order("date", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
+                    limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogEncounterRow>()
         }
         val notes = async {
             supabase.postgrest.from("notes")
                 .select(columns = Columns.list("id,occurred_at,text")) {
+                    filter { gte("occurred_at", fromTimestamp) }
                     order("occurred_at", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
+                    limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogNoteRow>()
         }
         val hydration = async {
             supabase.postgrest.from("hydration_daily")
                 .select(columns = Columns.list("id,date,ml")) {
+                    filter { gte("date", fromDate) }
                     order("date", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
+                    limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogHydrationRow>()
         }
         val wellbeing = async {
             supabase.postgrest.from("wellbeing_daily")
                 .select(columns = Columns.list("id,date,energy,mood,stress,soreness,morning_erection_quality,arousal_level")) {
+                    filter { gte("date", fromDate) }
                     order("date", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
+                    limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogWellbeingRow>()
         }
         val supplementsTaken = async {
             supabase.postgrest.from("supplement_log")
                 .select(columns = Columns.list("id,supplement_name,taken_at,dose_value,dose_unit")) {
+                    filter { gte("taken_at", fromTimestamp) }
                     order("taken_at", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
+                    limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogSupplementTakenRow>()
         }
         val ostrc = async {
             supabase.postgrest.from("ostrc_checkins")
                 .select(columns = Columns.list("id,check_date,body_area,q1,q2,q3,q4,notes")) {
+                    filter { gte("check_date", fromDate) }
                     order("check_date", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
+                    limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogOstrcRow>()
         }
         val sexualActivity = async {
             supabase.postgrest.from("sexual_activity_daily")
                 .select(columns = Columns.list("id,date,activity_type,instances,notes")) {
+                    filter { gte("date", fromDate) }
                     order("date", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
+                    limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogSexualActivityRow>()
         }
         val grip = async {
             supabase.postgrest.from("grip_strength_log")
                 .select(columns = Columns.list("id,occurred_at,hand,kg")) {
+                    filter { gte("occurred_at", fromTimestamp) }
                     order("occurred_at", Order.DESCENDING)
-                    limit(FETCH_LIMIT_PER_SOURCE)
+                    limit(FETCH_CAP_PER_SOURCE)
                 }.decodeList<LogGripRow>()
         }
         // A roster that fails to load only costs the supplement gap marks, never the feed (caught inside the child so the
@@ -157,9 +172,10 @@ class LogRepository(private val supabase: SupabaseClient) {
                 mealRows, exerciseSessions.await(), sleepRows,
                 stool.await(), encounters.await(), notes.await(), hydrationRows,
                 wellbeingRows, supplementRows, ostrc.await(), sexualActivity.await(), grip.await(),
-            ),
-            coverage = logCoverage(mealRows, hydrationRows, supplementRows, sleepRows, wellbeingRows, FETCH_LIMIT_PER_SOURCE.toInt()),
+            ).filter { !it.timestamp.toLocalDate().isBefore(since) },
+            coverage = logCoverage(mealRows, hydrationRows, supplementRows, sleepRows, wellbeingRows, FETCH_CAP_PER_SOURCE.toInt(), since),
             supplementSchedule = schedule.await(),
+            since = since,
         )
     }
 }

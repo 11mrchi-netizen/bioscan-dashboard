@@ -54,9 +54,9 @@ const val LOG_COMPLETE_MEALS = 3
 
 private val EXPECTED_DAILY = setOf(LogMark.FOOD, LogMark.DRINK, LogMark.SLEEP, LogMark.WELL)
 
-// Per-source history coverage. The feed fetches each source's newest rows only, so a source that returned its row limit is
-// only known back to its oldest row: that day may be cut mid-day, so coverage starts the day after. A source that returned
-// fewer rows than the limit is complete (null = the whole history). Only marks that can be flagged missing matter here.
+// Per-source history coverage. The feed reads each source from the window's first day (`since`, null = the whole
+// history), so nothing older is known. A source that returned its row cap is only known back to its oldest row: that day
+// may be cut mid-day, so coverage starts the day after. Only marks that can be flagged missing matter here.
 fun logCoverage(
     meals: List<LogMealRow>,
     hydration: List<LogHydrationRow>,
@@ -64,8 +64,12 @@ fun logCoverage(
     sleep: List<LogSleepRow>,
     wellbeing: List<LogWellbeingRow>,
     limit: Int,
+    since: LocalDate? = null,
 ): Map<LogMark, LocalDate?> {
-    fun start(dates: List<LocalDate>): LocalDate? = if (dates.size >= limit) dates.minOrNull()?.plusDays(1) else null
+    fun start(dates: List<LocalDate>): LocalDate? {
+        val capped = if (dates.size >= limit) dates.minOrNull()?.plusDays(1) else null
+        return listOfNotNull(capped, since).maxOrNull()
+    }
     fun parsed(iso: String) = runCatching { LocalDate.parse(iso) }.getOrNull()
     return mapOf(
         LogMark.FOOD to start(meals.map { parseTimestamp(it.loggedAt).toLocalDate() }),
@@ -87,18 +91,19 @@ fun supplementExpectedOn(schedule: List<SupplementScheduleRow>, date: LocalDate)
     !date.isBefore(start) && ((end != null && !date.isAfter(end)) || open)
 }
 
-// Days newest first, from the later of today and the newest entry back to the oldest entry. A day with nothing logged still
-// gets a row (that is the point), but only where at least one expected mark has history covering it; older than that, only
-// days that actually have entries appear.
+// Days newest first, from the later of today and the newest entry back to the oldest entry, or to `from` (the loaded
+// window's first day) when that is older. A day with nothing logged still gets a row (that is the point), but only where at
+// least one expected mark has history covering it; older than that, only days that actually have entries appear.
 fun buildLogDays(
     entries: List<LogEntry>,
     today: LocalDate,
     coverage: Map<LogMark, LocalDate?> = emptyMap(),
     supplementExpected: (LocalDate) -> Boolean = { false },
+    from: LocalDate? = null,
 ): List<LogDay> {
     val byDate = entries.groupBy { it.timestamp.toLocalDate() }
     val newest = maxOf(today, byDate.keys.maxOrNull() ?: today)
-    val oldest = byDate.keys.minOrNull() ?: today
+    val oldest = listOfNotNull(byDate.keys.minOrNull(), from?.takeIf { !it.isAfter(newest) }).minOrNull() ?: today
 
     fun covered(mark: LogMark, date: LocalDate): Boolean = coverage[mark]?.let { !date.isBefore(it) } ?: true
     val days = mutableListOf<LogDay>()

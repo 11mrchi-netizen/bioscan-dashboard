@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.LOG_PAGE_DAYS
+import com.bioscan.fieldterminal.data.LOG_WINDOW_DAYS
 import com.bioscan.fieldterminal.data.LogFeed
 import com.bioscan.fieldterminal.data.LogRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -61,11 +62,9 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 // Log tab: Step 11's unified read feed plus Step 12's "+" add-entry flow and
-// its edit/delete counterpart. Real data merged from meals/runs/sleep_daily/
-// arousal_daily/stool_log/encounters/notes/hydration_daily -- see
-// domain/Log.kt for what's deliberately NOT included (supplement-taken
-// confirmations have no backing table) and data/LogRepository.kt for the
-// pagination approach Step 11's roadmap text explicitly asked to be decided.
+// its edit/delete counterpart. Real data merged from every logged table (see
+// domain/Log.kt), loaded as a window of days (data/LogRepository.kt): LOAD
+// OLDER first shows more of the loaded days, then widens the window.
 // Tapping "+ LOG" opens AddEntrySheet; tapping an existing entry opens
 // EntrySheet (the entry, then DETAIL/EDIT/DELETE), and EDIT opens EditEntrySheet (all in
 // ui/screens/AddEntrySheet.kt). Any successful save or delete bumps
@@ -74,6 +73,11 @@ import java.time.format.DateTimeFormatter
 fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     var feed by remember { mutableStateOf<LogFeed?>(null) }
     var visibleDays by remember { mutableIntStateOf(LOG_PAGE_DAYS) }
+    // How many days back the feed is loaded; LOAD OLDER widens it once the loaded days are all shown, until a widening
+    // finds nothing older.
+    var windowDays by remember { mutableIntStateOf(LOG_WINDOW_DAYS) }
+    var olderExhausted by remember { mutableStateOf(false) }
+    var loadingOlder by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var actionEntry by remember { mutableStateOf<LogEntry?>(null) }
@@ -84,14 +88,23 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     var expandedKeys by rememberSaveable { mutableStateOf("") }
     var gapsOnly by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(reloadKey) {
+    LaunchedEffect(reloadKey, windowDays) {
         error = null
         try {
-            feed = LogRepository(SupabaseClientProvider.client).loadFeed()
+            val since = LocalDate.now().minusDays(windowDays - 1L)
+            val loaded = LogRepository(SupabaseClientProvider.client).loadFeed(since)
+            // A widening that adds nothing older than the previous window ends LOAD OLDER.
+            if (windowDays > LOG_WINDOW_DAYS) {
+                val previousStart = since.plusDays(LOG_WINDOW_DAYS.toLong())
+                olderExhausted = loaded.entries.none { it.timestamp.toLocalDate().isBefore(previousStart) }
+            }
+            feed = loaded
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
+        } finally {
+            loadingOlder = false
         }
     }
 
@@ -103,7 +116,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     // Everything about days (grouping, marks, gaps, summaries) is computed in the domain; the screen only draws it.
     val days = remember(feed) {
         feed?.let { f ->
-            buildLogDays(f.entries, LocalDate.now(), f.coverage) { date -> supplementExpectedOn(f.supplementSchedule, date) }
+            buildLogDays(f.entries, LocalDate.now(), f.coverage, { date -> supplementExpectedOn(f.supplementSchedule, date) }, from = f.since)
         }.orEmpty()
     }
     val expanded = expandedKeys.split(',').filter { it.isNotEmpty() }.toSet()
@@ -167,8 +180,16 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
                                 onEntryClick = { actionEntry = it },
                             )
                         }
-                        if (visibleDays < shown.size) {
-                            item(key = "older") { LoadOlderButton(onClick = { visibleDays += LOG_PAGE_DAYS }) }
+                        if (visibleDays < shown.size || !olderExhausted) {
+                            item(key = "older") {
+                                LoadOlderButton(loading = loadingOlder, onClick = {
+                                    visibleDays += LOG_PAGE_DAYS
+                                    if (visibleDays > shown.size && !olderExhausted && !loadingOlder) {
+                                        loadingOlder = true
+                                        windowDays += LOG_WINDOW_DAYS
+                                    }
+                                })
+                            }
                         }
                         item(key = "end-pad") { Box(Modifier.fillMaxWidth().padding(vertical = 48.dp)) }
                     }
@@ -447,7 +468,7 @@ private fun TypeChip(kind: LogEntryKind) {
 }
 
 @Composable
-private fun LoadOlderButton(onClick: () -> Unit) {
+private fun LoadOlderButton(loading: Boolean, onClick: () -> Unit) {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
         Box(
             modifier = Modifier
@@ -455,7 +476,7 @@ private fun LoadOlderButton(onClick: () -> Unit) {
                 .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
-            Text("LOAD OLDER", style = FTType.LabelCaps, color = FT.TextSecondary)
+            Text(if (loading) "LOADING OLDER…" else "LOAD OLDER", style = FTType.LabelCaps, color = FT.TextSecondary)
         }
     }
 }

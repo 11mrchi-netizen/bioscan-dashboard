@@ -154,6 +154,14 @@ the app. Now (`zepp-extract/strengthImport.ts`, `domain/StrengthImport.kt`):
   exercise code unless renamed) through a save, and saving only RPE or notes keeps the list's
   source, so it keeps following Zepp.
 
+## Trail runs: tagged by the sync
+
+Zepp records a trail run as sport `7`; Health Connect carries no trail signal. A Zepp trail run sets
+`exercise_sessions.details.route_type = "trail"` on its session: at insert for a new session, and on a matched
+session that has no route type yet. A road or mixed tag set by hand is never overwritten
+(`zepp-extract/workoutDistance.ts` `trailTaggedDetails`). The app reads trail runs from this tag, or from the sport
+code on the linked workout, so the old "trail runs to confirm" review is gone.
+
 ## What's a genuine gap, left open
 
 - **Units/resolution as queryable metadata.** Units are correct but live only in code comments

@@ -15,6 +15,7 @@ import com.bioscan.fieldterminal.domain.form.PoseFrame
 import com.bioscan.fieldterminal.domain.form.PosePoint
 import com.bioscan.fieldterminal.domain.form.nextPoseTimestampMs
 import com.bioscan.fieldterminal.domain.form.onRealClock
+import com.bioscan.fieldterminal.domain.form.parseVideoDate
 import com.bioscan.fieldterminal.domain.form.yuv420ToArgb
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
@@ -26,6 +27,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.Closeable
+import java.time.Instant
 
 // Running form analyser (docs/running-form/README.md): a video file on the phone to a PoseClip. The video is decoded
 // frame by frame with MediaCodec (in order, no seeking), each frame turned upright and scaled down (ClipFrames.kt), and
@@ -34,8 +36,8 @@ import java.io.Closeable
 /** MediaPipe's pose model, downloaded at build time into the app's assets (app/build.gradle.kts, downloadPoseModel). */
 const val POSE_MODEL_ASSET = "pose_landmarker_full.task"
 
-/** What the file says about itself: its slow-motion capture rate, length and how it should be turned to show upright. */
-data class ClipMeta(val captureFps: Double?, val durationMs: Long?, val rotation: Int)
+/** What the file says about itself: its slow-motion capture rate, length, how to turn it upright and when it was filmed. */
+data class ClipMeta(val captureFps: Double?, val durationMs: Long?, val rotation: Int, val recordedAt: Instant?)
 
 fun readClipMeta(context: Context, uri: Uri): ClipMeta {
     val r = MediaMetadataRetriever()
@@ -45,14 +47,18 @@ fun readClipMeta(context: Context, uri: Uri): ClipMeta {
             captureFps = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toDoubleOrNull()?.takeIf { it > 0 },
             durationMs = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull(),
             rotation = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull()?.let { ((it % 360) + 360) % 360 } ?: 0,
+            recordedAt = parseVideoDate(r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE)),
         )
     } finally {
         r.release()
     }
 }
 
-/** The pose clip, with each frame's time in the file (µs) and its rotation, so a frame can be fetched again for display. */
-class ExtractedClip(val clip: PoseClip, val fileTimesUs: List<Long>, val rotation: Int)
+/**
+ * The pose clip, with each frame's time in the file (µs) and its rotation, so a frame can be fetched again for display,
+ * and when it was filmed (null when the file does not say).
+ */
+class ExtractedClip(val clip: PoseClip, val fileTimesUs: List<Long>, val rotation: Int, val recordedAt: Instant?)
 
 /**
  * The clip's pose, frame by frame. `onProgress` gets the share of the clip read (0 to 1). Runs off the main thread;
@@ -81,7 +87,7 @@ suspend fun extractPoseClip(context: Context, uri: Uri, onProgress: (Double) -> 
             true
         }
         onProgress(1.0)
-        ExtractedClip(onRealClock(PoseClip(frames, width, height), meta.captureFps), fileTimes, meta.rotation)
+        ExtractedClip(onRealClock(PoseClip(frames, width, height), meta.captureFps), fileTimes, meta.rotation, meta.recordedAt)
     }
 }
 

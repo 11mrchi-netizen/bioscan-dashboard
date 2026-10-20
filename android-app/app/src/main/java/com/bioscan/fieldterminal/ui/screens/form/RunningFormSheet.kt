@@ -20,6 +20,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.RunningFormRepository
+import com.bioscan.fieldterminal.data.SavedFormAnalysis
+import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.form.ExtractedClip
 import com.bioscan.fieldterminal.data.form.extractPoseClip
 import com.bioscan.fieldterminal.data.form.framesAt
@@ -49,14 +53,23 @@ import com.bioscan.fieldterminal.domain.form.FormSetup
 import com.bioscan.fieldterminal.domain.form.FormSurface
 import com.bioscan.fieldterminal.domain.form.Landmark
 import com.bioscan.fieldterminal.domain.form.PoseTracks
+import com.bioscan.fieldterminal.domain.form.RunChoice
+import com.bioscan.fieldterminal.domain.form.WatchRunValues
 import com.bioscan.fieldterminal.domain.form.analyseRunningForm
+import com.bioscan.fieldterminal.domain.form.formFindings
+import com.bioscan.fieldterminal.domain.form.formMetricValues
 import com.bioscan.fieldterminal.domain.form.legOf
+import com.bioscan.fieldterminal.domain.form.runForClip
+import com.bioscan.fieldterminal.domain.form.sinceLastTime
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
+import com.bioscan.fieldterminal.ui.components.FTDropdown
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
@@ -64,11 +77,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
-// Lab › Tests › RUNNING FORM ANALYSER (docs/running-form/README.md): the filming guide and the runner's choices, then a
-// picked clip read on the phone (pose, then the analysis), then the report: the clip's quality, the step shown on two key
-// frames with the skeleton drawn, and the findings with their reasons and sources.
+// Lab › Tests › RUNNING FORM ANALYSER (docs/running-form/README.md): the filming guide, the runner's choices and past
+// analyses, then a picked clip read on the phone (pose, then the analysis), then the report: the clip's quality, the step
+// shown on two key frames with the skeleton drawn, the run it was filmed during (the watch's values beside the clip's),
+// the findings with their reasons, sources and last time's value, and SAVE.
 
 private enum class Facing(val label: String, val side: BodySide?) { LEFT("LEFT", BodySide.LEFT), RIGHT("RIGHT", BodySide.RIGHT), UNSURE("NOT SURE", null) }
 
@@ -99,6 +116,13 @@ fun RunningFormSheet(onDismiss: () -> Unit) {
     var stage by remember { mutableStateOf<Stage>(Stage.Setup) }
     var job by remember { mutableStateOf<Job?>(null) }
     var picking by remember { mutableStateOf(false) }
+    val repo = remember { RunningFormRepository(SupabaseClientProvider.client) }
+    // Past analyses for the list and the "last time" lines; empty (not an error) until the table exists.
+    var history by remember { mutableStateOf<List<SavedFormAnalysis>>(emptyList()) }
+    var historyKey by remember { mutableStateOf(0) }
+    LaunchedEffect(historyKey) {
+        history = try { repo.loadAll() } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+    }
 
     fun read(uri: Uri) {
         val setup = FormSetup(
@@ -146,15 +170,18 @@ fun RunningFormSheet(onDismiss: () -> Unit) {
         ) {
             Text("RUNNING FORM ANALYSER", style = FTType.SectionTitle, color = FT.DomainLabs)
             when (val s = stage) {
-                Stage.Setup -> SetupStage(
-                    surface, { surface = it }, facing, { facing = it }, speed, { speed = it },
-                    onPick = {
-                        picking = true
-                        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
-                    },
-                )
+                Stage.Setup -> {
+                    SetupStage(
+                        surface, { surface = it }, facing, { facing = it }, speed, { speed = it },
+                        onPick = {
+                            picking = true
+                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+                        },
+                    )
+                    if (history.isNotEmpty()) PastAnalyses(history, repo, onDeleted = { historyKey++ })
+                }
                 is Stage.Reading -> ReadingStage(s) { job?.cancel(); stage = Stage.Setup }
-                is Stage.Report -> ReportStage(s, onAnother = { stage = Stage.Setup }, onDone = onDismiss)
+                is Stage.Report -> ReportStage(s, repo, history, onSaved = { historyKey++ }, onAnother = { stage = Stage.Setup }, onDone = onDismiss)
                 is Stage.Failed -> {
                     Text("The clip could not be read: ${s.message}", style = FTType.BodySmall, color = FT.Critical)
                     FTButton("TRY ANOTHER CLIP", emphasis = FTButtonEmphasis.Primary) { stage = Stage.Setup }
@@ -219,9 +246,36 @@ private fun qualityColor(q: ClipQuality) = when (q) {
 }
 
 @Composable
-private fun ReportStage(s: Stage.Report, onAnother: () -> Unit, onDone: () -> Unit) {
+private fun ReportStage(
+    s: Stage.Report,
+    repo: RunningFormRepository,
+    history: List<SavedFormAnalysis>,
+    onSaved: () -> Unit,
+    onAnother: () -> Unit,
+    onDone: () -> Unit,
+) {
     val r = s.report
     val q = r.quality
+    val scope = rememberCoroutineScope()
+    // The clip's own recording time, on the phone's clock; sessions store wall-clock times, so the two compare directly.
+    val clipAt = remember(r) { s.clip.recordedAt?.atZone(ZoneId.systemDefault())?.toLocalDateTime() }
+    val day = clipAt?.toLocalDate() ?: LocalDate.now()
+    var runs by remember(r) { mutableStateOf<List<RunChoice>>(emptyList()) }
+    var runId by remember(r) { mutableStateOf<Long?>(null) }
+    var watch by remember(r) { mutableStateOf<WatchRunValues?>(null) }
+    var saving by remember(r) { mutableStateOf(false) }
+    var saved by remember(r) { mutableStateOf(false) }
+    var error by remember(r) { mutableStateOf<String?>(null) }
+    LaunchedEffect(r) {
+        runs = try { repo.runsOn(day) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        runId = runForClip(clipAt, runs)
+    }
+    LaunchedEffect(runId) {
+        watch = runId?.let { id -> try { repo.watchValues(id) } catch (e: CancellationException) { throw e } catch (e: Exception) { null } }
+    }
+    val findings = remember(r, watch) { r.metrics?.let { formFindings(it, watch) }.orEmpty() }
+    val values = remember(r) { r.metrics?.let(::formMetricValues).orEmpty() }
+    val previous = history.firstOrNull { it.surface == r.setup.surface }
     val setupLine = listOfNotNull(
         "SIDE",
         if (r.setup.surface == FormSurface.TREADMILL) "TREADMILL" else "OUTDOORS",
@@ -270,19 +324,100 @@ private fun ReportStage(s: Stage.Report, onAnother: () -> Unit, onDone: () -> Un
         }
     }
 
-    if (r.findings.isNotEmpty()) {
-        FTCard(title = "FINDINGS", info = "Each line says what was measured, what it usually means and where that comes from. Where the app draws a line of its own it says so. Compare with your own earlier clips more than with the ranges.") {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { r.findings.forEach { FindingRow(it) } }
+    if (r.metrics != null) {
+        FTCard(title = "THE RUN", info = "If the clip was filmed during a run the watch recorded, pick it: the watch's cadence, contact time and vertical ratio then show beside the clip's.") {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SmallLabel("RECORDED ON ${day.format(DateTimeFormatter.ofPattern("d MMM yyyy")).uppercase()}")
+                FTDropdown(
+                    listOf("none" to "NOT A RECORDED RUN") + runs.map { it.id.toString() to it.label },
+                    runId?.toString() ?: "none", "Run",
+                ) { k -> runId = k.toLongOrNull() }
+                if (runId != null && watch == null) Text("No watch values for this run.", style = FTType.Caption, color = FT.TextMuted)
+            }
         }
     }
+
+    if (findings.isNotEmpty()) {
+        FTCard(title = "FINDINGS", info = "Each line says what was measured, what it usually means and where that comes from. Where the app draws a line of its own it says so. Compare with your own earlier clips more than with the ranges.") {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                findings.forEach { f ->
+                    val now = values[f.key]?.median
+                    FindingRow(f, since = now?.let { sinceLastTime(f.key, it, previous?.values, previous?.date) })
+                }
+            }
+        }
+    }
+    error?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (r.metrics != null) {
+            FTButton(
+                when { saved -> "SAVED"; saving -> "SAVING…"; else -> "SAVE" },
+                enabled = !saved && !saving, emphasis = FTButtonEmphasis.Primary,
+            ) {
+                saving = true
+                error = null
+                scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) {
+                    repo.save(r, day, runId)
+                    saved = true
+                    onSaved()
+                }
+            }
+        }
         FTButton("ANALYSE ANOTHER", emphasis = FTButtonEmphasis.Secondary, onClick = onAnother)
-        FTButton("DONE", emphasis = FTButtonEmphasis.Primary, onClick = onDone)
+        FTButton("DONE", emphasis = FTButtonEmphasis.Tertiary, onClick = onDone)
+    }
+}
+
+/** Past analyses, newest first: date, where, quality and the main values; each can be deleted after a confirm. */
+@Composable
+private fun PastAnalyses(history: List<SavedFormAnalysis>, repo: RunningFormRepository, onDeleted: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var confirming by remember { mutableStateOf<Long?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    FTCard(title = "PAST ANALYSES") {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            history.take(12).forEach { a ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            listOf(
+                                a.date.format(DateTimeFormatter.ofPattern("d MMM yyyy")).uppercase(),
+                                if (a.surface == FormSurface.TREADMILL) "TREADMILL" else "OUTDOORS",
+                                "${a.fps.roundToInt()} FPS",
+                                a.quality.uppercase(),
+                            ).joinToString(" · "),
+                            style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f),
+                        )
+                        if (confirming != a.id) FTButton("DELETE", emphasis = FTButtonEmphasis.Tertiary) { confirming = a.id }
+                    }
+                    Text(
+                        listOfNotNull(
+                            a.values["cadence"]?.let { "${it.median.roundToInt()} spm" },
+                            a.values["shin_angle"]?.let { "shin ${it.median.roundToInt()}°" },
+                            a.values["knee_landing"]?.let { "knee ${it.median.roundToInt()}°" },
+                            a.values["contact_time"]?.let { "${it.median.roundToInt()} ms" },
+                            a.footStrike?.lowercase(),
+                        ).joinToString(" · ").ifEmpty { "—" },
+                        style = FTType.Caption, color = FT.TextSecondary,
+                    )
+                    if (confirming == a.id) FTConfirmDestructive(
+                        message = "Delete this analysis? It cannot be brought back.", confirmLabel = "DELETE", busy = busy,
+                        onCancel = { confirming = null },
+                    ) {
+                        busy = true
+                        scope.launchSafe(onError = { busy = false }, onDone = { busy = false; confirming = null }) {
+                            repo.delete(a.id)
+                            onDeleted()
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun FindingRow(f: FormFinding) {
+private fun FindingRow(f: FormFinding, since: String?) {
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(f.title, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f))
@@ -294,6 +429,7 @@ private fun FindingRow(f: FormFinding) {
             FindingState.INFO -> Unit
         }
         Text(f.reason, style = FTType.BodySmall, color = FT.TextSecondary)
+        since?.let { Text(it, style = FTType.Caption, color = FT.TextPrimary) }
         Text(f.source, style = FTType.Micro, color = FT.TextMuted)
     }
 }

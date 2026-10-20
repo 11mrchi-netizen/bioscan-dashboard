@@ -134,6 +134,18 @@ CANCEL while the clip is read, then the report:
   checked by eye. The two frames are decoded again after the analysis, nothing else is kept;
 - **FINDINGS**: each metric with its value, TYPICAL or WORTH A LOOK where a rule applies, the reason and the source.
 
+## Saving and comparing
+
+- **THE RUN**: the clip's own recording time (the file's `METADATA_KEY_DATE`) picks the run the watch recorded around it on
+  that day (within 10 minutes of its start to end); the runner can change it or say it was not a recorded run. With a run
+  picked, the watch's cadence, contact time and vertical ratio for it show beside the clip's values.
+- **SAVE** stores the report in `running_form_analyses` (migration `20261030_running_form_analyses.sql`, owner-only RLS):
+  the setup, frame rate, steps, quality and its issues, every metric's median, spread and step count, the per-step values,
+  the analyser version and the linked run. No video and no per-frame points.
+- **Last time**: each finding shows the value from the latest saved analysis on the same surface, with "about the same"
+  when the change is within the analyser's own error (3° for angles, 3 spm, 15 ms, 4 % of leg length).
+- **PAST ANALYSES** on the analyser's first page lists them, newest first, each deletable after a confirm.
+
 ## Phases (one commit each)
 
 - **F1, the analysis core**: `domain/form/` with the synthetic runner and tests: clean-up, contacts, every side-view

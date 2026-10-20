@@ -74,7 +74,8 @@ android {
         getByName("main") {
             assets.srcDir("../../supabase/functions/_shared/metric-registry")
             // Running form analyser: MediaPipe's pose model, downloaded at build time (downloadPoseModel below).
-            assets.srcDir(layout.buildDirectory.dir("generated/pose-model"))
+            // A plain folder: AGP 9 refuses a Provider here. The download still runs first (preBuild dependsOn downloadPoseModel below).
+            assets.srcDir(layout.buildDirectory.dir("generated/pose-model").get().asFile)
         }
     }
 

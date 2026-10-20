@@ -132,10 +132,17 @@ data class HeartRateZoneBreakdown(val zone: HeartRateZone, val seconds: Long)
 
 // Standard "time in zone" method: each inter-sample interval's duration is
 // attributed to the zone of its starting sample, then summed per zone.
-fun heartRateZoneBreakdown(points: List<TimePoint>, bounds: ZoneBounds): List<HeartRateZoneBreakdown> {
+// Run session page: the time inside a pause is left out, and an interval is capped at ZONE_GAP_CAP_SEC (a lost signal
+// is not time at the last heart rate before it).
+const val ZONE_GAP_CAP_SEC = 120L
+
+fun heartRateZoneBreakdown(points: List<TimePoint>, bounds: ZoneBounds, pauses: List<SessionPause> = emptyList()): List<HeartRateZoneBreakdown> {
     if (points.size < 2) return emptyList()
     val sorted = points.sortedBy { it.offsetSeconds }
-    return sorted.zipWithNext { a, b -> heartRateZoneFor(a.value, bounds) to (b.offsetSeconds - a.offsetSeconds) }
+    return sorted.zipWithNext { a, b ->
+        val moving = (b.offsetSeconds - a.offsetSeconds) - pausedSecondsBetween(pauses, a.offsetSeconds, b.offsetSeconds)
+        heartRateZoneFor(a.value, bounds) to moving.coerceIn(0L, ZONE_GAP_CAP_SEC)
+    }
         .groupBy({ it.first }, { it.second })
         .map { (zone, durations) -> HeartRateZoneBreakdown(zone, durations.sum()) }
         .sortedBy { it.zone.ordinal }

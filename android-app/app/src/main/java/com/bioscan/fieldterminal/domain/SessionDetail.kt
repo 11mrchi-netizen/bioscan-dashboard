@@ -32,7 +32,17 @@ data class SessionDetail(
     // call site (SessionDetailRepository.loadTimeSeries) doesn't need touching.
     val cadenceSpm: List<TimePoint> = emptyList(),
     val verticalRatioPct: List<TimePoint> = emptyList(),
+    // Run session page: the workout's pauses, from Zepp (seconds from the start); empty without a Zepp workout.
+    val pauses: List<SessionPause> = emptyList(),
 )
+
+data class SessionPause(val startOffset: Long, val durationSec: Long) {
+    val endOffset: Long get() = startOffset + durationSec
+}
+
+/** Seconds of [pauses] that fall between offsets [from] and [to]. */
+fun pausedSecondsBetween(pauses: List<SessionPause>, from: Long, to: Long): Long =
+    pauses.sumOf { p -> (minOf(to, p.endOffset) - maxOf(from, p.startOffset)).coerceAtLeast(0L) }
 
 // DAV-115/123: prefer Zepp's real per-second series (heartRate/speedKmh/
 // distanceKm) over Health Connect's when a matched Zepp workout exists --
@@ -50,6 +60,7 @@ fun mergePreferZepp(zepp: SessionDetail?, healthConnect: SessionDetail): Session
         distanceKm = zepp.distanceKm.ifEmpty { healthConnect.distanceKm },
         cadenceSpm = zepp.cadenceSpm,
         verticalRatioPct = zepp.verticalRatioPct,
+        pauses = zepp.pauses,
     )
 }
 
@@ -61,9 +72,11 @@ fun mergePreferZepp(zepp: SessionDetail?, healthConnect: SessionDetail): Session
 // that bracket it (DistanceRecord's own interval granularity, typically
 // under a minute, bounds the interpolation error). avgHr is the mean of
 // this session's real heart-rate samples whose offset falls in that window.
-data class SessionSplit(val km: Int, val durationSec: Long, val avgHr: Double?)
+// Run session page: durationSec is moving time (a pause inside the km left out); elapsedSec is the km's clock time,
+// set only when a pause fell inside it.
+data class SessionSplit(val km: Int, val durationSec: Long, val avgHr: Double?, val elapsedSec: Long? = null)
 
-fun computeKmSplits(distanceKm: List<TimePoint>, heartRate: List<TimePoint>): List<SessionSplit> {
+fun computeKmSplits(distanceKm: List<TimePoint>, heartRate: List<TimePoint>, pauses: List<SessionPause> = emptyList()): List<SessionSplit> {
     val totalKm = distanceKm.lastOrNull()?.value?.toInt() ?: 0
     if (distanceKm.size < 2 || totalKm < 1) return emptyList()
 
@@ -83,6 +96,7 @@ fun computeKmSplits(distanceKm: List<TimePoint>, heartRate: List<TimePoint>): Li
         val avgHr = heartRate.filter { it.offsetSeconds in prevSec..sec }
             .takeIf { it.isNotEmpty() }
             ?.let { samples -> samples.map { it.value }.average() }
-        SessionSplit(km, sec - prevSec, avgHr).also { prevSec = sec }
+        val paused = pausedSecondsBetween(pauses, prevSec, sec)
+        SessionSplit(km, sec - prevSec - paused, avgHr, elapsedSec = if (paused > 0) sec - prevSec else null).also { prevSec = sec }
     }
 }

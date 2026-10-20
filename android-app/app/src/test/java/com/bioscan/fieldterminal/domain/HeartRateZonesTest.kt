@@ -105,6 +105,18 @@ class HeartRateZonesTest {
         assertEquals(120L, breakdown.first { it.zone == HeartRateZone.Z3 }.seconds)
     }
 
+    // Run session page: a pause between two samples is not time in the zone of the sample before it, and a lost
+    // signal counts at most ZONE_GAP_CAP_SEC.
+    @Test
+    fun breakdownLeavesOutPausesAndCapsGaps() {
+        val b = bounds(ZoneMethod.MAX, ZoneAnchors(maxHr = 200.0))
+        val points = listOf(TimePoint(0, 140.0), TimePoint(60, 140.0), TimePoint(1260, 140.0), TimePoint(1320, 140.0), TimePoint(2000, 140.0))
+        val pauses = listOf(SessionPause(startOffset = 60, durationSec = 1200))
+        val breakdown = heartRateZoneBreakdown(points, b, pauses)
+        // 60 + 0 (the pause) + 60 + 120 (a 680 s gap, capped)
+        assertEquals(240L, breakdown.sumOf { it.seconds })
+    }
+
     @Test
     fun fewerThanTwoPointsReturnsEmpty() {
         val b = bounds(ZoneMethod.MAX)

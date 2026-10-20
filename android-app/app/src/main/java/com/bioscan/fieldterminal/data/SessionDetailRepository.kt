@@ -91,6 +91,9 @@ data class ZeppRoutePoint(
 )
 
 @Serializable
+data class ZeppPause(val startOffset: Long, val durationSec: Long)
+
+@Serializable
 data class ZeppDecodedSeries(
     val heartRate: List<ZeppDecodedPoint> = emptyList(),
     val speedKmh: List<ZeppDecodedPoint> = emptyList(),
@@ -99,6 +102,8 @@ data class ZeppDecodedSeries(
     val cadenceSpm: List<ZeppDecodedPoint> = emptyList(),
     val verticalStrideRatioPct: List<ZeppDecodedPoint> = emptyList(),
     val routePoints: List<ZeppRoutePoint> = emptyList(),
+    // Decoder 2 (zepp-extract decodeSeries.ts): every series on one axis, and the pauses on it.
+    val pauses: List<ZeppPause> = emptyList(),
     val summary: ZeppWorkoutSummary? = null,
     val strengthData: ZeppStrengthData? = null,
 )
@@ -228,6 +233,7 @@ class SessionDetailRepository(
             distanceKm = toPoints(decoded.distanceKm),
             cadenceSpm = toPoints(decoded.cadenceSpm),
             verticalRatioPct = toPoints(decoded.verticalStrideRatioPct),
+            pauses = decoded.pauses.map { com.bioscan.fieldterminal.domain.SessionPause(it.startOffset, it.durationSec) },
         )
     }
 

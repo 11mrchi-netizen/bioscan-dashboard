@@ -32,6 +32,26 @@ class SessionDetailTest {
         assertEquals(240L, splits[0].durationSec)
     }
 
+    // Run session page: a 600 s pause inside km 2 leaves its moving pace alone and shows the clock time beside it.
+    @Test
+    fun testAPauseIsLeftOutOfTheKmItFallsIn() {
+        val distance = listOf(TimePoint(0, 0.0), TimePoint(300, 1.0), TimePoint(450, 1.5), TimePoint(1050, 1.5), TimePoint(1200, 2.0))
+        val pauses = listOf(SessionPause(startOffset = 450, durationSec = 600))
+        val splits = computeKmSplits(distance, emptyList(), pauses)
+        assertEquals(300L, splits[0].durationSec)
+        assertEquals(null, splits[0].elapsedSec)
+        assertEquals(300L, splits[1].durationSec)
+        assertEquals(900L, splits[1].elapsedSec)
+    }
+
+    @Test
+    fun testPausedSecondsBetween() {
+        val pauses = listOf(SessionPause(100, 50), SessionPause(400, 100))
+        assertEquals(150L, pausedSecondsBetween(pauses, 0, 1000))
+        assertEquals(25L, pausedSecondsBetween(pauses, 125, 300))
+        assertEquals(0L, pausedSecondsBetween(pauses, 160, 390))
+    }
+
     @Test
     fun testUnderOneKmProducesNoSplits() {
         assertTrue(computeKmSplits(listOf(TimePoint(0, 0.0), TimePoint(200, 0.8)), emptyList()).isEmpty())

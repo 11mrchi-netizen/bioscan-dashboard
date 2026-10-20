@@ -131,6 +131,10 @@ fun DateTrendLine(
     bandLabel: String? = null,
     markLabel: String? = null,
     chartHeight: Dp = 90.dp,
+    // Running page: two stacked panels (cadence over stride) share one date span and one label gutter, so a date sits
+    // at the same x in both.
+    dateRange: ClosedRange<LocalDate>? = null,
+    minGutter: Dp = 0.dp,
 ) {
     val sortedSeries = series
         .map { it.copy(points = it.points.sortedBy { p -> p.first }) }
@@ -142,8 +146,8 @@ fun DateTrendLine(
     val padX = 12f
     val padY = 10f
     val dates = allPoints.map { it.first } + sortedBand.map { it.date } + marks.map { it.date }
-    val dayMin = dates.min()
-    val dayMax = dates.max()
+    val dayMin = dateRange?.start?.let { minOf(it, dates.min()) } ?: dates.min()
+    val dayMax = dateRange?.endInclusive?.let { maxOf(it, dates.max()) } ?: dates.max()
     val daySpan = ChronoUnit.DAYS.between(dayMin, dayMax).toFloat().let { if (it < 1f) 1f else it }
 
     val values = allPoints.map { it.second } + sortedBand.flatMap { listOf(it.low, it.high) } + marks.map { it.value }
@@ -170,7 +174,7 @@ fun DateTrendLine(
         val decimals = tickDecimals(ticks)
         ticks.map { measurer.measure("%.${decimals}f".format(it), FTType.Micro.copy(color = FT.TextMuted)) }
     }
-    val gutter = (tickLayouts.maxOfOrNull { it.size.width } ?: 0) + 6f
+    val gutter = maxOf((tickLayouts.maxOfOrNull { it.size.width } ?: 0) + 6f, with(LocalDensity.current) { minGutter.toPx() })
     val gutterDp = with(LocalDensity.current) { gutter.toDp() }
 
     fun xFor(day: LocalDate, width: Float): Float =

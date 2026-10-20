@@ -181,19 +181,6 @@ class TrainingTest {
     }
 
     @Test
-    fun testSuspectedTrailReason() {
-        fun run(routeType: String? = null, km: Double = 10.0, climb: Double? = null) = ExerciseSessionRow(
-            type = "run", startTime = "2026-09-12T08:00:00Z", distanceKm = km, elevationGainM = climb,
-            details = com.bioscan.fieldterminal.data.model.ExerciseSessionDetails(routeType = routeType),
-        )
-        assertEquals("ZEPP TRAIL RUN", suspectedTrailReason(run(), "7"))
-        assertEquals("64 M/KM CLIMB", suspectedTrailReason(run(km = 10.0, climb = 640.0), null))
-        assertEquals(null, suspectedTrailReason(run(km = 10.0, climb = 340.0), "1")) // 34 m/km, road
-        assertEquals(null, suspectedTrailReason(run(routeType = "road", climb = 900.0), "7")) // explicit tag wins
-        assertEquals(null, suspectedTrailReason(run(routeType = "trail", climb = 900.0), "7")) // already trail
-    }
-
-    @Test
     fun testAveragePaceExcludesTrailRuns() {
         // DAV-283: a mixed road+trail week should average pace over the road
         // run only -- the trail run's climb-slowed pace would misrepresent

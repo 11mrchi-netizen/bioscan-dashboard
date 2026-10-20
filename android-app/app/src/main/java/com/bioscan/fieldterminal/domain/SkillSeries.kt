@@ -48,6 +48,43 @@ fun <T> bucketWeekly(
 fun trailingWeeklyAverage(buckets: List<WeekBucket>, window: Int = 4): List<Double> =
     buckets.indices.map { i -> buckets.subList(maxOf(0, i - window + 1), i + 1).map { it.value }.average() }
 
+// A trailing median over [days] days at each point's date (that day included), once [minCount] points fall in the
+// window: the 28-day line of the Running page's efficiency and form charts. One run is too noisy to read alone.
+fun rollingMedian(series: List<Pair<LocalDate, Double>>, days: Long = 28, minCount: Int = 3): List<Pair<LocalDate, Double>> {
+    val sorted = series.sortedBy { it.first }
+    return sorted.mapNotNull { (date, _) ->
+        val window = sorted.filter { !it.first.isAfter(date) && it.first.isAfter(date.minusDays(days)) }.map { it.second }.sorted()
+        if (window.size < minCount) null
+        else date to (if (window.size % 2 == 1) window[window.size / 2] else (window[window.size / 2 - 1] + window[window.size / 2]) / 2)
+    }.distinctBy { it.first }
+}
+
+// One week's kilometres split into parts (the Running page's EASY / TRAIL / QUALITY bars), parts in the caller's order.
+data class StackedWeek(val weekStart: LocalDate, val parts: List<Double>) {
+    val total: Double get() = parts.sum()
+}
+
+// The weeks from `from` to `to` (zero-filled, as bucketWeekly), each item's value added to the part `partOf` names.
+fun <T> bucketWeeklyStacked(
+    items: List<T>,
+    dateOf: (T) -> LocalDate,
+    valueOf: (T) -> Double,
+    partOf: (T) -> Int,
+    partCount: Int,
+    from: LocalDate,
+    to: LocalDate,
+): List<StackedWeek> {
+    val firstWeek = mondayOf(from)
+    val weeks = ChronoUnit.WEEKS.between(firstWeek, mondayOf(to)).toInt()
+    val byWeek = items.filter { !dateOf(it).isBefore(firstWeek) && !dateOf(it).isAfter(to) }.groupBy { mondayOf(dateOf(it)) }
+    return (0..weeks).map { i ->
+        val week = firstWeek.plusWeeks(i.toLong())
+        val parts = DoubleArray(partCount)
+        byWeek[week].orEmpty().forEach { parts[partOf(it)] += valueOf(it) }
+        StackedWeek(week, parts.toList())
+    }
+}
+
 // ---- Strength ---------------------------------------------------------------------------------
 
 data class LoggedSet(val date: LocalDate, val exerciseName: String, val reps: Int, val weightKg: Double, val rpe: Int? = null)

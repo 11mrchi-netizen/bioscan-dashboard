@@ -136,12 +136,12 @@ fun TrainingTileScreen(
         onBack = onBack,
         title = "TRAINING",
         subtitle = when (tab) {
-            TrainingTab.Load -> "LOAD · INTENSITY · " + when (timeframe.months) {
+            TrainingTab.Load -> "LOAD · FITNESS · INTENSITY · " + when (timeframe.months) {
                 1L -> "LAST MONTH"
                 12L -> "LAST YEAR"
                 else -> "LAST ${timeframe.months} MONTHS"
             }
-            TrainingTab.Running -> "LEVEL · VOLUME · PACE · FITNESS · FORM · RECORDS"
+            TrainingTab.Running -> "LEVEL · VOLUME · EFFICIENCY · RECORDS"
             TrainingTab.Strength -> "LEVEL · STANDARDS · E1RM · VOLUME · PRs"
             TrainingTab.Sessions -> "EVERY SESSION, NEWEST FIRST"
             TrainingTab.Injury -> "INJURIES · ILLNESSES · CHECK-INS"
@@ -155,7 +155,7 @@ fun TrainingTileScreen(
             // App restructure: TRAINING LOAD then INTENSITY. READY FOR lives on Today only; the running and strength
             // rollups gave way to their own tabs.
             TrainingTab.Load -> TrainingLoadSection(timeframe, onTimeframeChange = { timeframe = it })
-            TrainingTab.Running -> com.bioscan.fieldterminal.ui.screens.user.RunningTab(top = { SuspectedTrailRunsCard() })
+            TrainingTab.Running -> com.bioscan.fieldterminal.ui.screens.user.RunningTab()
             TrainingTab.Strength -> com.bioscan.fieldterminal.ui.screens.user.StrengthTab()
             TrainingTab.Sessions -> TrainingSessionsTab(onOpenSessionDetail)
             TrainingTab.Injury -> InjuryTab()
@@ -373,6 +373,8 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChan
             onTimeframeChange = onTimeframeChange,
             fitnessFatigue = fitnessFatigue,
         )
+        // VO2max and lactate threshold, moved here from the Running page (owner's structure, Oct 2026).
+        com.bioscan.fieldterminal.ui.screens.user.RunningFitnessCard(timeframe)
         IntensityCard()
     }
 }

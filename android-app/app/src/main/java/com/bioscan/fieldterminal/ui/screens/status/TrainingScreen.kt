@@ -1,14 +1,12 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
@@ -24,9 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.rememberCoroutineScope
-import com.bioscan.fieldterminal.data.AddEntryRepository
-import com.bioscan.fieldterminal.data.SuspectedTrailRun
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingOverview
 import kotlinx.coroutines.launch
@@ -52,7 +47,6 @@ import com.bioscan.fieldterminal.ui.components.GlanceChip
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.glanceAnchor
-import com.bioscan.fieldterminal.ui.components.launchSafe
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -61,14 +55,13 @@ import java.time.temporal.ChronoUnit
 // Step 7 (Phase C), generalized in Phase G3 from runs-only to any exercise type via `exercise_sessions` (see
 // data/TrainingRepository.kt).
 // App restructure: the weekly RUNNING and STRENGTH rollup cards gave way to Training's RUNNING and STRENGTH tabs (the
-// former User-tab skill pages). What is left here is the SESSIONS tab and the suspected-trail-run review, which RUNNING
-// shows on top.
+// former User-tab skill pages). What is left here is the SESSIONS tab. (The suspected-trail-run review is gone: trail runs
+// are recognised from their tag or Zepp's trail sport, which the sync now writes as the tag.)
 @Composable
-private fun TrainingOverviewLoaded(quiet: Boolean = false, content: @Composable (TrainingOverview, (List<Long>) -> Unit) -> Unit) {
+private fun TrainingOverviewLoaded(content: @Composable (TrainingOverview) -> Unit) {
     var overview by remember { mutableStateOf<TrainingOverview?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         try {
@@ -81,25 +74,15 @@ private fun TrainingOverviewLoaded(quiet: Boolean = false, content: @Composable 
         isLoading = false
     }
 
-    // Tags every copy (HC/manual/Zepp) of each run as trail, then reloads so the suspected list updates.
-    val onMarkTrail: (List<Long>) -> Unit = { ids ->
-        scope.launchSafe {
-            val repo = AddEntryRepository(SupabaseClientProvider.client)
-            ids.forEach { repo.updateRouteType(it, "trail") }
-            overview = TrainingRepository(SupabaseClientProvider.client).loadOverview()
-        }
-    }
-
     val o = overview
     when {
-        quiet && o == null -> Unit
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FT.DomainTraining)
         }
         error != null || o == null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             Text("Failed to load: ${error ?: "no data"}", style = FTType.BodySmall, color = FT.Critical)
         }
-        else -> content(o, onMarkTrail)
+        else -> content(o)
     }
 }
 
@@ -110,17 +93,7 @@ fun TrainingSessionsTab(onOpenSessionDetail: (Long) -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        TrainingOverviewLoaded { overview, _ -> SessionListCard(overview.recentSessions, onOpenSessionDetail) }
-    }
-}
-
-// Training › RUNNING's first card, only when a run looks like trail but is not tagged so; nothing while it loads.
-@Composable
-fun SuspectedTrailRunsCard() {
-    TrainingOverviewLoaded(quiet = true) { overview, onMarkTrail ->
-        if (overview.suspectedTrailRuns.isNotEmpty()) {
-            FTCard(title = "TRAIL RUNS TO CONFIRM") { SuspectedTrailRuns(overview.suspectedTrailRuns, onMarkTrail) }
-        }
+        TrainingOverviewLoaded { overview -> SessionListCard(overview.recentSessions, onOpenSessionDetail) }
     }
 }
 
@@ -169,59 +142,5 @@ private fun SessionRow(session: ExerciseSessionRow, onClick: () -> Unit) {
             Text(when_, style = FTType.Caption, color = FT.TextSecondary)
         }
         Text(detail, style = FTType.Value, color = FT.TextSecondary)
-    }
-}
-
-// Untagged runs that look like trail runs (Zepp said trail, or a steep
-// climb/km) -- collapsed by default, one tap to confirm each or all.
-@Composable
-private fun SuspectedTrailRuns(suspected: List<SuspectedTrailRun>, onMark: (List<Long>) -> Unit) {
-    if (suspected.isEmpty()) return
-    var expanded by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .ftClickable { expanded = !expanded }
-            .padding(top = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            "SUSPECTED TRAIL RUNS (${suspected.size})",
-            style = FTType.LabelCaps,
-            color = FT.Warning,
-        )
-        Text(if (expanded) "HIDE" else "REVIEW", style = FTType.MonoCaption, color = FT.TextSecondary)
-    }
-    if (!expanded) return
-    Text(
-        "Logged as plain runs, but Zepp called them trail or they climb like one. Nothing changes until you confirm.",
-        style = FTType.Caption,
-        color = FT.TextSecondary,
-    )
-    suspected.forEach { s ->
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                val date = OffsetDateTime.parse(s.row.startTime).toLocalDate().format(DateTimeFormatter.ofPattern("EEE d MMM"))
-                Text("$date · ${"%.1f".format(s.row.distanceKm ?: 0.0)} km", style = FTType.BodySmall, color = FT.TextPrimary)
-                Text(s.reason, style = FTType.Micro, color = FT.TextSecondary)
-            }
-            TrailMarkButton("MARK") { onMark(s.sessionIds) }
-        }
-    }
-    if (suspected.size > 1) {
-        TrailMarkButton("MARK ALL AS TRAIL", modifier = Modifier.fillMaxWidth()) { onMark(suspected.flatMap { it.sessionIds }.distinct()) }
-    }
-}
-
-@Composable
-private fun TrailMarkButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(FT.RadiusSmall)
-    Box(
-        modifier = modifier
-            .border(FT.BorderWidth, FT.DomainTraining, shape)
-            .ftClickable(onClick = onClick, shape = shape)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, style = FTType.Label, color = FT.DomainTraining)
     }
 }

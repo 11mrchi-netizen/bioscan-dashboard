@@ -22,7 +22,8 @@ saved before the update still resolves (`NavigationMapTest`). Links that moved: 
 Food plan; the body check-in reminder opens Lab › Tests with the check-in up; the supplement reminder Lab › Supplements;
 the injury flag Training › Injury.
 
-Left for their own plans: injury risk from past data, and the running form analyser (shown as coming on Lab › Tests).
+Left for its own plan: injury risk from past data. The running form analyser opens from Lab › Tests
+(`docs/running-form/README.md`).
 
 ## Training › RUNNING (owner's structure, Oct 2026)
 

@@ -55,7 +55,7 @@ Four tabs: `STATUS | USER | LOG | SETUP`. (DAV-296: USER replaced MAP in the bot
 > - `HealthTab`: CARDIO · SLEEP (was Recovery) · BODY (from Fuel) · WELLBEING · SEXUAL HEALTH · BLOODWORK (from Labs).
 > - `LabTab`: N=1 (what goes with what, what came before off mornings, experiments, the scorecards, sexual-health
 >   correlations) · SUPPLEMENTS · PLANNING (`PlanningSection`: training block, food plan with meal prep, race fuel) ·
->   TESTS (grip, body check-in, sweat test; running form analyser to come).
+>   TESTS (grip, body check-in, sweat test, running form analyser).
 > - User keeps Healthspan, Aging, the level buttons (Running and Strength open Training's tabs) and the block card (opens
 >   Lab › Planning). Training blocks' one home moved with the planner from Training › Plan to Lab › Planning › Training.
 

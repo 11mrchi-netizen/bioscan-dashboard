@@ -26,9 +26,18 @@ data class FormReport(
     /** Null for a POOR clip: no reading from a clip that cannot be read. */
     val metrics: FormMetrics?,
     val findings: List<FormFinding>,
+    /** The measured foot's contacts (its MediaPipe label is `measuredLabel`). */
+    val measuredContacts: List<FootContact>,
+    /** Both feet's contacts when the far foot was seen well enough, else the measured foot's. */
     val contacts: List<FootContact>,
+    val measuredLabel: BodySide,
+    /** The clean tracks the report was read from: for drawing key frames, not stored. */
+    val tracks: PoseTracks,
     val analyserVersion: String = FORM_ANALYSER_VERSION,
-)
+) {
+    /** The step shown on the key frames: the middle one of the measured foot. */
+    val keyStep: FootContact? get() = measuredContacts.getOrNull(measuredContacts.size / 2)
+}
 
 /** The far foot's landings count toward cadence only when it is seen this well and found about as often as the near one. */
 const val FAR_LEG_MIN_VISIBILITY = 0.5
@@ -60,6 +69,9 @@ fun analyseTracks(tracks: PoseTracks, setup: FormSetup, watch: WatchRunValues? =
         direction = direction,
         metrics = if (readable) metrics else null,
         findings = if (readable) formFindings(metrics, watch) else emptyList(),
+        measuredContacts = nearContacts,
         contacts = nearContacts + if (bothFeet) farContacts else emptyList(),
+        measuredLabel = near,
+        tracks = tracks,
     )
 }

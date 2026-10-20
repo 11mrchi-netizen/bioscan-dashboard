@@ -121,6 +121,19 @@ reason, never "bad".
 - Storage (phase F4): `running_form_analyses` (owner-only RLS): when, view, surface, speed, frame rate, quality, metrics,
   per-step values, the linked session, analyser version, notes. No video, no per-frame points.
 
+## The screen
+
+Lab › Tests › RUNNING FORM ANALYSER › START opens one sheet: the filming guide and the choices (treadmill or outdoors, the
+side facing the camera, the treadmill speed), PICK A VIDEO (Android's photo picker, videos only), a progress bar with
+CANCEL while the clip is read, then the report:
+
+- the setup line (view, surface, speed, frame rate, steps, measured leg);
+- **CLIP QUALITY**: GOOD, USABLE or POOR with every issue and what to change;
+- **ONE STEP**: the middle step of the measured leg at landing and at toe-off, the frame with the analyser's points drawn on
+  it (the measured leg bright, the rest faint) and that step's knee, shin and hip-extension angles, so the reading can be
+  checked by eye. The two frames are decoded again after the analysis, nothing else is kept;
+- **FINDINGS**: each metric with its value, TYPICAL or WORTH A LOOK where a rule applies, the reason and the source.
+
 ## Phases (one commit each)
 
 - **F1, the analysis core**: `domain/form/` with the synthetic runner and tests: clean-up, contacts, every side-view

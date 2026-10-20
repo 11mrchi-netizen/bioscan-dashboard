@@ -51,15 +51,19 @@ fun readClipMeta(context: Context, uri: Uri): ClipMeta {
     }
 }
 
+/** The pose clip, with each frame's time in the file (µs) and its rotation, so a frame can be fetched again for display. */
+class ExtractedClip(val clip: PoseClip, val fileTimesUs: List<Long>, val rotation: Int)
+
 /**
  * The clip's pose, frame by frame. `onProgress` gets the share of the clip read (0 to 1). Runs off the main thread;
  * cancelling the calling coroutine stops it between frames.
  */
-suspend fun extractPoseClip(context: Context, uri: Uri, onProgress: (Double) -> Unit = {}): PoseClip = withContext(Dispatchers.Default) {
+suspend fun extractPoseClip(context: Context, uri: Uri, onProgress: (Double) -> Unit = {}): ExtractedClip = withContext(Dispatchers.Default) {
     val job = coroutineContext[Job]
     val meta = readClipMeta(context, uri)
     PoseDetector(context).use { detector ->
         val frames = ArrayList<PoseFrame>()
+        val fileTimes = ArrayList<Long>()
         var width = 0
         var height = 0
         var firstUs = -1L
@@ -70,13 +74,29 @@ suspend fun extractPoseClip(context: Context, uri: Uri, onProgress: (Double) -> 
             val relUs = timeUs - firstUs
             val stampMs = nextPoseTimestampMs(relUs, lastMs).also { lastMs = it }
             frames += PoseFrame(relUs / 1000.0, detector.detect(frame, stampMs))
+            fileTimes += timeUs
             width = frame.width
             height = frame.height
             meta.durationMs?.takeIf { it > 0 }?.let { onProgress((relUs / 1000.0 / it).coerceIn(0.0, 1.0)) }
+            true
         }
         onProgress(1.0)
-        onRealClock(PoseClip(frames, width, height), meta.captureFps)
+        ExtractedClip(onRealClock(PoseClip(frames, width, height), meta.captureFps), fileTimes, meta.rotation)
     }
+}
+
+/** The frames at the given file times (µs), upright and scaled as the pose extractor saw them; decoding stops after the last. */
+suspend fun framesAt(context: Context, uri: Uri, rotation: Int, timesUs: Set<Long>): Map<Long, ArgbFrame> = withContext(Dispatchers.Default) {
+    val job = coroutineContext[Job]
+    val out = HashMap<Long, ArgbFrame>()
+    val last = timesUs.maxOrNull() ?: return@withContext out
+    decodeVideoFrames(context, uri, rotation) { frame, timeUs ->
+        job?.ensureActive()
+        // The converter reuses its pixel array, so a kept frame is copied.
+        if (timeUs in timesUs) out[timeUs] = ArgbFrame(frame.pixels.copyOf(), frame.width, frame.height)
+        timeUs < last
+    }
+    out
 }
 
 /** MediaPipe Pose Landmarker in video mode, on the GPU when the phone allows, else the CPU. */
@@ -118,8 +138,11 @@ class PoseDetector(context: Context) : Closeable {
     }
 }
 
-/** Decodes the first video track in presentation order and hands each frame over upright and scaled down, with its time (µs). */
-internal fun decodeVideoFrames(context: Context, uri: Uri, rotation: Int, onFrame: (ArgbFrame, Long) -> Unit) {
+/**
+ * Decodes the first video track in presentation order and hands each frame over upright and scaled down, with its time
+ * (µs). `onFrame` returns false to stop.
+ */
+internal fun decodeVideoFrames(context: Context, uri: Uri, rotation: Int, onFrame: (ArgbFrame, Long) -> Boolean) {
     val extractor = MediaExtractor()
     try {
         extractor.setDataSource(context, uri, null)
@@ -153,9 +176,10 @@ internal fun decodeVideoFrames(context: Context, uri: Uri, rotation: Int, onFram
                 }
                 val outIndex = codec.dequeueOutputBuffer(info, 10_000)
                 if (outIndex >= 0) {
-                    if (info.size > 0) codec.getOutputImage(outIndex)?.use { onFrame(converter.convert(it), info.presentationTimeUs) }
+                    var keepGoing = true
+                    if (info.size > 0) codec.getOutputImage(outIndex)?.use { keepGoing = onFrame(converter.convert(it), info.presentationTimeUs) }
                     codec.releaseOutputBuffer(outIndex, false)
-                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
+                    if (!keepGoing || info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
                 }
             }
         } finally {

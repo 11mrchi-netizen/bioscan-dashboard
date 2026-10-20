@@ -100,6 +100,7 @@ fun LabTileScreen(
         LabTest.Grip -> AddEntrySheet(onDismiss = { test = null }, onSaved = { test = null }, start = AddEntryStart.Form(AddEntryType.Grip))
         LabTest.BodyCheckIn -> BodyCheckInSheet(onDismiss = { test = null }, onSaved = { test = null })
         LabTest.SweatTest -> com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = { test = null }, onSaved = { test = null })
+        LabTest.RunningForm -> com.bioscan.fieldterminal.ui.screens.form.RunningFormSheet(onDismiss = { test = null })
         null -> Unit
     }
 }
@@ -150,7 +151,7 @@ private fun PlanningTab(
 
 private enum class FoodPlanView(val label: String) { Days("NEXT 10 DAYS"), Prep("MEAL PREP") }
 
-enum class LabTest { Grip, BodyCheckIn, SweatTest }
+enum class LabTest { Grip, BodyCheckIn, SweatTest, RunningForm }
 
 // Lab › TESTS: where a test starts. Its result is saved like any other entry, so it shows in Log and on the cards that
 // read it (grip and the check-in on Health › Body, the sweat test in race fuel plans).
@@ -163,7 +164,7 @@ private fun TestsTab(onStart: (LabTest) -> Unit) {
         TestRow("GRIP STRENGTH", "Dynamometer, best of three per hand. Two minutes.") { onStart(LabTest.Grip) }
         TestRow("BODY CHECK-IN", "Grip, tape girths and three skinfolds, once a month before breakfast. About 15 minutes.") { onStart(LabTest.BodyCheckIn) }
         TestRow("SWEAT TEST", "Weigh before and after a session of an hour or more, with what you drank. It sets your sweat rate.") { onStart(LabTest.SweatTest) }
-        TestRow("RUNNING FORM ANALYSER", "Coming: a guided check of cadence, contact time and oscillation on a set run.", onStart = null)
+        TestRow("RUNNING FORM ANALYSER", "A 10–20 s side-on clip, read on the phone: foot landing, knee and shin, trunk lean, bounce and, in slow motion, contact time.") { onStart(LabTest.RunningForm) }
     }
 }
 

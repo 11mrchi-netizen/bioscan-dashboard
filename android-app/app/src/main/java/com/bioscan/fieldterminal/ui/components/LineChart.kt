@@ -60,6 +60,11 @@ fun LineChart(
     // solid `color` -- every other caller leaves this null and gets today's
     // unchanged single-color line.
     segmentColor: ((Double) -> Color)? = null,
+    // Run session page: colour each segment by its start time instead (pace coloured by the heart-rate zone at that
+    // moment). Wins over segmentColor when both are set.
+    segmentColorAt: ((Long) -> Color)? = null,
+    // Pauses as (start, end) offsets: shaded, and the line is not drawn across them.
+    pauses: List<Pair<Long, Long>> = emptyList(),
     // Lower-is-better series (pace in min/km): plot low values at the top so
     // "up" always means "better".
     invertY: Boolean = false,
@@ -119,10 +124,17 @@ fun LineChart(
                 drawPath(fill, color = color.copy(alpha = 0.16f))
             }
 
-            if (segmentColor != null) {
+            pauses.forEach { (from, to) ->
+                val x0 = xFor(from.toFloat(), size.width).coerceIn(0f, size.width)
+                val x1 = xFor(to.toFloat(), size.width).coerceIn(0f, size.width)
+                if (x1 > x0) drawRect(FT.TextSecondary.copy(alpha = 0.14f), Offset(x0, 0f), androidx.compose.ui.geometry.Size(x1 - x0, size.height))
+            }
+            val inPause = { a: Long, b: Long -> pauses.any { (from, to) -> a < to && b > from && b - a > 1 } }
+            if (segmentColor != null || segmentColorAt != null || pauses.isNotEmpty()) {
                 points.zipWithNext().forEach { (a, b) ->
+                    if (inPause(a.offsetSeconds, b.offsetSeconds)) return@forEach
                     drawLine(
-                        color = segmentColor(a.value),
+                        color = segmentColorAt?.invoke(a.offsetSeconds) ?: segmentColor?.invoke(a.value) ?: color,
                         start = Offset(xFor(a.offsetSeconds.toFloat(), size.width), yFor(a.value.toFloat(), size.height)),
                         end = Offset(xFor(b.offsetSeconds.toFloat(), size.width), yFor(b.value.toFloat(), size.height)),
                         strokeWidth = 4f,

@@ -527,6 +527,7 @@ private fun PerformanceChartSection(d: SessionDetail, zones: SessionZoneInputs?)
         color = selected.color,
         xRange = sessionStart to sessionEnd,
         segmentColor = if (showZoneUi && colorMode == ChartColorMode.Zones) { hr -> heartRateZoneColor(heartRateZoneFor(hr, bounds!!)) } else null,
+        pauses = d.pauses.map { it.startOffset to it.endOffset },
         modifier = Modifier.padding(top = 4.dp),
         valueFormat = { v -> formatSignalValue(selected, v) },
         invertY = selected == PerfSignal.PACE,
@@ -541,7 +542,7 @@ private fun PerformanceChartSection(d: SessionDetail, zones: SessionZoneInputs?)
     }
 
     if (showZoneUi) {
-        val breakdown = remember(points, bounds) { heartRateZoneBreakdown(points, bounds!!) }
+        val breakdown = remember(points, bounds, d.pauses) { heartRateZoneBreakdown(points, bounds!!, d.pauses) }
         HeartRateZoneDonutChart(breakdown, modifier = Modifier.padding(top = 12.dp), bounds = bounds)
     }
 }

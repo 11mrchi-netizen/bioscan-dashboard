@@ -250,7 +250,7 @@ fun RunDynamicsCard(
                 LineChart(points = vr, color = FT.TextSecondary, xRange = xRange, pauses = pauses, valueFormat = { "%.1f %%".format(it) }, unit = "% of stride")
             }
         }
-        if (pauses.isNotEmpty()) Text("Shaded on the charts: pauses.", style = FTType.Caption, color = FT.TextMuted)
+        if (pauses.isNotEmpty()) Text("The charts run on moving time: a dashed line marks each pause and its length.", style = FTType.Caption, color = FT.TextMuted)
     }
 }
 

@@ -15,14 +15,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.TimePoint
+import com.bioscan.fieldterminal.domain.movingOffset
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
@@ -63,7 +66,9 @@ fun LineChart(
     // Run session page: colour each segment by its start time instead (pace coloured by the heart-rate zone at that
     // moment). Wins over segmentColor when both are set.
     segmentColorAt: ((Long) -> Color)? = null,
-    // Pauses as (start, end) offsets: shaded, and the line is not drawn across them.
+    // Pauses as (start, end) offsets. The axis becomes moving time: each pause is closed up, the line runs straight on,
+    // and a dashed mark with the pause's length shows where it stopped (the old charts drew a long straight line across
+    // the stop instead).
     pauses: List<Pair<Long, Long>> = emptyList(),
     // Lower-is-better series (pace in min/km): plot low values at the top so
     // "up" always means "better".
@@ -71,13 +76,17 @@ fun LineChart(
     // Chart frame: unit header (see DateTrendLine).
     unit: String? = null,
 ) {
-    if (points.size < 2) return
+    val stops = pauses.filter { (from, to) -> to > from }.sortedBy { it.first }
+    // A sample inside a pause would sit on the mark; leave it out.
+    val shown = if (stops.isEmpty()) points else points.filterNot { p -> stops.any { (from, to) -> p.offsetSeconds > from && p.offsetSeconds < to } }
+    if (shown.size < 2) return
+    fun axis(t: Long): Float = movingOffset(t, stops).toFloat()
 
     val pad = 6f
-    val xs = points.map { it.offsetSeconds.toFloat() }
-    val ys = points.map { it.value.toFloat() }
-    val xMin = xRange?.first?.toFloat() ?: xs.min()
-    val xMax = (xRange?.second?.toFloat() ?: xs.max()).let { if (it - xMin < 1f) it + 1f else it }
+    val xs = shown.map { axis(it.offsetSeconds) }
+    val ys = shown.map { it.value.toFloat() }
+    val xMin = xRange?.first?.let { axis(it) } ?: xs.min()
+    val xMax = (xRange?.second?.let { axis(it) } ?: xs.max()).let { if (it - xMin < 1f) it + 1f else it }
     val yMin = ys.min()
     val yMax = ys.max().let { if (it - yMin < 0.001f) it + 1f else it }
     val xSpan = xMax - xMin
@@ -91,7 +100,7 @@ fun LineChart(
 
     var selected by remember { mutableStateOf<Int?>(null) }
     val measurer = rememberTextMeasurer()
-    val active = selected?.takeIf { it in points.indices }
+    val active = selected?.takeIf { it in shown.indices }
 
     Column(modifier = modifier.fillMaxWidth()) {
         unit?.let {
@@ -101,14 +110,14 @@ fun LineChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(96.dp)
-                .chartInspect(Triple(points, xMin, xMax)) { x, width, isTap ->
-                    val nearest = points.indices.minBy { kotlin.math.abs(xFor(points[it].offsetSeconds.toFloat(), width) - x) }
+                .chartInspect(Triple(shown, xMin, xMax)) { x, width, isTap ->
+                    val nearest = shown.indices.minBy { kotlin.math.abs(xFor(xs[it], width) - x) }
                     selected = if (isTap && selected == nearest) null else nearest
                 },
         ) {
             val line = Path().apply {
-                points.forEachIndexed { i, p ->
-                    val x = xFor(p.offsetSeconds.toFloat(), size.width)
+                shown.forEachIndexed { i, p ->
+                    val x = xFor(xs[i], size.width)
                     val y = yFor(p.value.toFloat(), size.height)
                     if (i == 0) moveTo(x, y) else lineTo(x, y)
                 }
@@ -124,19 +133,25 @@ fun LineChart(
                 drawPath(fill, color = color.copy(alpha = 0.16f))
             }
 
-            pauses.forEach { (from, to) ->
-                val x0 = xFor(from.toFloat(), size.width).coerceIn(0f, size.width)
-                val x1 = xFor(to.toFloat(), size.width).coerceIn(0f, size.width)
-                if (x1 > x0) drawRect(FT.TextSecondary.copy(alpha = 0.14f), Offset(x0, 0f), androidx.compose.ui.geometry.Size(x1 - x0, size.height))
+            stops.forEach { (from, to) ->
+                val x = xFor(axis(from), size.width)
+                if (x < 0f || x > size.width) return@forEach
+                drawLine(
+                    FT.TextSecondary.copy(alpha = 0.6f), Offset(x, 0f), Offset(x, size.height), strokeWidth = 2f,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)),
+                )
+                val tag = measurer.measure("PAUSE " + formatPause(to - from), pauseTagStyle)
+                val left = if (x + 6f + tag.size.width <= size.width) x + 6f else x - 6f - tag.size.width
+                drawText(tag, topLeft = Offset(left, size.height - tag.size.height - 2f))
             }
-            val inPause = { a: Long, b: Long -> pauses.any { (from, to) -> a < to && b > from && b - a > 1 } }
-            if (segmentColor != null || segmentColorAt != null || pauses.isNotEmpty()) {
-                points.zipWithNext().forEach { (a, b) ->
-                    if (inPause(a.offsetSeconds, b.offsetSeconds)) return@forEach
+            if (segmentColor != null || segmentColorAt != null) {
+                shown.indices.toList().zipWithNext().forEach { (i, j) ->
+                    val a = shown[i]
+                    val b = shown[j]
                     drawLine(
                         color = segmentColorAt?.invoke(a.offsetSeconds) ?: segmentColor?.invoke(a.value) ?: color,
-                        start = Offset(xFor(a.offsetSeconds.toFloat(), size.width), yFor(a.value.toFloat(), size.height)),
-                        end = Offset(xFor(b.offsetSeconds.toFloat(), size.width), yFor(b.value.toFloat(), size.height)),
+                        start = Offset(xFor(xs[i], size.width), yFor(a.value.toFloat(), size.height)),
+                        end = Offset(xFor(xs[j], size.width), yFor(b.value.toFloat(), size.height)),
                         strokeWidth = 4f,
                         cap = StrokeCap.Round,
                     )
@@ -146,23 +161,27 @@ fun LineChart(
             }
 
             active?.let { i ->
-                val p = points[i]
-                val x = xFor(p.offsetSeconds.toFloat(), size.width)
+                val p = shown[i]
+                val x = xFor(xs[i], size.width)
                 drawInspectOverlay(
                     measurer = measurer,
                     x = x,
                     dots = listOf(Offset(x, yFor(p.value.toFloat(), size.height))),
-                    header = formatElapsed(p.offsetSeconds),
+                    header = formatElapsed(xs[i].toLong()),
                     rows = listOf(InspectRow(null, valueFormat(p.value), color)),
                 )
             }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatElapsed(xRange?.first ?: points.first().offsetSeconds), style = FTType.MonoCaption, color = FT.TextSecondary)
-            Text(formatElapsed(xRange?.second ?: points.last().offsetSeconds), style = FTType.MonoCaption, color = FT.TextSecondary)
+            Text(formatElapsed(xMin.toLong()), style = FTType.MonoCaption, color = FT.TextSecondary)
+            Text(formatElapsed(xMax.toLong()), style = FTType.MonoCaption, color = FT.TextSecondary)
         }
     }
 }
+
+private val pauseTagStyle = FTType.MonoCaption.copy(color = FT.TextSecondary)
+
+private fun formatPause(seconds: Long): String = if (seconds < 60) "${seconds}s" else formatElapsed(seconds)
 
 private fun formatElapsed(seconds: Long): String {
     val totalMinutes = seconds / 60

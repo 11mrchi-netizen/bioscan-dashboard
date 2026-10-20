@@ -44,6 +44,14 @@ data class SessionPause(val startOffset: Long, val durationSec: Long) {
 fun pausedSecondsBetween(pauses: List<SessionPause>, from: Long, to: Long): Long =
     pauses.sumOf { p -> (minOf(to, p.endOffset) - maxOf(from, p.startOffset)).coerceAtLeast(0L) }
 
+/**
+ * An elapsed offset on the moving-time axis: the pause time before it taken out, so a chart runs on through a stop
+ * instead of leaving it as an empty stretch. A moment inside a pause sits at the pause's start. [pauses] are
+ * (start, end) offsets.
+ */
+fun movingOffset(offset: Long, pauses: List<Pair<Long, Long>>): Long =
+    offset - pauses.sumOf { (from, to) -> (minOf(offset, to) - from).coerceAtLeast(0L) }
+
 // DAV-115/123: prefer Zepp's real per-second series (heartRate/speedKmh/
 // distanceKm) over Health Connect's when a matched Zepp workout exists --
 // real recorded data over Health Connect's own reconstruction/estimate,

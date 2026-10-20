@@ -53,6 +53,18 @@ class SessionDetailTest {
     }
 
     @Test
+    fun testMovingOffsetClosesThePauses() {
+        // Pauses 100-150 and 400-500: the run continues straight on through each.
+        val pauses = listOf(100L to 150L, 400L to 500L)
+        assertEquals(90L, movingOffset(90, pauses))
+        assertEquals(100L, movingOffset(150, pauses)) // the end of the first pause lands where it began
+        assertEquals(100L, movingOffset(120, pauses)) // a moment inside it sits at its start
+        assertEquals(350L, movingOffset(400, pauses))
+        assertEquals(400L, movingOffset(550, pauses))
+        assertEquals(550L, movingOffset(550, emptyList()))
+    }
+
+    @Test
     fun testUnderOneKmProducesNoSplits() {
         assertTrue(computeKmSplits(listOf(TimePoint(0, 0.0), TimePoint(200, 0.8)), emptyList()).isEmpty())
     }

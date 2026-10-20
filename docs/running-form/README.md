@@ -67,8 +67,10 @@ reason, never "bad".
 
 ## How a clip is analysed
 
-1. **Frames**: the video is read frame by frame with its real timestamps. A slow-motion file is checked for its capture
-   frame rate (`METADATA_KEY_CAPTURE_FRAMERATE`), because some phones store slow motion re-timed to 30 fps.
+1. **Frames**: the video is decoded in order with MediaCodec (no seeking), each frame turned upright as the file asks and
+   scaled so its long side is 960 px (MediaPipe works at 256 px internally), with its real timestamp. A slow-motion file is
+   checked for its capture frame rate (`METADATA_KEY_CAPTURE_FRAMERATE`), because some phones store slow motion re-timed
+   to play at normal speed; its times are then scaled back.
 2. **Pose**: MediaPipe Pose Landmarker in video mode gives 33 body points per frame with a visibility for each.
 3. **Clean-up**: short gaps (≤ 0.1 s) are filled; left and right are un-swapped where MediaPipe swaps them (a known
    problem in a pure side view); the points are low-pass filtered forward and backward (Butterworth, cut-off 12 Hz, or a
@@ -106,13 +108,16 @@ reason, never "bad".
 - `domain/form/` (pure Kotlin, tested): the pose clip model, clean-up (gap fill, left-right swap fix, zero-phase
   Butterworth), contact detection, metrics, quality and findings. A synthetic runner (stick figure with known contacts,
   angles and foot strike, plus noise, swaps and dropped frames) drives the tests.
-- `data/form/` (Android): video frame reader (MediaMetadataRetriever, capture frame rate), the MediaPipe pose extractor
-  (VIDEO mode, background thread, progress, cancel) and, later, the repository.
+- `data/form/` (Android): `PoseExtractor.kt` decodes the clip (MediaExtractor and MediaCodec; MediaMetadataRetriever for
+  the capture frame rate and rotation) and runs the pose detector (VIDEO mode, GPU, else CPU) off the main thread with
+  progress and cancel; later, the repository. The frame conversion and the slow-motion clock are pure and tested
+  (`domain/form/ClipFrames.kt`).
 - `ui/screens/form/`: the guide, the picker and choices, progress, and the report (quality, findings, a few key frames with
   the skeleton drawn so the reading can be checked by eye).
 - Dependency `com.google.mediapipe:tasks-vision` (0.10.26 or newer: the first release whose Android packages support the
   16 KB page size). The pose model `pose_landmarker_full.task` (9.4 MB, version 1, SHA-256 `5134a3aa…11b1`) is downloaded
-  by a Gradle task at build time into a generated assets folder and checked against its hash; it is not committed.
+  by a Gradle task at build time into a generated assets folder and checked against its hash; it is not committed. The
+  model is stored uncompressed in the APK, and R8 keeps MediaPipe's and protobuf's classes (called from native code).
 - Storage (phase F4): `running_form_analyses` (owner-only RLS): when, view, surface, speed, frame rate, quality, metrics,
   per-step values, the linked session, analyser version, notes. No video, no per-frame points.
 

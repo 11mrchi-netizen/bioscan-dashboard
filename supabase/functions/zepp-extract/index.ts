@@ -16,7 +16,7 @@ import {
   gpsOffsets, type Pause, type RoutePoint, splitEntries, workoutStartSec,
 } from "./decodeSeries.ts";
 import { mergedSessionFields, pickSessionMatch, type SessionCandidate, type Span, spanOf, START_TOLERANCE_MS } from "./sessionMatch.ts";
-import { exerciseTypeForZeppSport, summaryDistanceM, takesDistance, zeppDistanceKm } from "./workoutDistance.ts";
+import { exerciseTypeForZeppSport, summaryDistanceM, takesDistance, trailTaggedDetails, ZEPP_TRAIL_SPORT, zeppDistanceKm } from "./workoutDistance.ts";
 import { afterWindow, HISTORY_METRICS, type HistoryState, windowDates } from "./historyPull.ts";
 import { buildZeppExercises, doneSets, exercisesFingerprint, parseLapSets, planStrengthDetails } from "./strengthImport.ts";
 
@@ -703,6 +703,7 @@ async function extract(
       // pass once detail.json's real field semantics are confirmed, rather
       // than guessing units now. Type comes from Zepp's sport code (DAV-268
       // has the full mapping; unknown codes land as 'other', never 'run').
+      const newTrailDetails = trailTaggedDetails(null, ref.sportType);
       const { data: inserted, error: insertError } = await supabase
         .from("exercise_sessions")
         .insert({
@@ -712,6 +713,8 @@ async function extract(
           start_time: ref.startTimeIso,
           end_time: ref.endTimeIso,
           duration_min: Math.round(ref.movingMin ?? (new Date(ref.endTimeIso).getTime() - startMs) / 60000),
+          // A Zepp trail run arrives tagged trail (the app reads trail runs from this tag).
+          ...(newTrailDetails ? { details: newTrailDetails } : {}),
         })
         .select("id")
         .single();
@@ -811,6 +814,18 @@ async function extract(
           .update(aggregates)
           .eq("id", exerciseSessionId);
         if (aggUpdateError) throw new Error(`exercise_sessions aggregate update failed: ${aggUpdateError.message}`);
+      }
+    }
+
+    // A Zepp trail run tags its matched session trail, unless the session already has a route type (a hand-set road or
+    // mixed tag stays). workoutDistance.ts has the rule.
+    if (matchedRow && ref.sportType === ZEPP_TRAIL_SPORT) {
+      const { data: tagRow, error: tagReadErr } = await supabase.from("exercise_sessions").select("details").eq("id", matchedRow.id).single();
+      if (tagReadErr) throw new Error(`exercise_sessions details read failed: ${tagReadErr.message}`);
+      const tagged = trailTaggedDetails((tagRow as { details?: Record<string, unknown> | null } | null)?.details, ref.sportType);
+      if (tagged) {
+        const { error: tagErr } = await supabase.from("exercise_sessions").update({ details: tagged }).eq("id", matchedRow.id);
+        if (tagErr) throw new Error(`exercise_sessions trail tag failed: ${tagErr.message}`);
       }
     }
 

@@ -49,3 +49,18 @@ export function exerciseTypeForZeppSport(sportType: string): string {
 export function takesDistance(type: string | null | undefined): boolean {
   return type === "run" || type === "ride" || type === "walk" || type === "hike";
 }
+
+/** Zepp's sport code for a trail run. */
+export const ZEPP_TRAIL_SPORT = "7";
+
+/**
+ * A Zepp trail run's session details with the trail tag (details.route_type = "trail"), or null when nothing changes:
+ * only a session with no route type is tagged, so a road or mixed tag set by hand stays. The app reads trail runs from
+ * this tag (Running page, road pace).
+ */
+export function trailTaggedDetails(details: Record<string, unknown> | null | undefined, sportType: string): Record<string, unknown> | null {
+  if (sportType !== ZEPP_TRAIL_SPORT) return null;
+  const route = details?.route_type;
+  if (route !== undefined && route !== null && route !== "") return null;
+  return { ...(details ?? {}), route_type: "trail" };
+}

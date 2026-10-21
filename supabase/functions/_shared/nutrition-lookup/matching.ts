@@ -129,7 +129,14 @@ export function resolveNutrients(food: CronoFoodDetail, quantityG: number): {
 const COUNT_WORDS: Record<string, number> = {
   a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, half: 0.5,
 };
-export const WEIGHT_UNIT_GRAMS: Record<string, number> = { g: 1, gram: 1, kg: 1000, oz: 28.35, ounce: 28.35 };
+// Weights, and volumes taken as grams (a drink's density is close enough to water's for logging).
+export const WEIGHT_UNIT_GRAMS: Record<string, number> = {
+  g: 1, gr: 1, gm: 1, gram: 1, kg: 1000, oz: 28.35, ounce: 28.35, lb: 453.6,
+  ml: 1, cl: 10, l: 1000, liter: 1000, litre: 1000,
+};
+const VOLUME_UNITS = new Set(["ml", "cl", "l", "liter", "litre"]);
+// Units naming a container: a weight given with them is per container ("2 cans of coke 330ml" is 660 ml).
+const CONTAINER_UNITS = new Set(["can", "bottle", "glass", "bowl"]);
 
 export interface Portion {
   count: number;
@@ -139,7 +146,19 @@ export interface Portion {
 }
 
 const PORTION_RE =
-  /^(\d+(?:[.,]\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|half)\s*(g|grams?|kg|oz|ounces?|ml|cups?|tbsp|tablespoons?|tsp|teaspoons?|slices?|pieces?|scoops?|servings?|bowls?|glass(?:es)?|bottles?|cans?)?\b\s*(?:of\s+)?(?:(small|medium|large)\s+)?(.+)$/i;
+  /^(\d+(?:[.,]\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|half)\s*(g|grs?|gms?|grams?|kg|oz|ounces?|lbs?|ml|cl|l|liters?|litres?|cups?|tbsp|tablespoons?|tsp|teaspoons?|slices?|pieces?|scoops?|servings?|bowls?|glass(?:es)?|bottles?|cans?)?\b\.?\s*(?:of\s+)?(?:(small|medium|large)\s+)?(.+)$/i;
+
+// Singular unit spelling: "grs" -> "gr", "gms" -> "gm", "glasses" -> "glass", "liters" -> "liter".
+function unitName(u: string): string {
+  const lower = u.toLowerCase();
+  if (lower.startsWith("glass")) return "glass";
+  if (lower === "grs" || lower === "gms" || lower === "lbs") return lower.slice(0, -1);
+  return lower.replace(/s$/, "");
+}
+
+// A weight or volume anywhere in the text: "(30g)", "355ml", "35gr each", "1.5 l".
+const INLINE_AMOUNT_RE =
+  /\(?\s*(\d+(?:[.,]\d+)?)\s*(g|grs?|gms?|grams?|kg|oz|ounces?|lbs?|ml|cl|l|liters?|litres?)\b\.?\s*(each|apiece)?\s*\)?/i;
 
 export function parsePortion(desc: string): Portion | null {
   const text = desc.trim();
@@ -157,10 +176,41 @@ export function parsePortion(desc: string): Portion | null {
   const count = COUNT_WORDS[raw] ?? Number(raw.replace(",", "."));
   const rest = m[4].trim();
   if (!Number.isFinite(count) || count <= 0 || !rest) return null;
-  const u = m[2]?.toLowerCase();
-  const unit = u ? (u.startsWith("glass") ? "glass" : u.replace(/s$/, "")) : null;
+  const unit = m[2] ? unitName(m[2]) : null;
   return { count, unit, size: m[3]?.toLowerCase() ?? null, rest };
 }
+
+export interface Amount {
+  query: string; // the food, without the amount
+  weightG?: number; // total grams (volumes as ml = g) when the text gives a weight or volume
+  portion?: Portion; // otherwise a count ("one apple"; a bare "apple" is one apple)
+  liquid: boolean; // the amount was a volume
+}
+
+// The amount and the food in a single-food description.
+export function parseAmount(desc: string): Amount {
+  const text = desc.trim();
+  const p = parsePortion(text);
+  if (p?.unit && WEIGHT_UNIT_GRAMS[p.unit]) {
+    return { query: p.rest, weightG: round1(p.count * WEIGHT_UNIT_GRAMS[p.unit]), liquid: VOLUME_UNITS.has(p.unit) };
+  }
+
+  const body = p?.rest ?? text;
+  const m = body.match(INLINE_AMOUNT_RE);
+  if (m && m.index != null) {
+    const unit = unitName(m[2]);
+    const value = Number(m[1].replace(",", "."));
+    // "2 waffles (35gr each)" and "2 cans of coke 330ml" are per item; "2 slices of bread (60g)" is the total.
+    const perItem = m[3] != null || (p?.unit != null && CONTAINER_UNITS.has(p.unit));
+    const count = p && perItem ? p.count : 1;
+    const query = (body.slice(0, m.index) + " " + body.slice(m.index + m[0].length)).replace(/\(\s*\)/g, " ").replace(/\s+/g, " ").trim();
+    if (value > 0 && query) return { query, weightG: round1(count * value * WEIGHT_UNIT_GRAMS[unit]), liquid: VOLUME_UNITS.has(unit) };
+  }
+
+  return { query: body, portion: p ?? { count: 1, unit: null, size: null, rest: text }, liquid: false };
+}
+
+const round1 = (v: number) => Math.round(v * 10) / 10;
 
 const UNIT_ALIASES: Record<string, string[]> = {
   tbsp: ["tbsp", "tablespoon"], tablespoon: ["tbsp", "tablespoon"], tsp: ["tsp", "teaspoon"], teaspoon: ["tsp", "teaspoon"],
@@ -220,6 +270,7 @@ const STOP = set([
   "with", "without", "and", "or", "in", "on", "of", "the", "a", "an", "from", "for", "to", "as", "by", "w", "wo",
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "half", "couple",
   "small", "medium", "large", "extra", "piece", "slice", "serving", "portion",
+  "can", "bottle", "pack", "packet", "bag", "container", "carton", "jar", "tin", "sachet", "pouch",
 ]);
 
 // The unprepared state of a food: asking for "apple" means the raw one.
@@ -394,7 +445,7 @@ function nutrientPer100g(food: CronoFoodDetail, id: number): number | null {
   return n ? n.amount : null;
 }
 
-export function implausibility(food: CronoFoodDetail, query: string): string | null {
+export function implausibility(food: CronoFoodDetail, query: string, liquid = false): string | null {
   const kcal = nutrientPer100g(food, 208);
   const protein = nutrientPer100g(food, 203) ?? 0;
   const carbs = nutrientPer100g(food, 205) ?? 0;
@@ -405,6 +456,10 @@ export function implausibility(food: CronoFoodDetail, query: string): string | n
     const fromMacros = 4 * protein + 4 * carbs + 9 * fat + 7 * alcohol;
     if (Math.abs(fromMacros - kcal) > Math.max(40, 0.35 * kcal)) return "calories do not match its macros";
   }
+
+  // Measured by volume, so per 100 g is per ~100 ml: soft drinks, juice and milk sit well under 120 kcal; a higher value
+  // is a per-serving entry or a different product, unless alcohol or fat (cream, a shake) explains it.
+  if (liquid && kcal != null && kcal > 120 && alcohol < 5 && fat < 5) return "too energy-dense for a drink";
 
   if (isPlainQuery(query)) {
     const produce = coreTokens(query).find((t) => PRODUCE_MAX_KCAL[t] !== undefined);
@@ -475,8 +530,9 @@ export function reconcile(item: ResolvedItem): void {
   const ratio = kcal / est.calories;
   if ((ratio > 1.75 || ratio < 0.55) && Math.abs(kcal - est.calories) > 100) {
     item.disagreement = true;
-    // An exact name match keeps its numbers (the flag tells the user to check the portion); a looser one yields.
-    if (item.match_quality !== "exact") item.used_estimate = true;
+    // An exact name match keeps its numbers (the flag tells the user to check the portion); a looser one yields, and
+    // so does an exact one that is off by more than 3x (a per-serving entry stored as per 100 g, a wrong portion).
+    if (item.match_quality !== "exact" || ratio > 3 || ratio < 1 / 3) item.used_estimate = true;
   }
 }
 

@@ -3,6 +3,7 @@
 // Started from SQL, with no human-held secret (same pattern as analysis-run):
 //   select private.run_nutrition_backfill();            -- every user's Cronometer-enriched meal items; returns the run id
 //   select private.run_nutrition_backfill('<user id>');  -- one user's
+//   select private.run_nutrition_backfill(null, array['ai_text_enriched']);  -- typed entries only (photo meals are skipped)
 // private.run_nutrition_backfill() sends a random Vault secret in x-nutrition-backfill, checked through the service
 // role-only public.nutrition_backfill_secret_ok().
 //
@@ -81,7 +82,13 @@ function primarySource(results: ResolvedItem[]): string | null {
   return [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 }
 
-async function reviewBatch(admin: SupabaseClient, runId: string, userId: string | null, secret: string): Promise<void> {
+async function reviewBatch(
+  admin: SupabaseClient,
+  runId: string,
+  userId: string | null,
+  sources: string[],
+  secret: string,
+): Promise<void> {
   const { data: doneRows, error: doneError } = await admin.from("nutrition_backfill_review").select("meal_item_id").eq("run_id", runId);
   if (doneError) return console.log(`review ${runId}: ${doneError.message}`);
   const done = new Set((doneRows as { meal_item_id: number }[]).map((r) => r.meal_item_id));
@@ -89,7 +96,7 @@ async function reviewBatch(admin: SupabaseClient, runId: string, userId: string 
   let query = admin
     .from("meal_items")
     .select("id, meal_id, user_id, description, calories, protein_g, carbs_g, fat_g, source")
-    .in("source", SOURCES)
+    .in("source", sources)
     .order("id");
   if (userId) query = query.eq("user_id", userId);
   const { data: itemRows, error: itemError } = await query;
@@ -166,7 +173,7 @@ async function reviewBatch(admin: SupabaseClient, runId: string, userId: string 
         Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
         "x-nutrition-backfill": secret,
       },
-      body: JSON.stringify({ action: "review", run_id: runId, user_id: userId }),
+      body: JSON.stringify({ action: "review", run_id: runId, user_id: userId, sources }),
     });
     if (!res.ok) console.log(`review ${runId}: next batch not started (HTTP ${res.status})`);
   }
@@ -186,7 +193,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: "not_configured", message: "CRONOMETER_EMAIL and CRONOMETER_PASSWORD must be set." }, 500);
     }
 
-    let body: { action?: string; run_id?: string; user_id?: string | null };
+    let body: { action?: string; run_id?: string; user_id?: string | null; sources?: string[] | null };
     try {
       body = await req.json();
     } catch {
@@ -194,8 +201,11 @@ Deno.serve(async (req: Request) => {
     }
     if (body.action !== "review") return json({ error: "unknown_action", message: "Supported: review." }, 400);
 
+    const sources = body.sources?.length ? body.sources.filter((s) => SOURCES.includes(s)) : SOURCES;
+    if (sources.length === 0) return json({ error: "invalid_sources", message: `Supported: ${SOURCES.join(", ")}.` }, 400);
+
     const runId = body.run_id ?? crypto.randomUUID();
-    const work = reviewBatch(admin, runId, body.user_id ?? null, secret).catch((e) => console.log(`review ${runId}: ${String(e)}`));
+    const work = reviewBatch(admin, runId, body.user_id ?? null, sources, secret).catch((e) => console.log(`review ${runId}: ${String(e)}`));
     // Answer the caller at once and keep working (Supabase's edge runtime); elsewhere, finish before answering.
     const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
     if (runtime) runtime.waitUntil(work);

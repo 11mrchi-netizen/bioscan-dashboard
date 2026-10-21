@@ -10,6 +10,7 @@ import { alignToAxis, dateAxis } from './stats.ts'
 import type { Num } from './stats.ts'
 import { CORE_VERSION } from './version.ts'
 import { fetchAll } from './paging.ts'
+import { baselineExclusionSpans, loadHealthInputs } from './healthLoad.ts'
 
 export const RELATIONSHIP_LOOKBACK_DAYS = 365
 // A day counts as having "afternoon caffeine" from this local hour on.
@@ -256,7 +257,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
   const q = (table: string, cols: string, col: string, from: string) => (a: number, b: number) =>
     admin.from(table).select(cols).eq('user_id', userId).gte(col, from).order(col).range(a, b)
 
-  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context] = await Promise.all([
+  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health] = await Promise.all([
     fetchAll<RawInputs['wearable'][number]>(q('wearable_daily', 'date, hrv, rhr, steps', 'date', since)),
     fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min', 'date', since)),
     fetchAll<RawInputs['wellbeing'][number]>(q('wellbeing_daily', 'date, energy, mood, stress, soreness', 'date', since)),
@@ -267,6 +268,9 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
     // Phase B tables: read softly, so the nightly run keeps working before the migration is applied.
     fetchAll<CheckinRow>(q('evening_checkins', 'date, drinks, caffeine_after_14, late_meal, stress', 'date', since)),
     fetchAll<{ date: string; utc_offset_min: number }>(q('daily_context', 'date, utc_offset_min', 'date', shift(since, -30))),
+    // Health concerns (docs/health-concerns): systemic episodes leave their days out as logged illness does. Read softly;
+    // for one release both are read (owner decision 7.2.7), and the copied legacy rows give the same spans.
+    loadHealthInputs(admin, userId),
   ])
   const failed = [wearable, sleep, wellbeing, meals, sessions, recovery].find((r) => r.error)
   if (failed) return { userId, error: failed.error as string }
@@ -275,7 +279,8 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
   const frame = buildFrame(
     {
       wearable: wearable.rows, sleep: sleep.rows, wellbeing: wellbeing.rows, meals: meals.rows, sessions: sessions.rows,
-      recovery: recovery.rows, illnesses: (ill.data ?? []) as RawInputs['illnesses'],
+      recovery: recovery.rows,
+      illnesses: [...((ill.data ?? []) as RawInputs['illnesses']), ...(health.error ? [] : baselineExclusionSpans(health, today))],
       checkins: checkins.error ? [] : checkins.rows,
       context: context.error ? [] : context.rows,
     },

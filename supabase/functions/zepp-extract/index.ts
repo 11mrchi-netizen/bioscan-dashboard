@@ -974,6 +974,13 @@ async function extract(
         const { error: repointError } = await supabase.from(table).update({ [column]: realId }).eq(column, orphan.id);
         if (repointError) throw new Error(`${table} repoint failed: ${repointError.message}`);
       }
+      // Health check-ins linked to the copy (docs/health-concerns). Soft: the table may not exist before its migration.
+      {
+        const { error: healthError } = await supabase.from("health_observations").update({ session_id: realId }).eq("session_id", orphan.id);
+        if (healthError && !/does not exist|schema cache/i.test(healthError.message)) {
+          throw new Error(`health_observations repoint failed: ${healthError.message}`);
+        }
+      }
       // A planned session moves over only if the kept session has none (one plan per workout).
       const { data: keptPlans, error: planReadError } = await supabase
         .from("planned_sessions").select("id").eq("exercise_session_id", realId).limit(1);

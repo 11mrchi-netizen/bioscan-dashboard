@@ -127,6 +127,7 @@ via `other` + note.
 | `id` uuid PK | |
 | `title` text | user's words: "Right knee (outside)", "Recurring sore throat" |
 | `kind` | `anatomical` / `systemic` / `mixed` |
+| `onset_type` | `acute` (traumatic event) / `gradual` / `unknown`; acute concerns get no association findings (7.2.5) |
 | `regions` jsonb | `[{"code":"knee","side":"right"}]` (empty for systemic) |
 | `symptoms` text[] | vocab codes the concern groups |
 | `excludes_from_baselines` bool | systemic illness: days in its episodes are left out of HRV/RHR/sleep comparisons (replaces the `illnesses` → `frame.excluded` rule). Default true for systemic. |
@@ -197,9 +198,10 @@ Both reuse `interventions` for name, domain (`training`, `sleep`, `lifestyle`), 
 No duplicated store. Exposures are built in the TS core from `exercise_sessions` (+ `zepp_workout_detail.hr_histogram`,
 `details.route_type/run_type/exercises`), `wearable_daily`, `sleep_daily`, `wellbeing_daily`, `evening_checkins`,
 `daily_context`, and the published `expected_band` flags, using the same loaders (`loadFrame`, `trainingLoad.ts`).
-Findings link back by session id and date. A read-only view **`v_health_day`** (per local date: sessions by type,
-run km, trail km, elevation gain, longest run minutes, strength sessions, sleep hours, HRV, RHR, soreness, evening
-answers) serves the unified chart and the console; it is a convenience, not a source of truth.
+Findings link back by session id and date. The daily context the charts need (run km, trail km, load, sleep, HRV
+against its band) is published inside each concern's `health_concern_state` payload by the same exposure builders the
+findings use, so the chart and the evidence can never disagree. (Built differently from the first draft, which had a
+`v_health_day` view: one implementation instead of a SQL copy of the TypeScript rules.)
 
 ### 2.5 Migration implications
 
@@ -210,8 +212,8 @@ answers) serves the unified chart and the console; it is a convenience, not a so
    (region parsed from `part` with a mapping table; unmatched → `other` + title kept), an onset observation at
    `start_date` (severity from `injuries.severity`, `source = legacy_backfill`), a symptom-free observation at
    `end_date` when resolved. Same for illnesses (systemic, `excludes_from_baselines`, symptoms from text → `other`
-   + note). The two right-knee injuries become **one concern with two episodes** after a confirm prompt in the app
-   (backfill proposes, the person confirms the merge). Legacy rows gain nothing; mapping lives in `legacy_id`.
+   + note). Each legacy row becomes its own concern (decision 7.2.5: the two right-knee injuries were different
+   contusions); injuries get `onset_type = acute`. Legacy rows gain nothing; mapping lives in `legacy_id`.
 4. **Analysis core**: `loadFrame` reads the union of `illnesses` spans and systemic episodes with
    `excludes_from_baselines` (deduplicated by `legacy_id`). A golden test asserts `frame.excluded` is unchanged on
    today's data. Bump `CORE_VERSION`.
@@ -332,7 +334,7 @@ Not in v1: regressions of severity on exposures, recovery-time predictors, multi
 |---|---|---|
 | INSUFFICIENT EVIDENCE | Any requirement below unmet. Says which and how much is missing ("needs 3 more flare-ups with check-ins in the days before; 14 more symptom-free check-ins") | no pattern words |
 | OBSERVED RECURRENCE | ≥ 2 episodes of the concern; no association claim | "has come back 3 times in 6 months; median 34 symptom-free days between" |
-| POSSIBLE PATTERN (exploratory) | Analysis A: ≥ 5 cases, ≥ 3 exposed cases, ≥ 20 referent days, DATA not THIN, MH OR lower 95% bound > 1, OR ≥ 1.5, BH-adjusted q < 0.10 across the concern's catalogue questions (primary windows only); or analysis B: ≥ 15 exposed sessions with follow-up, ≥ 3 symptomatic, RR lower bound > 1, same q rule | "went with", "came before", plus EXPLORATORY |
+| POSSIBLE PATTERN (exploratory) | Concern not `acute` (7.2.5). Analysis A: ≥ 5 cases, ≥ 3 exposed cases, ≥ 20 referent days, DATA not THIN, MH OR lower 95% bound > 1, OR ≥ 1.5, BH-adjusted q < 0.10 across the concern's catalogue questions (primary windows only); or analysis B: ≥ 15 exposed sessions with follow-up, ≥ 3 symptomatic, RR lower bound > 1, same q rule | "went with", "came before", plus EXPLORATORY |
 | PERSISTENT PATTERN | Was POSSIBLE; then ≥ 3 *new* cases (onsets after the date it first became possible; the confirmation set, like `registered_questions`) with estimate > 1 on new cases alone and combined lower bound still > 1; holds on the sensitivity windows in direction | "has kept going with … across 4 new flare-ups since it was first noticed" |
 | FADED | Was POSSIBLE/PERSISTENT; lower bound ≤ 1 on two consecutive nightly evaluations with new cases | kept in history: "no longer clear after 3 more flare-ups" |
 
@@ -405,8 +407,8 @@ Android Health › CONCERNS, Training › INJURY, Status figure, Lab › N=1; co
 - **Pure core modules**: `healthSeries.ts` (daily series, recall fill), `healthEpisodes.ts` (rules 3.2-3.4),
   `healthExposures.ts` (catalogue 3.5 from frame + sessions), `healthAssociations.ts` (A, B, C, BH, co-exposure),
   `healthFindings.ts` (ladder, explanations, next steps, payload), `healthTrials.ts` (4.1), `runHealth.ts` (I/O).
-- **SQL for simple summaries**: `v_health_concern_daily` (latest-of-chain observations → per concern/day severity,
-  impact, observed) and `v_health_day`. Episodes stay in TS (rules + marks + uncertainty are easier to test there).
+- **SQL only where it is plain**: `v_health_events` (legacy shape). Day series, episodes and context lanes stay in TS
+  and are published in the payload (rules, marks and uncertainty are tested there, once).
 - **On-demand action** keeps the state fresh after a check-in without a second Kotlin implementation of the rules.
   Android shows the last published state plus "updated just now"; offline it shows the raw entry as pending.
 - **Reproducibility**: `inputs_hash` over the latest-of-chain observation ids and `created_at`s, marks, and session
@@ -484,8 +486,8 @@ Dependencies: M0 → M1 → (M2 ∥ M3) → M4 → M5 → M6 → M7. M3's engine
 ### M1 · Data model and migration
 - **H-03** Baseline DDL for `injuries`/`illnesses` in migrations. *AC*: `create table if not exists` matches live columns and checks (diffed with information_schema).
 - **H-04** Tables `health_vocab`, `health_concerns`, `health_observations`, `health_signals`, `health_episode_marks`, `intervention_concerns`, `intervention_adherence`; RLS; supersede trigger; client-id idempotency. *AC*: applied on a branch DB; advisors clean; update on `health_observations` refused except supersede; rollback block present.
-- **H-05** Views `v_health_concern_daily`, `v_health_day`, `v_health_events`. *AC*: unobserved days return null, explicit zeros 0; legacy view returns the 4 existing events.
-- **H-06** Backfill function + Android merge prompt. *AC*: re-runnable (no duplicates on second run); 4 legacy events → concerns with onset/resolution observations; knees proposed as one concern.
+- **H-05** View `v_health_events` (legacy shape for the web dashboard and console). Daily series and context lanes are in the published payload instead of SQL views (§2.4). *AC*: legacy view returns the 4 existing events; unobserved days are null in the payload, explicit zeros 0.
+- **H-06** Backfill function. *AC*: re-runnable (no duplicates on second run); 4 legacy events → 4 concerns with onset/resolution observations; the two knee contusions stay separate.
 - **H-07** `loadFrame` reads systemic episodes with `excludes_from_baselines` ∪ `illnesses`. *AC*: golden test — `frame.excluded` identical on fixtures and on today's data; CORE_VERSION bumped.
 
 ### M2 · Capture (Android)
@@ -543,16 +545,19 @@ Size guide: M1 ~3-4 days, M2 ~5-7, M3 ~4-5, M4 ~3, M5 ~5-7, M6 ~3-4, M7 ~2.
 | Exposure data gaps (RPE nearly absent, no elevation loss, terrain only by tag) | Intensity from run type/HR zones; unavailable exposures listed; descent deferred. |
 | Privacy of free-text notes | No LLM path; RLS; export only on request. |
 
-### 7.2 Unresolved design decisions (need the owner)
+### 7.2 Design decisions (owner, 21 Oct 2026)
 
-1. Home of the feature: Health › CONCERNS (proposed) vs a top-level entry; Training › INJURY as a filtered view or removed.
-2. Accent: the brief says "signal amber"; the visual contract reserves amber for warning state and the Log domain and
-   gives Health rose. Proposal: rose domain accent, amber only for WORSENING and safety prompts.
-3. Daily check-in timing: its own reminder (21:00) vs folded into the 22:25 evening check-in as one more row.
-4. Severity threshold for "symptomatic" (≥ 2 proposed) and resolution spans (7 / 3 days).
-5. Merge the two legacy right-knee injuries into one concern (proposed) or keep separate.
-6. Keep OSTRC-H2 as an optional weekly instrument per concern, or drop the table.
-7. Whether systemic concerns should replace `illnesses` for baseline exclusion immediately or after a release of dual-read.
+1. Home: **Health › CONCERNS**; Training › INJURY shows the same cards filtered to anatomical concerns.
+2. Accent: **Health rose** for the domain; amber only for WORSENING and safety prompts (contract unchanged).
+3. Check-in: **its own reminder at 21:00** (`health_checkin`), skipped when logged.
+4. Thresholds: symptomatic at **severity ≥ 2**; resolution spans **7 days** anatomical, **3 days** systemic.
+5. Legacy knees: **not merged**. They were two different contusions, so each legacy row becomes its own concern
+   (one episode each). Consequence for the model: concerns carry `onset_type` (`acute` = a traumatic event such as a
+   contusion or a sprain, `gradual`, `unknown`). Acute concerns get the timeline, recovery metrics and WHAT CAME BEFORE,
+   but no exposure-association findings (a knock is not an overuse pattern); a new knock to the same knee is a new
+   concern unless the person says it is the same problem coming back.
+6. OSTRC-H2: **kept** as an optional weekly instrument; the table stays.
+7. Illness exclusion: **dual-read for one release** (`illnesses` ∪ systemic episodes), then switch.
 
 ### 7.3 Explicitly deferred
 

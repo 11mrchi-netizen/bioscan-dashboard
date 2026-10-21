@@ -17,13 +17,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Run session page: one metric as a tile -- its label (with an optional "?"), the value and unit, and one secondary
-// line (the metric that belongs with it: max HR under average HR, total calories under active calories).
+// line (the metric that belongs with it: max HR under average HR, total calories under active calories), and an
+// optional mark (an arrow and a word against the usual) between the value and that line.
 data class StatTileSpec(
     val label: String,
     val value: String,
@@ -31,7 +33,11 @@ data class StatTileSpec(
     val secondary: String? = null,
     val helpTitle: String? = null,
     val helpBody: String? = null,
+    val mark: TileMark? = null,
 )
+
+// The colour backs the word, never replaces it: every mark has its arrow and its word.
+data class TileMark(val text: String, val color: Color)
 
 @Composable
 fun FTStatTile(spec: StatTileSpec, modifier: Modifier = Modifier) {
@@ -52,6 +58,7 @@ fun FTStatTile(spec: StatTileSpec, modifier: Modifier = Modifier) {
             Text(spec.value, style = FTType.MetricMedium, color = FT.TextPrimary, maxLines = 1)
             spec.unit?.let { Text(it, style = FTType.Label, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 3.dp)) }
         }
+        spec.mark?.let { Text(it.text, style = FTType.Label, color = it.color, maxLines = 2) }
         spec.secondary?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary, maxLines = 2) }
     }
 }

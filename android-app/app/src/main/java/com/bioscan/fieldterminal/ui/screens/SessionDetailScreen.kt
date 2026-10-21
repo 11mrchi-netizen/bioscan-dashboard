@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.domain.movingMinutes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -131,6 +132,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
     var zoneSeries by remember { mutableStateOf<ZoneAnchorSeries?>(null) }
     var zoneDefault by remember { mutableStateOf(ZoneMethod.AUTO) }
     var planned by remember { mutableStateOf<com.bioscan.fieldterminal.data.PlannedMatch?>(null) }
+    var runMarks by remember { mutableStateOf<com.bioscan.fieldterminal.domain.RunDynamicsMarks?>(null) }
     val sessionScope = androidx.compose.runtime.rememberCoroutineScope()
 
     var exerciseLibrary by remember { mutableStateOf<List<ExerciseLibraryRow>>(emptyList()) }
@@ -168,6 +170,14 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
         // per screen open; the anchors are taken as of this session's date below.
         zoneSeries = softLoad { ZoneAnchorsRepository(SupabaseClientProvider.client).load() }
         zoneDefault = softLoad { com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client).loadZoneMethod() } ?: ZoneMethod.AUTO
+        // A run's RUN DYNAMICS marks against usual, from the per-run history the Running page reads (cached there).
+        if (row?.type == "run") {
+            runMarks = softLoad {
+                val rows = com.bioscan.fieldterminal.ui.screens.user.UserDataCache.running().historyRows()
+                com.bioscan.fieldterminal.domain.findRun(rows, row.id, OffsetDateTime.parse(row.startTime).toLocalDate(), row.distanceKm)
+                    ?.let { com.bioscan.fieldterminal.domain.runDynamicsMarks(it, rows) }
+            }
+        }
         // What the training block planned for this workout, if anything (DAV-346).
         if (row != null) {
             planned = runCatching {
@@ -300,7 +310,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                     // run session page). Every other type keeps SUMMARY with its combined chart.
                     if (isRun) {
                         RunSummaryCard(h, d, zeppSummary)
-                        RunDynamicsCard(h, d, zeppSummary, zones, loadingDetail, detailError, hasTimeSeries = h.healthConnectRecordId != null || d != null)
+                        RunDynamicsCard(h, d, zeppSummary, zones, loadingDetail, detailError, hasTimeSeries = h.healthConnectRecordId != null || d != null, marks = runMarks)
                     } else {
                         SummaryCard(h, d, loadingDetail, detailError, hasHealthConnectRecord = h.healthConnectRecordId != null, zones = zones)
                     }
@@ -846,7 +856,10 @@ private fun SummaryCard(
     val avgHr = header.avgHr
         ?: detail?.heartRate?.takeIf { it.isNotEmpty() }?.let { s -> s.map { it.value }.average() }
     val avgPaceMinPerKm = (
-        com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh(header.type, header.avgSpeedKmh, header.distanceKm, header.durationMin)
+        com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh(
+            header.type, header.avgSpeedKmh, header.distanceKm, header.durationMin,
+            detail?.movingMinutes(),
+        )
             ?: detail?.speedKmh?.takeIf { it.isNotEmpty() }?.let { s -> s.map { it.value }.average() }
         )?.takeIf { it > 0 }?.let { 60.0 / it }
     val isStrength = header.type == "strength"

@@ -50,6 +50,34 @@ Left for its own plan: injury risk from past data. The running form analyser ope
 - FITNESS (VO2max, lactate threshold) is on Training › LOAD. Trail runs need no confirming: the Zepp sync tags them
   (`docs/zepp-integration/04-data-model-and-provenance.md`).
 
+## Run session page: RUN DYNAMICS
+
+- Sections HEART RATE, PACE, POWER, CADENCE, VERTICAL RATIO. Each opens with its tiles followed by its chart over the run.
+  A tap folds a section; the fold is kept for every run, on the phone only (`RunPageSettingsStore`).
+  - Power over time comes from Health Connect on the phone; Zepp stores none. An open section without a series says so.
+- Average pace is distance over moving time (`sessionAvgSpeedKmh`): the shorter of the stored duration and the Zepp
+  workout's elapsed time less its pauses. The stored `avg_speed_kmh` is only the fallback without a distance, because
+  neither writer makes it a pace:
+  - the Health Connect sync stores a plain mean of the speed samples;
+  - Zepp's `avg_pace` is seconds per metre. Until 21 Oct 2026 the sync read it as seconds per km, and the 106 rows that
+    stored a 1000-times speed were divided back. Even read right it can differ from distance over time: on interval
+    and hill sessions in October 2026 it was up to a third slower.
+- Marks against usual (`domain/RunMarks.kt`) under the tiles: arrow, word and the usual value.
+  - Usual is the median of earlier runs (`RunBaseline`): road the last 28 days, trail the last 5 trail runs within 60
+    days, from 3 runs; the efficiency factor on road keeps its 6.
+  - AS USUAL inside the normal run-to-run spread: the robust SD of those runs, with a floor (efficiency factor, pace and power 3 %,
+    decoupling 2 points, cadence 3 spm, vertical ratio 0.3 points).
+  - IMPROVED / REGRESSED only where a direction is better: efficiency factor (higher), HR decoupling and vertical
+    ratio (lower).
+  - Pace and power compare with runs of the same kind (easy, quality or trail) and only say FASTER / SLOWER or
+    HIGHER / LOWER. Cadence says HIGHER / LOWER against the same surface.
+  - Stride length is read for the pace: a straight line through the same surface's runs over 90 days (stride against
+    speed, from 6 runs). LONG FOR THIS PACE at 8 % or more over the line is the watch's hint of overstriding; the form
+    analyser is what shows where the foot lands. SHORT FOR THIS PACE is a quicker step, not a risk by itself. Outside
+    the paces of those runs there is no verdict.
+  - Replayed read-only on the road runs since July 2026: 38 of 46 read usual for the pace, 4 long, 2 short, 2 outside
+    the range; the line's run-to-run spread is about 5 %, so 8 % is roughly 1.7 times it.
+
 ## The six content changes
 
 1. **THIS MORNING.** Each metric (HRV, resting HR, sleep) is its title, a tappable pill and its band chart. The pill's

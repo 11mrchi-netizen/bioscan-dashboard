@@ -109,14 +109,25 @@ fun computeKmSplits(distanceKm: List<TimePoint>, heartRate: List<TimePoint>, pau
     }
 }
 
-// The stored avg_speed_kmh is not always believable: the Zepp sync read Zepp's avg_pace (seconds per metre) as seconds
-// per km until Oct 2026 and wrote speeds of thousands of km/h. A session's average speed is the stored value when it is
-// believable for the type (the sync's own limits, zepp-extract/workoutDistance.ts), else distance over moving time.
+// The stored avg_speed_kmh is not a pace to show: the Health Connect sync writes a plain mean of the speed samples, and
+// Zepp's avg_pace (seconds per metre; read as seconds per km until Oct 2026, which stored thousands of km/h) does not
+// match distance over time on some interval and hill sessions. A session's average speed is its distance over moving
+// time: the shorter of the stored duration and the Zepp workout's elapsed time less its pauses (overlap-matched rows
+// already store moving time; the rest store elapsed). The stored value, when believable for the type (the sync's own
+// limits, zepp-extract/workoutDistance.ts), is only the fallback without a distance or a duration.
 private val MAX_AVG_SPEED_KMH = mapOf("run" to 30.0, "walk" to 12.0, "hike" to 15.0, "ride" to 90.0)
 
-fun sessionAvgSpeedKmh(type: String?, storedKmh: Double?, distanceKm: Double?, durationMin: Double?): Double? {
+fun sessionAvgSpeedKmh(type: String?, storedKmh: Double?, distanceKm: Double?, durationMin: Double?, movingMin: Double? = null): Double? {
     val max = MAX_AVG_SPEED_KMH[type] ?: 120.0
-    storedKmh?.takeIf { it > 0 && it <= max }?.let { return it }
-    if (distanceKm == null || durationMin == null || distanceKm <= 0 || durationMin <= 0) return null
-    return (distanceKm / (durationMin / 60.0)).takeIf { it <= max }
+    val minutes = listOfNotNull(durationMin, movingMin).filter { it > 0 }.minOrNull()
+    if (distanceKm != null && distanceKm > 0 && minutes != null) {
+        (distanceKm / (minutes / 60.0)).takeIf { it <= max }?.let { return it }
+    }
+    return storedKmh?.takeIf { it > 0 && it <= max }
+}
+
+/** Moving minutes of a session with a time series: its elapsed span less the pauses in it; null without a series. */
+fun SessionDetail.movingMinutes(): Double? {
+    val elapsed = listOf(distanceKm, speedKmh, heartRate).mapNotNull { it.lastOrNull()?.offsetSeconds }.maxOrNull() ?: return null
+    return ((elapsed - pausedSecondsBetween(pauses, 0, elapsed)) / 60.0).takeIf { it > 0 }
 }

@@ -7,6 +7,7 @@ import com.bioscan.fieldterminal.domain.HeartRateZone
 import com.bioscan.fieldterminal.domain.LoggedSet
 import com.bioscan.fieldterminal.domain.RunCategory
 import com.bioscan.fieldterminal.domain.RunCategoryBasis
+import com.bioscan.fieldterminal.domain.RunHistoryRow
 import com.bioscan.fieldterminal.domain.ZoneMethod
 import com.bioscan.fieldterminal.domain.classifyRun
 import com.bioscan.fieldterminal.domain.dedupeRunSessions
@@ -50,12 +51,14 @@ data class RunPoint(
     val elevationGainM: Double? = null,
     // Zepp's grade-adjusted pace for the run, when it has one.
     val gapMinPerKm: Double? = null,
+    val avgPowerW: Double? = null,
 ) {
     val trail: Boolean get() = category == RunCategory.TRAIL
 }
 
 // One point per run with a synced Zepp workout; any field the watch did not report is null, never filled in.
 data class RunFormPoint(
+    val id: Long,
     val date: LocalDate,
     val trail: Boolean,
     val cadenceSpm: Double?,
@@ -80,6 +83,18 @@ data class RunningHistory(
     // Road, comparable runs only: no trail (terrain makes pace incomparable), as `runs` already excludes
     // implausible paces.
     val roadRuns: List<RunPoint> get() = runs.filter { !it.trail }
+
+    // One row per run with its form values, for the session page's marks against usual (domain/RunMarks.kt).
+    fun historyRows(): List<RunHistoryRow> {
+        val formById = form.associateBy { it.id }
+        return runs.map { r ->
+            val f = formById[r.id]
+            RunHistoryRow(
+                r.id, r.date, r.distanceKm, r.category, r.paceMinPerKm, r.avgPowerW,
+                f?.efficiencyFactor, f?.hrDecouplingPct, f?.cadenceSpm, f?.strideCm, f?.verticalRatioPct,
+            )
+        }
+    }
 }
 
 // ---- Strength --------------------------------------------------------------------------------
@@ -135,7 +150,7 @@ class SkillHistoryRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadRunning(): RunningHistory {
         val rows = supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("id,type,start_time,duration_min,distance_km,avg_hr,avg_speed_kmh,source,elevation_gain_m,details")) {
+            .select(columns = Columns.list("id,type,start_time,duration_min,distance_km,avg_hr,avg_speed_kmh,source,elevation_gain_m,details,avg_power_w")) {
                 filter { eq("type", "run") }
                 order("start_time", Order.DESCENDING)
                 limit(2000)
@@ -166,7 +181,7 @@ class SkillHistoryRepository(private val supabase: SupabaseClient) {
             val zepp = zeppBySession[r.id]
             val histogram = zepp?.histogram?.mapNotNull { (bpm, secs) -> bpm.toIntOrNull()?.let { it to secs } }?.toMap()
             val c = classifyRun(r.details.routeType, r.details.runType, zepp?.sportType, d, r.elevationGainM, histogram, r.avgHr, z4Floor(date))
-            RunPoint(r.id, date, d, m, m / d, r.avgHr, c.category, c.basis, r.elevationGainM, zepp?.summary?.gapMinPerKm)
+            RunPoint(r.id, date, d, m, m / d, r.avgHr, c.category, c.basis, r.elevationGainM, zepp?.summary?.gapMinPerKm, r.avgPowerW)
         }.sortedBy { it.date }
 
         // ~800 daily rows covers more than two years, so the 1Y toggle has a full year behind it.
@@ -182,7 +197,7 @@ class SkillHistoryRepository(private val supabase: SupabaseClient) {
         val form = runs.mapNotNull { run ->
             val s = zeppBySession[run.id]?.summary ?: return@mapNotNull null
             RunFormPoint(
-                run.date, run.trail, s.avgCadenceSpm, s.avgStrideLengthCm, s.avgGroundContactMs,
+                run.id, run.date, run.trail, s.avgCadenceSpm, s.avgStrideLengthCm, s.avgGroundContactMs,
                 s.avgVerticalStrideRatioPct, s.gapMinPerKm, s.hrDecouplingPct, s.efficiencyFactor,
             )
         }

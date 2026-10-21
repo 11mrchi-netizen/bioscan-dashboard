@@ -30,7 +30,10 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.RunPageSettingsStore
 import com.bioscan.fieldterminal.data.ZeppWorkoutSummary
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetailRow
+import com.bioscan.fieldterminal.domain.MarkTone
 import com.bioscan.fieldterminal.domain.RoutePoint
+import com.bioscan.fieldterminal.domain.RunDynamicsMarks
+import com.bioscan.fieldterminal.domain.RunMark
 import com.bioscan.fieldterminal.domain.SessionDetail
 import com.bioscan.fieldterminal.domain.SessionSplit
 import com.bioscan.fieldterminal.domain.TimePoint
@@ -40,6 +43,7 @@ import com.bioscan.fieldterminal.domain.analysis.StateDimension
 import com.bioscan.fieldterminal.domain.heartRateZoneBreakdown
 import com.bioscan.fieldterminal.domain.heartRateZoneFor
 import com.bioscan.fieldterminal.domain.initialZoneMethod
+import com.bioscan.fieldterminal.domain.movingMinutes
 import com.bioscan.fieldterminal.domain.trail.elevationProfileWithOverlays
 import com.bioscan.fieldterminal.domain.trail.gradeTimeSplit
 import com.bioscan.fieldterminal.domain.zoneBounds
@@ -51,6 +55,7 @@ import com.bioscan.fieldterminal.ui.components.LineChart
 import com.bioscan.fieldterminal.ui.components.SessionZoneInputs
 import com.bioscan.fieldterminal.ui.components.StatTileSpec
 import com.bioscan.fieldterminal.ui.components.TileGrid
+import com.bioscan.fieldterminal.ui.components.TileMark
 import com.bioscan.fieldterminal.ui.components.TrailElevationChart
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
@@ -115,6 +120,7 @@ fun RunDynamicsCard(
     loading: Boolean,
     error: String?,
     hasTimeSeries: Boolean,
+    marks: RunDynamicsMarks? = null,
 ) {
     // Every section starts open, tiles then chart; a tap folds one, remembered for every run (RunPageSettingsStore).
     val context = LocalContext.current
@@ -157,7 +163,7 @@ fun RunDynamicsCard(
                 TileGrid(
                     listOfNotNull(
                         avgHr?.let { StatTileSpec("AVG HR", "${it.roundToInt()}", "bpm", secondary = (header.maxHr ?: hr.maxOfOrNull { p -> p.value })?.let { m -> "Max ${m.roundToInt()} bpm" }) },
-                        zepp?.hrDecouplingPct?.let { StatTileSpec("HR DECOUPLING", "%+.1f".format(it), "%", helpTitle = "HR decoupling", helpBody = HR_DECOUPLING_HELP) },
+                        zepp?.hrDecouplingPct?.let { StatTileSpec("HR DECOUPLING", "%+.1f".format(it), "%", helpTitle = "HR decoupling", helpBody = HR_DECOUPLING_HELP, mark = tileMark(marks?.hrDecoupling) { u -> "%+.1f %%".format(u) }) },
                     ),
                 )
             }
@@ -188,15 +194,15 @@ fun RunDynamicsCard(
 
         // PACE
         val avgPace = (
-            sessionAvgSpeedKmh(header.type, header.avgSpeedKmh, header.distanceKm, header.durationMin)
+            sessionAvgSpeedKmh(header.type, header.avgSpeedKmh, header.distanceKm, header.durationMin, d?.movingMinutes())
                 ?: d?.speedKmh?.takeIf { it.isNotEmpty() }?.map { it.value }?.average()
             )?.takeIf { it > 0 }?.let { 60.0 / it }
         if (avgPace != null || pace.isNotEmpty()) {
             Section(DynamicsSection.PACE, isOpen(DynamicsSection.PACE), ::toggle) {
                 TileGrid(
                     listOfNotNull(
-                        avgPace?.let { StatTileSpec("AVG PACE", pace(it).removeSuffix(" /km"), "/km", secondary = zepp?.gapMinPerKm?.let { g -> "Grade-adjusted ${pace(g)}" }, helpTitle = zepp?.gapMinPerKm?.let { "Grade-adjusted pace" }, helpBody = zepp?.gapMinPerKm?.let { GAP_HELP }) },
-                        zepp?.efficiencyFactor?.let { StatTileSpec("EFFICIENCY FACTOR", "%.2f".format(it), helpTitle = "Efficiency factor", helpBody = EF_SESSION_HELP) },
+                        avgPace?.let { StatTileSpec("AVG PACE", pace(it).removeSuffix(" /km"), "/km", secondary = zepp?.gapMinPerKm?.let { g -> "Grade-adjusted ${pace(g)}" }, helpTitle = zepp?.gapMinPerKm?.let { "Grade-adjusted pace" }, helpBody = zepp?.gapMinPerKm?.let { GAP_HELP }, mark = tileMark(marks?.pace, marks?.categoryLabel) { u -> pace(u) }) },
+                        zepp?.efficiencyFactor?.let { StatTileSpec("EFFICIENCY FACTOR", "%.2f".format(it), helpTitle = "Efficiency factor", helpBody = EF_SESSION_HELP, mark = tileMark(marks?.efficiencyFactor) { u -> "%.2f".format(u) }) },
                     ),
                 )
             }
@@ -219,7 +225,7 @@ fun RunDynamicsCard(
         val avgPower = header.avgPowerW ?: power.takeIf { it.isNotEmpty() }?.map { it.value }?.average()
         if (avgPower != null) {
             Section(DynamicsSection.POWER, isOpen(DynamicsSection.POWER), ::toggle) {
-                TileGrid(listOf(StatTileSpec("AVG POWER", "${avgPower.roundToInt()}", "W")))
+                TileGrid(listOf(StatTileSpec("AVG POWER", "${avgPower.roundToInt()}", "W", mark = tileMark(marks?.power, marks?.categoryLabel) { u -> "${u.roundToInt()} W" })))
             }
             if (isOpen(DynamicsSection.POWER) && power.size >= 2) {
                 LineChart(points = power, color = FT.Category.Activity.c300, xRange = xRange, pauses = pauses, valueFormat = { "%.0f W".format(it) }, unit = "W")
@@ -233,12 +239,13 @@ fun RunDynamicsCard(
             Section(DynamicsSection.CADENCE, isOpen(DynamicsSection.CADENCE), ::toggle) {
                 TileGrid(
                     listOfNotNull(
-                        avgCadence?.let { StatTileSpec("AVG CADENCE", "${it.roundToInt()}", "spm", secondary = (zepp?.maxCadenceSpm ?: cadence.maxOfOrNull { p -> p.value })?.let { m -> "Max ${m.roundToInt()} spm" }) },
+                        avgCadence?.let { StatTileSpec("AVG CADENCE", "${it.roundToInt()}", "spm", secondary = (zepp?.maxCadenceSpm ?: cadence.maxOfOrNull { p -> p.value })?.let { m -> "Max ${m.roundToInt()} spm" }, mark = tileMark(marks?.cadence) { u -> "${u.roundToInt()} spm" }) },
                         zepp?.avgStrideLengthCm?.let {
                             StatTileSpec(
                                 "STRIDE LENGTH", "%.2f".format(it / 100), "m",
                                 secondary = zepp.avgGroundContactMs?.let { g -> "Ground contact ${g.roundToInt()} ms" },
-                                helpTitle = "Stride length and ground contact", helpBody = STRIDE_LENGTH_HELP + "\n\n" + GROUND_CONTACT_HELP,
+                                helpTitle = "Stride length and ground contact", helpBody = STRIDE_LENGTH_HELP + "\n\n" + STRIDE_FOR_PACE_HELP + "\n\n" + GROUND_CONTACT_HELP,
+                                mark = tileMark(marks?.stride) { u -> "%.2f m".format(u / 100) },
                             )
                         },
                     ),
@@ -254,15 +261,35 @@ fun RunDynamicsCard(
         val avgVr = zepp?.avgVerticalStrideRatioPct ?: vr.takeIf { it.isNotEmpty() }?.map { it.value }?.average()
         if (avgVr != null) {
             Section(DynamicsSection.VERTICAL_RATIO, isOpen(DynamicsSection.VERTICAL_RATIO), ::toggle) {
-                TileGrid(listOf(StatTileSpec("AVG VERTICAL RATIO", "%.1f".format(avgVr), "%", helpTitle = "Vertical ratio", helpBody = VERTICAL_RATIO_HELP)))
+                TileGrid(listOf(StatTileSpec("AVG VERTICAL RATIO", "%.1f".format(avgVr), "%", helpTitle = "Vertical ratio", helpBody = VERTICAL_RATIO_HELP, mark = tileMark(marks?.verticalRatio) { u -> "%.1f %%".format(u) })))
             }
             if (isOpen(DynamicsSection.VERTICAL_RATIO) && vr.size >= 2) {
                 LineChart(points = vr, color = FT.TextSecondary, xRange = xRange, pauses = pauses, valueFormat = { "%.1f %%".format(it) }, unit = "% of stride")
             } else if (isOpen(DynamicsSection.VERTICAL_RATIO) && !loading) NoSeries("vertical ratio")
         }
         if (pauses.isNotEmpty()) Text("The charts run on moving time: a dashed line marks each pause and its length.", style = FTType.Caption, color = FT.TextMuted)
+        if (marks != null) Text(marksNote(marks), style = FTType.Caption, color = FT.TextMuted)
     }
 }
+
+// A tile's mark: arrow, word and the usual it was read against (pace and power name the kind of run they compare with).
+private fun tileMark(mark: RunMark?, kind: String? = null, format: (Double) -> String): TileMark? {
+    mark ?: return null
+    val color = when (mark.tone) {
+        MarkTone.IMPROVED -> FT.Emerald
+        MarkTone.REGRESSED, MarkTone.CAUTION -> FT.Warning
+        MarkTone.NEUTRAL -> FT.TextSecondary
+        MarkTone.BUILDING -> FT.TextMuted
+    }
+    val usual = mark.usual?.let { u -> " · usual ${kind?.let { "$it " }.orEmpty()}${format(u)}" }.orEmpty()
+    return TileMark("${mark.symbol} ${mark.word}$usual", color)
+}
+
+private fun marksNote(marks: RunDynamicsMarks): String =
+    "Marks compare this run with your earlier ${if (marks.trail) "trail" else "road"} runs: " +
+        (if (marks.trail) "the median of the last 5 trail runs within 60 days" else "the median of the last 28 days") +
+        "; pace and power with ${marks.categoryLabel} runs only. AS USUAL means inside your normal run-to-run spread. " +
+        "Stride is read against your own stride for that pace over 90 days."
 
 // An open section whose average exists but whose per-second series does not says so, rather than leaving a gap.
 @Composable

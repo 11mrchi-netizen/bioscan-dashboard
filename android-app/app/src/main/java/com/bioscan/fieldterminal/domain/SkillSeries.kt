@@ -82,11 +82,14 @@ data class RunBaseline(val days: Long, val minCount: Int, val lastN: Int? = null
 
     fun line(series: List<Pair<LocalDate, Double>>): List<Pair<LocalDate, Double>> = rollingMedian(series, days, minCount, lastN)
 
-    // The usual value before [date] (that day left out, so a run is never compared with itself), or null while building.
-    fun before(series: List<Pair<LocalDate, Double>>, date: LocalDate): Double? {
+    // The runs that make up "usual" for a run on [date]: earlier days only, so a run is never compared with itself.
+    fun window(series: List<Pair<LocalDate, Double>>, date: LocalDate): List<Double> {
         val window = series.filter { it.first.isBefore(date) && it.first.isAfter(date.minusDays(days)) }.sortedBy { it.first }
-        return medianOf((if (lastN != null) window.takeLast(lastN) else window).map { it.second }, minCount)
+        return (if (lastN != null) window.takeLast(lastN) else window).map { it.second }
     }
+
+    // The usual value before [date], or null while building.
+    fun before(series: List<Pair<LocalDate, Double>>, date: LocalDate): Double? = medianOf(window(series, date), minCount)
 
     companion object {
         val ROAD = RunBaseline(28, 3)

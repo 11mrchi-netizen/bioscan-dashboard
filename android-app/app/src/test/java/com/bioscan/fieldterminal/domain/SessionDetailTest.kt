@@ -81,12 +81,25 @@ class SessionDetailTest {
     }
 
     @Test
-    fun anUnbelievableStoredSpeedFallsBackToDistanceOverMovingTime() {
-        // The bad sync value (6:02/km read as seconds per km), then a believable stored value, then none at all.
+    fun averageSpeedIsDistanceOverMovingTime() {
+        // A stored speed is ignored when there is a distance and a duration: 7.4 km in 41 min is 10.8 km/h whatever the
+        // stored mean of the speed samples says.
+        org.junit.Assert.assertEquals(10.83, sessionAvgSpeedKmh("run", 7.09, 7.4, 41.0)!!, 0.01)
         org.junit.Assert.assertEquals(9.97, sessionAvgSpeedKmh("run", 9944.7, 9.97, 60.0)!!, 0.01)
-        org.junit.Assert.assertEquals(9.4, sessionAvgSpeedKmh("run", 9.4, 12.7, 81.0)!!, 1e-9)
-        org.junit.Assert.assertEquals(9.43, sessionAvgSpeedKmh("run", null, 12.73, 81.0)!!, 0.01)
+        // A pause comes out: the shorter of the stored duration and the workout's moving time.
+        org.junit.Assert.assertEquals(12.0, sessionAvgSpeedKmh("run", null, 10.0, 60.0, movingMin = 50.0)!!, 1e-9)
+        org.junit.Assert.assertEquals(12.0, sessionAvgSpeedKmh("run", null, 10.0, 50.0, movingMin = 55.0)!!, 1e-9)
+        // Without a distance the stored value is the fallback, when believable for the type.
+        org.junit.Assert.assertEquals(9.4, sessionAvgSpeedKmh("run", 9.4, null, 81.0)!!, 1e-9)
         org.junit.Assert.assertNull(sessionAvgSpeedKmh("run", 9944.7, null, 60.0))
         org.junit.Assert.assertEquals(45.0, sessionAvgSpeedKmh("ride", 45.0, 30.0, 40.0)!!, 1e-9)
+    }
+
+    @Test
+    fun movingMinutesLeaveThePausesOut() {
+        val hr = (0..3600L step 60).map { TimePoint(it, 140.0) }
+        val d = SessionDetail(hr, emptyList(), emptyList(), emptyList(), emptyList(), pauses = listOf(SessionPause(1200, 600)))
+        org.junit.Assert.assertEquals(50.0, d.movingMinutes()!!, 1e-9)
+        org.junit.Assert.assertNull(SessionDetail(emptyList(), emptyList(), emptyList(), emptyList(), emptyList()).movingMinutes())
     }
 }

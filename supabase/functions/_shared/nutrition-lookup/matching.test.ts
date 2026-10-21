@@ -1,4 +1,4 @@
-// Run: node supabase/functions/nutrition-cronometer-lookup/matching.test.ts  (Node 22+ strips types)
+// Run: node supabase/functions/_shared/nutrition-lookup/matching.test.ts  (Node 22+ strips types)
 import assert from "node:assert/strict";
 import {
   type CronoFoodDetail,

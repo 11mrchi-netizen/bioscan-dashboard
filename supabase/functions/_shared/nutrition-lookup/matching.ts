@@ -1,4 +1,4 @@
-// Pure matching, portion and reconciliation logic for nutrition-cronometer-lookup (no Deno or network APIs,
+// Pure matching, portion and reconciliation logic for the nutrition lookup (no Deno or network APIs,
 // so it runs under Node for matching.test.ts).
 
 export interface CronoNutrient {

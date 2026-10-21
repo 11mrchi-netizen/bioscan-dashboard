@@ -16,7 +16,9 @@ import {
   gpsOffsets, type Pause, type RoutePoint, splitEntries, workoutStartSec,
 } from "./decodeSeries.ts";
 import { mergedSessionFields, pickSessionMatch, type SessionCandidate, type Span, spanOf, START_TOLERANCE_MS } from "./sessionMatch.ts";
-import { exerciseTypeForZeppSport, summaryDistanceM, takesDistance, trailTaggedDetails, ZEPP_TRAIL_SPORT, zeppDistanceKm } from "./workoutDistance.ts";
+import {
+  exerciseTypeForZeppSport, summaryDistanceM, takesDistance, trailTaggedDetails, ZEPP_TRAIL_SPORT, workoutAvgSpeedKmh, zeppDistanceKm,
+} from "./workoutDistance.ts";
 import { afterWindow, HISTORY_METRICS, type HistoryState, windowDates } from "./historyPull.ts";
 import { buildZeppExercises, doneSets, exercisesFingerprint, parseLapSets, planStrengthDetails } from "./strengthImport.ts";
 
@@ -247,7 +249,8 @@ interface WorkoutRef {
   maxHrBpm: number | null;
   calorieKcal: number | null;
   altitudeAscendM: number | null;
-  avgPaceSecPerKm: number | null;
+  // Seconds per metre, as Zepp's summary gives it (workoutDistance.ts, avgSpeedKmhFromPace).
+  avgPaceSecPerM: number | null;
   distanceSummaryM: number | null;
   // Real Unix epoch ms for the workout start (endSec - runSec). Used to
   // compute per-set startOffsetSec for strength data (strengthAssess.time is
@@ -356,7 +359,7 @@ function extractWorkoutRefs(historyResponse: unknown): WorkoutRef[] {
       maxHrBpm: numOrNull(e.max_heart_rate),
       calorieKcal: numOrNull(e.calorie),
       altitudeAscendM: numOrNull(e.altitude_ascend),
-      avgPaceSecPerKm: numOrNull(e.avg_pace),
+      avgPaceSecPerM: numOrNull(e.avg_pace),
       // Zepp's summary carries `dis` / `highPrecisionDistance` (metres); there is no `distance` key (workoutDistance.ts).
       distanceSummaryM: summaryDistanceM(e),
       realStartMs: hasEnd && hasRun ? startSec * 1000 : 0,
@@ -786,7 +789,7 @@ async function extract(
     // v12: write Zepp-primary aggregates. Prefer smoothedAscentM (GPS-smoothed
     // by effort.ts) over the raw altitude_ascend from the summary. "Zepp wins
     // when > 0" -- skip the update if Zepp has zero/null to avoid clobbering
-    // legitimate HC values. avg_speed_kmh is derived from avg_pace (s/km).
+    // legitimate HC values. avg_speed_kmh is distance over moving time, avg_pace only without them (workoutAvgSpeedKmh).
     if (exerciseSessionId !== null) {
       const smoothedM = decoded?.summary?.smoothedAscentM ?? 0;
       const elevationM = smoothedM > 0 ? smoothedM
@@ -797,7 +800,8 @@ async function extract(
       if ((ref.maxHrBpm ?? 0) > 0)       aggregates.max_hr = ref.maxHrBpm!;
       if ((ref.calorieKcal ?? 0) > 0)    aggregates.calories_active = ref.calorieKcal!;
       if (elevationM !== null)            aggregates.elevation_gain_m = elevationM;
-      if ((ref.avgPaceSecPerKm ?? 0) > 0) aggregates.avg_speed_kmh = (1000 / ref.avgPaceSecPerKm!) * 3.6;
+      const avgSpeed = workoutAvgSpeedKmh(zeppKm, ref.movingMin, ref.avgPaceSecPerM, matchedType);
+      if (avgSpeed !== null) aggregates.avg_speed_kmh = avgSpeed;
       // Matched by overlap rather than start: the stored session's times are another app's (a gym visit, a start pressed
       // early); the workout's own times keep its pace and load right.
       const timing: Record<string, unknown> = {};

@@ -6,6 +6,7 @@ import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
 import com.bioscan.fieldterminal.domain.DistanceInterval
 import com.bioscan.fieldterminal.domain.workoutDistanceMeters
+import com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh
 import androidx.health.connect.client.records.ElevationGainedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
@@ -131,9 +132,13 @@ class HealthConnectExerciseSyncRepository(
         val avgPowerW = powerSamples.map { it.power.inWatts }.average().takeIf { powerSamples.isNotEmpty() }
 
         val speedSamples = client.readAllRecords(SpeedRecord::class, start, end).flatMap { it.samples }
-        val avgSpeedKmh = speedSamples.map { it.speed.inKilometersPerHour }.average().takeIf { speedSamples.isNotEmpty() }
+        val sampleMeanKmh = speedSamples.map { it.speed.inKilometersPerHour }.average().takeIf { speedSamples.isNotEmpty() }
 
         val durationMin = Duration.between(start, end).toMinutes().toDouble()
+        val type = mapHealthConnectExerciseType(session.exerciseType)
+        // Distance over time, as the Zepp sync writes it; the plain mean of the speed samples (unweighted, so it
+        // ran well under distance over time) only when there is no distance.
+        val avgSpeedKmh = sessionAvgSpeedKmh(type, sampleMeanKmh, summedDistanceKm.takeIf { it > 0 }, durationMin)
 
         // Every other real-time-of-day column in this app stores the
         // device's local wall-clock reading labeled with a FAKE zero/UTC
@@ -155,7 +160,7 @@ class HealthConnectExerciseSyncRepository(
         val endLocal = end.atZone(zone).toLocalDateTime().atOffset(ZoneOffset.UTC).toString()
 
         return NewExerciseSessionRow(
-            type = mapHealthConnectExerciseType(session.exerciseType),
+            type = type,
             startTime = startLocal,
             endTime = endLocal,
             durationMin = durationMin,

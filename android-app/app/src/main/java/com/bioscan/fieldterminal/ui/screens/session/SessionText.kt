@@ -28,6 +28,14 @@ internal const val VERTICAL_RATIO_HELP =
     "Vertical oscillation ratio -- how much you bounce up and down relative to your stride length. Lower means more of your effort goes into forward motion rather than bouncing."
 internal const val STRIDE_LENGTH_HELP =
     "Average distance covered per stride. Naturally shorter uphill and on technical terrain, longer on flat, fast sections."
+internal const val STRIDE_FOR_PACE_HELP =
+    "Stride lengthens with speed, so its mark compares it with your own stride at this pace: a straight line through " +
+        "your runs on the same surface over the last 90 days, from 6 runs. LONG FOR THIS PACE (8 % or more over it) is " +
+        "the watch's hint of overstriding: the same speed from fewer, longer steps, which costs energy (Cavanagh & " +
+        "Williams 1982) and loads the knee and hip more than a quicker step (Heiderscheit et al. 2011). Whether the foot " +
+        "really lands ahead of the body only a video shows: try the running form analyser. SHORT FOR THIS PACE is a " +
+        "quicker step for the speed; that is not a known risk by itself, but a sudden drop can mean fatigue, a niggle " +
+        "or slippery ground."
 internal const val LACTATE_THRESHOLD_HELP =
     "Your watch's own rolling estimate of the heart rate and pace you could sustain for about an hour before lactate builds up faster than you can clear it -- recomputed after each qualifying run, not from one dedicated test."
 

@@ -50,13 +50,52 @@ fun trailingWeeklyAverage(buckets: List<WeekBucket>, window: Int = 4): List<Doub
 
 // A trailing median over [days] days at each point's date (that day included), once [minCount] points fall in the
 // window: the 28-day line of the Running page's efficiency and form charts. One run is too noisy to read alone.
-fun rollingMedian(series: List<Pair<LocalDate, Double>>, days: Long = 28, minCount: Int = 3): List<Pair<LocalDate, Double>> {
+// With [lastN], only the newest [lastN] points of the window count (the trail baseline: trail runs are too sparse
+// for a fixed 28 days).
+fun rollingMedian(
+    series: List<Pair<LocalDate, Double>>,
+    days: Long = 28,
+    minCount: Int = 3,
+    lastN: Int? = null,
+): List<Pair<LocalDate, Double>> {
     val sorted = series.sortedBy { it.first }
     return sorted.mapNotNull { (date, _) ->
-        val window = sorted.filter { !it.first.isAfter(date) && it.first.isAfter(date.minusDays(days)) }.map { it.second }.sorted()
-        if (window.size < minCount) null
-        else date to (if (window.size % 2 == 1) window[window.size / 2] else (window[window.size / 2 - 1] + window[window.size / 2]) / 2)
+        val inWindow = sorted.filter { !it.first.isAfter(date) && it.first.isAfter(date.minusDays(days)) }
+        val window = (if (lastN != null) inWindow.takeLast(lastN) else inWindow).map { it.second }
+        medianOf(window, minCount)?.let { date to it }
     }.distinctBy { it.first }
+}
+
+private fun medianOf(values: List<Double>, minCount: Int): Double? {
+    if (values.size < maxOf(1, minCount)) return null
+    val v = values.sorted()
+    return if (v.size % 2 == 1) v[v.size / 2] else (v[v.size / 2 - 1] + v[v.size / 2]) / 2
+}
+
+// What "usual" means for a run metric: the Running page's median line and the session page's marks share it.
+// Road: every run in the last 28 days. Trail: the last 5 trail runs within 60 days, because a trail run comes about
+// once a week, so 28 days never holds enough of them.
+data class RunBaseline(val days: Long, val minCount: Int, val lastN: Int? = null) {
+    val legend: String get() = if (lastN != null) "LAST-$lastN MEDIAN" else "${days}D MEDIAN"
+    val label: String get() = if (lastN != null) "median of the last $lastN runs" else "$days-day median"
+    val needs: String get() = "$minCount runs in $days days"
+
+    fun line(series: List<Pair<LocalDate, Double>>): List<Pair<LocalDate, Double>> = rollingMedian(series, days, minCount, lastN)
+
+    // The runs that make up "usual" for a run on [date]: earlier days only, so a run is never compared with itself.
+    fun window(series: List<Pair<LocalDate, Double>>, date: LocalDate): List<Double> {
+        val window = series.filter { it.first.isBefore(date) && it.first.isAfter(date.minusDays(days)) }.sortedBy { it.first }
+        return (if (lastN != null) window.takeLast(lastN) else window).map { it.second }
+    }
+
+    // The usual value before [date], or null while building.
+    fun before(series: List<Pair<LocalDate, Double>>, date: LocalDate): Double? = medianOf(window(series, date), minCount)
+
+    companion object {
+        val ROAD = RunBaseline(28, 3)
+        val TRAIL = RunBaseline(60, 3, lastN = 5)
+        fun of(trail: Boolean): RunBaseline = if (trail) TRAIL else ROAD
+    }
 }
 
 // One week's kilometres split into parts (the Running page's EASY / TRAIL / QUALITY bars), parts in the caller's order.

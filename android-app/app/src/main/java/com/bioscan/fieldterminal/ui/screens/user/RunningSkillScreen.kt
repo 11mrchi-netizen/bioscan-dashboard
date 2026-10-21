@@ -20,18 +20,17 @@ import com.bioscan.fieldterminal.data.RunFormPoint
 import com.bioscan.fieldterminal.data.RunningHistory
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.DisplayValue
-import com.bioscan.fieldterminal.domain.EF_MIN_RUNS_28D
 import com.bioscan.fieldterminal.domain.HILLS_MIN_M_PER_KM
 import com.bioscan.fieldterminal.domain.PerformanceTimeframe
 import com.bioscan.fieldterminal.domain.QUALITY_Z4_SHARE
 import com.bioscan.fieldterminal.domain.RecordRun
 import com.bioscan.fieldterminal.domain.RunCategory
+import com.bioscan.fieldterminal.domain.RunBaseline
 import com.bioscan.fieldterminal.domain.RunCategoryBasis
 import com.bioscan.fieldterminal.domain.WeekBucket
 import com.bioscan.fieldterminal.domain.bucketWeeklyStacked
-import com.bioscan.fieldterminal.domain.efficiencyRollingMedian28
+import com.bioscan.fieldterminal.domain.efficiencyBaseline
 import com.bioscan.fieldterminal.domain.levels.formatPace
-import com.bioscan.fieldterminal.domain.rollingMedian
 import com.bioscan.fieldterminal.domain.runRecords
 import com.bioscan.fieldterminal.domain.trailingWeeklyAverage
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
@@ -54,7 +53,8 @@ import java.time.format.DateTimeFormatter
 private val DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy")
 
 // Running page (owner's structure, Oct 2026): LEVEL, VOLUME split by kind of run, then one ROAD | TRAIL switch for every
-// card below it (the efficiency and form charts, each per run with its 28-day median, and the records). FITNESS lives on
+// card below it (the efficiency and form charts, each per run with its median line, and the records). The median is
+// RunBaseline: 28 days on road, the last 5 trail runs within 60 days on trail. FITNESS lives on
 // Training › LOAD. Trail runs are recognised from their tag or Zepp's trail sport, so nothing asks to confirm them.
 
 // The three kinds of run, stacked from the bottom in this order (palette checked with the dataviz validator against the
@@ -127,6 +127,7 @@ private fun RunningContent(history: RunningHistory) {
         from = from, today = today,
         valueFormat = { "%+.1f".format(it) }, unit = "% drift · lower = steadier",
         emptyText = "No ${surface.label.lowercase()} runs with a decoupling value in this window.",
+        baseline = RunBaseline.of(trail),
     )
     PaceCard(history, trail, from, today)
     CadenceStrideCard(form, from, today, trail)
@@ -139,6 +140,7 @@ private fun RunningContent(history: RunningHistory) {
             from = from, today = today,
             valueFormat = { "%.0f".format(it) }, unit = "ms",
             emptyText = "No road runs with ground contact in this window.",
+            baseline = RunBaseline.ROAD,
         )
         RawAndMedianCard(
             title = "VERTICAL RATIO",
@@ -147,6 +149,7 @@ private fun RunningContent(history: RunningHistory) {
             from = from, today = today,
             valueFormat = { "%.1f".format(it) }, unit = "% of stride",
             emptyText = "No road runs with a vertical ratio in this window.",
+            baseline = RunBaseline.ROAD,
         )
     }
     RecordsCard(history, trail, today)
@@ -203,8 +206,8 @@ private fun VolumeCard(history: RunningHistory, from: LocalDate, today: LocalDat
 
 // ---- EFFICIENCY AND FORM ----------------------------------------------------------------------------------------------
 
-// One metric per run as dots, with its 28-day median as the line (the median computed on the whole history, so the line
-// starts right at the window's edge). The headline is the latest median.
+// One metric per run as dots, with its baseline median as the line (computed on the whole history, so the line starts
+// right at the window's edge). The headline is the latest median.
 @Composable
 private fun RawAndMedianCard(
     title: String,
@@ -215,8 +218,7 @@ private fun RawAndMedianCard(
     valueFormat: (Double) -> String,
     unit: String,
     emptyText: String,
-    median: (List<Pair<LocalDate, Double>>) -> List<Pair<LocalDate, Double>> = { rollingMedian(it) },
-    minCount: Int = 3,
+    baseline: RunBaseline,
     extra: (List<Pair<LocalDate, Double>>) -> List<TrendSeries> = { emptyList() },
 ) {
     FTCard(title = title, info = info) {
@@ -225,18 +227,18 @@ private fun RawAndMedianCard(
             FTDataState(DataAvailability.Building, emptyText)
             return@FTCard
         }
-        val line = median(all).filter { !it.first.isBefore(from) }
+        val line = baseline.line(all).filter { !it.first.isBefore(from) }
         val latest = line.lastOrNull()?.second
         if (latest != null) {
-            FTMetricValue(DisplayValue(primary = valueFormat(latest), secondary = "28-day median"))
+            FTMetricValue(DisplayValue(primary = valueFormat(latest), secondary = baseline.label))
         } else {
-            val n = all.count { it.first.isAfter(today.minusDays(28)) }
-            Text("Building — the 28-day median needs $minCount runs in 28 days ($n so far).", style = FTType.Caption, color = FT.TextSecondary)
+            val n = all.count { it.first.isAfter(today.minusDays(baseline.days)) }
+            Text("Building — the median needs ${baseline.needs} ($n so far).", style = FTType.Caption, color = FT.TextSecondary)
         }
         DateTrendLine(
             series = listOf(
                 TrendSeries(raw, FT.TextMuted, "PER RUN", dotsOnly = true),
-                TrendSeries(line, skillColor(Skill.RUNNING), "28D MEDIAN"),
+                TrendSeries(line, skillColor(Skill.RUNNING), baseline.legend),
             ) + extra(all),
             valueFormat = valueFormat,
             unit = unit,
@@ -251,70 +253,75 @@ private fun EfficiencyFactorCard(form: List<RunFormPoint>, from: LocalDate, toda
         title = "EFFICIENCY FACTOR",
         info = "Grade-adjusted speed (m/min) ÷ average heart rate, for aerobic runs of 20+ minutes from Zepp. Rising over weeks usually " +
             "means better aerobic fitness. Grade-adjusted speed takes the hills out, which is what lets trail runs have one too; " +
-            "compare a run with its own kind. The median needs $EF_MIN_RUNS_28D runs in 28 days.",
+            "compare a run with its own kind. Road: the median of the last 28 days, once there are ${efficiencyBaseline(false).minCount} runs. " +
+            "Trail: trail runs come about once a week, so the median is of the last 5 trail runs within 60 days, from 3.",
         all = form.series { it.efficiencyFactor },
         from = from, today = today,
         valueFormat = { "%.2f".format(it) }, unit = "EF (m/min per bpm)",
         emptyText = "No ${if (trail) "trail" else "road"} runs with an efficiency factor in this window.",
-        median = ::efficiencyRollingMedian28, minCount = EF_MIN_RUNS_28D,
+        baseline = efficiencyBaseline(trail),
     )
 }
 
 @Composable
 private fun PaceCard(history: RunningHistory, trail: Boolean, from: LocalDate, today: LocalDate) {
     val runs = remember(history, trail) { history.runs.filter { it.trail == trail && it.distanceKm >= 1.0 } }
+    val baseline = RunBaseline.of(trail)
     RawAndMedianCard(
         title = "PACE",
-        info = "Average pace of each run of 1 km or more, with its 28-day median, and grade-adjusted pace (GAP, Zepp runs) as a 28-day " +
-            "median: the pace the same effort would give on the flat. On trail, GAP is the line to follow; raw pace mostly says " +
-            "how steep the ground was. Lower is faster.",
+        info = "Average pace of each run of 1 km or more, with its median, and grade-adjusted pace (GAP, Zepp runs) as a median: " +
+            "the pace the same effort would give on the flat. Road: 28-day medians. Trail: medians of the last 5 trail runs within " +
+            "60 days. On trail, GAP is the line to follow; raw pace mostly says how steep the ground was. Lower is faster.",
         all = runs.map { it.date to it.paceMinPerKm },
         from = from, today = today,
         valueFormat = ::formatPace, unit = "min/km · lower = faster",
         emptyText = "No ${if (trail) "trail" else "road"} runs in this window.",
+        baseline = baseline,
         extra = {
-            val gap = rollingMedian(runs.mapNotNull { r -> r.gapMinPerKm?.let { r.date to it } }).filter { !it.first.isBefore(from) }
-            listOf(TrendSeries(gap, FT.Info, "GAP 28D MEDIAN", dashed = true))
+            val gap = baseline.line(runs.mapNotNull { r -> r.gapMinPerKm?.let { r.date to it } }).filter { !it.first.isBefore(from) }
+            listOf(TrendSeries(gap, FT.Info, "GAP ${baseline.legend}", dashed = true))
         },
     )
 }
 
-// Cadence (per run and its 28-day median) over stride length (28-day median), two panels on one date span and one
+// Cadence (per run and its median) over stride length (median), two panels on one date span and one
 // label gutter so a date sits at the same place in both; two units never share an axis.
 @Composable
 private fun CadenceStrideCard(form: List<RunFormPoint>, from: LocalDate, today: LocalDate, trail: Boolean) {
     FTCard(
         title = "CADENCE · STRIDE LENGTH",
-        info = "Steps per minute per run with its 28-day median, and below it stride length as a 28-day median (Zepp). For the same " +
+        info = "Steps per minute per run with its median, and below it stride length as a median (Zepp; road 28 days, trail the last " +
+            "5 trail runs within 60 days). For the same " +
             "pace, cadence and stride trade off: a rising cadence with a shorter stride is the usual sign of a quicker, lighter step.",
     ) {
         val cadenceAll = form.series { it.cadenceSpm }
         val cadence = cadenceAll.filter { !it.first.isBefore(from) }
-        val cadenceMedian = rollingMedian(cadenceAll).filter { !it.first.isBefore(from) }
-        val stride = rollingMedian(form.series { it.strideCm }).filter { !it.first.isBefore(from) }
+        val baseline = RunBaseline.of(trail)
+        val cadenceMedian = baseline.line(cadenceAll).filter { !it.first.isBefore(from) }
+        val stride = baseline.line(form.series { it.strideCm }).filter { !it.first.isBefore(from) }
         if (cadence.isEmpty() && stride.isEmpty()) {
             FTDataState(DataAvailability.Building, "No ${if (trail) "trail" else "road"} runs with cadence in this window.")
             return@FTCard
         }
         val dates = (cadence + stride).map { it.first }
         val range = dates.min()..dates.max()
-        cadenceMedian.lastOrNull()?.let { FTMetricValue(DisplayValue(primary = "%.0f".format(it.second), unit = "SPM", secondary = "28-day median")) }
+        cadenceMedian.lastOrNull()?.let { FTMetricValue(DisplayValue(primary = "%.0f".format(it.second), unit = "SPM", secondary = baseline.label)) }
         DateTrendLine(
             series = listOf(
                 TrendSeries(cadence, FT.TextMuted, "PER RUN", dotsOnly = true),
-                TrendSeries(cadenceMedian, skillColor(Skill.RUNNING), "28D MEDIAN"),
+                TrendSeries(cadenceMedian, skillColor(Skill.RUNNING), baseline.legend),
             ),
             valueFormat = { "%.0f".format(it) }, unit = "cadence · spm", legend = true,
             dateRange = range, minGutter = 36.dp,
         )
         if (stride.size >= 2) {
             DateTrendLine(
-                series = listOf(TrendSeries(stride, FT.Info, "STRIDE 28D MEDIAN")),
+                series = listOf(TrendSeries(stride, FT.Info, "STRIDE ${baseline.legend}")),
                 valueFormat = { "%.0f".format(it) }, unit = "stride length · cm", legend = true,
                 dateRange = range, minGutter = 36.dp,
             )
         } else {
-            Text("Stride length: its 28-day median needs 3 runs with a stride in 28 days.", style = FTType.Caption, color = FT.TextSecondary)
+            Text("Stride length: its median needs ${baseline.needs} with a stride.", style = FTType.Caption, color = FT.TextSecondary)
         }
     }
 }

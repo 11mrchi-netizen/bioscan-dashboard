@@ -234,3 +234,7 @@ const val EF_MIN_RUNS_28D = 6
 
 fun efficiencyRollingMedian28(series: List<Pair<LocalDate, Double>>): List<Pair<LocalDate, Double>> =
     rollingMedian(series, 28, EF_MIN_RUNS_28D)
+
+// The efficiency factor's baseline: on road the 28-day gate above; on trail, where 28 days holds at most four or
+// five runs, the trail baseline (last 5 trail runs within 60 days, from 3).
+fun efficiencyBaseline(trail: Boolean): RunBaseline = if (trail) RunBaseline.TRAIL else RunBaseline(28, EF_MIN_RUNS_28D)

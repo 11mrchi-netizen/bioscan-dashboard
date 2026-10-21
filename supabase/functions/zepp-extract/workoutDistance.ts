@@ -45,6 +45,39 @@ export function exerciseTypeForZeppSport(sportType: string): string {
   }
 }
 
+/** Fastest believable average speed per session type, km/h; above it the value is a unit error, not a workout. */
+const MAX_AVG_SPEED_KMH: Record<string, number> = { run: 30, walk: 12, hike: 15, ride: 90 };
+
+/**
+ * A workout's average speed in km/h from the summary's `avg_pace`, which is seconds per METRE (0.362 is 6:02/km;
+ * checked against run_time / dis on stored workouts). Reading it as seconds per km stored speeds of thousands of km/h
+ * (Oct 2026). Null when there is no pace or the speed is not believable for the session type.
+ */
+export function avgSpeedKmhFromPace(paceSecPerM: number | null | undefined, type: string | null | undefined): number | null {
+  if (typeof paceSecPerM !== "number" || !Number.isFinite(paceSecPerM) || paceSecPerM <= 0) return null;
+  const kmh = 3.6 / paceSecPerM;
+  const max = MAX_AVG_SPEED_KMH[type ?? ""] ?? 120;
+  return kmh <= max ? kmh : null;
+}
+
+/**
+ * A workout's average speed in km/h: its distance over moving time (the list entry's run_time), as the watch shows it.
+ * Zepp's avg_pace is only the fallback without both: on interval and hill sessions it ran up to a third slower than
+ * distance over time (Oct 2026). Null when neither gives a speed believable for the session type.
+ */
+export function workoutAvgSpeedKmh(
+  distanceKm: number | null | undefined,
+  movingMin: number | null | undefined,
+  paceSecPerM: number | null | undefined,
+  type: string | null | undefined,
+): number | null {
+  if (typeof distanceKm === "number" && typeof movingMin === "number" && distanceKm > 0 && movingMin > 0) {
+    const kmh = distanceKm / (movingMin / 60);
+    if (Number.isFinite(kmh) && kmh <= (MAX_AVG_SPEED_KMH[type ?? ""] ?? 120)) return kmh;
+  }
+  return avgSpeedKmhFromPace(paceSecPerM, type);
+}
+
 /** Distances only make sense for these session types; a strength session keeps none. */
 export function takesDistance(type: string | null | undefined): boolean {
   return type === "run" || type === "ride" || type === "walk" || type === "hike";

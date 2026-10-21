@@ -39,14 +39,51 @@ Left for its own plan: injury risk from past data. The running form analyser ope
   - Checked read-only against the 14 runs tagged when this was built: all 11 tagged road runs land in their own
     group. Heart rate alone missed both hill sessions, which is why climb comes first.
 - **ROAD | TRAIL**, one switch for every card below it:
-  - EFFICIENCY FACTOR, HR DECOUPLING, PACE (with grade-adjusted pace as a 28-day median line), CADENCE over STRIDE
+  - EFFICIENCY FACTOR, HR DECOUPLING, PACE (with grade-adjusted pace as a median line), CADENCE over STRIDE
     LENGTH (two panels on one date span), GROUND CONTACT and VERTICAL RATIO.
-  - Each is per run with its 28-day median (`rollingMedian`, 3 runs; the efficiency factor keeps its 6).
+  - Each is per run with its median line (`RunBaseline` in `domain/SkillSeries.kt`):
+    - road: the 28-day median, from 3 runs (the efficiency factor keeps its 6);
+    - trail: the median of the last 5 trail runs within 60 days, from 3, because trail runs come about once a week.
   - Ground contact and vertical ratio are hidden on TRAIL: the watch reports neither on trail runs.
 - **RECORDS**, by the same switch. Road: longest, fastest of 5 km or more, biggest week. Trail: longest, biggest
   climb, fastest grade-adjusted pace over 10 km or more, biggest week.
 - FITNESS (VO2max, lactate threshold) is on Training › LOAD. Trail runs need no confirming: the Zepp sync tags them
   (`docs/zepp-integration/04-data-model-and-provenance.md`).
+
+## Run session page: RUN DYNAMICS
+
+- Sections HEART RATE, PACE, POWER, CADENCE, VERTICAL RATIO. Each opens with its tiles followed by its chart over the run.
+  A tap folds a section; the fold is kept for every run, on the phone only (`RunPageSettingsStore`).
+  - Power over time comes from Health Connect on the phone; Zepp stores none. An open section without a series says so.
+- Average pace is distance over moving time (`sessionAvgSpeedKmh`): the shorter of the stored duration and the Zepp
+  workout's elapsed time less its pauses. The stored `avg_speed_kmh` is only the fallback without a distance.
+- Both writers now store `avg_speed_kmh` as distance over time (21 Oct 2026):
+  - the Zepp sync as its distance over moving time (`run_time`), with `avg_pace` only without them
+    (`workoutAvgSpeedKmh`);
+  - the Health Connect sync as distance over the session's span, with the mean of the speed samples only without a
+    distance. It upserts the whole row on every re-sync, so for a paused run its value includes the pause.
+- What was there before: the Health Connect sync stored a plain mean of the speed samples, and the Zepp sync read
+  `avg_pace` (seconds per metre) as seconds per km. Even read right, `avg_pace` ran up to a third slower than
+  distance over time on interval and hill sessions. Two repairs on 21 Oct 2026:
+  - 106 rows that stored a 1000-times speed were divided back;
+  - 88 runs, rides and hikes were set to distance over moving time.
+  - Walks were left as they are: their distances and durations disagree too widely (133 would be over 12 km/h) for
+    distance over time to be a better number.
+- Marks against usual (`domain/RunMarks.kt`) under the tiles: arrow, word and the usual value.
+  - Usual is the median of earlier runs (`RunBaseline`): road the last 28 days, trail the last 5 trail runs within 60
+    days, from 3 runs; the efficiency factor on road keeps its 6.
+  - AS USUAL inside the normal run-to-run spread: the robust SD of those runs, with a floor (efficiency factor, pace and power 3 %,
+    decoupling 2 points, cadence 3 spm, vertical ratio 0.3 points).
+  - IMPROVED / REGRESSED only where a direction is better: efficiency factor (higher), HR decoupling and vertical
+    ratio (lower).
+  - Pace and power compare with runs of the same kind (easy, quality or trail) and only say FASTER / SLOWER or
+    HIGHER / LOWER. Cadence says HIGHER / LOWER against the same surface.
+  - Stride length is read for the pace: a straight line through the same surface's runs over 90 days (stride against
+    speed, from 6 runs). LONG FOR THIS PACE at 8 % or more over the line is the watch's hint of overstriding; the form
+    analyser is what shows where the foot lands. SHORT FOR THIS PACE is a quicker step, not a risk by itself. Outside
+    the paces of those runs there is no verdict.
+  - Replayed read-only on the road runs since July 2026: 38 of 46 read usual for the pace, 4 long, 2 short, 2 outside
+    the range; the line's run-to-run spread is about 5 %, so 8 % is roughly 1.7 times it.
 
 ## The six content changes
 

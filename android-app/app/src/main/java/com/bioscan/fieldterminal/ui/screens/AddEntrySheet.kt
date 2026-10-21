@@ -55,6 +55,7 @@ import com.bioscan.fieldterminal.data.CronometerEnrichment
 import com.bioscan.fieldterminal.data.CronometerItemInput
 import com.bioscan.fieldterminal.data.NutritionBarcodeLookupRepository
 import com.bioscan.fieldterminal.data.NutritionCronometerLookupRepository
+import com.bioscan.fieldterminal.data.labelEnrichment
 import com.bioscan.fieldterminal.data.NutritionImageEstimateRepository
 import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
@@ -908,7 +909,7 @@ private fun FoodForm(
                     fiberG = enrichResult.fiberG,
                     sugarG = enrichResult.sugarG,
                     sodiumMg = enrichResult.sodiumMg,
-                    confidence = 0.85,
+                    confidence = enrichResult.confidence,
                 )
                 mealEstimateId = null
             } catch (e: Exception) {
@@ -936,8 +937,24 @@ private fun FoodForm(
                     val foodDesc = if (food.brand != null) "${food.name} (${food.brand})" else food.name
                     enriching = true
                     try {
-                        val enrichResult = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
-                            .enrichItems(listOf(CronometerItemInput(food.name)))
+                        // The package label first; Cronometer (at the label's serving weight) only adds micronutrients.
+                        val label = try {
+                            NutritionBarcodeLookupRepository(SupabaseClientProvider.client).labelPortion(food.id)
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            null
+                        }
+                        val looked = try {
+                            NutritionCronometerLookupRepository(SupabaseClientProvider.client)
+                                .enrichItems(listOf(CronometerItemInput(food.name, quantityG = label?.grams)))
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            if (label == null) throw e
+                            null
+                        }
+                        val enrichResult = if (label != null) labelEnrichment(foodDesc, label, looked) else looked!!
                         cronometerEnrichment = enrichResult
                         mealEstimate = NutritionMealEstimate(
                             description = foodDesc,
@@ -948,7 +965,7 @@ private fun FoodForm(
                             fiberG = enrichResult.fiberG,
                             sugarG = enrichResult.sugarG,
                             sodiumMg = enrichResult.sodiumMg,
-                            confidence = 0.9,
+                            confidence = enrichResult.confidence,
                         )
                         mealEstimateId = null
                     } catch (_: Exception) {

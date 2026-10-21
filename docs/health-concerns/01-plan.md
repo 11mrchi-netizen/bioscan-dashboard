@@ -1,6 +1,8 @@
 # Health concerns: longitudinal injury, symptom and illness intelligence (plan)
 
-Status: plan, nothing built. Base: `main` plus every commit of PR #20 (`ccr-b7b17b42-flzlrb`, merged into this branch).
+Status: built on this branch except deployment (see [README.md](README.md) for what is where and the deploy order, and
+[02-validation.md](02-validation.md) for the simulation results). Base: `main` plus every commit of PR #20
+(`ccr-b7b17b42-flzlrb`, merged into this branch).
 Scope: replace the crude injury/illness logging with a system that shows what repeatedly happens, which factors go
 with it, how a problem evolves, how strong the evidence is, and what observation or experiment would clarify it.
 It is personal health intelligence, not diagnosis: no diagnosis is required, no injury prediction, no rehab plan.
@@ -478,6 +480,10 @@ enough to build from).
 ## 6. Roadmap (milestones → issues; acceptance criteria)
 
 Dependencies: M0 → M1 → (M2 ∥ M3) → M4 → M5 → M6 → M7. M3's engine can start on synthetic data while M2 builds capture.
+
+Done on this branch: H-01 to H-28, H-30 (registry and contract R9). Partly: H-29 (the app no longer writes the legacy
+tables and the web dashboard and console read `v_health_events`; dropping the legacy insert policies waits one release,
+owner decision 7.2.7). Not done here: deployment, and compiling the Android UI (no Android SDK in the build container).
 
 ### M0 · Decisions and vocabulary (small)
 - **H-01** Confirm the open decisions in §7.2 (placement, reminder time, thresholds, legacy merge). *AC*: answers recorded in this doc.

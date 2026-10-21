@@ -249,6 +249,7 @@ export function sessionLevel(ctx: ExposureContext, cells: DayCell[], episodes: E
   // symptoms against the comparison, diluting any difference; such sessions are left out of the comparison.
   const exposedDays = ctx.sessions.filter((s) => kind.sport(s) && kind.kind(s)).map((s) => s.date)
   const shadowed = (d: string) => exposedDays.some((x) => x < d && d <= shiftDate(x, window[1]))
+  const sportDays = [...new Set(ctx.sessions.filter((s) => kind.sport(s)).map((s) => s.date))]
   for (const s of [...ctx.sessions].sort((a, b) => (a.start_time < b.start_time ? -1 : 1))) {
     if (!kind.sport(s) || (since !== undefined && s.date <= since)) continue
     // One session per day and sport (a second run the same day shares its follow-up days).
@@ -260,7 +261,13 @@ export function sessionLevel(ctx: ExposureContext, cells: DayCell[], episodes: E
     for (let k = 0; k <= window[1]; k++) { const c = byDate.get(shiftDate(s.date, k)); if (c) follow.push(c) }
     if (!follow.some((c) => c.observed)) continue
     seenDay.add(key)
-    const followed = follow.some((c) => c.present) || episodes.some((e) => e.start >= s.date && e.start <= shiftDate(s.date, window[1]))
+    // Followed = a flare-up started within the window. Each flare-up is credited to the last session of the sport before
+    // it: an earlier session whose window also held it is left out, so one flare-up is never counted for two sessions
+    // (overlapping windows made the counts look more certain than they are).
+    const end = shiftDate(s.date, window[1])
+    const onset = episodes.map((e) => e.start).filter((d) => d >= s.date && d <= end).sort()[0]
+    if (onset !== undefined && sportDays.some((d) => d > s.date && d <= onset)) continue
+    const followed = onset !== undefined
     const isKind = kind.kind(s)
     if (!isKind && shadowed(s.date)) continue
     if (isKind) {

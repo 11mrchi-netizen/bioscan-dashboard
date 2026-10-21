@@ -153,7 +153,7 @@ fun HealthCheckInSheet(
                 val a = answers[c.id]
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(c.title.uppercase(), style = FTType.LabelCaps, color = FT.TextPrimary)
-                    o?.lastSeverity?.let { Text("Last: $it/10 on ${shortDate(o.lastObserved)}", style = FTType.Caption, color = FT.TextMuted) }
+                    if (o?.lastSeverity != null) Text("Last: ${o.lastSeverity}/10 on ${shortDate(o.lastObserved)}", style = FTType.Caption, color = FT.TextMuted)
                     TextChipRow(CHANGE_LABELS, a?.change?.name?.uppercase(), perRow = 4) { picked ->
                         if (picked == null) answers.remove(c.id) else {
                             val change = ConcernChange.entries.first { it.name.uppercase() == picked }

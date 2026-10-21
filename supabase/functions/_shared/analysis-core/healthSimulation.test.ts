@@ -4,8 +4,9 @@
 // run; check-ins 1.8x as frequent during flare-ups as between them). The engine is re-run with its ledger as the nightly
 // job would. Gates (measured values with larger runs in docs/health-concerns/02-validation.md):
 //   no effect: at most 5% of concerns ever show POSSIBLE in a year, at most 1% PERSISTENT
-//   planted 3x: the trail-run finding is POSSIBLE within two years in at least a quarter of runs. Power is limited by the
-//   number of flare-ups (about ten a year); the safeguards are not loosened to buy more of it.
+//   planted 3x: the trail-run finding is POSSIBLE within two years in at least a quarter of these 30 seeded runs (the
+//   100-run estimate is 21%: power is limited by the number of flare-ups, and the safeguards are not loosened to buy it).
+// The seeds are fixed, so these are regression guards; the estimates to quote are in 02-validation.md.
 // Kept small enough for CI; the larger runs (weekly re-checks, two years without an effect, more effect sizes) are
 // reproduced with: node supabase/functions/_shared/analysis-core/healthSimMeasure.ts <null|planted> <runs> <effect> <step> <days>
 import assert from 'node:assert/strict'

@@ -14,11 +14,17 @@ import androidx.work.WorkerParameters
 import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.model.NotificationOutcome
 import com.bioscan.fieldterminal.domain.notifications.ShownEntry
+import com.bioscan.fieldterminal.domain.bodyCheckinNeeded
+import com.bioscan.fieldterminal.domain.checkinDateFor
+import com.bioscan.fieldterminal.domain.eveningCheckinNeeded
 import com.bioscan.fieldterminal.domain.notifications.eveningLogNeeded
 import com.bioscan.fieldterminal.domain.notifications.wellbeingCheckinNeeded
 import com.bioscan.fieldterminal.domain.notifications.nextFireTime
 import com.bioscan.fieldterminal.domain.notifications.supplementsDueForBucket
 import com.bioscan.fieldterminal.domain.notifications.withinLimits
+import com.bioscan.fieldterminal.domain.notifications.FUEL_PROMPT_WINDOW_MIN
+import com.bioscan.fieldterminal.domain.notifications.dueFuelPrompts
+import com.bioscan.fieldterminal.domain.notifications.fuelPrompts
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -97,7 +103,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                     "Morning check-in" to "Log your morning readiness"
 
                 NotificationKind.CHECKIN_EVENING ->
-                    "Evening check-in" to "Log how your day went"
+                    "Evening note" to "Log how your day went"
 
                 NotificationKind.WELLBEING_CHECKIN -> {
                     // A failed lookup must not suppress or invent a prompt: skip this run and try again at the next window.
@@ -111,6 +117,20 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                     val saved = runCatching { repo.countSavedAgentMessagesSince(startOfLocalDay) }.getOrElse { continue }
                     if (rule.conditions.skipIfLogged && !eveningLogNeeded(saved)) continue
                     "Anything to log today?" to "Drinks, supplements, recovery: say it in one message"
+                }
+
+                // Analysis review phase B: the structured check-in. A failed lookup skips this window rather than nagging.
+                NotificationKind.EVENING_CHECKIN -> {
+                    val saved = runCatching { EveningCheckinRepository(supabase).load(checkinDateFor(now)) }.getOrElse { continue }
+                    if (rule.conditions.skipIfLogged && !eveningCheckinNeeded(saved)) continue
+                    "Evening check-in" to "Drinks, caffeine after 14:00, a late meal: one tap each"
+                }
+
+                // The monthly body check-in: a failed lookup skips this window rather than nagging.
+                NotificationKind.BODY_CHECKIN -> {
+                    val last = runCatching { BodyCheckinRepository(supabase).lastCheckinDate() }.getOrElse { continue }
+                    if (rule.conditions.skipIfLogged && !bodyCheckinNeeded(last, today)) continue
+                    "Monthly body check-in" to "Grip, tape and skinfolds: before breakfast, about 15 minutes"
                 }
 
                 else -> continue
@@ -134,6 +154,37 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
 
             nm.notify(rule.kind.hashCode(), notification)
             runCatching { repo.appendLog(rule.kind, NotificationOutcome.SHOWN) }
+        }
+
+        // Fuel planning: reminders relative to planned sessions and races, not to clock times.
+        val fuelRules = rules.filter { it.enabled && it.kind in NotificationKind.FUEL }.associateBy { it.kind }
+        if (fuelRules.isNotEmpty() && prefs.masterEnabled) {
+            val days = runCatching { PlannedDayRepository(supabase).load(today, days = 3) }.getOrNull()
+            if (days != null) {
+                val shownKeys = runCatching { repo.loadShownSince(dayStart.minusSeconds(3 * 86_400L)) }.getOrElse { emptyList() }
+                    .mapNotNull { it.dedupeKey }.toSet()
+                val due = dueFuelPrompts(
+                    fuelPrompts(days, NotificationKind.FUEL_SESSION, NotificationKind.FUEL_EVENT),
+                    prefs, now.minusMinutes(FUEL_PROMPT_WINDOW_MIN), now, shownKeys,
+                )
+                val shown = shownToday.toMutableList()
+                for (p in due) {
+                    val rule = fuelRules[p.kind] ?: continue
+                    if (!withinLimits(rule, prefs, now, shown)) continue
+                    val n = NotificationCompat.Builder(applicationContext, p.kind)
+                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .setContentTitle(p.title)
+                        .setContentText(p.body)
+                        .setStyle(NotificationCompat.BigTextStyle().bigText(p.body))
+                        .setPriority(if (p.kind == NotificationKind.FUEL_EVENT) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+                        .setAutoCancel(true)
+                        .setContentIntent(NotificationActionReceiver.contentIntent(applicationContext, p.kind))
+                        .build()
+                    nm.notify(p.key.hashCode(), n)
+                    runCatching { repo.appendLog(p.kind, NotificationOutcome.SHOWN, dedupeKey = p.key) }
+                    shown += ShownEntry(p.kind, now)
+                }
+            }
         }
 
         return Result.success()

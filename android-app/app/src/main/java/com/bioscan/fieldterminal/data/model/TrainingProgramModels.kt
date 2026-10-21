@@ -44,6 +44,9 @@ data class TrainingSettingsRow(
 )
 
 @Serializable
+data class ZoneMethodRow(@SerialName("hr_zone_method") val method: String? = null)
+
+@Serializable
 data class AthleteMaxRow(
     val id: Long = 0,
     @SerialName("exercise_key") val exerciseKey: String,

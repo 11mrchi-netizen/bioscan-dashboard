@@ -339,6 +339,7 @@ export function blockPermutationP(
   const tail = cause.slice(blocks * block)
   const order = Array.from({ length: blocks }, (_, i) => i)
   let hits = 0
+  let valid = 0
   for (let r = 0; r < reps; r++) {
     for (let i = blocks - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1))
@@ -352,9 +353,14 @@ export function blockPermutationP(
     const pr = pairedLag(perm, target, lag)
     if (pr.x.length < minPairs) continue
     const s = stat(pr.x, pr.y)
-    if (Number.isFinite(s) && Math.abs(s) >= r0 - 1e-12) hits++
+    if (!Number.isFinite(s)) continue
+    valid++
+    if (Math.abs(s) >= r0 - 1e-12) hits++
   }
-  return (hits + 1) / (reps + 1)
+  // Analysis review B4: skipped shuffles used to stay in the denominator, which pushed p down when sparse overlap made
+  // many of them unusable. Only shuffles that produced a statistic count; too few of them is no evidence at all.
+  if (valid < Math.min(reps, 100)) return 1
+  return (hits + 1) / (valid + 1)
 }
 
 // ---- Analysis Layer 3 / Phase 5: Student t helpers for the N-of-1 experiments ----

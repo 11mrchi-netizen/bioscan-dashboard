@@ -5,6 +5,7 @@ import { supabase } from './supabase'
 import { TABLES_WITH_SOURCE } from './schema'
 import { SeriesCache } from './metricCache'
 import {
+  aggregatePoints,
   assembleResult,
   errorResult,
   metricIdOf,
@@ -36,18 +37,27 @@ async function query(table: string, dateCol: string, columns: string[], req: Met
   // No table has `confidence` or `provenance` columns (see lib/schema.ts); only select `source` where it exists.
   const hasSource = TABLES_WITH_SOURCE.has(table)
   const select = [dateCol, ...columns, ...(hasSource ? ['source'] : [])].join(', ')
-  let q = supabase
-    .from(table)
-    .select(select)
-    .gte(dateCol, req.range.start)
-    .lte(dateCol, req.range.end)
-    .order(dateCol)
-  if (req.extraFilters) {
-    for (const [k, v] of Object.entries(req.extraFilters)) q = q.eq(k, v)
+  // Analysis review A6: paged. PostgREST stops at its row cap (1,000 by default on Supabase), which silently cut long
+  // ranges; keep asking for the next page until a short one comes back.
+  const PAGE = 1000
+  const rows: Row[] = []
+  for (let from = 0; ; from += PAGE) {
+    let q = supabase
+      .from(table)
+      .select(select)
+      .gte(dateCol, req.range.start)
+      .lte(dateCol, req.range.end)
+      .order(dateCol)
+    if (req.extraFilters) {
+      for (const [k, v] of Object.entries(req.extraFilters)) q = q.eq(k, v)
+    }
+    countRequest(table, columns)
+    const { data, error } = await q.range(from, from + PAGE - 1)
+    if (error) return { rows: [], error: error.message }
+    const page = (data ?? []) as unknown as Row[]
+    rows.push(...page)
+    if (page.length < PAGE) return { rows, error: null }
   }
-  countRequest(table, columns)
-  const { data, error } = await q
-  return { rows: (error ? [] : (data ?? [])) as unknown as Row[], error: error ? error.message : null }
 }
 
 function toPoints(rows: Row[], dateCol: string, column: string): MetricPoint[] {
@@ -68,7 +78,7 @@ export async function fetchMetric(req: MetricRequest): Promise<MetricResult> {
   return cache.dedupe(`${cache.seriesKey(req)}|${req.range.start}|${req.range.end}`, async () => {
     const { rows, error } = await query(req.table, dateCol, [req.column], req)
     if (error) return errorResult(req, error)
-    const points = toPoints(rows, dateCol, req.column)
+    const points = aggregatePoints(toPoints(rows, dateCol, req.column), req.aggregation)
     cache.store(req, points)
     return assembleResult(req, points)
   })
@@ -97,7 +107,7 @@ export async function fetchMetrics(reqs: MetricRequest[]): Promise<MetricResult[
     for (const i of idx) {
       const req = reqs[i]
       if (error) { results[i] = errorResult(req, error); continue }
-      const points = toPoints(rows, dateCol, req.column)
+      const points = aggregatePoints(toPoints(rows, dateCol, req.column), req.aggregation)
       cache.store(req, points)
       results[i] = assembleResult(req, points)
     }

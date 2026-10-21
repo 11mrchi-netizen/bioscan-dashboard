@@ -6,14 +6,14 @@
       "key": "heart_rate_instant",
       "docName": "Heart rate (instantaneous)",
       "kind": "raw",
-      "methodology": "Per-sample heart rate as reported by the watch. Not stored per sample in the app database; only session-level and daily aggregates are kept.",
+      "methodology": "Per-sample heart rate as reported by the watch. For Zepp workouts the per-second series is stored with the workout (zepp_workout_detail.decoded) and drawn on the session's chart, colour-coded by zone; the workout's seconds per bpm are also kept as a small histogram for the weekly intensity split. Other sessions keep only session-level and daily aggregates; Health Connect series are read on demand.",
       "limitations": [
         "Optical heart-rate sensors lose accuracy during high-intensity, irregular-motion and cold-weather activity.",
-        "Not available at sample resolution in this app."
+        "Sessions without a Zepp record have no stored per-sample series."
       ],
       "references": [],
       "productDefined": false,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "1.1.0"
     },
     {
       "key": "heart_rate_session_avg",
@@ -412,10 +412,10 @@
       "key": "training_load",
       "docName": "Training load (CTL/ATL/TSB)",
       "kind": "modeled",
-      "methodology": "Session load = minutes x RPE, summed per day. Chronic load (CTL) is an exponentially weighted average with a 42-day time constant, acute load (ATL) with a 7-day constant, and form (TSB) is CTL minus ATL. Sessions without an RPE contribute nothing; nothing is imputed. CTL needs 42 days of history.",
+      "methodology": "Session load = minutes x RPE when an RPE was logged, otherwise Banister's TRIMP from average heart rate against the person's maximum and resting heart rate as of the session's date (see TRIMP); a session with neither contributes nothing, nothing is imputed. Loads are summed per day. Fitness (CTL) and fatigue (ATL) are exponentially weighted averages with spans of 42 and 7 days (alpha = 2 / (span + 1)), and form (TSB) is yesterday's CTL minus ATL. Since October 2026 the spans can be your own: every night a pair is fitted to forecast tomorrow morning's ln HRV (from today's ln HRV, the weekday, fitness and fatigue) and tested on weeks the fit never saw (rolling origin, log score); it replaces 42 and 7, in the app and the console alike, only when it forecasts better (the 95% Newey-West interval of the daily score difference above zero, the PREDICTIVE rung). CTL needs 42 days of history.",
       "limitations": [
-        "Time constants are population conventions, not fitted to you.",
-        "Needs an RPE on each session; unlogged sessions understate load.",
+        "The spans are population conventions unless your own pair beat them on held-out weeks, and a personal pair is fitted to HRV, not to performance.",
+        "Sessions with neither an RPE nor heart rate understate load.",
         "The web dashboard still computes a different ratio (ACWR) from the same sessions."
       ],
       "references": [
@@ -426,27 +426,41 @@
         {
           "citation": "Foster C, Florhaug JA, Franklin J, et al. A new approach to monitoring exercise training. J Strength Cond Res 2001;15(1):109-115.",
           "doi": null
+        },
+        {
+          "citation": "Gneiting T, Raftery AE. Strictly proper scoring rules, prediction, and estimation. J Am Stat Assoc 2007;102(477):359-378.",
+          "doi": "10.1198/016214506000001437"
+        },
+        {
+          "citation": "Tashman LJ. Out-of-sample tests of forecasting accuracy: an analysis and review. Int J Forecast 2000;16(4):437-450.",
+          "doi": "10.1016/S0169-2070(00)00065-0"
         }
       ],
       "productDefined": false,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "2.1.0"
     },
     {
       "key": "trimp",
       "docName": "TRIMP",
       "kind": "modeled",
-      "methodology": "Heart-rate-reserve weighted training impulse. Specified but not yet implemented in the app.",
+      "methodology": "Banister's training impulse: minutes x heart-rate-reserve fraction x 0.64 x e^(1.92 x fraction), with the fraction (average - resting) / (maximum - resting) capped at 1. The maximum and resting heart rate are the person's as of the session's date: the second-highest session maximum of the 24 months up to it (so one optical spike cannot set it) and the 30-day median resting heart rate. It is the load of every session without an RPE. Until October 2026 the fraction divided by the session's own maximum, which made easy sessions score about twice what they should.",
       "limitations": [
-        "Needs per-minute heart rate and a maximum heart rate; not available for most sessions."
+        "Average heart rate hides how the session was spread: an interval session and a steady one with the same average score alike.",
+        "Male coefficients (0.64, 1.92) are used for everyone; the female pair (0.86, 1.67) is not applied yet.",
+        "The maximum is the highest values the watch saw, not a tested maximum, and drifts with what the sessions reached."
       ],
       "references": [
         {
           "citation": "Banister EW, Calvert TW. Planning for future performance: implications for long term training. Can J Appl Sport Sci 1980;5(3):170-176.",
           "doi": null
+        },
+        {
+          "citation": "Banister EW. Modeling elite athletic performance. In: MacDougall JD, Wenger HA, Green HJ, eds. Physiological Testing of the High-Performance Athlete. 2nd ed. Champaign, IL: Human Kinetics; 1991:403-424.",
+          "doi": null
         }
       ],
       "productDefined": false,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "2.0.0"
     },
     {
       "key": "threshold_intensity",
@@ -517,27 +531,56 @@
       "key": "sleep_index",
       "docName": null,
       "kind": "composite",
-      "methodology": "A 0 to 100 index that aggregates the existing sleep evaluations (duration, regularity, respiratory anomaly, stages) with named fixed weights. It shows how close your recent week is to your own norm, never a universal target. At least two components are required.",
+      "methodology": "A 0 to 100 index that aggregates the existing sleep evaluations (duration, regularity, respiratory anomaly, stages) with named fixed weights. It shows how close your recent week is to your own norm, never a universal target: duration and stages count against their own 60-day means, capped at 100. At least two components are required. One set of cut-offs, shared with Today's recovery: AS EXPECTED from 75, BELOW EXPECTED under 75, UNUSUALLY LOW under 55; it has no ABOVE EXPECTED, since a week cannot score better than its own norm. Since October 2026 it carries a scorecard worked out on your own history: every past morning it is recomputed as it would have read then and turned into a forecast of the day's energy and that morning's HRV against its recent level by a straight line fitted only on the days before (the last 120 with an outcome); the forecast is scored once the outcome is known (log score of a Gaussian forecast), and each of its single inputs is scored the same way on the same days. It EARNS ITS PLACE when it beats its best single input (the 95% Newey-West interval of the daily score difference above zero), is NO BETTER when it cannot be more than negligibly better, and then is shown as its inputs, without its own word (INPUTS ONLY); otherwise UNCLEAR, or NOT YET SCORED before 60 scored days. It is demoted only when it is no better on both outcomes; its main rival is last night's duration alone.",
       "limitations": [
         "Product-defined: weights are documented opinions, not fitted or clinically validated.",
-        "Not comparable between people."
+        "Not comparable between people.",
+        "The 75 and 55 cut-offs are product-defined."
       ],
-      "references": [],
+      "references": [
+        {
+          "citation": "Gneiting T, Raftery AE. Strictly proper scoring rules, prediction, and estimation. J Am Stat Assoc 2007;102(477):359-378.",
+          "doi": "10.1198/016214506000001437"
+        },
+        {
+          "citation": "Diebold FX, Mariano RS. Comparing predictive accuracy. J Bus Econ Stat 1995;13(3):253-263.",
+          "doi": "10.1080/07350015.1995.10524599"
+        },
+        {
+          "citation": "Tashman LJ. Out-of-sample tests of forecasting accuracy: an analysis and review. Int J Forecast 2000;16(4):437-450.",
+          "doi": "10.1016/S0169-2070(00)00065-0"
+        }
+      ],
       "productDefined": true,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "2.0.0"
     },
     {
       "key": "dynamic_recovery",
       "docName": null,
       "kind": "composite",
-      "methodology": "A recovery state built from separate contributors (sleep index, HRV, resting heart rate, training load, optionally Zepp stress). Each keeps its own direction and confidence; they are listed, not blended into one score. At least two contributors are required for a state.",
+      "methodology": "A recovery state built from separate contributors (the Sleep Index, HRV and resting heart rate as 7-day against 60-day baselines, training load, energy, stress and soreness, optionally Zepp stress). Each keeps its own direction and confidence; they are listed, not blended into one score. At least two contributors are required for a state. Since October 2026 (v2) the state weighs them instead of needing them to agree: HRV, resting heart rate, the Sleep Index, training load and Zepp stress are one vote each (+1, 0 or -1), and the subjective answers (energy, stress, soreness, morning erection, arousal) are one vote together, their mean. ABOVE EXPECTED when the net lean is at least a quarter of the votes up, BELOW EXPECTED when it is a quarter down, MIXED SIGNALS only when each side carries at least a third of the votes and neither wins by a quarter, AS EXPECTED otherwise. Under v1 any disagreement read MIXED SIGNALS, and during training, when load points down, a clearly good morning could read nothing else. The Sleep Index counts with its own cut-offs: as expected (75 or more) it is neutral, below that it holds recovery back. Since October 2026 it carries a scorecard worked out on your own history: every past morning it is recomputed as it would have read then and turned into a forecast of tomorrow morning's HRV against its recent level by a straight line fitted only on the days before (the last 120 with an outcome); the forecast is scored once the outcome is known (log score of a Gaussian forecast), and each of its single inputs is scored the same way on the same days. It EARNS ITS PLACE when it beats its best single input (the 95% Newey-West interval of the daily score difference above zero), is NO BETTER when it cannot be more than negligibly better, and then is shown as its inputs, without its own word (INPUTS ONLY); otherwise UNCLEAR, or NOT YET SCORED before 60 scored days.",
       "limitations": [
         "Product-defined, not clinically validated.",
-        "Direction mapping (for example lower resting heart rate is better) is a convention."
+        "Direction mapping (for example lower resting heart rate is better) is a convention.",
+        "The scorecard's history leaves out the Zepp stress contributor, which exists only for the last few days.",
+        "READY FOR is the same state matched to the demand of a kind of session; its own scorecard asks whether planned sessions were done (Brier score), and needs 40 planned days."
       ],
-      "references": [],
+      "references": [
+        {
+          "citation": "Gneiting T, Raftery AE. Strictly proper scoring rules, prediction, and estimation. J Am Stat Assoc 2007;102(477):359-378.",
+          "doi": "10.1198/016214506000001437"
+        },
+        {
+          "citation": "Diebold FX, Mariano RS. Comparing predictive accuracy. J Bus Econ Stat 1995;13(3):253-263.",
+          "doi": "10.1080/07350015.1995.10524599"
+        },
+        {
+          "citation": "Tashman LJ. Out-of-sample tests of forecasting accuracy: an analysis and review. Int J Forecast 2000;16(4):437-450.",
+          "doi": "10.1016/S0169-2070(00)00065-0"
+        }
+      ],
       "productDefined": true,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "3.0.0"
     },
     {
       "key": "series_break",
@@ -557,32 +600,53 @@
       "key": "relationship_engine",
       "docName": null,
       "kind": "modeled",
-      "methodology": "A fixed catalogue of hypotheses (for example alcohol and next-day HRV), each tested once. Both series are adjusted for day of week by subtracting weekday means, so a weekly routine cannot pass as an effect. The p-value comes from a weekly-block permutation test (2,000 shuffles of whole weeks of the cause, which keeps day-of-week alignment and short-range dependence), corrected across the hypotheses that had enough data with Benjamini-Hochberg. The effect is reported in natural units with a block-bootstrap 95% interval and the smallest effect the data could have detected (80% power).",
+      "methodology": "A fixed catalogue of questions (for example alcohol and next-morning HRV), each tested once with one regression: the outcome on day t against the exposure on day t minus the lag, adjusted for weekday, a slow trend (a linear spline with a knot every 60 days), the outcome measured before the exposure and the exposure behind that earlier outcome. Standard errors are Newey-West in calendar days with small-sample corrections, so neighbouring days are not counted as independent. The verdict compares the 95% interval with the question's no-effect zone, fixed before any data (HRV 2%, resting heart rate 1 bpm, sleep 10 minutes, energy half a point): CLEAR when the interval lies entirely outside the zone, NEGLIGIBLE when it lies entirely inside, UNCLEAR when it crosses an edge, NOT YET when there are too few days. Each answer carries the smallest effect the data could detect, an E-value and a negative-control lag (the same model on the outcome before the exposure). On simulated data with no effect, under 1% of questions read clear; planted effects are covered by the 95% interval 93-96% of the time. Because every question is re-checked every night, the verdict uses a repeated confidence interval with an O'Brien-Fleming-type boundary (2.24 divided by the square root of the information so far against a full year), so with no effect a question reads clear at some point in about 1% of simulated histories instead of 10%. Every verdict is kept in an append-only ledger. Questions about the same exposure are also pooled (normal-normal model, DerSimonian-Laird spread) and the pooled estimate is shown next to the verdict.",
       "limitations": [
-        "Observational: a supported link is an association after adjusting for weekday, not proof of cause.",
-        "Days without a record are left out, except where a hypothesis states that absence counts as zero (days with a food log for alcohol and caffeine, days with a watch record for training, days after the first logged recovery session).",
-        "With a few months of data only large effects are detectable; 'not distinguishable from noise' is not evidence of no effect, and the card says how large an effect had to be to be seen.",
-        "Product-defined catalogue: the questions were chosen in advance, not discovered from your data."
+        "Observational: a clear answer is an association on the evidence ladder's second rung, not proof of cause; only a randomised self-experiment reaches 'tested'.",
+        "Days without a record are left out, except where a question states that absence counts as none (an answered evening check-in, days with a watch record for training, days after the first logged recovery session).",
+        "If the exposure follows your state (you drink on good days), adjusting for the morning before helps but cannot remove all of it; the negative-control lag warns when the outcome already differed before the exposure.",
+        "Product-defined catalogue and no-effect zones: the questions and zones were chosen in advance, not discovered from your data."
       ],
       "references": [
         {
-          "citation": "Benjamini Y, Hochberg Y. Controlling the false discovery rate: a practical and powerful approach to multiple testing. J R Stat Soc B 1995;57(1):289-300.",
-          "doi": "10.1111/j.2517-6161.1995.tb02031.x"
+          "citation": "Newey WK, West KD. A simple, positive semi-definite, heteroskedasticity and autocorrelation consistent covariance matrix. Econometrica 1987;55(3):703-708.",
+          "doi": "10.2307/1913610"
+        },
+        {
+          "citation": "Lakens D, Scheel AM, Isager PM. Equivalence testing for psychological research: a tutorial. Adv Methods Pract Psychol Sci 2018;1(2):259-269.",
+          "doi": "10.1177/2515245918770963"
+        },
+        {
+          "citation": "VanderWeele TJ, Ding P. Sensitivity analysis in observational research: introducing the E-value. Ann Intern Med 2017;167(4):268-274.",
+          "doi": "10.7326/M16-2607"
+        },
+        {
+          "citation": "Lipsitch M, Tchetgen Tchetgen E, Cohen T. Negative controls: a tool for detecting confounding and bias in observational studies. Epidemiology 2010;21(3):383-388.",
+          "doi": "10.1097/EDE.0b013e3181d61eeb"
+        },
+        {
+          "citation": "Lan KKG, DeMets DL. Discrete sequential boundaries for clinical trials. Biometrika 1983;70(3):659-663.",
+          "doi": "10.1093/biomet/70.3.659"
+        },
+        {
+          "citation": "DerSimonian R, Laird N. Meta-analysis in clinical trials. Control Clin Trials 1986;7(3):177-188.",
+          "doi": "10.1016/0197-2456(86)90046-2"
         }
       ],
       "productDefined": true,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "2.1.0"
     },
     {
       "key": "typicality",
       "docName": null,
       "kind": "modeled",
-      "methodology": "Compares today with your own recent typical days across five signals together: ln HRV, resting heart rate, sleep hours, deep + REM minutes and steps. The baseline is up to 120 past days that ends before the 14 days being judged, leaves out logged illness days and starts at the last confirmed series break. Each signal is standardised with a robust centre and spread (median, MAD); the joint pattern is described by a mean and a Ledoit-Wolf shrunk covariance, so correlated signals are judged together. A day's distance is the Mahalanobis distance over the signals it has (at least three) divided by their number, and 'elevated' and 'unusual' mean further out than 90% and 97.5% of your own typical days (leave-one-out). Two such days in a row with resting heart rate up suggest logging an illness. Today's steps are ignored because the day is not over, and a device-sensitive signal (deep + REM) is left out while a detected series break lies inside the window.",
+      "methodology": "Compares today with your own recent typical days across five signals together: ln HRV, resting heart rate, sleep hours, deep + REM minutes and steps. The baseline is up to 120 past days that ends before the 14 days being judged, leaves out logged illness days and starts at the last confirmed series break. Each signal is standardised with a robust centre and spread (median, MAD); the joint pattern is described by a mean and a Ledoit-Wolf shrunk covariance, so correlated signals are judged together. A day's distance is the Mahalanobis distance over the signals it has (at least three) divided by their number, and 'elevated' and 'unusual' mean further out than 90% and 97.5% of your own typical days (leave-one-out). Two such days in a row with resting heart rate up suggest logging an illness. Today's steps are ignored because the day is not over, and a device-sensitive signal (deep + REM) is left out while a detected series break lies inside the window. Since October 2026 its strain flag is scored against logged illness: the engine is replayed two weeks at a time on your history, each block against the baseline before it, and each strain day outside an illness is checked against illnesses logged in the three days after. Precision (strain days followed by an illness) is set against the base rate (the share of all days that fall in the three days before one): EARNS ITS PLACE when the precision's 95% Wilson interval lies above the base rate, NO BETTER THAN CHANCE when it lies under one and a half times it, UNCLEAR otherwise, NOT YET SCORED before 5 logged illnesses and 10 strain days.",
       "limitations": [
         "Experimental: on a real 9-month history, replayed one day at a time, it flagged clearly more ordinary days than its nominal 10% (elevated) and 2.5% (unusual), because real signals drift and change regime; on synthetic stationary data it stays near nominal. It is therefore shown as a drill-down and does not feed Today's Recovery.",
         "A day being atypical is not a problem in itself (an unusually long sleep or a big hike day are atypical too); only the strain flag requires resting heart rate to be up.",
         "Needs 45 complete days (all five signals) before it says anything.",
-        "Observational and personal: it says nothing about other people or about causes."
+        "Observational and personal: it says nothing about other people or about causes.",
+        "The scorecard needs illnesses to be logged; an illness that was never logged counts as a strain day with nothing after it."
       ],
       "references": [
         {
@@ -591,28 +655,36 @@
         }
       ],
       "productDefined": true,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "1.1.0"
     },
     {
       "key": "supplement_experiment",
       "docName": null,
       "kind": "modeled",
-      "methodology": "A pre-registered N-of-1 test of one supplement: a phase without it (A) and a phase with it (B), once or twice (AB or ABAB), with the dates, the one primary outcome (at most three secondary) and the rules fixed before the first day; the database refuses later changes to the plan. The B days are compared with the A days by phase (intention to treat), after removing illness days, alcohol days and the morning after (when the plan says so) and any washout days, and adjusting for day of week. The difference of means is reported in natural units with a 95% interval that uses the effective sample size implied by day-to-day autocorrelation (small-sample corrected) and a Student t, together with the smallest difference the design could detect at 80% power. While the experiment runs the numbers are labelled interim and carry no verdict. Adherence is counted from the real supplement log, never assumed.",
+      "methodology": "A randomised N-of-1 test, registered before the first day: the outcome (one primary, at most three secondary), the smallest change that would matter (the no-effect zone) and the schedule are fixed when the person registers, and the database refuses later changes and a schedule that starts in the past. Two designs. Periods in random order (a supplement or a fueling product): pairs of equal periods, with and without, the order inside each pair drawn on the phone (SecureRandom); every period starts with a washout whose days do not count. Each pair gives one difference (with minus without, weekday-adjusted, from its own two periods, so a slow drift cancels); the estimate is the mean of the pair differences with a Student t interval on them, and with six or more pairs the exact randomisation p over all the orders that could have been drawn. Days in random order (a same-day choice from the evidence board, such as no caffeine after 14:00): each week 3 or 4 days drawn for the rule, the outcome read the next morning; analysed as drawn, with an exact randomisation test that re-draws the schedule the way the phone did, and the interval from inverting it. The answer, once the last period or day has been read, is CLEAR BENEFIT or CLEAR HARM (the 95% interval lies beyond the zone, in the outcome's favourable or unfavourable direction), NO MEANINGFUL EFFECT (inside it) or UNCLEAR (across an edge); while it runs the numbers are interim and carry no verdict. The days a period leaves out (illness; alcohol in the period designs) are frozen the night after it ends. Adherence comes from the supplement log or, for a daily rule, from what the check-in recorded. Optional blinding: a partner fills a weekly organiser with the real thing or a placebo following the schedule, and the app keeps the schedule out of sight. Plans registered before October 2026 used a fixed without-then-with order and keep their original reading.",
       "limitations": [
-        "Not randomised or blinded: the person knows which phase they are in, so expectation, season, training and life events can move an outcome in step with the phases.",
-        "A drifting outcome in the without-phase is checked and flagged, but cannot be fully separated from an effect in a single AB design; ABAB shows whether the effect repeats.",
-        "With a few weeks per phase only large differences can be seen; \"no detectable effect\" is not evidence of no effect, and the result states the smallest difference the design could have seen.",
-        "Supplements with slow onset (weeks) need longer phases or a washout than the defaults; outcomes with a recent device or source change are less reliable.",
-        "Applies to this person only and says nothing about other people."
+        "It answers for this person, under the conditions tested, and says nothing about other people.",
+        "Unblinded, knowing which period or day it is can still move a self-rated outcome (energy, mood); the randomised order protects against trends, seasons and bad weeks, not against expectation.",
+        "Days or periods where the schedule was not followed still count as drawn, which shrinks a real effect toward zero; low adherence is reported with the result.",
+        "Slow-acting changes need longer periods: an effect that lingers beyond the washout leaks into the next period and also shrinks the difference.",
+        "Small designs can only see large effects: four pairs of 14 days see about 16% on HRV; the sheet shows what a design can detect before it is registered, and UNCLEAR is not evidence of no effect."
       ],
       "references": [
         {
           "citation": "Guyatt GH, Keller JL, Jaeschke R, Rosenbloom D, Adachi JD, Newhouse MT. The n-of-1 randomized controlled trial: clinical usefulness. Our three-year experience. Ann Intern Med 1990;112(4):293-299.",
           "doi": "10.7326/0003-4819-112-4-293"
+        },
+        {
+          "citation": "Klasnja P, Hekler EB, Shiffman S, et al. Microrandomized trials: an experimental design for developing just-in-time adaptive interventions. Health Psychol 2015;34(Suppl):1220-1228.",
+          "doi": "10.1037/hea0000305"
+        },
+        {
+          "citation": "Edgington ES, Onghena P. Randomization Tests. 4th ed. Chapman & Hall/CRC; 2007.",
+          "doi": "10.1201/9781420011814"
         }
       ],
       "productDefined": true,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "2.0.0"
     },
     {
       "key": "supplement_interactions",
@@ -678,6 +750,334 @@
         }
       ],
       "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "expected_band",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "Each morning is compared with a forecast made before it: a slowly moving level plus a weekly pattern (exponential smoothing, ETS(A,N,A)) fitted to your own readings, HRV on a log scale. The band's width is the spread of recent one-step errors, widened after missing days and while errors are few (Student t). The 80% band should hold about 8 mornings in 10; how often it actually did is shown. A flag needs a morning beyond the 99% band, or several mornings on one side that trip an EWMA chart (lambda 0.3, limit 2.4). A confirmed device change starts a new regime.",
+      "limitations": [
+        "One morning outside the 80% band is ordinary: about 1 in 5 mornings is, by design.",
+        "The weekly pattern and level absorb habits that repeat (a weekend routine), so a regular habit's effect sits inside 'expected'; the evidence board looks at those.",
+        "Needs about seven weeks of readings, and starts again (wide at first) after a confirmed device change."
+      ],
+      "references": [
+        {
+          "citation": "Hyndman RJ, Koehler AB, Ord JK, Snyder RD. Forecasting with Exponential Smoothing: The State Space Approach. Springer; 2008.",
+          "doi": "10.1007/978-3-540-71918-2"
+        },
+        {
+          "citation": "Lucas JM, Saccucci MS. Exponentially weighted moving average control schemes: properties and enhancements. Technometrics 1990;32(1):1-12.",
+          "doi": "10.1080/00401706.1990.10484583"
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "event_curve",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "Each occurrence (the first evening of a run) is lined up with the three days before and five after. Each day's distance from what the expected-band model forecast from before the window is compared with the same days around evenings on the same weekday without it. The grey chance band reassigns which days count as events within each weekday (400 times) and is simultaneous across the days shown, so with no effect the whole curve stays inside it 95% of the time. Drawn from 8 events.",
+      "limitations": [
+        "Consecutive evenings count as one episode, so the curve shows the episode, not one evening.",
+        "Other things that happen on the same evenings (late nights, travel) are part of what the curve shows.",
+        "A day before the event outside the band means the outcome already differed: something else may drive both."
+      ],
+      "references": [
+        {
+          "citation": "MacKinlay AC. Event studies in economics and finance. J Econ Lit 1997;35(1):13-39.",
+          "doi": null
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "case_crossover",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "Starting from mornings outside the 80% expected band on the unfavourable side, the evening before is compared with the evenings before reference days on the same weekday in the same calendar month (time-stratified case-crossover). Each low morning is its own control, so stable habits cancel out. Mantel-Haenszel odds ratio with the Robins-Breslow-Greenland 95% interval; shown from 15 low mornings with a known exposure.",
+      "limitations": [
+        "Exploratory: several exposures are screened at once, so a row is a hint of what to test next, not an answer.",
+        "Assumes the exposure's effect is short-lived (a day).",
+        "Evenings with an unknown exposure are left out of both sides."
+      ],
+      "references": [
+        {
+          "citation": "Maclure M. The case-crossover design: a method for studying transient effects on the risk of acute events. Am J Epidemiol 1991;133(2):144-153.",
+          "doi": "10.1093/oxfordjournals.aje.a115853"
+        },
+        {
+          "citation": "Janes H, Sheppard L, Lumley T. Case-crossover analyses of air pollution exposure data: referent selection strategies and their implications for bias. Epidemiology 2005;16(6):717-726.",
+          "doi": "10.1097/01.ede.0000181315.18836.9d"
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "lag_curve",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "A distributed-lag regression: the outcome against the amount of the exposure on each of the seven days before (training minutes, steps, drinks), adjusted for weekday and a slow trend, with Newey-West standard errors. Each day's effect has its own 95% interval; how long it lasts is the first unbroken run of days whose interval excludes zero. For alcohol, a dose curve groups next mornings by drinks the evening before.",
+      "limitations": [
+        "Needs 120 days with a full week of the exposure recorded behind them and at least 20 days with it.",
+        "Days with an unknown amount are left out, which for drinks means days without an answered check-in.",
+        "A smoothness constraint across days was tried and spread a one-day effect over the week, so each day is estimated freely and intervals are wider."
+      ],
+      "references": [
+        {
+          "citation": "Gasparrini A, Armstrong B, Kenward MG. Distributed lag non-linear models. Stat Med 2010;29(21):2224-2234.",
+          "doi": "10.1002/sim.3940"
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "intervention_its",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "An intervention read once, on a date fixed when it started (four weeks after the start unless the person set another, and never after it stopped), against a forecast from before it: the level and weekly pattern of the eight weeks before the start (HRV on a log scale) are carried forward over the days since, and the estimate is the average gap between what happened and that forecast. Its 95% interval counts neighbouring days as one long-run variance of the pre-period's day-to-day noise (lag-one autocorrelation, bias-corrected) for both the forecast's level and the gaps, with a Student t. The gap is judged against the outcome's no-effect zone: CLEAR, NEGLIGIBLE or UNCLEAR. A confirmed device change before the start shortens the pre-period to the days after it; one after the start leaves nothing to read. The read is published once and kept.",
+      "limitations": [
+        "It is the OBSERVED rung: what happened against what was expected, not what the intervention did; anything else that changed at the same time counts too, and it never changes a protocol on its own.",
+        "The forecast assumes the eight weeks before would have stayed level; when they were already drifting the result says so.",
+        "Four weeks of an intervention only show large changes (about 16% on HRV is seen three times in four); a randomised self-experiment is the way to a tested answer."
+      ],
+      "references": [
+        {
+          "citation": "Bernal JL, Cummins S, Gasparrini A. Interrupted time series regression for the evaluation of public health interventions: a tutorial. Int J Epidemiol 2017;46(1):348-355.",
+          "doi": "10.1093/ije/dyw098"
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "grip_strength",
+      "docName": null,
+      "kind": "raw",
+      "methodology": "Handgrip strength on a hand dynamometer, the best of three squeezes per hand, standing with the arm at the side and the elbow straight, alternating hands. Logged on its own or as the first step of the monthly body check-in.",
+      "limitations": [
+        "Dynamometers differ from each other; readings from a different device are not comparable.",
+        "Posture and effort change the reading; the protocol is fixed so months are comparable, not so the number matches a clinic's."
+      ],
+      "references": [
+        {
+          "citation": "Roberts HC, Denison HJ, Martin HJ, et al. A review of the measurement of grip strength in clinical and epidemiological studies: towards a standardised approach. Age Ageing 2011;40(4):423-429.",
+          "doi": "10.1093/ageing/afr051"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "body_girths",
+      "docName": null,
+      "kind": "raw",
+      "methodology": "Tape girths taken by the person at the monthly body check-in: neck, shoulders, chest, waist at the navel, waist midway between the lowest rib and the top of the hip bone (WHO site), hips, and on both sides relaxed upper arm (optionally flexed), forearm, mid-thigh and calf. A non-stretch tape, level, snug without compressing the skin, trunk sites at the end of a normal breath out. Two readings per site, a third when they differ by more than 0.5 cm; the value is the median. A change between check-ins, and a left-right difference, is called only beyond 2.77 typical errors of the site's value: the typical error of one reading from the within-sitting repeats, divided by the root of the readings behind the value, never below 0.5 cm.",
+      "limitations": [
+        "Self-measurement is less reliable than a trained measurer; shoulders and chest in particular need a mirror or a helper to keep the tape level.",
+        "Within-sitting repeats miss the error of finding the landmark again on another day; the 0.5 cm floor stands in for it until enough months exist.",
+        "Food, fluid and the time of day move the waist by about a centimetre: the same conditions each month matter more than the tape."
+      ],
+      "references": [
+        {
+          "citation": "Stewart A, Marfell-Jones M, Olds T, de Ridder H. International Standards for Anthropometric Assessment. International Society for the Advancement of Kinanthropometry, Lower Hutt, 2011.",
+          "doi": null
+        },
+        {
+          "citation": "Hopkins WG. Measures of reliability in sports medicine and science. Sports Med 2000;30(1):1-15.",
+          "doi": "10.2165/00007256-200030010-00001"
+        },
+        {
+          "citation": "World Health Organization. Waist circumference and waist-hip ratio: report of a WHO expert consultation, Geneva, 8-11 December 2008. WHO, 2011.",
+          "doi": null
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "skinfold_sum",
+      "docName": null,
+      "kind": "raw",
+      "methodology": "Sum of three skinfolds the person can pinch on themselves, on the right side: abdominal (vertical, 2 cm right of the navel), suprailiac (diagonal, above the hip bone in line with the front of the armpit) and front thigh (vertical, seated with the knee bent). Three readings per site taken in rounds, a fourth when they span more than 2 mm; the value is the median. The caliper is recorded and a sum taken with a different caliper is not compared. The change is judged against the sites' typical errors added in quadrature (never below 1 mm per site), times 2.77. The sum is the primary skinfold number: it tracks subcutaneous fat without a population equation.",
+      "limitations": [
+        "Self-pinched folds are less reliable than a trained measurer's; the same person, side, sites and caliper keep it comparable over time.",
+        "Cheap plastic calipers read differently from spring calipers such as a Harpenden; readings only compare within one caliper.",
+        "The triceps fold (part of the usual women's three-site equation) cannot be pinched on oneself and is left out."
+      ],
+      "references": [
+        {
+          "citation": "Stewart A, Marfell-Jones M, Olds T, de Ridder H. International Standards for Anthropometric Assessment. International Society for the Advancement of Kinanthropometry, Lower Hutt, 2011.",
+          "doi": null
+        },
+        {
+          "citation": "Hopkins WG. Measures of reliability in sports medicine and science. Sports Med 2000;30(1):1-15.",
+          "doi": "10.2165/00007256-200030010-00001"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "waist_to_height",
+      "docName": null,
+      "kind": "derived",
+      "methodology": "Waist (the WHO midpoint site, else at the navel) divided by height, from the monthly body check-in; waist-to-hip uses the same waist over the hips. Under 0.5 is the boundary the evidence supports for cardiometabolic risk.",
+      "limitations": [
+        "A screening ratio, not a diagnosis.",
+        "Inherits the waist measurement's day-to-day error of about a centimetre."
+      ],
+      "references": [
+        {
+          "citation": "Ashwell M, Gunn P, Gibson S. Waist-to-height ratio is a better screening tool than waist circumference and BMI for adult cardiometabolic risk factors: systematic review and meta-analysis. Obes Rev 2012;13(3):275-286.",
+          "doi": "10.1111/j.1467-789X.2011.00952.x"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "body_fat_estimates",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "Two body-fat estimates from the monthly check-in, shown next to the scale's impedance reading and labelled as estimates: the US Navy circumference equation (men: waist at the navel minus neck, and height; women: waist plus hips minus neck, and height) and, for men who measured the chest fold, the Jackson-Pollock three-site skinfold equation (chest, abdominal, thigh and age) turned into body fat with Siri's equation.",
+      "limitations": [
+        "Population equations: for one person each is typically a few percentage points off a reference method, and the methods disagree with each other.",
+        "Follow one method's trend; the gap between methods is not information about the body.",
+        "Needs sex (and age for the skinfold equation) in the profile."
+      ],
+      "references": [
+        {
+          "citation": "Hodgdon JA, Beckett MB. Prediction of percent body fat for U.S. Navy men and women from body circumferences and height. Naval Health Research Center, San Diego, Reports 84-11 and 84-29, 1984.",
+          "doi": null
+        },
+        {
+          "citation": "Jackson AS, Pollock ML. Generalized equations for predicting body density of men. Br J Nutr 1978;40(3):497-504.",
+          "doi": "10.1079/BJN19780152"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "hr_zones",
+      "docName": "Heart-rate zones",
+      "kind": "derived",
+      "methodology": "Five zones placed three ways, switchable on a session's chart with a default in Training setup. % of maximum: zones start at 50, 60, 70, 80 and 90% of the maximum. Heart-rate reserve (Karvonen): resting + 50 to 90% of (maximum - resting). Lactate threshold (Friel's run zones): Z2 from 85%, Z3 from 90%, Z4 from 95% and Z5 from 100% of Zepp's lactate-threshold heart rate, for runs only. Auto uses the threshold for a run when Zepp has estimated one in the last 120 days, otherwise heart-rate reserve, otherwise % of maximum. The anchors are taken as of the session's date: the second-highest session maximum of the 24 months up to it, the 30-day median resting heart rate and the latest threshold estimate.",
+      "limitations": [
+        "The maximum is the highest values the watch saw, not a tested maximum.",
+        "Zepp's lactate-threshold heart rate is an estimate from runs; it is not used for other sports.",
+        "Zone edges are conventions; the same bpm can be easy one day and hard on a hot or tired one."
+      ],
+      "references": [
+        {
+          "citation": "Karvonen MJ, Kentala E, Mustala O. The effects of training on heart rate; a longitudinal study. Ann Med Exp Biol Fenn 1957;35(3):307-315.",
+          "doi": null
+        },
+        {
+          "citation": "Friel J. The Triathlete's Training Bible. 4th ed. Boulder, CO: VeloPress; 2016.",
+          "doi": null
+        },
+        {
+          "citation": "Mann T, Lamberts RP, Lambert MI. Methods of prescribing relative exercise intensity: physiological and practical considerations. Sports Med 2013;43(7):613-625.",
+          "doi": "10.1007/s40279-013-0045-x"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "intensity_distribution",
+      "docName": "Intensity distribution",
+      "kind": "derived",
+      "methodology": "Each week's run, ride and hike minutes split as low (below zone 3), moderate (zone 3) and high (zones 4 and 5), from each workout's per-second heart rate placed in the zones of the default method with the anchors of its date. Only workouts with a Zepp heart-rate record are counted; the card says how many of the week's endurance sessions that is. Descriptive: endurance athletes typically spend about 80% of their training at low intensity, which the card mentions without setting a target.",
+      "limitations": [
+        "Five zones folded into three bands approximate the three-zone model, which is defined by the two lactate or ventilatory thresholds.",
+        "Heart rate lags effort in short intervals, so time in the high band understates very short hard efforts.",
+        "Strength sessions are left out."
+      ],
+      "references": [
+        {
+          "citation": "Seiler S. What is best practice for training intensity and duration distribution in endurance athletes? Int J Sports Physiol Perform 2010;5(3):276-291.",
+          "doi": "10.1123/ijspp.5.3.276"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "fuel_day_plan",
+      "docName": "Daily carbohydrate plan",
+      "kind": "modeled",
+      "methodology": "Each day's carbohydrate target in g/kg follows the training of the next 72 hours: light days 3-5, about an hour of training 5-7, 1-3 hours 6-10, over 4 hours 8-12 (Thomas, Erdman & Burke 2016), easy days low in the band and hard days high, a step up before a hard morning, and 10-12 g/kg for the two days before an A or B race over 90 minutes (carbohydrate loading). The nutrition goal's calories stay the weekly average while each day moves with its session energy; protein stays at the goal (1.8 g/kg without one); fat is the remainder, never under 20 % of energy. Meals are coded LOW / MEDIUM / HIGH by their place around key sessions, with a +-15 % range and the reason; the day's protein and fat are split across the meals too (protein weight 1 for main meals and recovery, 0.5 for snacks, at least 0.3 g/kg at each main meal when the day allows; fat weight 1 for main meals, 0.5 for snacks and for HIGH meals before key sessions, at most 10 g pre-session and 15 g at recovery). The plan covers today and the next ten days, the goal holding as the average of each block of seven days from today. Each meal gets two example plates: portions of the person's usual foods (catalogue foods logged three times or more, staples their meal descriptions mention) and built-in staples with USDA FoodData Central values, solved by bounded least squares on carbohydrate, protein and fat, rounded to real servings and scored by fixed rules; no language model is involved. Calendar training entries are read from their text (distance and climb, interval rounds, strength sets and load, deload, easy, long) and timed at the person's recent pace, replacing placeholder lengths; unreadable entries over four hours are asked about, not counted. With meal prep, lunch and dinner from Monday to Friday are four batch-cooked recipes (A-B-A-B-A, C-D-C-D-C) portioned for each day's targets, the fixed breakfast is scaled each day, and the snacks take what is left.",
+      "limitations": [
+        "Session energy and intensity are estimates from the person's history or the Compendium of Physical Activities, not measured.",
+        "Bands are population guidance; individual needs differ, and the codes are a plan, not a prescription.",
+        "A day with fewer than 3 meals logged is not read as eaten (never as a deficit).",
+        "Example plates are guidance in portions of typical foods: staple values are averages from USDA FoodData Central, and a mixed dish logged by description counts as its named staples, not as a recipe."
+      ],
+      "references": [
+        {
+          "citation": "Thomas DT, Erdman KA, Burke LM. American College of Sports Medicine Joint Position Statement. Nutrition and Athletic Performance. Med Sci Sports Exerc 2016;48(3):543-568.",
+          "doi": "10.1249/MSS.0000000000000852"
+        },
+        {
+          "citation": "Impey SG, Hearris MA, Hammond KM, et al. Fuel for the Work Required: A Theoretical Framework for Carbohydrate Periodization and the Glycogen Threshold Hypothesis. Sports Med 2018;48(5):1031-1048.",
+          "doi": "10.1007/s40279-018-0867-7"
+        },
+        {
+          "citation": "Jeukendrup A. A step towards personalized sports nutrition: carbohydrate intake during exercise. Sports Med 2014;44(Suppl 1):S25-S33.",
+          "doi": "10.1007/s40279-014-0148-z"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.2.0"
+    },
+    {
+      "key": "sweat_rate",
+      "docName": "Sweat rate",
+      "kind": "modeled",
+      "methodology": "From sweat tests: weight lost plus fluid drunk minus urine passed, over the session's duration. A prior (0.5 / 0.8 / 1.0 L/h easy / moderate / hard at 20 C and 70 kg, scaled by weight, +3 % per degree above 20, -2 % below) is moved by the median ratio of measured to predicted and narrowed with each test (+-40 % with none, +-25 % with one or two, +-15 % with three or more). Hydration plans keep the loss within 2 % of body weight and never drink more than the low estimate of sweat.",
+      "limitations": [
+        "A scale reading carries water from food and breathing, and a test measures one session's conditions.",
+        "The temperature scaling is a simple approximation, not a fitted model of the person.",
+        "Sweat sodium is not measured; plans use 500-1,000 mg per litre by heat and a salty-sweater setting."
+      ],
+      "references": [
+        {
+          "citation": "Sawka MN, Burke LM, Eichner ER, et al. American College of Sports Medicine position stand. Exercise and fluid replacement. Med Sci Sports Exerc 2007;39(2):377-390.",
+          "doi": "10.1249/mss.0b013e31802ca597"
+        },
+        {
+          "citation": "McCubbin AJ, et al. Sports Dietitians Australia Position Statement: Nutrition for Exercise in Hot Environments. Int J Sport Nutr Exerc Metab 2020;30(1):83-98.",
+          "doi": "10.1123/ijsnem.2019-0300"
+        }
+      ],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "carb_periodization_index",
+      "docName": "Carbohydrate periodization index",
+      "kind": "derived",
+      "methodology": "Over the fully logged days (3 or more meals) of the last 28, at least 14: the Pearson correlation between daily carbohydrate (g/kg) and the day's training energy, times the range of daily carbohydrate (g/kg), divided by its monotony (mean / SD). High when carbohydrate rises and falls with the training over a real range; near zero when it is the same every day.",
+      "limitations": [
+        "Computed on the phone from the Log's daily totals; incomplete logging biases it.",
+        "Training energy is the recorded active energy (or an estimate), a proxy for the work done.",
+        "Presented descriptively; no target value is implied."
+      ],
+      "references": [
+        {
+          "citation": "Rothschild JA, et al. The quantification of daily carbohydrate periodization among endurance athletes during 12 weeks of self-selected training: presentation of a novel Carbohydrate Periodization Index. medRxiv 2022 (preprint).",
+          "doi": "10.1101/2022.06.21.22276725"
+        }
+      ],
+      "productDefined": false,
       "methodologyVersion": "1.0.0"
     }
   ]

@@ -2,8 +2,6 @@ package com.bioscan.fieldterminal.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -33,13 +31,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.domain.TrainingCycle
-import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
@@ -169,7 +168,7 @@ fun TrainingBlockFormSheet(cycle: TrainingCycle?, onDismiss: () -> Unit, onSaved
             val targetNum = targetValue.toDoubleOrNull()
             val goalValid = !hasGoal || (startingNum != null && targetNum != null)
 
-            AmberButton(label = if (saving) "SAVING..." else "SAVE") {
+            FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
                 if (primaryFocus == null) {
                     error = "Select a primary focus."
                 } else if (!goalValid) {
@@ -234,10 +233,7 @@ private fun FocusChipGrid(selected: TbFocus?, exclude: TbFocus?, onSelect: (TbFo
                     .border(FT.BorderWidth, borderColor, RoundedCornerShape(FT.RadiusSmall))
                     .background(bgColor, RoundedCornerShape(FT.RadiusSmall))
                     .then(
-                        if (!isExcluded) Modifier.clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { onSelect(focus) } else Modifier,
+                        if (!isExcluded) Modifier.ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onSelect(focus) } else Modifier,
                     )
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             )
@@ -259,22 +255,14 @@ private fun DaysStepper(value: Int, onDecrement: () -> Unit, onIncrement: () -> 
             "−",
             style = stepperButtonStyle,
             color = if (value > 0) FT.TextPrimary else FT.TextMuted,
-            modifier = Modifier.clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onDecrement,
-            ),
+            modifier = Modifier.ftClickable(onClick = onDecrement),
         )
         Text(value.toString(), style = stepperValueStyle, color = FT.TextPrimary)
         Text(
             "+",
             style = stepperButtonStyle,
             color = if (value < 7) FT.TextPrimary else FT.TextMuted,
-            modifier = Modifier.clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onIncrement,
-            ),
+            modifier = Modifier.ftClickable(onClick = onIncrement),
         )
     }
 }

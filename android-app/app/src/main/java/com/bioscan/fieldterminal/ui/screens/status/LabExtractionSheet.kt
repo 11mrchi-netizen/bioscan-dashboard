@@ -3,8 +3,6 @@ package com.bioscan.fieldterminal.ui.screens.status
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,15 +32,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.ExtractedLabMarker
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.LabExtractionRepository
 import com.bioscan.fieldterminal.data.LabsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -142,7 +141,7 @@ fun LabExtractionSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                             style = FTType.BodySmall,
                             color = FT.TextSecondary,
                         )
-                        AmberButton(label = "CHOOSE FILE") {
+                        FTButton(label = "CHOOSE FILE") {
                             filePickerLauncher.launch(arrayOf("application/pdf", "image/*"))
                         }
                     }
@@ -171,7 +170,7 @@ fun LabExtractionSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                         EditableMarkerCard(row, onRemove = { rows.removeAt(index) })
                     }
                     val valid = rows.isNotEmpty() && rows.all { it.name.isNotBlank() && it.value.toDoubleOrNull() != null }
-                    AmberButton(label = if (phase == ExtractionPhase.Saving) "SAVING..." else "SAVE ${rows.size} RESULT${if (rows.size == 1) "" else "S"}") {
+                    FTButton(label = if (phase == ExtractionPhase.Saving) "SAVING..." else "SAVE ${rows.size} RESULT${if (rows.size == 1) "" else "S"}", emphasis = FTButtonEmphasis.Primary) {
                         if (valid && phase != ExtractionPhase.Saving) {
                             phase = ExtractionPhase.Saving
                             error = null
@@ -217,7 +216,7 @@ private fun EditableMarkerCard(row: EditableMarkerRow, onRemove: () -> Unit) {
                 color = FT.Critical,
                 modifier = Modifier
                     .padding(start = 10.dp)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onRemove),
+                    .ftClickable(onClick = onRemove),
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -1,21 +1,48 @@
 package com.bioscan.fieldterminal.domain
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
-import java.time.LocalDate
 
-// Analysis Layer 3 / Phase 5. Pure rules for registering a supplement N-of-1 experiment (supabase/functions/_shared/
-// analysis-core/experiment.ts does the analysis). The protocol built here is stored once and the database refuses later
-// changes, so what is compared and which outcome is primary cannot be re-chosen after seeing the data.
+// Analysis Layer 3 / Phase 5. The stored protocol of an N-of-1 experiment (supabase/functions/_shared/analysis-core/
+// experiment.ts does the analysis). It is stored once and the database refuses later changes, so what is compared and
+// which outcome is primary cannot be re-chosen after seeing the data. Since analysis review phase F every new experiment
+// is randomised (RandomisedExperiment.kt builds the protocol); the fixed A-then-B builder is gone.
+// `pair` (analysis review phase F): which pair of a randomised design the period belongs to.
 @Serializable
-data class ExperimentPhase(val label: String, val start: String, val end: String)
+data class ExperimentPhase(val label: String, val start: String, val end: String, val pair: Int? = null)
 
+// Analysis review phase F: the drawn daily schedule (B = with) and the behaviour a with-day asks for.
+@Serializable
+data class DailyAssignment(val date: String, val arm: String)
+
+@Serializable
+data class ExperimentBehaviour(val series: String, val withValue: Double, val label: String)
+
+@Serializable
+data class ExperimentRandomization(val method: String, val drawnAt: String)
+
+// The client leaves a field out of the JSON when it equals its default, so the three registration settings are always
+// written: the stored protocol is the pre-registration, and the analysis must not have to guess them.
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ExperimentProtocol(
     val design: String,
     val phases: List<ExperimentPhase>,
-    val washoutDays: Int = 0,
-    val minAdherence: Double = 0.7,
-    val excludeAlcoholDays: Boolean = true,
+    @EncodeDefault val washoutDays: Int = 0,
+    @EncodeDefault val minAdherence: Double = 0.7,
+    @EncodeDefault val excludeAlcoholDays: Boolean = true,
+    // ---- analysis review phase F: protocol version 2, the randomised designs ----
+    val version: Int? = null,
+    // No-effect zone of the primary outcome, in its display unit (% for HRV, minutes for sleep).
+    val zone: Double? = null,
+    val blinded: Boolean? = null,
+    val pairs: Int? = null,
+    val periodDays: Int? = null,
+    val assignments: List<DailyAssignment>? = null,
+    val lag: Int? = null,
+    val behaviour: ExperimentBehaviour? = null,
+    val randomization: ExperimentRandomization? = null,
 )
 
 @Serializable
@@ -40,32 +67,6 @@ val EXPERIMENT_METRICS = listOf(
     "stress" to "Stress",
     "soreness" to "Soreness",
 )
-
-const val MIN_EXPERIMENT_PHASE_DAYS = 14
-const val MAX_EXPERIMENT_PHASE_DAYS = 60
-
-// A (without) first, then B (with); ABAB repeats the pair. Phases are back to back, `start` is the first day of A.
-fun buildProtocol(start: LocalDate, design: String, daysPerPhase: Int, washoutDays: Int): ExperimentProtocol {
-    val labels = if (design == "ABAB") listOf("A", "B", "A", "B") else listOf("A", "B")
-    val phases = labels.mapIndexed { i, label ->
-        val from = start.plusDays((i * daysPerPhase).toLong())
-        ExperimentPhase(label, from.toString(), from.plusDays((daysPerPhase - 1).toLong()).toString())
-    }
-    return ExperimentProtocol(design, phases, washoutDays)
-}
-
-// What would stop the experiment from being registered. Empty = valid.
-fun experimentProblems(primary: String?, daysPerPhase: Int, design: String, washoutDays: Int): List<String> = buildList {
-    if (primary == null || EXPERIMENT_METRICS.none { it.first == primary }) add("Choose the one outcome this experiment is about.")
-    if (design != "AB" && design != "ABAB") add("Choose a design.")
-    if (daysPerPhase !in MIN_EXPERIMENT_PHASE_DAYS..MAX_EXPERIMENT_PHASE_DAYS) add("Each phase must be $MIN_EXPERIMENT_PHASE_DAYS to $MAX_EXPERIMENT_PHASE_DAYS days.")
-    if (washoutDays < 0 || washoutDays >= daysPerPhase / 2) add("The washout must be shorter than half a phase.")
-}
-
-fun mdeText(p: MdePreviewRow): String {
-    val d = if (p.unit == "%" || p.unit == "min") "%.1f".format(p.mde) else "%.2f".format(p.mde)
-    return "Smallest difference this design could detect: $d${if (p.unit == "%") "%" else " " + p.unit}"
-}
 
 // Plain reading of a preview, so a person picks an outcome the design can actually resolve.
 fun mdeCaveat(p: MdePreviewRow): String? = when {

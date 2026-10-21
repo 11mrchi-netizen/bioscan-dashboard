@@ -58,19 +58,6 @@ class PerfGoldenTest {
         assertEquals(one, batch)
     }
 
-    // ---------- computeHrvReadinessSeries ----------
-
-    @Test
-    fun hrvReadinessSeriesMatchesTheHandComputedZScores() {
-        val z = computeHrvReadinessSeries(listOf(50.0, 52.0, 48.0, 51.0, 49.0, null, 53.0))
-        assertNull(z[0]); assertNull(z[1]); assertNull(z[2]) // fewer than 3 prior valid days
-        assertEquals(0.61237, z[3]!!, 1e-4) // prior 50,52,48: mean 50, population sd 1.63299
-        assertEquals(-0.84515, z[4]!!, 1e-4) // prior 50,52,48,51
-        assertNull(z[5]) // the day itself is null
-        assertEquals(2.12132, z[6]!!, 1e-4) // null prior dropped: 50,52,48,51,49
-        assertEquals(0.0, computeHrvReadinessSeries(listOf(10.0, 10.0, 10.0, 10.0))[3]!!, 0.0) // sd 0 -> 0
-    }
-
     // ---------- aggregateMealsByDay ----------
 
     @Test
@@ -131,17 +118,23 @@ class PerfGoldenTest {
     @Test
     fun trainingLoadUsesRpeThenTrimpAndSkipsWhatItCannotScore() {
         val rows = listOf(
+            TrainingLoadSessionRow("2026-10-09T07:00:00+08:00", durationMin = 50.0, avgHr = 160.0, maxHr = 190.0),
             TrainingLoadSessionRow("2026-10-10T07:00:00+08:00", durationMin = 60.0, rpe = 7),
             TrainingLoadSessionRow("2026-10-11T07:00:00+08:00", durationMin = null, rpe = 5),
             TrainingLoadSessionRow("2026-10-12T07:00:00+08:00", durationMin = 45.0, avgHr = 150.0, maxHr = 185.0),
             TrainingLoadSessionRow("2026-10-13T07:00:00+08:00", durationMin = 30.0), // no rpe, no hr
+            TrainingLoadSessionRow("2026-10-14T07:00:00+08:00", durationMin = 30.0, rpe = 0, avgHr = 140.0, maxHr = 150.0), // RPE 0 is not an RPE
         )
-        val out = buildTrainingSessionLoads(rows, latestRestingHr = 50.0)
-        assertEquals(2, out.size)
-        assertEquals(LocalDate.of(2026, 10, 10) to 420.0, out[0])
-        assertEquals(LocalDate.of(2026, 10, 12), out[1].first)
-        assertEquals(trimp(EnduranceSessionInput(45.0, null, 150.0, 185.0, null, null, null), 50.0)!!, out[1].second, 1e-9)
-        assertEquals(1, buildTrainingSessionLoads(rows, latestRestingHr = null).size) // no resting HR: trimp row dropped
+        val resting = listOf(LocalDate.of(2026, 10, 1) to 50.0)
+        val out = buildTrainingSessionLoads(rows, resting)
+        assertEquals(listOf(9, 10, 12, 14), out.map { it.first.dayOfMonth })
+        assertEquals(420.0, out[1].second, 0.0)
+        // The 12th: the person's maximum on that date is the second-highest session maximum so far (185 of 190, 185),
+        // not the session's own.
+        assertEquals(trimp(EnduranceSessionInput(45.0, null, 150.0, 185.0, null, null, null), 50.0, 185.0)!!, out[2].second, 1e-9)
+        // The 14th: still 185 (190, 185, 150); its own 150 peak no longer makes it look hard.
+        assertEquals(trimp(EnduranceSessionInput(30.0, null, 140.0, null, null, null, null), 50.0, 185.0)!!, out[3].second, 1e-9)
+        assertEquals(1, buildTrainingSessionLoads(rows, emptyList()).size) // no resting HR: only the RPE row
     }
 
     // ---------- evaluateSri ----------

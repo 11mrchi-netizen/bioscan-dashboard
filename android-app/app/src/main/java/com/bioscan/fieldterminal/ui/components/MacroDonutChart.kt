@@ -25,7 +25,7 @@ import kotlin.math.roundToInt
 // is what MACROS already shows elsewhere on this page, so the donut reads
 // consistently). Fixed categorical hue order, never cycled or reassigned when
 // a slice happens to be zero (dataviz skill's color-formula: identity, not rank).
-private val MACRO_COLORS = listOf(FT.DomainFuel, FT.Emerald, FT.Warning) // carbs, protein, fat, in that fixed order
+internal val MACRO_COLORS = listOf(FT.DomainFuel, FT.Emerald, FT.Warning) // carbs, protein, fat, in that fixed order
 
 @Composable
 fun MacroDonutChart(carbsG: Double, proteinG: Double, fatG: Double, modifier: Modifier = Modifier) {

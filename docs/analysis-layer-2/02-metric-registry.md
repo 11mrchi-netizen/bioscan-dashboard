@@ -67,7 +67,7 @@ provenance:
 
 | Canonical name | Kind | Unit | Temporal grain | Aggregation | Current Supabase source(s) | Status |
 |---|---|---|---|---|---|---|
-| Heart rate (instantaneous) | raw | bpm | per-sample | none | not stored (HC session-level only) | gap |
+| Heart rate (instantaneous) | raw | bpm | per-sample | none | `zepp_workout_detail.decoded.heartRate` (Zepp workouts, per second) and `hr_histogram` (seconds per bpm); HC series read on demand | mapped for Zepp workouts |
 | Heart rate (session average) | raw | bpm | per-session | mean | `exercise_sessions.avg_hr` | mapped |
 | Heart rate (session max) | raw | bpm | per-session | max | `exercise_sessions.max_hr` | mapped (sparse on manual entries — 0/19) |
 | HRV | raw | ms | daily | vendor-defined | `wearable_daily.hrv` | mapped (20% coverage) |
@@ -95,7 +95,12 @@ provenance:
 | Hydration | raw | ml | daily | sum | `hydration_daily.ml` | mapped |
 | Wellbeing (energy/mood/stress/soreness) | raw | 0–10 | daily | none | `wellbeing_daily.*` | mapped |
 | Training load (CTL/ATL/TSB) | modeled | arbitrary load units | daily, EWMA | Banister two-compartment (`TrainingLoadEvaluation.kt`) | computed from `exercise_sessions` | mapped, Android-only (web dashboard still runs ACWR — see Core principle above) |
-| TRIMP | modeled | arbitrary | per-session | HR-reserve weighted | computed from `avg_hr` + `wearable_daily.rhr` (+ max HR) | **spec'd in DAV-55 doc, not yet implemented** |
+| TRIMP | modeled | arbitrary | per-session | HR-reserve weighted, personal maximum and resting HR as of the session's date | computed from `avg_hr`, session maxima and `wearable_daily.rhr` | mapped (phone, server, console; Oct 2026) |
+| Heart-rate zones | derived | zone 1–5 | per-sample | % of max, HR reserve or % of lactate-threshold HR (`HeartRateZones.kt`) | anchors from session maxima, `wearable_daily.rhr`, Zepp `lactateThresholdHrBpm` | mapped |
+| Intensity distribution | derived | minutes per band | weekly | low / moderate / high from zones (`IntensityDistribution.kt`) | `zepp_workout_detail.hr_histogram` | mapped (Zepp workouts) |
+| Daily carbohydrate plan | modeled | g/kg, g | daily, 11 days ahead | bands by the next 72 h of training, the goal as the average of each 7-day block, meal codes with carbohydrate, protein and fat per meal, two example plates per meal by fixed rules (`domain/fuel/DayFuelPlan.kt`, `MealCodes.kt`, `MealSuggestions.kt`, `StapleFoods.kt`) | planned sessions, calendar, events, recorded sessions, goal, weight, logged meals | mapped |
+| Sweat rate | modeled | ml/h | per test / per hour planned | sweat tests moving a temperature-scaled prior (`domain/fuel/SweatProfile.kt`) | `sweat_tests`, Open-Meteo weather | mapped |
+| Carbohydrate periodization index | derived | index | 28 days | correlation x range / monotony of daily carbohydrate against training energy (`domain/fuel/Periodization.kt`) | Log daily totals, recorded sessions | mapped |
 | Threshold-relative intensity | modeled | percent of threshold | per-session | — | needs a threshold profile that doesn't exist yet | gap — [DAV-126](https://linear.app/biodashboard/issue/DAV-126) |
 | sRPE load | derived | RPE·minutes | per-session | rpe × duration | `exercise_sessions.rpe` × `duration_min` | mapped (fallback model, see DAV-55 doc) |
 | Lab marker (generic) | raw | marker-specific | per-draw | none | `lab_results.marker_name`/`value`/`unit`/`ref_low`/`ref_high`/`flag` | mapped — per-marker themes already exist in `domain/LabMarkerThemes.kt`, not re-enumerated here |

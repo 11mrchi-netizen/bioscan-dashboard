@@ -14,6 +14,8 @@ import com.bioscan.fieldterminal.data.model.PlannedForSessionRow
 import com.bioscan.fieldterminal.data.model.TrainingDefinitionRow
 import com.bioscan.fieldterminal.data.model.UpcomingSessionRow
 import com.bioscan.fieldterminal.data.model.TrainingSettingsRow
+import com.bioscan.fieldterminal.data.model.ZoneMethodRow
+import com.bioscan.fieldterminal.domain.ZoneMethod
 import com.bioscan.fieldterminal.domain.training.DatedSet
 import com.bioscan.fieldterminal.domain.training.RecordedMax
 import com.bioscan.fieldterminal.domain.training.ResolvedMax
@@ -138,6 +140,23 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
             put("second_start_time", s.secondStartTime)
             put("second_duration_min", s.secondDurationMin)
             put("weighted_percent_base", s.weightedPercentBase)
+            put("updated_at", java.time.Instant.now().toString())
+        }) { onConflict = "user_id" }
+    }
+
+    // The default heart-rate zone method (20261021_hr_zone_method.sql), read and written on its own: a database without
+    // the column yet still opens the planner and its settings, and the zones fall back to AUTO.
+    suspend fun loadZoneMethod(): ZoneMethod = ReadCache.get("training.zone_method", tables = setOf("training_settings")) {
+        runCatching {
+            supabase.postgrest.from("training_settings")
+                .select(columns = Columns.list("hr_zone_method"))
+                .decodeList<ZoneMethodRow>().firstOrNull()?.method
+        }.getOrNull().let(ZoneMethod::of)
+    }
+
+    suspend fun saveZoneMethod(method: ZoneMethod) {
+        supabase.postgrest.from("training_settings").upsert(buildJsonObject {
+            put("hr_zone_method", method.key)
             put("updated_at", java.time.Instant.now().toString())
         }) { onConflict = "user_id" }
     }

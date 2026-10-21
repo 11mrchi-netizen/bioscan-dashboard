@@ -6,6 +6,7 @@ import com.bioscan.fieldterminal.data.model.MedicationEntry
 import com.bioscan.fieldterminal.data.model.NewIllnessRow
 import com.bioscan.fieldterminal.data.model.NewInjuryRow
 import com.bioscan.fieldterminal.domain.HealthEvent
+import com.bioscan.fieldterminal.domain.isHealthEventOpen
 import com.bioscan.fieldterminal.domain.mergeHealthEvents
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -31,7 +32,7 @@ class HealthEventsRepository(private val supabase: SupabaseClient) {
             .decodeList<IllnessRow>()
 
         val all = mergeHealthEvents(injuries, illnesses)
-        val (open, resolved) = all.partition { it.status == "active" || it.status == "monitoring" }
+        val (open, resolved) = all.partition { isHealthEventOpen(it.status) }
 
         return HealthEventsOverview(open = open, resolved = resolved)
     }

@@ -1,93 +1,142 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.LOG_PAGE_SIZE
+import com.bioscan.fieldterminal.data.LOG_PAGE_DAYS
+import com.bioscan.fieldterminal.data.LOG_WINDOW_DAYS
+import com.bioscan.fieldterminal.data.LogFeed
 import com.bioscan.fieldterminal.data.LogRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.LogCategory
 import com.bioscan.fieldterminal.domain.LogEntry
+import com.bioscan.fieldterminal.domain.LogDay
 import com.bioscan.fieldterminal.domain.LogEntryKind
+import com.bioscan.fieldterminal.domain.LogMark
 import com.bioscan.fieldterminal.domain.LogSource
+import com.bioscan.fieldterminal.domain.DayMark
+import com.bioscan.fieldterminal.domain.MarkState
+import com.bioscan.fieldterminal.domain.buildLogDays
 import com.bioscan.fieldterminal.domain.category
+import com.bioscan.fieldterminal.domain.supplementExpectedOn
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
+import com.bioscan.fieldterminal.ui.components.SubTabChip
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 // Log tab: Step 11's unified read feed plus Step 12's "+" add-entry flow and
-// its edit/delete counterpart. Real data merged from meals/runs/sleep_daily/
-// arousal_daily/stool_log/encounters/notes/hydration_daily -- see
-// domain/Log.kt for what's deliberately NOT included (supplement-taken
-// confirmations have no backing table) and data/LogRepository.kt for the
-// pagination approach Step 11's roadmap text explicitly asked to be decided.
-// Tapping "+" opens AddEntrySheet; tapping an existing entry opens
-// EntryActionSheet (EDIT/DELETE), and EDIT opens EditEntrySheet (all in
+// its edit/delete counterpart. Real data merged from every logged table (see
+// domain/Log.kt), loaded as a window of days (data/LogRepository.kt): LOAD
+// OLDER first shows more of the loaded days, then widens the window.
+// Tapping "+ LOG" opens AddEntrySheet; tapping an existing entry opens
+// EntrySheet (the entry, then DETAIL/EDIT/DELETE), and EDIT opens EditEntrySheet (all in
 // ui/screens/AddEntrySheet.kt). Any successful save or delete bumps
 // `reloadKey` so the feed re-fetches immediately.
 @Composable
 fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
-    var allEntries by remember { mutableStateOf<List<LogEntry>?>(null) }
-    var visibleCount by remember { mutableStateOf(LOG_PAGE_SIZE) }
-    var reloadKey by remember { mutableStateOf(0) }
-    var showAddSheet by remember { mutableStateOf(false) }
+    var feed by remember { mutableStateOf<LogFeed?>(null) }
+    var visibleDays by remember { mutableIntStateOf(LOG_PAGE_DAYS) }
+    // How many days back the feed is loaded; LOAD OLDER widens it once the loaded days are all shown, until a widening
+    // finds nothing older.
+    var windowDays by remember { mutableIntStateOf(LOG_WINDOW_DAYS) }
+    var olderExhausted by remember { mutableStateOf(false) }
+    var loadingOlder by remember { mutableStateOf(false) }
+    var reloadKey by remember { mutableIntStateOf(0) }
+    var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var actionEntry by remember { mutableStateOf<LogEntry?>(null) }
     var editingEntry by remember { mutableStateOf<LogEntry?>(null) }
     var sleepDetailEntryId by remember { mutableStateOf<Long?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Days are collapsed unless opened; the open set and the filter survive switching tabs (kept as a string so it is saveable).
+    var expandedKeys by rememberSaveable { mutableStateOf("") }
+    var gapsOnly by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(reloadKey) {
+    LaunchedEffect(reloadKey, windowDays) {
         error = null
         try {
-            allEntries = LogRepository(SupabaseClientProvider.client).loadAllEntries()
+            val since = LocalDate.now().minusDays(windowDays - 1L)
+            val loaded = LogRepository(SupabaseClientProvider.client).loadFeed(since)
+            // A widening that adds nothing older than the previous window ends LOAD OLDER.
+            if (windowDays > LOG_WINDOW_DAYS) {
+                val previousStart = since.plusDays(LOG_WINDOW_DAYS.toLong())
+                olderExhausted = loaded.entries.none { it.timestamp.toLocalDate().isBefore(previousStart) }
+            }
+            feed = loaded
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
+        } finally {
+            loadingOlder = false
         }
     }
 
     fun refresh() {
-        visibleCount = LOG_PAGE_SIZE
+        visibleDays = LOG_PAGE_DAYS
         reloadKey += 1
+    }
+
+    // Everything about days (grouping, marks, gaps, summaries) is computed in the domain; the screen only draws it.
+    val days = remember(feed) {
+        feed?.let { f ->
+            buildLogDays(f.entries, LocalDate.now(), f.coverage, { date -> supplementExpectedOn(f.supplementSchedule, date) }, from = f.since)
+        }.orEmpty()
+    }
+    val expanded = expandedKeys.split(',').filter { it.isNotEmpty() }.toSet()
+    fun toggle(day: LogDay) {
+        val key = day.date.toString()
+        expandedKeys = (if (key in expanded) expanded - key else expanded + key).joinToString(",")
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-            val entries = allEntries
+            val current = feed
+            val gapCount = days.count { it.hasGap }
+            // UX review P4: the header counts today (the all-time count of loaded rows said little) and keeps the gap count.
+            val today = LocalDate.now()
             ScreenHeader(
                 title = "LOG",
                 context = when {
                     error != null -> "ERROR"
-                    entries != null -> "${entries.size} ENTRIES"
+                    current != null -> "TODAY ${current.entries.count { it.timestamp.toLocalDate() == today }} · " +
+                        if (gapCount == 0) "NO GAPS" else "$gapCount DAY${if (gapCount == 1) "" else "S"} WITH GAPS"
                     else -> "LOADING"
                 },
             )
@@ -96,34 +145,53 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
                 error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
                 }
-                entries == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                current == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = FT.DomainLog)
                 }
-                entries.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                current.entries.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Nothing logged yet.", style = FTType.Body, color = FT.TextSecondary)
                 }
                 else -> {
-                    val visible = entries.take(visibleCount)
-                    val grouped = visible.groupBy { it.timestamp.toLocalDate() }
-
-                    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                        grouped.forEach { (date, dayEntries) ->
-                            DayHeader(date)
-                            // DAV-219 (24/9 fixes): sub-grouped by category
-                            // within the day instead of one flat chronological
-                            // list -- a day with 8 supplements logged at once
-                            // no longer buries the day's other entries between them.
-                            val byCategory = dayEntries.groupBy { it.kind.category }
-                            LogCategory.entries.forEach { category ->
-                                val categoryEntries = byCategory[category] ?: return@forEach
-                                CategoryLabel(category)
-                                categoryEntries.forEach { entry -> EntryRow(entry, onClick = { actionEntry = entry }) }
+                    val shown = if (gapsOnly) days.filter { it.hasGap } else days
+                    val visible = shown.take(visibleDays)
+                    LogToolbar(
+                        gapsOnly = gapsOnly,
+                        onToggleGaps = { gapsOnly = !gapsOnly; visibleDays = LOG_PAGE_DAYS },
+                        allOpen = visible.isNotEmpty() && visible.all { it.date.toString() in expanded },
+                        onToggleAll = {
+                            expandedKeys = if (visible.all { it.date.toString() in expanded }) "" else visible.joinToString(",") { it.date.toString() }
+                        },
+                    )
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        if (visible.isEmpty()) {
+                            item(key = "no-gaps") {
+                                Text(
+                                    "No gaps in the loaded days.",
+                                    style = FTType.Body, color = FT.TextSecondary,
+                                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                )
                             }
                         }
-                        if (visibleCount < entries.size) {
-                            LoadOlderButton(onClick = { visibleCount += LOG_PAGE_SIZE })
+                        items(visible, key = { it.date.toString() }) { day ->
+                            LogDayCard(
+                                day = day,
+                                open = day.date.toString() in expanded,
+                                onToggle = { toggle(day) },
+                                onEntryClick = { actionEntry = it },
+                            )
                         }
-                        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp))
+                        if (visibleDays < shown.size || !olderExhausted) {
+                            item(key = "older") {
+                                LoadOlderButton(loading = loadingOlder, onClick = {
+                                    visibleDays += LOG_PAGE_DAYS
+                                    if (visibleDays > shown.size && !olderExhausted && !loadingOlder) {
+                                        loadingOlder = true
+                                        windowDays += LOG_WINDOW_DAYS
+                                    }
+                                })
+                            }
+                        }
+                        item(key = "end-pad") { Box(Modifier.fillMaxWidth().padding(vertical = 48.dp)) }
                     }
                 }
             }
@@ -143,7 +211,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     }
 
     actionEntry?.let { entry ->
-        EntryActionSheet(
+        EntrySheet(
             entry = entry,
             onDismiss = { actionEntry = null },
             onEdit = {
@@ -188,48 +256,140 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     }
 }
 
+// UX review P4: a labelled "+ LOG" (was a bare "+", which said nothing to a screen reader). The feed's end padding keeps
+// the last row clear of it.
 @Composable
 private fun AddEntryFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
+            .defaultMinSize(minHeight = 56.dp)
             .background(FT.DomainLog, CircleShape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(horizontal = 22.dp, vertical = 16.dp),
+            .ftClickable(onClick = onClick, shape = CircleShape, role = Role.Button, onClickLabel = "Log a new entry")
+            .padding(horizontal = 24.dp, vertical = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            "+",
-            style = FTType.MetricMedium,
-            color = FT.Base,
-        )
+        Text("+ LOG", style = FTType.ButtonLabel, color = FT.Base)
     }
 }
 
 @Composable
-private fun DayHeader(date: LocalDate) {
-    val today = LocalDate.now()
-    val label = when (date) {
-        today -> "TODAY"
-        today.minusDays(1) -> "YESTERDAY"
-        else -> date.format(DateTimeFormatter.ofPattern("dd MMM")).uppercase()
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(FT.GlassFill)
-            .padding(horizontal = 22.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(label, style = FTType.LabelCaps, color = FT.TextSecondary)
+private fun LogToolbar(gapsOnly: Boolean, onToggleGaps: () -> Unit, allOpen: Boolean, onToggleAll: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SubTabChip(label = "GAPS ONLY", selected = gapsOnly, onClick = onToggleGaps)
+            Box(Modifier.weight(1f))
+            Text(
+                if (allOpen) "COLLAPSE ALL" else "EXPAND ALL",
+                style = FTType.Label, color = FT.TextSecondary,
+                modifier = Modifier.ftClickable(onClick = onToggleAll),
+            )
+        }
         Text(
-            date.format(DateTimeFormatter.ofPattern("dd MMM")).uppercase(),
-            style = FTType.LabelCaps,
-            color = FT.TextSecondary,
+            "SOLID = LOGGED · HALF = PARTIAL (MEALS UNDER 3) · DASHED = MISSING · FAINT = NOT EXPECTED OR NOT KNOWN",
+            style = FTType.Micro, color = FT.TextMuted,
         )
     }
 }
 
-// DAV-219 (24/9 fixes): lighter weight than DayHeader (no background fill) --
+private fun dayLabel(date: LocalDate): String {
+    val today = LocalDate.now()
+    return when (date) {
+        today -> "TODAY"
+        today.minusDays(1) -> "YESTERDAY"
+        else -> date.format(DateTimeFormatter.ofPattern("EEE d MMM")).uppercase()
+    }
+}
+
+// One day: collapsed it shows the date, the one-line summary and the row of marks; opened it lists the entries as before
+// (category by category), each still tappable for detail / edit / delete.
+@Composable
+private fun LogDayCard(day: LogDay, open: Boolean, onToggle: () -> Unit, onEntryClick: (LogEntry) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(if (open) FT.GlassStrongFill else FT.GlassFill)
+                .ftClickable(onClick = onToggle)
+                .padding(horizontal = 22.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(dayLabel(day.date), style = FTType.LabelCaps, color = if (day.hasGap) FT.Warning else FT.TextPrimary, modifier = Modifier.weight(1f))
+                Text("${day.entries.size}", style = FTType.Value, color = FT.TextSecondary)
+                Text(if (open) "  ▾" else "  ▸", style = FTType.Value, color = FT.TextMuted)
+            }
+            Text(day.summary, style = FTType.BodySmall, color = if (day.entries.isEmpty()) FT.TextMuted else FT.TextSecondary, maxLines = 2)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                day.marks.forEach { DayMarkCell(it, Modifier.weight(1f)) }
+            }
+        }
+        if (open) {
+            day.byCategory.let { byCategory ->
+                LogCategory.entries.forEach { category ->
+                    val categoryEntries = byCategory[category] ?: return@forEach
+                    CategoryLabel(category)
+                    categoryEntries.forEach { entry -> EntryRow(entry, onClick = { onEntryClick(entry) }) }
+                }
+            }
+            if (day.entries.isEmpty()) {
+                Text("Nothing was logged this day.", style = FTType.Caption, color = FT.TextMuted, modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp))
+            }
+        }
+    }
+}
+
+private fun markColor(mark: LogMark): Color = when (mark) {
+    LogMark.FOOD -> FT.Category.Intake.c500
+    LogMark.DRINK -> FT.Category.Intake.c300
+    LogMark.SUPP -> FT.Category.Intake.c700
+    LogMark.SLEEP -> FT.Category.Sleep.c500
+    LogMark.WELL -> FT.Category.Wellbeing.c500
+    LogMark.EX -> FT.Category.Activity.c500
+    LogMark.OTHER -> FT.TextSecondary
+}
+
+// A glyph that differs by shape as well as colour: solid bar = logged, half-filled = partial, dashed outline = missing,
+// faint outline = nothing to say. The count (or "2/3", or a dash) is written under it.
+@Composable
+private fun DayMarkCell(m: DayMark, modifier: Modifier = Modifier) {
+    val color = markColor(m.mark)
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Canvas(modifier = Modifier.fillMaxWidth().height(8.dp)) {
+            val corner = CornerRadius(size.height / 2f)
+            when (m.state) {
+                MarkState.PRESENT -> drawRoundRect(color, Offset.Zero, size, corner)
+                MarkState.PARTIAL -> {
+                    drawRoundRect(color, Offset.Zero, Size(size.width / 2f, size.height), corner)
+                    drawRoundRect(color, Offset.Zero, size, corner, style = Stroke(1.5.dp.toPx()))
+                }
+                MarkState.MISSING -> drawRoundRect(
+                    FT.Warning, Offset.Zero, size, corner,
+                    style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 3.dp.toPx()))),
+                )
+                MarkState.NONE -> drawRoundRect(FT.GlassTrack, Offset.Zero, size, corner, style = Stroke(1.dp.toPx()))
+            }
+        }
+        Text(
+            when (m.state) {
+                MarkState.PARTIAL -> "${m.count}/3"
+                MarkState.MISSING -> "—"
+                MarkState.NONE -> ""
+                MarkState.PRESENT -> "${m.count}"
+            },
+            style = FTType.Micro,
+            color = if (m.state == MarkState.MISSING) FT.Warning else FT.TextSecondary,
+            maxLines = 1,
+        )
+        Text(
+            m.mark.label,
+            style = FTType.Micro,
+            color = if (m.state == MarkState.NONE) FT.TextMuted.copy(alpha = 0.6f) else FT.TextMuted,
+            maxLines = 1,
+        )
+    }
+}
+
+// DAV-219 (24/9 fixes): lighter weight than the day row (no background fill) --
 // subordinate to the day it sits under, not a peer section of its own.
 @Composable
 private fun CategoryLabel(category: LogCategory) {
@@ -246,7 +406,7 @@ private fun EntryRow(entry: LogEntry, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -308,15 +468,15 @@ private fun TypeChip(kind: LogEntryKind) {
 }
 
 @Composable
-private fun LoadOlderButton(onClick: () -> Unit) {
+private fun LoadOlderButton(loading: Boolean, onClick: () -> Unit) {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
         Box(
             modifier = Modifier
                 .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+                .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
-            Text("LOAD OLDER", style = FTType.LabelCaps, color = FT.TextSecondary)
+            Text(if (loading) "LOADING OLDER…" else "LOAD OLDER", style = FTType.LabelCaps, color = FT.TextSecondary)
         }
     }
 }

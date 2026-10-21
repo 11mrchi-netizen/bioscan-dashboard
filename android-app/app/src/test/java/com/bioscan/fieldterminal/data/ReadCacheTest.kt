@@ -78,6 +78,30 @@ class ReadCacheTest {
     }
 
     @Test
+    fun aWriteDropsOnlyTheEntriesThatReadItsTable() = runBlocking {
+        val loads = AtomicInteger()
+        ReadCache.get("sessions", tables = setOf("exercise_sessions")) { loads.incrementAndGet() }
+        ReadCache.get("untagged") { loads.incrementAndGet() }
+        ReadCache.invalidateWrite("wearable_daily")
+        ReadCache.get("sessions", tables = setOf("exercise_sessions")) { loads.incrementAndGet() } // still cached
+        ReadCache.get("untagged") { loads.incrementAndGet() } // dropped: names no tables
+        assertEquals(3, loads.get())
+        ReadCache.invalidateWrite("exercise_sessions")
+        ReadCache.get("sessions", tables = setOf("exercise_sessions")) { loads.incrementAndGet() }
+        assertEquals(4, loads.get())
+        ReadCache.invalidateWrite(null) // an rpc or an edge function: everything goes
+        assertEquals(0, ReadCache.size())
+    }
+
+    @Test
+    fun theWrittenTableComesFromTheRestPath() {
+        assertEquals("wearable_daily", writtenTable("/rest/v1/wearable_daily"))
+        assertEquals("exercise_sessions", writtenTable("/rest/v1/exercise_sessions?id=eq.5"))
+        assertNull(writtenTable("/rest/v1/rpc/claim_zepp_history_pull"))
+        assertNull(writtenTable("/functions/v1/zepp-extract"))
+    }
+
+    @Test
     fun aCachedNullIsAHitNotAMiss() = runBlocking {
         val loads = AtomicInteger()
         val a: String? = ReadCache.get("none") { loads.incrementAndGet(); null }

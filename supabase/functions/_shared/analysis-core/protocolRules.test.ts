@@ -52,9 +52,21 @@ test('a signal in the intended direction with high burden: decrease, not termina
   assert.equal(p.action, 'decrease')
 })
 
-test('a signal in the wrong direction: terminate, even with low burden', () => {
-  const p = proposeProtocolAction(base({ verdict: 'signal_observed', observedDirection: 'decrease', expectedDirection: 'increase', burden: 'low' }))
+test('a tested effect in the wrong direction: terminate, even with low burden', () => {
+  const p = proposeProtocolAction(base({ verdict: 'effect_detected', observedDirection: 'decrease', expectedDirection: 'increase', burden: 'low' }))
   assert.equal(p.action, 'terminate')
+})
+
+test('an observed signal never changes the protocol on its own: reassess, with the reason and a randomised test', () => {
+  const wrongWay = proposeProtocolAction(base({ verdict: 'signal_observed', observedDirection: 'decrease', expectedDirection: 'increase', burden: 'low' }))
+  assert.equal(wrongWay.action, 'reassess')
+  assert.match(wrongWay.rationale[0], /opposite way/)
+  assert.match(wrongWay.rationale[1], /Stopping is always your call.*randomised self-experiment/)
+  assert.equal(proposeProtocolAction(base({ verdict: 'signal_observed', burden: 'high' })).action, 'reassess')
+  assert.equal(proposeProtocolAction(base({ verdict: 'no_signal', evidenceStrength: 'moderate', burden: 'medium' })).action, 'reassess')
+  // Keeping it, or giving it more time, still follows from an observed read.
+  assert.equal(proposeProtocolAction(base({ verdict: 'signal_observed', burden: 'low' })).action, 'maintain')
+  assert.equal(proposeProtocolAction(base({ verdict: 'no_signal', evidenceStrength: 'strong', burden: 'medium' })).action, 'extend_evaluation')
 })
 
 test('expectedDirection "stabilize" is never treated as a direction mismatch', () => {
@@ -77,7 +89,7 @@ test('no signal with weak or no evidence: reassess', () => {
   assert.equal(proposeProtocolAction(base({ verdict: 'no_signal', evidenceStrength: 'none' })).action, 'reassess')
 })
 
-test('no signal with moderate evidence: pause', () => {
-  const p = proposeProtocolAction(base({ verdict: 'no_signal', evidenceStrength: 'moderate', burden: 'medium' }))
+test('no tested effect with moderate evidence: pause', () => {
+  const p = proposeProtocolAction(base({ verdict: 'no_detectable_effect', evidenceStrength: 'moderate', burden: 'medium' }))
   assert.equal(p.action, 'pause')
 })

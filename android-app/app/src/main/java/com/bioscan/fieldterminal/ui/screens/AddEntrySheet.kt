@@ -1,8 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.ui.components.describeLoadFailure
-import com.bioscan.fieldterminal.ui.components.softLoad
-import com.bioscan.fieldterminal.ui.components.launchSafe
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -11,14 +8,16 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -36,18 +35,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.ExerciseLibraryRepository
@@ -87,17 +87,36 @@ import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
+import com.bioscan.fieldterminal.domain.AddEntryChoice
+import com.bioscan.fieldterminal.domain.editedDetails
+import com.bioscan.fieldterminal.domain.AddEntryGroup
+import com.bioscan.fieldterminal.domain.AddEntryStart
+import com.bioscan.fieldterminal.domain.AddEntryTarget
+
 import com.bioscan.fieldterminal.domain.AddEntryType
 import com.bioscan.fieldterminal.domain.ethanolGrams
 import com.bioscan.fieldterminal.domain.isSupplementDueToday
 import com.bioscan.fieldterminal.domain.supplementNextDueDate
 import com.bioscan.fieldterminal.domain.FuelSubType
+import com.bioscan.fieldterminal.domain.formatRecentChoices
+import com.bioscan.fieldterminal.domain.parseRecentChoices
+import com.bioscan.fieldterminal.domain.recordRecentChoice
+import com.bioscan.fieldterminal.domain.target
 import com.bioscan.fieldterminal.domain.LogEntry
 import com.bioscan.fieldterminal.domain.LogSource
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.domain.logEntryWhen
 import com.bioscan.fieldterminal.ui.components.DateField
 import com.bioscan.fieldterminal.ui.components.DateTimeField
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.ui.screens.status.IllnessFormSheet
+import com.bioscan.fieldterminal.ui.screens.status.InjuryFormSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -124,15 +143,27 @@ private val sheetActionLabelStyle = FTType.LabelCaps
 // Supplements share one FUEL entry point with a three-way sub-picker.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
+fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntryStart? = null) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedType by remember { mutableStateOf<AddEntryType?>(null) }
-    // Daily-use shortcut: the type logged last time is one tap away (the picker is otherwise FAB -> grid -> type).
+    // UX review P1: the Status quick-log row opens the sheet on the right form; back from it still leads to the picker.
+    // Saveable: the forms here can open the camera, file and photo pickers, and the app may be restored meanwhile.
+    var selectedType by rememberSaveable { mutableStateOf(
+        when (start) {
+            is AddEntryStart.Fuel -> AddEntryType.Fuel
+            is AddEntryStart.Form -> start.type
+            else -> null
+        },
+    ) }
+    // Cleared on back, so picking FUEL again from the picker opens on FOOD as usual.
+    var fuelStart by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.AddEntryStartSaver) { mutableStateOf<AddEntryStart?>(start as? AddEntryStart.Fuel) }
+    // UX review P3: the last three choices are one tap away in a RECENT row (was a single LAST button).
     val addPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("ft_ui", android.content.Context.MODE_PRIVATE)
-    val lastType = remember { addPrefs.getString("last_add_type", null)?.let { name -> AddEntryType.entries.firstOrNull { it.name == name } } }
+    var recent by remember { mutableStateOf(parseRecentChoices(addPrefs.getString("recent_add_choices", null))) }
+    // Injury and illness have their own form sheets (shared with Training › Injury); picking one swaps this sheet for it.
+    var healthForm by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.AddEntryTargetSaver) { mutableStateOf<AddEntryTarget?>(null) }
     // Analysis Layer 3 / R2: "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
-    var sayIt by remember { mutableStateOf(false) }
-    var foodPrefill by remember { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
+    var sayIt by rememberSaveable { mutableStateOf(start is AddEntryStart.SayIt) }
+    var foodPrefill by rememberSaveable { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
     val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var saving by remember { mutableStateOf(false) }
@@ -142,106 +173,124 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     // callback even though the user hasn't actually dismissed the sheet.
     val externalActivityActive = remember { mutableStateOf(false) }
 
-    ModalBottomSheet(
-        onDismissRequest = { if (!externalActivityActive.value && !com.bioscan.fieldterminal.util.ExternalActivityGuard.active) onDismiss() },
-        sheetState = sheetState,
-        shape = FT.SheetShape,
-        containerColor = FT.Surface,
-        contentColor = FT.TextPrimary,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
-                .verticalScroll(rememberScrollState()),
+    val pick: (AddEntryChoice) -> Unit = { choice ->
+        recent = recordRecentChoice(recent, choice)
+        addPrefs.edit().putString("recent_add_choices", formatRecentChoices(recent)).apply()
+        when (val target = choice.target) {
+            is AddEntryTarget.Form -> {
+                fuelStart = target.fuel?.let { AddEntryStart.Fuel(it) }
+                selectedType = target.type
+            }
+            else -> healthForm = target
+        }
+    }
+
+    when (healthForm) {
+        AddEntryTarget.InjuryForm -> InjuryFormSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.IllnessForm -> IllnessFormSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.BodyCheckIn -> com.bioscan.fieldterminal.ui.screens.status.BodyCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.EventForm -> com.bioscan.fieldterminal.ui.screens.events.EventFormSheet(onDismiss = onDismiss, onSaved = { onSaved() })
+        AddEntryTarget.SweatTest -> com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = onDismiss, onSaved = onSaved)
+        else -> ModalBottomSheet(
+            onDismissRequest = { if (!externalActivityActive.value && !com.bioscan.fieldterminal.util.ExternalActivityGuard.active) onDismiss() },
+            sheetState = sheetState,
+            shape = FT.SheetShape,
+            containerColor = FT.Surface,
+            contentColor = FT.TextPrimary,
         ) {
-            val type = selectedType
-            if (sayIt) {
-                SheetBackHeader(label = "SAY IT", onBack = { sayIt = false })
-                Spacer(Modifier.height(16.dp))
-                LogAgentForm(
-                    onSaved = onSaved,
-                    onFoodHandoff = { text, at ->
-                        foodPrefill = text to at
-                        sayIt = false
-                        selectedType = AddEntryType.Fuel
-                    },
-                )
-            } else if (type == null) {
-                Text("LOG NEW ENTRY", style = sheetHeaderTitleStyle, color = FT.DomainLog)
-                Spacer(Modifier.height(16.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(FT.BorderWidth, FT.DomainLog, RoundedCornerShape(FT.RadiusModule))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { sayIt = true }
-                        .padding(vertical = 18.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("SAY IT", style = sheetActionLabelStyle, color = FT.DomainLog)
-                }
-                Spacer(Modifier.height(10.dp))
-                lastType?.let { last ->
-                    AmberButton(label = "LAST: ${last.label}") { selectedType = last }
-                    Spacer(Modifier.height(10.dp))
-                }
-                TypePickerGrid(onSelect = { picked ->
-                    addPrefs.edit().putString("last_add_type", picked.name).apply()
-                    selectedType = picked
-                })
-            } else {
-                SheetBackHeader(label = type.label, onBack = { selectedType = null; foodPrefill = null })
-                Spacer(Modifier.height(16.dp))
-                val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
-                    saving = true
-                    saveError = null
-                    scope.launch {
-                        // A rejected write must surface here, not crash the app.
-                        try {
-                            write(repo)
-                            saving = false
-                            onSaved()
-                        } catch (e: kotlinx.coroutines.CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            saving = false
-                            saveError = e.message ?: "Save failed"
-                        }
-                    }
-                }
-                saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
-                when (type) {
-                    AddEntryType.Fuel -> FuelForm(saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill)
-                    AddEntryType.Encounter -> EncounterForm(
-                        saving,
-                        onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
-                            onSubmit { it.addEncounter(date = date, encounterType = et, notes = n, occurredAt = occurredAt, locationType = loc, durationMin = dur, activities = acts, myRating = rating) }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                val type = selectedType
+                if (sayIt) {
+                    SheetBackHeader(label = "SAY IT", onBack = { sayIt = false })
+                    Spacer(Modifier.height(16.dp))
+                    LogAgentForm(
+                        onSaved = onSaved,
+                        onFoodHandoff = { text, at ->
+                            foodPrefill = text to at
+                            sayIt = false
+                            selectedType = AddEntryType.Fuel
                         },
                     )
-                    AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d -> onSubmit { it.addStool(occurredAt, bt, d) } })
-                    AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so, mw, al -> onSubmit { it.addWellbeing(date, e, m, s, so, mw, al) } })
-                    AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
-                    AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
-                    AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
-                    AddEntryType.Grip -> GripForm(saving, onSave = { occurredAt, hand, kg -> onSubmit { it.addGrip(occurredAt, hand, kg) } })
+                } else if (type == null) {
+                    Text("LOG NEW ENTRY", style = sheetHeaderTitleStyle, color = FT.DomainLog)
+                    Spacer(Modifier.height(16.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(FT.BorderWidth, FT.DomainLog, RoundedCornerShape(FT.RadiusModule))
+                            .ftClickable(shape = RoundedCornerShape(FT.RadiusModule)) { sayIt = true }
+                            .padding(vertical = 18.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("SAY IT", style = sheetActionLabelStyle, color = FT.DomainLog)
+                    }
+                    Spacer(Modifier.height(18.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        if (recent.isNotEmpty()) ChoiceSection("RECENT", recent, pick)
+                        AddEntryGroup.entries.forEach { group -> ChoiceSection(group.label, AddEntryChoice.entries.filter { it.group == group }, pick) }
+                    }
+                } else {
+                    SheetBackHeader(label = type.label, onBack = { selectedType = null; foodPrefill = null; fuelStart = null })
+                    Spacer(Modifier.height(16.dp))
+                    val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
+                        saving = true
+                        saveError = null
+                        scope.launch {
+                            // A rejected write must surface here, not crash the app.
+                            try {
+                                write(repo)
+                                saving = false
+                                onSaved()
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                saving = false
+                                saveError = e.message ?: "Save failed"
+                            }
+                        }
+                    }
+                    saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
+                    when (type) {
+                        AddEntryType.Fuel -> FuelForm(
+                            saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill,
+                            initialSubType = (fuelStart as? AddEntryStart.Fuel)?.subType ?: FuelSubType.Food,
+                            supplementBundle = (fuelStart as? AddEntryStart.Fuel)?.supplementBundle,
+                        )
+                        AddEntryType.Encounter -> EncounterForm(
+                            saving,
+                            onSave = { date, occurredAt, et, loc, dur, acts, rating, n ->
+                                onSubmit { it.addEncounter(date = date, encounterType = et, notes = n, occurredAt = occurredAt, locationType = loc, durationMin = dur, activities = acts, myRating = rating) }
+                            },
+                        )
+                        AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d -> onSubmit { it.addStool(occurredAt, bt, d) } })
+                        AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so, mw, al -> onSubmit { it.addWellbeing(date, e, m, s, so, mw, al) } })
+                        AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
+                        AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
+                        AddEntryType.SexualActivity -> SexualActivityForm(saving, onSave = { date, type, instances, n -> onSubmit { it.addSexualActivity(date, type, instances, n) } })
+                        AddEntryType.Grip -> GripForm(saving, onSave = { occurredAt, hand, kg -> onSubmit { it.addGrip(occurredAt, hand, kg) } })
+                    }
                 }
+                Spacer(Modifier.height(12.dp))
             }
-            Spacer(Modifier.height(12.dp))
         }
     }
 }
 
-// Tapping a Log entry opens this first -- EDIT (when the source has a
-// corresponding form) and DELETE, with an inline confirm step rather than a
-// second popup. Sleep has no add-entry form and no editable fields, so it
-// stays delete-only. Supplement (DAV-156) is editable now -- dose is a real
-// field, even though which supplement was taken still isn't (that's "delete
-// and re-log," not "edit"). Exercise (Phase G3) IS editable -- not its
-// Health-Connect-sourced fields, just rpe/notes via ExerciseDetailsForm.
-// Phase G4 adds a DETAIL action for Exercise entries, pushing SessionDetailScreen.
+// Tapping a Log entry opens the entry itself (UX review P4, adapted to PR #20's Log): what it is and when, its values, then
+// DETAIL / EDIT / DELETE. It used to open a bare action menu. EDIT appears when the source has a corresponding form;
+// Sleep has no add-entry form and no editable fields, so it stays delete-only. Supplement (DAV-156) is editable -- dose
+// is a real field, even though which supplement was taken still isn't (that's "delete and re-log," not "edit").
+// Exercise (Phase G3) IS editable -- not its Health-Connect-sourced fields, just rpe/notes via ExerciseDetailsForm.
+// DETAIL (Phase G4) pushes SessionDetailScreen for exercise and opens the sleep detail for sleep. DELETE asks first
+// (contract A2) and says when it failed.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EntryActionSheet(
+fun EntrySheet(
     entry: LogEntry,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
@@ -253,6 +302,7 @@ fun EntryActionSheet(
     val scope = rememberCoroutineScope()
     var confirmingDelete by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
     val editable = entry.source != LogSource.Sleep
 
     ModalBottomSheet(
@@ -263,63 +313,37 @@ fun EntryActionSheet(
         contentColor = FT.TextPrimary,
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(entry.headline, style = sheetHeaderTitleStyle, color = FT.DomainLog)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(logEntryWhen(entry, LocalDate.now()), style = FTType.LabelCaps, color = FT.TextMuted)
+                Text(entry.headline, style = sheetHeaderTitleStyle, color = FT.TextPrimary)
+                entry.detail?.takeIf { it.isNotBlank() }?.let { Text(it, style = FTType.Body, color = FT.TextSecondary) }
+            }
 
             if (!confirmingDelete) {
-                if (onViewDetail != null) {
-                    AmberButton(label = "DETAIL", onClick = onViewDetail)
-                }
-                if (editable) {
-                    AmberButton(label = "EDIT", onClick = onEdit)
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(FT.BorderWidth, FT.Critical, RoundedCornerShape(FT.RadiusSmall))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { confirmingDelete = true }
-                        .padding(vertical = 14.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("DELETE", style = sheetActionLabelStyle, color = FT.Critical)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    onViewDetail?.let { FTButton(label = "DETAIL", modifier = Modifier.weight(1f), onClick = it) }
+                    if (editable) FTButton(label = "EDIT", modifier = Modifier.weight(1f), onClick = onEdit)
+                    FTButton(label = "DELETE", emphasis = FTButtonEmphasis.Destructive, modifier = Modifier.weight(1f)) {
+                        confirmingDelete = true
+                        deleteError = null
+                    }
                 }
             } else {
-                Text(
-                    "Delete this entry? This can't be undone.",
-                    style = FTType.Body,
-                    color = FT.TextSecondary,
+                FTConfirmDestructive(
+                    message = "Delete this entry? This can't be undone.",
+                    confirmLabel = "DELETE ENTRY",
+                    busy = deleting,
+                    onCancel = { confirmingDelete = false },
+                    onConfirm = {
+                        deleting = true
+                        scope.launchSafe(onError = { deleteError = describeLoadFailure(it) }, onDone = { deleting = false }) {
+                            repo.deleteEntry(entry.source, entry.id)
+                            onDeleted()
+                        }
+                    },
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { confirmingDelete = false }
-                            .padding(vertical = 14.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("CANCEL", style = sheetActionLabelStyle, color = FT.TextSecondary)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(FT.Critical, RoundedCornerShape(FT.RadiusSmall))
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                if (!deleting) {
-                                    deleting = true
-                                    scope.launchSafe(onDone = { deleting = false }) {
-                                        repo.deleteEntry(entry.source, entry.id)
-                                        deleting = false
-                                        onDeleted()
-                                    }
-                                }
-                            }
-                            .padding(vertical = 14.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(if (deleting) "DELETING..." else "CONFIRM", style = sheetActionLabelStyle, color = FT.Base)
-                    }
-                }
             }
+            deleteError?.let { Text("Couldn't delete: $it", style = FTType.BodySmall, color = FT.Critical) }
             Spacer(Modifier.height(4.dp))
         }
     }
@@ -352,7 +376,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
             LogSource.Ostrc -> repo.fetchOstrc(entry.id)
             LogSource.Masturbation -> repo.fetchSexualActivity(entry.id)
             LogSource.Supplement -> repo.fetchSupplementTaken(entry.id)
-            LogSource.Sleep -> null // no edit form; EntryActionSheet never offers EDIT for this
+            LogSource.Sleep -> null // no edit form; EntrySheet never offers EDIT for this
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -506,7 +530,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
 }
 
 // DAV-160. Read-only detail view for Sleep, opened via the same DETAIL
-// action Exercise already uses (EntryActionSheet's onViewDetail) rather than
+// action Exercise already uses (EntrySheet's onViewDetail) rather than
 // a new nav route -- a bottom sheet is proportionate for a handful of read-
 // only stats, matching every other sheet in this file. Sleep still has no
 // edit form (see LogSource's own doc comment); this only reads.
@@ -611,36 +635,54 @@ private fun SheetBackHeader(label: String, onBack: () -> Unit) {
             "BACK",
             style = sheetActionLabelStyle,
             color = FT.TextSecondary,
-            modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onBack),
+            modifier = Modifier.ftClickable(onClick = onBack),
         )
         Text(label, style = sheetHeaderTitleStyle, color = FT.DomainLog)
     }
 }
 
+// UX review P3: one labelled group of add-entry choices, three per row. Labels are words a person reads (Inter, contract
+// A7); the dot is the entry's category colour, an identity mark the Log feed uses for the same kinds, never a state.
 @Composable
-private fun TypePickerGrid(onSelect: (AddEntryType) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        AddEntryType.entries.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { type ->
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { onSelect(type) }
-                            .padding(vertical = 18.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(type.label, style = sheetActionLabelStyle, color = FT.TextPrimary)
-                    }
-                }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+private fun ChoiceSection(label: String, choices: List<AddEntryChoice>, onPick: (AddEntryChoice) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, style = FTType.LabelCaps, color = FT.TextMuted)
+        choices.chunked(3).forEach { row ->
+            Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { choice -> ChoiceTile(choice, Modifier.weight(1f).fillMaxHeight()) { onPick(choice) } }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
+}
+
+@Composable
+private fun ChoiceTile(choice: AddEntryChoice, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(FT.RadiusModule)
+    Row(
+        modifier = modifier
+            .defaultMinSize(minHeight = 48.dp)
+            .border(FT.BorderWidth, FT.GlassBorder, shape)
+            .ftClickable(shape = shape, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(choiceColor(choice)))
+        Text(choice.label, style = FTType.ButtonLabel, color = FT.TextPrimary, maxLines = 2)
+    }
+}
+
+private fun choiceColor(choice: AddEntryChoice): Color = when (choice) {
+    AddEntryChoice.Food, AddEntryChoice.RunFuel -> FT.Category.Intake.c500
+    AddEntryChoice.Drink -> FT.Category.Intake.c300
+    AddEntryChoice.Supplements -> FT.Category.Intake.c700
+    AddEntryChoice.Wellbeing -> FT.Category.Wellbeing.c500
+    AddEntryChoice.Stool, AddEntryChoice.InjuryCheckIn, AddEntryChoice.Injury, AddEntryChoice.Illness -> FT.Category.Digestion.c500
+    AddEntryChoice.Grip, AddEntryChoice.BodyCheckIn, AddEntryChoice.SweatTest -> FT.Category.Activity.c500
+    AddEntryChoice.Event -> FT.DomainTraining
+    AddEntryChoice.SexualActivity, AddEntryChoice.Encounter -> FT.Category.Arousal.c500
+    AddEntryChoice.Note -> FT.TextSecondary
 }
 
 @Composable
@@ -655,7 +697,7 @@ private fun FormLabel(text: String) {
 
 @Composable
 private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    AmberButton(label = if (saving) "SAVING..." else "SAVE") {
+    FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
         if (enabled && !saving) onClick()
     }
 }
@@ -675,7 +717,7 @@ private fun QtyRow(qty: Int, onChange: (Int) -> Unit) {
                     .clip(shape)
                     .background(FT.GlassFill, shape)
                     .border(FT.BorderWidth, FT.GlassBorder, shape)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                    .ftClickable(shape = shape) {
                         val next = qty + delta
                         if (next >= 1) onChange(next)
                     },
@@ -692,8 +734,17 @@ private fun QtyRow(qty: Int, onChange: (Int) -> Unit) {
 // SupplementsForm exactly as they'd be used standalone -- only the picker
 // wrapping them is new.
 @Composable
-private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit, onCanonicalSaved: () -> Unit, externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null, foodPrefill: Pair<String, LocalDateTime>? = null) {
-    var subType by remember { mutableStateOf(FuelSubType.Food) }
+private fun FuelForm(
+    saving: Boolean,
+    onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit,
+    onCanonicalSaved: () -> Unit,
+    externalActivityActive: androidx.compose.runtime.MutableState<Boolean>? = null,
+    foodPrefill: Pair<String, LocalDateTime>? = null,
+    initialSubType: FuelSubType = FuelSubType.Food,
+    supplementBundle: String? = null,
+) {
+    // A "say it" food hand-off always lands on FOOD, whatever the sheet was opened on.
+    var subType by rememberSaveable { mutableStateOf(if (foodPrefill != null) FuelSubType.Food else initialSubType) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -704,7 +755,7 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
                         .weight(1f)
                         .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                         .background(if (isSelected) FT.DomainLog.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { subType = sub }
+                        .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { subType = sub }
                         .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -722,7 +773,7 @@ private fun FuelForm(saving: Boolean, onSubmit: ((suspend (AddEntryRepository) -
                 externalActivityActive = externalActivityActive,
             )
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
-            FuelSubType.Supplements -> SupplementsForm(saving, onSave = { takenAt, items, source, quantities -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities) } })
+            FuelSubType.Supplements -> SupplementsForm(saving, preselectBundle = supplementBundle, onSave = { takenAt, items, source, quantities -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities) } })
             FuelSubType.Endurance -> EnduranceFuelForm(onSaved = onCanonicalSaved)
         }
     }
@@ -761,25 +812,32 @@ private fun FoodForm(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var dateTime by remember { mutableStateOf(initialDateTime) }
-    var description by remember { mutableStateOf(initialDescription) }
-    var calories by remember { mutableStateOf(initialCalories?.toString() ?: "") }
-    var protein by remember { mutableStateOf(initialProtein?.toString() ?: "") }
-    var carbs by remember { mutableStateOf(initialCarbs?.toString() ?: "") }
-    var fat by remember { mutableStateOf(initialFat?.toString() ?: "") }
-    var fiber by remember { mutableStateOf(initialFiber?.toString() ?: "") }
-    var sugar by remember { mutableStateOf(initialSugar?.toString() ?: "") }
-    var sodium by remember { mutableStateOf(initialSodium?.toString() ?: "") }
+    // Saveable: TAKE PHOTO hands the screen to the camera app, which can get this app killed and restored.
+    var dateTime by rememberSaveable { mutableStateOf(initialDateTime) }
+    var description by rememberSaveable { mutableStateOf(initialDescription) }
+    var calories by rememberSaveable { mutableStateOf(initialCalories?.toString() ?: "") }
+    var protein by rememberSaveable { mutableStateOf(initialProtein?.toString() ?: "") }
+    var carbs by rememberSaveable { mutableStateOf(initialCarbs?.toString() ?: "") }
+    var fat by rememberSaveable { mutableStateOf(initialFat?.toString() ?: "") }
+    var fiber by rememberSaveable { mutableStateOf(initialFiber?.toString() ?: "") }
+    var sugar by rememberSaveable { mutableStateOf(initialSugar?.toString() ?: "") }
+    var sodium by rememberSaveable { mutableStateOf(initialSodium?.toString() ?: "") }
 
     var estimating by remember { mutableStateOf(false) }
     var estimationError by remember { mutableStateOf<String?>(null) }
-    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     // User request (2026-09-30): one or more photos of the same meal queue up
     // here before a single ESTIMATE tap -- was "first photo taken/picked
     // auto-runs estimate," now a real batch since the whole point is letting
     // Gemini see everything on the plate at once.
-    var pendingPhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var pendingPhotos by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.UriListSaver) { mutableStateOf<List<Uri>>(emptyList()) }
+    // A photo taken just before the app was killed, whose result never arrived (util/ImageUtils.kt PendingCameraCapture).
+    var strandedPhoto by remember { mutableStateOf<Uri?>(null) }
+    LaunchedEffect(Unit) {
+        val stranded = com.bioscan.fieldterminal.util.PendingCameraCapture.stranded(context)
+        if (stranded != null && stranded !in pendingPhotos) strandedPhoto = stranded
+    }
     var mealEstimate by remember { mutableStateOf<NutritionMealEstimate?>(null) }
     var mealEstimateId by remember { mutableStateOf<Long?>(null) }
     var cronometerEnrichment by remember { mutableStateOf<CronometerEnrichment?>(null) }
@@ -926,7 +984,8 @@ private fun FoodForm(
 
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         externalActivityActive?.value = false
-        if (success) pendingCameraUri?.let { pendingPhotos = pendingPhotos + it }
+        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
+        if (success) pendingCameraUri?.let { if (it !in pendingPhotos) pendingPhotos = pendingPhotos + it }
     }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
@@ -972,6 +1031,20 @@ private fun FoodForm(
                     pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }
             }
+            strandedPhoto?.let { photo ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 10.dp)) {
+                    Text("PHOTO JUST TAKEN", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.weight(1f))
+                    com.bioscan.fieldterminal.ui.components.FTButton("USE IT", emphasis = com.bioscan.fieldterminal.ui.components.FTButtonEmphasis.Secondary) {
+                        pendingPhotos = pendingPhotos + photo
+                        strandedPhoto = null
+                        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
+                    }
+                    com.bioscan.fieldterminal.ui.components.FTButton("DISCARD", emphasis = com.bioscan.fieldterminal.ui.components.FTButtonEmphasis.Tertiary) {
+                        strandedPhoto = null
+                        com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
+                    }
+                }
+            }
             if (pendingPhotos.isNotEmpty()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -987,7 +1060,7 @@ private fun FoodForm(
                         "CLEAR",
                         style = sheetActionLabelStyle,
                         color = FT.Critical,
-                        modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        modifier = Modifier.ftClickable {
                             pendingPhotos = emptyList()
                         },
                     )
@@ -1035,7 +1108,7 @@ private fun FoodForm(
                 color = FT.TextSecondary,
                 modifier = Modifier
                     .padding(top = 14.dp)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                    .ftClickable {
                         showRecentMeals = !showRecentMeals
                     },
             )
@@ -1059,8 +1132,8 @@ private fun FoodForm(
                                 color = if (cloning) FT.TextMuted else FT.TextPrimary,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = !cloning) {
-                                        val id = meal.id ?: return@clickable
+                                    .ftClickable(enabled = !cloning) {
+                                        val id = meal.id ?: return@ftClickable
                                         cloning = true
                                         scope.launch {
                                             try {
@@ -1175,7 +1248,12 @@ private fun DrinkForm(
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateField("DATE", date, { date = it })
-        Column { FormLabel("AMOUNT (ML)"); FieldTextField(ml, { ml = it }, "e.g. 500", keyboardType = KeyboardType.Number) }
+        // UX review P3: the usual glass and bottle sizes one tap away; the field still takes any amount.
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FormLabel("AMOUNT (ML)")
+            TextChipRow(DRINK_PRESETS_ML, ml.takeIf { it in DRINK_PRESETS_ML }, perRow = 4) { ml = it ?: "" }
+            FieldTextField(ml, { ml = it }, "e.g. 500", keyboardType = KeyboardType.Number)
+        }
 
         // Unselected = water → simple hydration_daily path. Any other class
         // creates a meal_items beverage row with the DAV-181 retention factor.
@@ -1210,13 +1288,13 @@ private fun DrinkForm(
             }
         } else {
             val label = BEVERAGE_CLASS_LABELS[beverageClass] ?: beverageClass!!.uppercase()
-            AmberButton(label = if (beverageSaving) "SAVING..." else "LOG $label") {
-                val vol = mlValue ?: return@AmberButton
-                if (vol <= 0 || beverageSaving) return@AmberButton
+            FTButton(label = if (beverageSaving) "SAVING..." else "LOG $label", emphasis = FTButtonEmphasis.Primary) {
+                val vol = mlValue ?: return@FTButton
+                if (vol <= 0 || beverageSaving) return@FTButton
                 val abvValue = abv.toDoubleOrNull()
                 if (beverageClass == "alcohol" && ethanolGrams(vol.toDouble(), abvValue ?: 0.0) == null) {
                     beverageError = "Enter the drink's strength (ABV %, above 0 and at most 100)."
-                    return@AmberButton
+                    return@FTButton
                 }
                 beverageSaving = true
                 beverageError = null
@@ -1245,10 +1323,16 @@ private fun DrinkForm(
 // from the Log feed like any other entry -- no separate "batch" concept
 // needed for "add or remove single items."
 @Composable
-private fun SupplementsForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDateTime.now(), onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String, quantities: Map<Long, Int>) -> Unit) {
+private fun SupplementsForm(
+    saving: Boolean,
+    initialDateTime: LocalDateTime = LocalDateTime.now(),
+    // The bundle the Status hub's + SUPPS found still due now; ticked on open, untick to change.
+    preselectBundle: String? = null,
+    onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String, quantities: Map<Long, Int>) -> Unit,
+) {
     var dateTime by remember { mutableStateOf(initialDateTime) }
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
-    var checkedBundles by remember { mutableStateOf(setOf<String>()) }
+    var checkedBundles by remember { mutableStateOf(setOfNotNull(preselectBundle)) }
     var checkedAsNeeded by remember { mutableStateOf(setOf<Long>()) }
     // DAV-362: items picked by barcode are selected one by one, never as a time-of-day bundle.
     var scanned by remember { mutableStateOf<List<SupplementRow>>(emptyList()) }
@@ -1447,7 +1531,7 @@ private fun BundleToggleRow(label: String, itemNames: String, checked: Boolean, 
             .fillMaxWidth()
             .border(FT.BorderWidth, if (checked) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
             .background(if (checked) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(FT.RadiusModule))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggle)
+            .ftClickable(onClick = onToggle, shape = RoundedCornerShape(FT.RadiusModule))
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1467,7 +1551,7 @@ private fun CheckToggleRow(label: String, checked: Boolean, onToggle: () -> Unit
             .fillMaxWidth()
             .border(FT.BorderWidth, if (checked) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
             .background(if (checked) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(FT.RadiusModule))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggle)
+            .ftClickable(onClick = onToggle, shape = RoundedCornerShape(FT.RadiusModule))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1487,7 +1571,7 @@ private fun CheckboxGlyph(checked: Boolean) {
         contentAlignment = Alignment.Center,
     ) {
         if (checked) {
-            Text("✓", style = TextStyle(fontSize = 12.sp), color = FT.Base)
+            Text("✓", style = FTType.CaptionStrong, color = FT.Base)
         }
     }
 }
@@ -1498,7 +1582,7 @@ private fun PhotoActionButton(label: String, modifier: Modifier = Modifier, enab
     Box(
         modifier = modifier
             .border(FT.BorderWidth, color, RoundedCornerShape(FT.RadiusSmall))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = enabled, onClick = onClick)
+            .ftClickable(enabled = enabled, onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
             .padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -1627,10 +1711,7 @@ private fun IntChipRow(range: IntRange, selected: Int?, onSelect: (Int) -> Unit)
                     .weight(1f)
                     .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                     .background(if (isSelected) FT.DomainLog.copy(alpha = 0.18f) else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onSelect(n) }
+                    .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onSelect(n) }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1743,10 +1824,7 @@ private fun SexualActivityForm(
                 "+ ADD INSTANCE",
                 style = FTType.MonoCaption,
                 color = FT.DomainLog,
-                modifier = Modifier.clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) { instances.add(EditableSexualActivityInstance()) },
+                modifier = Modifier.ftClickable { instances.add(EditableSexualActivityInstance()) },
             )
         }
         Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
@@ -1776,7 +1854,7 @@ private fun SexualActivityInstanceEditor(
                     "REMOVE",
                     style = FTType.MonoCaption,
                     color = FT.Critical,
-                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onRemove() },
+                    modifier = Modifier.ftClickable { onRemove() },
                 )
             }
         }
@@ -1809,7 +1887,7 @@ private fun SexualActivityInstanceEditor(
                             "CLEAR",
                             style = FTType.Micro,
                             color = FT.Critical,
-                            modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            modifier = Modifier.ftClickable {
                                 instance.partnerId = null
                                 instance.partnerName = ""
                                 partnerQuery = ""
@@ -1825,7 +1903,7 @@ private fun SexualActivityInstanceEditor(
                             color = FT.TextSecondary,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                .ftClickable {
                                     instance.partnerId = person.id
                                     instance.partnerName = person.name
                                     partnerQuery = ""
@@ -1839,7 +1917,7 @@ private fun SexualActivityInstanceEditor(
                             "+ ADD \"$trimmedQuery\"",
                             style = FTType.LabelCaps,
                             color = FT.Emerald,
-                            modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            modifier = Modifier.ftClickable {
                                 newPartnerInitialName = trimmedQuery
                                 showNewPartnerSheet = true
                             },
@@ -1865,6 +1943,7 @@ private fun SexualActivityInstanceEditor(
     }
 }
 
+private val DRINK_PRESETS_ML = listOf("250", "330", "500", "750")
 private val OSTRC_Q1Q4_OPTIONS = listOf("0", "8", "17", "25")
 private val OSTRC_Q2Q3_OPTIONS = listOf("0", "6", "13", "19", "25")
 
@@ -2068,10 +2147,7 @@ private fun ExerciseDetailsForm(
                     "+ ADD EXERCISE",
                     style = FTType.MonoCaption,
                     color = FT.DomainLog,
-                    modifier = Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { exercises.add(EditableExercise()) },
+                    modifier = Modifier.ftClickable { exercises.add(EditableExercise()) },
                 )
             }
         }
@@ -2079,7 +2155,10 @@ private fun ExerciseDetailsForm(
         Column { FormLabel("RPE 0-10 (OPTIONAL)"); FieldTextField(rpe, { rpe = it }, "e.g. 6", keyboardType = KeyboardType.Number) }
         Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
         SaveButton(saving, true) {
-            val details = ExerciseSessionDetails(
+            // Changing the exercises makes them the person's own, so no Zepp sync overwrites them; saving only RPE or
+            // notes leaves a Zepp list following Zepp (domain/StrengthImport.kt).
+            val details = editedDetails(
+                initial = initialDetails,
                 routeType = routeType,
                 runType = runType,
                 exercises = if (type == "strength") exercises.mapNotNull { it.toDtoOrNull() }.ifEmpty { null } else initialDetails.exercises,
@@ -2105,10 +2184,7 @@ internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int =
                             .weight(1f)
                             .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                             .background(if (isSelected) FT.DomainLog.copy(alpha = 0.18f) else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { onSelect(if (isSelected) null else option) }
+                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onSelect(if (isSelected) null else option) }
                             .padding(vertical = 10.dp, horizontal = 2.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -2129,21 +2205,40 @@ internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int =
 // backed (reps/weight_kg parse to Int/Double only on Save) since a set
 // mid-entry is routinely blank or partial, which the DTO's non-nullable
 // reps/weight_kg can't represent.
-private class EditableSet(reps: String = "", weightKg: String = "", rpe: String = "", percentOneRm: String = "") {
+// What the watch measured (set duration, heart rate, detected reps, and the exercise's Zepp code) is not editable but
+// rides along unchanged: saving used to drop it, so the first edit, even of RPE alone, lost the link to Zepp's data.
+private class EditableSet(
+    reps: String = "",
+    weightKg: String = "",
+    rpe: String = "",
+    percentOneRm: String = "",
+    val durationSec: Int? = null,
+    val avgHr: Int? = null,
+    val detectedReps: Int? = null,
+) {
     var reps by mutableStateOf(reps)
     var weightKg by mutableStateOf(weightKg)
     var rpe by mutableStateOf(rpe)
     var percentOneRm by mutableStateOf(percentOneRm)
 }
 
-private class EditableExercise(name: String = "") {
+private class EditableExercise(name: String = "", val exerciseCode: Int? = null) {
+    // The Zepp code names the exercise Zepp recorded; renamed, it would point at the wrong one, so it is dropped then.
+    val originalName = name
     var name by mutableStateOf(name)
     val sets = mutableStateListOf(EditableSet())
 }
 
-private fun StrengthExerciseDto.toEditable() = EditableExercise(name).also { editable ->
+private fun StrengthExerciseDto.toEditable() = EditableExercise(name, exerciseCode).also { editable ->
     editable.sets.clear()
-    sets.forEach { s -> editable.sets.add(EditableSet(s.reps.toString(), s.weightKg.toString(), s.rpe?.toString() ?: "", s.percentOneRm?.toString() ?: "")) }
+    sets.forEach { s ->
+        editable.sets.add(
+            EditableSet(
+                s.reps.toString(), s.weightKg.toString(), s.rpe?.toString() ?: "", s.percentOneRm?.toString() ?: "",
+                durationSec = s.durationSec, avgHr = s.avgHr, detectedReps = s.detectedReps,
+            ),
+        )
+    }
 }
 
 // Drops a set with no reps/weight rather than saving a garbage 0; drops an
@@ -2154,9 +2249,18 @@ private fun EditableExercise.toDtoOrNull(): StrengthExerciseDto? {
         val reps = s.reps.toIntOrNull()
         val weightKg = s.weightKg.toDoubleOrNull()
         if (reps == null || weightKg == null) null
-        else StrengthSetDto(reps = reps, weightKg = weightKg, rpe = s.rpe.toIntOrNull(), percentOneRm = s.percentOneRm.toDoubleOrNull())
+        else StrengthSetDto(
+            reps = reps,
+            weightKg = weightKg,
+            rpe = s.rpe.toIntOrNull(),
+            percentOneRm = s.percentOneRm.toDoubleOrNull(),
+            durationSec = s.durationSec,
+            avgHr = s.avgHr,
+            detectedReps = s.detectedReps,
+        )
     }
-    return if (validSets.isEmpty()) null else StrengthExerciseDto(name.trim(), sets = validSets)
+    val code = exerciseCode.takeIf { name.trim() == originalName.trim() }
+    return if (validSets.isEmpty()) null else StrengthExerciseDto(name.trim(), exerciseCode = code, sets = validSets)
 }
 
 // One exercise's editable form: name, its list of sets, and add/remove
@@ -2199,10 +2303,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                     "REMOVE",
                     style = FTType.MonoCaption,
                     color = FT.Critical,
-                    modifier = Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onRemove() },
+                    modifier = Modifier.ftClickable { onRemove() },
                 )
             }
         }
@@ -2219,10 +2320,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                         color = FT.TextSecondary,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) {
+                            .ftClickable {
                                 suppressSearch = true
                                 exercise.name = match.name
                                 suggestions = emptyList()
@@ -2247,10 +2345,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                             "REMOVE",
                             style = FTType.MonoCaption,
                             color = FT.Critical,
-                            modifier = Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { exercise.sets.removeAt(i) },
+                            modifier = Modifier.ftClickable { exercise.sets.removeAt(i) },
                         )
                     }
                 }
@@ -2261,10 +2356,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
             "+ ADD SET",
             style = FTType.MonoCaption,
             color = FT.DomainLog,
-            modifier = Modifier.clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) {
+            modifier = Modifier.ftClickable {
                 // Most sets in a real workout repeat or closely follow the
                 // one before it -- default to the previous set's values
                 // instead of blank fields, per direct user feedback.

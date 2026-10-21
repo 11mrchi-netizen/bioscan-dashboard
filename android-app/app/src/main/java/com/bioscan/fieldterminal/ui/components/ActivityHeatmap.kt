@@ -1,8 +1,6 @@
 package com.bioscan.fieldterminal.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,7 +45,7 @@ private val TOOLTIP_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM
 // same "small fixed grid, no laziness needed" call DatePickers.kt's
 // ButtonGrid already makes.
 @Composable
-fun ActivityHeatmap(days: Map<LocalDate, DayActivity>, weeks: Int = 12, modifier: Modifier = Modifier) {
+fun ActivityHeatmap(days: Map<LocalDate, DayActivity>, modifier: Modifier = Modifier, weeks: Int = 12) {
     var selected by remember { mutableStateOf<LocalDate?>(null) }
     val today = LocalDate.now()
     // Align the grid to end on the current week's Sunday so columns are
@@ -112,7 +110,7 @@ private fun HeatCell(activity: DayActivity?, size: Dp, isFuture: Boolean, onClic
         modifier = Modifier
             .size(size)
             .clip(shape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = !isFuture, onClick = onClick),
+            .ftClickable(enabled = !isFuture, onClick = onClick, shape = shape),
     ) {
         when {
             hasIntercourse && hasMasturbation -> Row(Modifier.fillMaxWidth().fillMaxHeight()) {

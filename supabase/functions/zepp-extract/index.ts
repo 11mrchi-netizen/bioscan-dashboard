@@ -8,6 +8,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { computeEffort } from "./effort.ts";
+import { decodeMinuteHr, type HrMinutePoint } from "./minuteHr.ts";
+import { hrHistogram } from "./hrHistogram.ts";
+import { redecodeReport, sessionStartMatches } from "./redecode.ts";
+import {
+  decodeAltitude, decodeCadenceAndVerticalRatio, decodeHeartRate, decodePauses, decodeSpeedKmh, decodeTrack, type DecodedPoint,
+  gpsOffsets, type Pause, type RoutePoint, splitEntries, workoutStartSec,
+} from "./decodeSeries.ts";
+import { mergedSessionFields, pickSessionMatch, type SessionCandidate, type Span, spanOf, START_TOLERANCE_MS } from "./sessionMatch.ts";
+import { exerciseTypeForZeppSport, summaryDistanceM, takesDistance, trailTaggedDetails, ZEPP_TRAIL_SPORT, zeppDistanceKm } from "./workoutDistance.ts";
+import { afterWindow, HISTORY_METRICS, type HistoryState, windowDates } from "./historyPull.ts";
+import { buildZeppExercises, doneSets, exercisesFingerprint, parseLapSets, planStrengthDetails } from "./strengthImport.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -80,10 +91,6 @@ async function recordFieldProvenance(supabase: any, userId: string, date: string
 // cycling confirmed the encoding is identical, just with different fields
 // left empty (e.g. strength has no GPS/pace/speed) -- no per-type branching
 // needed, only per-field presence checks.
-interface DecodedPoint {
-  offsetSeconds: number;
-  value: number;
-}
 
 interface WorkoutSummaryFields {
   // DAV-272, computed here from the per-second series (see effort.ts); only
@@ -109,122 +116,16 @@ interface DecodedSeries {
   cadenceSpm: DecodedPoint[];
   verticalStrideRatioPct: DecodedPoint[];
   routePoints: RoutePoint[];
+  // Seconds from the start at which each pause began, and how long it lasted.
+  pauses: Pause[];
+  // 2: every series timed by its own steps (decodeSeries.ts); absent on rows decoded before.
+  decoderVersion: number;
   summary: WorkoutSummaryFields;
 }
 
-interface RoutePoint { offsetSeconds: number; lat: number; lon: number; }
+const DECODER_VERSION = 2;
 
-function splitEntries(raw: unknown): string[] {
-  if (typeof raw !== "string" || raw.length === 0) return [];
-  return raw.replace(/;$/, "").split(";").filter((e) => e.length > 0);
-}
-
-// heart_rate: first entry is the absolute starting bpm; every entry after
-// that is a signed delta to add to the running total. The flag before the
-// comma (seen: empty, 0, 2, 7 on entry 1 only) doesn't gate the decode.
-function decodeHeartRate(raw: unknown): DecodedPoint[] {
-  const entries = splitEntries(raw);
-  const out: DecodedPoint[] = [];
-  let running = 0;
-  entries.forEach((entry, i) => {
-    const parts = entry.split(",");
-    const v = Number(parts[1] ?? parts[0]);
-    if (!Number.isFinite(v)) return;
-    running = i === 0 ? v : running + v;
-    out.push({ offsetSeconds: i, value: running });
-  });
-  return out;
-}
-
-// speed: "<flag>,<m/s>" per second, no delta encoding -- convert straight to km/h.
-function decodeSpeedKmh(raw: unknown): DecodedPoint[] {
-  const entries = splitEntries(raw);
-  const out: DecodedPoint[] = [];
-  entries.forEach((entry, i) => {
-    const parts = entry.split(",");
-    const ms = Number(parts[1] ?? parts[0]);
-    if (!Number.isFinite(ms)) return;
-    out.push({ offsetSeconds: i, value: ms * 3.6 });
-  });
-  return out;
-}
-
-// altitude: plain per-second value, no delta encoding, in CENTIMETRES (checked
-// 2026-09-25: a run with ~20 m of real ascent spans 922..2054; a trail run
-// tops out at 30716 = 307 m) -- converted to metres here. Zepp writes about
-// -2,000,000 when it has no fix; those samples are dropped, not decoded.
-const ALTITUDE_INVALID_BELOW_CM = -1_000_000;
-function decodeAltitude(raw: unknown): DecodedPoint[] {
-  const entries = splitEntries(raw);
-  const out: DecodedPoint[] = [];
-  entries.forEach((entry, i) => {
-    const v = Number(entry);
-    if (!Number.isFinite(v) || v < ALTITUDE_INVALID_BELOW_CM) return;
-    out.push({ offsetSeconds: i, value: v / 100 });
-  });
-  return out;
-}
-
-// gait: "<f1>,<f2>,<vertRatio_x10>,<cadence_spm>" per second -- f1/f2 look
-// like run-state flags (0 before the run starts, settling to 1/2 once
-// steady), not decoded since neither has a summary field to check against.
-// Confirmed 2026-09-25: avg cadence (f4) = 175.5 vs summary avg_frequency
-// 173.0; max f4 = 200 vs summary max_frequency 201; avg f3/10 = 8.89% vs
-// summary avgVertStrideRatio/10 = 8.6% -- both close enough (same
-// time-vs-distance-weighting gap as pace/speed) to trust. No ground-contact-
-// time or stride-length per-second series found in this or any other field;
-// those exist only as this workout's summary averages (see WorkoutSummaryFields).
-function decodeCadenceAndVerticalRatio(raw: unknown): { cadenceSpm: DecodedPoint[]; verticalStrideRatioPct: DecodedPoint[] } {
-  const entries = splitEntries(raw);
-  const cadenceSpm: DecodedPoint[] = [];
-  const verticalStrideRatioPct: DecodedPoint[] = [];
-  entries.forEach((entry, i) => {
-    const parts = entry.split(",");
-    const vertRatio = Number(parts[2]);
-    const cadence = Number(parts[3]);
-    if (Number.isFinite(cadence) && cadence > 0) cadenceSpm.push({ offsetSeconds: i, value: cadence });
-    if (Number.isFinite(vertRatio) && cadence > 0) verticalStrideRatioPct.push({ offsetSeconds: i, value: vertRatio / 10 });
-  });
-  return { cadenceSpm, verticalStrideRatioPct };
-}
-
-function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.asin(Math.sqrt(a));
-}
-
-// longitude_latitude: first pair is absolute (lat*1e8, lon*1e8); every pair
-// after that is (dlat*1e8, dlon*1e8) to cumulatively sum. Produces cumulative
-// distance (km), not the raw lat/lon track -- that's all SessionDetail needs
-// today; the reconstructed positions themselves aren't kept.
-function decodeDistanceKm(raw: unknown): DecodedPoint[] {
-  const entries = splitEntries(raw);
-  const out: DecodedPoint[] = [];
-  let lat = 0, lon = 0, cumMeters = 0;
-  entries.forEach((entry, i) => {
-    const parts = entry.split(",");
-    const a = Number(parts[0]);
-    const b = Number(parts[1]);
-    if (!Number.isFinite(a) || !Number.isFinite(b)) return;
-    if (i === 0) {
-      lat = a / 1e8;
-      lon = b / 1e8;
-    } else {
-      const newLat = lat + a / 1e8;
-      const newLon = lon + b / 1e8;
-      cumMeters += haversineMeters(lat, lon, newLat, newLon);
-      lat = newLat;
-      lon = newLon;
-    }
-    out.push({ offsetSeconds: i, value: cumMeters / 1000 });
-  });
-  return out;
-}
+// The per-second series decoders live in decodeSeries.ts (each series timed by its own steps; tested there).
 
 // Gadgetbridge Zepp OS exercise catalog (Freeyourgadget/Gadgetbridge, zeppos.json)
 // actionType → display name. Extracted 2026-10-08. Fallback: "Exercise ${code}".
@@ -248,25 +149,6 @@ interface StrengthSetDecoded {
   durationSec: number;
   exerciseCode: number;
   scores: StrengthMovementScores | null;
-}
-
-// Parse the semicolon-separated lap string into per-set objects.
-// Index map (confirmed from live data 2026-10-08): [0]=idx, [1]=duration_sec,
-// [4]=avg_hr, [15]=IMU_detected_reps, [21]=weight_kg, [22]=target_reps,
-// [26]=status (-1 or 0=done, 2=planned/skipped), [28]=exercise_code.
-function parseLapSets(lapStr: unknown): Array<{
-  idx: number; durationSec: number; avgHr: number; detectedReps: number;
-  weightKg: number; targetReps: number; status: number; exerciseCode: number;
-}> {
-  if (typeof lapStr !== "string" || !lapStr) return [];
-  return lapStr.split(";").filter(Boolean).map(f => {
-    const c = f.split(",");
-    return {
-      idx: +c[0], durationSec: +c[1], avgHr: +c[4],
-      detectedReps: +c[15], weightKg: +c[21], targetReps: +c[22],
-      status: +c[26], exerciseCode: +c[28],
-    };
-  });
 }
 
 // Parse strengthAssess JSON string → per-set timing + IMU movement scores.
@@ -303,41 +185,31 @@ function parseStrengthAssess(assessStr: unknown): Array<{
 // Minetti's cost curve is a running model -- cycling/strength get no GAP/EF.
 const RUN_SPORT_TYPES = new Set(["1", "7"]);
 
-function decodeRoute(raw: unknown): RoutePoint[] {
-  const entries = splitEntries(raw);
-  const out: RoutePoint[] = [];
-  let lat = 0, lon = 0;
-  entries.forEach((entry, i) => {
-    const parts = entry.split(",");
-    const a = Number(parts[0]), b = Number(parts[1]);
-    if (!Number.isFinite(a) || !Number.isFinite(b)) return;
-    if (i === 0) { lat = a / 1e8; lon = b / 1e8; }
-    else { lat += a / 1e8; lon += b / 1e8; }
-    out.push({ offsetSeconds: i, lat, lon });
-  });
-  return out;
-}
-
 function decodeWorkoutDetail(detailRawBody: unknown, summary: WorkoutSummaryFields, sportType: string): DecodedSeries | null {
   if (!detailRawBody || typeof detailRawBody !== "object") return null;
   const data = (detailRawBody as Record<string, unknown>).data;
   if (!data || typeof data !== "object") return null;
   const d = data as Record<string, unknown>;
   const { cadenceSpm, verticalStrideRatioPct } = decodeCadenceAndVerticalRatio(d.gait);
-  const routePoints = sportType !== "52" ? decodeRoute(d.longitude_latitude) : [];
+  // GPS points and altitude are timed by the `time` field; every other series by its own steps (decodeSeries.ts).
+  const gpsCount = Math.max(splitEntries(d.longitude_latitude).length, splitEntries(d.altitude).length);
+  const offsets = gpsOffsets(d.time, gpsCount);
+  const track = decodeTrack(d.longitude_latitude, offsets);
+  const trackStart = Number(d.trackid);
   const series = {
     heartRate: decodeHeartRate(d.heart_rate),
     speedKmh: decodeSpeedKmh(d.speed),
-    altitudeM: decodeAltitude(d.altitude),
-    distanceKm: decodeDistanceKm(d.longitude_latitude),
+    altitudeM: decodeAltitude(d.altitude, offsets),
+    distanceKm: track.distanceKm,
     cadenceSpm,
     verticalStrideRatioPct,
-    routePoints,
+    routePoints: sportType !== "52" ? track.routePoints : [],
+    pauses: decodePauses(d.pause, Number.isFinite(trackStart) && trackStart > 0 ? trackStart : null),
   };
   const effort = RUN_SPORT_TYPES.has(sportType)
     ? computeEffort({ ...series, lactateThresholdHrBpm: summary.lactateThresholdHrBpm })
     : null;
-  return { ...series, summary: { ...summary, ...(effort ?? {}) } };
+  return { ...series, decoderVersion: DECODER_VERSION, summary: { ...summary, ...(effort ?? {}) } };
 }
 
 // DAV-112/123: a workout's real per-point pace/power/GPS lives behind a *second*
@@ -381,6 +253,8 @@ interface WorkoutRef {
   // compute per-set startOffsetSec for strength data (strengthAssess.time is
   // also real epoch ms). Distinct from startTimeIso which is local-labeled-UTC.
   realStartMs: number;
+  // Moving time (the list entry's run_time), minutes: a session's duration, so a pause does not add training time.
+  movingMin: number | null;
 }
 
 function numOrNull(v: unknown): number | null {
@@ -403,22 +277,6 @@ function numOrNull(v: unknown): number | null {
 // (`syncedTimezone`, e.g. "Asia/Taipei") -- Taipei as the fallback since
 // this is a single-user, Taiwan-based account, not a guess made blind.
 const FALLBACK_TIMEZONE = "Asia/Taipei";
-
-// Confirmed codes only: 1=run, 7=trail run, 9=outdoor cycling, 52=strength.
-// Anything else is 'other' until DAV-268's full mapping lands.
-function exerciseTypeForZeppSport(sportType: string): string {
-  switch (sportType) {
-    case "1":
-    case "7":
-      return "run";
-    case "9":
-      return "ride";
-    case "52":
-      return "strength";
-    default:
-      return "other";
-  }
-}
 
 function toLocalLabeledUtcIso(realUtcMs: number, timeZone: string): string {
   const dtf = new Intl.DateTimeFormat("en-US", {
@@ -475,7 +333,9 @@ function extractWorkoutRefs(historyResponse: unknown): WorkoutRef[] {
     const hasRun = Number.isFinite(runSec) && runSec >= 0;
     const tz = typeof e.syncedTimezone === "string" && e.syncedTimezone ? e.syncedTimezone : FALLBACK_TIMEZONE;
     const endTimeIso = hasEnd ? toLocalLabeledUtcIso(endSec * 1000, tz) : "";
-    const startTimeIso = hasEnd && hasRun ? toLocalLabeledUtcIso((endSec - runSec) * 1000, tz) : "";
+    // run_time is moving time; the trackid is the real start (a paused workout started earlier than end - run_time).
+    const startSec = hasEnd && hasRun ? workoutStartSec(rawId, endSec, runSec) : 0;
+    const startTimeIso = hasEnd && hasRun ? toLocalLabeledUtcIso(startSec * 1000, tz) : "";
 
     refs.push({
       trackId: String(rawId),
@@ -497,8 +357,10 @@ function extractWorkoutRefs(historyResponse: unknown): WorkoutRef[] {
       calorieKcal: numOrNull(e.calorie),
       altitudeAscendM: numOrNull(e.altitude_ascend),
       avgPaceSecPerKm: numOrNull(e.avg_pace),
-      distanceSummaryM: numOrNull(e.distance),
-      realStartMs: hasEnd && hasRun ? (endSec - runSec) * 1000 : 0,
+      // Zepp's summary carries `dis` / `highPrecisionDistance` (metres); there is no `distance` key (workoutDistance.ts).
+      distanceSummaryM: summaryDistanceM(e),
+      realStartMs: hasEnd && hasRun ? startSec * 1000 : 0,
+      movingMin: hasRun ? runSec / 60 : null,
     });
   }
   return refs;
@@ -567,8 +429,6 @@ const METRIC_DEFS: MetricDef[] = [
 // (to subtract awake time from total time-in-bed); the summary's own
 // dp/lt/dt fields give deep/light/REM minutes pre-aggregated.
 const SLEEP_MODE_AWAKE = 7;
-
-interface HrMinutePoint { offsetMinutes: number; bpm: number; }
 
 interface BandDataDecoded {
   sleepHours: number | null;
@@ -646,19 +506,8 @@ function decodeBandDataSummary(rawBody: unknown): BandDataDecoded | null {
   const stepsVal = stp ? Number(stp.ttl) : NaN;
   const steps = Number.isFinite(stepsVal) && stepsVal >= 0 ? stepsVal : null;
 
-  let hrTimeseries: HrMinutePoint[] | null = null;
-  const hrB64 = entry.data_hr;
-  if (typeof hrB64 === "string" && hrB64) {
-    try {
-      const bytes = atob(hrB64);
-      const pts: HrMinutePoint[] = [];
-      for (let i = 0; i < bytes.length; i++) {
-        const bpm = bytes.charCodeAt(i);
-        if (bpm > 0) pts.push({ offsetMinutes: i, bpm });
-      }
-      if (pts.length > 0) hrTimeseries = pts;
-    } catch { /* invalid base64, skip */ }
-  }
+  // Minute heart rate without the band's no-reading markers (minuteHr.ts).
+  const hrTimeseries = decodeMinuteHr(entry.data_hr);
 
   return { sleepHours, sleepScore, bedtimeIso, wakeTimeIso, deepMin, remMin, lightMin, rhr, steps, hrTimeseries };
 }
@@ -689,12 +538,731 @@ function parseDateRange(
   return { dates };
 }
 
+// The extraction itself, for the signed-in app (the handler below) and for the history pull (runHistoryPull):
+// the requested metrics for each requested day, decoded and written for `user`. `supabase` is the caller's client, or
+// the service role client for the scheduler, which is why every write names user_id itself.
+interface ZeppConfig { token: string; userId: string; host: string }
+
+function zeppConfig(): ZeppConfig | null {
+  const token = Deno.env.get("ZEPP_APP_TOKEN");
+  const userId = Deno.env.get("ZEPP_USER_ID");
+  const host = Deno.env.get("ZEPP_API_HOST");
+  return token && userId && host ? { token, userId, host } : null;
+}
+
+interface ExtractOutcome {
+  summary: { total: number; succeeded: number; failed: number };
+  found: { workouts: number; bandDays: number };
+  authFailed: boolean;
+  results: Array<{ metric: string; date: string; status: number; stored: boolean; error?: string }>;
+}
+
+async function extract(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  user: { id: string },
+  dates: string[],
+  defs: MetricDef[],
+  zepp: ZeppConfig,
+  options: { updateSyncState: boolean },
+): Promise<ExtractOutcome> {
+  const zeppToken = zepp.token;
+  const zeppUserId = zepp.userId;
+  const zeppHost = zepp.host;
+
+  // --- Extract ---
+  const results: Array<{
+    metric: string;
+    date: string;
+    status: number;
+    stored: boolean;
+    error?: string;
+  }> = [];
+
+  // track_id defaults to '' (not null) for every non-detail metric -- a nullable
+  // track_id would break upsert idempotency, since Postgres unique constraints
+  // never treat two NULLs as a conflict (see the schema comment/migration).
+  async function fetchAndStore(
+    endpoint: string,
+    metric: string,
+    date: string,
+    trackId: string,
+  ): Promise<{ statusCode: number; rawBody: unknown; stored: boolean; error?: string }> {
+    // v8: append the same "r" cache-buster every zepp-health-cli request
+    // carries (a random UUID, not a validated value -- just present).
+    const sep = endpoint.includes("?") ? "&" : "?";
+    const fetchUrl = `https://${zeppHost}${endpoint}${sep}r=${crypto.randomUUID().toUpperCase()}`;
+    let statusCode: number;
+    let rawBody: unknown = null;
+
+    try {
+      const res = await fetch(fetchUrl, {
+        headers: {
+          apptoken: zeppToken!,
+          "Content-Type": "application/json",
+          appname: "com.huami.midong",
+          appplatform: "ios_phone",
+          v: "2.0",
+          vn: "10.2.5",
+          cv: "1722_10.2.5",
+          vb: "202604132257",
+          "user-agent": "Zepp/10.2.5 (iPhone; iOS 26.3.1; Scale/3.00)",
+          lang: "en",
+          country: "",
+          timezone: "UTC",
+        },
+      });
+      statusCode = res.status;
+      const text = await res.text();
+      try {
+        rawBody = JSON.parse(text);
+      } catch {
+        rawBody = { _raw_text: text };
+      }
+    } catch (e) {
+      statusCode = 0;
+      rawBody = { _fetch_error: String(e) };
+    }
+
+    const { error: upsertError } = await supabase
+      .from("zepp_raw_extracts")
+      .upsert(
+        {
+          user_id: user.id,
+          metric,
+          query_date: date,
+          track_id: trackId,
+          api_host: zeppHost,
+          endpoint,
+          status_code: statusCode,
+          raw_body: rawBody,
+          fetched_at: new Date().toISOString(),
+          extractor_version: EXTRACTOR_VERSION,
+        },
+        { onConflict: "user_id,metric,query_date,track_id" },
+      );
+
+    return { statusCode, rawBody, stored: !upsertError, error: upsertError?.message };
+  }
+
+  // DAV-115: match a Zepp workout to an existing Health-Connect-sourced
+  // exercise_sessions row rather than duplicating it; insert a new
+  // source='zepp' row only when nothing matches. Matching (sessionMatch.ts):
+  // a session starting within 2 minutes, else one of the same type
+  // overlapping the workout by at least half of the longer span. Also tracks
+  // the highest track_id seen, for zepp_sync_state below.
+  const RECONCILE_TOLERANCE_MS = START_TOLERANCE_MS;
+  const CANDIDATE_LOOKBACK_MS = 6 * 60 * 60 * 1000;
+  let maxTrackIdSeen = 0;
+
+  type SessionRow = Record<string, unknown> & { id: number; type: string | null; source: string | null };
+
+  // Sessions that could be this workout: starting up to 6 h before it and no later than 2 min after its end, each with
+  // the Zepp track it is already linked to (if any).
+  async function candidateSessions(span: Span, columns: string): Promise<SessionRow[]> {
+    const { data, error } = await supabase
+      .from("exercise_sessions")
+      .select(`${columns},zepp_workout_detail(zepp_track_id)`)
+      .eq("user_id", user.id)
+      .gte("start_time", new Date(span.startMs - CANDIDATE_LOOKBACK_MS).toISOString())
+      .lte("start_time", new Date(span.endMs + RECONCILE_TOLERANCE_MS).toISOString());
+    if (error) throw new Error(`exercise_sessions candidate read failed: ${error.message}`);
+    return (data ?? []) as SessionRow[];
+  }
+
+  function asCandidate(row: SessionRow): SessionCandidate | null {
+    const span = spanOf(row);
+    if (!span) return null;
+    const links = row.zepp_workout_detail as { zepp_track_id: unknown }[] | null | undefined;
+    const linked = Array.isArray(links) && links.length > 0 ? String(links[0].zepp_track_id) : null;
+    return { id: row.id, type: row.type, startMs: span.startMs, endMs: span.endMs, linkedTrackId: linked, deviceTimed: row.source === "health_connect" };
+  }
+
+  async function reconcileWorkout(
+    ref: WorkoutRef,
+    detailRawBody: unknown,
+  ): Promise<void> {
+    if (!ref.startTimeIso || !ref.endTimeIso) return; // no reliable time to reconcile with
+
+    const startMs = new Date(ref.startTimeIso).getTime();
+    const zeppSpan = { startMs, endMs: new Date(ref.endTimeIso).getTime() };
+    const rows = await candidateSessions(zeppSpan, "id,type,source,start_time,end_time,duration_min");
+    const match = pickSessionMatch(
+      { ...zeppSpan, type: exerciseTypeForZeppSport(ref.sportType) },
+      rows.map(asCandidate).filter((c): c is SessionCandidate => c !== null),
+      String(ref.trackId),
+    );
+    const matchedRow = match ? rows.find((r) => r.id === match.id) : undefined;
+
+    let exerciseSessionId: number | null = matchedRow?.id ?? null;
+    const matchedType: string = matchedRow?.type ?? exerciseTypeForZeppSport(ref.sportType);
+
+    if (exerciseSessionId === null) {
+      // Unmatched: this workout isn't in Health Connect yet. Insert minimally
+      // -- aggregate fields (distance/calories/hr) are left for the decode
+      // pass once detail.json's real field semantics are confirmed, rather
+      // than guessing units now. Type comes from Zepp's sport code (DAV-268
+      // has the full mapping; unknown codes land as 'other', never 'run').
+      const newTrailDetails = trailTaggedDetails(null, ref.sportType);
+      const { data: inserted, error: insertError } = await supabase
+        .from("exercise_sessions")
+        .insert({
+          user_id: user.id,
+          type: exerciseTypeForZeppSport(ref.sportType),
+          source: "zepp",
+          start_time: ref.startTimeIso,
+          end_time: ref.endTimeIso,
+          duration_min: Math.round(ref.movingMin ?? (new Date(ref.endTimeIso).getTime() - startMs) / 60000),
+          // A Zepp trail run arrives tagged trail (the app reads trail runs from this tag).
+          ...(newTrailDetails ? { details: newTrailDetails } : {}),
+        })
+        .select("id")
+        .single();
+      // Surfacing this insert's error mattered in practice: it silently
+      // failed once already (a since-fixed CHECK constraint didn't allow
+      // source='zepp') and the swallowed error hid it -- DAV-115's own
+      // acceptance criterion is "no silent data loss."
+      if (insertError) throw new Error(`exercise_sessions insert failed: ${insertError.message}`);
+      exerciseSessionId = inserted?.id ?? null;
+    }
+
+    const decoded = decodeWorkoutDetail(detailRawBody, {
+      avgCadenceSpm: ref.avgCadenceSpm,
+      maxCadenceSpm: ref.maxCadenceSpm,
+      avgStrideLengthCm: ref.avgStrideLengthCm,
+      avgGroundContactMs: ref.avgGroundContactMs,
+      avgVerticalStrideRatioPct: ref.avgVerticalStrideRatioPct,
+      lactateThresholdHrBpm: ref.lactateThresholdHrBpm,
+      lactateThresholdPaceSecPerKm: ref.lactateThresholdPaceSecPerKm,
+    }, ref.sportType);
+
+    const { error: detailUpsertError } = await supabase.from("zepp_workout_detail").upsert(
+      {
+        user_id: user.id,
+        exercise_session_id: exerciseSessionId,
+        zepp_track_id: ref.trackId,
+        zepp_source: ref.source,
+        start_time: ref.startTimeIso,
+        end_time: ref.endTimeIso,
+        sport_type: ref.sportType,
+        raw: detailRawBody,
+        decoded,
+        hr_histogram: hrHistogram(decoded?.heartRate),
+        fetched_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,zepp_track_id" },
+    );
+    if (detailUpsertError) throw new Error(`zepp_workout_detail upsert failed: ${detailUpsertError.message}`);
+
+    // DAV-274 real bug: exercise_sessions.distance_km (Health Connect's own
+    // multi-source-summed figure, sometimes wrong by 2-3x -- see
+    // domain/Training.kt's reconcileDistanceWithSpeed on the Android side)
+    // is never corrected once a real Zepp GPS track exists for the same
+    // session, matched or not. Zepp's decoded per-second distance is real
+    // GPS ground truth (repeatedly cross-checked this session) -- write it
+    // back outright, same "Zepp wins when present" principle
+    // mergePreferZepp() already applies to the per-second series client-side.
+    // Zepp's distance: the GPS track, else the summary's (a treadmill has no track). It also goes to any duplicate
+    // row of the same session (same type, same start within the tolerance): the source app wrote some workouts to
+    // Health Connect twice, and correcting one copy left the run list keeping the other (workoutDistance.ts).
+    const zeppKm = zeppDistanceKm(decoded?.distanceKm?.at(-1)?.value, ref.distanceSummaryM);
+    if (exerciseSessionId !== null && zeppKm !== null && takesDistance(matchedType)) {
+      const { error: distanceUpdateError } = await supabase
+        .from("exercise_sessions")
+        .update({ distance_km: zeppKm })
+        .eq("user_id", user.id)
+        .eq("type", matchedType)
+        .gte("start_time", new Date(startMs - RECONCILE_TOLERANCE_MS).toISOString())
+        .lte("start_time", new Date(startMs + RECONCILE_TOLERANCE_MS).toISOString());
+      if (distanceUpdateError) throw new Error(`exercise_sessions distance update failed: ${distanceUpdateError.message}`);
+      // A session matched by overlap starts outside that 2-minute window.
+      if (match?.kind === "overlap") {
+        const { error: matchedDistanceError } = await supabase
+          .from("exercise_sessions").update({ distance_km: zeppKm }).eq("id", exerciseSessionId);
+        if (matchedDistanceError) throw new Error(`exercise_sessions distance update failed: ${matchedDistanceError.message}`);
+      }
+    }
+
+    // v12: write Zepp-primary aggregates. Prefer smoothedAscentM (GPS-smoothed
+    // by effort.ts) over the raw altitude_ascend from the summary. "Zepp wins
+    // when > 0" -- skip the update if Zepp has zero/null to avoid clobbering
+    // legitimate HC values. avg_speed_kmh is derived from avg_pace (s/km).
+    if (exerciseSessionId !== null) {
+      const smoothedM = decoded?.summary?.smoothedAscentM ?? 0;
+      const elevationM = smoothedM > 0 ? smoothedM
+        : (ref.altitudeAscendM ?? 0) > 0 ? ref.altitudeAscendM : null;
+
+      const aggregates: Record<string, number> = {};
+      if ((ref.avgHrBpm ?? 0) > 0)       aggregates.avg_hr = ref.avgHrBpm!;
+      if ((ref.maxHrBpm ?? 0) > 0)       aggregates.max_hr = ref.maxHrBpm!;
+      if ((ref.calorieKcal ?? 0) > 0)    aggregates.calories_active = ref.calorieKcal!;
+      if (elevationM !== null)            aggregates.elevation_gain_m = elevationM;
+      if ((ref.avgPaceSecPerKm ?? 0) > 0) aggregates.avg_speed_kmh = (1000 / ref.avgPaceSecPerKm!) * 3.6;
+      // Matched by overlap rather than start: the stored session's times are another app's (a gym visit, a start pressed
+      // early); the workout's own times keep its pace and load right.
+      const timing: Record<string, unknown> = {};
+      if (match?.kind === "overlap") {
+        timing.start_time = ref.startTimeIso;
+        timing.end_time = ref.endTimeIso;
+        timing.duration_min = Math.round(ref.movingMin ?? (zeppSpan.endMs - startMs) / 60000);
+      }
+      Object.assign(aggregates, timing);
+
+      if (Object.keys(aggregates).length > 0) {
+        const { error: aggUpdateError } = await supabase
+          .from("exercise_sessions")
+          .update(aggregates)
+          .eq("id", exerciseSessionId);
+        if (aggUpdateError) throw new Error(`exercise_sessions aggregate update failed: ${aggUpdateError.message}`);
+      }
+    }
+
+    // A Zepp trail run tags its matched session trail, unless the session already has a route type (a hand-set road or
+    // mixed tag stays). workoutDistance.ts has the rule.
+    if (matchedRow && ref.sportType === ZEPP_TRAIL_SPORT) {
+      const { data: tagRow, error: tagReadErr } = await supabase.from("exercise_sessions").select("details").eq("id", matchedRow.id).single();
+      if (tagReadErr) throw new Error(`exercise_sessions details read failed: ${tagReadErr.message}`);
+      const tagged = trailTaggedDetails((tagRow as { details?: Record<string, unknown> | null } | null)?.details, ref.sportType);
+      if (tagged) {
+        const { error: tagErr } = await supabase.from("exercise_sessions").update({ details: tagged }).eq("id", matchedRow.id);
+        if (tagErr) throw new Error(`exercise_sessions trail tag failed: ${tagErr.message}`);
+      }
+    }
+
+    // v11: strength set import for workouts on/after 2026-10-08. Writes
+    // decoded.strengthData (per-set timing + movement scores) and, if
+    // exercise_sessions.details is currently null, populates it with exercises
+    // and sets from the lap field using the Gadgetbridge exercise catalog.
+    if (
+      ref.sportType === "52" &&
+      exerciseSessionId !== null &&
+      new Date(ref.startTimeIso) >= STRENGTH_IMPORT_START
+    ) {
+      await reconcileStrengthData(
+        exerciseSessionId, detailRawBody, ref.realStartMs,
+        decoded as Record<string, unknown> | null,
+      );
+    }
+
+    const n = Number(ref.trackId);
+    if (Number.isFinite(n) && n > maxTrackIdSeen) maxTrackIdSeen = n;
+  }
+
+  async function reconcileStrengthData(
+    exerciseSessionId: number,
+    detailRawBody: unknown,
+    realStartMs: number,
+    existingDecoded: Record<string, unknown> | null,
+  ): Promise<void> {
+    if (!detailRawBody || typeof detailRawBody !== "object") return;
+    const rawData = ((detailRawBody as Record<string, unknown>).data) as Record<string, unknown> | undefined;
+    if (!rawData) return;
+
+    // Done sets only (strengthImport.ts: status -1 or 0; 2 is a planned set that was skipped).
+    const laps = doneSets(parseLapSets(rawData.lap));
+    if (!laps.length) return;
+    // Zepp's current version of the exercises, kept with the per-set data so the app can offer it when the person's
+    // own edit and Zepp's version differ (strengthImport.ts).
+    const zeppExercises = buildZeppExercises(laps, (code) => ZEPP_EXERCISE_NAMES[code]);
+
+    const assess = parseStrengthAssess(rawData.strengthAssess as unknown);
+    const assessByIdx = new Map(assess.map(a => [a.idx, a]));
+
+    const strengthSets: StrengthSetDecoded[] = laps.map(lap => {
+      const a = assessByIdx.get(lap.idx);
+      const startOffsetSec = (a && realStartMs > 0)
+        ? Math.max(0, Math.round((a.startMs - realStartMs) / 1000))
+        : 0;
+      return {
+        idx: lap.idx,
+        startOffsetSec,
+        durationSec: lap.durationSec,
+        exerciseCode: lap.exerciseCode,
+        scores: a?.scores ?? null,
+      };
+    });
+
+    // Patch decoded.strengthData onto the existing decoded object.
+    const mergedDecoded = {
+      ...(existingDecoded ?? {}),
+      strengthData: { sets: strengthSets, exercises: zeppExercises, fingerprint: exercisesFingerprint(zeppExercises) },
+    };
+    const { error: decodedUpdateErr } = await supabase
+      .from("zepp_workout_detail")
+      .update({ decoded: mergedDecoded })
+      .eq("exercise_session_id", exerciseSessionId);
+    if (decodedUpdateErr) throw new Error(`zepp_workout_detail decoded patch failed: ${decodedUpdateErr.message}`);
+
+    // Exercises Zepp wrote follow Zepp: a later correction in the Zepp app replaces them. Exercises changed in the app
+    // are never overwritten here (the app offers Zepp's version instead). strengthImport.ts has the rules.
+    const { data: sessionRow, error: readErr } = await supabase
+      .from("exercise_sessions")
+      .select("details")
+      .eq("id", exerciseSessionId)
+      .single();
+    if (readErr) throw new Error(`exercise_sessions details read failed: ${readErr.message}`);
+    const existing = (sessionRow as Record<string, unknown> | null)?.details as Record<string, unknown> | null | undefined;
+    const plan = planStrengthDetails(existing, zeppExercises);
+    if (plan.details === null) return;
+
+    const { error: detailsUpdateErr } = await supabase
+      .from("exercise_sessions")
+      .update({ details: plan.details })
+      .eq("id", exerciseSessionId);
+    if (detailsUpdateErr) throw new Error(`exercise_sessions details update failed: ${detailsUpdateErr.message}`);
+  }
+
+  // DAV-274: the Zepp sync and the Health Connect sync both run on app open
+  // and can race -- if Zepp's reconcile query above runs before Health
+  // Connect's own sync has inserted its row for the same real session, the
+  // match finds nothing and a second source='zepp' placeholder gets
+  // inserted (confirmed against real created_at timestamps 12s apart for
+  // the account's 2026-09-26 run). zepp_workout_detail then stays linked to
+  // that orphan forever, so neither the corrected distance above nor the
+  // real per-second series (splits, charts) ever reaches the row the app
+  // actually displays. Self-heals here: by the *next* sync, Health Connect
+  // has normally caught up, so re-run the same match this time and merge.
+  //
+  // The same matching as reconcileWorkout (sessionMatch.ts), so a copy the
+  // history pull inserted because the Health Connect session started minutes
+  // earlier folds in too. The Health Connect row is kept (its record id serves
+  // the session page's series and route, and a Health Connect re-sync would
+  // bring it back if deleted); it takes the copy's Zepp measurements, timing,
+  // and RPE, notes and exercises where it has none (mergedSessionFields), and
+  // every reference to the copy is moved to it before the copy is deleted.
+  const MERGE_COLUMNS =
+    "id,type,source,start_time,end_time,duration_min,distance_km,avg_hr,max_hr,calories_active,elevation_gain_m,avg_speed_kmh,rpe,notes,details";
+
+  async function mergeOrphanedZeppSessions(): Promise<number> {
+    const { data: orphanRows, error: orphanErr } = await supabase
+      .from("exercise_sessions")
+      .select(`${MERGE_COLUMNS},zepp_workout_detail(zepp_track_id)`)
+      .eq("user_id", user.id)
+      .eq("source", "zepp");
+    if (orphanErr) throw new Error(`orphan read failed: ${orphanErr.message}`);
+    const orphans = (orphanRows ?? []) as SessionRow[];
+    if (orphans.length === 0) return 0;
+
+    let merged = 0;
+    for (const orphan of orphans) {
+      const self = asCandidate(orphan);
+      if (!self) continue;
+      const rows = (await candidateSessions(self, MERGE_COLUMNS)).filter((r) => r.id !== orphan.id && r.source !== "zepp");
+      const match = pickSessionMatch(
+        { startMs: self.startMs, endMs: self.endMs, type: orphan.type },
+        rows.map(asCandidate).filter((c): c is SessionCandidate => c !== null),
+        self.linkedTrackId,
+      );
+      const real = match ? rows.find((r) => r.id === match.id) : undefined;
+      if (!real) continue;
+      const realId = real.id;
+
+      const update = mergedSessionFields(orphan, real);
+      if (Object.keys(update).length > 0) {
+        const { error: updateError } = await supabase.from("exercise_sessions").update(update).eq("id", realId);
+        if (updateError) throw new Error(`merged session update failed: ${updateError.message}`);
+      }
+
+      // Every table that references exercise_sessions (fueling_intake_log and calendar_strength_staging cascade on
+      // delete, the others would lose their link).
+      for (const [table, column] of [
+        ["zepp_workout_detail", "exercise_session_id"],
+        ["planned_routes", "exercise_session_id"],
+        ["fueling_intake_log", "exercise_session_id"],
+        ["calendar_strength_staging", "session_id"],
+      ]) {
+        const { error: repointError } = await supabase.from(table).update({ [column]: realId }).eq(column, orphan.id);
+        if (repointError) throw new Error(`${table} repoint failed: ${repointError.message}`);
+      }
+      // A planned session moves over only if the kept session has none (one plan per workout).
+      const { data: keptPlans, error: planReadError } = await supabase
+        .from("planned_sessions").select("id").eq("exercise_session_id", realId).limit(1);
+      if (planReadError) throw new Error(`planned_sessions read failed: ${planReadError.message}`);
+      if ((keptPlans ?? []).length === 0) {
+        const { error: planError } = await supabase
+          .from("planned_sessions").update({ exercise_session_id: realId }).eq("exercise_session_id", orphan.id);
+        if (planError) throw new Error(`planned_sessions repoint failed: ${planError.message}`);
+      }
+
+      const { error: deleteError } = await supabase.from("exercise_sessions").delete().eq("id", orphan.id);
+      if (deleteError) throw new Error(`orphaned exercise_sessions delete failed: ${deleteError.message}`);
+      merged++;
+    }
+    return merged;
+  }
+
+  try {
+    const merged = await mergeOrphanedZeppSessions();
+    if (merged > 0) results.push({ metric: "zepp_orphan_merge", date: "", status: 200, stored: true, error: `merged ${merged}` });
+  } catch (e) {
+    results.push({ metric: "zepp_orphan_merge", date: "", status: 0, stored: false, error: String(e) });
+  }
+
+  for (const date of dates) {
+    for (const def of defs) {
+      const endpoint = def.endpoint(zeppUserId, date);
+      const { statusCode, rawBody, stored, error } = await fetchAndStore(endpoint, def.metric, date, "");
+      results.push({ metric: def.metric, date, status: statusCode, stored, ...(error ? { error } : {}) });
+
+      // v10: decode band_data and upsert sleep/wearable daily rows.
+      if (def.metric === "band_data" && statusCode >= 200 && statusCode < 300) {
+        try {
+          const decoded = decodeBandDataSummary(rawBody);
+          if (decoded) {
+            if (decoded.sleepHours !== null && decoded.sleepHours >= MIN_PLAUSIBLE_SLEEP_HOURS && decoded.bedtimeIso && decoded.wakeTimeIso) {
+              const sleepRow: Record<string, unknown> = {
+                user_id: user.id,
+                date,
+                hours: decoded.sleepHours,
+                bedtime: decoded.bedtimeIso,
+                wake_time: decoded.wakeTimeIso,
+              };
+              if (decoded.sleepScore !== null) sleepRow.score = decoded.sleepScore;
+              if (decoded.deepMin !== null) sleepRow.deep_min = decoded.deepMin;
+              if (decoded.remMin !== null) sleepRow.rem_min = decoded.remMin;
+              if (decoded.lightMin !== null) sleepRow.light_min = decoded.lightMin;
+              const { error: sleepErr } = await supabase.from("sleep_daily")
+                .upsert(sleepRow, { onConflict: "user_id,date" });
+              if (sleepErr) throw new Error(`sleep_daily upsert: ${sleepErr.message}`);
+              await recordFieldProvenance(supabase, user.id, date, Object.keys(sleepRow).filter((k) => k !== "user_id" && k !== "date").map((k) => `sleep_daily.${k}`));
+            }
+            const wearableUpdates: Record<string, unknown> = { user_id: user.id, date };
+            let hasWearable = false;
+            if (decoded.rhr !== null) { wearableUpdates.rhr = decoded.rhr; hasWearable = true; }
+            if (decoded.steps !== null) { wearableUpdates.steps = decoded.steps; hasWearable = true; }
+            if (decoded.hrTimeseries !== null) { wearableUpdates.hr_timeseries = decoded.hrTimeseries; hasWearable = true; }
+            if (hasWearable) {
+              const { error: wearErr } = await supabase.from("wearable_daily")
+                .upsert(wearableUpdates, { onConflict: "user_id,date" });
+              if (wearErr) throw new Error(`wearable_daily upsert: ${wearErr.message}`);
+              await recordFieldProvenance(supabase, user.id, date, Object.keys(wearableUpdates).filter((k) => k !== "user_id" && k !== "date").map((k) => `wearable_daily.${k}`));
+            }
+            results.push({ metric: "band_data_decode", date, status: 200, stored: true });
+          }
+        } catch (e) {
+          results.push({ metric: "band_data_decode", date, status: 0, stored: false, error: String(e) });
+        }
+      }
+
+      // DAV-112/123: sport_history is the list; follow up with the real
+      // per-point detail payload for each workout it references.
+      if (def.metric === "sport_history" && statusCode >= 200 && statusCode < 300) {
+        let refs: WorkoutRef[] = [];
+        try {
+          refs = extractWorkoutRefs(rawBody);
+        } catch (e) {
+          results.push({
+            metric: WORKOUT_DETAIL_METRIC,
+            date,
+            status: 0,
+            stored: false,
+            error: `extractWorkoutRefs failed: ${String(e)}`,
+          });
+        }
+
+        for (const ref of refs) {
+          const detailEndpoint =
+            `/v1/sport/run/detail.json?trackid=${encodeURIComponent(ref.trackId)}` +
+            `&source=${encodeURIComponent(ref.source)}`;
+          const detail = await fetchAndStore(detailEndpoint, WORKOUT_DETAIL_METRIC, date, ref.trackId);
+          results.push({
+            metric: WORKOUT_DETAIL_METRIC,
+            date,
+            status: detail.statusCode,
+            stored: detail.stored,
+            ...(detail.error ? { error: detail.error } : {}),
+          });
+
+          if (detail.stored && detail.statusCode >= 200 && detail.statusCode < 300) {
+            try {
+              await reconcileWorkout(ref, detail.rawBody);
+            } catch (e) {
+              results.push({
+                metric: "zepp_reconcile",
+                date,
+                status: 0,
+                stored: false,
+                error: String(e),
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Surface auth failures (expired ~30-day apptoken) distinctly from a
+  // successful-but-empty run, so Settings can tell "re-auth needed" apart
+  // from "nothing new today" (DAV-118).
+  const authFailed = results.some((r) => r.status === 401 || r.status === 403);
+  if (!options.updateSyncState) {
+    // The history pull reads old days: it must not move the "last synced" marker back in time.
+  } else if (authFailed) {
+    await supabase.from("zepp_sync_state").upsert(
+      {
+        user_id: user.id,
+        last_error: "Zepp API returned 401/403 -- apptoken likely expired, re-capture needed.",
+        last_error_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+  } else {
+    const update: Record<string, unknown> = { user_id: user.id, last_error: null, last_error_at: null };
+    if (maxTrackIdSeen > 0) {
+      update.last_synced_track_id = String(maxTrackIdSeen);
+      update.last_synced_at = new Date().toISOString();
+    }
+    await supabase.from("zepp_sync_state").upsert(update, { onConflict: "user_id" });
+  }
+
+  const succeeded = results.filter((r) => r.stored && r.status >= 200 && r.status < 300).length;
+  const failed = results.length - succeeded;
+
+  // What the requested days actually held: the history pull on the phone walks back until Zepp has had nothing
+  // for several windows in a row, which is where the account's history starts.
+  const found = {
+    workouts: results.filter((r) => r.metric === WORKOUT_DETAIL_METRIC).length,
+    bandDays: results.filter((r) => r.metric === "band_data_decode" && r.stored).length,
+  };
+
+
+  return {
+    summary: { total: results.length, succeeded, failed },
+    found,
+    authFailed,
+    results,
+  };
+}
+
+// The history pull's scheduler call (historyPull.ts, migration 20261020_zepp_history_pull.sql). pg_cron sends a random
+// Vault secret in x-zepp-history; only a service role-only SQL function can say whether it matches, so no human-held key
+// is involved. The call claims the pending pull (a lease, so two calls never work on it at once), answers at once and
+// works on in the background: week after week back in time for up to HISTORY_BUDGET_MS, saving after every week.
+const HISTORY_BUDGET_MS = 100_000;
+
+async function runHistoryPull(secret: string): Promise<Response> {
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const { data: ok } = await admin.rpc("zepp_history_secret_ok", { candidate: secret });
+  if (ok !== true) return json({ error: "unauthorized" }, 401);
+  const zepp = zeppConfig();
+  if (!zepp) return json({ error: "not_configured" }, 500);
+
+  const { data: claimed, error: claimError } = await admin.rpc("claim_zepp_history_pull");
+  if (claimError) return json({ error: "claim_failed", message: claimError.message }, 500);
+  const rows = (claimed ?? []) as Array<HistoryState & { user_id: string }>;
+  if (rows.length === 0) return json({ status: "idle" }, 200);
+
+  const defs = METRIC_DEFS.filter((d) => HISTORY_METRICS.includes(d.metric));
+  const work = (async () => {
+    for (const row of rows) {
+      const started = Date.now();
+      let state: HistoryState = row;
+      const save = (patch: Record<string, unknown>) =>
+        admin.from("zepp_history_pull").update({ ...patch, updated_at: new Date().toISOString() }).eq("user_id", row.user_id);
+      try {
+        while (!state.done && Date.now() - started < HISTORY_BUDGET_MS) {
+          const outcome = await extract(admin, { id: row.user_id }, windowDates(state), defs, zepp, { updateSyncState: false });
+          if (outcome.authFailed) {
+            await save({ error: "Zepp refused the app token (401/403): renew ZEPP_APP_TOKEN, then carry on" });
+            break;
+          }
+          state = afterWindow(state, outcome.found);
+          await save({ ...state });
+        }
+      } catch (e) {
+        await save({ error: `Stopped: ${String(e).slice(0, 300)}` });
+      } finally {
+        await admin.from("zepp_history_pull").update({ running_since: null }).eq("user_id", row.user_id);
+      }
+    }
+  })();
+  // Answer the scheduler at once and keep working (Supabase's edge runtime); elsewhere, finish before answering.
+  const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
+  if (runtime) runtime.waitUntil(work);
+  else await work;
+  return json({ status: "started", users: rows.length }, 202);
+}
+
+// Re-decoding stored workouts with the timed decoder (redecode.ts), from their stored raw detail: nothing is fetched
+// from Zepp. Called from SQL with the history pull's Vault secret in x-zepp-redecode (same check as runHistoryPull).
+// Body: { dryRun?: boolean, limit?: number, afterId?: number }. A dry run reports and writes nothing; a live run writes
+// each workout's decoded series, its heart-rate histogram and, for a paused workout, the real start on the detail row
+// and on its session (only when the session still has the old start). Live runs take rows not yet at DECODER_VERSION,
+// so calling again carries on; a dry run pages with afterId. Synchronous: the answer is the report.
+const REDECODE_MAX_BATCH = 25;
+
+async function runRedecode(secret: string, req: Request): Promise<Response> {
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const { data: ok } = await admin.rpc("zepp_history_secret_ok", { candidate: secret });
+  if (ok !== true) return json({ error: "unauthorized" }, 401);
+  let body: Record<string, unknown> = {};
+  try { body = JSON.parse(await req.text() || "{}"); } catch { /* defaults */ }
+  const dryRun = body.dryRun !== false;
+  const limit = Math.min(REDECODE_MAX_BATCH, Math.max(1, Number(body.limit) || REDECODE_MAX_BATCH));
+  const afterId = Number(body.afterId) || 0;
+
+  let q = admin.from("zepp_workout_detail")
+    .select("id,user_id,exercise_session_id,sport_type,start_time,end_time,raw,decoded")
+    .not("raw", "is", null).gt("id", afterId).order("id").limit(limit);
+  if (!dryRun) q = q.or(`decoded.is.null,decoded->>decoderVersion.is.null,decoded->>decoderVersion.neq.${DECODER_VERSION}`);
+  const { data: rows, error } = await q;
+  if (error) return json({ error: "read_failed", message: error.message }, 500);
+
+  const reports: Record<string, unknown>[] = [];
+  for (const row of (rows ?? []) as Array<Record<string, unknown>>) {
+    const old = row.decoded as Record<string, unknown> | null;
+    const oldSummary = (old?.summary ?? {}) as Record<string, unknown>;
+    const pick = (k: string) => (typeof oldSummary[k] === "number" ? oldSummary[k] as number : null);
+    const next = decodeWorkoutDetail(row.raw, {
+      avgCadenceSpm: pick("avgCadenceSpm"),
+      maxCadenceSpm: pick("maxCadenceSpm"),
+      avgStrideLengthCm: pick("avgStrideLengthCm"),
+      avgGroundContactMs: pick("avgGroundContactMs"),
+      avgVerticalStrideRatioPct: pick("avgVerticalStrideRatioPct"),
+      lactateThresholdHrBpm: pick("lactateThresholdHrBpm"),
+      lactateThresholdPaceSecPerKm: pick("lactateThresholdPaceSecPerKm"),
+    }, String(row.sport_type ?? ""));
+    if (!next) {
+      reports.push({ id: row.id, skipped: "no decodable detail" });
+      continue;
+    }
+    const report = redecodeReport(old as never, next, row.start_time as string | null, row.end_time as string | null);
+    const entry: Record<string, unknown> = { id: row.id, sessionId: row.exercise_session_id, sport: row.sport_type, ...report };
+    if (!dryRun) {
+      // Keep what the decode does not produce (the strength sets written by reconcileStrengthData).
+      const decoded = old?.strengthData ? { ...next, strengthData: old.strengthData } : next;
+      const patch: Record<string, unknown> = { decoded, hr_histogram: hrHistogram(next.heartRate) };
+      if (report.newStartIso) patch.start_time = report.newStartIso;
+      const { error: upErr } = await admin.from("zepp_workout_detail").update(patch).eq("id", row.id);
+      if (upErr) { entry.error = upErr.message; reports.push(entry); continue; }
+      if (report.newStartIso && row.exercise_session_id) {
+        const { data: session } = await admin.from("exercise_sessions").select("start_time").eq("id", row.exercise_session_id).maybeSingle();
+        if (sessionStartMatches((session as { start_time?: string } | null)?.start_time ?? null, row.start_time as string | null)) {
+          const { error: sErr } = await admin.from("exercise_sessions").update({ start_time: report.newStartIso }).eq("id", row.exercise_session_id);
+          entry.sessionStartMoved = !sErr;
+          if (sErr) entry.error = sErr.message;
+        } else {
+          entry.sessionStartMoved = false;
+        }
+      }
+    }
+    reports.push(entry);
+  }
+  const lastId = rows && rows.length ? (rows[rows.length - 1] as { id: number }).id : null;
+  return json({ dryRun, count: reports.length, lastId, reports }, 200);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
+    const historySecret = req.headers.get("x-zepp-history");
+    if (historySecret) return await runHistoryPull(historySecret);
+    const redecodeSecret = req.headers.get("x-zepp-redecode");
+    if (redecodeSecret) return await runRedecode(redecodeSecret, req);
+
     // --- Auth ---
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -717,10 +1285,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- Zepp config ---
-    const zeppToken = Deno.env.get("ZEPP_APP_TOKEN");
-    const zeppUserId = Deno.env.get("ZEPP_USER_ID");
-    const zeppHost = Deno.env.get("ZEPP_API_HOST");
-    if (!zeppToken || !zeppUserId || !zeppHost) {
+    const zepp = zeppConfig();
+    if (!zepp) {
       return json({
         error: "not_configured",
         message:
@@ -789,481 +1355,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- Extract ---
-    const results: Array<{
-      metric: string;
-      date: string;
-      status: number;
-      stored: boolean;
-      error?: string;
-    }> = [];
-
-    // track_id defaults to '' (not null) for every non-detail metric -- a nullable
-    // track_id would break upsert idempotency, since Postgres unique constraints
-    // never treat two NULLs as a conflict (see the schema comment/migration).
-    async function fetchAndStore(
-      endpoint: string,
-      metric: string,
-      date: string,
-      trackId: string,
-    ): Promise<{ statusCode: number; rawBody: unknown; stored: boolean; error?: string }> {
-      // v8: append the same "r" cache-buster every zepp-health-cli request
-      // carries (a random UUID, not a validated value -- just present).
-      const sep = endpoint.includes("?") ? "&" : "?";
-      const fetchUrl = `https://${zeppHost}${endpoint}${sep}r=${crypto.randomUUID().toUpperCase()}`;
-      let statusCode: number;
-      let rawBody: unknown = null;
-
-      try {
-        const res = await fetch(fetchUrl, {
-          headers: {
-            apptoken: zeppToken!,
-            "Content-Type": "application/json",
-            appname: "com.huami.midong",
-            appplatform: "ios_phone",
-            v: "2.0",
-            vn: "10.2.5",
-            cv: "1722_10.2.5",
-            vb: "202604132257",
-            "user-agent": "Zepp/10.2.5 (iPhone; iOS 26.3.1; Scale/3.00)",
-            lang: "en",
-            country: "",
-            timezone: "UTC",
-          },
-        });
-        statusCode = res.status;
-        const text = await res.text();
-        try {
-          rawBody = JSON.parse(text);
-        } catch {
-          rawBody = { _raw_text: text };
-        }
-      } catch (e) {
-        statusCode = 0;
-        rawBody = { _fetch_error: String(e) };
-      }
-
-      const { error: upsertError } = await supabase
-        .from("zepp_raw_extracts")
-        .upsert(
-          {
-            user_id: user.id,
-            metric,
-            query_date: date,
-            track_id: trackId,
-            api_host: zeppHost,
-            endpoint,
-            status_code: statusCode,
-            raw_body: rawBody,
-            fetched_at: new Date().toISOString(),
-            extractor_version: EXTRACTOR_VERSION,
-          },
-          { onConflict: "user_id,metric,query_date,track_id" },
-        );
-
-      return { statusCode, rawBody, stored: !upsertError, error: upsertError?.message };
-    }
-
-    // DAV-115: match a Zepp workout to an existing Health-Connect-sourced
-    // exercise_sessions row by start_time proximity rather than duplicating it;
-    // insert a new source='zepp' row only when nothing matches. Also tracks the
-    // highest track_id seen, for zepp_sync_state below.
-    const RECONCILE_TOLERANCE_MS = 2 * 60 * 1000;
-    let maxTrackIdSeen = 0;
-
-    async function reconcileWorkout(
-      ref: WorkoutRef,
-      detailRawBody: unknown,
-    ): Promise<void> {
-      if (!ref.startTimeIso || !ref.endTimeIso) return; // no reliable time to reconcile with
-
-      const startMs = new Date(ref.startTimeIso).getTime();
-      const { data: matches } = await supabase
-        .from("exercise_sessions")
-        .select("id")
-        .eq("user_id", user.id)
-        .gte("start_time", new Date(startMs - RECONCILE_TOLERANCE_MS).toISOString())
-        .lte("start_time", new Date(startMs + RECONCILE_TOLERANCE_MS).toISOString())
-        .limit(1);
-
-      let exerciseSessionId: number | null = matches?.[0]?.id ?? null;
-
-      if (exerciseSessionId === null) {
-        // Unmatched: this workout isn't in Health Connect yet. Insert minimally
-        // -- aggregate fields (distance/calories/hr) are left for the decode
-        // pass once detail.json's real field semantics are confirmed, rather
-        // than guessing units now. Type comes from Zepp's sport code (DAV-268
-        // has the full mapping; unknown codes land as 'other', never 'run').
-        const { data: inserted, error: insertError } = await supabase
-          .from("exercise_sessions")
-          .insert({
-            user_id: user.id,
-            type: exerciseTypeForZeppSport(ref.sportType),
-            source: "zepp",
-            start_time: ref.startTimeIso,
-            end_time: ref.endTimeIso,
-            duration_min: Math.round((new Date(ref.endTimeIso).getTime() - startMs) / 60000),
-          })
-          .select("id")
-          .single();
-        // Surfacing this insert's error mattered in practice: it silently
-        // failed once already (a since-fixed CHECK constraint didn't allow
-        // source='zepp') and the swallowed error hid it -- DAV-115's own
-        // acceptance criterion is "no silent data loss."
-        if (insertError) throw new Error(`exercise_sessions insert failed: ${insertError.message}`);
-        exerciseSessionId = inserted?.id ?? null;
-      }
-
-      const decoded = decodeWorkoutDetail(detailRawBody, {
-        avgCadenceSpm: ref.avgCadenceSpm,
-        maxCadenceSpm: ref.maxCadenceSpm,
-        avgStrideLengthCm: ref.avgStrideLengthCm,
-        avgGroundContactMs: ref.avgGroundContactMs,
-        avgVerticalStrideRatioPct: ref.avgVerticalStrideRatioPct,
-        lactateThresholdHrBpm: ref.lactateThresholdHrBpm,
-        lactateThresholdPaceSecPerKm: ref.lactateThresholdPaceSecPerKm,
-      }, ref.sportType);
-
-      const { error: detailUpsertError } = await supabase.from("zepp_workout_detail").upsert(
-        {
-          user_id: user.id,
-          exercise_session_id: exerciseSessionId,
-          zepp_track_id: ref.trackId,
-          zepp_source: ref.source,
-          start_time: ref.startTimeIso,
-          end_time: ref.endTimeIso,
-          sport_type: ref.sportType,
-          raw: detailRawBody,
-          decoded,
-          fetched_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,zepp_track_id" },
-      );
-      if (detailUpsertError) throw new Error(`zepp_workout_detail upsert failed: ${detailUpsertError.message}`);
-
-      // DAV-274 real bug: exercise_sessions.distance_km (Health Connect's own
-      // multi-source-summed figure, sometimes wrong by 2-3x -- see
-      // domain/Training.kt's reconcileDistanceWithSpeed on the Android side)
-      // is never corrected once a real Zepp GPS track exists for the same
-      // session, matched or not. Zepp's decoded per-second distance is real
-      // GPS ground truth (repeatedly cross-checked this session) -- write it
-      // back outright, same "Zepp wins when present" principle
-      // mergePreferZepp() already applies to the per-second series client-side.
-      const zeppDistanceKm = decoded?.distanceKm?.at(-1)?.value;
-      if (exerciseSessionId !== null && zeppDistanceKm && zeppDistanceKm > 0) {
-        const { error: distanceUpdateError } = await supabase
-          .from("exercise_sessions")
-          .update({ distance_km: zeppDistanceKm })
-          .eq("id", exerciseSessionId);
-        if (distanceUpdateError) throw new Error(`exercise_sessions distance update failed: ${distanceUpdateError.message}`);
-      }
-
-      // v12: write Zepp-primary aggregates. Prefer smoothedAscentM (GPS-smoothed
-      // by effort.ts) over the raw altitude_ascend from the summary. "Zepp wins
-      // when > 0" -- skip the update if Zepp has zero/null to avoid clobbering
-      // legitimate HC values. avg_speed_kmh is derived from avg_pace (s/km).
-      if (exerciseSessionId !== null) {
-        const smoothedM = decoded?.summary?.smoothedAscentM ?? 0;
-        const elevationM = smoothedM > 0 ? smoothedM
-          : (ref.altitudeAscendM ?? 0) > 0 ? ref.altitudeAscendM : null;
-
-        const aggregates: Record<string, number> = {};
-        if ((ref.avgHrBpm ?? 0) > 0)       aggregates.avg_hr = ref.avgHrBpm!;
-        if ((ref.maxHrBpm ?? 0) > 0)       aggregates.max_hr = ref.maxHrBpm!;
-        if ((ref.calorieKcal ?? 0) > 0)    aggregates.calories_active = ref.calorieKcal!;
-        if (elevationM !== null)            aggregates.elevation_gain_m = elevationM;
-        if ((ref.avgPaceSecPerKm ?? 0) > 0) aggregates.avg_speed_kmh = (1000 / ref.avgPaceSecPerKm!) * 3.6;
-
-        if (Object.keys(aggregates).length > 0) {
-          const { error: aggUpdateError } = await supabase
-            .from("exercise_sessions")
-            .update(aggregates)
-            .eq("id", exerciseSessionId);
-          if (aggUpdateError) throw new Error(`exercise_sessions aggregate update failed: ${aggUpdateError.message}`);
-        }
-      }
-
-      // v11: strength set import for workouts on/after 2026-10-08. Writes
-      // decoded.strengthData (per-set timing + movement scores) and, if
-      // exercise_sessions.details is currently null, populates it with exercises
-      // and sets from the lap field using the Gadgetbridge exercise catalog.
-      if (
-        ref.sportType === "52" &&
-        exerciseSessionId !== null &&
-        new Date(ref.startTimeIso) >= STRENGTH_IMPORT_START
-      ) {
-        await reconcileStrengthData(
-          exerciseSessionId, detailRawBody, ref.realStartMs,
-          decoded as Record<string, unknown> | null,
-        );
-      }
-
-      const n = Number(ref.trackId);
-      if (Number.isFinite(n) && n > maxTrackIdSeen) maxTrackIdSeen = n;
-    }
-
-    async function reconcileStrengthData(
-      exerciseSessionId: number,
-      detailRawBody: unknown,
-      realStartMs: number,
-      existingDecoded: Record<string, unknown> | null,
-    ): Promise<void> {
-      if (!detailRawBody || typeof detailRawBody !== "object") return;
-      const rawData = ((detailRawBody as Record<string, unknown>).data) as Record<string, unknown> | undefined;
-      if (!rawData) return;
-
-      // Done sets carry status -1 (older exports) or 0 (current firmware); 2 is a planned set that was
-      // skipped. Filtering on -1 alone dropped every set from the 2026-10-08 session.
-      const laps = parseLapSets(rawData.lap).filter(s => s.status !== 2 && s.durationSec > 0);
-      if (!laps.length) return;
-
-      const assess = parseStrengthAssess(rawData.strengthAssess as unknown);
-      const assessByIdx = new Map(assess.map(a => [a.idx, a]));
-
-      const strengthSets: StrengthSetDecoded[] = laps.map(lap => {
-        const a = assessByIdx.get(lap.idx);
-        const startOffsetSec = (a && realStartMs > 0)
-          ? Math.max(0, Math.round((a.startMs - realStartMs) / 1000))
-          : 0;
-        return {
-          idx: lap.idx,
-          startOffsetSec,
-          durationSec: lap.durationSec,
-          exerciseCode: lap.exerciseCode,
-          scores: a?.scores ?? null,
-        };
-      });
-
-      // Patch decoded.strengthData onto the existing decoded object.
-      const mergedDecoded = { ...(existingDecoded ?? {}), strengthData: { sets: strengthSets } };
-      const { error: decodedUpdateErr } = await supabase
-        .from("zepp_workout_detail")
-        .update({ decoded: mergedDecoded })
-        .eq("exercise_session_id", exerciseSessionId);
-      if (decodedUpdateErr) throw new Error(`zepp_workout_detail decoded patch failed: ${decodedUpdateErr.message}`);
-
-      // Only write exercise_sessions.details if currently null/empty.
-      const { data: sessionRow } = await supabase
-        .from("exercise_sessions")
-        .select("details")
-        .eq("id", exerciseSessionId)
-        .single();
-      const existing = (sessionRow as Record<string, unknown> | null)?.details as Record<string, unknown> | null | undefined;
-      if (existing && Array.isArray((existing as Record<string, unknown>).exercises) && ((existing as Record<string, unknown>).exercises as unknown[]).length > 0) {
-        return; // user has already set details, don't overwrite
-      }
-
-      // Group consecutive laps by exercise code.
-      const groups: Array<{ code: number; sets: Array<Record<string, unknown>> }> = [];
-      for (const lap of laps) {
-        const last = groups.at(-1);
-        const setRow: Record<string, unknown> = {
-          reps: lap.targetReps,
-          weight_kg: lap.weightKg,
-          duration_sec: lap.durationSec,
-          avg_hr: lap.avgHr > 0 ? lap.avgHr : null,
-          detected_reps: lap.detectedReps > 0 ? lap.detectedReps : null,
-        };
-        if (last && last.code === lap.exerciseCode) {
-          last.sets.push(setRow);
-        } else {
-          groups.push({ code: lap.exerciseCode, sets: [setRow] });
-        }
-      }
-
-      const exercises = groups.map(g => ({
-        name: ZEPP_EXERCISE_NAMES[g.code] ?? `Exercise ${g.code}`,
-        exercise_code: g.code,
-        sets: g.sets,
-      }));
-
-      const { error: detailsUpdateErr } = await supabase
-        .from("exercise_sessions")
-        .update({ details: { exercises } })
-        .eq("id", exerciseSessionId);
-      if (detailsUpdateErr) throw new Error(`exercise_sessions details update failed: ${detailsUpdateErr.message}`);
-    }
-
-    // DAV-274: the Zepp sync and the Health Connect sync both run on app open
-    // and can race -- if Zepp's reconcile query above runs before Health
-    // Connect's own sync has inserted its row for the same real session, the
-    // match finds nothing and a second source='zepp' placeholder gets
-    // inserted (confirmed against real created_at timestamps 12s apart for
-    // the account's 2026-09-26 run). zepp_workout_detail then stays linked to
-    // that orphan forever, so neither the corrected distance above nor the
-    // real per-second series (splits, charts) ever reaches the row the app
-    // actually displays. Self-heals here: by the *next* sync, Health Connect
-    // has normally caught up, so re-run the same match this time and merge.
-    async function mergeOrphanedZeppSessions(): Promise<number> {
-      const { data: orphans } = await supabase
-        .from("exercise_sessions")
-        .select("id,start_time")
-        .eq("user_id", user.id)
-        .eq("source", "zepp");
-      if (!orphans || orphans.length === 0) return 0;
-
-      let merged = 0;
-      for (const orphan of orphans) {
-        const orphanMs = new Date(orphan.start_time).getTime();
-        const { data: matches } = await supabase
-          .from("exercise_sessions")
-          .select("id")
-          .eq("user_id", user.id)
-          .neq("id", orphan.id)
-          .neq("source", "zepp")
-          .gte("start_time", new Date(orphanMs - RECONCILE_TOLERANCE_MS).toISOString())
-          .lte("start_time", new Date(orphanMs + RECONCILE_TOLERANCE_MS).toISOString())
-          .limit(1);
-        const realId = matches?.[0]?.id;
-        if (realId === undefined) continue;
-
-        // Repoint both real FKs to exercise_sessions before deleting the orphan.
-        const { error: repointDetailError } = await supabase
-          .from("zepp_workout_detail")
-          .update({ exercise_session_id: realId })
-          .eq("exercise_session_id", orphan.id);
-        if (repointDetailError) throw new Error(`zepp_workout_detail repoint failed: ${repointDetailError.message}`);
-        const { error: repointRouteError } = await supabase
-          .from("planned_routes")
-          .update({ exercise_session_id: realId })
-          .eq("exercise_session_id", orphan.id);
-        if (repointRouteError) throw new Error(`planned_routes repoint failed: ${repointRouteError.message}`);
-
-        const { error: deleteError } = await supabase.from("exercise_sessions").delete().eq("id", orphan.id);
-        if (deleteError) throw new Error(`orphaned exercise_sessions delete failed: ${deleteError.message}`);
-        merged++;
-      }
-      return merged;
-    }
-
-    try {
-      const merged = await mergeOrphanedZeppSessions();
-      if (merged > 0) results.push({ metric: "zepp_orphan_merge", date: "", status: 200, stored: true, error: `merged ${merged}` });
-    } catch (e) {
-      results.push({ metric: "zepp_orphan_merge", date: "", status: 0, stored: false, error: String(e) });
-    }
-
-    for (const date of dates) {
-      for (const def of defs) {
-        const endpoint = def.endpoint(zeppUserId, date);
-        const { statusCode, rawBody, stored, error } = await fetchAndStore(endpoint, def.metric, date, "");
-        results.push({ metric: def.metric, date, status: statusCode, stored, ...(error ? { error } : {}) });
-
-        // v10: decode band_data and upsert sleep/wearable daily rows.
-        if (def.metric === "band_data" && statusCode >= 200 && statusCode < 300) {
-          try {
-            const decoded = decodeBandDataSummary(rawBody);
-            if (decoded) {
-              if (decoded.sleepHours !== null && decoded.sleepHours >= MIN_PLAUSIBLE_SLEEP_HOURS && decoded.bedtimeIso && decoded.wakeTimeIso) {
-                const sleepRow: Record<string, unknown> = {
-                  user_id: user.id,
-                  date,
-                  hours: decoded.sleepHours,
-                  bedtime: decoded.bedtimeIso,
-                  wake_time: decoded.wakeTimeIso,
-                };
-                if (decoded.sleepScore !== null) sleepRow.score = decoded.sleepScore;
-                if (decoded.deepMin !== null) sleepRow.deep_min = decoded.deepMin;
-                if (decoded.remMin !== null) sleepRow.rem_min = decoded.remMin;
-                if (decoded.lightMin !== null) sleepRow.light_min = decoded.lightMin;
-                const { error: sleepErr } = await supabase.from("sleep_daily")
-                  .upsert(sleepRow, { onConflict: "user_id,date" });
-                if (sleepErr) throw new Error(`sleep_daily upsert: ${sleepErr.message}`);
-                await recordFieldProvenance(supabase, user.id, date, Object.keys(sleepRow).filter((k) => k !== "user_id" && k !== "date").map((k) => `sleep_daily.${k}`));
-              }
-              const wearableUpdates: Record<string, unknown> = { user_id: user.id, date };
-              let hasWearable = false;
-              if (decoded.rhr !== null) { wearableUpdates.rhr = decoded.rhr; hasWearable = true; }
-              if (decoded.steps !== null) { wearableUpdates.steps = decoded.steps; hasWearable = true; }
-              if (decoded.hrTimeseries !== null) { wearableUpdates.hr_timeseries = decoded.hrTimeseries; hasWearable = true; }
-              if (hasWearable) {
-                const { error: wearErr } = await supabase.from("wearable_daily")
-                  .upsert(wearableUpdates, { onConflict: "user_id,date" });
-                if (wearErr) throw new Error(`wearable_daily upsert: ${wearErr.message}`);
-                await recordFieldProvenance(supabase, user.id, date, Object.keys(wearableUpdates).filter((k) => k !== "user_id" && k !== "date").map((k) => `wearable_daily.${k}`));
-              }
-              results.push({ metric: "band_data_decode", date, status: 200, stored: true });
-            }
-          } catch (e) {
-            results.push({ metric: "band_data_decode", date, status: 0, stored: false, error: String(e) });
-          }
-        }
-
-        // DAV-112/123: sport_history is the list; follow up with the real
-        // per-point detail payload for each workout it references.
-        if (def.metric === "sport_history" && statusCode >= 200 && statusCode < 300) {
-          let refs: WorkoutRef[] = [];
-          try {
-            refs = extractWorkoutRefs(rawBody);
-          } catch (e) {
-            results.push({
-              metric: WORKOUT_DETAIL_METRIC,
-              date,
-              status: 0,
-              stored: false,
-              error: `extractWorkoutRefs failed: ${String(e)}`,
-            });
-          }
-
-          for (const ref of refs) {
-            const detailEndpoint =
-              `/v1/sport/run/detail.json?trackid=${encodeURIComponent(ref.trackId)}` +
-              `&source=${encodeURIComponent(ref.source)}`;
-            const detail = await fetchAndStore(detailEndpoint, WORKOUT_DETAIL_METRIC, date, ref.trackId);
-            results.push({
-              metric: WORKOUT_DETAIL_METRIC,
-              date,
-              status: detail.statusCode,
-              stored: detail.stored,
-              ...(detail.error ? { error: detail.error } : {}),
-            });
-
-            if (detail.stored && detail.statusCode >= 200 && detail.statusCode < 300) {
-              try {
-                await reconcileWorkout(ref, detail.rawBody);
-              } catch (e) {
-                results.push({
-                  metric: "zepp_reconcile",
-                  date,
-                  status: 0,
-                  stored: false,
-                  error: String(e),
-                });
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Surface auth failures (expired ~30-day apptoken) distinctly from a
-    // successful-but-empty run, so Settings can tell "re-auth needed" apart
-    // from "nothing new today" (DAV-118).
-    const authFailed = results.some((r) => r.status === 401 || r.status === 403);
-    if (authFailed) {
-      await supabase.from("zepp_sync_state").upsert(
-        {
-          user_id: user.id,
-          last_error: "Zepp API returned 401/403 -- apptoken likely expired, re-capture needed.",
-          last_error_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      );
-    } else {
-      const update: Record<string, unknown> = { user_id: user.id, last_error: null, last_error_at: null };
-      if (maxTrackIdSeen > 0) {
-        update.last_synced_track_id = String(maxTrackIdSeen);
-        update.last_synced_at = new Date().toISOString();
-      }
-      await supabase.from("zepp_sync_state").upsert(update, { onConflict: "user_id" });
-    }
-
-    const succeeded = results.filter((r) => r.stored && r.status >= 200 && r.status < 300).length;
-    const failed = results.length - succeeded;
-
-    return json({
-      summary: { total: results.length, succeeded, failed },
-      results,
-    }, 200);
+    return json(await extract(supabase, user, dates, defs, zepp, { updateSyncState: true }), 200);
   } catch (e) {
     return json({ error: "internal_error", message: String(e) }, 500);
   }

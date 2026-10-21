@@ -2,7 +2,6 @@ package com.bioscan.fieldterminal.ui.screens.training
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,12 +33,13 @@ import com.bioscan.fieldterminal.domain.training.generate.WeekKind
 import com.bioscan.fieldterminal.domain.training.generate.countedWeeks
 import com.bioscan.fieldterminal.domain.training.generate.text
 import com.bioscan.fieldterminal.domain.training.generate.weeksForBlocks
-import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
+import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDropdown
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.DayOfWeek
@@ -151,7 +150,7 @@ internal fun LayoutStep(state: TrainingPlannerState) {
         state.layoutWarnings.forEach { Text("! $it", style = FTType.BodySmall, color = FT.Warning) }
         if (state.layoutWarnings.isEmpty()) Text("No clashes found.", style = FTType.BodySmall, color = FT.TextSecondary)
         Spacer(Modifier.height(4.dp))
-        AmberButton("RESET TO SUGGESTION") { state.resetLayout() }
+        FTButton("RESET TO SUGGESTION") { state.resetLayout() }
     }
 }
 
@@ -162,7 +161,7 @@ private fun DayChip(label: String, active: Boolean, accent: Color, modifier: Mod
         modifier.defaultMinSize(minHeight = 44.dp)
             .border(FT.BorderWidth, if (active) accent else FT.GlassBorder, shape)
             .background(if (active) accent.copy(alpha = 0.14f) else Color.Transparent, shape)
-            .clickable { onClick() }.padding(horizontal = 8.dp),
+            .ftClickable(shape = shape, onClick = onClick).padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) { Text(label.take(22), style = FTType.Label, color = if (active) FT.TextPrimary else FT.TextMuted) }
 }
@@ -172,11 +171,29 @@ private fun DayChip(label: String, active: Boolean, accent: Color, modifier: Mod
 internal fun TimelineStep(state: TrainingPlannerState) {
     val len = state.blockLength()
     val t = state.timeline
+    val buildable = com.bioscan.fieldterminal.domain.events.buildableEvents(state.events, state.startDate)
+    if (buildable.isNotEmpty()) {
+        Label("BUILD TOWARD AN EVENT")
+        Chips(buildable.map { it.id.toString() } + "none", setOfNotNull(state.targetEvent?.id?.toString() ?: "none"), { k ->
+            buildable.firstOrNull { it.id.toString() == k }?.let { "${it.name} · ${it.date}" } ?: "NO EVENT"
+        }) { k -> state.buildToward(buildable.firstOrNull { it.id.toString() == k }) }
+        state.targetEvent?.let { e ->
+            val taper = com.bioscan.fieldterminal.domain.events.taperWeeks(e)
+            Body(
+                "Ends in the week of ${e.name}." + if (taper > 0) {
+                    " The last $taper week${if (taper > 1) "s" else ""} taper (lighter weeks, about half the volume; Bosquet 2007): keep a few short efforts at race pace."
+                } else {
+                    ""
+                },
+                muted = true,
+            )
+        }
+    }
     Label("LENGTH")
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        AmberButton("-", enabled = state.weeks > 1) { state.changeWeeks(state.weeks - 1) }
+        FTButton("-", enabled = state.weeks > 1) { state.changeWeeks(state.weeks - 1) }
         Text("${state.weeks} WEEKS", style = FTType.MetricMedium, color = FT.TextPrimary)
-        AmberButton("+", enabled = state.weeks < 52) { state.changeWeeks(state.weeks + 1) }
+        FTButton("+", enabled = state.weeks < 52) { state.changeWeeks(state.weeks + 1) }
     }
     if (state.strengthModule != null) {
         Label("OR BY BLOCKS OF $len WEEKS")

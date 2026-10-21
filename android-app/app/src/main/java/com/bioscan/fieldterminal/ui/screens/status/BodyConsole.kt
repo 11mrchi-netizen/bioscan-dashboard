@@ -1,28 +1,30 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -31,11 +33,13 @@ import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,47 +48,86 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
 import com.bioscan.fieldterminal.data.MapRepository
+import com.bioscan.fieldterminal.data.NutritionGoals
+import com.bioscan.fieldterminal.data.NutritionGoalsStore
+import com.bioscan.fieldterminal.data.STALE_AFTER_DAYS
 import com.bioscan.fieldterminal.data.StatusOverview
+import com.bioscan.fieldterminal.data.TodayPreviews
+import com.bioscan.fieldterminal.data.hydrationBoundsMl
+import com.bioscan.fieldterminal.domain.AddEntryStart
+import com.bioscan.fieldterminal.domain.FigurePoint
+import com.bioscan.fieldterminal.domain.FuelSubType
 import com.bioscan.fieldterminal.domain.MapEvent
 import com.bioscan.fieldterminal.domain.MetricState
+import com.bioscan.fieldterminal.domain.MorningReadout
+import com.bioscan.fieldterminal.domain.expectedStateWord
+import com.bioscan.fieldterminal.domain.headline
+import com.bioscan.fieldterminal.domain.figurePinForBodyPart
+import com.bioscan.fieldterminal.domain.freshnessLine
+import com.bioscan.fieldterminal.domain.healthFlagDay
 import com.bioscan.fieldterminal.domain.parseSessionZonedDateTime
-import com.bioscan.fieldterminal.ui.nav.TileRoute
+import com.bioscan.fieldterminal.domain.supplementsTodayLine
 import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.metricStateColor
 import com.bioscan.fieldterminal.ui.components.metricStateLabel
-import com.bioscan.fieldterminal.ui.components.readinessState
+import com.bioscan.fieldterminal.ui.nav.TileRoute
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.Locale
+import kotlin.math.roundToInt
 
 // The Status hub: a body-centered composition (design/FIELD_TERMINAL_IA_CONTRACT.md
-// section 4). Real data for readiness/HRV/RHR/sleep/health-flag. The hero is
-// the HRV-vs-baseline readiness band (categorical on purpose: no composite
-// 0-100 score exists or is invented), paired with a state pill; the figure's
+// section 4). Real data for HRV/RHR/sleep/health-flag. The hero is this
+// morning's HRV against the band expected for it (analysis review phase C; no
+// composite 0-100 score exists or is invented), paired with a state pill; the figure's
 // head/chest/legs tint by recovery/cardio/training-load state, and the zone
 // legend under it spells out each zone's state in words so color is never the
 // only signal. Entirely Futuristic Material tokens/fonts.
+//
+// UX review P1 ("today at a glance"): the hero names its basis and freshness and links TODAY ›; the figure is shorter;
+// the four tiles are a 2x2 grid of instruments with real previews (FUEL and LABS no longer say OPEN); a quick-log row
+// opens the add sheet on the right form. The hub scrolls (F4: large fonts used to squeeze it), and the figure is sized
+// from the viewport so the first screen still holds the hero, the figure and all four tiles.
 @Composable
-fun BodyConsole(overview: StatusOverview?, isLoading: Boolean, onOpenTile: (TileRoute) -> Unit, onOpenDailyReadiness: () -> Unit) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        // 25/9 rework: figure absorbs all leftover height; Next Up band and the
-        // tile row sit at the bottom, resting on the Scaffold's bottom menu.
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            ConditionFigureField(overview, isLoading, onOpenDailyReadiness)
+fun BodyConsole(
+    overview: StatusOverview?,
+    previews: TodayPreviews?,
+    isLoading: Boolean,
+    onOpenTile: (TileRoute) -> Unit,
+    onOpenToday: () -> Unit,
+    onOpenInjury: () -> Unit = {},
+    onQuickLog: (AddEntryStart) -> Unit = {},
+    onOpenEvent: (Long) -> Unit = {},
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val figureHeight = (maxHeight * 0.30f).coerceIn(160.dp, 280.dp)
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            ConditionField(overview, isLoading, figureHeight, onOpenToday, onOpenInjury)
+            NextUpSection(onOpenEvent = onOpenEvent)
+            SystemTileGrid(overview, previews, onOpenTile)
+            QuickLogRow(previews, onQuickLog)
         }
-        NextUpSection()
-        SystemTileRow(overview, onOpenTile)
     }
 }
 
@@ -103,63 +146,89 @@ private data class SystemTileSpec(
 // overview really has a state for that system.
 private val SYSTEM_TILES = listOf(
     SystemTileSpec(TileRoute.Training, "TRAINING", Icons.Filled.FitnessCenter, FT.DomainTraining) { it.trainingState },
-    SystemTileSpec(TileRoute.Fuel, "FUEL", Icons.Filled.Restaurant, FT.DomainFuel) { null },
-    SystemTileSpec(TileRoute.Heart, "HEALTH", Icons.Filled.Favorite, FT.DomainHeart) { it.cardioState },
-    SystemTileSpec(TileRoute.Labs, "LABS", Icons.Filled.Science, FT.DomainLabs) { null },
+    SystemTileSpec(TileRoute.Nutrition, "NUTRITION", Icons.Filled.Restaurant, FT.DomainFuel) { null },
+    SystemTileSpec(TileRoute.Health, "HEALTH", Icons.Filled.Favorite, FT.DomainHeart) { it.cardioState },
+    SystemTileSpec(TileRoute.Lab, "LAB", Icons.Filled.Science, FT.DomainLabs) { null },
 )
 
-// Compact preview lines -- real data only. HEART is backed by HRV/RHR,
-// TRAINING by the 7-day session count; FUEL/LABS have no summary data at this
-// overview level yet, so they show a plain "OPEN" rather than a fabricated
-// number. Two short lines (not one "HRV64·RHR57" string) so each reads alone.
-private fun previewLines(route: TileRoute, overview: StatusOverview?): List<String> = when (route) {
-    TileRoute.Heart -> overview?.let {
+// Two preview lines per tile, real data only: a missing reading is "—", never a made-up number. Short lines (not one
+// "HRV64·RHR57" string) so each reads alone. NUTRITION uses the same goal and hydration range as the Nutrition tile, LAB
+// the same supplements-due rule as the reminder (domain/SupplementsToday.kt). App restructure: the last lab draw moved
+// to HEALTH with bloodwork.
+private fun previewLines(route: TileRoute, overview: StatusOverview?, previews: TodayPreviews?, goals: NutritionGoals): List<String> = when (route) {
+    TileRoute.Training -> listOf(
+        overview?.let { "${it.sessionsLast7Days} SESSION${if (it.sessionsLast7Days == 1) "" else "S"} · 7D" } ?: "SESSIONS —",
+        overview?.let { o -> o.trainingLoadBand?.uppercase() ?: "LOAD ${metricStateLabel(o.trainingState)}" } ?: "LOAD —",
+    )
+    TileRoute.Nutrition -> {
+        val fuel = previews?.fuel
+        val goal = goals.caloriesKcal
+        val kcal = fuel?.kcal?.let(::thousands) ?: "—"
+        val water = fuel?.waterMl?.let { "%.1f".format(Locale.ENGLISH, it / 1000.0) } ?: "—"
+        val bounds = hydrationBoundsMl(goals, fuel?.exerciseDemandMl ?: 0.0)
         listOf(
-            "HRV " + (it.latestHrv?.let { v -> "%.0f".format(v) } ?: "—"),
-            "RHR " + (it.latestRhr?.let { v -> "%.0f".format(v) } ?: "—"),
+            if (goal != null) "$kcal / ${thousands(goal)} KCAL" else "$kcal KCAL",
+            "WATER $water / " + "%.1f–%.1f L".format(Locale.ENGLISH, bounds.start / 1000.0, bounds.endInclusive / 1000.0),
         )
-    } ?: listOf("OPEN")
-    TileRoute.Training -> overview?.let {
-        listOf(if (it.sessionsLast7Days == 1) "1 SESSION" else "${it.sessionsLast7Days} SESSIONS", "LAST 7 DAYS")
-    } ?: listOf("OPEN")
-    else -> listOf("OPEN")
+    }
+    TileRoute.Health -> listOf(
+        "HRV " + (overview?.latestHrv?.let { "%.0f".format(it) } ?: "—") + " · RHR " + (overview?.latestRhr?.let { "%.0f".format(it) } ?: "—"),
+        "SLEEP " + (overview?.sleepHours?.let { formatHours(it) } ?: "—"),
+        previews?.lastLabDraw?.let { "LAST DRAW " + it.format(DRAW_DATE).uppercase() }
+            ?: if (previews?.labDrawsLoaded == true) "NO LAB DRAWS YET" else "LAST DRAW —",
+    )
+    TileRoute.Lab -> listOf(
+        previews?.supplements?.let { supplementsTodayLine(it) } ?: "SUPPS —",
+        "N=1 · PLANNING · TESTS",
+    )
 }
 
+private fun thousands(v: Double): String = "%,d".format(Locale.ENGLISH, v.roundToInt())
+
+private val DRAW_DATE = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
+
 @Composable
-private fun SystemTileRow(overview: StatusOverview?, onOpenTile: (TileRoute) -> Unit) {
-    Row(
-        // IntrinsicSize.Min + fillMaxHeight on each tile keeps all four the
-        // same height even when one has more preview lines than its siblings.
-        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(horizontal = 18.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+private fun SystemTileGrid(overview: StatusOverview?, previews: TodayPreviews?, onOpenTile: (TileRoute) -> Unit) {
+    val context = LocalContext.current
+    // Re-read with the previews: they reload after a quick-log save, and goals are edited in Setup.
+    val goals = remember(previews) { NutritionGoalsStore.getGoals(context) }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        SYSTEM_TILES.forEach { tile ->
-            SystemTile(
-                tile = tile,
-                state = overview?.let { tile.state(it) },
-                preview = previewLines(tile.route, overview),
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-            ) { onOpenTile(tile.route) }
+        SYSTEM_TILES.chunked(2).forEach { pair ->
+            // IntrinsicSize.Min + fillMaxHeight keeps both tiles of a row the same height when one preview wraps.
+            Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                pair.forEach { tile ->
+                    SystemTile(
+                        tile = tile,
+                        state = overview?.let { tile.state(it) },
+                        preview = previewLines(tile.route, overview, previews, goals),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    ) { onOpenTile(tile.route) }
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun SystemTile(tile: SystemTileSpec, state: MetricState?, preview: List<String>, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(FT.RadiusModule)
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(FT.RadiusModule))
+            .clip(shape)
             .background(FT.GlassFill)
-            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(vertical = 14.dp, horizontal = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .border(FT.BorderWidth, FT.GlassBorder, shape)
+            .ftClickable(shape = shape, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(tile.icon, contentDescription = tile.label, tint = tile.accent, modifier = Modifier.size(22.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // The label next to it names the tile; a description here would be read twice.
+            Icon(tile.icon, contentDescription = null, tint = tile.accent, modifier = Modifier.size(18.dp))
+            Text(tile.label, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             state?.let {
-                Spacer(Modifier.width(6.dp))
                 Box(
                     Modifier
                         .size(8.dp)
@@ -168,22 +237,56 @@ private fun SystemTile(tile: SystemTileSpec, state: MetricState?, preview: List<
                         .semantics { contentDescription = metricStateLabel(it).lowercase() },
                 )
             }
+            Text("›", style = FTType.LabelCaps, color = FT.TextSecondary)
         }
-        Text(tile.label, style = tileLabelStyle, color = FT.TextPrimary)
-        preview.forEach { line ->
-            Text(line, style = tilePreviewStyle, color = FT.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        preview.forEachIndexed { i, line ->
+            Text(line, style = FTType.Label, color = if (i == 0) FT.TextPrimary else FT.TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
-private val tileLabelStyle = FTType.CaptionStrong
-private val tilePreviewStyle = FTType.Label
+// UX review P1 / F3: the most frequent entries one tap from the hub, each opening the add sheet already on its form.
+// + SUPPS ticks the bundle that is due now (domain/SupplementsToday.kt). Labels are actions, so Inter (contract A7).
+// Four across; two by two when large text or a narrow screen would not fit four labels.
+@Composable
+private fun QuickLogRow(previews: TodayPreviews?, onQuickLog: (AddEntryStart) -> Unit) {
+    val actions = listOf(
+        "+ WATER" to AddEntryStart.Fuel(FuelSubType.Drink),
+        "+ FOOD" to AddEntryStart.Fuel(FuelSubType.Food),
+        "+ SUPPS" to AddEntryStart.Fuel(FuelSubType.Supplements, supplementBundle = previews?.supplements?.suggestedBucket),
+        "SAY IT" to AddEntryStart.SayIt,
+    )
+    val shape = RoundedCornerShape(FT.RadiusSmall)
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 18.dp)) {
+        // "+ WATER" needs ~60dp of text at 1x; four chips leave (width - gaps) / 4 - padding each.
+        val perRow = if (maxWidth / LocalDensity.current.fontScale < 300.dp) 2 else 4
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            actions.chunked(perRow).forEach { row ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { (label, start) ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 48.dp)
+                                .border(FT.BorderWidth, FT.DomainLog.copy(alpha = 0.6f), shape)
+                                .ftClickable(shape = shape, role = Role.Button) { onQuickLog(start) }
+                                .padding(horizontal = 6.dp, vertical = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(label, style = FTType.ButtonLabel, color = FT.DomainLog, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
-private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean, onOpenDailyReadiness: () -> Unit) {
-    Box(
+private fun ConditionField(overview: StatusOverview?, isLoading: Boolean, figureHeight: Dp, onOpenToday: () -> Unit, onOpenInjury: () -> Unit) {
+    Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .background(FT.Base)
             // Contract section 7: an emerald atmospheric wash is allowed behind
             // a biometric focal visualization (large-area, low opacity).
@@ -197,66 +300,139 @@ private fun ConditionFigureField(overview: StatusOverview?, isLoading: Boolean, 
                 )
             },
     ) {
-        when {
-            isLoading -> CircularProgressIndicator(
-                color = FT.Emerald,
-                modifier = Modifier.align(Alignment.Center),
-            )
-            overview != null -> {
-                val readiness = overview.readiness
-                val conditionState = readinessState(readiness.label)
-                Row(
+        if (overview == null) {
+            // Same footprint as the loaded hero + figure + legend, so the tiles below do not jump when it arrives.
+            Box(Modifier.fillMaxWidth().height(figureHeight + 190.dp), contentAlignment = Alignment.Center) {
+                if (isLoading) CircularProgressIndicator(color = FT.Emerald)
+            }
+            return@Column
+        }
+        ConditionHero(overview, onOpenToday)
+        BodySchematic(overview, onOpenInjury, modifier = Modifier.fillMaxWidth().height(figureHeight).padding(horizontal = 8.dp))
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            ZoneLegend(overview)
+            Row {
+                Text(
+                    text = "SLEEP " + (overview.sleepHours?.let { formatHours(it) } ?: "—"),
+                    style = FTType.Label,
+                    color = FT.TextSecondary,
+                )
+                // UX review F1: the count opens the same place the pin does (Training › Injury).
+                val flags = overview.openHealthFlags.takeIf { it > 0 } ?: if (overview.activeHealthEvent) 1 else 0
+                Text(
+                    text = if (flags == 1) "1 FLAG ›" else if (flags > 1) "$flags FLAGS ›" else "0 FLAGS",
+                    style = FTType.Label,
+                    color = if (flags > 0) FT.Critical else FT.TextSecondary,
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .fillMaxWidth()
-                        // Tapping the condition hero opens Daily Readiness.
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpenDailyReadiness)
-                        .padding(horizontal = 18.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("CONDITION", style = FTType.Label, color = FT.TextMuted)
-                        Text(
-                            text = readiness.label.display,
-                            style = FTType.DisplayMetric,
-                            // Neutral/Building/Unavailable stay unaccented: only a
-                            // real favorable/attention state earns a signal color.
-                            color = when (conditionState) {
-                                MetricState.Optimal, MetricState.Warning, MetricState.Critical -> metricStateColor(conditionState)
-                                else -> FT.TextPrimary
+                        .padding(start = 16.dp)
+                        .then(
+                            if (flags > 0) {
+                                Modifier.ftClickable(onClickLabel = "Open Training, Injury", onClick = onOpenInjury)
+                            } else {
+                                Modifier
                             },
-                        )
-                        Text(
-                            text = if (conditionState == MetricState.Building) readiness.note.uppercase() else "HRV VS YOUR RECENT BASELINE",
-                            style = FTType.Micro,
-                            color = FT.TextMuted,
-                        )
-                    }
-                    FTStatePill(conditionState)
-                }
-                // Inset clears the hero block above and the legend/footer below.
-                BodySchematic(overview, modifier = Modifier.fillMaxSize().padding(top = 104.dp, bottom = 112.dp, start = 8.dp, end = 8.dp))
-                Column(
-                    modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    ZoneLegend(overview)
-                    Row {
-                        Text(
-                            text = "SLEEP " + (overview.sleepHours?.let { formatHours(it) } ?: "—"),
-                            style = FTType.Label,
-                            color = FT.TextSecondary,
-                        )
-                        Text(
-                            text = if (overview.activeHealthEvent) "1 FLAG" else "0 FLAGS",
-                            style = FTType.Label,
-                            color = if (overview.activeHealthEvent) FT.Critical else FT.TextSecondary,
-                            modifier = Modifier.padding(start = 16.dp),
-                        )
-                    }
-                }
+                        ),
+                )
             }
         }
+    }
+}
+
+// UX review P1 / P6: the hero says what it is, how fresh the reading is (contract A5), and where a tap goes (TODAY ›).
+// Analysis review phase C: this morning's HRV against the band expected for it (value, words, size). Phase G retired the
+// fallback that judged HRV against a 7-day z-score (LOW / REDUCED / NORMAL / PRIMED): while the band builds, the hero
+// shows the reading and how many mornings the band still needs, without a verdict.
+@Composable
+private fun ConditionHero(overview: StatusOverview, onOpenToday: () -> Unit) {
+    overview.hrvReadout?.let { readout ->
+        BandHero(overview, readout, onOpenToday)
+        return
+    }
+    val freshness = freshnessLine(
+        readingDate = overview.hrvReadingDate,
+        source = "WEARABLE",
+        lastSync = overview.lastSyncAt?.atZone(ZoneId.systemDefault())?.toLocalDateTime(),
+        today = LocalDate.now(),
+        staleAfterDays = STALE_AFTER_DAYS,
+    )
+    val progress = overview.hrvBandProgress
+    val building = when {
+        progress == null -> "THE EXPECTED BAND APPEARS AFTER THE FIRST NIGHTLY ANALYSIS"
+        progress.second > progress.first -> "THE EXPECTED BAND NEEDS ${progress.second - progress.first} MORE MORNINGS"
+        else -> "NO HRV READING THIS MORNING YET"
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .ftClickable(role = Role.Button, onClickLabel = "Open Today", onClick = onOpenToday)
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "THIS MORNING · HRV",
+                style = FTType.LabelCaps,
+                color = FT.TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text("TODAY ›", style = FTType.LabelCaps, color = FT.EmeraldHighlight, modifier = Modifier.padding(start = 8.dp))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = overview.latestHrv?.let { "%.0f MS".format(it) } ?: "—",
+                style = FTType.DisplayMetric,
+                color = FT.TextPrimary,
+                modifier = Modifier.weight(1f),
+            )
+            FTStatePill(MetricState.Building)
+        }
+        Text(building, style = FTType.Micro, color = FT.TextMuted)
+        Text(freshness.text, style = FTType.Micro, color = if (freshness.stale) FT.Warning else FT.TextMuted, maxLines = 2)
+    }
+}
+
+@Composable
+private fun BandHero(overview: StatusOverview, readout: MorningReadout, onOpenToday: () -> Unit) {
+    val word = expectedStateWord(readout)
+    val freshness = freshnessLine(
+        readingDate = overview.hrvReadingDate,
+        source = "WEARABLE",
+        lastSync = overview.lastSyncAt?.atZone(ZoneId.systemDefault())?.toLocalDateTime(),
+        today = LocalDate.now(),
+        staleAfterDays = STALE_AFTER_DAYS,
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .ftClickable(role = Role.Button, onClickLabel = "Open Today", onClick = onOpenToday)
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "THIS MORNING · HRV VS EXPECTED",
+                style = FTType.LabelCaps,
+                color = FT.TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text("TODAY ›", style = FTType.LabelCaps, color = FT.EmeraldHighlight, modifier = Modifier.padding(start = 8.dp))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "%.0f ms".format(readout.value),
+                style = FTType.DisplayMetric,
+                color = if (word.state == MetricState.Warning) metricStateColor(word.state) else FT.TextPrimary,
+                modifier = Modifier.weight(1f),
+            )
+            FTStatePill(word)
+        }
+        Text(readout.headline(), style = FTType.BodySmall, color = FT.TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(freshness.text, style = FTType.Micro, color = if (freshness.stale) FT.Warning else FT.TextMuted, maxLines = 2)
     }
 }
 
@@ -300,11 +476,16 @@ private fun ZoneLegendCell(label: String, state: MetricState, modifier: Modifier
 // instead of every line being uniform amber. Arms and rib lines stay amber/
 // green decoration since they aren't mapped to any of the three systems.
 @Composable
-private fun BodySchematic(overview: StatusOverview, modifier: Modifier = Modifier) {
+private fun BodySchematic(overview: StatusOverview, onOpenInjury: () -> Unit, modifier: Modifier = Modifier) {
     val headColor = metricStateColor(overview.recoveryState)
     val chestColor = metricStateColor(overview.cardioState)
     val legColor = metricStateColor(overview.trainingState)
     val armColor = FT.TextMuted
+    // UX review F1: the pin sits on the injured region and names it (domain/HealthFlag.kt); an illness has no region, so
+    // it is shown by the flag count under the figure only.
+    val flag = overview.healthFlag?.takeIf { it.isInjury }
+    val pin = flag?.let { figurePinForBodyPart(it.label) }
+    val flagDay = flag?.let { healthFlagDay(it, java.time.LocalDate.now()) }
 
     // 25/9 rework: the figure fills whatever height the layout leaves it, so
     // scale (dp per viewBox unit) comes from the tighter of width/height.
@@ -351,12 +532,17 @@ private fun BodySchematic(overview: StatusOverview, modifier: Modifier = Modifie
             drawCircle(chestColor, radius = 9f * s, center = p(130f, 78f), style = Stroke(1.8f * s))
             drawLine(chestColor.copy(alpha = 0.7f), p(120f, 78f), p(58f, 78f), 1.4f * s)
 
-            // Health-event pin -- only drawn when something is actually active
-            if (overview.activeHealthEvent) {
-                drawCircle(FT.Critical.copy(alpha = 0.18f), radius = 13f * s, center = p(150f, 146f))
-                drawCircle(FT.Critical, radius = 13f * s, center = p(150f, 146f), style = Stroke(2f * s))
-                drawCircle(FT.Critical, radius = 4.4f * s, center = p(150f, 146f))
-                drawLine(FT.Critical, p(164f, 146f), p(204f, 146f), 1.4f * s)
+            // Injury pin -- only drawn when an injury is actually open, on its region, with a leader to its label.
+            if (pin != null) {
+                val at = pin.point
+                drawCircle(FT.Critical.copy(alpha = 0.18f), radius = 13f * s, center = p(at.x, at.y))
+                drawCircle(FT.Critical, radius = 13f * s, center = p(at.x, at.y), style = Stroke(2f * s))
+                drawCircle(FT.Critical, radius = 4.4f * s, center = p(at.x, at.y))
+                if (flagLabelsLeft(at)) {
+                    drawLine(FT.Critical, p(at.x - 14f, at.y), p(58f, at.y), 1.4f * s)
+                } else {
+                    drawLine(FT.Critical, p(at.x + 14f, at.y), p(204f, at.y), 1.4f * s)
+                }
             }
         }
 
@@ -372,17 +558,36 @@ private fun BodySchematic(overview: StatusOverview, modifier: Modifier = Modifie
             Text("RHR " + (overview.latestRhr?.let { "%.0f".format(it) } ?: "—"), style = smallValue, color = FT.TextPrimary)
         }
 
-        if (overview.activeHealthEvent) {
-            LabelAt(x = 208f, y = 135f, scale = scale, align = Alignment.TopStart) {
-                Text("FLAGGED", style = smallLabel, color = FT.Critical)
-            }
-            LabelAt(x = 208f, y = 161f, scale = scale, align = Alignment.TopStart) {
-                Text("SEE HEALTH", style = smallValue, color = FT.TextPrimary)
+        if (pin != null) {
+            val at = pin.point
+            val left = flagLabelsLeft(at)
+            val description = "Open injury: " + flag.label + (flagDay?.let { ", day $it" } ?: "") + ". Opens Training, Injury."
+            // One tap target for both lines (padded toward the 48dp minimum), opening Training › Injury.
+            LabelAt(x = if (left) 58f else 202f, y = at.y - 17f, scale = scale, align = if (left) Alignment.TopEnd else Alignment.TopStart) {
+                Column(
+                    modifier = Modifier
+                        .semantics(mergeDescendants = true) { contentDescription = description }
+                        .ftClickable(onClick = onOpenInjury)
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                    horizontalAlignment = if (left) Alignment.End else Alignment.Start,
+                ) {
+                    Text(pin.label, style = smallLabel, color = FT.Critical, maxLines = 1)
+                    Text(
+                        (flagDay?.let { "DAY $it " } ?: "") + "›",
+                        style = smallValue,
+                        color = FT.TextPrimary,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
     }
 }
+
+// Labels go on the pin's side, except for left-side pins level with the cardio labels (HRV/RHR sit on the left down to
+// y ~100; the flag label starts 17 units above its pin, so only pins below y 112 have room there).
+private fun flagLabelsLeft(at: FigurePoint): Boolean = at.x < 130f && at.y > 112f
 
 private val smallLabel = FTType.Label
 private val smallValue = FTType.Label
@@ -407,60 +612,132 @@ private fun LabelAt(x: Float, y: Float, scale: Float, align: Alignment, content:
 }
 
 // DAV-69: real Calendar data, same silent-authorize + fetchUpcomingEvents()
-// path MapScreen.kt already uses. Deliberately never launches the OAuth
-// consent screen from this passive Status band -- if scopes aren't already
-// granted, authorize() reports a resolution and this just shows a hint to
-// visit Map (which does prompt), rather than a Status-tab surprise dialog.
+// path MapScreen.kt used. Loading stays silent: if Calendar access isn't
+// granted yet, the row says so and a TAP asks for it (UX review F1: with the
+// Map tab gone there was nowhere left to grant it). An explicit tap is the
+// one place a consent dialog is expected, so the passive load never opens it.
 private sealed interface NextUpState {
     data object Loading : NextUpState
     data class Found(val event: MapEvent) : NextUpState
+    // An event outside the training plan (domain/events): first within the next 24 hours, or the calendar has nothing.
+    data class EventNext(val event: com.bioscan.fieldterminal.domain.events.AthleteEvent) : NextUpState
     data object None : NextUpState
-    data object NeedsMapConsent : NextUpState
+    data class NeedsConsent(val pendingIntent: android.app.PendingIntent) : NextUpState
     data class Error(val message: String) : NextUpState
 }
 
-@Composable
-private fun NextUpSection(modifier: Modifier = Modifier) {
-    val activity = LocalContext.current as Activity
-    var state by remember { mutableStateOf<NextUpState>(NextUpState.Loading) }
+private suspend fun loadNextUp(token: String, event: com.bioscan.fieldterminal.domain.events.AthleteEvent?): NextUpState {
+    val next = MapRepository(token).fetchUpcomingEvents().firstOrNull()
+    val calendarStart = next?.let { runCatching { parseSessionZonedDateTime(it.startIso) }.getOrNull() }
+    val now = ZonedDateTime.now()
+    return when {
+        com.bioscan.fieldterminal.domain.events.eventTakesNextUp(event, calendarStart, now) -> NextUpState.EventNext(event!!)
+        next != null -> NextUpState.Found(next)
+        else -> NextUpState.None
+    }
+}
 
-    LaunchedEffect(Unit) {
+private suspend fun loadNextEvent(): com.bioscan.fieldterminal.domain.events.AthleteEvent? = runCatching {
+    val events = com.bioscan.fieldterminal.data.AthleteEventsRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client)
+        .loadUpcoming(java.time.LocalDate.now(), days = 15)
+    com.bioscan.fieldterminal.domain.events.nextUpcomingEvent(events, ZonedDateTime.now())
+}.getOrNull()
+
+@Composable
+private fun NextUpSection(modifier: Modifier = Modifier, onOpenEvent: (Long) -> Unit = {}) {
+    val activity = LocalContext.current as Activity
+    val scope = rememberCoroutineScope()
+    var state by remember { mutableStateOf<NextUpState>(NextUpState.Loading) }
+    var attempt by remember { mutableIntStateOf(0) }
+    var nextEvent by remember { mutableStateOf<com.bioscan.fieldterminal.domain.events.AthleteEvent?>(null) }
+
+    LaunchedEffect(attempt) {
+        state = NextUpState.Loading
+        nextEvent = loadNextEvent()
         state = try {
             val authResult = GoogleAuthorizationManager.authorize(activity)
             val token = authResult.accessToken
+            val pendingIntent = authResult.pendingIntent
             when {
-                authResult.hasResolution() -> NextUpState.NeedsMapConsent
+                authResult.hasResolution() && pendingIntent != null -> NextUpState.NeedsConsent(pendingIntent)
                 token == null -> NextUpState.Error("Could not get a Google access token.")
-                else -> MapRepository(token).fetchUpcomingEvents().firstOrNull()
-                    ?.let { NextUpState.Found(it) } ?: NextUpState.None
+                else -> {
+                    // Keeps the calendar cache and its GPX course previews current (both had no caller before).
+                    scope.launch { runCatching { com.bioscan.fieldterminal.data.CalendarBackgroundSync.runIfDue(activity, token) } }
+                    loadNextUp(token, nextEvent)
+                }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             NextUpState.Error(e.message ?: "Couldn't load calendar.")
         }
     }
 
+    val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        scope.launch {
+            state = try {
+                val token = GoogleAuthorizationManager.resultFromIntent(activity, result.data).accessToken
+                if (token == null) NextUpState.Error("Calendar access was not granted.") else loadNextUp(token, nextEvent)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                NextUpState.Error(e.message ?: "Couldn't connect Calendar.")
+            }
+        }
+    }
+
+    // Found: opens the calendar app at the event's time. NeedsConsent: asks for Calendar access. Error: retries.
+    val onTap: (() -> Unit)? = when (val s = state) {
+        is NextUpState.Found -> { { openCalendarAt(activity, s.event) } }
+        is NextUpState.EventNext -> { { s.event.id?.let(onOpenEvent) } }
+        is NextUpState.NeedsConsent -> { { consentLauncher.launch(IntentSenderRequest.Builder(s.pendingIntent.intentSender).build()) } }
+        is NextUpState.Error -> { { attempt++ } }
+        else -> null
+    }
+
     // 25/9 rework: back to a single-line band; the figure above now absorbs
     // the leftover height and the tile row sits below this band.
-    // DAV-296: this used to tap through to the Map tab, focused on the
-    // found event -- dropped along with the tab (see
-    // docs/user-profile-milestone/01-canonical-contracts-audit.md section 10).
-    // Still shows the next calendar event as information; just not tappable.
-    Box(
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .background(FT.Surface)
+            .then(
+                if (onTap != null) {
+                    Modifier.ftClickable(onClick = onTap)
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(nextUpLabel(state), style = FTType.LabelCaps, color = FT.TextSecondary)
+        Text(
+            nextUpLabel(state),
+            style = FTType.LabelCaps,
+            color = if (state is NextUpState.NeedsConsent) FT.EmeraldHighlight else FT.TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (onTap != null) Text("›", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
 private fun nextUpLabel(state: NextUpState): String = when (state) {
     NextUpState.Loading -> "NEXT UP — loading…"
     is NextUpState.Found -> "NEXT UP — ${state.event.title.trim().ifBlank { "Untitled event" }} · ${relativeTimeLabel(state.event)}"
+    is NextUpState.EventNext -> "NEXT UP — ${state.event.name} · ${eventRelativeLabel(state.event)}"
     NextUpState.None -> "NEXT UP — nothing in the next 24h"
-    NextUpState.NeedsMapConsent -> "NEXT UP — connect Calendar in the Map tab"
-    is NextUpState.Error -> "NEXT UP — unavailable"
+    is NextUpState.NeedsConsent -> "NEXT UP — tap to connect Google Calendar"
+    is NextUpState.Error -> "NEXT UP — couldn't load · tap to retry"
+}
+
+// Opens the device's calendar app at the event's start time (the standard calendar time intent, no event id needed).
+private fun openCalendarAt(activity: Activity, event: MapEvent) {
+    val startMillis = runCatching { parseSessionZonedDateTime(event.startIso).toInstant().toEpochMilli() }.getOrNull() ?: return
+    val uri = android.provider.CalendarContract.CONTENT_URI.buildUpon().appendPath("time").appendPath(startMillis.toString()).build()
+    runCatching { activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri)) }
 }
 
 private fun relativeTimeLabel(event: MapEvent): String {
@@ -470,6 +747,21 @@ private fun relativeTimeLabel(event: MapEvent): String {
         minutesUntil <= 0 -> "NOW"
         minutesUntil < 60 -> "IN $minutesUntil MIN"
         else -> "IN ${minutesUntil / 60}H ${minutesUntil % 60}M"
+    }
+}
+
+private fun eventRelativeLabel(event: com.bioscan.fieldterminal.domain.events.AthleteEvent): String {
+    val now = ZonedDateTime.now()
+    val start = event.start?.withZoneSameInstant(now.zone)
+    val days = ChronoUnit.DAYS.between(now.toLocalDate(), event.date)
+    return when {
+        start != null && ChronoUnit.MINUTES.between(now, start) in 0..(24 * 60) -> {
+            val m = ChronoUnit.MINUTES.between(now, start)
+            if (m < 60) "IN $m MIN" else "IN ${m / 60}H ${m % 60}M"
+        }
+        days == 0L -> "TODAY"
+        days == 1L -> "TOMORROW"
+        else -> "IN $days DAYS"
     }
 }
 

@@ -54,10 +54,12 @@ fun timingRegularityScore(minutesSinceMidnight: List<Double>): Double? {
     return (1.0 - (sd / MAX_REGULAR_STDDEV_MINUTES).coerceIn(0.0, 1.0)) * 100.0
 }
 
+// Analysis review phase G: "regular" belongs to the Sleep Regularity Index and its one mark (SRI_REGULAR, 80); this score
+// is how steady the clock times of sleep, meals and training were, so its words say timing.
 fun circadianAlignmentBand(score: Double): String = when {
-    score >= 75.0 -> "Regular"
-    score >= 50.0 -> "Somewhat irregular"
-    else -> "Irregular"
+    score >= 75.0 -> "STEADY TIMING"
+    score >= 50.0 -> "SOMEWHAT VARIABLE TIMING"
+    else -> "VARIABLE TIMING"
 }
 
 private fun OffsetDateTime.minutesSinceMidnight(): Double = toLocalTime().toSecondOfDay() / 60.0

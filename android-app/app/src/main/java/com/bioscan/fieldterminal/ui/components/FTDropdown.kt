@@ -2,7 +2,6 @@ package com.bioscan.fieldterminal.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +35,7 @@ private fun DropdownBox(text: String, placeholder: String, modifier: Modifier, m
         Row(
             Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)
                 .border(FT.BorderWidth, FT.GlassBorder, shape).background(FT.GlassFill, shape)
-                .clickable { open = true }.padding(horizontal = 12.dp, vertical = 10.dp),
+                .ftClickable(shape = shape) { open = true }.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -70,7 +69,7 @@ fun FTMultiDropdown(options: List<Pair<String, String>>, selected: List<String>,
             Row(
                 Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)
                     .border(FT.BorderWidth, FT.GlassBorder, shape).background(FT.GlassFill, shape)
-                    .clickable { open = true }.padding(horizontal = 12.dp, vertical = 10.dp),
+                    .ftClickable(shape = shape) { open = true }.padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {

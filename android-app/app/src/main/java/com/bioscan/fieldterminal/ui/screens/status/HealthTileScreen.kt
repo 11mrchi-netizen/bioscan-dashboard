@@ -142,7 +142,7 @@ import java.time.temporal.ChronoUnit
 // TODAY'S RECOVERY live on Today only; BODY came from Fuel and BLOODWORK from Labs (each loads its own data), and the
 // sexual-health correlations moved to Lab › N=1.
 @Composable
-fun HealthTileScreen(onBack: () -> Unit, requestedTab: HealthTab? = null, onRequestedTabConsumed: () -> Unit = {}) {
+fun HealthTileScreen(onBack: () -> Unit, requestedTab: HealthTab? = null, onRequestedTabConsumed: () -> Unit = {}, onOpenConcern: (String) -> Unit = {}) {
     var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(requestedTab ?: HealthTab.Cardio) }
     LaunchedEffect(requestedTab) {
         if (requestedTab != null) {
@@ -205,6 +205,7 @@ fun HealthTileScreen(onBack: () -> Unit, requestedTab: HealthTab? = null, onRequ
             HealthTab.Cardio -> "HRV · HEART RATE · RHR · SPO2 · BREATHING · STEPS"
             HealthTab.Sleep -> "INDEX · DURATION · REGULARITY · PHASES · CIRCADIAN"
             HealthTab.Body -> "WEIGHT · MEASUREMENTS · BODY FAT · DIGESTION"
+            HealthTab.Concerns -> "INJURIES · PAIN · SYMPTOMS · ILLNESS"
             HealthTab.Wellbeing -> "ENERGY · MOOD · STRESS · SORENESS"
             HealthTab.SexualHealth -> "ACTIVITY · FREQUENCY · PATTERNS"
             HealthTab.Bloodwork -> "LATEST DRAW · CHANGES BEYOND RCV"
@@ -216,6 +217,7 @@ fun HealthTileScreen(onBack: () -> Unit, requestedTab: HealthTab? = null, onRequ
         // These two load their own data, so they show without waiting for the shared load below.
         when (tab) {
             HealthTab.Body -> { BodyTabContent(); return@PinnedPage }
+            HealthTab.Concerns -> { com.bioscan.fieldterminal.ui.screens.health.ConcernsTab(onOpenConcern = onOpenConcern); return@PinnedPage }
             HealthTab.Bloodwork -> { LabsScreen(); return@PinnedPage }
             else -> Unit
         }
@@ -419,7 +421,7 @@ fun HealthTileScreen(onBack: () -> Unit, requestedTab: HealthTab? = null, onRequ
                     SexualHealthHeatmapCard(sa)
                     SexualHealthQualitativeCard(wb, sa)
                 }
-                HealthTab.Body, HealthTab.Bloodwork -> Unit
+                HealthTab.Body, HealthTab.Bloodwork, HealthTab.Concerns -> Unit
             }
         }
     }

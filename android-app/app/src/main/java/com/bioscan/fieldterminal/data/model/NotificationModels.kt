@@ -18,7 +18,9 @@ object NotificationKind {
     const val FUEL_SESSION = "fuel_session"
     const val FUEL_EVENT = "fuel_event"
     val FUEL = setOf(FUEL_SESSION, FUEL_EVENT)
-    val ALL = listOf(SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG, EVENING_CHECKIN, BODY_CHECKIN, FUEL_SESSION, FUEL_EVENT)
+    // Health concerns (docs/health-concerns): the daily check-in at 21:00 (owner decision), skipped once one is saved.
+    const val HEALTH_CHECKIN = "health_checkin"
+    val ALL = listOf(SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG, EVENING_CHECKIN, BODY_CHECKIN, FUEL_SESSION, FUEL_EVENT, HEALTH_CHECKIN)
 }
 
 object NotificationOutcome {

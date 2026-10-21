@@ -159,6 +159,8 @@ fun N1Tab() {
         )
         experimentError?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
         N1ScorecardsCard(scorecards, typicality = typicalityView(typicality).scorecard)
+        // Health concerns (docs/health-concerns): patterns found in check-ins and the trials testing them.
+        com.bioscan.fieldterminal.ui.screens.health.HealthN1Section()
         if (sexualActivity.isNotEmpty()) SexualHealthCorrelationsCard(wb, sexualActivity, w, sl)
     }
 

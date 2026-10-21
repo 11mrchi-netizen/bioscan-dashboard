@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { buildConcernSeries, currentObservations, shiftDate } from './healthSeries.ts'
 import type { ConcernRow, MarkRow, ObservationRow, SignalRow } from './healthSeries.ts'
+import { concern, obs, sig } from './healthTestKit.ts'
 import { measureEpisodes, summariseConcern } from './healthEpisodes.ts'
 import { validateVocab, vocabRows } from './healthVocab.ts'
 import type { HealthVocab } from './healthVocab.ts'
@@ -12,29 +13,6 @@ const migration = readFileSync(new URL('../../../migrations/20261101_health_conc
 
 const D0 = '2026-06-01'
 const day = (n: number) => shiftDate(D0, n)
-
-export function concern(id: string, over: Partial<ConcernRow> = {}): ConcernRow {
-  return {
-    id, title: id, kind: 'anatomical', onset_type: 'gradual', regions: [{ code: 'knee', side: 'right' }], symptoms: ['sym.pain'],
-    excludes_from_baselines: false, resolution_days: null, archived_at: null, created_at: `${D0}T00:00:00Z`, ...over,
-  }
-}
-
-let seq = 0
-export function obs(dayN: number, over: Partial<ObservationRow> = {}): ObservationRow {
-  seq++
-  const date = day(dayN)
-  return {
-    id: `o${seq}`, observed_at: `${date}T20:00:${String(seq % 60).padStart(2, '0')}Z`, local_date: date, concern_id: 'k', scope: 'concern',
-    symptom_free: false, recall: 'today', recall_from: null, function_impact: null, change_vs_last: null, onset: false,
-    session_id: null, timing: null, supersedes: null, superseded_at: null, retracted: false, source: 'app', created_at: `${date}T20:00:00Z`,
-    ...over,
-  }
-}
-
-export function sig(o: ObservationRow, severity: number | null, over: Partial<SignalRow> = {}): SignalRow {
-  return { observation_id: o.id, concern_id: o.concern_id, symptom: 'sym.pain', region: 'knee', side: 'right', severity, ...over }
-}
 
 /** A concern's check-ins from a compact script: number = severity that day, 0 = explicit symptom-free, null = no check-in. */
 function scripted(script: (number | null)[], c = concern('k')) {

@@ -133,6 +133,13 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                     "Monthly body check-in" to "Grip, tape and skinfolds: before breakfast, about 15 minutes"
                 }
 
+                // Health concerns: a failed lookup skips this window rather than nagging.
+                NotificationKind.HEALTH_CHECKIN -> {
+                    val last = runCatching { HealthConcernsRepository(supabase).lastCheckinDate() }.getOrElse { continue }
+                    if (rule.conditions.skipIfLogged && !com.bioscan.fieldterminal.domain.health.healthCheckinNeeded(last, today)) continue
+                    "Health check-in" to "Anything bothering you today? NOTHING is one tap, and it counts."
+                }
+
                 else -> continue
             }
 

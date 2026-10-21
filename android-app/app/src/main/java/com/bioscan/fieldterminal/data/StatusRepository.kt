@@ -117,6 +117,8 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
             supabase.postgrest.from("illnesses").select(columns = Columns.list("status,end_date,name,start_date")).decodeList<HealthEventRow>()
         }
         val lastSyncD = async(Dispatchers.Default) { softly { loadLastHealthConnectSync(supabase) } }
+        // Health concerns (docs/health-concerns): open concerns pin the figure once the engine has published them.
+        val concernsD = async(Dispatchers.Default) { softly { HealthConcernsRepository(supabase).loadOverview() } }
         // Small dedicated fetch (10 days of margin, filtered to 7 by date below)
         // rather than reusing TrainingLoadSessionRow, which carries no type/source.
         val recentD = async(Dispatchers.Default) {
@@ -144,10 +146,19 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
             isInjury = isInjury,
             since = startDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
         )
-        val openInjuries = injuriesD.await().filter { it.isOpen() }
-        val openIllnesses = illnessesD.await().filter { it.isOpen() }
-        val activeHealthEvent = openInjuries.isNotEmpty() || openIllnesses.isNotEmpty()
-        val healthFlag = pickHealthFlag(openInjuries.map { it.toFlag(true) }, openIllnesses.map { it.toFlag(false) })
+        // The legacy tables are read only until the concerns engine has published (their rows were copied in as concerns).
+        val overview = concernsD.await()
+        val openConcerns = overview?.concerns?.filter { !it.archived && com.bioscan.fieldterminal.domain.health.isConcernOpen(it.state) }
+        val concernFlags = openConcerns?.map { c ->
+            // The region code in words ("right lateral thigh") so the figure's pin lands on it; the title otherwise.
+            val where = c.regions.firstOrNull()?.let { r -> listOfNotNull(r.side, r.code.replace('_', ' ')).joinToString(" ") }
+            HealthFlag(label = where ?: c.title, isInjury = c.kind != "systemic", since = c.currentEpisode?.start?.let { runCatching { LocalDate.parse(it) }.getOrNull() })
+        }
+        val openInjuries = if (concernFlags != null) emptyList() else injuriesD.await().filter { it.isOpen() }
+        val openIllnesses = if (concernFlags != null) emptyList() else illnessesD.await().filter { it.isOpen() }
+        val activeHealthEvent = openInjuries.isNotEmpty() || openIllnesses.isNotEmpty() || !concernFlags.isNullOrEmpty()
+        val healthFlag = if (concernFlags != null) pickHealthFlag(concernFlags.filter { it.isInjury }, concernFlags.filter { !it.isInjury })
+            else pickHealthFlag(openInjuries.map { it.toFlag(true) }, openIllnesses.map { it.toFlag(false) })
 
         // DAV-203: reuse the exact same evaluations the Health/Training tabs already compute so the figure's zone colors
         // never disagree with what tapping into that tile shows.

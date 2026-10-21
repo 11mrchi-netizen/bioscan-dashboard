@@ -47,6 +47,8 @@ enum class HealthTab(val label: String) {
     Cardio("CARDIO"),
     Sleep("SLEEP"),
     Body("BODY"),
+    // Health concerns (docs/health-concerns): injuries, recurring pain, symptoms and illness, tracked over time.
+    Concerns("CONCERNS"),
     Wellbeing("WELLBEING"),
     SexualHealth("SEXUAL HEALTH"),
     Bloodwork("BLOODWORK"),

@@ -35,7 +35,9 @@ import com.bioscan.fieldterminal.data.model.WeightUpsertRow
 import com.bioscan.fieldterminal.domain.SleepStageInterval
 import com.bioscan.fieldterminal.domain.TimedValue
 import com.bioscan.fieldterminal.domain.averageByLocalDate
+import com.bioscan.fieldterminal.domain.averageByNightDate
 import com.bioscan.fieldterminal.domain.dominantOriginByLocalDate
+import com.bioscan.fieldterminal.domain.dominantOriginByNightDate
 import com.bioscan.fieldterminal.domain.latestByLocalDate
 import com.bioscan.fieldterminal.domain.sumByLocalDate
 import com.bioscan.fieldterminal.domain.sumStageMinutes
@@ -166,19 +168,20 @@ class HealthConnectDailySyncRepository(
     // HealthConnectSyncModels.kt's header comment for why not one shared row).
     suspend fun syncVitals(since: Instant, until: Instant): Int {
         val rhrValues = readAll(RestingHeartRateRecord::class, since, until).map { TimedValue(it.time, it.beatsPerMinute.toDouble(), it.metadata.dataOrigin.packageName) }
-        val rhr = averageByLocalDate(rhrValues, zone)
+        // Analysis review phase B: overnight readings are keyed to the morning their night ends on (like sleep_daily).
+        val rhr = averageByNightDate(rhrValues, zone)
         if (rhr.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
                 .upsert(rhr.map { (date, v) -> RestingHeartRateUpsertRow(date.toString(), v) }) { onConflict = "user_id,date" }
-            recordProvenance("wearable_daily.rhr", dominantOriginByLocalDate(rhrValues, zone))
+            recordProvenance("wearable_daily.rhr", dominantOriginByNightDate(rhrValues, zone))
         }
 
         val hrvValues = readAll(HeartRateVariabilityRmssdRecord::class, since, until).map { TimedValue(it.time, it.heartRateVariabilityMillis, it.metadata.dataOrigin.packageName) }
-        val hrv = averageByLocalDate(hrvValues, zone)
+        val hrv = averageByNightDate(hrvValues, zone)
         if (hrv.isNotEmpty()) {
             supabase.postgrest.from("wearable_daily")
                 .upsert(hrv.map { (date, v) -> HrvUpsertRow(date.toString(), v) }) { onConflict = "user_id,date" }
-            recordProvenance("wearable_daily.hrv", dominantOriginByLocalDate(hrvValues, zone))
+            recordProvenance("wearable_daily.hrv", dominantOriginByNightDate(hrvValues, zone))
         }
 
         val spo2Values = readAll(OxygenSaturationRecord::class, since, until).map { TimedValue(it.time, it.percentage.value, it.metadata.dataOrigin.packageName) }

@@ -24,8 +24,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.LabsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.DateField
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -84,7 +85,7 @@ fun LabResultFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
             }
 
             val valid = markerName.isNotBlank() && value.toDoubleOrNull() != null
-            AmberButton(label = if (saving) "SAVING..." else "SAVE") {
+            FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
                 if (valid && !saving) {
                     saving = true
                     error = null

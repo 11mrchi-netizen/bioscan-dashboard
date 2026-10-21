@@ -2,12 +2,10 @@ package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -29,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -40,9 +39,12 @@ import com.bioscan.fieldterminal.domain.PantryFindingKind
 import com.bioscan.fieldterminal.domain.RateBasis
 import com.bioscan.fieldterminal.domain.StockEventKind
 import com.bioscan.fieldterminal.domain.OBSERVED_WINDOW_DAYS
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.FieldTextField
-import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.components.PinnedPage
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.CancellationException
@@ -77,10 +79,8 @@ fun PantryScreen(onBack: () -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
-        TileHeader(onBack = onBack)
+    PinnedPage(onBack = onBack, title = "PANTRY", subtitle = "STOCK · RUN-OUT DATES · REORDER", accent = FT.DomainLabs) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("PANTRY", style = FTType.SectionTitle, color = FT.TextPrimary)
             Text(
                 "Remaining stock is your recorded purchases minus the servings you logged since the first one. " +
                     "Run-out dates are estimates from your schedule or recent logging.",
@@ -123,8 +123,8 @@ private fun Section(title: String, items: List<PantryItem>, onOpen: (Long) -> Un
 @Composable
 private fun PantryRow(item: PantryItem, onClick: () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().background(FT.GlassFill).border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .clickable(onClick = onClick).padding(14.dp),
+        Modifier.fillMaxWidth().background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule)).border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
+            .ftClickable(shape = RoundedCornerShape(FT.RadiusModule), onClick = onClick).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(item.name, style = strong, color = FT.TextPrimary)
@@ -194,6 +194,8 @@ private fun PantryDetailSheet(item: PantryItem, repo: PantryRepository, onDismis
     var mode by remember { mutableStateOf<StockMode?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    // A stock entry is removed only after a second, explicit tap (contract A2): it changes the recorded stock and run-out date.
+    var confirmingEvent by remember { mutableStateOf<Long?>(null) }
 
     var containers by remember { mutableStateOf("1") }
     var perContainer by remember { mutableStateOf(item.servingsPerContainer?.let(::fmt) ?: "") }
@@ -232,7 +234,7 @@ private fun PantryDetailSheet(item: PantryItem, repo: PantryRepository, onDismis
 
             Text("RECORD STOCK", style = label, color = FT.TextSecondary)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StockMode.entries.forEach { m -> AmberButton(label = m.title) { mode = if (mode == m) null else m; error = null } }
+                StockMode.entries.forEach { m -> FTButton(label = m.title) { mode = if (mode == m) null else m; error = null } }
             }
             when (mode) {
                 StockMode.Received -> {
@@ -248,7 +250,7 @@ private fun PantryDetailSheet(item: PantryItem, repo: PantryRepository, onDismis
                     val per = perContainer.toDoubleOrNull()
                     val exp = expires.trim().takeIf { it.isNotEmpty() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                     val expOk = expires.isBlank() || exp != null
-                    AmberButton(label = if (busy) "SAVING..." else "SAVE PURCHASE", enabled = !busy && n != null && n > 0 && per != null && per > 0 && expOk) {
+                    FTButton(label = if (busy) "SAVING..." else "SAVE PURCHASE", enabled = !busy && n != null && n > 0 && per != null && per > 0 && expOk, emphasis = FTButtonEmphasis.Primary) {
                         run {
                             if (item.servingsPerContainer == null) repo.setServingsPerContainer(item.productId, per!!)
                             repo.addEvent(item.productId, StockEventKind.Purchase, n!! * per!!, exp, price.toDoubleOrNull())
@@ -264,7 +266,7 @@ private fun PantryDetailSheet(item: PantryItem, repo: PantryRepository, onDismis
                         Text("Servings you actually have now (recorded: ${fmt(remaining)})", style = body, color = FT.TextSecondary)
                         FieldTextField(count, { count = it }, "", keyboardType = KeyboardType.Number)
                         val target = count.toDoubleOrNull()
-                        AmberButton(label = if (busy) "SAVING..." else "SAVE COUNT", enabled = !busy && target != null && target >= 0 && target != remaining) {
+                        FTButton(label = if (busy) "SAVING..." else "SAVE COUNT", enabled = !busy && target != null && target >= 0 && target != remaining, emphasis = FTButtonEmphasis.Primary) {
                             run { repo.addEvent(item.productId, StockEventKind.Adjustment, target!! - remaining) }
                         }
                     }
@@ -273,7 +275,7 @@ private fun PantryDetailSheet(item: PantryItem, repo: PantryRepository, onDismis
                     Text("Servings to discard (spilled, expired, given away)", style = body, color = FT.TextSecondary)
                     FieldTextField(discard, { discard = it }, "", keyboardType = KeyboardType.Number)
                     val n = discard.toDoubleOrNull()
-                    AmberButton(label = if (busy) "SAVING..." else "SAVE DISCARD", enabled = !busy && n != null && n > 0) {
+                    FTButton(label = if (busy) "SAVING..." else "SAVE DISCARD", enabled = !busy && n != null && n > 0, emphasis = FTButtonEmphasis.Primary) {
                         run { repo.addEvent(item.productId, StockEventKind.Discard, -n!!) }
                     }
                 }
@@ -289,9 +291,20 @@ private fun PantryDetailSheet(item: PantryItem, repo: PantryRepository, onDismis
                             "${e.occurredAt.take(10)} · ${e.kind} ${if (e.servings > 0) "+" else ""}${fmt(e.servings)}" + (e.expiresOn?.let { " · expires $it" } ?: ""),
                             style = body, color = FT.TextPrimary, modifier = Modifier.weight(1f),
                         )
-                        Text(
-                            "REMOVE", style = label, color = FT.TextSecondary,
-                            modifier = Modifier.clickable(enabled = !busy) { run { repo.deleteEvent(e.id) } }.padding(8.dp),
+                        if (confirmingEvent != e.id) {
+                            Text(
+                                "REMOVE", style = label, color = FT.TextSecondary,
+                                modifier = Modifier.ftClickable(enabled = !busy, role = Role.Button) { confirmingEvent = e.id; error = null }.padding(8.dp),
+                            )
+                        }
+                    }
+                    if (confirmingEvent == e.id) {
+                        FTConfirmDestructive(
+                            message = "Remove this stock entry? Stock and the run-out date are recalculated without it.",
+                            confirmLabel = "REMOVE ENTRY",
+                            busy = busy,
+                            onCancel = { confirmingEvent = null },
+                            onConfirm = { run { repo.deleteEvent(e.id); confirmingEvent = null } },
                         )
                     }
                 }

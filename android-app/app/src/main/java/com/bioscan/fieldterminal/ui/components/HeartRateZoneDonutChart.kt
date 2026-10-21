@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.HeartRateZone
 import com.bioscan.fieldterminal.domain.HeartRateZoneBreakdown
+import com.bioscan.fieldterminal.domain.ZoneBounds
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
@@ -40,7 +41,7 @@ private val HR_ZONE_COLORS: Map<HeartRateZone, Color> = mapOf(
 fun heartRateZoneColor(zone: HeartRateZone): Color = HR_ZONE_COLORS.getValue(zone)
 
 @Composable
-fun HeartRateZoneDonutChart(breakdown: List<HeartRateZoneBreakdown>, modifier: Modifier = Modifier) {
+fun HeartRateZoneDonutChart(breakdown: List<HeartRateZoneBreakdown>, modifier: Modifier = Modifier, bounds: ZoneBounds? = null) {
     val nonZero = breakdown.filter { it.seconds > 0 }
     val totalSeconds = nonZero.sumOf { it.seconds }
     if (totalSeconds <= 0) return
@@ -66,17 +67,18 @@ fun HeartRateZoneDonutChart(breakdown: List<HeartRateZoneBreakdown>, modifier: M
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            nonZero.forEach { entry -> HeartRateZoneLegendRow(entry, totalSeconds) }
+            nonZero.forEach { entry -> HeartRateZoneLegendRow(entry, totalSeconds, bounds) }
         }
     }
 }
 
 @Composable
-private fun HeartRateZoneLegendRow(entry: HeartRateZoneBreakdown, totalSeconds: Long) {
+private fun HeartRateZoneLegendRow(entry: HeartRateZoneBreakdown, totalSeconds: Long, bounds: ZoneBounds?) {
     val pct = (entry.seconds.toDouble() / totalSeconds * 100).roundToInt()
     val minutes = entry.seconds / 60
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(modifier = Modifier.size(10.dp).background(heartRateZoneColor(entry.zone), CircleShape))
-        Text("${entry.zone.label} — ${minutes}min ($pct%)", style = FTType.BodySmall, color = FT.TextSecondary)
+        val range = bounds?.let { " · ${it.rangeText(entry.zone)} bpm" } ?: ""
+        Text("${entry.zone.label}$range — ${minutes}min ($pct%)", style = FTType.BodySmall, color = FT.TextSecondary)
     }
 }

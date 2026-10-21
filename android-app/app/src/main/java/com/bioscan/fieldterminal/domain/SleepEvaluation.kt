@@ -28,6 +28,12 @@ fun evaluateSleepStage(minutesDaily: List<Pair<LocalDate, Double>>, asOf: LocalD
 // bedtime/wake_time can straddle midnight.
 data class SleepNight(val date: LocalDate, val bedtime: Instant, val wakeTime: Instant)
 
+// Analysis review phase G: the one mark for a regular sleep pattern, used by the SRI card and the Healthspan sleep factor
+// (product-defined; the large cohort studies report SRI in quintiles, not one cut-off).
+const val SRI_REGULAR = 80.0
+
+fun sriWord(sri: Double): String = if (sri >= SRI_REGULAR) "REGULAR" else "LESS REGULAR"
+
 private const val SRI_BIN_MINUTES = 5
 private const val SRI_BINS_PER_DAY = 1440 / SRI_BIN_MINUTES // 288
 private const val SRI_MIN_NIGHTS = 14

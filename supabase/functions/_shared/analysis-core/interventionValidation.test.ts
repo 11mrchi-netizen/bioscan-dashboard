@@ -17,6 +17,7 @@ import type { AuditableIntervention } from './protocolAudit.ts'
 import { evidenceForIntervention } from './evidenceLink.ts'
 import type { EvidenceRow } from './evidenceLink.ts'
 import type { Frame } from './relationship.ts'
+import { analyseIts } from './its.ts'
 import { dateAxis, gaussian, mulberry32 } from './stats.ts'
 import type { Num } from './stats.ts'
 
@@ -176,4 +177,15 @@ test('a multi-domain protocol (supplement + sleep + training) composes sensibly 
   })
   assert.equal(proposal.action, 'maintain')
   assertNoCausalLanguage([...proposal.rationale, magResponse.metrics[0].summary, ...findings.map((f) => f.message)])
+})
+
+test('interrupted-time-series summaries never claim causation, whatever they read', () => {
+  const dates = dateAxis(START, shiftDate(START, 119))
+  const rng = mulberry32(5)
+  const summaries = [0, 0.15, -0.15].flatMap((step) => {
+    const values = dates.map((_, t) => Math.exp(4.1 + 0.08 * gaussian(rng) + (t >= 90 ? step : 0)))
+    const base = { metric: 'hrv', label: 'HRV', dates, values, excluded: dates.map(() => false), ln: true, unit: '%', zone: 2, preStart: dates[30], activeStart: dates[90], evaluateOn: dates[117] }
+    return [analyseIts({ ...base, today: dates[119] }), analyseIts({ ...base, today: dates[100] }), analyseIts({ ...base, today: dates[119], breaks: [dates[95]] })].map((r) => r.summary)
+  })
+  assertNoCausalLanguage(summaries)
 })

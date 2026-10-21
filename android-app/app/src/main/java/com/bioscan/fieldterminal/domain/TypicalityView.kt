@@ -9,6 +9,15 @@ data class TypicalityView(
     val headline: String,
     val lines: List<String>,
     val promptIllness: Boolean,
+    // Analysis review phase G: the strain flag's scorecard against logged illness ("SCORECARD · ..." and its sentence).
+    val scorecard: Pair<String, String>? = null,
+)
+
+private val TYPICALITY_VERDICT_WORDS = mapOf(
+    "earns_its_place" to "EARNS ITS PLACE",
+    "no_better" to "NO BETTER THAN CHANCE",
+    "unclear" to "UNCLEAR",
+    "not_yet" to "NOT YET SCORED",
 )
 
 private val SIGNAL_NAMES = mapOf(
@@ -23,6 +32,7 @@ fun typicalityView(row: TypicalityResultRow?): TypicalityView {
     if (row == null) return TypicalityView("Not analysed yet", listOf("The nightly analysis publishes this."), false)
     val p = row.payload
     val today = p.today
+    val scorecard = p.scorecard?.let { (TYPICALITY_VERDICT_WORDS[it.verdict] ?: it.verdict.uppercase()) to it.sentence }
     return when {
         row.state == "building" -> TypicalityView("Building your baseline", listOf("${p.baselineDays} of ${p.baselineNeed} complete days"), false)
         today == null -> TypicalityView("Not enough signals to judge", listOf("Needs at least three of today's signals."), false)
@@ -48,5 +58,5 @@ fun typicalityView(row: TypicalityResultRow?): TypicalityView {
             }
             TypicalityView(headline, lines, p.suggestIllnessLog)
         }
-    }
+    }.copy(scorecard = scorecard)
 }

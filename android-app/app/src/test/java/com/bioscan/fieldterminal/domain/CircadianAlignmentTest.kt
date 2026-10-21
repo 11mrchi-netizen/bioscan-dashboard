@@ -41,7 +41,7 @@ class CircadianAlignmentTest {
 
         assertEquals(setOf(CircadianAlignmentComponent.MEAL_TIMING, CircadianAlignmentComponent.EXERCISE_TIMING), result.components.keys)
         assertTrue(result.score!! > 95.0)
-        assertEquals("Regular", result.band)
+        assertEquals("STEADY TIMING", result.band)
     }
 
     @Test

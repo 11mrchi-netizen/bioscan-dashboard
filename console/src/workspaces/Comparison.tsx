@@ -1,5 +1,5 @@
-// Comparison workspace — side-by-side overlay of any two metrics over the primary range.
-// Both series on a shared x-axis; optional second y-axis for different units.
+// Comparison workspace — any two metrics over the primary range, on one time axis. Same unit: one panel. Different
+// units: two aligned panels (no second y-axis).
 
 import { LoadBanner } from '../components/shared/LoadBanner'
 import { useLoadEffect } from '../lib/useLoadEffect'
@@ -9,6 +9,7 @@ import { useRange } from '../lib/analysisStore'
 import { fetchMetric, type MetricResult } from '../lib/metricAdapter'
 import { PALETTE } from '../lib/palette'
 import { METRIC_OPTIONS, type MetricOption } from '../lib/metricOptions'
+import { dailyAxis } from '../lib/dates'
 import './Comparison.css'
 
 const COLORS = {
@@ -33,52 +34,52 @@ export function Comparison() {
     if (isCurrent()) { setResultA(a); setResultB(b) }
   }, [metricA, metricB, range])
 
-  // Update chart when data arrives
+  // Update chart when data arrives.
+  // Analysis review A6: two metrics with different units get two aligned panels on one time axis (small multiples), never
+  // a second y-axis, which readers misjudge; the time axis is a real one and every day in the range is a slot, so missing
+  // days show as gaps instead of being squeezed out of a category axis.
   useEffect(() => {
     const chart = chartInstance.current
     if (!chart || !resultA || !resultB) return
 
-    const datesA = resultA.points.map(p => p.date)
-    const valsA  = resultA.points.map(p => p.value)
-    const datesB = resultB.points.map(p => p.date)
-    const valsB  = resultB.points.map(p => p.value)
-
-    // Union of all dates for shared x-axis
-    const allDates = [...new Set([...datesA, ...datesB])].sort()
-    const mapA = Object.fromEntries(datesA.map((d, i) => [d, valsA[i]]))
-    const mapB = Object.fromEntries(datesB.map((d, i) => [d, valsB[i]]))
-    const seriesValsA = allDates.map(d => mapA[d] ?? null)
-    const seriesValsB = allDates.map(d => mapB[d] ?? null)
-
+    const days = dailyAxis(range.start, range.end)
+    const toSeries = (r: MetricResult) => {
+      const byDay = new Map(r.points.map(p => [p.date.slice(0, 10), p.value]))
+      return days.map(d => [d, byDay.get(d) ?? null])
+    }
     const sameUnit = metricA.unit === metricB.unit
+    const xAxisBase = {
+      type: 'time' as const,
+      axisLine: { lineStyle: { color: PALETTE.border } },
+      axisTick: { show: false },
+      axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
+      splitLine: { show: false },
+    }
+    const yAxisBase = (unit: string) => ({
+      type: 'value' as const, name: unit, scale: true,
+      nameTextStyle: { color: PALETTE.textMuted, fontSize: 10 },
+      axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
+      splitLine: { lineStyle: { color: PALETTE.border } },
+      axisLine: { show: false }, axisTick: { show: false },
+    })
+    const line = (name: string, color: string, data: (string | number | null)[][], index: number) => ({
+      name, type: 'line', xAxisIndex: index, yAxisIndex: index, data, symbolSize: 4,
+      itemStyle: { color }, lineStyle: { color, width: 2 }, connectNulls: false,
+    })
 
     chart.setOption({
       backgroundColor: 'transparent',
       animation: false,
-      grid: { top: 16, right: sameUnit ? 12 : 60, bottom: 40, left: 52 },
-      xAxis: {
-        type: 'category', data: allDates,
-        axisLine: { lineStyle: { color: PALETTE.border } },
-        axisTick: { show: false },
-        axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
-        splitLine: { show: false },
-      },
-      yAxis: [
-        {
-          type: 'value', name: metricA.unit,
-          nameTextStyle: { color: COLORS.a, fontSize: 10 },
-          axisLabel: { color: COLORS.a, fontSize: 10, fontFamily: 'Roboto Mono' },
-          splitLine: { lineStyle: { color: PALETTE.border } },
-          axisLine: { show: false }, axisTick: { show: false },
-        },
-        {
-          type: 'value', name: sameUnit ? '' : metricB.unit,
-          nameTextStyle: { color: COLORS.b, fontSize: 10 },
-          axisLabel: sameUnit ? { show: false } : { color: COLORS.b, fontSize: 10, fontFamily: 'Roboto Mono' },
-          splitLine: { show: false },
-          axisLine: { show: false }, axisTick: { show: false },
-        },
-      ],
+      grid: sameUnit
+        ? [{ top: 28, right: 12, bottom: 40, left: 52 }]
+        : [{ top: 28, right: 12, height: '34%', left: 52 }, { top: '58%', right: 12, bottom: 40, left: 52 }],
+      xAxis: sameUnit
+        ? [xAxisBase]
+        : [{ ...xAxisBase, gridIndex: 0, axisLabel: { show: false } }, { ...xAxisBase, gridIndex: 1 }],
+      yAxis: sameUnit
+        ? [yAxisBase(metricA.unit)]
+        : [{ ...yAxisBase(metricA.unit), gridIndex: 0 }, { ...yAxisBase(metricB.unit), gridIndex: 1 }],
+      axisPointer: { link: [{ xAxisIndex: 'all' }] },
       tooltip: {
         trigger: 'axis',
         backgroundColor: PALETTE.surface,
@@ -91,21 +92,11 @@ export function Comparison() {
         top: 0,
       },
       series: [
-        {
-          name: metricA.label, type: 'line', yAxisIndex: 0,
-          data: seriesValsA, smooth: true, symbolSize: 3,
-          itemStyle: { color: COLORS.a }, lineStyle: { color: COLORS.a },
-          connectNulls: false,
-        },
-        {
-          name: metricB.label, type: 'line', yAxisIndex: sameUnit ? 0 : 1,
-          data: seriesValsB, smooth: true, symbolSize: 3,
-          itemStyle: { color: COLORS.b }, lineStyle: { color: COLORS.b },
-          connectNulls: false,
-        },
+        line(metricA.label, COLORS.a, toSeries(resultA), 0),
+        line(metricB.label, COLORS.b, toSeries(resultB), sameUnit ? 0 : 1),
       ],
     }, true)
-  }, [resultA, resultB, metricA, metricB])
+  }, [resultA, resultB, metricA, metricB, range])
 
   return (
     <div className="comparison">

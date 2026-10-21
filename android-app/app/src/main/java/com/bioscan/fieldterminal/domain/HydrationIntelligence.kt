@@ -28,18 +28,23 @@ data class HydrationIntelligenceResult(
 private const val ASSUMED_SWEAT_RATE_ML_PER_HOUR = 500.0
 private const val CONTRIBUTORS_TRACKED = 3
 
+// Fuel planning phase 4: when the person's sweat profile (domain/fuel/SweatProfile.kt) and today's weather at home are
+// known, [sweatRateMlPerHour] replaces the fixed 500 ml/h and [environmentKnown] says the temperature went into it.
 fun computeHydrationIntelligence(
     measuredIntakeMl: Double?,
     effectiveHydrationMl: Double?,
     exerciseDurationMinutesToday: Double,
+    sweatRateMlPerHour: Double? = null,
+    environmentKnown: Boolean = false,
 ): HydrationIntelligenceResult {
-    val inferredDemandMl = if (exerciseDurationMinutesToday > 0) (exerciseDurationMinutesToday / 60.0) * ASSUMED_SWEAT_RATE_ML_PER_HOUR else null
+    val rate = sweatRateMlPerHour ?: ASSUMED_SWEAT_RATE_ML_PER_HOUR
+    val inferredDemandMl = if (exerciseDurationMinutesToday > 0) (exerciseDurationMinutesToday / 60.0) * rate else null
     val have = listOfNotNull(measuredIntakeMl, effectiveHydrationMl, inferredDemandMl).size
     return HydrationIntelligenceResult(
         measuredIntakeMl = measuredIntakeMl,
         effectiveHydrationMl = effectiveHydrationMl,
         inferredDemandMl = inferredDemandMl,
-        environmentalContextAvailable = false,
+        environmentalContextAvailable = environmentKnown && sweatRateMlPerHour != null,
         confidence = Confidence(have, CONTRIBUTORS_TRACKED),
     )
 }

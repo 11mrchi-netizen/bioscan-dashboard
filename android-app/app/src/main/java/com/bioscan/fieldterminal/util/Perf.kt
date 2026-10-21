@@ -30,15 +30,18 @@ object Perf {
     }
 
     // Times a block and logs "timed <tag> ms=<n>". Also opens a System Trace section so it shows in Perfetto.
+    // Lint can't follow the inline block's return through the try; the begin/finally-end pair below is balanced.
+    @android.annotation.SuppressLint("UnclosedTrace")
     inline fun <T> timed(tag: String, block: () -> T): T {
         if (!enabled) return block()
-        runCatching { android.os.Trace.beginSection(tag.take(120)) }
         val t0 = System.nanoTime()
+        // Directly before the try, so the finally's endSection always pairs with it. Only reached on a device (enabled is off in JVM tests).
+        android.os.Trace.beginSection(tag.take(120))
         try {
             return block()
         } finally {
             val ms = (System.nanoTime() - t0) / 1_000_000.0
-            runCatching { android.os.Trace.endSection() }
+            android.os.Trace.endSection()
             emit("timed $tag ms=${"%.1f".format(ms)}")
         }
     }

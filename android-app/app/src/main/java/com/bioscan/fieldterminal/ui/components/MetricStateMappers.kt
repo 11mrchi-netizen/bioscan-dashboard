@@ -4,7 +4,6 @@ import com.bioscan.fieldterminal.domain.BloodworkTrendState
 import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.ConfidenceLevel
 import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.ReadinessLabel
 import com.bioscan.fieldterminal.domain.comparison.PercentileBand
 
 // The one place threshold -> presentation-state decisions live (Analytical
@@ -39,17 +38,6 @@ fun percentileBandState(band: PercentileBand?): MetricState = when (band) {
     PercentileBand.ABOVE_AVERAGE, PercentileBand.AVERAGE -> MetricState.Neutral
     PercentileBand.BELOW_AVERAGE, PercentileBand.BOTTOM_DECILE -> MetricState.Building
     null -> MetricState.Unavailable
-}
-
-// HRV z-score band (readinessBand): Primed is favorable, Normal is no claim,
-// Reduced/Low both warrant attention (neither is urgent, so neither is
-// Critical -- the label word itself carries the difference), no baseline yet
-// is Building.
-fun readinessState(label: ReadinessLabel): MetricState = when (label) {
-    ReadinessLabel.Primed -> MetricState.Optimal
-    ReadinessLabel.Normal -> MetricState.Neutral
-    ReadinessLabel.Reduced, ReadinessLabel.Low -> MetricState.Warning
-    ReadinessLabel.Unknown -> MetricState.Building
 }
 
 // Biological age minus chronological age, in years: <= -2 clearly younger

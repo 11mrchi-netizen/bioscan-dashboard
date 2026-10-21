@@ -9,6 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import com.bioscan.fieldterminal.domain.analysis.ComparisonResult
 import com.bioscan.fieldterminal.domain.comparison.PercentileBand
+import com.bioscan.fieldterminal.domain.comparison.favorablePercentile
+import com.bioscan.fieldterminal.domain.comparison.ordinal
 import com.bioscan.fieldterminal.domain.comparison.presentComparison
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -36,7 +38,9 @@ private fun ComparisonRow(label: String, result: ComparisonResult) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = FTType.MonoCaption, color = FT.TextMuted)
         Text(
-            presentation.band?.let { band -> "${percentileBandLabel(band)} · ${result.percentile!!.toInt()}th pct" }
+            // The percentile shown is the favorable one the band came from (analysis review A3), so "Top 10%" and the
+            // number always agree, and a low resting heart rate ranks high.
+            presentation.band?.let { band -> "${percentileBandLabel(band)} · ${ordinal((favorablePercentile(result) ?: 0.0).toInt())} pct" }
                 ?: result.bandLabel?.let { categoryLabel(it) }
                 ?: presentation.stateLabel,
             style = FTType.Caption,

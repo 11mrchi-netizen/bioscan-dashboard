@@ -1,3 +1,5 @@
+import java.net.URI
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -71,9 +73,39 @@ android {
     sourceSets {
         getByName("main") {
             assets.srcDir("../../supabase/functions/_shared/metric-registry")
+            // Running form analyser: MediaPipe's pose model, downloaded at build time (downloadPoseModel below).
+            // A plain folder: AGP 9 refuses a Provider here. The download still runs first (preBuild dependsOn downloadPoseModel below).
+            assets.srcDir(layout.buildDirectory.dir("generated/pose-model").get().asFile)
         }
     }
+
+    // The pose model is read in place from the APK (memory-mapped), which needs it stored uncompressed.
+    androidResources {
+        noCompress += listOf("task")
+    }
 }
+
+// Running form analyser (docs/running-form/README.md): MediaPipe's pose model, version 1 of the "full" variant (9.4 MB),
+// fetched from Google's model bucket at build time rather than committed, and checked against its SHA-256 so a changed
+// or broken download fails the build instead of shipping. Already-present files with the right hash are not fetched.
+val poseModelUrl = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task"
+val poseModelSha256 = "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1"
+val poseModelFile = layout.buildDirectory.file("generated/pose-model/pose_landmarker_full.task")
+val downloadPoseModel by tasks.registering {
+    outputs.file(poseModelFile)
+    doLast {
+        val target = poseModelFile.get().asFile
+        fun sha256(f: File): String = MessageDigest.getInstance("SHA-256").digest(f.readBytes()).joinToString("") { "%02x".format(it) }
+        if (target.isFile && sha256(target) == poseModelSha256) return@doLast
+        target.parentFile.mkdirs()
+        val part = File(target.parentFile, target.name + ".part")
+        URI(poseModelUrl).toURL().openStream().use { input -> part.outputStream().use { input.copyTo(it) } }
+        val got = sha256(part)
+        check(got == poseModelSha256) { "Pose model download has SHA-256 $got, expected $poseModelSha256" }
+        part.renameTo(target)
+    }
+}
+tasks.named("preBuild") { dependsOn(downloadPoseModel) }
 
 // Performance pass: ./gradlew :app:assembleDebug -PcomposeReports writes stability/skippability reports to
 // app/build/compose_compiler (off by default, it slows the build).
@@ -150,6 +182,10 @@ dependencies {
     // survives that (and even process death), and retries on failure with
     // its own backoff instead of requiring the user to babysit the app.
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+    // Running form analyser: MediaPipe Tasks pose landmarker (Apache 2.0, runs on the phone). 0.10.26 is the first release
+    // whose Android packages support the 16 KB page size.
+    implementation("com.google.mediapipe:tasks-vision:0.10.26")
 
     // Perf pass: installs the baseline profile (src/main/baseline-prof.txt) so release builds start precompiled.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")

@@ -16,7 +16,10 @@ import com.bioscan.fieldterminal.domain.stress.StressRhythmResult
 // OPTIONAL contributor, folded in only when a real StressRhythmResult
 // exists, per DAV-238's own "add Zepp stress only when its source is
 // validated" instruction.
-const val DYNAMIC_RECOVERY_MODEL_VERSION = "v1"
+// v2 (app restructure, fix 4): the state weighs its contributors instead of needing them to agree. v1 called ABOVE only
+// when no contributor pointed down and BELOW only when none pointed up, so any disagreement read MIXED SIGNALS, and
+// during training (load almost always points down) a clearly good morning never read anything else.
+const val DYNAMIC_RECOVERY_MODEL_VERSION = "v2"
 
 data class RecoveryContributor(
     val dimension: String,
@@ -34,7 +37,44 @@ data class DynamicRecoveryResult(
     val contributors: List<RecoveryContributor>,
     val confidence: Confidence,
     val modelVersion: String = DYNAMIC_RECOVERY_MODEL_VERSION,
+    // v2: the weighted lean behind the state (null while building).
+    val balance: RecoveryBalance? = null,
 )
+
+// The weighted vote behind the state: each share is of the total weight, net = up - down.
+data class RecoveryBalance(val up: Double, val down: Double, val votes: Double) {
+    val net: Double get() = up - down
+}
+
+// v2 weights. HRV, resting heart rate, the Sleep Index and training load are one vote each; the subjective answers
+// (energy, stress, soreness, morning erection, arousal) are one vote together, their mean, so five answers from one
+// questionnaire do not outvote the measurements; Zepp physiological stress is one vote.
+private val SUBJECTIVE_DIMENSIONS = setOf("energy", "subjective_stress", "soreness", "morning_wood", "arousal")
+
+// ABOVE / BELOW once the weighted lean reaches a quarter of the votes (one vote in four, net of the others).
+const val RECOVERY_LEAN = 0.25
+
+// MIXED SIGNALS only when each side carries at least a third of the weight and neither wins by the lean above.
+const val RECOVERY_SPLIT_SHARE = 1.0 / 3.0
+
+fun recoveryBalance(contributors: List<RecoveryContributor>): RecoveryBalance? {
+    val votes = buildList {
+        contributors.filter { it.dimension !in SUBJECTIVE_DIMENSIONS }.forEach { c -> c.direction?.let { add(it.toDouble()) } }
+        contributors.filter { it.dimension in SUBJECTIVE_DIMENSIONS }.mapNotNull { it.direction }
+            .takeIf { it.isNotEmpty() }?.let { add(it.average()) }
+    }
+    if (votes.isEmpty()) return null
+    val n = votes.size.toDouble()
+    return RecoveryBalance(up = votes.sumOf { maxOf(it, 0.0) } / n, down = votes.sumOf { maxOf(-it, 0.0) } / n, votes = n)
+}
+
+fun recoveryStateOf(balance: RecoveryBalance?): EvalState = when {
+    balance == null -> EvalState.Building
+    balance.up >= RECOVERY_SPLIT_SHARE && balance.down >= RECOVERY_SPLIT_SHARE && kotlin.math.abs(balance.net) < RECOVERY_LEAN -> EvalState.Unstable
+    balance.net >= RECOVERY_LEAN -> EvalState.ShiftUp
+    balance.net <= -RECOVERY_LEAN -> EvalState.ShiftDown
+    else -> EvalState.Stable
+}
 
 private const val MIN_CONTRIBUTORS_FOR_STATE = 2
 
@@ -81,13 +121,10 @@ fun computeDynamicRecovery(
 ): DynamicRecoveryResult {
     val contributors = mutableListOf<RecoveryContributor>()
 
+    // Analysis review phase G: the Sleep Index's own cut-offs (SleepIndex.kt), not a second set: a week of sleep as
+    // expected is neutral here, one below expected holds recovery back.
     if (sleepIndex.score != null) {
-        val direction = when {
-            sleepIndex.score >= 70.0 -> 1
-            sleepIndex.score < 50.0 -> -1
-            else -> 0
-        }
-        contributors += RecoveryContributor("sleep", direction, sleepIndex.score, sleepIndex.confidence, Provenance("sleep_index", "computeSleepIndex", SLEEP_INDEX_MODEL_VERSION))
+        contributors += RecoveryContributor("sleep", sleepIndexDirection(sleepIndex.score), sleepIndex.score, sleepIndex.confidence, Provenance("sleep_index", "computeSleepIndex", SLEEP_INDEX_MODEL_VERSION))
     }
 
     directionFromShift(hrvEval.state, METRIC_DIRECTIONALITY.getValue("hrv")).let { direction ->
@@ -138,13 +175,6 @@ fun computeDynamicRecovery(
         return DynamicRecoveryResult(EvalState.Building, contributors, Confidence(contributors.size, MIN_CONTRIBUTORS_FOR_STATE))
     }
 
-    val directional = contributors.mapNotNull { it.direction }
-    val state = when {
-        directional.isEmpty() -> EvalState.Building
-        directional.sumOf { it } > 0 && directional.count { it < 0 } == 0 -> EvalState.ShiftUp
-        directional.sumOf { it } < 0 && directional.count { it > 0 } == 0 -> EvalState.ShiftDown
-        directional.count { it != 0 } >= 2 && directional.any { it > 0 } && directional.any { it < 0 } -> EvalState.Unstable
-        else -> EvalState.Stable
-    }
-    return DynamicRecoveryResult(state, contributors, Confidence(contributors.size, MIN_CONTRIBUTORS_FOR_STATE))
+    val balance = recoveryBalance(contributors)
+    return DynamicRecoveryResult(recoveryStateOf(balance), contributors, Confidence(contributors.size, MIN_CONTRIBUTORS_FOR_STATE), balance = balance)
 }

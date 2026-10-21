@@ -202,3 +202,17 @@ test('the pre-registration preview states a detectable size and the days needed 
   assert.equal(previewMde(frame, ['hrv'], 28, 28, ['hrv'])[0].unsettled, true)
   assert.equal(previewMde(frame, ['hrv'], 28, 28, ['rhr'])[0].unsettled, false)
 })
+
+test('a protocol stored without its default fields (the phone leaves defaults out) is read with the registration defaults', () => {
+  const { frame, protocol } = build(41, 56, AB28, 0.1)
+  // Alcohol on a run of with-phase evenings: excluded (with the morning after) only when excludeAlcoholDays applies.
+  frame.series.alcohol_any = frame.dates.map((_, t) => (t >= 30 && t < 40 ? 1 : 0))
+  const stored = { design: protocol.design, phases: protocol.phases } as unknown as Protocol
+  const taken = new Set(frame.dates.slice(28, 56))
+  const sparse = analyseExperiment(spec(stored), frame, taken, AFTER)
+  const explicit = analyseExperiment(spec(protocol), frame, taken, AFTER)
+  assert.equal(sparse.metrics[0].n1, explicit.metrics[0].n1, 'alcohol days left out as registered')
+  assert.ok(sparse.metrics[0].n1 < 28)
+  assert.equal(sparse.adherence.ok, true, 'adherence judged against the 70% default, not against a missing value')
+  assert.deepEqual(sparse.metrics[0].diff, explicit.metrics[0].diff)
+})

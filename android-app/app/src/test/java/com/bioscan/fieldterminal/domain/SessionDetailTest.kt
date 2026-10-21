@@ -32,6 +32,38 @@ class SessionDetailTest {
         assertEquals(240L, splits[0].durationSec)
     }
 
+    // Run session page: a 600 s pause inside km 2 leaves its moving pace alone and shows the clock time beside it.
+    @Test
+    fun testAPauseIsLeftOutOfTheKmItFallsIn() {
+        val distance = listOf(TimePoint(0, 0.0), TimePoint(300, 1.0), TimePoint(450, 1.5), TimePoint(1050, 1.5), TimePoint(1200, 2.0))
+        val pauses = listOf(SessionPause(startOffset = 450, durationSec = 600))
+        val splits = computeKmSplits(distance, emptyList(), pauses)
+        assertEquals(300L, splits[0].durationSec)
+        assertEquals(null, splits[0].elapsedSec)
+        assertEquals(300L, splits[1].durationSec)
+        assertEquals(900L, splits[1].elapsedSec)
+    }
+
+    @Test
+    fun testPausedSecondsBetween() {
+        val pauses = listOf(SessionPause(100, 50), SessionPause(400, 100))
+        assertEquals(150L, pausedSecondsBetween(pauses, 0, 1000))
+        assertEquals(25L, pausedSecondsBetween(pauses, 125, 300))
+        assertEquals(0L, pausedSecondsBetween(pauses, 160, 390))
+    }
+
+    @Test
+    fun testMovingOffsetClosesThePauses() {
+        // Pauses 100-150 and 400-500: the run continues straight on through each.
+        val pauses = listOf(100L to 150L, 400L to 500L)
+        assertEquals(90L, movingOffset(90, pauses))
+        assertEquals(100L, movingOffset(150, pauses)) // the end of the first pause lands where it began
+        assertEquals(100L, movingOffset(120, pauses)) // a moment inside it sits at its start
+        assertEquals(350L, movingOffset(400, pauses))
+        assertEquals(400L, movingOffset(550, pauses))
+        assertEquals(550L, movingOffset(550, emptyList()))
+    }
+
     @Test
     fun testUnderOneKmProducesNoSplits() {
         assertTrue(computeKmSplits(listOf(TimePoint(0, 0.0), TimePoint(200, 0.8)), emptyList()).isEmpty())

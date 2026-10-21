@@ -77,7 +77,7 @@ fun LoadErrorCard(guard: LoadGuard, modifier: Modifier = Modifier, onRetry: () -
     Column(modifier = modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("COULDN'T LOAD", style = FTType.LabelCaps, color = FT.Critical)
         Text(message, style = FTType.BodySmall, color = FT.TextSecondary)
-        AmberButton(label = "RETRY", onClick = onRetry)
+        FTButton(label = "RETRY", onClick = onRetry)
     }
 }
 

@@ -2,8 +2,6 @@ package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,7 +32,9 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.HealthEvent
 import com.bioscan.fieldterminal.domain.HealthEventKind
 import com.bioscan.fieldterminal.domain.daysSince
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
@@ -104,15 +104,8 @@ fun HealthEventsScreen() {
 @Composable
 private fun AddEventButtons(onAddInjuryClick: () -> Unit, onAddIllnessClick: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
-        Text(
-            "+ ADD ILLNESS",
-            style = FTType.LabelCaps,
-            color = FT.Info,
-            modifier = Modifier
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onAddIllnessClick() }
-                .padding(vertical = 8.dp),
-        )
-        AmberButton(label = "+ ADD INJURY") { onAddInjuryClick() }
+        FTButton(label = "+ ADD ILLNESS", emphasis = FTButtonEmphasis.Tertiary) { onAddIllnessClick() }
+        FTButton(label = "+ ADD INJURY") { onAddInjuryClick() }
     }
 }
 
@@ -233,7 +226,7 @@ private fun OpenEventCard(event: HealthEvent, today: LocalDate, onResolved: () -
                 color = FT.Emerald,
                 modifier = Modifier
                     .padding(top = 12.dp)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                    .ftClickable {
                         if (!resolving) {
                             resolving = true
                             resolveError = null

@@ -37,12 +37,8 @@ enum class SportType(val label: String, val icon: ImageVector) {
     OTHER("Other", Icons.Filled.Help);
 
     companion object {
-        // routeType == "trail" is the user-confirmed signal (ROUTE_TYPE_OPTIONS in
-        // AddEntrySheet.kt, and the MARK AS TRAIL action writes exactly this value).
-        // An untagged run that merely *looks* like a trail run (suspectedTrailReason)
-        // stays RUN here -- that suspicion is deliberately detection-only until a
-        // person confirms it, same convention this codebase already follows for
-        // reconcileDistanceWithSpeed.
+        // routeType == "trail" is the trail signal: set in the entry form (ROUTE_TYPE_OPTIONS in AddEntrySheet.kt), or
+        // by the Zepp sync for a workout Zepp recorded as a trail run.
         fun from(type: String, routeType: String?): SportType = when (type) {
             "run" -> if (routeType == "trail") TRAIL_RUN else RUN
             "walk" -> WALK

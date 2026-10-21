@@ -1,8 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +22,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.LabsOverview
+import com.bioscan.fieldterminal.domain.BloodworkMarkerEvaluation
+import com.bioscan.fieldterminal.domain.evaluateBloodworkMarker
+import com.bioscan.fieldterminal.ui.components.bloodworkTrendMetricState
+import java.time.LocalDate
 import com.bioscan.fieldterminal.data.LabsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.domain.LabMarkerTheme
@@ -33,9 +36,10 @@ import com.bioscan.fieldterminal.domain.MarkerDirection
 import com.bioscan.fieldterminal.domain.PersonalRange
 import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.labMarkerTheme
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTRangeIndicator
 import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.labFlagState
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -46,9 +50,14 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // the earliest and latest draw by name (domain/Labs.kt); a marker tested in
 // only one draw shows "—" for the other, which this account's real data
 // genuinely has. See ROADMAP.md P8 Step 9.
+// App restructure: Health › BLOODWORK. The tile used to show this list and, below it, a second card with the same
+// markers again (BLOODWORK (RCV)); the RCV reading of each marker now sits on its row here, and the second card is gone.
 @Composable
 fun LabsScreen() {
     var overview by remember { mutableStateOf<LabsOverview?>(null) }
+    // Category 9: each marker's change between its last two draws against its own noise threshold (RCV), by name. A
+    // failed read leaves the rows without it.
+    var rcv by remember { mutableStateOf<Map<String, BloodworkMarkerEvaluation>>(emptyMap()) }
     var isLoading by remember { mutableStateOf(true) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var showAddSheet by remember { mutableStateOf(false) }
@@ -61,6 +70,7 @@ fun LabsScreen() {
         error = null
         try {
             overview = LabsRepository(SupabaseClientProvider.client).loadOverview()
+            rcv = runCatching { loadRcv() }.getOrDefault(emptyMap())
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
         }
@@ -80,7 +90,7 @@ fun LabsScreen() {
                 Text("No lab draws logged yet.", style = FTType.Body, color = FT.TextSecondary)
             }
         }
-        else -> LabsContent(overview!!, onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })
+        else -> LabsContent(overview!!, rcv, onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })
     }
 
     if (showAddSheet) {
@@ -101,14 +111,14 @@ fun LabsScreen() {
 private fun AddResultButtons(onAddClick: () -> Unit, onUploadClick: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AmberButton(label = "+ UPLOAD REPORT") { onUploadClick() }
-            AmberButton(label = "+ ADD RESULT") { onAddClick() }
+            FTButton(label = "+ UPLOAD REPORT") { onUploadClick() }
+            FTButton(label = "+ ADD RESULT") { onAddClick() }
         }
     }
 }
 
 @Composable
-private fun LabsContent(overview: LabsOverview, onAddClick: () -> Unit, onUploadClick: () -> Unit) {
+private fun LabsContent(overview: LabsOverview, rcv: Map<String, BloodworkMarkerEvaluation>, onAddClick: () -> Unit, onUploadClick: () -> Unit) {
     val drawCount = if (overview.earlierDraw != null) 2 else 1
     // DAV-86: collapsed-by-default is the wrong first impression right after
     // this grouped view replaces a flat list -- everything open, matching
@@ -148,7 +158,7 @@ private fun LabsContent(overview: LabsOverview, onAddClick: () -> Unit, onUpload
                 onClick = { collapsedThemes = if (collapsed) collapsedThemes - theme else collapsedThemes + theme },
             )
             if (!collapsed) {
-                markers.forEach { marker -> MarkerRow(marker) }
+                markers.forEach { marker -> MarkerRow(marker, rcv[marker.name]) }
             }
         }
     }
@@ -159,7 +169,7 @@ private fun ThemeGroupHeader(theme: LabMarkerTheme, count: Int, collapsed: Boole
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .ftClickable(onClick = onClick)
             .padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -187,7 +197,7 @@ private fun ThemeGroupHeader(theme: LabMarkerTheme, count: Int, collapsed: Boole
 // bounds would either fabricate a range or mislead with a "building" state
 // that more history can never fix.
 @Composable
-private fun MarkerRow(marker: MarkerComparison) {
+private fun MarkerRow(marker: MarkerComparison, rcv: BloodworkMarkerEvaluation?) {
     Column {
         if (marker.refLow != null && marker.refHigh != null && marker.latestValue != null) {
             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
@@ -200,6 +210,7 @@ private fun MarkerRow(marker: MarkerComparison) {
                     )
                 }
                 FlagLine(marker.latestFlag, Modifier.padding(top = 6.dp))
+                RcvLine(rcv, Modifier.padding(top = 6.dp))
                 FTRangeIndicator(
                     PersonalRange(
                         kind = RangeKind.ReferenceRange,
@@ -222,6 +233,7 @@ private fun MarkerRow(marker: MarkerComparison) {
                         Text(refText, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
                     }
                     FlagLine(marker.latestFlag, Modifier.padding(top = 6.dp))
+                    RcvLine(rcv, Modifier.padding(top = 6.dp))
                 }
                 Text(
                     marker.earlierDisplay ?: "—",
@@ -266,6 +278,33 @@ private fun FlagLine(flag: String?, modifier: Modifier = Modifier) {
             color = FT.TextSecondary,
         )
     }
+}
+
+// The change since the previous draw against the marker's RCV: a pill only when it is beyond it (or there is one draw).
+@Composable
+private fun RcvLine(m: BloodworkMarkerEvaluation?, modifier: Modifier = Modifier) {
+    m ?: return
+    val delta = m.deltaPercent
+    val rcvPct = m.rcv
+    if (m.previousValue == null || delta == null || rcvPct == null) return
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        bloodworkTrendMetricState(m.state)?.let { FTStatePill(it) }
+        Text("Δ%+.1f%% · RCV ±%.1f%%".format(delta, rcvPct), style = FTType.Label, color = FT.TextSecondary)
+    }
+}
+
+private suspend fun loadRcv(): Map<String, BloodworkMarkerEvaluation> {
+    val repo = AnalysisRepository(SupabaseClientProvider.client)
+    val draws = repo.loadLabDraws()
+    val results = repo.loadLabResults()
+    val drawDatesById = draws.associate { it.id to LocalDate.parse(it.drawDate) }
+    return results
+        .mapNotNull { row -> row.value?.let { v -> drawDatesById[row.drawId]?.let { date -> Triple(row, date, v) } } }
+        .groupBy { it.first.markerName }
+        .mapValues { (name, rows) ->
+            val first = rows.first().first
+            evaluateBloodworkMarker(markerName = name, draws = rows.map { it.second to it.third }, unit = first.unit, refLow = first.refLow, refHigh = first.refHigh)
+        }
 }
 
 private fun flagColor(flag: String?): Color = when (flag) {

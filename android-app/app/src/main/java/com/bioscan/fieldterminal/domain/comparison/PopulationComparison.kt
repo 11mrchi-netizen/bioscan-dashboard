@@ -59,8 +59,29 @@ private fun specificity(artifact: BenchmarkArtifact, context: PopulationContext)
     return score
 }
 
+// Analysis review A7: an artifact restricted to an age band or a sex the person is known NOT to belong to is never used.
+// It used to win whenever it was the only candidate (specificity 0 ties with an unqualified table), so a 30-year-old
+// could be placed against a 60-69 table.
+private fun excludes(artifact: BenchmarkArtifact, context: PopulationContext): Boolean {
+    val pop = artifact.population
+    val ageOut = context.ageYears != null && pop.ageLow != null && pop.ageHigh != null && context.ageYears !in pop.ageLow..pop.ageHigh
+    val sexOut = context.sex != null && pop.sex != null && !context.sex.equals(pop.sex, ignoreCase = true)
+    return ageOut || sexOut
+}
+
 fun resolveArtifact(metric: String, context: PopulationContext, artifacts: List<BenchmarkArtifact>): BenchmarkArtifact? =
-    artifacts.filter { it.metric == metric }.maxByOrNull { specificity(it, context) }
+    artifacts.filter { it.metric == metric && !excludes(it, context) }.maxByOrNull { specificity(it, context) }
+
+// How specifically the table describes this person: one point each for a confirmed age-band and sex match, out of two.
+// An unqualified table (or one whose strata can't be checked because age or sex is unknown) is a weaker reference, and
+// the chip says so instead of a constant 2 of 2.
+fun populationFit(artifact: BenchmarkArtifact, context: PopulationContext): Confidence {
+    val pop = artifact.population
+    var have = 0
+    if (context.ageYears != null && pop.ageLow != null && pop.ageHigh != null && context.ageYears in pop.ageLow..pop.ageHigh) have++
+    if (context.sex != null && pop.sex != null && context.sex.equals(pop.sex, ignoreCase = true)) have++
+    return Confidence(have, 2)
+}
 
 // Conservative linear interpolation between the artifact's own published
 // points -- never extrapolated past the table's own min/max percentile, per
@@ -118,7 +139,7 @@ fun comparePopulation(
             delta = null, standardizedDelta = null, percentile = null, rank = null, rankDenominator = artifact.sampleSize,
             directionality = artifact.directionality, referenceIdentity = artifact.sourceName,
             referenceVersion = artifact.artifactVersion.toString(),
-            confidence = if (bandLabel != null) Confidence(2, 2) else Confidence(1, 2),
+            confidence = if (bandLabel != null) populationFit(artifact, context) else Confidence(0, 2),
             breadth = InputCompleteness(setOf(artifact.sourceName), setOf(artifact.sourceName)),
             provenance = Provenance(origin, "population_comparison", artifact.artifactVersion.toString()),
             bandLabel = bandLabel,
@@ -144,7 +165,7 @@ fun comparePopulation(
         directionality = artifact.directionality,
         referenceIdentity = artifact.sourceName,
         referenceVersion = artifact.artifactVersion.toString(),
-        confidence = Confidence(2, 2),
+        confidence = populationFit(artifact, context),
         breadth = InputCompleteness(setOf(artifact.sourceName), setOf(artifact.sourceName)),
         provenance = Provenance(origin, "population_comparison", artifact.artifactVersion.toString()),
     )

@@ -22,7 +22,8 @@ class WarmUpTest {
     // The zepp-training function maps these keys to Zepp exercises (template.ts BY_MOVEMENT).
     @Test
     fun movementKeysMatchTheFunctionsExerciseMap() {
-        assertEquals("press", movementKey("Standing Barbell Press"))
+        // 03cf62e folds Zepp's "Standing Barbell Press" onto the overhead press; template.ts maps both keys to PRESS.
+        assertEquals("overhead press", movementKey("Standing Barbell Press"))
         assertEquals("overhead press", movementKey("Overhead Press"))
         assertEquals("front squat", movementKey("Barbell Front Squat"))
         assertEquals("pull up weighted", movementKey("Weighted Pull-up"))

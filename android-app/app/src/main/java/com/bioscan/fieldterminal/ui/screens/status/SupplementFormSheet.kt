@@ -2,8 +2,6 @@ package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,8 +45,10 @@ import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.InteractionRecord
 import com.bioscan.fieldterminal.domain.RosterItem
 import com.bioscan.fieldterminal.domain.detectInteractions
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
@@ -152,7 +152,7 @@ fun SupplementFormSheet(
                                 .weight(1f)
                                 .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                                 .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { timeOfDay = option }
+                                .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { timeOfDay = option }
                                 .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -176,7 +176,7 @@ fun SupplementFormSheet(
                                 .weight(1f)
                                 .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                                 .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { everyNDays = days }
+                                .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { everyNDays = days }
                                 .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -212,11 +212,7 @@ fun SupplementFormSheet(
                     if (scanningBarcode) "SCANNING..." else "SCAN BARCODE TO IMPORT INGREDIENTS",
                     style = FTType.LabelCaps,
                     color = if (scanningBarcode) FT.TextMuted else FT.Emerald,
-                    modifier = Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        enabled = !scanningBarcode,
-                    ) {
+                    modifier = Modifier.ftClickable(enabled = !scanningBarcode) {
                         scanningBarcode = true
                         scanError = null
                         scope.launch {
@@ -305,7 +301,7 @@ fun SupplementFormSheet(
             }
 
             val valid = name.isNotBlank() && dose.isNotBlank()
-            AmberButton(label = if (saving) "SAVING..." else "SAVE") {
+            FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
                 if (valid && !saving) {
                     saving = true
                     error = null
@@ -361,7 +357,7 @@ fun SupplementFormSheet(
                     color = FT.Critical,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        .ftClickable {
                             if (!ending) {
                                 ending = true
                                 scope.launch {
@@ -425,10 +421,7 @@ private fun IngredientsSection(ingredients: androidx.compose.runtime.snapshots.S
             "+ ADD INGREDIENT",
             style = FTType.MonoCaption,
             color = FT.Emerald,
-            modifier = Modifier.clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) { ingredients.add(EditableIngredient()) },
+            modifier = Modifier.ftClickable { ingredients.add(EditableIngredient()) },
         )
     }
 }
@@ -447,7 +440,7 @@ private fun IngredientEditor(ingredient: EditableIngredient, onRemove: () -> Uni
                 color = FT.Critical,
                 modifier = Modifier
                     .padding(start = 10.dp)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onRemove),
+                    .ftClickable(onClick = onRemove),
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

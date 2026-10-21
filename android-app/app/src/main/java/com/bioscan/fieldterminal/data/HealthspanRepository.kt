@@ -18,6 +18,7 @@ import com.bioscan.fieldterminal.domain.comparison.PopulationContext
 import com.bioscan.fieldterminal.domain.comparison.comparePopulation
 import com.bioscan.fieldterminal.domain.comparison.resolveArtifact
 import com.bioscan.fieldterminal.domain.evaluateSri
+import com.bioscan.fieldterminal.domain.ratioWaist
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -52,6 +53,22 @@ private const val WINDOW_DAYS = 30L
 
 private fun later(a: LocalDate, b: LocalDate?): LocalDate = if (b != null && b.isAfter(a)) b else a
 
+// VO2max placement against the age- and sex-matched table, or null when the person's age/sex/VO2max is unknown or no table covers
+// them (never the nearest table). Shared by the Healthspan cardio factor and the Running level on the User tab.
+suspend fun vo2Placement(supabase: SupabaseClient, aging: AgingProfileOverview): ComparisonResult? {
+    val sex = UserProfileRepository(supabase).loadProfile()?.sex?.takeIf { it == "male" || it == "female" }
+    val age = aging.chronologicalAgeYears
+    val vo2 = aging.latestVo2Max
+    if (vo2 == null || age == null || sex == null) return null
+    val artifacts = BenchmarkArtifactRepository(supabase).loadArtifacts("vo2max")
+    val context = PopulationContext(ageYears = age, sex = sex, geography = null)
+    val table = resolveArtifact("vo2max", context, artifacts)
+    val fits = table != null && table.population.sex.equals(sex, ignoreCase = true) &&
+        age >= (table.population.ageLow ?: Int.MAX_VALUE) && age <= (table.population.ageHigh ?: Int.MIN_VALUE)
+    if (!fits) return null
+    return comparePopulation("vo2max", vo2.second, context, artifacts).takeIf { it.state == ComparisonState.OK && it.confidence.met }
+}
+
 // Analysis Layer 3 / Phase 8. Gathers what the Healthspan factors need and hands it, unmodified, to the pure domain
 // function. This class decides nothing about cut-offs; it only refuses to pass a value it cannot vouch for.
 class HealthspanRepository(private val supabase: SupabaseClient) {
@@ -66,17 +83,7 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
 
         // VO2max against a table that actually covers this age and sex; never the nearest table.
         val vo2 = aging.latestVo2Max
-        var vo2Comparison: ComparisonResult? = null
-        if (vo2 != null && age != null && sex != null) {
-            val artifacts = benchmarks.loadArtifacts("vo2max")
-            val context = PopulationContext(ageYears = age, sex = sex, geography = null)
-            val table = resolveArtifact("vo2max", context, artifacts)
-            val fits = table != null && table.population.sex.equals(sex, ignoreCase = true) &&
-                age >= (table.population.ageLow ?: Int.MAX_VALUE) && age <= (table.population.ageHigh ?: Int.MIN_VALUE)
-            if (fits) {
-                vo2Comparison = comparePopulation("vo2max", vo2.second, context, artifacts).takeIf { it.state == ComparisonState.OK && it.confidence.met }
-            }
-        }
+        val vo2Comparison = vo2Placement(supabase, aging)
 
         // Sleep and steps: last 30 days, restarted at the last confirmed series break.
         val sleepRows = analysis.loadSleepDaily()
@@ -104,15 +111,18 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
         }
 
         // Strength: best estimated 1RM per lift over about six months, the latest body weight, the latest logged grip.
-        val liftSets = supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("id,type,start_time,source,details")) {
-                filter {
-                    eq("type", "strength")
-                    gte("start_time", asOf.minusDays(183).toString())
+        // Cached: the User tab reloads this card on every visit (back from a skill page included).
+        val liftSets = ReadCache.get("healthspan.strength.$asOf", tables = setOf("exercise_sessions")) {
+            supabase.postgrest.from("exercise_sessions")
+                .select(columns = Columns.list("id,type,start_time,source,details")) {
+                    filter {
+                        eq("type", "strength")
+                        gte("start_time", asOf.minusDays(183).toString())
+                    }
+                    limit(1000)
                 }
-                limit(1000)
-            }
-            .decodeList<ExerciseSessionRow>()
+                .decodeList<ExerciseSessionRow>()
+        }
             .flatMap { session ->
                 val date = runCatching { OffsetDateTime.parse(session.startTime).toLocalDate() }.getOrNull() ?: return@flatMap emptyList()
                 session.details.exercises.orEmpty().flatMap { ex -> ex.sets.map { LiftSet(ex.name, it.weightKg, it.reps, date) } }
@@ -132,6 +142,16 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
 
         val labs = loadLabObservations()
         fun lab(vararg names: String) = latestLab(labs) { m -> names.any { m.equals(it, ignoreCase = true) } }
+        // Waist from the monthly body check-in's tape (the WHO site, else the navel) when it is newer than a lab value;
+        // height from Health Connect or the check-in when no lab has it (an adult height does not age out, so it is dated
+        // today for the freshness gate).
+        val checkins = BodyCheckinRepository(supabase)
+        val tapeWaist = runCatching { checkins.loadHistory() }.getOrElse { emptyList() }
+            .lastOrNull { ratioWaist(it) != null }
+            ?.let { DatedValue(ratioWaist(it)!!, it.date, "cm") }
+        val labWaist = lab("Waistline")
+        val waist = listOfNotNull(labWaist, tapeWaist).maxByOrNull { it.date }
+        val height = lab("Body Height") ?: runCatching { checkins.latestHeightCm() }.getOrNull()?.let { DatedValue(it, asOf, "cm") }
         return HealthspanBundle(
             summary = healthspanSummary(
                 HealthspanInputs(
@@ -143,8 +163,8 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
                     lifts = bestLifts(liftSets),
                     bodyWeightKg = bodyWeight?.let { DatedValue(it.weightKg!!, LocalDate.parse(it.date), "kg") },
                     grip = grip,
-                    waistCm = lab("Waistline"),
-                    heightCm = lab("Body Height"),
+                    waistCm = waist,
+                    heightCm = height,
                     sleepMeanHours = hours.takeIf { it.isNotEmpty() }?.average(),
                     sleepNights = hours.size,
                     sri = evaluateSri(nights),

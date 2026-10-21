@@ -2,9 +2,7 @@ package com.bioscan.fieldterminal.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -15,7 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -58,11 +55,7 @@ fun SubTabChip(label: String, selected: Boolean, onClick: () -> Unit) {
             .defaultMinSize(minHeight = 48.dp) // under Android's 48dp minimum touch target
             .border(FT.BorderWidth, borderColor, shape)
             .background(background, shape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            .ftClickable(onClick = onClick, shape = shape)
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Text(text = label, style = FTType.LabelCaps, color = textColor)

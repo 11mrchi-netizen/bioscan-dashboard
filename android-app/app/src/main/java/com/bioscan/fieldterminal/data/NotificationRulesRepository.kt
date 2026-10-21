@@ -67,6 +67,37 @@ private val DEFAULT_RULES = listOf(
         conditions = NotificationConditions(skipIfLogged = true),
         limits = NotificationLimits(maxPerDay = 1, minGapMin = 120, snoozeMin = 60),
     ),
+    // Analysis review phase B: 22:25 is the owner's choice. Skipped once tonight's exposures are answered.
+    NewNotificationRuleRow(
+        kind = NotificationKind.EVENING_CHECKIN,
+        enabled = true,
+        schedule = NotificationSchedule(times = listOf("22:25")),
+        conditions = NotificationConditions(skipIfLogged = true),
+        limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 20),
+    ),
+    // The monthly body check-in: a Saturday morning, before breakfast and training; skipped until 28 days have passed.
+    NewNotificationRuleRow(
+        kind = NotificationKind.BODY_CHECKIN,
+        enabled = true,
+        schedule = NotificationSchedule(times = listOf("09:30"), days = listOf(6)),
+        conditions = NotificationConditions(skipIfLogged = true),
+        limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 60),
+    ),
+    // Fuel planning: no clock times; the worker reads the planned sessions and races (domain/notifications/FuelPrompts.kt).
+    NewNotificationRuleRow(
+        kind = NotificationKind.FUEL_SESSION,
+        enabled = true,
+        schedule = NotificationSchedule(),
+        conditions = NotificationConditions(skipIfLogged = false),
+        limits = NotificationLimits(maxPerDay = 4, minGapMin = 60, snoozeMin = 30),
+    ),
+    NewNotificationRuleRow(
+        kind = NotificationKind.FUEL_EVENT,
+        enabled = true,
+        schedule = NotificationSchedule(),
+        conditions = NotificationConditions(skipIfLogged = false),
+        limits = NotificationLimits(maxPerDay = 3, minGapMin = 30, snoozeMin = 30),
+    ),
 )
 
 class NotificationRulesRepository(private val supabase: SupabaseClient) {
@@ -144,7 +175,7 @@ class NotificationRulesRepository(private val supabase: SupabaseClient) {
     // Used for daily cap / min-gap checks: what was actually shown since `since`.
     suspend fun loadShownSince(since: Instant): List<NotificationLogRow> =
         supabase.postgrest.from("notification_log")
-            .select(columns = Columns.list("rule_kind,fired_at,outcome")) {
+            .select(columns = Columns.list("rule_kind,fired_at,outcome,dedupe_key")) {
                 filter {
                     eq("outcome", NotificationOutcome.SHOWN)
                     gte("fired_at", since.toString())

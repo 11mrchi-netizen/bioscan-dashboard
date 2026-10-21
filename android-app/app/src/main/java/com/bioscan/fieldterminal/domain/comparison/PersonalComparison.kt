@@ -48,10 +48,15 @@ fun comparePersonal(
             provenance = Provenance(origin, "personal_comparison", PERSONAL_COMPARISON_ALGORITHM_VERSION),
         )
 
-    val sortedHistory = history.map { it.second }.sorted()
-    // Percentile rank: fraction of this account's own comparable history at
-    // or below the current value -- inclusive, so a current value equal to
-    // every historical value reads as the 100th percentile, not <100th.
+    // Analysis review A3: rank against the same window the baseline uses (the label says PERSONAL (28d)); it used to rank
+    // against everything the caller loaded (~200 days for HRV and RHR).
+    val sortedHistory = history
+        .filter { java.time.temporal.ChronoUnit.DAYS.between(it.first, asOf) in 0..PERSONAL_BASELINE_WINDOW_DAYS.toLong() }
+        .map { it.second }
+        .sorted()
+    // Percentile rank: fraction of the window at or below the current value -- inclusive, so a current value equal to
+    // every value reads as the 100th percentile, not <100th. This is the raw position; presentComparison() turns it
+    // into a favorable position for the band using the metric's directionality.
     val rank = sortedHistory.count { it <= current }
     val percentile = rank.toDouble() / sortedHistory.size * 100.0
     val delta = current - baseline.mean

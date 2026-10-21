@@ -1,7 +1,9 @@
 // Run: node --test supabase/functions/zepp-extract/workoutDistance.test.ts  (Node 22+ strips types)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { avgSpeedKmhFromPace, exerciseTypeForZeppSport, summaryDistanceM, takesDistance, trailTaggedDetails, zeppDistanceKm } from "./workoutDistance.ts";
+import {
+  avgSpeedKmhFromPace, exerciseTypeForZeppSport, summaryDistanceM, takesDistance, trailTaggedDetails, workoutAvgSpeedKmh, zeppDistanceKm,
+} from "./workoutDistance.ts";
 
 test("the summary distance comes from highPrecisionDistance or dis, never a missing `distance` key", () => {
   // Shape of a real sport_history entry (synthetic values).
@@ -43,4 +45,14 @@ test("avg_pace is seconds per metre: a 6:02/km run is 9.9 km/h, never thousands"
   // A value read in the wrong unit (seconds per km) would be implausible and is dropped.
   assert.equal(avgSpeedKmhFromPace(0.05, "run"), null);
   assert.ok(avgSpeedKmhFromPace(0.05, "ride")! > 70);
+});
+
+test("average speed is distance over moving time; avg_pace only without them", () => {
+  // Synthetic interval session: 7.4 km in 41 moving minutes is 10.8 km/h, though avg_pace says 8:28/km.
+  assert.ok(Math.abs(workoutAvgSpeedKmh(7.4, 41, 0.508, "run")! - 10.83) < 0.01);
+  assert.ok(Math.abs(workoutAvgSpeedKmh(null, 41, 0.362, "run")! - 9.945) < 0.01);
+  assert.ok(Math.abs(workoutAvgSpeedKmh(7.4, 0, 0.362, "run")! - 9.945) < 0.01);
+  // An unbelievable distance over time falls back too, and with nothing believable there is no speed.
+  assert.ok(Math.abs(workoutAvgSpeedKmh(70, 41, 0.362, "run")! - 9.945) < 0.01);
+  assert.equal(workoutAvgSpeedKmh(70, 41, null, "run"), null);
 });

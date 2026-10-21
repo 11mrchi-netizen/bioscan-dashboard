@@ -60,6 +60,24 @@ export function avgSpeedKmhFromPace(paceSecPerM: number | null | undefined, type
   return kmh <= max ? kmh : null;
 }
 
+/**
+ * A workout's average speed in km/h: its distance over moving time (the list entry's run_time), as the watch shows it.
+ * Zepp's avg_pace is only the fallback without both: on interval and hill sessions it ran up to a third slower than
+ * distance over time (Oct 2026). Null when neither gives a speed believable for the session type.
+ */
+export function workoutAvgSpeedKmh(
+  distanceKm: number | null | undefined,
+  movingMin: number | null | undefined,
+  paceSecPerM: number | null | undefined,
+  type: string | null | undefined,
+): number | null {
+  if (typeof distanceKm === "number" && typeof movingMin === "number" && distanceKm > 0 && movingMin > 0) {
+    const kmh = distanceKm / (movingMin / 60);
+    if (Number.isFinite(kmh) && kmh <= (MAX_AVG_SPEED_KMH[type ?? ""] ?? 120)) return kmh;
+  }
+  return avgSpeedKmhFromPace(paceSecPerM, type);
+}
+
 /** Distances only make sense for these session types; a strength session keeps none. */
 export function takesDistance(type: string | null | undefined): boolean {
   return type === "run" || type === "ride" || type === "walk" || type === "hike";

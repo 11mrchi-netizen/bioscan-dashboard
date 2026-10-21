@@ -17,7 +17,7 @@ import {
 } from "./decodeSeries.ts";
 import { mergedSessionFields, pickSessionMatch, type SessionCandidate, type Span, spanOf, START_TOLERANCE_MS } from "./sessionMatch.ts";
 import {
-  avgSpeedKmhFromPace, exerciseTypeForZeppSport, summaryDistanceM, takesDistance, trailTaggedDetails, ZEPP_TRAIL_SPORT, zeppDistanceKm,
+  exerciseTypeForZeppSport, summaryDistanceM, takesDistance, trailTaggedDetails, ZEPP_TRAIL_SPORT, workoutAvgSpeedKmh, zeppDistanceKm,
 } from "./workoutDistance.ts";
 import { afterWindow, HISTORY_METRICS, type HistoryState, windowDates } from "./historyPull.ts";
 import { buildZeppExercises, doneSets, exercisesFingerprint, parseLapSets, planStrengthDetails } from "./strengthImport.ts";
@@ -789,7 +789,7 @@ async function extract(
     // v12: write Zepp-primary aggregates. Prefer smoothedAscentM (GPS-smoothed
     // by effort.ts) over the raw altitude_ascend from the summary. "Zepp wins
     // when > 0" -- skip the update if Zepp has zero/null to avoid clobbering
-    // legitimate HC values. avg_speed_kmh is derived from avg_pace, seconds per metre (avgSpeedKmhFromPace).
+    // legitimate HC values. avg_speed_kmh is distance over moving time, avg_pace only without them (workoutAvgSpeedKmh).
     if (exerciseSessionId !== null) {
       const smoothedM = decoded?.summary?.smoothedAscentM ?? 0;
       const elevationM = smoothedM > 0 ? smoothedM
@@ -800,7 +800,7 @@ async function extract(
       if ((ref.maxHrBpm ?? 0) > 0)       aggregates.max_hr = ref.maxHrBpm!;
       if ((ref.calorieKcal ?? 0) > 0)    aggregates.calories_active = ref.calorieKcal!;
       if (elevationM !== null)            aggregates.elevation_gain_m = elevationM;
-      const avgSpeed = avgSpeedKmhFromPace(ref.avgPaceSecPerM, matchedType);
+      const avgSpeed = workoutAvgSpeedKmh(zeppKm, ref.movingMin, ref.avgPaceSecPerM, matchedType);
       if (avgSpeed !== null) aggregates.avg_speed_kmh = avgSpeed;
       // Matched by overlap rather than start: the stored session's times are another app's (a gym visit, a start pressed
       // early); the workout's own times keep its pace and load right.

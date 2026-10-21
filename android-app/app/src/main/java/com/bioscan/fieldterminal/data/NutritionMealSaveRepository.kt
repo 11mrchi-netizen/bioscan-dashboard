@@ -52,6 +52,60 @@ private data class AiEstimateLinkUpdate(
     val accepted: Boolean,
 )
 
+@Serializable
+private data class CronometerItemAudit(
+    val query: String,
+    @SerialName("food_id") val foodId: Long?,
+    val food: String?,
+    val source: String?,
+    val grams: Double,
+    val serving: String?,
+    val kcal: Double?,
+    val quality: String,
+    @SerialName("ai_kcal") val aiKcal: Double?,
+    @SerialName("used_estimate") val usedEstimate: Boolean,
+    val disagreement: Boolean,
+    @SerialName("from_memory") val fromMemory: Boolean,
+    @SerialName("user_edited") val userEdited: Boolean,
+)
+
+private fun CronometerItemResult.toAudit() = CronometerItemAudit(
+    query = query,
+    foodId = cronometerFoodId,
+    food = cronometerFoodName,
+    source = cronometerSource,
+    grams = quantityG,
+    serving = servingUsed,
+    kcal = calories(),
+    quality = matchQuality,
+    aiKcal = aiEstimate?.calories,
+    usedEstimate = usedEstimate,
+    disagreement = disagreement,
+    fromMemory = fromMemory,
+    userEdited = userEdited,
+)
+
+@Serializable
+private data class CronometerItemsUpdate(@SerialName("cronometer_items") val cronometerItems: List<CronometerItemAudit>)
+
+@Serializable
+private data class FoodMatchMemoryRow(
+    @SerialName("query_key") val queryKey: String,
+    @SerialName("cronometer_food_id") val cronometerFoodId: Long,
+    @SerialName("food_name") val foodName: String,
+    @SerialName("grams_per_unit") val gramsPerUnit: Double,
+    val unit: String?,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
+@Serializable
+private data class FoodMatchMemoryFoodRow(
+    @SerialName("query_key") val queryKey: String,
+    @SerialName("cronometer_food_id") val cronometerFoodId: Long,
+    @SerialName("food_name") val foodName: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
 class NutritionMealSaveRepository(
     private val supabase: SupabaseClient,
     private val resolver: NutritionResolverRepository = NutritionResolverRepository(supabase),
@@ -186,6 +240,7 @@ class NutritionMealSaveRepository(
             JsonObject(nutrients.mapValues { (_, v) -> JsonPrimitive(v) })
         }
 
+        var savedItemId: Long? = null
         try {
             val mealItemRow = supabase.postgrest.from("meal_items")
                 .insert(
@@ -193,6 +248,7 @@ class NutritionMealSaveRepository(
                         mealId = mealId,
                         sortOrder = 0,
                         description = estimate.description,
+                        quantity = enrichment?.items?.filter { it.counts() }?.sumOf { it.quantityG }?.takeIf { it > 0 },
                         calories = cal,
                         proteinG = pro,
                         fatG = fat,
@@ -208,6 +264,7 @@ class NutritionMealSaveRepository(
                     ),
                 ) { select(Columns.list("id")) }
                 .decodeSingle<MealIdRow>()
+            savedItemId = mealItemRow.id
 
             if (aiEstimateId != null) {
                 supabase.postgrest.from("ai_estimates")
@@ -236,7 +293,67 @@ class NutritionMealSaveRepository(
             supabase.postgrest.from("meals").delete { filter { eq("id", mealId) } }
             throw e
         }
+        if (enrichment != null) recordMatches(savedItemId, enrichment.items)
         return mealId
+    }
+
+    // The per-item match audit and the user's food memory. Both are extras on top of a meal that is already saved,
+    // so a failure here (e.g. the 20261021_food_match_memory migration not applied yet) never fails the save.
+    private suspend fun recordMatches(mealItemId: Long?, items: List<CronometerItemResult>) {
+        if (mealItemId != null && items.isNotEmpty()) {
+            bestEffort("cronometer_items audit") {
+                supabase.postgrest.from("meal_items")
+                    .update(CronometerItemsUpdate(items.map { it.toAudit() })) { filter { eq("id", mealItemId) } }
+            }
+        }
+
+        // Remember only matches the user can stand behind: an exact name match, a reused memory, or their own pick.
+        val remembered = items.filter {
+            it.cronometerFoodId != null && it.cronometerFoodName != null && !it.memoryKey.isNullOrBlank() &&
+                !it.usedEstimate && (it.userEdited || it.fromMemory || it.matchQuality == "exact")
+        }
+        if (remembered.isEmpty()) return
+        val now = java.time.Instant.now().toString()
+        // Rows with a per-unit weight and rows without go separately, so a weight-based entry ("150 g apple") never
+        // erases the remembered weight of one apple.
+        val (withGrams, foodOnly) = remembered.partition { (it.portionCount ?: 0.0) > 0 }
+        bestEffort("food_match_memory") {
+            if (withGrams.isNotEmpty()) {
+                supabase.postgrest.from("food_match_memory").upsert(
+                    withGrams.map {
+                        FoodMatchMemoryRow(
+                            queryKey = it.memoryKey!!,
+                            cronometerFoodId = it.cronometerFoodId!!,
+                            foodName = it.cronometerFoodName!!,
+                            gramsPerUnit = Math.round(it.quantityG / it.portionCount!! * 10.0) / 10.0,
+                            unit = it.portionUnit,
+                            updatedAt = now,
+                        )
+                    },
+                ) { onConflict = "user_id,query_key" }
+            }
+            if (foodOnly.isNotEmpty()) {
+                supabase.postgrest.from("food_match_memory").upsert(
+                    foodOnly.map {
+                        FoodMatchMemoryFoodRow(
+                            queryKey = it.memoryKey!!,
+                            cronometerFoodId = it.cronometerFoodId!!,
+                            foodName = it.cronometerFoodName!!,
+                            updatedAt = now,
+                        )
+                    },
+                ) { onConflict = "user_id,query_key" }
+            }
+        }
+    }
+
+    private suspend fun <T> bestEffort(what: String, block: suspend () -> T): T? = try {
+        block()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        android.util.Log.w("NutritionMealSave", "$what skipped: ${e.message}")
+        null
     }
 
     // Duplicates a previous meal's items under a new meal at newLoggedAt --

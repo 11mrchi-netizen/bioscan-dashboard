@@ -12,7 +12,14 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import com.bioscan.fieldterminal.data.model.FoodServingRow
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.jsonPrimitive
 
 // DAV-165. Calls the nutrition-barcode-lookup Edge Function (server-side
 // Open Food Facts lookup + cache-as-foods-table) instead of talking to Open
@@ -70,4 +77,67 @@ class NutritionBarcodeLookupRepository(private val supabase: SupabaseClient) {
         if (parsed.error != null) throw BarcodeLookupException(parsed.message ?: parsed.error)
         return parsed.food.takeIf { parsed.found }
     }
+
+    // The package label's own numbers for one serving (or 100 g when the label gives no serving size), read from
+    // the catalog rows nutrition-barcode-lookup stored. Null when the label has no calories.
+    suspend fun labelPortion(foodId: Long): LabelPortion? {
+        val serving = supabase.postgrest.from("food_servings")
+            .select(columns = Columns.list("id,food_id,serving_name,grams,ml")) { filter { eq("food_id", foodId) } }
+            .decodeList<FoodServingRow>()
+            .firstOrNull { (it.grams ?: it.ml ?: 0.0) > 0 }
+        val grams = serving?.grams ?: serving?.ml ?: 100.0
+        val n = NutritionResolverRepository(supabase).resolveMealItem(foodId, grams, "g").nutrients
+        if (n.calories == null) return null
+        val nutrients = listOfNotNull(
+            n.calories.let { "calories" to it },
+            n.proteinG?.let { "protein" to it },
+            n.carbsG?.let { "carbs" to it },
+            n.fatG?.let { "fat" to it },
+            n.fiberG?.let { "fiber" to it },
+            n.sugarG?.let { "sugar" to it },
+            n.sodiumMg?.let { "sodium" to it },
+        ).associate { (k, v) -> k to Math.round(v * 100.0) / 100.0 }
+        return LabelPortion(grams, serving?.servingName, nutrients)
+    }
+}
+
+data class LabelPortion(val grams: Double, val servingName: String?, val nutrients: Map<String, Double>)
+
+private val LABEL_UNITS = mapOf(
+    "calories" to "kcal", "protein" to "g", "carbs" to "g", "fat" to "g", "fiber" to "g", "sugar" to "g", "sodium" to "mg",
+)
+
+// The label is authoritative for calories and macros. A good Cronometer match for the same product only adds the
+// micronutrients the label does not have, at the label's serving weight.
+fun labelEnrichment(productName: String, label: LabelPortion, cronometer: CronometerEnrichment?): CronometerEnrichment {
+    val serving = label.servingName?.let { "1 x $it" } ?: "${label.grams} g"
+    val matched = cronometer?.items?.singleOrNull()?.takeIf { it.matchQuality == "exact" || it.matchQuality == "good" }
+    val item = if (matched != null) {
+        val merged = matched.nutrientsForPortion.mapValues { (_, v) -> v.jsonPrimitive.double } + label.nutrients
+        matched.copy(
+            query = productName,
+            quantityG = label.grams,
+            servingUsed = serving,
+            nutrientsForPortion = JsonObject(merged.mapValues { (_, v) -> JsonPrimitive(v) }),
+            cronometerSource = "Label + ${matched.cronometerSource ?: "Cronometer"}",
+            usedEstimate = false,
+            disagreement = false,
+        )
+    } else {
+        CronometerItemResult(
+            query = productName,
+            cronometerFoodName = productName,
+            cronometerSource = "Package label",
+            quantityG = label.grams,
+            servingUsed = serving,
+            matchQuality = "exact",
+            nutrientsForPortion = JsonObject(label.nutrients.mapValues { (_, v) -> JsonPrimitive(v) }),
+        )
+    }
+    val base = cronometer ?: CronometerEnrichment(
+        calories = null, proteinG = null, carbsG = null, fatG = null, fiberG = null, sugarG = null, sodiumMg = null,
+        allNutrients = emptyMap(), nutrientUnits = emptyMap(), items = emptyList(), itemsIncluded = 0,
+        itemsSkipped = emptyList(), primarySource = null,
+    )
+    return base.withItems(listOf(item), LABEL_UNITS).copy(confidence = 0.95, aiEstimateTotal = null)
 }

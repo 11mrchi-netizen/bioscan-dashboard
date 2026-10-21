@@ -79,4 +79,14 @@ class SessionDetailTest {
         assertEquals(300L, splits[0].durationSec)
         assertEquals(300L, splits[1].durationSec)
     }
+
+    @Test
+    fun anUnbelievableStoredSpeedFallsBackToDistanceOverMovingTime() {
+        // The bad sync value (6:02/km read as seconds per km), then a believable stored value, then none at all.
+        org.junit.Assert.assertEquals(9.97, sessionAvgSpeedKmh("run", 9944.7, 9.97, 60.0)!!, 0.01)
+        org.junit.Assert.assertEquals(9.4, sessionAvgSpeedKmh("run", 9.4, 12.7, 81.0)!!, 1e-9)
+        org.junit.Assert.assertEquals(9.43, sessionAvgSpeedKmh("run", null, 12.73, 81.0)!!, 0.01)
+        org.junit.Assert.assertNull(sessionAvgSpeedKmh("run", 9944.7, null, 60.0))
+        org.junit.Assert.assertEquals(45.0, sessionAvgSpeedKmh("ride", 45.0, 30.0, 40.0)!!, 1e-9)
+    }
 }

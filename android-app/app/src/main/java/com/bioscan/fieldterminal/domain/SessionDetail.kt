@@ -108,3 +108,15 @@ fun computeKmSplits(distanceKm: List<TimePoint>, heartRate: List<TimePoint>, pau
         SessionSplit(km, sec - prevSec - paused, avgHr, elapsedSec = if (paused > 0) sec - prevSec else null).also { prevSec = sec }
     }
 }
+
+// The stored avg_speed_kmh is not always believable: the Zepp sync read Zepp's avg_pace (seconds per metre) as seconds
+// per km until Oct 2026 and wrote speeds of thousands of km/h. A session's average speed is the stored value when it is
+// believable for the type (the sync's own limits, zepp-extract/workoutDistance.ts), else distance over moving time.
+private val MAX_AVG_SPEED_KMH = mapOf("run" to 30.0, "walk" to 12.0, "hike" to 15.0, "ride" to 90.0)
+
+fun sessionAvgSpeedKmh(type: String?, storedKmh: Double?, distanceKm: Double?, durationMin: Double?): Double? {
+    val max = MAX_AVG_SPEED_KMH[type] ?: 120.0
+    storedKmh?.takeIf { it > 0 && it <= max }?.let { return it }
+    if (distanceKm == null || durationMin == null || distanceKm <= 0 || durationMin <= 0) return null
+    return (distanceKm / (durationMin / 60.0)).takeIf { it <= max }
+}

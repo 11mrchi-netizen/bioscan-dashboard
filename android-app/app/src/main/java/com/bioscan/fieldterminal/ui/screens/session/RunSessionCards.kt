@@ -33,6 +33,7 @@ import com.bioscan.fieldterminal.domain.RoutePoint
 import com.bioscan.fieldterminal.domain.SessionDetail
 import com.bioscan.fieldterminal.domain.SessionSplit
 import com.bioscan.fieldterminal.domain.TimePoint
+import com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh
 import com.bioscan.fieldterminal.domain.analysis.SessionStateObject
 import com.bioscan.fieldterminal.domain.analysis.StateDimension
 import com.bioscan.fieldterminal.domain.heartRateZoneBreakdown
@@ -180,7 +181,10 @@ fun RunDynamicsCard(
         }
 
         // PACE
-        val avgPace = (header.avgSpeedKmh ?: d?.speedKmh?.takeIf { it.isNotEmpty() }?.map { it.value }?.average())?.takeIf { it > 0 }?.let { 60.0 / it }
+        val avgPace = (
+            sessionAvgSpeedKmh(header.type, header.avgSpeedKmh, header.distanceKm, header.durationMin)
+                ?: d?.speedKmh?.takeIf { it.isNotEmpty() }?.map { it.value }?.average()
+            )?.takeIf { it > 0 }?.let { 60.0 / it }
         if (avgPace != null || pace.isNotEmpty()) {
             Section(DynamicsSection.PACE, DynamicsSection.PACE.name in open, ::toggle) {
                 TileGrid(

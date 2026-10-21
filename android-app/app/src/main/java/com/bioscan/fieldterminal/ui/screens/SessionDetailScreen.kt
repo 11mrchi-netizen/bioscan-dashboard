@@ -846,7 +846,7 @@ private fun SummaryCard(
     val avgHr = header.avgHr
         ?: detail?.heartRate?.takeIf { it.isNotEmpty() }?.let { s -> s.map { it.value }.average() }
     val avgPaceMinPerKm = (
-        header.avgSpeedKmh
+        com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh(header.type, header.avgSpeedKmh, header.distanceKm, header.durationMin)
             ?: detail?.speedKmh?.takeIf { it.isNotEmpty() }?.let { s -> s.map { it.value }.average() }
         )?.takeIf { it > 0 }?.let { 60.0 / it }
     val isStrength = header.type == "strength"

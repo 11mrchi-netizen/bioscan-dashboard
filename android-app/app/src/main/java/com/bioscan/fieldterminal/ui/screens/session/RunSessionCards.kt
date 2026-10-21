@@ -16,7 +16,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,9 +23,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.RunPageSettingsStore
 import com.bioscan.fieldterminal.data.ZeppWorkoutSummary
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetailRow
 import com.bioscan.fieldterminal.domain.RoutePoint
@@ -115,9 +116,14 @@ fun RunDynamicsCard(
     error: String?,
     hasTimeSeries: Boolean,
 ) {
-    // HEART RATE starts open, the rest closed with their tiles showing; kept across a restore.
-    var open by rememberSaveable { mutableStateOf(setOf(DynamicsSection.HEART_RATE.name)) }
-    fun toggle(s: DynamicsSection) { open = if (s.name in open) open - s.name else open + s.name }
+    // Every section starts open, tiles then chart; a tap folds one, remembered for every run (RunPageSettingsStore).
+    val context = LocalContext.current
+    var folded by remember { mutableStateOf(RunPageSettingsStore.foldedSections(context)) }
+    fun toggle(s: DynamicsSection) {
+        folded = if (s.name in folded) folded - s.name else folded + s.name
+        RunPageSettingsStore.saveFoldedSections(context, folded)
+    }
+    fun isOpen(s: DynamicsSection) = s.name !in folded
 
     val d = detail
     val pace = remember(d) { d?.speedKmh.orEmpty().mapNotNull { p -> if (p.value > 0.5) TimePoint(p.offsetSeconds, 60.0 / p.value) else null } }
@@ -147,7 +153,7 @@ fun RunDynamicsCard(
         val hr = d?.heartRate.orEmpty()
         val avgHr = header.avgHr ?: hr.takeIf { it.isNotEmpty() }?.map { it.value }?.average()
         if (avgHr != null || hr.isNotEmpty()) {
-            Section(DynamicsSection.HEART_RATE, DynamicsSection.HEART_RATE.name in open, ::toggle) {
+            Section(DynamicsSection.HEART_RATE, isOpen(DynamicsSection.HEART_RATE), ::toggle) {
                 TileGrid(
                     listOfNotNull(
                         avgHr?.let { StatTileSpec("AVG HR", "${it.roundToInt()}", "bpm", secondary = (header.maxHr ?: hr.maxOfOrNull { p -> p.value })?.let { m -> "Max ${m.roundToInt()} bpm" }) },
@@ -155,7 +161,7 @@ fun RunDynamicsCard(
                     ),
                 )
             }
-            if (DynamicsSection.HEART_RATE.name in open && hr.size >= 2) {
+            if (isOpen(DynamicsSection.HEART_RATE) && hr.size >= 2) {
                 // Coloured by zone only (the LINE / ZONES switch is gone); the zone method stays switchable.
                 LineChart(
                     points = hr,
@@ -173,7 +179,7 @@ fun RunDynamicsCard(
                     HeartRateZoneBars(breakdown, bounds)
                 }
             }
-            if (DynamicsSection.HEART_RATE.name in open && zepp != null && (zepp.lactateThresholdHrBpm != null || zepp.lactateThresholdPaceSecPerKm != null)) {
+            if (isOpen(DynamicsSection.HEART_RATE) && zepp != null && (zepp.lactateThresholdHrBpm != null || zepp.lactateThresholdPaceSecPerKm != null)) {
                 // Zepp's own rolling estimate as of this run, not a test.
                 val lt = listOfNotNull(zepp.lactateThresholdHrBpm?.let { "%.0f bpm".format(it) }, zepp.lactateThresholdPaceSecPerKm?.let { formatSplitPace(it.toLong()) })
                 HelpRow("Lactate threshold (as of this run)", lt.joinToString("  ·  "), LACTATE_THRESHOLD_HELP)
@@ -186,7 +192,7 @@ fun RunDynamicsCard(
                 ?: d?.speedKmh?.takeIf { it.isNotEmpty() }?.map { it.value }?.average()
             )?.takeIf { it > 0 }?.let { 60.0 / it }
         if (avgPace != null || pace.isNotEmpty()) {
-            Section(DynamicsSection.PACE, DynamicsSection.PACE.name in open, ::toggle) {
+            Section(DynamicsSection.PACE, isOpen(DynamicsSection.PACE), ::toggle) {
                 TileGrid(
                     listOfNotNull(
                         avgPace?.let { StatTileSpec("AVG PACE", pace(it).removeSuffix(" /km"), "/km", secondary = zepp?.gapMinPerKm?.let { g -> "Grade-adjusted ${pace(g)}" }, helpTitle = zepp?.gapMinPerKm?.let { "Grade-adjusted pace" }, helpBody = zepp?.gapMinPerKm?.let { GAP_HELP }) },
@@ -194,7 +200,7 @@ fun RunDynamicsCard(
                     ),
                 )
             }
-            if (DynamicsSection.PACE.name in open && pace.size >= 2) {
+            if (isOpen(DynamicsSection.PACE) && pace.size >= 2) {
                 LineChart(
                     points = pace,
                     color = FT.Category.Activity.c500,
@@ -205,26 +211,26 @@ fun RunDynamicsCard(
                     invertY = true,
                     unit = if (zoneColorAt != null) "pace · coloured by heart-rate zone" else "pace · min:sec per km",
                 )
-            }
+            } else if (isOpen(DynamicsSection.PACE) && !loading) NoSeries("pace")
         }
 
         // POWER
         val power = d?.powerW.orEmpty()
         val avgPower = header.avgPowerW ?: power.takeIf { it.isNotEmpty() }?.map { it.value }?.average()
         if (avgPower != null) {
-            Section(DynamicsSection.POWER, DynamicsSection.POWER.name in open, ::toggle) {
+            Section(DynamicsSection.POWER, isOpen(DynamicsSection.POWER), ::toggle) {
                 TileGrid(listOf(StatTileSpec("AVG POWER", "${avgPower.roundToInt()}", "W")))
             }
-            if (DynamicsSection.POWER.name in open && power.size >= 2) {
+            if (isOpen(DynamicsSection.POWER) && power.size >= 2) {
                 LineChart(points = power, color = FT.Category.Activity.c300, xRange = xRange, pauses = pauses, valueFormat = { "%.0f W".format(it) }, unit = "W")
-            }
+            } else if (isOpen(DynamicsSection.POWER) && !loading) NoSeries("power", "Power over time is read from Health Connect on this phone.")
         }
 
         // CADENCE
         val cadence = d?.cadenceSpm.orEmpty()
         val avgCadence = zepp?.avgCadenceSpm ?: cadence.takeIf { it.isNotEmpty() }?.map { it.value }?.average()
         if (avgCadence != null || zepp?.avgStrideLengthCm != null) {
-            Section(DynamicsSection.CADENCE, DynamicsSection.CADENCE.name in open, ::toggle) {
+            Section(DynamicsSection.CADENCE, isOpen(DynamicsSection.CADENCE), ::toggle) {
                 TileGrid(
                     listOfNotNull(
                         avgCadence?.let { StatTileSpec("AVG CADENCE", "${it.roundToInt()}", "spm", secondary = (zepp?.maxCadenceSpm ?: cadence.maxOfOrNull { p -> p.value })?.let { m -> "Max ${m.roundToInt()} spm" }) },
@@ -238,24 +244,30 @@ fun RunDynamicsCard(
                     ),
                 )
             }
-            if (DynamicsSection.CADENCE.name in open && cadence.size >= 2) {
+            if (isOpen(DynamicsSection.CADENCE) && cadence.size >= 2) {
                 LineChart(points = cadence, color = FT.TextSecondary, xRange = xRange, pauses = pauses, valueFormat = { "%.0f spm".format(it) }, unit = "spm")
-            }
+            } else if (isOpen(DynamicsSection.CADENCE) && !loading) NoSeries("cadence")
         }
 
         // VERTICAL RATIO
         val vr = d?.verticalRatioPct.orEmpty()
         val avgVr = zepp?.avgVerticalStrideRatioPct ?: vr.takeIf { it.isNotEmpty() }?.map { it.value }?.average()
         if (avgVr != null) {
-            Section(DynamicsSection.VERTICAL_RATIO, DynamicsSection.VERTICAL_RATIO.name in open, ::toggle) {
+            Section(DynamicsSection.VERTICAL_RATIO, isOpen(DynamicsSection.VERTICAL_RATIO), ::toggle) {
                 TileGrid(listOf(StatTileSpec("AVG VERTICAL RATIO", "%.1f".format(avgVr), "%", helpTitle = "Vertical ratio", helpBody = VERTICAL_RATIO_HELP)))
             }
-            if (DynamicsSection.VERTICAL_RATIO.name in open && vr.size >= 2) {
+            if (isOpen(DynamicsSection.VERTICAL_RATIO) && vr.size >= 2) {
                 LineChart(points = vr, color = FT.TextSecondary, xRange = xRange, pauses = pauses, valueFormat = { "%.1f %%".format(it) }, unit = "% of stride")
-            }
+            } else if (isOpen(DynamicsSection.VERTICAL_RATIO) && !loading) NoSeries("vertical ratio")
         }
         if (pauses.isNotEmpty()) Text("The charts run on moving time: a dashed line marks each pause and its length.", style = FTType.Caption, color = FT.TextMuted)
     }
+}
+
+// An open section whose average exists but whose per-second series does not says so, rather than leaving a gap.
+@Composable
+private fun NoSeries(what: String, why: String? = null) {
+    Text(listOfNotNull("No $what over time for this run.", why).joinToString(" "), style = FTType.Caption, color = FT.TextMuted)
 }
 
 // A section's header (title and a chevron, tap to open or close) and its tiles; the caller draws its chart when open.

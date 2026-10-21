@@ -20,6 +20,30 @@ class RunningSeriesTest {
     }
 
     @Test
+    fun theTrailBaselineIsTheLastFiveTrailRunsWithinSixtyDays() {
+        // One trail run a week: 28 days never holds more than four, the trail baseline still has a median from the 3rd.
+        val weekly = (0 until 8).map { w -> d0.plusDays(7L * w) to (10.0 + w) }
+        assertEquals(0, RunBaseline(28, 6).line(weekly).size)
+        val line = RunBaseline.TRAIL.line(weekly)
+        assertEquals(d0.plusDays(14) to 11.0, line.first())
+        // At week 7 the last five are 13..17.
+        assertEquals(15.0, line.last().second, 1e-9)
+        // A run more than 60 days back is not in the window, however few runs there are.
+        val sparse = listOf(d0 to 1.0, d0.plusDays(70) to 5.0, d0.plusDays(80) to 6.0, d0.plusDays(90) to 7.0)
+        assertEquals(listOf(d0.plusDays(90) to 6.0), RunBaseline.TRAIL.line(sparse))
+    }
+
+    @Test
+    fun aRunIsComparedWithTheRunsBeforeItNeverItself() {
+        val runs = listOf(d0 to 10.0, d0.plusDays(5) to 12.0, d0.plusDays(9) to 14.0, d0.plusDays(12) to 40.0)
+        assertEquals(12.0, RunBaseline.ROAD.before(runs, d0.plusDays(12))!!, 1e-9)
+        assertNull(RunBaseline.ROAD.before(runs, d0.plusDays(9))) // only two before it
+        assertNull(RunBaseline.ROAD.before(runs, d0.plusDays(40))) // the window starts after day 12
+        assertEquals("LAST-5 MEDIAN", RunBaseline.TRAIL.legend)
+        assertEquals("28D MEDIAN", RunBaseline.ROAD.legend)
+    }
+
+    @Test
     fun stackedWeeksAddUpAndKeepQuietWeeks() {
         data class R(val date: LocalDate, val km: Double, val part: Int)
         val runs = listOf(R(d0, 10.0, 0), R(d0.plusDays(2), 5.0, 2), R(d0.plusDays(3), 8.0, 0), R(d0.plusDays(15), 20.0, 1))

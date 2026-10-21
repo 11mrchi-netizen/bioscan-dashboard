@@ -39,9 +39,11 @@ Left for its own plan: injury risk from past data. The running form analyser ope
   - Checked read-only against the 14 runs tagged when this was built: all 11 tagged road runs land in their own
     group. Heart rate alone missed both hill sessions, which is why climb comes first.
 - **ROAD | TRAIL**, one switch for every card below it:
-  - EFFICIENCY FACTOR, HR DECOUPLING, PACE (with grade-adjusted pace as a 28-day median line), CADENCE over STRIDE
+  - EFFICIENCY FACTOR, HR DECOUPLING, PACE (with grade-adjusted pace as a median line), CADENCE over STRIDE
     LENGTH (two panels on one date span), GROUND CONTACT and VERTICAL RATIO.
-  - Each is per run with its 28-day median (`rollingMedian`, 3 runs; the efficiency factor keeps its 6).
+  - Each is per run with its median line (`RunBaseline` in `domain/SkillSeries.kt`):
+    - road: the 28-day median, from 3 runs (the efficiency factor keeps its 6);
+    - trail: the median of the last 5 trail runs within 60 days, from 3, because trail runs come about once a week.
   - Ground contact and vertical ratio are hidden on TRAIL: the watch reports neither on trail runs.
 - **RECORDS**, by the same switch. Road: longest, fastest of 5 km or more, biggest week. Trail: longest, biggest
   climb, fastest grade-adjusted pace over 10 km or more, biggest week.

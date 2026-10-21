@@ -61,7 +61,10 @@ export function legacyIllnessCopy(ill: { id: number; start_date: string; end_dat
       created_at: `${ill.start_date}T12:00:00Z`,
     },
     signal: { observation_id: oid, concern_id: cid, symptom: 'sym.other', region: null, side: null, severity: null },
-    marks: ill.status === 'resolved' && ill.end_date ? [{ concern_id: cid, kind: 'end', date: ill.end_date, retracted_at: null }] : [],
+    marks: [
+      { concern_id: cid, kind: 'start', date: ill.start_date, retracted_at: null },
+      ...(ill.status === 'resolved' && ill.end_date ? [{ concern_id: cid, kind: 'end' as const, date: ill.end_date, retracted_at: null }] : []),
+    ],
   }
 }
 

@@ -133,6 +133,30 @@ test('an end mark ends an episode on its date (legacy rows); a start mark opens 
   assert.equal(retracted.open, true)
 })
 
+test('a legacy injury rated below the symptomatic line is still one episode between its start and end marks', () => {
+  // the owner's two knee contusions were logged at severity 1 of 10: the marks, not the rating, carry the old log's dates
+  const { o, s, c } = scripted([1, null, null, null, null, null, null, null, null, null])
+  const marks: MarkRow[] = [
+    { concern_id: 'k', kind: 'start', date: day(0), retracted_at: null },
+    { concern_id: 'k', kind: 'end', date: day(6), retracted_at: null },
+  ]
+  const eps = measureEpisodes(c, cellsOf(c, o, s, 10), marks, day(9))
+  assert.equal(eps.length, 1)
+  assert.equal(eps[0].start, day(0))
+  assert.equal(eps[0].end, day(6))
+  assert.equal(eps[0].open, false)
+  assert.equal(measureEpisodes(c, cellsOf(c, o, s, 10), [marks[1]], day(9)).length, 0)
+  // months later with nothing logged since, the end mark is what is known: resolved, not unobserved
+  const later = shiftDate(D0, 120)
+  const sum = summariseConcern(c, buildConcernSeries([c], o, s, D0, later).series.get('k')!.cells, marks, later)
+  assert.equal(sum.state, 'resolved')
+  assert.match(sum.stateReason, /Marked over on 2026-06-07/)
+  // a check-in after the mark is newer information: the usual staleness rule applies again
+  const after = obs(30, { concern_id: 'k', symptom_free: true })
+  const sum2 = summariseConcern(c, buildConcernSeries([c], [...o, after], s, D0, later).series.get('k')!.cells, marks, later)
+  assert.equal(sum2.state, 'unobserved')
+})
+
 test('a long silent gap splits an episode unless a merge mark spans it; a shorter one is flagged', () => {
   const script: (number | null)[] = [4, ...Array(30).fill(null), 4]
   const { o, s, c } = scripted(script)

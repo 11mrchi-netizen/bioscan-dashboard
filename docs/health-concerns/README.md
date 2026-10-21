@@ -36,6 +36,17 @@ practice; their insert policies are dropped after one release (below).
 
 ## Deploy, in this order
 
+Status (21 Oct 2026): steps 1-3 done on live. Both migrations applied (the backfill copied 4 rows); `analysis-run`
+and `zepp-extract` deployed as pins to a commit of this branch, the way `analysis-run` was already deployed. Found on
+the first live run and fixed: the two knee rows were rated 1 of 10, below the symptomatic line, so they had no episode;
+the backfill now also writes a start mark on each legacy start date, and an episode the person marked over reads
+RESOLVED (not UNOBSERVED) while nothing was logged after the mark. The nightly run is close to the edge-function CPU
+limit (one manual run on 21 Oct stopped with "CPU Time exceeded"; the health engine itself takes about 40 ms and runs
+last, so the other engines publish first): watch the 20:30 UTC run, and split the run per engine if it recurs.
+Still to apply on live: the `private.fold_exercise_session` replacement from `20261101_health_concerns.sql` (its body
+deletes the dropped session, so the SQL tool waits for the owner to confirm it). Until then a folded duplicate's
+check-in link is cleared (`on delete set null`) instead of moved to the kept session.
+
 1. Apply `20261031_legacy_health_events_baseline.sql` (changes nothing on live) and `20261101_health_concerns.sql`.
    Check: `select private.backfill_health_concerns()` returned 4 on the first apply (two knee contusions, two illnesses);
    RLS on the seven new tables; advisors clean.

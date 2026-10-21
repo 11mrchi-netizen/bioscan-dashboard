@@ -316,9 +316,14 @@ export function summariseConcern(concern: ConcernRow, cells: DayCell[], marks: M
   const lastObserved = observed.length ? observed[observed.length - 1].date : null
 
   const stale = current && concern.kind === 'systemic' ? HEALTH_RULES.staleDaysSystemic : HEALTH_RULES.staleDays
+  // the person's own end mark is the last thing known when nothing was logged after it (the copied legacy rows)
+  const markedOver = !current && lastEpisode?.endedBy === 'mark' && (lastObserved === null || lastEpisode.end >= lastObserved)
   let state: ConcernState
   let stateReason: string
-  if (lastObserved === null || daysBetween(lastObserved, today) >= stale) {
+  if (markedOver) {
+    state = 'resolved'
+    stateReason = `Marked over on ${lastEpisode!.end}; no check-in since.`
+  } else if (lastObserved === null || daysBetween(lastObserved, today) >= stale) {
     state = 'unobserved'
     stateReason = lastObserved === null ? 'No check-in yet.' : `No check-in for ${daysBetween(lastObserved, today)} days; last known on ${lastObserved}.`
   } else if (!current) {

@@ -460,8 +460,10 @@ revoke all on function private.fold_exercise_session(bigint, bigint, text) from 
 -- ---------- legacy injuries and illnesses ----------
 
 -- One concern per legacy row (owner decision: the two right-knee injuries were different contusions). Each gets an
--- onset check-in on its start date and, when resolved, an end mark on its end date (the old log said it was over; a
--- single symptom-free check-in could not end an episode by the 7-day rule). Re-runnable: a row already copied is skipped.
+-- onset check-in on its start date, a start mark on that date (the old log said it began; a rating of 1 of 10 alone is
+-- below the symptomatic line, as both knee rows were) and, when resolved, an end mark on its end date (the old log said
+-- it was over; a single symptom-free check-in could not end an episode by the 7-day rule). Re-runnable: a row already
+-- copied is skipped.
 create or replace function private.backfill_health_concerns(p_user uuid default null) returns integer
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare
@@ -493,6 +495,8 @@ begin
     returning id into oid;
     insert into public.health_signals (user_id, observation_id, concern_id, symptom, region, side, severity)
     values (r.user_id, oid, cid, 'sym.pain', reg, sd, nullif(r.severity, 0));
+    insert into public.health_episode_marks (user_id, concern_id, kind, date, note, source)
+    values (r.user_id, cid, 'start', r.start_date, 'Started in the old injury log', 'legacy_backfill');
     if r.status = 'resolved' and r.end_date is not null then
       insert into public.health_episode_marks (user_id, concern_id, kind, date, note, source)
       values (r.user_id, cid, 'end', r.end_date, 'Resolved in the old injury log', 'legacy_backfill');
@@ -517,6 +521,8 @@ begin
     returning id into oid;
     insert into public.health_signals (user_id, observation_id, concern_id, symptom, severity)
     values (r.user_id, oid, cid, 'sym.other', nullif(r.severity, 0));
+    insert into public.health_episode_marks (user_id, concern_id, kind, date, note, source)
+    values (r.user_id, cid, 'start', r.start_date, 'Started in the old illness log', 'legacy_backfill');
     if r.status = 'resolved' and r.end_date is not null then
       insert into public.health_episode_marks (user_id, concern_id, kind, date, note, source)
       values (r.user_id, cid, 'end', r.end_date, 'Resolved in the old illness log', 'legacy_backfill');

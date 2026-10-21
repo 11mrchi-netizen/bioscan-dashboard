@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.data.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -37,6 +39,9 @@ data class NewHealthConcernRow(
     @SerialName("excludes_from_baselines") val excludesFromBaselines: Boolean,
 )
 
+// Insert rows go out in one request, and PostgREST fills a key one row leaves out with NULL (not the column default) when
+// another row has it; a default-valued field is left out unless @EncodeDefault, so every non-null default is always sent.
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class HealthObservationInsert(
     val id: String,
@@ -46,19 +51,20 @@ data class HealthObservationInsert(
     @SerialName("concern_id") val concernId: String? = null,
     val scope: String,
     @SerialName("symptom_free") val symptomFree: Boolean,
-    val recall: String = "today",
+    @EncodeDefault val recall: String = "today",
     @SerialName("recall_from") val recallFrom: String? = null,
     @SerialName("function_impact") val functionImpact: Int? = null,
     @SerialName("change_vs_last") val changeVsLast: String? = null,
-    val onset: Boolean = false,
+    @EncodeDefault val onset: Boolean = false,
     val mechanism: String? = null,
     @SerialName("session_id") val sessionId: Long? = null,
     val timing: String? = null,
     val note: String? = null,
     val supersedes: String? = null,
-    val retracted: Boolean = false,
+    @EncodeDefault val retracted: Boolean = false,
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class HealthSignalInsert(
     @SerialName("observation_id") val observationId: String,
@@ -67,7 +73,7 @@ data class HealthSignalInsert(
     val region: String? = null,
     val side: String? = null,
     val severity: Int? = null,
-    val details: JsonObject = JsonObject(emptyMap()),
+    @EncodeDefault val details: JsonObject = JsonObject(emptyMap()),
     @SerialName("temperature_c") val temperatureC: Double? = null,
 )
 

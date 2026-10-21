@@ -43,9 +43,7 @@ the backfill now also writes a start mark on each legacy start date, and an epis
 RESOLVED (not UNOBSERVED) while nothing was logged after the mark. The nightly run is close to the edge-function CPU
 limit (one manual run on 21 Oct stopped with "CPU Time exceeded"; the health engine itself takes about 40 ms and runs
 last, so the other engines publish first): watch the 20:30 UTC run, and split the run per engine if it recurs.
-Still to apply on live: the `private.fold_exercise_session` replacement from `20261101_health_concerns.sql` (its body
-deletes the dropped session, so the SQL tool waits for the owner to confirm it). Until then a folded duplicate's
-check-in link is cleared (`on delete set null`) instead of moved to the kept session.
+The `private.fold_exercise_session` replacement was applied by the owner in the SQL editor (21 Oct 2026).
 
 1. Apply `20261031_legacy_health_events_baseline.sql` (changes nothing on live) and `20261101_health_concerns.sql`.
    Check: `select private.backfill_health_concerns()` returned 4 on the first apply (two knee contusions, two illnesses);

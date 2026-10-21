@@ -4,7 +4,9 @@ import com.bioscan.fieldterminal.data.model.ConcernStateDto
 import com.bioscan.fieldterminal.data.model.DailySeriesDto
 import com.bioscan.fieldterminal.data.model.EpisodeDto
 import com.bioscan.fieldterminal.data.model.FindingRow
+import com.bioscan.fieldterminal.data.model.HealthObservationInsert
 import com.bioscan.fieldterminal.data.model.HealthObservationRow
+import com.bioscan.fieldterminal.data.model.HealthSignalInsert
 import com.bioscan.fieldterminal.data.model.HealthOverviewRow
 import com.bioscan.fieldterminal.data.model.RegionRef
 import com.bioscan.fieldterminal.domain.MetricState
@@ -213,5 +215,15 @@ class HealthConcernsDomainTest {
         assertFalse(healthCheckinNeeded(today, today))
         assertEquals(NotificationDestination.HEALTH, notificationDestination(NotificationKind.HEALTH_CHECKIN))
         assertTrue(NotificationKind.HEALTH_CHECKIN in NotificationKind.ALL)
+    }
+
+    @Test
+    fun `insert rows always carry their not-null defaults, so a batch never sends NULL for them`() {
+        // a batch insert fills a key one row leaves out with NULL when another row has it (onset 23502 on 21 Oct 2026)
+        val json = Json { encodeDefaults = false }
+        val obs = json.encodeToString(HealthObservationInsert.serializer(), HealthObservationInsert("o", "t", "2026-10-21", scope = "sweep", symptomFree = true))
+        for (key in listOf("\"onset\":false", "\"recall\":\"today\"", "\"retracted\":false")) assertTrue(key, key in obs)
+        val sig = json.encodeToString(HealthSignalInsert.serializer(), HealthSignalInsert("o", symptom = "sym.pain"))
+        assertTrue(sig, "\"details\":{}" in sig)
     }
 }

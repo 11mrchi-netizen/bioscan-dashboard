@@ -18,7 +18,7 @@ import {
   looksCompound,
   type MacroEstimate,
   memoryKey,
-  parsePortion,
+  parseAmount,
   type Portion,
   portionGrams,
   type Quality,
@@ -243,7 +243,13 @@ function kcalPer100g(food: CronoFoodDetail | null | undefined): number | null {
   return food?.nutrients.find((n) => n.id === 208)?.amount ?? null;
 }
 
-async function tryLookup(session: CronoSession, query: string, quantityG?: number, portion?: Portion): Promise<ResolvedItem | null> {
+async function tryLookup(
+  session: CronoSession,
+  query: string,
+  quantityG?: number,
+  portion?: Portion,
+  liquid = false,
+): Promise<ResolvedItem | null> {
   const results = await searchCandidates(session, query);
   if (results.length === 0) return null;
 
@@ -268,7 +274,7 @@ async function tryLookup(session: CronoSession, query: string, quantityG?: numbe
   for (let i = 0; i < top.length; i++) {
     const food = details[i];
     if (!food) continue;
-    const why = implausibility(food, query);
+    const why = implausibility(food, query, liquid);
     if (why) {
       rejected.push(`${food.name}: ${why}`);
       continue;
@@ -305,13 +311,19 @@ async function tryLookup(session: CronoSession, query: string, quantityG?: numbe
   };
 }
 
-async function searchItem(session: CronoSession, query: string, quantityG?: number, portion?: Portion): Promise<ResolvedItem> {
-  let result = await tryLookup(session, query, quantityG, portion);
+async function searchItem(
+  session: CronoSession,
+  query: string,
+  quantityG?: number,
+  portion?: Portion,
+  liquid = false,
+): Promise<ResolvedItem> {
+  let result = await tryLookup(session, query, quantityG, portion, liquid);
 
   if (!result || qualityRank(result.match_quality) < qualityRank("good")) {
     const simplified = simplifyQuery(query);
     if (simplified) {
-      const retry = await tryLookup(session, simplified, quantityG, portion);
+      const retry = await tryLookup(session, simplified, quantityG, portion, liquid);
       if (retry && qualityRank(retry.match_quality) > qualityRank(result?.match_quality ?? "none")) {
         retry.query = query; // keep original query for context
         result = retry;
@@ -354,6 +366,7 @@ interface ItemSpec {
   quantityG?: number;
   portion?: Portion;
   foodId?: number;
+  liquid?: boolean;
 }
 
 async function resolveItem(session: CronoSession, spec: ItemSpec, memory: Map<string, MemoryRow>): Promise<ResolvedItem> {
@@ -379,7 +392,7 @@ async function resolveItem(session: CronoSession, spec: ItemSpec, memory: Map<st
       item.from_memory = remembered != null;
     }
   }
-  item ??= await searchItem(session, spec.query, spec.quantityG, portion);
+  item ??= await searchItem(session, spec.query, spec.quantityG, portion, spec.liquid ?? false);
 
   item.memory_key = key;
   item.portion_count = portionCount;
@@ -608,14 +621,12 @@ export async function lookupDescription(ctx: LookupContext, description: string)
   // A single food ("one apple", "150 g rice"): look it up directly, sized from its own servings, and ask Gemini for an
   // independent estimate at the same time.
   if (!looksCompound(desc)) {
-    const portion = parsePortion(desc);
-    const weightG = portion?.unit && WEIGHT_UNIT_GRAMS[portion.unit] ? portion.count * WEIGHT_UNIT_GRAMS[portion.unit] : undefined;
-    const query = portion?.rest ?? desc;
-    // A bare food name is one of it ("apple" is one apple); measures that are a volume never count as "one".
-    const countPortion = weightG === undefined ? (portion ?? { count: 1, unit: null, size: null, rest: desc }) : undefined;
-    const memory = await ctx.loadMemory([query]);
+    // "20gr of dried tofu", "biscuit bar (30g)", "monster 355ml can": the weight or volume, wherever it is written; else a
+    // count ("one apple"; a bare "apple" is one apple), where measures that are a volume never count as "one".
+    const amount = parseAmount(desc);
+    const memory = await ctx.loadMemory([amount.query]);
     const [item, estimate] = await Promise.all([
-      resolveItem(ctx.session, { query, quantityG: weightG, portion: countPortion }, memory),
+      resolveItem(ctx.session, { query: amount.query, quantityG: amount.weightG, portion: amount.portion, liquid: amount.liquid }, memory),
       estimateFood(ctx.geminiKey, desc),
     ]);
     return summarize("direct_auto", [finalize(item, estimate, "direct_auto")], { original_description: desc });

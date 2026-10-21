@@ -9,6 +9,7 @@ import {
   looksCompound,
   matchName,
   memoryKey,
+  parseAmount,
   parsePortion,
   portionGrams,
   rankCandidates,
@@ -77,6 +78,30 @@ assert.deepEqual(parsePortion("150 g rice"), { count: 150, unit: "g", size: null
 assert.deepEqual(parsePortion("a cup of oats"), { count: 1, unit: "cup", size: null, rest: "oats" });
 assert.deepEqual(parsePortion("breakfast waffle x2"), { count: 2, unit: null, size: null, rest: "breakfast waffle" });
 assert.equal(parsePortion("apple"), null);
+assert.deepEqual(parsePortion("1 large apple"), { count: 1, unit: null, size: "large", rest: "apple" }); // "l" is not litres here
+assert.deepEqual(parsePortion("a lemon"), { count: 1, unit: null, size: null, rest: "lemon" });
+
+// Amounts wherever they are written (cases from the backfill review of logged meals).
+const amount = (d: string) => {
+  const a = parseAmount(d);
+  return { query: a.query, weightG: a.weightG, count: a.portion?.count, liquid: a.liquid };
+};
+assert.deepEqual(amount("20gr of dried tofu"), { query: "dried tofu", weightG: 20, count: undefined, liquid: false });
+assert.deepEqual(amount("McVitie's digestive biscuit snack bar (30g)"),
+  { query: "McVitie's digestive biscuit snack bar", weightG: 30, count: undefined, liquid: false });
+assert.deepEqual(amount("Aussie lemonade juiced monster 355ml can"),
+  { query: "Aussie lemonade juiced monster can", weightG: 355, count: undefined, liquid: true });
+assert.deepEqual(amount("2 breakfast waffles (35gr each)"), { query: "breakfast waffles", weightG: 70, count: undefined, liquid: false });
+assert.deepEqual(amount("2 slices of bread (60g)"), { query: "bread", weightG: 60, count: undefined, liquid: false });
+assert.deepEqual(amount("2 cans of coke 330ml"), { query: "coke", weightG: 660, count: undefined, liquid: true });
+assert.deepEqual(amount("1.5l water"), { query: "water", weightG: 1500, count: undefined, liquid: true });
+assert.deepEqual(amount("150 g rice"), { query: "rice", weightG: 150, count: undefined, liquid: false });
+assert.deepEqual(amount("150 g rice x2"), { query: "rice", weightG: 300, count: undefined, liquid: false });
+assert.deepEqual(amount("one apple"), { query: "apple", weightG: undefined, count: 1, liquid: false });
+assert.deepEqual(amount("apple"), { query: "apple", weightG: undefined, count: 1, liquid: false });
+assert.deepEqual(amount("breakfast waffle x4"), { query: "breakfast waffle", weightG: undefined, count: 4, liquid: false });
+assert.deepEqual(amount('3 20" pizza slices'), { query: '20" pizza slices', weightG: undefined, count: 3, liquid: false });
+assert.equal(memoryKey("Aussie lemonade juiced monster can"), memoryKey("Aussie lemonade juiced monster")); // containers are not food
 
 const rawApple: CronoFoodDetail = {
   id: 4, name: "Apples, raw, with skin", source: "USDAsr", defaultMeasureId: 10,
@@ -114,6 +139,15 @@ assert.match(implausibility(appleCrisp, "apple") ?? "", /energy-dense/);
 assert.equal(implausibility(appleCrisp, "apple crisp"), null);
 const brokenEntry: CronoFoodDetail = { ...rawApple, nutrients: [{ id: 208, amount: 300 }, { id: 203, amount: 1 }] };
 assert.match(implausibility(brokenEntry, "granola") ?? "", /macros/);
+// A drink measured by volume cannot carry a per-serving entry's 211 kcal per 100 g; milk and beer are fine.
+const drink = (kcal: number, carbs: number, fat = 0, alcohol = 0): CronoFoodDetail => ({
+  ...rawApple, name: "drink", nutrients: [{ id: 208, amount: kcal }, { id: 205, amount: carbs }, { id: 204, amount: fat }, { id: 221, amount: alcohol }],
+});
+assert.match(implausibility(drink(211, 52), "aussie lemonade juiced monster", true) ?? "", /drink/);
+assert.equal(implausibility(drink(45, 11), "aussie lemonade juiced monster", true), null);
+assert.equal(implausibility(drink(211, 52), "aussie lemonade juiced monster", false), null);
+assert.equal(implausibility(drink(43, 3.6, 1), "beer", true), null);
+assert.equal(implausibility(drink(130, 4, 13), "cream", true), null);
 assert.equal(isPlainQuery("apple"), true);
 assert.equal(isPlainQuery("baked apple"), false);
 
@@ -134,10 +168,16 @@ reconcile(goodButWrong);
 assert.equal(goodButWrong.disagreement, true);
 assert.equal(goodButWrong.used_estimate, true);
 
-const exactButOff = item("exact", 570, 95);
+const exactButOff = item("exact", 250, 95);
 reconcile(exactButOff);
 assert.equal(exactButOff.disagreement, true);
 assert.equal(exactButOff.used_estimate, false);
+
+// An exact name that is off by more than 3x is bad data or a wrong portion: the estimate stands in.
+const exactWayOff = item("exact", 570, 95);
+reconcile(exactWayOff);
+assert.equal(exactWayOff.disagreement, true);
+assert.equal(exactWayOff.used_estimate, true);
 
 const agrees = item("good", 100, 95);
 reconcile(agrees);

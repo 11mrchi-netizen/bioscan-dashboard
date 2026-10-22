@@ -4,19 +4,28 @@ import com.bioscan.fieldterminal.domain.LiftReading
 import com.bioscan.fieldterminal.domain.SRI_REGULAR
 import com.bioscan.fieldterminal.domain.SriEvaluation
 import com.bioscan.fieldterminal.domain.StrengthLevel
+import com.bioscan.fieldterminal.domain.comparison.extendedPercentile
+import com.bioscan.fieldterminal.domain.levels.ladderFraction
 import com.bioscan.fieldterminal.domain.strengthLevelFor
+import com.bioscan.fieldterminal.domain.strengthThresholds
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
-// Analysis Layer 3 / Phase 8. A general "healthspan" grade, product-defined and not clinically validated. It exists ONLY for
+// Analysis Layer 3 / Phase 8. A general "healthspan" score, product-defined and not clinically validated. It exists ONLY for
 // the User profile page (a unit test fails if any other screen imports it): everywhere else this app deliberately shows no
 // cross-metric score.
 //
-// Eight factors, each unassessed / favorable / neutral / opportunity. A factor is assessed only when every input passes the
-// trust gate: present, recent enough, confidence met, units known and matching, no conflicting duplicates, nothing assumed.
-// The grade is the share of ASSESSED factors that are favorable; below HEALTHSPAN_MIN_ASSESSED assessed it stays "preliminary"
-// and carries no letter. Cut-offs are named below with their source; the letter bands and the floor are provisional.
+// Eight factors, each scored 1-100 or left unassessed. A factor is assessed only when every input passes the trust gate:
+// present, recent enough, confidence met, units known and matching, no conflicting duplicates, nothing assumed.
+//
+// One scale for every factor: favorable from 50, neutral from 25, an opportunity below. A factor with a population table
+// (VO2max; grip once its table is installed) scores its percentile for the person's age and sex. The others score against
+// cited clinical targets or the lifter standards, through anchors that put each cited cut-off exactly on the 50 or 25 line;
+// the band a value falls in is still decided by that cut-off's own comparison (a triglyceride of exactly 150 counts as
+// flagged, as the guideline says), and the score is held inside it. The summary score is the mean of the assessed factors,
+// shown from HEALTHSPAN_MIN_ASSESSED; below that it stays "preliminary". Anchors are named below with their source; the
+// points between and beyond the cited cut-offs are product-defined.
 
 enum class HealthspanFactorId(val label: String) {
     CARDIO_FITNESS("Cardio fitness"),
@@ -45,12 +54,15 @@ data class HealthspanInputs(
     val vo2max: DatedValue? = null, // mL/kg/min
     // Placement against an age- and sex-matched table; null when none fits (never a nearest-table guess).
     val vo2Percentile: Double? = null,
+    // That table's published points, so the score can go past its 10th and 90th percentile (extendedPercentile).
+    val vo2Quantiles: Map<Int, Double>? = null,
     val phenoAge: BiologicalAgeResult? = null,
     // Best estimated 1RM per lift from the last 6 months, and the latest body weight (kg).
     val lifts: List<LiftReading> = emptyList(),
     val bodyWeightKg: DatedValue? = null,
-    // Logged by hand; shown, not scored (no cited norm table yet).
+    // Logged by hand; scored as a percentile only when an age- and sex-matched grip table fits (gripPercentile).
     val grip: GripReading? = null,
+    val gripPercentile: Double? = null,
     val waistCm: DatedValue? = null,
     val heightCm: DatedValue? = null,
     val sleepMeanHours: Double? = null,
@@ -67,6 +79,15 @@ data class HealthspanInputs(
 
 data class GripReading(val kg: Double, val hand: String, val date: LocalDate)
 
+// What a factor's number is measured against.
+enum class ScoreBasis(val label: String) {
+    POPULATION_PERCENTILE("percentile for your age and sex"),
+    CLINICAL_TARGET("against clinical targets"),
+    PRODUCT_DEFINED("against product-defined targets"),
+    LIFTER_STANDARD("on the lifter standards"),
+    MIXED("lifter standards and grip percentile, averaged"),
+}
+
 data class HealthspanFactor(
     val id: HealthspanFactorId,
     val status: FactorStatus,
@@ -74,21 +95,23 @@ data class HealthspanFactor(
     val missingInputs: List<String>,
     val action: String?, // one thing: how to get it assessed, or the main lever
     val notes: List<String> = emptyList(), // caveats that belong to this factor
+    val score: Int? = null, // 1..100, null when unassessed
+    val basis: ScoreBasis? = null,
 )
 
 data class HealthspanSummary(
     val factors: List<HealthspanFactor>,
     val assessed: Int,
     val favorable: Int,
-    val grade: String?, // null while preliminary
+    val score: Int?, // mean of the assessed factors' scores; null while preliminary
     val preliminary: Boolean,
 )
 
 // ---- Provisional parameters (product-defined; see docs/analysis-layer-3/healthspan.md) ----
 const val HEALTHSPAN_MIN_ASSESSED = 5
-private const val GRADE_A = 0.80
-private const val GRADE_B = 0.60
-private const val GRADE_C = 0.40
+// The shared scale's two lines.
+const val SCORE_FAVORABLE = 50
+const val SCORE_NEUTRAL = 25
 
 private const val LAB_MAX_AGE_DAYS = 365L
 private const val VO2_MAX_AGE_DAYS = 90L
@@ -105,13 +128,71 @@ private const val PHENOAGE_OPPORTUNITY_YEARS = 2.0
 private const val WHTR_FAVORABLE = 0.5 // Ashwell 2012: keep waist under half of height
 private const val WHTR_OPPORTUNITY = 0.6 // product-defined step
 private const val SLEEP_MIN_HOURS = 7.0 // Watson 2015 consensus: adults at least 7 h
+private const val SLEEP_SHORT_HOURS = 6.0 // product-defined: the next step down
+private const val SRI_IRREGULAR = 60.0 // product-defined: the next step down from SRI_REGULAR
 private const val TRIGLYCERIDES_FLAG = 150.0 // Alberti 2009 harmonised criteria
+private const val TRIGLYCERIDES_HIGH = 200.0 // NCEP ATP III "high"
 private const val HDL_FLAG_MALE = 40.0
 private const val HDL_FLAG_FEMALE = 50.0
+private const val HDL_LOW_STEP = 10.0 // product-defined: 10 mg/dL under the flag
 private const val HBA1C_NEUTRAL = 5.7 // ADA Standards of Care
 private const val HBA1C_OPPORTUNITY = 6.5
 private const val GLUCOSE_NEUTRAL = 100.0
 private const val GLUCOSE_OPPORTUNITY = 126.0
+
+// Anchors, value -> score, values ascending. The 50 and 25 points are the cut-offs above; the rest is product-defined unless
+// a source is named.
+private val PHENOAGE_ANCHORS = listOf(-10.0 to 100.0, PHENOAGE_FAVORABLE_YEARS to 50.0, PHENOAGE_OPPORTUNITY_YEARS to 25.0, 10.0 to 1.0)
+// Ashwell & Gibson 2016 boundary chart: 0.4, 0.5, 0.6. Under 0.4 is "take care" too, so the score falls back towards the
+// line there (never below it: those ratios are favorable by the 0.5 cut-off).
+private val WHTR_ANCHORS = listOf(0.30 to 50.0, 0.40 to 100.0, WHTR_FAVORABLE to 50.0, WHTR_OPPORTUNITY to 25.0, 0.70 to 1.0)
+// Long sleep is not penalised (the association is not shown to be causal). 8 h is the middle of the 7-9 h range.
+private val SLEEP_HOURS_ANCHORS = listOf(4.5 to 1.0, SLEEP_SHORT_HOURS to 25.0, SLEEP_MIN_HOURS to 50.0, 8.0 to 100.0)
+private val SRI_ANCHORS = listOf(40.0 to 1.0, SRI_IRREGULAR to 25.0, SRI_REGULAR to 50.0, 90.0 to 100.0)
+// Tudor-Locke & Bassett 2004 bands: 7,500 somewhat active, 10,000 active, 12,500 highly active.
+private val STEPS_ANCHORS = listOf(2_500.0 to 1.0, 7_500.0 to 25.0, 10_000.0 to 50.0, 12_500.0 to 100.0)
+// AHA 2011 scientific statement: under 100 mg/dL is optimal; ATP III: 500 is "very high".
+private val TRIGLYCERIDES_ANCHORS = listOf(100.0 to 100.0, TRIGLYCERIDES_FLAG to 50.0, TRIGLYCERIDES_HIGH to 25.0, 500.0 to 1.0)
+// ATP III: 60 mg/dL or more is protective.
+private fun hdlAnchors(limit: Double) = listOf(limit - 2 * HDL_LOW_STEP to 1.0, limit - HDL_LOW_STEP to 25.0, limit to 50.0, 60.0 to 100.0)
+// Selvin 2010 (NEJM): risk lowest from 5.0 to 5.4 %.
+private val HBA1C_ANCHORS = listOf(5.4 to 100.0, HBA1C_NEUTRAL to 50.0, HBA1C_OPPORTUNITY to 25.0, 9.0 to 1.0)
+// 70-90 mg/dL is the normal fasting range; under 70 is hypoglycaemia, so the score falls back to the line there.
+private val GLUCOSE_ANCHORS = listOf(60.0 to 50.0, 70.0 to 100.0, 90.0 to 100.0, GLUCOSE_NEUTRAL to 50.0, GLUCOSE_OPPORTUNITY to 25.0, 200.0 to 1.0)
+
+fun statusFor(score: Int): FactorStatus = when {
+    score >= SCORE_FAVORABLE -> FactorStatus.FAVORABLE
+    score >= SCORE_NEUTRAL -> FactorStatus.NEUTRAL
+    else -> FactorStatus.OPPORTUNITY
+}
+
+// Piecewise linear through the anchors, flat past the first and last.
+internal fun anchored(value: Double, anchors: List<Pair<Double, Double>>): Double {
+    if (value <= anchors.first().first) return anchors.first().second
+    if (value >= anchors.last().first) return anchors.last().second
+    for (k in 0 until anchors.size - 1) {
+        val (v0, s0) = anchors[k]
+        val (v1, s1) = anchors[k + 1]
+        if (value <= v1) return s0 + (value - v0) / (v1 - v0) * (s1 - s0)
+    }
+    return anchors.last().second
+}
+
+// Two parts that are each a risk criterion (lipids, sleep): the weaker part, and an opportunity when both are below the
+// favorable line, as the flag count had it. One good part never makes up for the other.
+internal fun weakerPart(a: Int, b: Int): Int =
+    if (a < SCORE_FAVORABLE && b < SCORE_FAVORABLE) minOf(a, b, SCORE_NEUTRAL - 1) else minOf(a, b)
+
+// A whole-number score held inside the band its cut-offs give, so number and status never disagree.
+internal fun scoreIn(band: FactorStatus, raw: Double): Int {
+    val s = kotlin.math.floor(raw).toInt()
+    return when (band) {
+        FactorStatus.FAVORABLE -> s.coerceIn(SCORE_FAVORABLE, 100)
+        FactorStatus.NEUTRAL -> s.coerceIn(SCORE_NEUTRAL, SCORE_FAVORABLE - 1)
+        FactorStatus.OPPORTUNITY -> s.coerceIn(1, SCORE_NEUTRAL - 1)
+        FactorStatus.UNASSESSED -> s.coerceIn(1, 100)
+    }
+}
 
 // The grip reading to show: among the readings on the most recent date, the stronger hand's value.
 fun latestGrip(readings: List<GripReading>): GripReading? {
@@ -160,18 +241,21 @@ private fun ordinal(p: Double): String {
     return "$n$suffix"
 }
 
-private fun factor(id: HealthspanFactorId, status: FactorStatus, reading: String?, missing: List<String>, lever: String, howTo: String) =
-    HealthspanFactor(
+private fun unassessed(id: HealthspanFactorId, missing: List<String>, howTo: String) =
+    HealthspanFactor(id = id, status = FactorStatus.UNASSESSED, reading = null, missingInputs = missing, action = howTo)
+
+private fun factor(id: HealthspanFactorId, score: Int, basis: ScoreBasis, reading: String, lever: String): HealthspanFactor {
+    val status = statusFor(score)
+    return HealthspanFactor(
         id = id,
         status = status,
         reading = reading,
-        missingInputs = missing,
-        action = when (status) {
-            FactorStatus.UNASSESSED -> howTo
-            FactorStatus.OPPORTUNITY -> lever
-            else -> null
-        },
+        missingInputs = emptyList(),
+        action = if (status == FactorStatus.OPPORTUNITY) lever else null,
+        score = score,
+        basis = basis,
     )
+}
 
 private fun cardio(i: HealthspanInputs): HealthspanFactor {
     val id = HealthspanFactorId.CARDIO_FITNESS
@@ -181,12 +265,16 @@ private fun cardio(i: HealthspanInputs): HealthspanFactor {
     if (v == null) missing += "a VO2max reading"
     else if (ChronoUnit.DAYS.between(v.date, i.asOf) > VO2_MAX_AGE_DAYS) missing += "a VO2max reading from the last $VO2_MAX_AGE_DAYS days (latest ${v.date})"
     if (i.vo2Percentile == null) missing += "an age- and sex-matched VO2max table that fits (needs sex and date of birth)"
-    if (missing.isNotEmpty() || v == null || i.vo2Percentile == null) return factor(id, FactorStatus.UNASSESSED, null, missing, "", howTo)
-    return factor(
-        id, percentileStatus(i.vo2Percentile),
-        "VO2max %.1f mL/kg/min, %s percentile for your age and sex".format(v.value, ordinal(i.vo2Percentile)),
-        emptyList(), "More easy aerobic time each week moves this most.", howTo,
-    )
+    if (missing.isNotEmpty() || v == null || i.vo2Percentile == null) return unassessed(id, missing, howTo)
+    // Inside the table the two percentiles are the same; past its 10th or 90th the extended one keeps going (an estimate).
+    val extended = i.vo2Quantiles?.let { extendedPercentile(v.value, it) } ?: i.vo2Percentile
+    val lowest = i.vo2Quantiles?.keys?.minOrNull()
+    val highest = i.vo2Quantiles?.keys?.maxOrNull()
+    val beyond = (lowest != null && i.vo2Percentile <= lowest) || (highest != null && i.vo2Percentile >= highest)
+    val score = scoreIn(percentileStatus(i.vo2Percentile), extended)
+    val reading = "VO2max %.1f mL/kg/min, %s percentile for your age and sex".format(v.value, ordinal(score.toDouble())) +
+        if (beyond) " (past the table's published range: estimated)" else ""
+    return factor(id, score, ScoreBasis.POPULATION_PERCENTILE, reading, "More easy aerobic time each week moves this most.")
 }
 
 private fun biologicalAge(i: HealthspanInputs): HealthspanFactor {
@@ -201,45 +289,71 @@ private fun biologicalAge(i: HealthspanInputs): HealthspanFactor {
         ChronoUnit.DAYS.between(p.observedAt, i.asOf) > LAB_MAX_AGE_DAYS -> missing += "a PhenoAge panel from the last year (latest ${p.observedAt})"
     }
     val accel = p?.ageAcceleration
-    if (missing.isNotEmpty() || p == null || accel == null) return factor(id, FactorStatus.UNASSESSED, null, missing, "", howTo)
-    val status = when {
+    if (missing.isNotEmpty() || p == null || accel == null) return unassessed(id, missing, howTo)
+    val band = when {
         accel <= PHENOAGE_FAVORABLE_YEARS -> FactorStatus.FAVORABLE
         accel < PHENOAGE_OPPORTUNITY_YEARS -> FactorStatus.NEUTRAL
         else -> FactorStatus.OPPORTUNITY
     }
     val dir = if (accel < 0) "younger" else "older"
     return factor(
-        id, status, "PhenoAge %.1f y, %.1f y %s than your calendar age (panel of %s)".format(p.biologicalAge, abs(accel), dir, p.observedAt),
-        emptyList(), "Open the Aging page to see which markers drive the gap.", howTo,
+        id, scoreIn(band, anchored(accel, PHENOAGE_ANCHORS)), ScoreBasis.PRODUCT_DEFINED,
+        "PhenoAge %.1f y, %.1f y %s than your calendar age (panel of %s)".format(p.biologicalAge, abs(accel), dir, p.observedAt),
+        "Open the Aging page to see which markers drive the gap.",
     )
+}
+
+private fun levelBand(level: StrengthLevel): FactorStatus = when {
+    level >= StrengthLevel.INTERMEDIATE -> FactorStatus.FAVORABLE
+    level == StrengthLevel.NOVICE -> FactorStatus.NEUTRAL
+    else -> FactorStatus.OPPORTUNITY
 }
 
 private fun strength(i: HealthspanInputs): HealthspanFactor {
     val id = HealthspanFactorId.STRENGTH
-    val howTo = "Log barbell lifts (squat, deadlift, presses, row) and a body weight."
+    val howTo = "Log barbell lifts (squat, deadlift, presses, row) and a body weight, or a grip test at the body check-in."
     val notes = mutableListOf("Lifter standards (bodyweight multiples), not population percentiles; not adjusted for sex or age.")
-    i.grip?.let {
-        notes += "Latest grip: %.1f kg (%s hand, %s). Logged only: there is no cited norm table yet, so it does not change the grade.".format(it.kg, it.hand, it.date)
-    }
     val g = Gate(i.asOf)
     val bw = g.lab(i.bodyWeightKg, "body weight", "kg", BODY_WEIGHT_MAX_AGE_DAYS)
-    val levels = i.lifts
+    // Each lift: its level and its place on the ladder (novice 25, intermediate 50, advanced 75, elite 100; linear between).
+    data class Rated(val slug: String, val level: StrengthLevel, val score: Int)
+    val rated = i.lifts
         .filter { ChronoUnit.DAYS.between(it.date, i.asOf) in 0..STRENGTH_WINDOW_DAYS }
-        .mapNotNull { lift -> strengthLevelFor(lift.slug, lift.e1rmKg, bw)?.let { lift.slug to it } }
-    if (levels.size < MIN_LIFTS) {
-        g.missing += "$MIN_LIFTS lifts from the last 6 months that have a standard (have ${levels.size})"
-        return factor(id, FactorStatus.UNASSESSED, null, g.missing, "", howTo).copy(notes = notes)
-    }
+        .mapNotNull { lift ->
+            val level = strengthLevelFor(lift.slug, lift.e1rmKg, bw) ?: return@mapNotNull null
+            val thresholds = strengthThresholds(lift.slug, bw) ?: return@mapNotNull null
+            Rated(lift.slug, level, scoreIn(levelBand(level), ladderFraction(thresholds.toList(), lift.e1rmKg) * 100))
+        }
+    val liftsOk = rated.size >= MIN_LIFTS
+    if (!liftsOk) g.missing += "$MIN_LIFTS lifts from the last 6 months that have a standard (have ${rated.size})"
     // Lower median: with an even count the weaker middle lift decides.
-    val sorted = levels.sortedBy { it.second.ordinal }
-    val median = sorted[(sorted.size - 1) / 2].second
-    val status = when {
-        median >= StrengthLevel.INTERMEDIATE -> FactorStatus.FAVORABLE
-        median == StrengthLevel.NOVICE -> FactorStatus.NEUTRAL
-        else -> FactorStatus.OPPORTUNITY
+    val sorted = rated.sortedBy { it.score }
+    val median = if (liftsOk) sorted[(sorted.size - 1) / 2] else null
+    // A grip reading counts from the same six months as the lifts.
+    val grip = i.grip
+    val gripRecent = grip != null && ChronoUnit.DAYS.between(grip.date, i.asOf) in 0..STRENGTH_WINDOW_DAYS
+    val gripPercentile = i.gripPercentile?.takeIf { gripRecent }
+    val gripScore = gripPercentile?.let { scoreIn(percentileStatus(it), it) }
+    grip?.let {
+        notes += if (gripScore != null) "Grip %.1f kg (%s hand, %s): %s percentile for your age and sex.".format(it.kg, it.hand, it.date, ordinal(gripScore.toDouble()))
+        else if (!gripRecent) "Latest grip: %.1f kg (%s hand, %s). Older than 6 months, so it does not change the score.".format(it.kg, it.hand, it.date)
+        else "Latest grip: %.1f kg (%s hand, %s). Logged only: no grip table fits your age and sex, so it does not change the score.".format(it.kg, it.hand, it.date)
     }
-    val detail = sorted.joinToString(", ") { (slug, level) -> "${slug.replace('_', ' ')} ${level.label.lowercase()}" }
-    return factor(id, status, "Median ${median.label.lowercase()} across ${levels.size} lifts ($detail)", emptyList(), "Progressive loading on the weakest main lift moves this.", howTo).copy(notes = notes)
+    if (median == null && gripScore == null) return unassessed(id, g.missing, howTo).copy(notes = notes)
+    val parts = listOfNotNull(median?.score, gripScore)
+    val score = kotlin.math.round(parts.average()).toInt().coerceIn(1, 100)
+    val basis = when {
+        median != null && gripScore != null -> ScoreBasis.MIXED
+        median != null -> ScoreBasis.LIFTER_STANDARD
+        else -> ScoreBasis.POPULATION_PERCENTILE
+    }
+    val reading = if (median != null) {
+        val detail = sorted.joinToString(", ") { r -> "${r.slug.replace('_', ' ')} ${r.level.label.lowercase()} ${r.score}" }
+        "Median ${median.level.label.lowercase()} across ${rated.size} lifts ($detail)"
+    } else {
+        "Grip %.1f kg, %s percentile for your age and sex".format(grip!!.kg, ordinal(gripScore!!.toDouble()))
+    }
+    return factor(id, score, basis, reading, "Progressive loading on the weakest main lift moves this.").copy(notes = notes)
 }
 
 private fun bodyComposition(i: HealthspanInputs): HealthspanFactor {
@@ -250,15 +364,19 @@ private fun bodyComposition(i: HealthspanInputs): HealthspanFactor {
     val height = g.lab(i.heightCm, "height", "cm")
     val ratio = if (waist != null && height != null && height > 0) waist / height else null
     if (ratio != null && ratio !in 0.3..1.0) g.missing += "a plausible waist and height"
-    if (ratio == null || g.missing.isNotEmpty()) return factor(id, FactorStatus.UNASSESSED, null, g.missing, "", howTo)
-    val status = when {
+    if (ratio == null || g.missing.isNotEmpty()) return unassessed(id, g.missing, howTo)
+    val band = when {
         ratio < WHTR_FAVORABLE -> FactorStatus.FAVORABLE
         ratio < WHTR_OPPORTUNITY -> FactorStatus.NEUTRAL
         else -> FactorStatus.OPPORTUNITY
     }
-    return factor(id, status, "Waist-to-height %.2f (waist %.0f cm, height %.0f cm)".format(ratio, waist, height), emptyList(), "Waist is the lever; re-measure monthly.", howTo)
+    return factor(
+        id, scoreIn(band, anchored(ratio, WHTR_ANCHORS)), ScoreBasis.CLINICAL_TARGET,
+        "Waist-to-height %.2f (waist %.0f cm, height %.0f cm)".format(ratio, waist, height), "Waist is the lever; re-measure monthly.",
+    )
 }
 
+// Sleep and lipids have two parts, combined by weakerPart.
 private fun sleep(i: HealthspanInputs): HealthspanFactor {
     val id = HealthspanFactorId.SLEEP
     val howTo = "Wear the watch to bed for two weeks."
@@ -268,16 +386,16 @@ private fun sleep(i: HealthspanInputs): HealthspanFactor {
     if (sri?.value == null || !sri.confidence.met) missing += "$MIN_NIGHTS nights of bed and wake times for regularity (have ${sri?.confidence?.have ?: 0})"
     val hours = i.sleepMeanHours
     val regularity = sri?.value
-    if (missing.isNotEmpty() || hours == null || regularity == null) return factor(id, FactorStatus.UNASSESSED, null, missing, "", howTo)
-    val durationOk = hours >= SLEEP_MIN_HOURS
-    val regularOk = regularity >= SRI_REGULAR
-    val status = when {
-        durationOk && regularOk -> FactorStatus.FAVORABLE
-        durationOk || regularOk -> FactorStatus.NEUTRAL
-        else -> FactorStatus.OPPORTUNITY
-    }
-    val lever = if (!regularOk) "Hold a fixed wake time first; regularity is the cheaper lever." else "Protect time in bed to reach 7 hours."
-    return factor(id, status, "%.1f h average over %d nights, regularity (SRI) %.0f".format(hours, i.sleepNights, regularity), emptyList(), lever, howTo)
+    if (missing.isNotEmpty() || hours == null || regularity == null) return unassessed(id, missing, howTo)
+    val hoursBand = when { hours >= SLEEP_MIN_HOURS -> FactorStatus.FAVORABLE; hours >= SLEEP_SHORT_HOURS -> FactorStatus.NEUTRAL; else -> FactorStatus.OPPORTUNITY }
+    val sriBand = when { regularity >= SRI_REGULAR -> FactorStatus.FAVORABLE; regularity >= SRI_IRREGULAR -> FactorStatus.NEUTRAL; else -> FactorStatus.OPPORTUNITY }
+    val hoursScore = scoreIn(hoursBand, anchored(hours, SLEEP_HOURS_ANCHORS))
+    val sriScore = scoreIn(sriBand, anchored(regularity, SRI_ANCHORS))
+    val lever = if (sriScore <= hoursScore) "Hold a fixed wake time first; regularity is the cheaper lever." else "Protect time in bed to reach 7 hours."
+    return factor(
+        id, weakerPart(hoursScore, sriScore), ScoreBasis.CLINICAL_TARGET,
+        "%.1f h average over %d nights (%d), regularity (SRI) %.0f (%d)".format(hours, i.sleepNights, hoursScore, regularity, sriScore), lever,
+    )
 }
 
 private fun activity(i: HealthspanInputs): HealthspanFactor {
@@ -288,13 +406,16 @@ private fun activity(i: HealthspanInputs): HealthspanFactor {
     if (i.stepsBand == null) missing += "a steps reference"
     val band = i.stepsBand
     val median = i.stepsMedian
-    if (missing.isNotEmpty() || band == null || median == null) return factor(id, FactorStatus.UNASSESSED, null, missing, "", howTo)
+    if (missing.isNotEmpty() || band == null || median == null) return unassessed(id, missing, howTo)
     val status = when (band) {
         "active", "highly_active" -> FactorStatus.FAVORABLE
         "somewhat_active" -> FactorStatus.NEUTRAL
         else -> FactorStatus.OPPORTUNITY
     }
-    return factor(id, status, "%,.0f steps/day median over %d days (%s)".format(median, i.stepsDays, band.replace('_', ' ')), emptyList(), "Add a daily walk to lift the median.", howTo)
+    return factor(
+        id, scoreIn(status, anchored(median, STEPS_ANCHORS)), ScoreBasis.CLINICAL_TARGET,
+        "%,.0f steps/day median over %d days (%s)".format(median, i.stepsDays, band.replace('_', ' ')), "Add a daily walk to lift the median.",
+    )
 }
 
 private fun lipids(i: HealthspanInputs): HealthspanFactor {
@@ -304,14 +425,20 @@ private fun lipids(i: HealthspanInputs): HealthspanFactor {
     val tg = g.lab(i.triglyceridesMgDl, "triglycerides", "mg/dL")
     val hdl = g.lab(i.hdlMgDl, "HDL cholesterol", "mg/dL")
     if (i.sex != "male" && i.sex != "female") g.missing += "sex (Setup > Profile), because the HDL limit differs by sex"
-    if (tg == null || hdl == null || g.missing.isNotEmpty()) return factor(id, FactorStatus.UNASSESSED, null, g.missing, "", howTo)
+    if (tg == null || hdl == null || g.missing.isNotEmpty()) return unassessed(id, g.missing, howTo)
     val hdlLimit = if (i.sex == "male") HDL_FLAG_MALE else HDL_FLAG_FEMALE
-    val flags = (if (tg >= TRIGLYCERIDES_FLAG) 1 else 0) + (if (hdl < hdlLimit) 1 else 0)
-    val status = when (flags) { 0 -> FactorStatus.FAVORABLE; 1 -> FactorStatus.NEUTRAL; else -> FactorStatus.OPPORTUNITY }
+    val tgBand = when { tg < TRIGLYCERIDES_FLAG -> FactorStatus.FAVORABLE; tg < TRIGLYCERIDES_HIGH -> FactorStatus.NEUTRAL; else -> FactorStatus.OPPORTUNITY }
+    val hdlBand = when { hdl >= hdlLimit -> FactorStatus.FAVORABLE; hdl >= hdlLimit - HDL_LOW_STEP -> FactorStatus.NEUTRAL; else -> FactorStatus.OPPORTUNITY }
+    val tgScore = scoreIn(tgBand, anchored(tg, TRIGLYCERIDES_ANCHORS))
+    val hdlScore = scoreIn(hdlBand, anchored(hdl, hdlAnchors(hdlLimit)))
     val tgDate = i.triglyceridesMgDl!!.date
     val hdlDate = i.hdlMgDl!!.date
     val date = if (hdlDate.isAfter(tgDate)) hdlDate else tgDate
-    return factor(id, status, "Triglycerides %.0f mg/dL, HDL %.0f mg/dL (panel of %s)".format(tg, hdl, date), emptyList(), "Discuss the lipid result with your clinician and re-test.", howTo)
+    return factor(
+        id, weakerPart(tgScore, hdlScore), ScoreBasis.CLINICAL_TARGET,
+        "Triglycerides %.0f mg/dL (%d), HDL %.0f mg/dL (%d) (panel of %s)".format(tg, tgScore, hdl, hdlScore, date),
+        "Discuss the lipid result with your clinician and re-test.",
+    )
 }
 
 private fun glucose(i: HealthspanInputs): HealthspanFactor {
@@ -325,13 +452,13 @@ private fun glucose(i: HealthspanInputs): HealthspanFactor {
     // HbA1c wins when it passes the gate; otherwise fasting glucose.
     if (a1c != null) {
         val s = when { a1c < HBA1C_NEUTRAL -> FactorStatus.FAVORABLE; a1c < HBA1C_OPPORTUNITY -> FactorStatus.NEUTRAL; else -> FactorStatus.OPPORTUNITY }
-        return factor(id, s, "HbA1c %.1f %% (panel of %s)".format(a1c, i.hba1cPct!!.date), emptyList(), lever, howTo)
+        return factor(id, scoreIn(s, anchored(a1c, HBA1C_ANCHORS)), ScoreBasis.CLINICAL_TARGET, "HbA1c %.1f %% (panel of %s)".format(a1c, i.hba1cPct!!.date), lever)
     }
     if (glu != null) {
         val s = when { glu < GLUCOSE_NEUTRAL -> FactorStatus.FAVORABLE; glu < GLUCOSE_OPPORTUNITY -> FactorStatus.NEUTRAL; else -> FactorStatus.OPPORTUNITY }
-        return factor(id, s, "Fasting glucose %.0f mg/dL (panel of %s)".format(glu, i.fastingGlucoseMgDl!!.date), emptyList(), lever, howTo)
+        return factor(id, scoreIn(s, anchored(glu, GLUCOSE_ANCHORS)), ScoreBasis.CLINICAL_TARGET, "Fasting glucose %.0f mg/dL (panel of %s)".format(glu, i.fastingGlucoseMgDl!!.date), lever)
     }
-    return factor(id, FactorStatus.UNASSESSED, null, (a1cGate.missing + gGate.missing).distinct(), "", howTo)
+    return unassessed(id, (a1cGate.missing + gGate.missing).distinct(), howTo)
 }
 
 fun healthspanSummary(inputs: HealthspanInputs): HealthspanSummary {
@@ -339,17 +466,10 @@ fun healthspanSummary(inputs: HealthspanInputs): HealthspanSummary {
         cardio(inputs), biologicalAge(inputs), strength(inputs), bodyComposition(inputs),
         sleep(inputs), activity(inputs), lipids(inputs), glucose(inputs),
     )
-    val assessed = factors.count { it.status != FactorStatus.UNASSESSED }
+    val scores = factors.mapNotNull { it.score }
+    val assessed = scores.size
     val favorable = factors.count { it.status == FactorStatus.FAVORABLE }
     val preliminary = assessed < HEALTHSPAN_MIN_ASSESSED
-    val grade = if (preliminary) null else {
-        val share = favorable.toDouble() / assessed
-        when {
-            share >= GRADE_A -> "A"
-            share >= GRADE_B -> "B"
-            share >= GRADE_C -> "C"
-            else -> "D"
-        }
-    }
-    return HealthspanSummary(factors, assessed, favorable, grade, preliminary)
+    val score = if (preliminary) null else kotlin.math.round(scores.average()).toInt()
+    return HealthspanSummary(factors, assessed, favorable, score, preliminary)
 }

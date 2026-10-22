@@ -706,13 +706,13 @@
       "key": "healthspan",
       "docName": null,
       "kind": "composite",
-      "methodology": "A general grade shown only on the User profile page. Eight factors are each placed as favorable, neutral or opportunity, or left unassessed: cardio fitness (VO2max percentile for your age and sex), biological age (PhenoAge versus calendar age), strength (the median level of your main barbell lifts, from your best estimated one-rep max in the last six months against bodyweight multiples used by lifters; needs at least three lifts and a body weight from the last 90 days), body composition (waist-to-height ratio), sleep (average duration over the last 30 days with the sleep regularity index), activity (median daily steps over the last 30 days against the Tudor-Locke and Bassett categories), blood lipids (triglycerides and HDL against the harmonised metabolic syndrome criteria) and blood glucose (HbA1c, or fasting glucose when there is no valid HbA1c, against the American Diabetes Association categories). A factor is assessed only when every input passes a trust gate: present, recent (labs within a year, VO2max within 90 days), enough days of data, confidence met, a known matching unit, no conflicting values for the same marker on the same date, and nothing assumed; sleep and steps restart at a confirmed series break. The grade is the share of assessed factors that are favorable, shown as a letter (A at 80% or more, B at 60%, C at 40%, otherwise D) only when at least five factors are assessed; below that it is labelled preliminary. The cut-offs for cardio fitness, biological age, the regularity index and the letter bands are product-defined. Handgrip readings you log are shown beside the strength factor but are not scored, because no cited norm table is installed.",
+      "methodology": "A general score from 1 to 100, shown only on the User profile page. Eight factors are each scored 1-100 on one scale, or left unassessed: favorable from 50, neutral from 25, an opportunity below 25. Where a population table exists the score is your percentile for your age and sex: cardio fitness (VO2max against the ACSM table; past the table's 10th or 90th percentile it is estimated with a split normal fitted to the table) and handgrip once its table is installed. The other factors are scored against cited clinical targets, with each cited cut-off on the 50 or 25 line and straight lines between: body composition (waist-to-height 0.4 scores 100, 0.5 is 50, 0.6 is 25), sleep (7 h is 50, 8 h or more 100; regularity index 80 is 50), activity (median daily steps: 10,000 is 50, 7,500 is 25, 12,500 or more 100), blood lipids (triglycerides under 150 and HDL from 40 for men or 50 for women are favorable; triglycerides of 100 or less and HDL of 60 or more score 100) and blood glucose (HbA1c under 5.7 % or fasting glucose under 100 mg/dL are favorable; HbA1c of 5.4 % or less and fasting glucose of 70-90 score 100). Biological age (PhenoAge versus calendar age: 2 years younger is 50, 2 years older is 25) and strength (your main barbell lifts on the lifter standards: novice 25, intermediate 50, advanced 75, elite 100, the lower middle lift counting; with a handgrip percentile the two are averaged) are scored the same way. A value exactly on a cut-off stays on the side its source puts it (a triglyceride of 150 is flagged). Lipids and sleep take their weaker part, and both parts below 50 is an opportunity. A factor is assessed only when every input passes a trust gate: present, recent (labs within a year, VO2max within 90 days), enough days of data, confidence met, a known matching unit, no conflicting values for the same marker on the same date, and nothing assumed; sleep and steps restart at a confirmed series break. The headline is the mean of the assessed factors' scores, shown only when at least five factors are assessed; below that it is labelled preliminary. The points between and beyond the cited cut-offs, the biological-age and regularity cut-offs and the five-factor floor are product-defined.",
       "limitations": [
-        "Product-defined and provisional, not clinically validated: the cut-offs, the letter bands and the minimum of five assessed factors have not been tested against outcomes, and with only a few lab draws they cannot yet be checked on your own history.",
+        "Product-defined and provisional, not clinically validated: the scoring lines between the cited cut-offs, the mean of the factors and the minimum of five assessed factors have not been tested against outcomes, and with only a few lab draws they cannot yet be checked on your own history.",
         "The strength factor uses lifter standards (bodyweight multiples), not population percentiles, and they are not adjusted for sex or age; an estimated one-rep max from a set of several reps is an estimate.",
-        "A factor that cannot be assessed is left out, not scored as bad, so the grade describes only the factors you have data for and can move a lot when one more becomes assessable.",
+        "A factor that cannot be assessed is left out, not scored as bad, so the score describes only the factors you have data for and can move a lot when one more becomes assessable. A clinical-target score is a position between cut-offs, not a percentile; only cardio fitness (and grip, once its table is installed) is a percentile.",
         "Blood pressure, family history, smoking, diet and many other determinants of healthspan are not inputs; a favorable grade does not mean low risk.",
-        "Long sleep is not penalised (only under 7 hours counts against duration), and a single panel or reading is treated as current for a year.",
+        "Long sleep, very high HDL and a low HbA1c are not penalised, although long sleep and low HbA1c are associated with higher mortality in some cohorts; whether a triglyceride was fasting is not recorded; a single panel or reading is treated as current for a year.",
         "Lab values come from the panels you entered and are as accurate as that entry; the grade does not replace a clinician's reading of them."
       ],
       "references": [
@@ -747,10 +747,34 @@
         {
           "citation": "American Diabetes Association Professional Practice Committee. 2. Diagnosis and classification of diabetes: Standards of Care in Diabetes-2025. Diabetes Care 2025;48(Suppl 1):S27-S49.",
           "doi": "10.2337/dc25-S002"
+        },
+        {
+          "citation": "Liu Z, Kuo PL, Horvath S, Crimmins E, Ferrucci L, Levine M. A new aging measure captures morbidity and mortality risk across diverse subpopulations from NHANES IV: a cohort study. PLoS Med 2018;15(12):e1002718.",
+          "doi": "10.1371/journal.pmed.1002718"
+        },
+        {
+          "citation": "Ashwell M, Gibson S. Waist-to-height ratio as an indicator of 'early health risk': simpler and more predictive than using a 'matrix' based on BMI and waist circumference. BMJ Open 2016;6(3):e010159.",
+          "doi": "10.1136/bmjopen-2015-010159"
+        },
+        {
+          "citation": "Miller M, Stone NJ, Ballantyne C, et al. Triglycerides and cardiovascular disease: a scientific statement from the American Heart Association. Circulation 2011;123(20):2292-2333.",
+          "doi": "10.1161/CIR.0b013e3182160726"
+        },
+        {
+          "citation": "National Cholesterol Education Program Expert Panel. Third Report of the NCEP Expert Panel on Detection, Evaluation, and Treatment of High Blood Cholesterol in Adults (Adult Treatment Panel III) final report. Circulation 2002;106(25):3143-3421. PMID 12485966.",
+          "doi": null
+        },
+        {
+          "citation": "Selvin E, Steffes MW, Zhu H, et al. Glycated hemoglobin, diabetes, and cardiovascular risk in nondiabetic adults. N Engl J Med 2010;362(9):800-811.",
+          "doi": "10.1056/NEJMoa0908359"
+        },
+        {
+          "citation": "Dodds RM, Syddall HE, Cooper R, et al. Grip strength across the life course: normative data from twelve British studies. PLoS One 2014;9(12):e113637.",
+          "doi": "10.1371/journal.pone.0113637"
         }
       ],
       "productDefined": true,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "2.0.0"
     },
     {
       "key": "expected_band",

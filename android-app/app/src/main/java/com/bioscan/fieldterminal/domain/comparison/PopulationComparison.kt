@@ -103,6 +103,44 @@ fun interpolatePercentile(current: Double, sortedQuantiles: List<Map.Entry<Int, 
     return last.key.toDouble()
 }
 
+// A percentile carried past the table's lowest and highest published points, for the Healthspan 1-100 scale only
+// (comparePopulation keeps the rule above). Inside the table it is interpolatePercentile. Past it, a split normal: the spread
+// below the median comes from the lowest point, above it from the highest, so a skewed table (the ACSM women's VO2max rows
+// spread about two-thirds as far below the median as above) keeps its shape. An estimate, so the caller says so; capped to
+// 1..99. Null when the table has no median or no point on each side of it.
+fun extendedPercentile(current: Double, quantiles: Map<Int, Double>): Double? {
+    val sorted = quantiles.entries.sortedBy { it.key }
+    val median = quantiles[50] ?: return null
+    val low = sorted.first()
+    val high = sorted.last()
+    if (low.key >= 50 || high.key <= 50) return null
+    if (current in low.value..high.value) return interpolatePercentile(current, sorted)
+    val (p, v) = if (current < low.value) low.key to low.value else high.key to high.value
+    val sigma = (v - median) / inverseNormalCdf(p / 100.0)
+    if (sigma <= 0.0) return interpolatePercentile(current, sorted)
+    return (100.0 * normalCdf((current - median) / sigma)).coerceIn(1.0, 99.0)
+}
+
+// Standard normal CDF, Phi(z) = (1 + erf(z / sqrt 2)) / 2, with Abramowitz & Stegun 7.1.26 for erf (error under 1.5e-7).
+internal fun normalCdf(z: Double): Double {
+    val x = kotlin.math.abs(z) / kotlin.math.sqrt(2.0)
+    val t = 1.0 / (1.0 + 0.3275911 * x)
+    val poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))))
+    val erf = 1.0 - poly * kotlin.math.exp(-x * x)
+    return if (z >= 0) 0.5 * (1.0 + erf) else 0.5 * (1.0 - erf)
+}
+
+// Its inverse by bisection: only ever asked for a table's end points (P10, P90), so speed does not matter.
+internal fun inverseNormalCdf(p: Double): Double {
+    var lo = -8.0
+    var hi = 8.0
+    repeat(80) {
+        val mid = (lo + hi) / 2
+        if (normalCdf(mid) < p) lo = mid else hi = mid
+    }
+    return (lo + hi) / 2
+}
+
 const val POPULATION_COMPARISON_ALGORITHM_VERSION = "1"
 
 fun comparePopulation(

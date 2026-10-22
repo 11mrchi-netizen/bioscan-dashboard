@@ -28,7 +28,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 // One spoke of the radar. `value` is already a 0..100 radius supplied upstream; null means the axis could
-// not be assessed -- it is drawn as a dashed spoke with a hollow marker and left OUT of the polygon (never
+// not be assessed -- it is drawn as a dashed spoke with no marker and a "—" label, and left OUT of the polygon (never
 // plotted at zero, which would read as a bad result instead of a missing one). `valueLabel`, when set,
 // replaces the number in the axis label (for axes whose radius is a position, not a score).
 data class RadarAxis(val label: String, val value: Double?, val color: Color, val valueLabel: String? = null)
@@ -119,11 +119,9 @@ fun FTRadarChart(
                 if (selected) drawCircle(axis.color.copy(alpha = 0.3f), radius = 11.dp.toPx(), center = p)
                 drawCircle(FT.Surface, radius = 6.dp.toPx(), center = p)
                 drawCircle(axis.color, radius = 4.5.dp.toPx(), center = p)
-            } else {
-                val p = point(i, 0.5f)
-                drawCircle(FT.Surface, radius = 5.dp.toPx(), center = p)
-                drawCircle(FT.TextMuted, radius = 5.dp.toPx(), center = p, style = Stroke(1.5.dp.toPx()))
             }
+            // An axis with no value has no marker: anywhere on the spoke would read as a score. Its spoke is dashed and its
+            // label says "—".
             drawAxisLabel(measurer, axis, selected, point(i, 1f), center, labelPad)
         }
     }
@@ -133,7 +131,7 @@ fun FTRadarChart(
 private fun labelText(axis: RadarAxis): String = when {
     axis.valueLabel != null -> "${axis.label}\n${axis.valueLabel}"
     axis.value != null -> "${axis.label}\n${"%.0f".format(axis.value)}"
-    else -> axis.label
+    else -> "${axis.label}\n—"
 }
 
 private fun DrawScope.drawAxisLabel(measurer: TextMeasurer, axis: RadarAxis, selected: Boolean, tip: Offset, center: Offset, pad: Float) {

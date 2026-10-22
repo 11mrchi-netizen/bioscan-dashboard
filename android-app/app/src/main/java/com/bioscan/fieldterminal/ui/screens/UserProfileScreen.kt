@@ -43,7 +43,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-// User tab: Healthspan (radar over the graded factors), Aging, the three skill pages (Running / Strength / Conditioning) as buttons
+// User tab: Healthspan (radar over the scored factors), Aging, the three skill pages (Running / Strength / Conditioning) as buttons
 // under Aging, then the training block. Skill levels are computed from real history (see domain/levels/SkillLevel.kt); nothing on
 // this page is mock data.
 @Composable
@@ -60,7 +60,7 @@ fun UserProfileScreen(
         agingGuard.run { agingOverview = UserDataCache.aging() }
     }
 
-    // Analysis Layer 3 / Phase 8: the Healthspan grade (loaded once aging is known).
+    // Analysis Layer 3 / Phase 8: the Healthspan score (loaded once aging is known).
     var healthspan by remember { mutableStateOf<HealthspanBundle?>(null) }
     var healthspanFailed by remember { mutableStateOf(false) }
     LaunchedEffect(agingOverview) {

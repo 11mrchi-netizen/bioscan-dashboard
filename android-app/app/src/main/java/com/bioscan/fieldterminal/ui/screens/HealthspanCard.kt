@@ -33,18 +33,18 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Analysis Layer 3 / Phase 8. The one place in the app that shows a cross-metric grade: the User profile page. Product-defined,
+// Analysis Layer 3 / Phase 8. The one place in the app that shows a cross-metric score: the User profile page. Product-defined,
 // not clinically validated; the factor rows show what it rests on and what is missing.
 //
-// The radar is a picture of the same factors, not a second score: each assessed factor sits on a ring for its status (outer =
-// favorable, middle = neutral, inner = opportunity) and a factor that could not be assessed is a hollow dashed marker left out of
-// the polygon. The grade itself is still only "favorable of assessed", computed in domain/aging/Healthspan.kt.
+// Every factor is a 1-100 score on one scale: favorable from 50, neutral from 25, an opportunity below. The radar plots each
+// assessed factor at its score, so its 50 and 25 rings are those two lines; a factor that could not be assessed is a dashed
+// spoke marked "—", left out of the polygon. The headline is the mean of the assessed scores, from domain/aging/Healthspan.kt.
 @Composable
 fun HealthspanCard(summary: HealthspanSummary?, failed: Boolean = false) {
     var selected by remember { mutableStateOf<Int?>(null) }
     FTCard(
         title = "HEALTHSPAN",
-        info = "A general grade: the share of the factors that could be assessed from your own data and that are favorable. A factor is assessed only when its input is recent, complete and consistent; otherwise it says what is missing. Chart: outer ring favorable, middle neutral, inner an opportunity, hollow dashed not assessed. Product-defined, not a medical assessment.",
+        info = "A general score from 1 to 100: the mean of the factors that could be assessed from your own data. Each factor is scored 1-100 on one scale, favorable from 50 and an opportunity below 25: as a percentile for your age and sex where a population table exists, otherwise against cited clinical targets or lifter standards. A factor is assessed only when its input is recent, complete and consistent; otherwise it says what is missing. Chart: each factor at its score; the 50 and 25 rings are the favorable and opportunity lines; a dashed spoke marked — is not assessed. Product-defined, not a medical assessment.",
         methodology = "healthspan",
     ) {
         if (summary == null) {
@@ -54,14 +54,14 @@ fun HealthspanCard(summary: HealthspanSummary?, failed: Boolean = false) {
         }
         FTMetricValue(
             DisplayValue(
-                primary = summary.grade ?: "PRELIMINARY",
-                unit = null,
+                primary = summary.score?.toString() ?: "PRELIMINARY",
+                unit = summary.score?.let { "/ 100" },
                 secondary = "${summary.favorable} of ${summary.assessed} assessed factors favorable",
             ),
         )
         if (summary.preliminary) {
             Text(
-                "No letter yet: at least $HEALTHSPAN_MIN_ASSESSED of the 8 factors must be assessed, and ${summary.assessed} are.",
+                "No score yet: at least $HEALTHSPAN_MIN_ASSESSED of the 8 factors must be assessed, and ${summary.assessed} are.",
                 style = FTType.Caption,
                 color = FT.TextMuted,
             )
@@ -70,7 +70,7 @@ fun HealthspanCard(summary: HealthspanSummary?, failed: Boolean = false) {
         FTRadarChart(
             axes = summary.factors.map { f ->
                 val (tag, color) = f.status.tag()
-                RadarAxis(f.id.short(), f.status.radius(), color, valueLabel = tag.shortTag())
+                RadarAxis(f.id.short(), f.score?.toDouble(), color)
             },
             selectedIndex = selected,
             onSelect = { selected = if (selected == it) null else it },
@@ -92,21 +92,6 @@ private fun FactorStatus.tag(): Pair<String, Color> = when (this) {
     FactorStatus.UNASSESSED -> "NOT ASSESSED" to FT.TextMuted
 }
 
-// Ring position only (not a score): favorable on the outer ring, opportunity near the centre; unassessed is left out.
-private fun FactorStatus.radius(): Double? = when (this) {
-    FactorStatus.FAVORABLE -> 100.0
-    FactorStatus.NEUTRAL -> 60.0
-    FactorStatus.OPPORTUNITY -> 25.0
-    FactorStatus.UNASSESSED -> null
-}
-
-private fun String.shortTag(): String? = when (this) {
-    "FAVORABLE" -> "FAV"
-    "NEUTRAL" -> "NEU"
-    "OPPORTUNITY" -> "OPP"
-    else -> null
-}
-
 private fun HealthspanFactorId.short(): String = when (this) {
     HealthspanFactorId.CARDIO_FITNESS -> "CARDIO"
     HealthspanFactorId.BIOLOGICAL_AGE -> "BIO AGE"
@@ -118,8 +103,8 @@ private fun HealthspanFactorId.short(): String = when (this) {
     HealthspanFactorId.GLYCAEMIC -> "GLUCOSE"
 }
 
-// Collapsed: the factor and its status, one line. Expanded (tap the row or the chart vertex): what was measured, what is missing,
-// the caveats and the one action.
+// Collapsed: the factor, its score and status, one line. Expanded (tap the row or the chart vertex): what the number is
+// measured against, what was measured, what is missing, the caveats and the one action.
 @Composable
 private fun FactorRow(f: HealthspanFactor, expanded: Boolean, assessed: Int, onClick: () -> Unit) {
     val (tag, color) = f.status.tag()
@@ -135,12 +120,12 @@ private fun FactorRow(f: HealthspanFactor, expanded: Boolean, assessed: Int, onC
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(f.id.label, style = if (expanded) FTType.RowTitle else FTType.Body, color = if (expanded) FT.TextPrimary else FT.TextSecondary, modifier = Modifier.weight(1f))
-            Text(tag, style = FTType.MonoCaption, color = color)
+            Text(f.score?.let { "$it · $tag" } ?: tag, style = FTType.MonoCaption, color = color)
         }
         if (expanded) {
             f.reading?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
-            if (f.status != FactorStatus.UNASSESSED && assessed > 0) {
-                Text("Counts as 1 of $assessed assessed factors in the grade.", style = FTType.Caption, color = FT.TextMuted)
+            if (f.score != null && f.basis != null && assessed > 0) {
+                Text("${f.score} / 100, ${f.basis.label}; 1 of $assessed factors in the mean.", style = FTType.Caption, color = FT.TextMuted)
             }
             if (f.missingInputs.isNotEmpty()) {
                 Text("Needs: " + f.missingInputs.joinToString("; "), style = FTType.Caption, color = FT.TextMuted)

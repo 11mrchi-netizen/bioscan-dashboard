@@ -1,23 +1,18 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -28,10 +23,16 @@ import com.bioscan.fieldterminal.data.TodayFuel
 import com.bioscan.fieldterminal.data.hydrationBoundsMl
 import com.bioscan.fieldterminal.domain.DayProgressItem
 import com.bioscan.fieldterminal.domain.MetricState
+import com.bioscan.fieldterminal.domain.OVER_MARGIN
 import com.bioscan.fieldterminal.domain.ProgressMark
 import com.bioscan.fieldterminal.domain.progressItem
 import com.bioscan.fieldterminal.domain.shortfalls
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.NutrientColor
+import com.bioscan.fieldterminal.ui.components.drawZonedTrack
+import com.bioscan.fieldterminal.ui.components.drawZonedValue
+import com.bioscan.fieldterminal.ui.components.zoneEdges
+import com.bioscan.fieldterminal.ui.components.zonedFraction
 import com.bioscan.fieldterminal.ui.components.stateTreatment
 import com.bioscan.fieldterminal.ui.screens.fuel.TodayFuelSummary
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -66,11 +67,13 @@ fun NutritionTodayCard(nut: NutritionOverview, fuel: TodayFuel?, onOpenPlan: () 
         progressItem("Fat", "g", today?.fatG ?: 0.0, plan?.fatG ?: goals.fatG, now),
         progressItem("Water", "ml", waterMl, water.start, now, upper = water.endInclusive),
     )
+    val colors = listOf(NutrientColor.Calories, NutrientColor.Protein, NutrientColor.Carbs, NutrientColor.Fat, NutrientColor.Water)
+    val uppers = listOf(null, null, null, null, water.endInclusive)
 
     FTCard(title = "NUTRITION TODAY", info = NUTRITION_TODAY_INFO, infoDetails = NUTRITION_TODAY_DETAILS, modifier = modifier) {
         fuel?.let { TodayFuelSummary(it, onOpen = onOpenPlan) }
         Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items.forEach { ProgressRow(it) }
+            items.forEachIndexed { i, item -> ProgressRow(item, colors[i], uppers[i]) }
         }
         val short = shortfalls(items)
         if (short.isNotEmpty()) {
@@ -89,9 +92,11 @@ fun NutritionTodayCard(nut: NutritionOverview, fuel: TodayFuel?, onOpenPlan: () 
     }
 }
 
-// Label and amount over a bar of the day's target, the hour's expected share as a tick, the mark as a word.
+// Label and amount over a bar of the day's target, the hour's expected share as a tick, the mark as a word. The bar uses
+// the nutrition layout (ZonedScale.kt): the target to the OVER line (the water range's top, else target x OVER_MARGIN)
+// is the band at 70-90 %; the fill is the nutrient's colour, the word keeps the state colour.
 @Composable
-private fun ProgressRow(item: DayProgressItem) {
+private fun ProgressRow(item: DayProgressItem, color: Color, upper: Double?) {
     val state = when (item.mark) {
         ProgressMark.ON_TRACK -> MetricState.Optimal
         ProgressMark.SHORT, ProgressMark.OVER -> MetricState.Warning
@@ -114,14 +119,17 @@ private fun ProgressRow(item: DayProgressItem) {
             Text("${treatment.symbol} ${item.mark.word}", style = FTType.Label, color = treatment.color, modifier = Modifier.padding(start = 10.dp))
         }
         if (target != null) {
-            val shape = RoundedCornerShape(FT.RadiusSmall)
-            BoxWithConstraints(Modifier.fillMaxWidth().height(8.dp).clip(shape).background(FT.GlassStrongFill, shape)) {
-                val fill = (item.have / target).toFloat().coerceIn(0f, 1f)
-                Box(Modifier.fillMaxHeight().fillMaxWidth(fill).clip(shape).background(treatment.color.copy(alpha = 0.75f), shape))
+            val top = upper ?: (target * OVER_MARGIN)
+            val edges = zoneEdges(target, top)
+            if (edges != null) Canvas(Modifier.fillMaxWidth().height(12.dp)) {
+                val y = size.height / 2f
+                val bar = 8.dp.toPx()
+                drawZonedTrack(y, bar, edges, color)
+                drawZonedValue(y, bar, zonedFraction(item.have, target, top) ?: 0f, color, 4.dp.toPx())
                 // The hour's expected share: a thin tick across the bar.
                 item.expectedNow?.let { e ->
-                    val x = maxWidth * (e / target).toFloat().coerceIn(0f, 1f)
-                    Box(Modifier.offset(x = x - 1.dp).width(2.dp).fillMaxHeight().background(FT.TextPrimary.copy(alpha = 0.8f)))
+                    val x = (zonedFraction(e, target, top) ?: 0f) * size.width
+                    drawLine(FT.TextPrimary.copy(alpha = 0.8f), Offset(x, 0f), Offset(x, size.height), strokeWidth = 2.dp.toPx())
                 }
             }
         }

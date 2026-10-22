@@ -22,9 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,6 +38,10 @@ import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.PinnedPage
 import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.drawZonedTrack
+import com.bioscan.fieldterminal.ui.components.drawZonedValue
+import com.bioscan.fieldterminal.ui.components.zoneEdges
+import com.bioscan.fieldterminal.ui.components.zonedFraction
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
@@ -210,53 +211,26 @@ private fun NutrientRow(info: NutrientInfo, amount: Double, rdaMultiplier: Int) 
     }
 }
 
+// The same 70 / 20 / 10 layout as the other nutrition bars (ZonedScale.kt): under the RDA, the RDA to the upper limit,
+// over it. With no upper limit the last 30 % is the good range; with only an upper limit, everything under it is good.
+// The fill keeps its state colour (no nutrient identity here); the RDA and limit sit on the zone edges.
 @Composable
 private fun NutrientBar(amount: Double, rda: Double?, upperLimit: Double?) {
-    val maxRef = listOfNotNull(rda, upperLimit, amount).max() * 1.2
-    if (maxRef <= 0) return
+    val edges = zoneEdges(rda, upperLimit) ?: return
+    val fraction = zonedFraction(amount, rda, upperLimit) ?: return
 
     val barColor = when {
         upperLimit != null && amount > upperLimit -> FT.Warning
         rda != null && amount >= rda -> FT.Emerald
         rda != null && amount >= rda * 0.7 -> FT.Emerald.copy(alpha = 0.7f)
-        else -> FT.DomainFuel
+        else -> FT.TextSecondary
     }
 
     Canvas(modifier = Modifier.fillMaxWidth().height(30.dp)) {
         val barH = 14.dp.toPx()
         val cy = size.height / 2f
-        val cr = barH / 2f
-
-        drawRoundRect(
-            color = FT.GlassTrack,
-            topLeft = Offset(0f, cy - barH / 2f),
-            size = Size(size.width, barH),
-            cornerRadius = CornerRadius(cr),
-        )
-
-        val fraction = (amount / maxRef).toFloat().coerceIn(0f, 1f)
-        val fillW = fraction * size.width
-        if (fillW > 0f) {
-            drawRoundRect(
-                color = barColor,
-                topLeft = Offset(0f, cy - barH / 2f),
-                size = Size(fillW.coerceAtLeast(barH), barH),
-                cornerRadius = CornerRadius(cr),
-            )
-        }
-
-        val markerR = 10.dp.toPx()
-        val markerX = fillW.coerceIn(markerR, size.width - markerR)
-        drawCircle(color = barColor, radius = markerR, center = Offset(markerX, cy))
-
-        rda?.let {
-            val x = (it / maxRef).toFloat().coerceIn(0f, 1f) * size.width
-            drawLine(FT.TextSecondary, Offset(x, cy - barH * 0.7f), Offset(x, cy + barH * 0.7f), strokeWidth = 2.5f)
-        }
-        upperLimit?.let {
-            val x = (it / maxRef).toFloat().coerceIn(0f, 1f) * size.width
-            drawLine(FT.Warning.copy(alpha = 0.6f), Offset(x, cy - barH * 0.7f), Offset(x, cy + barH * 0.7f), strokeWidth = 2.5f)
-        }
+        drawZonedTrack(cy, barH, edges, FT.Emerald)
+        drawZonedValue(cy, barH, fraction, barColor, 10.dp.toPx())
     }
 }
 

@@ -39,6 +39,7 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.NutrientColor
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -153,12 +154,12 @@ private fun CarbStrip(days: List<HorizonDay>) {
                     val cx = i * slot + slot / 2
                     val band = h.plan.band
                     drawRoundRect(
-                        FT.DomainFuel.copy(alpha = 0.12f), Offset(cx - bandW / 2, y(band.highGPerKg)),
+                        NutrientColor.Carbs.copy(alpha = 0.14f), Offset(cx - bandW / 2, y(band.highGPerKg)),
                         Size(bandW, y(band.lowGPerKg) - y(band.highGPerKg)), CornerRadius(3.dp.toPx()),
                     )
                     val v = h.plan.carbGPerKg
                     val alpha = if (i == shown) 1f else 0.55f
-                    drawRoundRect(FT.DomainFuel.copy(alpha = alpha), Offset(cx - barW / 2, y(v)), Size(barW, size.height - y(v)), CornerRadius(4.dp.toPx()))
+                    drawRoundRect(NutrientColor.Carbs.copy(alpha = alpha), Offset(cx - barW / 2, y(v)), Size(barW, size.height - y(v)), CornerRadius(4.dp.toPx()))
                 }
                 drawLine(FT.TextMuted.copy(alpha = 0.5f), Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1f)
             }

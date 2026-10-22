@@ -8,9 +8,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.domain.fuel.CarbCode
 import com.bioscan.fieldterminal.domain.fuel.DayClass
+import com.bioscan.fieldterminal.ui.components.NutrientColor
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
@@ -26,7 +28,8 @@ private fun stepAlpha(step: Int): Float = when (step) {
 
 @Composable
 fun CodeChip(code: CarbCode, modifier: Modifier = Modifier) {
-    StepChip(code.label, code.ordinal, modifier)
+    // A carbohydrate level, so the carbs colour (ui/components/NutritionColors.kt).
+    StepChip(code.label, code.ordinal, modifier, NutrientColor.Carbs)
 }
 
 @Composable
@@ -35,12 +38,12 @@ fun DayClassChip(dayClass: DayClass, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun StepChip(label: String, step: Int, modifier: Modifier) {
+private fun StepChip(label: String, step: Int, modifier: Modifier, color: Color = FT.DomainFuel) {
     val shape = RoundedCornerShape(FT.RadiusSmall)
     Box(
         modifier
-            .background(FT.DomainFuel.copy(alpha = stepAlpha(step)), shape)
-            .border(FT.BorderWidth, FT.DomainFuel.copy(alpha = 0.6f), shape)
+            .background(color.copy(alpha = stepAlpha(step)), shape)
+            .border(FT.BorderWidth, color.copy(alpha = 0.6f), shape)
             .padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
         Text(label, style = FTType.LabelCaps, color = FT.TextPrimary)

@@ -48,6 +48,7 @@ import com.bioscan.fieldterminal.domain.RangeKind
 import com.bioscan.fieldterminal.domain.TotalsPeriod
 import com.bioscan.fieldterminal.domain.sumNutritionSince
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.NutrientColor
 import com.bioscan.fieldterminal.ui.components.FTDataChip
 import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
@@ -95,7 +96,7 @@ fun NutritionTabContent(overview: NutritionOverview, onOpenNutrientBreakdown: ()
             Text("No meals logged yet today.", style = FTType.Body, color = FT.TextSecondary)
         } else Column {
             FTMetricValue(DisplayValue(primary = today.calories.roundToInt().toString(), unit = "KCAL"))
-            FTRangeIndicator(dailyRange("CALORIES", today.calories, goals.caloriesKcal, 3500.0))
+            FTRangeIndicator(dailyRange("CALORIES", today.calories, goals.caloriesKcal, 3500.0), currentColor = NutrientColor.Calories, zoned = goals.caloriesKcal != null)
             Text(
                 text = "${today.mealCount} MEAL${if (today.mealCount == 1) "" else "S"} LOGGED — ${today.date}",
                 style = FTType.LabelCaps,
@@ -106,9 +107,9 @@ fun NutritionTabContent(overview: NutritionOverview, onOpenNutrientBreakdown: ()
 
         if (today != null) {
             FTCard(title = "MACROS") {
-                FTRangeIndicator(dailyRange("PROTEIN (G)", today.proteinG, goals.proteinG, 220.0))
-                FTRangeIndicator(dailyRange("CARBS (G)", today.carbsG, goals.carbsG, 450.0))
-                FTRangeIndicator(dailyRange("FAT (G)", today.fatG, goals.fatG, 180.0))
+                FTRangeIndicator(dailyRange("PROTEIN (G)", today.proteinG, goals.proteinG, 220.0), currentColor = NutrientColor.Protein, zoned = goals.proteinG != null)
+                FTRangeIndicator(dailyRange("CARBS (G)", today.carbsG, goals.carbsG, 450.0), currentColor = NutrientColor.Carbs, zoned = goals.carbsG != null)
+                FTRangeIndicator(dailyRange("FAT (G)", today.fatG, goals.fatG, 180.0), currentColor = NutrientColor.Fat, zoned = goals.fatG != null)
                 NutrientBreakdownButton(onClick = onOpenNutrientBreakdown)
             }
         }
@@ -278,7 +279,7 @@ fun HydrationTabContent(overview: NutritionOverview) {
                 Text("No hydration logged yet today.", style = FTType.Body, color = FT.TextSecondary)
             } else {
                 FTMetricValue(DisplayValue(primary = "%.1f".format(totalMl / 1000.0), unit = "L"))
-                FTRangeIndicator(hydrationRange(totalMl, NutritionGoalsStore.getGoals(LocalContext.current), hydrationIntelligence.inferredDemandMl ?: 0.0))
+                FTRangeIndicator(hydrationRange(totalMl, NutritionGoalsStore.getGoals(LocalContext.current), hydrationIntelligence.inferredDemandMl ?: 0.0), currentColor = NutrientColor.Water, zoned = true)
 
                 // Breakdown by source when there are beverage entries alongside
                 // plain water, so the user can see each contribution.
@@ -410,10 +411,10 @@ private fun NutritionGoalAdherenceCard(allDays: List<DailyNutrition>) {
     val days = totals.dayCount.coerceAtLeast(1)
 
     FTCard(title = "GOAL ADHERENCE") {
-        goals.caloriesKcal?.let { FTRangeIndicator(targetRange("CALORIES (KCAL/DAY)", totals.calories / days, it)) }
-        goals.proteinG?.let { FTRangeIndicator(targetRange("PROTEIN (G/DAY)", totals.proteinG / days, it)) }
-        goals.carbsG?.let { FTRangeIndicator(targetRange("CARBS (G/DAY)", totals.carbsG / days, it)) }
-        goals.fatG?.let { FTRangeIndicator(targetRange("FAT (G/DAY)", totals.fatG / days, it)) }
+        goals.caloriesKcal?.let { FTRangeIndicator(targetRange("CALORIES (KCAL/DAY)", totals.calories / days, it), currentColor = NutrientColor.Calories, zoned = true) }
+        goals.proteinG?.let { FTRangeIndicator(targetRange("PROTEIN (G/DAY)", totals.proteinG / days, it), currentColor = NutrientColor.Protein, zoned = true) }
+        goals.carbsG?.let { FTRangeIndicator(targetRange("CARBS (G/DAY)", totals.carbsG / days, it), currentColor = NutrientColor.Carbs, zoned = true) }
+        goals.fatG?.let { FTRangeIndicator(targetRange("FAT (G/DAY)", totals.fatG / days, it), currentColor = NutrientColor.Fat, zoned = true) }
         Text(
             "7-day daily average vs. your saved targets",
             style = FTType.Caption,
@@ -476,7 +477,7 @@ private fun CalorieTrendBars(days: List<DailyNutrition>) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height((40 * fraction).dp)
-                        .background(FT.Emerald.copy(alpha = 0.7f)),
+                        .background(NutrientColor.Calories.copy(alpha = 0.8f)),
                 )
             }
         }

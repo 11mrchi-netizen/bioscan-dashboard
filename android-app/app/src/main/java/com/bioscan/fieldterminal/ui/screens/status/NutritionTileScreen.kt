@@ -50,6 +50,7 @@ import com.bioscan.fieldterminal.domain.evaluateWeightTrend
 import com.bioscan.fieldterminal.domain.gateStateWord
 import com.bioscan.fieldterminal.domain.proteinPercentSeries
 import com.bioscan.fieldterminal.domain.trendStateWord
+import com.bioscan.fieldterminal.ui.components.NutrientColor
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDataChip
@@ -162,7 +163,7 @@ private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) 
         } else {
             DateTrendLine(
                 points = proteinSeries,
-                color = FT.DomainFuel,
+                color = NutrientColor.Protein,
                 refLow = PROTEIN_PCT_LOW * 100,
                 refHigh = PROTEIN_PCT_HIGH * 100,
                 unit = "% of calories from protein",

@@ -171,7 +171,9 @@ fun FTProvenanceCue(provenance: List<Provenance>, modifier: Modifier = Modifier)
 }
 
 @Composable
-fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, currentColor: Color = FT.TextPrimary) {
+// zoned: the nutrition layout (ZonedScale.kt), the band at 70-90 % of the bar, with the value as a fill and dot in
+// currentColor. Off by default, so other screens keep the padded layout.
+fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, currentColor: Color = FT.TextPrimary, zoned: Boolean = false) {
     val minimum = range.lower
     val maximum = range.upper
     if (!range.sufficientHistory || minimum == null || maximum == null) {
@@ -200,7 +202,13 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
             Text(range.label.uppercase(), color = FT.TextSecondary, style = FTType.MonoCaption, modifier = Modifier.weight(1f))
             comparisonLabel?.let { Text(it, color = FT.TextSecondary, style = FTType.Label) }
         }
-        Canvas(modifier = Modifier.fillMaxWidth().height(28.dp).padding(top = 6.dp)) {
+        val edges = if (zoned) zoneEdges(minimum, maximum) else null
+        if (edges != null) Canvas(modifier = Modifier.fillMaxWidth().height(28.dp).padding(top = 6.dp)) {
+            val y = size.height / 2f
+            val bar = 8.dp.toPx()
+            drawZonedTrack(y, bar, edges, currentColor)
+            range.current?.let { drawZonedValue(y, bar, zonedFraction(it, minimum, maximum) ?: 0f, currentColor, 5.dp.toPx()) }
+        } else Canvas(modifier = Modifier.fillMaxWidth().height(28.dp).padding(top = 6.dp)) {
             val y = size.height / 2f
             val stroke = 8.dp.toPx()
             drawLine(FT.GlassTrack, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), strokeWidth = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)

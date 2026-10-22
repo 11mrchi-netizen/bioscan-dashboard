@@ -1,7 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,12 +11,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,8 +30,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.CronometerAlternative
 import com.bioscan.fieldterminal.data.CronometerEnrichment
-import com.bioscan.fieldterminal.data.CronometerItemInput
 import com.bioscan.fieldterminal.data.CronometerItemResult
+import com.bioscan.fieldterminal.data.FoodMeasure
+import com.bioscan.fieldterminal.data.FoodSuggestion
+import com.bioscan.fieldterminal.data.FoodSuggestionRef
 import com.bioscan.fieldterminal.data.MealItemSource
 import com.bioscan.fieldterminal.data.NutritionCronometerLookupRepository
 import com.bioscan.fieldterminal.data.NutritionMealEstimate
@@ -37,12 +41,16 @@ import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.calories
 import com.bioscan.fieldterminal.data.counts
+import com.bioscan.fieldterminal.data.emptyEnrichment
+import com.bioscan.fieldterminal.data.formatAmount
 import com.bioscan.fieldterminal.data.usingDatabaseMatch
 import com.bioscan.fieldterminal.data.withGrams
 import com.bioscan.fieldterminal.data.withItems
+import com.bioscan.fieldterminal.data.withMeasure
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
@@ -50,9 +58,11 @@ import java.time.LocalDateTime
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-// One whole-meal approximation to confirm (and correct, if visibly off) and save. Photo, text and barcode entries all
-// land here. With Cronometer enrichment, each matched food is listed so a wrong match or portion is visible and
-// fixable (pick another food, change grams, remove it) before anything is saved.
+private const val ADDING = -1
+
+// One meal to confirm (and correct) before saving. Photo, text and barcode entries all land here. Each food is listed
+// with its portion; any of them can be replaced by typing another food (with suggestions), new ingredients can be added
+// (also to a photo estimate that had no database match), and portions can be set by serving, count or grams.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NutritionEstimateConfirmSheet(
@@ -67,11 +77,15 @@ fun NutritionEstimateConfirmSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    val lookupRepo = remember { NutritionCronometerLookupRepository(SupabaseClientProvider.client) }
 
     // The user's item edits; reset whenever a new lookup result arrives.
     var current by remember(enrichment) { mutableStateOf(enrichment) }
-    var swappingIndex by remember(enrichment) { mutableStateOf<Int?>(null) }
-    var swapError by remember(enrichment) { mutableStateOf<String?>(null) }
+    // Which item has its search field open (ADDING for a new ingredient), and which one is loading a picked food.
+    var editing by remember(enrichment) { mutableStateOf<Int?>(null) }
+    var busy by remember(enrichment) { mutableStateOf<Int?>(null) }
+    var busyName by remember(enrichment) { mutableStateOf("") }
+    var pickError by remember(enrichment) { mutableStateOf<String?>(null) }
 
     val effectiveCal = current?.calories ?: estimate.calories
     val effectivePro = current?.proteinG ?: estimate.proteinG
@@ -99,36 +113,45 @@ fun NutritionEstimateConfirmSheet(
         current = e.withItems(items, extraUnits)
     }
 
-    fun pickAlternative(index: Int, alternative: CronometerAlternative) {
-        val original = current?.items?.getOrNull(index) ?: return
-        swappingIndex = index
-        swapError = null
+    // Loads the picked food and puts it in place of item `target`, or adds it (target == ADDING). A replaced item keeps
+    // its grams and its memory key, so the pick is remembered for what the user originally wrote.
+    fun pickSuggestion(target: Int, typed: String, suggestion: FoodSuggestion) {
+        val original = current?.items?.getOrNull(target)
+        editing = null
+        busy = target
+        busyName = suggestion.name
+        pickError = null
         scope.launch {
             try {
-                val looked = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
-                    .enrichItems(listOf(CronometerItemInput(original.query, original.quantityG, alternative.foodId)))
+                val grams = original?.quantityG?.takeIf { it > 0 } ?: suggestion.defaultGrams
+                val looked = lookupRepo.resolve(original?.query ?: typed, suggestion, grams)
                 val picked = looked.items.firstOrNull() ?: throw IllegalStateException("no result")
-                val previous = original.cronometerFoodId?.let { id ->
-                    CronometerAlternative(id, original.cronometerFoodName ?: original.query, original.cronometerSource, null)
-                }
-                replaceItem(
-                    index,
-                    picked.copy(
+                val base = current ?: emptyEnrichment()
+                val items = base.items.toMutableList()
+                if (original != null) {
+                    val previous = original.cronometerFoodId?.let { id ->
+                        CronometerAlternative(id, original.cronometerFoodName ?: original.query, original.cronometerSource, null)
+                    }
+                    items[target] = picked.copy(
                         memoryKey = original.memoryKey,
                         portionCount = original.portionCount,
                         portionUnit = original.portionUnit,
                         aiEstimate = original.aiEstimate,
                         usedEstimate = false,
                         disagreement = false,
-                        alternatives = (listOfNotNull(previous) + original.alternatives).filter { it.foodId != alternative.foodId },
+                        alternatives = (listOfNotNull(previous) + original.alternatives + picked.alternatives)
+                            .distinctBy { it.foodId }
+                            .filter { it.foodId != picked.cronometerFoodId },
                         userEdited = true,
-                    ),
-                    looked.nutrientUnits,
-                )
+                    )
+                } else {
+                    items += picked.copy(userEdited = true)
+                }
+                current = base.withItems(items, looked.nutrientUnits)
             } catch (e: Exception) {
-                swapError = e.message ?: "lookup failed"
+                pickError = e.message ?: "lookup failed"
             } finally {
-                swappingIndex = null
+                busy = null
             }
         }
     }
@@ -152,40 +175,69 @@ fun NutritionEstimateConfirmSheet(
             Text(headerTitle, style = sheetHeaderTitleStyle, color = FT.Emerald)
             val e = current
             if (e != null) {
-                Text("ENRICHED WITH CRONOMETER", style = FTType.LabelCaps, color = FT.Emerald)
+                Text("FOODS", style = FTType.LabelCaps, color = FT.Emerald)
                 Text(
-                    "Database-backed nutrition from ${e.primarySource ?: "Cronometer"} (${e.itemsIncluded} of ${e.items.size} items counted, " +
-                        "confidence ${(e.confidence * 100).roundToInt()}%). Check each food and portion below.",
+                    "From ${sourceLabel(e.primarySource) ?: "the food database"} (${e.itemsIncluded} of ${e.items.size} items counted, " +
+                        "confidence ${(e.confidence * 100).roundToInt()}%). Check each food and portion; replace or add anything that's off.",
                     style = FTType.Caption,
                     color = FT.TextMuted,
                 )
+                if (enrichment == null) {
+                    Text("Totals now come from the foods below, not the photo estimate.", style = FTType.Caption, color = FT.TextMuted)
+                }
                 CrossCheckNote(e)
                 e.items.forEachIndexed { index, item ->
-                    MatchedItemRow(
-                        index = index,
-                        item = item,
-                        swapping = swappingIndex == index,
-                        onGrams = { grams -> replaceItem(index, item.withGrams(grams)) },
-                        onPick = { alt -> pickAlternative(index, alt) },
-                        onUseDatabase = { replaceItem(index, item.usingDatabaseMatch()) },
-                        onRemove = if (e.items.size > 1) ({ replaceItem(index, null) }) else null,
-                    )
+                    if (editing == index) {
+                        FoodSuggestField(
+                            initialQuery = item.query,
+                            initial = item.alternatives.map {
+                                FoodSuggestion(FoodSuggestionRef("cronometer", it.foodId), it.name, it.source, it.kcalPer100g)
+                            },
+                            placeholder = "Type the right food",
+                            onPick = { typed, s -> pickSuggestion(index, typed, s) },
+                            onCancel = { editing = null },
+                        )
+                    } else {
+                        MatchedItemRow(
+                            item = item,
+                            loading = busy == index,
+                            onPortion = { replaceItem(index, it) },
+                            onReplace = { editing = index },
+                            onUseDatabase = { replaceItem(index, item.usingDatabaseMatch()) },
+                            onRemove = if (e.items.size > 1) ({ replaceItem(index, null) }) else null,
+                        )
+                    }
                 }
-                swapError?.let { Text("Couldn't load that food ($it).", style = FTType.Caption, color = FT.Critical) }
             } else if (enriching) {
-                Text("ENRICHING WITH CRONOMETER...", style = FTType.LabelCaps, color = FT.TextSecondary)
+                Text("LOOKING UP FOODS...", style = FTType.LabelCaps, color = FT.TextSecondary)
                 Text(
-                    "Looking up foods in database for more accurate nutrition. Gemini estimate shown below.",
+                    "Matching the foods in the database for more accurate nutrition. The AI estimate is shown below meanwhile.",
                     style = FTType.Caption,
                     color = FT.TextMuted,
                 )
             } else {
                 Text(
-                    "Approximate whole-meal estimate (confidence ${(estimate.confidence * 100).toInt()}%) -- edit anything that looks off before saving.",
+                    "Approximate whole-meal estimate (confidence ${(estimate.confidence * 100).toInt()}%) -- edit anything that looks off, " +
+                        "or add the foods one by one for database numbers.",
                     style = FTType.Caption,
                     color = FT.TextMuted,
                 )
             }
+
+            if (!enriching || e != null) {
+                when {
+                    editing == ADDING -> FoodSuggestField(
+                        initialQuery = "",
+                        initial = emptyList(),
+                        placeholder = "Add a food, e.g. olive oil",
+                        onPick = { typed, s -> pickSuggestion(ADDING, typed, s) },
+                        onCancel = { editing = null },
+                    )
+                    busy == ADDING -> Text("Adding $busyName...", style = FTType.Caption, color = FT.TextSecondary)
+                    else -> ActionLink("+ ADD INGREDIENT") { editing = ADDING }
+                }
+            }
+            pickError?.let { Text("Couldn't load that food ($it).", style = FTType.Caption, color = FT.Critical) }
 
             Column { FormFieldLabel("DESCRIPTION"); FieldTextField(description, { description = it }, "Meal description") }
             Column { FormFieldLabel("CALORIES"); FieldTextField(calories, { calories = it }, "0", keyboardType = KeyboardType.Number) }
@@ -210,7 +262,11 @@ fun NutritionEstimateConfirmSheet(
             val fatValue = fat.toDoubleOrNull()
             val valid = description.isNotBlank() && caloriesValue != null && proteinValue != null && carbsValue != null && fatValue != null
 
-            FTButton(label = if (saving) "SAVING..." else "SAVE", enabled = valid && !saving && swappingIndex == null, emphasis = FTButtonEmphasis.Primary) {
+            FTButton(
+                label = if (saving) "SAVING..." else "SAVE",
+                enabled = valid && !saving && busy == null && editing == null,
+                emphasis = FTButtonEmphasis.Primary,
+            ) {
                 if (valid && !saving) {
                     saving = true
                     error = null
@@ -286,25 +342,23 @@ private fun CrossCheckNote(e: CronometerEnrichment) {
 
 @Composable
 private fun MatchedItemRow(
-    index: Int,
     item: CronometerItemResult,
-    swapping: Boolean,
-    onGrams: (Double) -> Unit,
-    onPick: (CronometerAlternative) -> Unit,
+    loading: Boolean,
+    onPortion: (CronometerItemResult) -> Unit,
+    onReplace: () -> Unit,
     onUseDatabase: () -> Unit,
     onRemove: (() -> Unit)?,
 ) {
-    var showAlternatives by remember(index, item.cronometerFoodId) { mutableStateOf(false) }
-    // Keyed on the food, not the grams, so typing "18." is not reformatted under the cursor.
-    var gramsText by remember(index, item.cronometerFoodId) { mutableStateOf(formatGrams(item.quantityG)) }
+    val foodKey = item.cronometerFoodId ?: item.catalogFoodId
+    val hasFood = foodKey != null
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(item.cronometerFoodName ?: "No database match", style = FTType.RowTitle, color = FT.TextPrimary)
         val kcal = item.calories()
         Text(
-            "for \"${item.query}\" · ${item.servingUsed ?: "${formatGrams(item.quantityG)} g"}" +
+            "for \"${item.query}\" · ${item.servingUsed ?: "${formatAmount(item.quantityG)} g"}" +
                 (kcal?.let { " · ${it.roundToInt()} kcal" } ?: "") +
-                (item.cronometerSource?.let { " · $it" } ?: ""),
+                (sourceLabel(item.cronometerSource, if (item.catalogFoodId != null) "catalog" else null)?.let { " · $it" } ?: ""),
             style = FTType.Caption,
             color = FT.TextMuted,
         )
@@ -314,51 +368,101 @@ private fun MatchedItemRow(
         if (item.rejected.isNotEmpty()) {
             Text("Passed over: ${item.rejected.joinToString("; ")}", style = FTType.Caption, color = FT.TextMuted)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (item.counts() && item.quantityG > 0) {
-                FieldTextField(
-                    gramsText,
-                    { text ->
-                        gramsText = text
-                        text.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 }?.let(onGrams)
-                    },
-                    "g",
-                    modifier = Modifier.width(96.dp),
-                    keyboardType = KeyboardType.Number,
-                )
-                Text("G", style = FTType.LabelCaps, color = FT.TextSecondary)
-            }
-            if (swapping) {
+        if (hasFood && item.counts()) PortionEditor(item, onPortion)
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (loading) {
                 Text("LOADING...", style = FTType.LabelCaps, color = FT.TextSecondary)
-            } else if (item.alternatives.isNotEmpty()) {
-                ActionLink(if (showAlternatives) "HIDE" else "CHANGE FOOD") { showAlternatives = !showAlternatives }
+            } else {
+                ActionLink(if (hasFood) "REPLACE" else "FIND FOOD", onReplace)
             }
-            if (item.usedEstimate && item.cronometerFoodId != null) ActionLink("USE DATABASE", onUseDatabase)
+            if (item.usedEstimate && hasFood) ActionLink("USE DATABASE", onUseDatabase)
             onRemove?.let { ActionLink("REMOVE", it) }
         }
-        if (showAlternatives && !swapping) {
-            item.alternatives.forEach { alt ->
-                Text(
-                    "${alt.name}" + (alt.kcalPer100g?.let { " · ${it.roundToInt()} kcal/100 g" } ?: "") + (alt.source?.let { " · $it" } ?: ""),
-                    style = FTType.BodySmall,
-                    color = FT.TextSecondary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                            showAlternatives = false
-                            onPick(alt)
-                        }
-                        .padding(vertical = 4.dp),
-                )
+    }
+}
+
+// Serving chips from the food's own measures, a count stepper for the chosen serving, and grams for anything else.
+@Composable
+private fun PortionEditor(item: CronometerItemResult, onPortion: (CronometerItemResult) -> Unit) {
+    val foodKey = item.cronometerFoodId ?: item.catalogFoodId
+    val measures = remember(foodKey, item.allMeasures) {
+        item.allMeasures.filter { it.grams > 0 }.distinctBy { it.name }.take(6)
+    }
+    var measure by remember(foodKey) { mutableStateOf<FoodMeasure?>(null) }
+    var count by remember(foodKey) { mutableStateOf(1.0) }
+    // Not reset by its own edits (typing "18." stays as typed); follows changes made by the chips and the stepper.
+    var gramsText by remember(foodKey) { mutableStateOf(formatAmount(item.quantityG)) }
+    LaunchedEffect(item.quantityG) {
+        if (gramsText.replace(',', '.').toDoubleOrNull() != item.quantityG) gramsText = formatAmount(item.quantityG)
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (measures.isNotEmpty()) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                measures.forEach { m ->
+                    val selected = measure?.name == m.name
+                    Text(
+                        "${m.name} · ${formatAmount(m.grams)} g",
+                        style = FTType.Caption,
+                        color = if (selected) FT.Emerald else FT.TextSecondary,
+                        modifier = Modifier
+                            .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) {
+                                measure = m
+                                onPortion(item.withMeasure(m, count))
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                }
             }
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            measure?.let { m ->
+                StepButton("−") {
+                    count = (count - 0.5).coerceAtLeast(0.5)
+                    onPortion(item.withMeasure(m, count))
+                }
+                Text("${formatAmount(count)} ×", style = FTType.Value, color = FT.TextPrimary)
+                StepButton("+") {
+                    count += 0.5
+                    onPortion(item.withMeasure(m, count))
+                }
+            }
+            FieldTextField(
+                gramsText,
+                { text ->
+                    gramsText = text
+                    text.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 }?.let {
+                        measure = null
+                        onPortion(item.withGrams(it))
+                    }
+                },
+                "g",
+                modifier = Modifier.width(96.dp),
+                keyboardType = KeyboardType.Number,
+            )
+            Text("G", style = FTType.LabelCaps, color = FT.TextSecondary)
+        }
     }
+}
+
+@Composable
+private fun StepButton(label: String, onClick: () -> Unit) {
+    Text(
+        label,
+        style = FTType.Value,
+        color = FT.Emerald,
+        modifier = Modifier
+            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall), onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    )
 }
 
 private fun statusLine(item: CronometerItemResult): Pair<String, Boolean>? = when {
     item.usedEstimate && item.aiEstimate != null ->
         "Using AI estimate (~${item.aiEstimate.calories.roundToInt()} kcal) -- the database match looked wrong" to true
-    !item.counts() -> "Not counted -- no reliable database match" to true
+    !item.counts() -> "Not counted -- no reliable database match; find the right food below" to true
     item.disagreement && item.aiEstimate != null ->
         "AI estimate is ~${item.aiEstimate.calories.roundToInt()} kcal -- check the portion" to true
     item.userEdited -> "Your edit" to false
@@ -366,15 +470,13 @@ private fun statusLine(item: CronometerItemResult): Pair<String, Boolean>? = whe
     else -> null
 }
 
-private fun formatGrams(g: Double): String = if (g == Math.floor(g)) g.toLong().toString() else "%.1f".format(g)
-
 @Composable
 private fun ActionLink(label: String, onClick: () -> Unit) {
     Text(
         label,
         style = FTType.LabelCaps,
         color = FT.Emerald,
-        modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        modifier = Modifier.ftClickable(onClick = onClick),
     )
 }
 

@@ -56,6 +56,7 @@ private data class AiEstimateLinkUpdate(
 private data class CronometerItemAudit(
     val query: String,
     @SerialName("food_id") val foodId: Long?,
+    @SerialName("catalog_food_id") val catalogFoodId: Long?,
     val food: String?,
     val source: String?,
     val grams: Double,
@@ -72,6 +73,7 @@ private data class CronometerItemAudit(
 private fun CronometerItemResult.toAudit() = CronometerItemAudit(
     query = query,
     foodId = cronometerFoodId,
+    catalogFoodId = catalogFoodId,
     food = cronometerFoodName,
     source = cronometerSource,
     grams = quantityG,
@@ -88,10 +90,13 @@ private fun CronometerItemResult.toAudit() = CronometerItemAudit(
 @Serializable
 private data class CronometerItemsUpdate(@SerialName("cronometer_items") val cronometerItems: List<CronometerItemAudit>)
 
+// No default values: every field is always sent, so a null id clears the other kind of food on update
+// (food_match_memory requires exactly one of cronometer_food_id / catalog_food_id).
 @Serializable
 private data class FoodMatchMemoryRow(
     @SerialName("query_key") val queryKey: String,
-    @SerialName("cronometer_food_id") val cronometerFoodId: Long,
+    @SerialName("cronometer_food_id") val cronometerFoodId: Long?,
+    @SerialName("catalog_food_id") val catalogFoodId: Long?,
     @SerialName("food_name") val foodName: String,
     @SerialName("grams_per_unit") val gramsPerUnit: Double,
     val unit: String?,
@@ -101,7 +106,8 @@ private data class FoodMatchMemoryRow(
 @Serializable
 private data class FoodMatchMemoryFoodRow(
     @SerialName("query_key") val queryKey: String,
-    @SerialName("cronometer_food_id") val cronometerFoodId: Long,
+    @SerialName("cronometer_food_id") val cronometerFoodId: Long?,
+    @SerialName("catalog_food_id") val catalogFoodId: Long?,
     @SerialName("food_name") val foodName: String,
     @SerialName("updated_at") val updatedAt: String,
 )
@@ -309,7 +315,7 @@ class NutritionMealSaveRepository(
 
         // Remember only matches the user can stand behind: an exact name match, a reused memory, or their own pick.
         val remembered = items.filter {
-            it.cronometerFoodId != null && it.cronometerFoodName != null && !it.memoryKey.isNullOrBlank() &&
+            (it.cronometerFoodId != null || it.catalogFoodId != null) && it.cronometerFoodName != null && !it.memoryKey.isNullOrBlank() &&
                 !it.usedEstimate && (it.userEdited || it.fromMemory || it.matchQuality == "exact")
         }
         if (remembered.isEmpty()) return
@@ -323,7 +329,8 @@ class NutritionMealSaveRepository(
                     withGrams.map {
                         FoodMatchMemoryRow(
                             queryKey = it.memoryKey!!,
-                            cronometerFoodId = it.cronometerFoodId!!,
+                            cronometerFoodId = if (it.catalogFoodId == null) it.cronometerFoodId else null,
+                            catalogFoodId = it.catalogFoodId,
                             foodName = it.cronometerFoodName!!,
                             gramsPerUnit = Math.round(it.quantityG / it.portionCount!! * 10.0) / 10.0,
                             unit = it.portionUnit,
@@ -337,7 +344,8 @@ class NutritionMealSaveRepository(
                     foodOnly.map {
                         FoodMatchMemoryFoodRow(
                             queryKey = it.memoryKey!!,
-                            cronometerFoodId = it.cronometerFoodId!!,
+                            cronometerFoodId = if (it.catalogFoodId == null) it.cronometerFoodId else null,
+                            catalogFoodId = it.catalogFoodId,
                             foodName = it.cronometerFoodName!!,
                             updatedAt = now,
                         )

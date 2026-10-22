@@ -74,7 +74,15 @@ compositional change, not a new navigation destination.
 > the four tiles as a 2×2 grid with real previews (Fuel: kcal vs goal and water vs range; Labs: supplements still due and
 > last draw), and a quick-log row. The hub scrolls. The hero's destination is the **Today** page (formerly Daily
 > Readiness): recovery, READY FOR, fuel today, patterns; it links to Training › Load and Health › Cardio instead of
-> repeating them. `BodyConsole.kt` already exists; DAV-95 should
+> repeating them.
+>
+> **Update 2026-10 (opening-page clean-up, owner request):** the hero is only this morning's HRV and its state pill (STALE
+> when the reading is old); its label, the "as expected for a ..." sentence and the freshness line moved off the hub (all
+> on Today, where a tap on the hero goes). The zone legend, SLEEP and FLAGS under the figure are gone; the figure keeps its
+> tints and its injury pin. The four tiles show icon, title and one coloured dot, and the dot is the tile's only
+> indicator: Training = load, Health = the worst of HRV/RHR, sleep and HRV vs expected, Nutrition = logged calories and
+> water against the pace for the time of day, Lab = today's supplements (`domain/HubTileStates.kt`). The dot is announced
+> in words to screen readers. `BodyConsole.kt` already exists; DAV-95 should
 confirm during its own investigation whether it extends that file or replaces it — not decided here
 (see §6).
 

@@ -73,14 +73,15 @@ import com.bioscan.fieldterminal.domain.FigurePoint
 import com.bioscan.fieldterminal.domain.FuelSubType
 import com.bioscan.fieldterminal.domain.MapEvent
 import com.bioscan.fieldterminal.domain.MetricState
-import com.bioscan.fieldterminal.domain.MorningReadout
+import com.bioscan.fieldterminal.domain.StateWord
+import com.bioscan.fieldterminal.domain.healthHubState
+import com.bioscan.fieldterminal.domain.labHubState
+import com.bioscan.fieldterminal.domain.nutritionHubState
 import com.bioscan.fieldterminal.domain.expectedStateWord
-import com.bioscan.fieldterminal.domain.headline
 import com.bioscan.fieldterminal.domain.figurePinForBodyPart
 import com.bioscan.fieldterminal.domain.freshnessLine
 import com.bioscan.fieldterminal.domain.healthFlagDay
 import com.bioscan.fieldterminal.domain.parseSessionZonedDateTime
-import com.bioscan.fieldterminal.domain.supplementsTodayLine
 import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.metricStateColor
@@ -90,25 +91,19 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import java.util.Locale
-import kotlin.math.roundToInt
 
-// The Status hub: a body-centered composition (design/FIELD_TERMINAL_IA_CONTRACT.md
-// section 4). Real data for HRV/RHR/sleep/health-flag. The hero is this
-// morning's HRV against the band expected for it (analysis review phase C; no
-// composite 0-100 score exists or is invented), paired with a state pill; the figure's
-// head/chest/legs tint by recovery/cardio/training-load state, and the zone
-// legend under it spells out each zone's state in words so color is never the
-// only signal. Entirely Futuristic Material tokens/fonts.
+// The Status hub: a body-centered composition (design/FIELD_TERMINAL_IA_CONTRACT.md section 4). Entirely Futuristic
+// Material tokens/fonts.
 //
-// UX review P1 ("today at a glance"): the hero names its basis and freshness and links TODAY ›; the figure is shorter;
-// the four tiles are a 2x2 grid of instruments with real previews (FUEL and LABS no longer say OPEN); a quick-log row
-// opens the add sheet on the right form. The hub scrolls (F4: large fonts used to squeeze it), and the figure is sized
-// from the viewport so the first screen still holds the hero, the figure and all four tiles.
+// Opening-page clean-up (owner, 2026-10): the hero is only this morning's HRV and its state pill (against the band
+// expected for it; STALE when the reading is old), and a tap opens Today, where the words, the range and the freshness
+// live. The figure's head/chest/legs tint by recovery/cardio/training-load state, with nothing under it. Then Next up,
+// the four tiles (icon, title and one coloured dot, the dot ruled by domain/HubTileStates.kt) and the quick-log row.
+// The hub scrolls, and the figure is sized from the viewport.
 @Composable
 fun BodyConsole(
     overview: StatusOverview?,
@@ -131,79 +126,57 @@ fun BodyConsole(
     }
 }
 
+private class HubInputs(val overview: StatusOverview?, val previews: TodayPreviews?, val goals: NutritionGoals, val now: LocalTime)
+
 private data class SystemTileSpec(
     val route: TileRoute,
     val label: String,
     val icon: ImageVector,
     val accent: Color,
-    // null = this overview has no state for the tile (Fuel, Labs).
-    val state: (StatusOverview) -> MetricState?,
+    val state: (HubInputs) -> MetricState,
 )
 
-// Each tile's icon uses its own domain accent (contract section 4): domain
-// accents identify sections/navigation. The small dot beside the icon is the
-// separate STATE signal (same color table as the pills), shown only where the
-// overview really has a state for that system.
+// Each tile's icon uses its own domain accent (contract section 4): domain accents identify sections/navigation. The dot
+// is the separate STATE signal (same colour table as the pills) and the tile's only indicator; the rules are in
+// domain/HubTileStates.kt. A screen reader hears it as words.
 private val SYSTEM_TILES = listOf(
-    SystemTileSpec(TileRoute.Training, "TRAINING", Icons.Filled.FitnessCenter, FT.DomainTraining) { it.trainingState },
-    SystemTileSpec(TileRoute.Nutrition, "NUTRITION", Icons.Filled.Restaurant, FT.DomainFuel) { null },
-    SystemTileSpec(TileRoute.Health, "HEALTH", Icons.Filled.Favorite, FT.DomainHeart) { it.cardioState },
-    SystemTileSpec(TileRoute.Lab, "LAB", Icons.Filled.Science, FT.DomainLabs) { null },
-)
-
-// Two preview lines per tile, real data only: a missing reading is "—", never a made-up number. Short lines (not one
-// "HRV64·RHR57" string) so each reads alone. NUTRITION uses the same goal and hydration range as the Nutrition tile, LAB
-// the same supplements-due rule as the reminder (domain/SupplementsToday.kt). App restructure: the last lab draw moved
-// to HEALTH with bloodwork.
-private fun previewLines(route: TileRoute, overview: StatusOverview?, previews: TodayPreviews?, goals: NutritionGoals): List<String> = when (route) {
-    TileRoute.Training -> listOf(
-        overview?.let { "${it.sessionsLast7Days} SESSION${if (it.sessionsLast7Days == 1) "" else "S"} · 7D" } ?: "SESSIONS —",
-        overview?.let { o -> o.trainingLoadBand?.uppercase() ?: "LOAD ${metricStateLabel(o.trainingState)}" } ?: "LOAD —",
-    )
-    TileRoute.Nutrition -> {
-        val fuel = previews?.fuel
-        val goal = goals.caloriesKcal
-        val kcal = fuel?.kcal?.let(::thousands) ?: "—"
-        val water = fuel?.waterMl?.let { "%.1f".format(Locale.ENGLISH, it / 1000.0) } ?: "—"
-        val bounds = hydrationBoundsMl(goals, fuel?.exerciseDemandMl ?: 0.0)
-        listOf(
-            if (goal != null) "$kcal / ${thousands(goal)} KCAL" else "$kcal KCAL",
-            "WATER $water / " + "%.1f–%.1f L".format(Locale.ENGLISH, bounds.start / 1000.0, bounds.endInclusive / 1000.0),
+    SystemTileSpec(TileRoute.Training, "TRAINING", Icons.Filled.FitnessCenter, FT.DomainTraining) { it.overview?.trainingState ?: MetricState.Unavailable },
+    SystemTileSpec(TileRoute.Nutrition, "NUTRITION", Icons.Filled.Restaurant, FT.DomainFuel) { i ->
+        val fuel = i.previews?.fuel
+        nutritionHubState(
+            loaded = fuel != null,
+            kcal = fuel?.kcal,
+            kcalGoal = i.goals.caloriesKcal,
+            waterMl = fuel?.waterMl,
+            waterTargetMl = hydrationBoundsMl(i.goals, fuel?.exerciseDemandMl ?: 0.0).start,
+            now = i.now,
         )
-    }
-    TileRoute.Health -> listOf(
-        "HRV " + (overview?.latestHrv?.let { "%.0f".format(it) } ?: "—") + " · RHR " + (overview?.latestRhr?.let { "%.0f".format(it) } ?: "—"),
-        "SLEEP " + (overview?.sleepHours?.let { formatHours(it) } ?: "—"),
-        previews?.lastLabDraw?.let { "LAST DRAW " + it.format(DRAW_DATE).uppercase() }
-            ?: if (previews?.labDrawsLoaded == true) "NO LAB DRAWS YET" else "LAST DRAW —",
-    )
-    TileRoute.Lab -> listOf(
-        previews?.supplements?.let { supplementsTodayLine(it) } ?: "SUPPS —",
-        "N=1 · PLANNING · TESTS",
-    )
-}
-
-private fun thousands(v: Double): String = "%,d".format(Locale.ENGLISH, v.roundToInt())
-
-private val DRAW_DATE = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
+    },
+    SystemTileSpec(TileRoute.Health, "HEALTH", Icons.Filled.Favorite, FT.DomainHeart) { i ->
+        i.overview?.let { o -> healthHubState(o.cardioState, o.recoveryState, o.hrvReadout?.let { expectedStateWord(it).state }) } ?: MetricState.Unavailable
+    },
+    SystemTileSpec(TileRoute.Lab, "LAB", Icons.Filled.Science, FT.DomainLabs) { labHubState(it.previews?.supplements, it.now) },
+)
 
 @Composable
 private fun SystemTileGrid(overview: StatusOverview?, previews: TodayPreviews?, onOpenTile: (TileRoute) -> Unit) {
     val context = LocalContext.current
-    // Re-read with the previews: they reload after a quick-log save, and goals are edited in Setup.
+    // Re-read with the previews: they reload after a quick-log save, and goals are edited in Setup. The time of day is
+    // taken then too (the Nutrition and Lab dots depend on it).
     val goals = remember(previews) { NutritionGoalsStore.getGoals(context) }
+    val now = remember(previews) { LocalTime.now() }
+    val inputs = HubInputs(overview, previews, goals, now)
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         SYSTEM_TILES.chunked(2).forEach { pair ->
-            // IntrinsicSize.Min + fillMaxHeight keeps both tiles of a row the same height when one preview wraps.
+            // IntrinsicSize.Min + fillMaxHeight keeps both tiles of a row the same height.
             Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 pair.forEach { tile ->
                     SystemTile(
                         tile = tile,
-                        state = overview?.let { tile.state(it) },
-                        preview = previewLines(tile.route, overview, previews, goals),
+                        state = tile.state(inputs),
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                     ) { onOpenTile(tile.route) }
                 }
@@ -213,7 +186,7 @@ private fun SystemTileGrid(overview: StatusOverview?, previews: TodayPreviews?, 
 }
 
 @Composable
-private fun SystemTile(tile: SystemTileSpec, state: MetricState?, preview: List<String>, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun SystemTile(tile: SystemTileSpec, state: MetricState, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(FT.RadiusModule)
     Column(
         modifier = modifier
@@ -221,26 +194,20 @@ private fun SystemTile(tile: SystemTileSpec, state: MetricState?, preview: List<
             .background(FT.GlassFill)
             .border(FT.BorderWidth, FT.GlassBorder, shape)
             .ftClickable(shape = shape, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.Center,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // The label next to it names the tile; a description here would be read twice.
-            Icon(tile.icon, contentDescription = null, tint = tile.accent, modifier = Modifier.size(18.dp))
+            Icon(tile.icon, contentDescription = null, tint = tile.accent, modifier = Modifier.size(20.dp))
             Text(tile.label, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            state?.let {
-                Box(
-                    Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(metricStateColor(it))
-                        .semantics { contentDescription = metricStateLabel(it).lowercase() },
-                )
-            }
-            Text("›", style = FTType.LabelCaps, color = FT.TextSecondary)
-        }
-        preview.forEachIndexed { i, line ->
-            Text(line, style = FTType.Label, color = if (i == 0) FT.TextPrimary else FT.TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Box(
+                Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(metricStateColor(state))
+                    .semantics { contentDescription = "${tile.label.lowercase()}: ${metricStateLabel(state).lowercase()}" },
+            )
         }
     }
 }
@@ -301,168 +268,50 @@ private fun ConditionField(overview: StatusOverview?, isLoading: Boolean, figure
             },
     ) {
         if (overview == null) {
-            // Same footprint as the loaded hero + figure + legend, so the tiles below do not jump when it arrives.
-            Box(Modifier.fillMaxWidth().height(figureHeight + 190.dp), contentAlignment = Alignment.Center) {
+            // Same footprint as the loaded hero + figure, so the tiles below do not jump when it arrives.
+            Box(Modifier.fillMaxWidth().height(figureHeight + 80.dp), contentAlignment = Alignment.Center) {
                 if (isLoading) CircularProgressIndicator(color = FT.Emerald)
             }
             return@Column
         }
         ConditionHero(overview, onOpenToday)
-        BodySchematic(overview, onOpenInjury, modifier = Modifier.fillMaxWidth().height(figureHeight).padding(horizontal = 8.dp))
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            ZoneLegend(overview)
-            Row {
-                Text(
-                    text = "SLEEP " + (overview.sleepHours?.let { formatHours(it) } ?: "—"),
-                    style = FTType.Label,
-                    color = FT.TextSecondary,
-                )
-                // UX review F1: the count opens the same place the pin does (Training › Injury).
-                val flags = overview.openHealthFlags.takeIf { it > 0 } ?: if (overview.activeHealthEvent) 1 else 0
-                Text(
-                    text = if (flags == 1) "1 FLAG ›" else if (flags > 1) "$flags FLAGS ›" else "0 FLAGS",
-                    style = FTType.Label,
-                    color = if (flags > 0) FT.Critical else FT.TextSecondary,
-                    modifier = Modifier
-                        .padding(start = 16.dp)
-                        .then(
-                            if (flags > 0) {
-                                Modifier.ftClickable(onClickLabel = "Open Training, Injury", onClick = onOpenInjury)
-                            } else {
-                                Modifier
-                            },
-                        ),
-                )
-            }
-        }
+        BodySchematic(overview, onOpenInjury, modifier = Modifier.fillMaxWidth().height(figureHeight).padding(horizontal = 8.dp).padding(bottom = 8.dp))
     }
 }
 
-// UX review P1 / P6: the hero says what it is, how fresh the reading is (contract A5), and where a tap goes (TODAY ›).
-// Analysis review phase C: this morning's HRV against the band expected for it (value, words, size). Phase G retired the
-// fallback that judged HRV against a 7-day z-score (LOW / REDUCED / NORMAL / PRIMED): while the band builds, the hero
-// shows the reading and how many mornings the band still needs, without a verdict.
+// The hero: this morning's HRV and one pill (analysis review phase C: against the band expected for it; phase G: while
+// the band builds, BUILDING and no verdict). A reading older than the freshness rule allows (contract A5) shows STALE
+// instead, since it is not this morning's. Everything else (the words, the range, the source and sync) is on Today.
 @Composable
 private fun ConditionHero(overview: StatusOverview, onOpenToday: () -> Unit) {
-    overview.hrvReadout?.let { readout ->
-        BandHero(overview, readout, onOpenToday)
-        return
-    }
-    val freshness = freshnessLine(
+    val readout = overview.hrvReadout
+    val stale = freshnessLine(
         readingDate = overview.hrvReadingDate,
         source = "WEARABLE",
         lastSync = overview.lastSyncAt?.atZone(ZoneId.systemDefault())?.toLocalDateTime(),
         today = LocalDate.now(),
         staleAfterDays = STALE_AFTER_DAYS,
-    )
-    val progress = overview.hrvBandProgress
-    val building = when {
-        progress == null -> "THE EXPECTED BAND APPEARS AFTER THE FIRST NIGHTLY ANALYSIS"
-        progress.second > progress.first -> "THE EXPECTED BAND NEEDS ${progress.second - progress.first} MORE MORNINGS"
-        else -> "NO HRV READING THIS MORNING YET"
+    ).stale
+    val word = when {
+        stale -> StateWord(MetricState.Warning, "STALE")
+        readout != null -> expectedStateWord(readout)
+        else -> StateWord(MetricState.Building)
     }
-    Column(
+    val value = readout?.value ?: overview.latestHrv
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .ftClickable(role = Role.Button, onClickLabel = "Open Today", onClick = onOpenToday)
             .padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "THIS MORNING · HRV",
-                style = FTType.LabelCaps,
-                color = FT.TextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Text("TODAY ›", style = FTType.LabelCaps, color = FT.EmeraldHighlight, modifier = Modifier.padding(start = 8.dp))
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = overview.latestHrv?.let { "%.0f MS".format(it) } ?: "—",
-                style = FTType.DisplayMetric,
-                color = FT.TextPrimary,
-                modifier = Modifier.weight(1f),
-            )
-            FTStatePill(MetricState.Building)
-        }
-        Text(building, style = FTType.Micro, color = FT.TextMuted)
-        Text(freshness.text, style = FTType.Micro, color = if (freshness.stale) FT.Warning else FT.TextMuted, maxLines = 2)
-    }
-}
-
-@Composable
-private fun BandHero(overview: StatusOverview, readout: MorningReadout, onOpenToday: () -> Unit) {
-    val word = expectedStateWord(readout)
-    val freshness = freshnessLine(
-        readingDate = overview.hrvReadingDate,
-        source = "WEARABLE",
-        lastSync = overview.lastSyncAt?.atZone(ZoneId.systemDefault())?.toLocalDateTime(),
-        today = LocalDate.now(),
-        staleAfterDays = STALE_AFTER_DAYS,
-    )
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .ftClickable(role = Role.Button, onClickLabel = "Open Today", onClick = onOpenToday)
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "THIS MORNING · HRV VS EXPECTED",
-                style = FTType.LabelCaps,
-                color = FT.TextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Text("TODAY ›", style = FTType.LabelCaps, color = FT.EmeraldHighlight, modifier = Modifier.padding(start = 8.dp))
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "%.0f ms".format(readout.value),
-                style = FTType.DisplayMetric,
-                color = if (word.state == MetricState.Warning) metricStateColor(word.state) else FT.TextPrimary,
-                modifier = Modifier.weight(1f),
-            )
-            FTStatePill(word)
-        }
-        Text(readout.headline(), style = FTType.BodySmall, color = FT.TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(freshness.text, style = FTType.Micro, color = if (freshness.stale) FT.Warning else FT.TextMuted, maxLines = 2)
-    }
-}
-
-// What each figure zone's color means, in words: head = recovery (sleep),
-// chest = cardio (HRV/RHR), legs = training load. Dot color + state word, so
-// the tint on the figure is never the only signal.
-@Composable
-private fun ZoneLegend(overview: StatusOverview) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ZoneLegendCell("RECOVERY", overview.recoveryState, Modifier.weight(1f))
-        ZoneLegendCell("CARDIO", overview.cardioState, Modifier.weight(1f))
-        ZoneLegendCell("LOAD", overview.trainingState, Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun ZoneLegendCell(label: String, state: MetricState, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(FT.RadiusSmall)
-    Column(
-        modifier = modifier
-            .clip(shape)
-            .background(FT.GlassFill)
-            .border(FT.BorderWidth, FT.GlassBorder, shape)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-    ) {
-        Text(label, style = FTType.Micro, color = FT.TextMuted)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(metricStateColor(state)))
-            Text(metricStateLabel(state), style = FTType.Label, color = FT.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+        Text(
+            text = value?.let { "%.0f ms".format(it) } ?: "—",
+            style = FTType.DisplayMetric,
+            color = if (word.state == MetricState.Warning && !stale) metricStateColor(word.state) else FT.TextPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        FTStatePill(word)
     }
 }
 
@@ -763,10 +612,4 @@ private fun eventRelativeLabel(event: com.bioscan.fieldterminal.domain.events.At
         days == 1L -> "TOMORROW"
         else -> "IN $days DAYS"
     }
-}
-
-private fun formatHours(hours: Double): String {
-    val h = hours.toInt()
-    val m = ((hours - h) * 60).toInt()
-    return "%d:%02d".format(h, m)
 }

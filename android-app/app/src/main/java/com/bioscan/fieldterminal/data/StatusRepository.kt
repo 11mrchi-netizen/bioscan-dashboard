@@ -17,6 +17,7 @@ import com.bioscan.fieldterminal.data.model.SleepDailyRow
 import com.bioscan.fieldterminal.data.model.WearableDailyRow
 import com.bioscan.fieldterminal.domain.HealthFlag
 import com.bioscan.fieldterminal.domain.MetricState
+import com.bioscan.fieldterminal.domain.worstOf
 import com.bioscan.fieldterminal.domain.MorningReadout
 import com.bioscan.fieldterminal.domain.morningReadout
 import com.bioscan.fieldterminal.domain.SupplementsToday
@@ -255,13 +256,3 @@ private suspend fun <T> softly(block: suspend () -> T): T? = try {
     null
 }
 
-private fun MetricState.severity(): Int = when (this) {
-    MetricState.Critical -> 4
-    MetricState.Warning -> 3
-    MetricState.Neutral -> 2
-    MetricState.Optimal -> 1
-    MetricState.Building -> 0
-    MetricState.Unavailable -> -1
-}
-
-private fun worstOf(a: MetricState, b: MetricState): MetricState = if (a.severity() >= b.severity()) a else b

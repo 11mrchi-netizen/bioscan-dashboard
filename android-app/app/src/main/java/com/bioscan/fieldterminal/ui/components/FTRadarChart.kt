@@ -27,15 +27,14 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
-// One spoke of the radar. `value` is already a 0..100 radius supplied upstream; null means the axis could
-// not be assessed -- it is drawn as a dashed spoke with a hollow marker and left OUT of the polygon (never
-// plotted at zero, which would read as a bad result instead of a missing one). `valueLabel`, when set,
-// replaces the number in the axis label (for axes whose radius is a position, not a score).
+// One spoke of the radar. `value` is a 0..100 numerical radius supplied upstream; null means the axis could
+// not be assessed -- it is drawn as a dashed spoke with a hollow marker and left OUT of the polygon.
+// `valueLabel`, when set, replaces or supplements the number in the axis label.
 data class RadarAxis(val label: String, val value: Double?, val color: Color, val valueLabel: String? = null)
 
 // N-gon radar (the User tab's Healthspan factors). Rings at 25/50/75/100, an accent-filled polygon through
-// the scored axes, a coloured vertex per axis, tap an axis to select it. Generic in N; knows nothing about
-// Healthspan. Labels are drawn on the canvas with FTType so they stay inside the design scale.
+// the scored axes (using 0-100 scores directly), a coloured vertex per axis, tap an axis to select it.
+// Generic in N; knows nothing about Healthspan. Labels are drawn on the canvas with FTType so they stay inside the design scale.
 @Composable
 fun FTRadarChart(
     axes: List<RadarAxis>,

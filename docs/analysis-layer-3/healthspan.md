@@ -1,43 +1,32 @@
-# Healthspan grade (Phase 8)
+# Healthspan composite score (Phase 8)
 
-A general grade that appears on **one page only**: the User profile. It is product-defined and provisional, not clinically validated. The rest of the app keeps showing single-metric states and no cross-metric score; a unit test (`HealthspanTest.onlyTheProfileScreensUseHealthspan`) fails if any screen other than the profile screens uses it.
+A general composite score on a **1-100 scale** that appears on **one page only**: the User profile. It is product-defined and provisional, not clinically validated. The rest of the app keeps showing single-metric states and no cross-metric score; a unit test (`HealthspanTest.onlyTheProfileScreensUseHealthspan`) fails if any screen other than the profile screens uses it.
 
-Code: `domain/aging/Healthspan.kt` (pure, all cut-offs as named constants), `data/HealthspanRepository.kt` (gathers inputs, decides nothing), `ui/screens/HealthspanCard.kt`. Methodology text shown behind the card's help button: registry key `healthspan`.
+Code: `domain/aging/Healthspan.kt` (pure, all cut-offs and scoring formulas), `data/HealthspanRepository.kt` (gathers inputs, decides nothing), `ui/screens/HealthspanCard.kt`, `ui/components/FTRadarChart.kt`. Methodology text shown behind the card's help button: registry key `healthspan`.
 
-## Factors
+## Factors & 0-100 Continuous Scoring
 
-Each factor ends as **favorable**, **neutral**, **opportunity**, or **not assessed** (with what is missing and one action).
+Each factor produces a continuous **0-100 score** when assessed (or **unassessed** with what is missing and one action). Score ranges translate to statuses for tags and colors: **Favorable** (≥ 75), **Neutral** (50 to 74), or **Opportunity** (< 50).
 
-| Factor | Input | Favorable | Neutral | Opportunity | Basis |
-| -- | -- | -- | -- | -- | -- |
-| Cardio fitness | Latest VO2max, placed against the age- and sex-matched table in `benchmark_artifacts` | percentile 50 or above | 25 to under 50 | under 25 | Mandsager 2018 groups fitness by age/sex percentile; the cut points are product-defined |
-| Biological age | PhenoAge acceleration (biological minus calendar age) | 2 years younger or more | between | 2 years older or more | Levine 2018; the plus and minus 2 years are product-defined |
-| Strength | Median level of your main barbell lifts: best estimated 1RM per lift over the last 183 days against bodyweight multiples (`domain/StrengthStandards.kt`); needs 3 lifts that have a standard and a body weight from the last 90 days | median Intermediate or better | median Novice | median Untrained | Lifter standards (gym convention), **not** population percentiles and not adjusted for sex or age; the card says so. With an even count the weaker middle lift decides |
-| Body composition | Waist-to-height ratio from lab entries | under 0.50 | 0.50 to under 0.60 | 0.60 or more | Ashwell 2012 (0.5 boundary); 0.6 is product-defined |
-| Sleep | Mean duration, last 30 days, and the regularity index (SRI) | at least 7 h and SRI 80 or more | one of the two | neither | Watson 2015 (7 h); Windred 2024 shows regularity matters; SRI 80 is product-defined |
-| Activity | Median daily steps, last 30 days (0-step days dropped as watch-off) | "active" or "highly active" | "somewhat active" | "low active" or "sedentary" | Tudor-Locke and Bassett 2004 categories, the artifact already in the database |
-| Blood lipids | Triglycerides and HDL cholesterol | no flag | one flag | both flagged | Alberti 2009: triglycerides 150 mg/dL or more; HDL under 40 (men) or 50 (women) |
-| Blood glucose | HbA1c if present and valid, else fasting glucose | HbA1c under 5.7 % / glucose under 100 mg/dL | 5.7 to under 6.5 / 100 to under 126 | 6.5 or more / 126 or more | American Diabetes Association Standards of Care 2025 |
+| Factor | Input | 100 Score Target | 50 Score Baseline | Scoring Curve / Continuous Function |
+| -- | -- | -- | -- | -- |
+| Cardio fitness | VO2max age/sex population percentile | Percentile 100 | Percentile 50 | Direct population percentile (1-100) |
+| Biological age | PhenoAge acceleration normalized by chronological age | -20% acceleration (-10 y at age 50) | 0% acceleration | Linear relative acceleration scaling (-20% accel = 100, 0% = 70, +20% = 20) |
+| Strength | Lift best estimated 1RM vs bodyweight multiples (`domain/StrengthStandards.kt`) | Elite lifter standard | Intermediate lifter standard | Continuous linear interpolation between standards (Untrained=20, Novice=40, Intermediate=60, Advanced=80, Elite=100) |
+| Body composition | Waist-to-height ratio (WHtR) | WHtR ≤ 0.45 | WHtR 0.57 | Continuous piecewise linear scaling (≤0.45 = 100, 0.50 = 75, 0.60 = 40, ≥0.65 = 10) |
+| Sleep | Duration and regularity index (SRI) | 7-9 h and SRI ≥ 80 | 6 h or SRI 55 | 50% duration score (7-9h = 100, 6h = 60, 5h = 20) + 50% SRI score (SRI 80+ = 100, 50 = 40) |
+| Activity | Daily steps median | ≥ 12,500 steps/day | 5,500 steps/day | Continuous piecewise linear scale (≤2,500 = 20, 5,000 = 45, 7,500 = 70, 10,000 = 90, ≥12,500 = 100) |
+| Blood lipids | Triglycerides and HDL cholesterol | TG ≤ 100 mg/dL, HDL ≥ 60 mg/dL | TG 160 mg/dL, HDL 40 mg/dL | 50% TG continuous score + 50% HDL continuous score relative to optimal targets |
+| Blood glucose | HbA1c if present, else Fasting Glucose | HbA1c ≤ 5.4% / Glucose ≤ 90 mg/dL | HbA1c 6.2% / Glucose 110 mg/dL | Piecewise continuous scaling (HbA1c 5.4% = 100, 5.7% = 75, 6.5% = 35 / Glucose 90 = 100, 100 = 75, 126 = 35) |
 
 ## Trust gate
 
-A factor is assessed only if every input is: present; recent (labs and PhenoAge panel within 365 days, VO2max within 90); backed by enough days (14 nights of sleep, 14 days of steps); confidence met (SRI and PhenoAge); in a known unit that matches (no unit, or a different unit, is never assumed); free of conflicting values for the same marker on its latest date; and not assumed (no sex or date of birth means no sex-specific placement). Sleep and steps restart at a confirmed series break. When a factor fails, it says what is missing instead of guessing. The VO2max placement uses a table only if it covers the person's age and sex; it never falls back to the nearest table.
+A factor is assessed only if every input is: present; recent (labs and PhenoAge panel within 365 days, VO2max within 90); backed by enough days (14 nights of sleep, 14 days of steps); confidence met (SRI and PhenoAge); in a known unit that matches; free of conflicting values for the same marker; and not assumed. Sleep and steps restart at a confirmed series break. When a factor fails, it says what is missing instead of guessing.
 
-## Grade
+## Overall Composite Score
 
-Share of **assessed** factors that are favorable. With at least 5 of the 8 assessed it shows a letter (A at 80 % or more, B at 60 %, C at 40 %, otherwise D); with fewer it shows "PRELIMINARY" and no letter. The floor and the bands are provisional: there are no outcome data to calibrate them on and only a couple of lab draws to look at, so treat them as a starting point and expect to revise them.
+The overall Healthspan composite score is the **arithmetic average (0-100)** of all assessed factor scores. With at least 5 of the 8 factors assessed, the overall score is displayed (e.g. `82 / 100`); with fewer than 5 assessed factors, it shows "PRELIMINARY".
 
-## Deviations from the plan
+## Radar Chart Plotting
 
-- **TyG replaced.** The plan listed a triglyceride-glucose index. There is no widely agreed cut-off to cite for it, so the lipid factor uses the harmonised guideline thresholds for triglycerides and HDL, and glucose uses the ADA categories. TyG can be added if a defensible threshold is chosen.
-- **HbA1c** is accepted but the account has none today; fasting glucose is used.
-- **Strength** uses lifter standards, not a population benchmark (none is installed). Handgrip is logged (GRIP in the add-entry picker, one row per hand, best of the attempts in kg, table `grip_strength_log`) and shown under the strength factor, but **not scored**: that needs a cited age- and sex-matched norm table, which has not been added. Alternative names of one lift (for example "standing military press" and "standing barbell press") are merged so a lift counts once.
-- **Mock data removed.** The profile screen used to render sample domain levels and sample achievements while real ones loaded. That is gone: the running level now comes from the real VO2max placement, the other three domains read "Not enough data yet" until benchmarks exist, and achievements show only real ones.
-
-## What it cannot say
-
-Blood pressure, family history, smoking, diet, medication and much else are not inputs. Long sleep is not penalised. A reading counts as current for up to a year. A favorable grade is not low risk, and an unfavorable factor is a prompt to look, not a diagnosis.
-
-## Changing it
-
-Edit the named constants at the top of `Healthspan.kt` and the matching test in `HealthspanTest.kt`; keep the methodology text in `metric-registry.json` and this page in step with them.
+The radar chart (`FTRadarChart`) plots each assessed factor's vertex directly at its calculated numerical 0-100 score along its spoke axis (with concentric reference rings at 25, 50, 75, 100). Unassessed factors are shown as hollow dashed spokes and excluded from the polygon.

@@ -341,6 +341,26 @@ class HealthspanTest {
     }
 
     @Test
+    fun gripIsPlacedOnThePublishedTableAndCarriedPastIt() {
+        // Dodds et al. 2014, Table 2, men at age 30 (the row a 28-32-year-old man is placed on).
+        val men30 = mapOf(10 to 38.0, 25 to 44.0, 50 to 51.0, 75 to 58.0, 90 to 64.0)
+        fun strengthAt(kg: Double): HealthspanFactor {
+            val clamped = com.bioscan.fieldterminal.domain.comparison.interpolatePercentile(kg, men30.entries.sortedBy { it.key })
+            return strengthOf(good().copy(grip = GripReading(kg, "right", today.minusDays(3)), gripPercentile = clamped, gripQuantiles = men30))
+        }
+        val weak = strengthAt(41.0) // between P10 and P25: 10 + 3/6 x 15 = 17.5
+        assertEquals(17, weak.score)
+        assertEquals(FactorStatus.OPPORTUNITY, weak.status)
+        assertFalse(weak.reading!!.contains("estimated"))
+        val strong = strengthAt(70.0) // past P90: Phi((70 - 51) / ((64 - 51) / 1.2816)) = 96.9
+        assertEquals(96, strong.score)
+        assertEquals(FactorStatus.FAVORABLE, strong.status)
+        assertTrue(strong.reading!!.contains("past the table's published range: estimated"))
+        // Exactly on the median is favorable (the higher-is-better line is included).
+        assertEquals(50, strengthAt(51.0).score)
+    }
+
+    @Test
     fun latestGripIsTheStrongerHandOnTheLatestDate() {
         val d1 = today.minusDays(10)
         val d2 = today.minusDays(2)

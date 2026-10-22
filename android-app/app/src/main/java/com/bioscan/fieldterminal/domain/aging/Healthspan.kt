@@ -20,7 +20,7 @@ import kotlin.math.abs
 // present, recent enough, confidence met, units known and matching, no conflicting duplicates, nothing assumed.
 //
 // One scale for every factor: favorable from 50, neutral from 25, an opportunity below. A factor with a population table
-// (VO2max; grip once its table is installed) scores its percentile for the person's age and sex. The others score against
+// (VO2max, handgrip) scores its percentile for the person's age and sex. The others score against
 // cited clinical targets or the lifter standards, through anchors that put each cited cut-off exactly on the 50 or 25 line;
 // the band a value falls in is still decided by that cut-off's own comparison (a triglyceride of exactly 150 counts as
 // flagged, as the guideline says), and the score is held inside it. The summary score is the mean of the assessed factors,
@@ -60,9 +60,11 @@ data class HealthspanInputs(
     // Best estimated 1RM per lift from the last 6 months, and the latest body weight (kg).
     val lifts: List<LiftReading> = emptyList(),
     val bodyWeightKg: DatedValue? = null,
-    // Logged by hand; scored as a percentile only when an age- and sex-matched grip table fits (gripPercentile).
+    // Logged by hand; scored as a percentile only when an age- and sex-matched grip table fits (gripPercentile), with that
+    // table's points for the tails as for VO2max.
     val grip: GripReading? = null,
     val gripPercentile: Double? = null,
+    val gripQuantiles: Map<Int, Double>? = null,
     val waistCm: DatedValue? = null,
     val heightCm: DatedValue? = null,
     val sleepMeanHours: Double? = null,
@@ -257,6 +259,19 @@ private fun factor(id: HealthspanFactorId, score: Int, basis: ScoreBasis, readin
     )
 }
 
+private class Placed(val score: Int, val text: String)
+
+// A population-table placement on the scale. Inside the table the clamped and the extended percentile are the same; past
+// its 10th or 90th the extended one keeps going (an estimate, and the text says so). The band comes from the clamped one.
+private fun placed(value: Double, percentile: Double, quantiles: Map<Int, Double>?): Placed {
+    val extended = quantiles?.let { extendedPercentile(value, it) } ?: percentile
+    val lowest = quantiles?.keys?.minOrNull()
+    val highest = quantiles?.keys?.maxOrNull()
+    val beyond = (lowest != null && percentile <= lowest) || (highest != null && percentile >= highest)
+    val score = scoreIn(percentileStatus(percentile), extended)
+    return Placed(score, "${ordinal(score.toDouble())} percentile for your age and sex" + if (beyond) " (past the table's published range: estimated)" else "")
+}
+
 private fun cardio(i: HealthspanInputs): HealthspanFactor {
     val id = HealthspanFactorId.CARDIO_FITNESS
     val howTo = "Set sex and date of birth in Setup > Profile and keep a watch VO2max estimate coming in."
@@ -266,14 +281,9 @@ private fun cardio(i: HealthspanInputs): HealthspanFactor {
     else if (ChronoUnit.DAYS.between(v.date, i.asOf) > VO2_MAX_AGE_DAYS) missing += "a VO2max reading from the last $VO2_MAX_AGE_DAYS days (latest ${v.date})"
     if (i.vo2Percentile == null) missing += "an age- and sex-matched VO2max table that fits (needs sex and date of birth)"
     if (missing.isNotEmpty() || v == null || i.vo2Percentile == null) return unassessed(id, missing, howTo)
-    // Inside the table the two percentiles are the same; past its 10th or 90th the extended one keeps going (an estimate).
-    val extended = i.vo2Quantiles?.let { extendedPercentile(v.value, it) } ?: i.vo2Percentile
-    val lowest = i.vo2Quantiles?.keys?.minOrNull()
-    val highest = i.vo2Quantiles?.keys?.maxOrNull()
-    val beyond = (lowest != null && i.vo2Percentile <= lowest) || (highest != null && i.vo2Percentile >= highest)
-    val score = scoreIn(percentileStatus(i.vo2Percentile), extended)
-    val reading = "VO2max %.1f mL/kg/min, %s percentile for your age and sex".format(v.value, ordinal(score.toDouble())) +
-        if (beyond) " (past the table's published range: estimated)" else ""
+    val placed = placed(v.value, i.vo2Percentile, i.vo2Quantiles)
+    val reading = "VO2max %.1f mL/kg/min, %s".format(v.value, placed.text)
+    val score = placed.score
     return factor(id, score, ScoreBasis.POPULATION_PERCENTILE, reading, "More easy aerobic time each week moves this most.")
 }
 
@@ -333,9 +343,10 @@ private fun strength(i: HealthspanInputs): HealthspanFactor {
     val grip = i.grip
     val gripRecent = grip != null && ChronoUnit.DAYS.between(grip.date, i.asOf) in 0..STRENGTH_WINDOW_DAYS
     val gripPercentile = i.gripPercentile?.takeIf { gripRecent }
-    val gripScore = gripPercentile?.let { scoreIn(percentileStatus(it), it) }
+    val gripPlaced = if (grip != null && gripPercentile != null) placed(grip.kg, gripPercentile, i.gripQuantiles) else null
+    val gripScore = gripPlaced?.score
     grip?.let {
-        notes += if (gripScore != null) "Grip %.1f kg (%s hand, %s): %s percentile for your age and sex.".format(it.kg, it.hand, it.date, ordinal(gripScore.toDouble()))
+        notes += if (gripPlaced != null) "Grip %.1f kg (%s hand, %s): %s.".format(it.kg, it.hand, it.date, gripPlaced.text)
         else if (!gripRecent) "Latest grip: %.1f kg (%s hand, %s). Older than 6 months, so it does not change the score.".format(it.kg, it.hand, it.date)
         else "Latest grip: %.1f kg (%s hand, %s). Logged only: no grip table fits your age and sex, so it does not change the score.".format(it.kg, it.hand, it.date)
     }
@@ -351,7 +362,7 @@ private fun strength(i: HealthspanInputs): HealthspanFactor {
         val detail = sorted.joinToString(", ") { r -> "${r.slug.replace('_', ' ')} ${r.level.label.lowercase()} ${r.score}" }
         "Median ${median.level.label.lowercase()} across ${rated.size} lifts ($detail)"
     } else {
-        "Grip %.1f kg, %s percentile for your age and sex".format(grip!!.kg, ordinal(gripScore!!.toDouble()))
+        "Grip %.1f kg, %s".format(grip!!.kg, gripPlaced!!.text)
     }
     return factor(id, score, basis, reading, "Progressive loading on the weakest main lift moves this.").copy(notes = notes)
 }

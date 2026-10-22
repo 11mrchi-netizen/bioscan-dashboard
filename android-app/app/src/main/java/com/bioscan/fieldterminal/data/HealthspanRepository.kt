@@ -150,8 +150,8 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
                 .decodeList<HsGripRow>()
                 .mapNotNull { r -> runCatching { OffsetDateTime.parse(r.occurredAt).toLocalDate() }.getOrNull()?.let { GripReading(r.kg, r.hand, it) } },
         )
-        // Grip against an age- and sex-matched grip table (benchmark_artifacts "grip_strength"); none installed yet, so null.
-        val gripPercentile = strictPlacement(supabase, "grip_strength", grip?.kg, age, sex)?.comparison?.percentile
+        // Grip against the age- and sex-matched grip table (benchmark_artifacts "grip_strength", Dodds 2014).
+        val gripTable = strictPlacement(supabase, "grip_strength", grip?.kg, age, sex)
 
         val labs = loadLabObservations()
         fun lab(vararg names: String) = latestLab(labs) { m -> names.any { m.equals(it, ignoreCase = true) } }
@@ -177,7 +177,8 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
                     lifts = bestLifts(liftSets),
                     bodyWeightKg = bodyWeight?.let { DatedValue(it.weightKg!!, LocalDate.parse(it.date), "kg") },
                     grip = grip,
-                    gripPercentile = gripPercentile,
+                    gripPercentile = gripTable?.comparison?.percentile,
+                    gripQuantiles = gripTable?.quantiles,
                     waistCm = waist,
                     heightCm = height,
                     sleepMeanHours = hours.takeIf { it.isNotEmpty() }?.average(),

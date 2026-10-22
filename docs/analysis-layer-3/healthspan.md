@@ -14,7 +14,7 @@ Every factor is a whole number from 1 to 100, or **not assessed** (with what is 
 
 What the number is depends on the factor, and the row says which:
 
-- **Percentile for your age and sex** where a population table exists: cardio fitness, and handgrip once its table is installed.
+- **Percentile for your age and sex** where a population table exists: cardio fitness and handgrip.
 - **Against clinical targets** for the rest: each cited cut-off is placed exactly on the 50 or 25 line, the optimum at 100, straight lines between.
 - **Lifter standards** for barbell lifts.
 - **Product-defined targets** for biological age.
@@ -29,6 +29,7 @@ Anchors are value → score. The 50 and 25 points are the cited cut-offs; the po
 | -- | -- | -- | -- | -- | -- | -- |
 | Cardio fitness | Latest VO2max (90 days), placed against the age- and sex-matched table in `benchmark_artifacts` | top | P50 | P25 | bottom | ACSM 11th ed. table; Mandsager 2018 groups by percentile |
 | Biological age | PhenoAge acceleration (biological minus calendar age) | -10 y | -2 y | +2 y | +10 y | Liu, Levine et al. 2018 (PhenoAge); all points product-defined |
+| Strength, grip | Stronger hand of the latest grip test (183 days), placed against the age- and sex-matched row of the grip table in `benchmark_artifacts` | top | P50 | P25 | bottom | Dodds et al. 2014, Table 2 (see below) |
 | Strength, lifts | Best estimated 1RM per lift over 183 days against bodyweight multiples (`domain/StrengthStandards.kt`); 3 lifts with a standard and a body weight from 90 days | elite | intermediate | novice | 0 | Lifter standards, `ladderFraction` (`domain/levels/StrengthStandards.kt`); the lower middle lift counts |
 | Body composition | Waist-to-height ratio (latest of lab waist and check-in tape) | 0.40 | 0.50 | 0.60 | 0.70 | Ashwell 2012 (0.5); Ashwell & Gibson 2016 (0.4 / 0.5 / 0.6). Under 0.40 falls back to 50 at 0.30, never below the line |
 | Sleep, hours | Mean duration, last 30 days | 8.0 h | 7.0 h | 6.0 h | 4.5 h | Watson 2015 (7 h); long sleep not penalised |
@@ -45,9 +46,20 @@ Two-part factors:
   - The only change from the old flag count: a single flag far past its 25 line is now an opportunity, not neutral. For example: triglycerides 200 or more with HDL fine; under 6 h of sleep with regularity 80 or more.
 - **Strength** averages the lift score and the grip percentile when both pass their gates. Either one alone assesses the factor (grip alone is a percentile; lifts alone work as before). A grip reading counts from the same 183 days as the lifts.
 
+### The grip table
+
+Dodds et al. 2014 (*PLoS ONE* 9(12):e113637, doi:10.1371/journal.pone.0113637), Table 2: the 10th, 25th, 50th, 75th and 90th centiles in whole kg, by sex, modelled at the exact ages 20, 25, ..., 90 from 60,803 observations in 12 general-population studies in Great Britain. Migration `20261103_grip_strength_norms.sql` stores them as 30 rows (`metric = 'grip_strength'`, tier B):
+
+- each tabulated age becomes the band age-2 to age+2 (18-22, 23-27, ..., 88-92), so a person is placed on the **nearest tabulated age**; nobody under 18 or over 92 is placed;
+- the paper's grip is the maximum of all trials, both hands in 10 of the 12 studies, so the app uses the stronger hand of the latest test;
+- the studies used Jamar, Smedley, Nottingham, Harpenden and Takei dynamometers, seated or standing; the paper's sensitivity analyses found these within about 10 % of each other. A home dynamometer has not been checked against them;
+- the paper found no skew at any age, so the normal tails below are a good fit for grip.
+
+`20261102_benchmark_artifacts_schema.sql` mirrors the live `benchmark_artifacts` definition, which was created outside this folder, so the repo can rebuild it; on production it changes nothing.
+
 ### Past the table
 
-`interpolatePercentile` never goes past a table's lowest and highest published point (DAV-196), and `comparePopulation` keeps that rule. For this score only, `extendedPercentile` (`domain/comparison/PopulationComparison.kt`) carries a value past the 10th or 90th percentile with a split normal:
+`interpolatePercentile` never goes past a table's lowest and highest published point (DAV-196), and `comparePopulation` keeps that rule. For this score only (VO2max and grip), `extendedPercentile` (`domain/comparison/PopulationComparison.kt`) carries a value past the 10th or 90th percentile with a split normal:
 
 - the spread below the median comes from P10, the spread above from P90;
 - it is continuous at both ends and rises with the value;
@@ -81,7 +93,7 @@ The floor, the equal weighting and the lines between the cited cut-offs are prov
 
 - **TyG replaced.** The plan listed a triglyceride-glucose index. There is no widely agreed cut-off to cite for it, so the lipid factor uses the guideline thresholds for triglycerides and HDL, and glucose uses the ADA categories. TyG can be added if a defensible threshold is chosen.
 - **HbA1c** is accepted but the account has none today; fasting glucose is used.
-- **Strength** uses lifter standards for lifts; no population benchmark exists for barbell lifts. Handgrip is logged (GRIP in the add-entry picker, one row per hand, best of the attempts in kg, table `grip_strength_log`) and scored as a percentile once the grip table (`grip_strength` in `benchmark_artifacts`) is installed; until then it is shown and not scored. Alternative names of one lift (for example "standing military press" and "standing barbell press") are merged so a lift counts once.
+- **Strength** uses lifter standards for lifts; no population benchmark exists for barbell lifts. Handgrip is logged (GRIP in the add-entry picker, one row per hand, best of the attempts in kg, table `grip_strength_log`) and scored as a percentile against the grip table (`grip_strength` in `benchmark_artifacts`); without a row that fits, it is shown and not scored. Alternative names of one lift (for example "standing military press" and "standing barbell press") are merged so a lift counts once.
 - **Mock data removed.** The profile screen used to render sample domain levels and sample achievements while real ones loaded. That is gone: the running level comes from the real VO2max placement, the other three domains read "Not enough data yet" until benchmarks exist, and achievements show only real ones.
 - **Letter grade replaced** (methodology 2.0.0). The A-D letter (share of assessed factors favorable) became the 1-100 mean of factor scores, so two people both "favorable" at the 51st and 95th percentile no longer look the same.
 
@@ -92,6 +104,7 @@ The floor, the equal weighting and the lines between the cited cut-offs are prov
 - Whether a triglyceride was fasting is not recorded.
 - A reading counts as current for up to a year.
 - A clinical-target score is a position between cut-offs, not a percentile.
+- The grip centiles are British and from 1990-2012; they are not adjusted for height, which the paper names as a determinant it did not consider.
 - A favorable score is not low risk, and an unfavorable factor is a prompt to look, not a diagnosis.
 
 ## Changing it

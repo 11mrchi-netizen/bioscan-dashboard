@@ -4,7 +4,7 @@ import com.bioscan.fieldterminal.data.model.NotificationKind
 
 // Pure helpers for notification taps/actions, kept out of the Android classes so they're unit-testable.
 
-enum class NotificationDestination { SUPPLEMENTS, LOG, CHECKIN, BODY_CHECKIN, FUEL, NONE }
+enum class NotificationDestination { SUPPLEMENTS, LOG, CHECKIN, BODY_CHECKIN, FUEL, HEALTH, NONE }
 
 // Where tapping a notification of this kind should land in the app.
 fun notificationDestination(kind: String?): NotificationDestination = when (kind) {
@@ -19,6 +19,8 @@ fun notificationDestination(kind: String?): NotificationDestination = when (kind
     NotificationKind.BODY_CHECKIN -> NotificationDestination.BODY_CHECKIN
     // Fuel reminders open Fuel › Nutrition, where today's plan is.
     NotificationKind.FUEL_SESSION, NotificationKind.FUEL_EVENT -> NotificationDestination.FUEL
+    // The health check-in opens Health › CONCERNS, where CHECK IN is.
+    NotificationKind.HEALTH_CHECKIN -> NotificationDestination.HEALTH
     else -> NotificationDestination.NONE
 }
 

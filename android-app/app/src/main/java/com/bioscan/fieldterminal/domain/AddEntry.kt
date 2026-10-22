@@ -53,9 +53,12 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
     BodyCheckIn("Body check-in", AddEntryGroup.Body),
     // Weigh-in before and after a session, for hydration plans (domain/fuel/SweatProfile.kt).
     SweatTest("Sweat test", AddEntryGroup.Body),
+    // Health concerns (docs/health-concerns): the daily check-in (NOTHING in one tap), and straight to the body map or the
+    // general symptoms for something new. Injury and Illness keep their names (stored in RECENT) but open the new check-in.
+    HealthCheckIn("Health check-in", AddEntryGroup.Body),
     InjuryCheckIn("Injury check-in", AddEntryGroup.Training),
-    Injury("Injury", AddEntryGroup.Training),
-    Illness("Illness", AddEntryGroup.Training),
+    Injury("Injury / pain", AddEntryGroup.Training),
+    Illness("Illness / symptom", AddEntryGroup.Training),
     // A race, long day or other hard day outside the training plan (domain/events/AthleteEvent.kt).
     Event("Event", AddEntryGroup.Training),
     SexualActivity("Sexual activity", AddEntryGroup.Intimacy),
@@ -63,10 +66,11 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
     Note("Note", AddEntryGroup.Other),
 }
 
-// Where a choice leads: one of the sheet's own forms (a Fuel choice opens FuelForm on that sub-type), the injury /
-// illness form sheets that Training › Injury also uses, or the body check-in that Fuel › Body also opens.
+// Where a choice leads: one of the sheet's own forms (a Fuel choice opens FuelForm on that sub-type), the health check-in
+// (InjuryForm opens it on the body map, IllnessForm on general symptoms), or the body check-in that Fuel › Body also opens.
 sealed interface AddEntryTarget {
     data class Form(val type: AddEntryType, val fuel: FuelSubType? = null) : AddEntryTarget
+    data object HealthCheckIn : AddEntryTarget
     data object InjuryForm : AddEntryTarget
     data object IllnessForm : AddEntryTarget
     data object BodyCheckIn : AddEntryTarget
@@ -84,6 +88,7 @@ val AddEntryChoice.target: AddEntryTarget
         AddEntryChoice.Stool -> AddEntryTarget.Form(AddEntryType.Stool)
         AddEntryChoice.Grip -> AddEntryTarget.Form(AddEntryType.Grip)
         AddEntryChoice.BodyCheckIn -> AddEntryTarget.BodyCheckIn
+        AddEntryChoice.HealthCheckIn -> AddEntryTarget.HealthCheckIn
         AddEntryChoice.InjuryCheckIn -> AddEntryTarget.Form(AddEntryType.Ostrc)
         AddEntryChoice.Injury -> AddEntryTarget.InjuryForm
         AddEntryChoice.Illness -> AddEntryTarget.IllnessForm
@@ -128,6 +133,7 @@ fun decodeStart(s: String): AddEntryStart? {
 fun encodeTarget(t: AddEntryTarget?): String = when (t) {
     null -> ""
     is AddEntryTarget.Form -> "FORM|${t.type.name}|${t.fuel?.name.orEmpty()}"
+    AddEntryTarget.HealthCheckIn -> "HEALTH"
     AddEntryTarget.InjuryForm -> "INJURY"
     AddEntryTarget.IllnessForm -> "ILLNESS"
     AddEntryTarget.BodyCheckIn -> "BODY"
@@ -141,6 +147,7 @@ fun decodeTarget(s: String): AddEntryTarget? {
         "FORM" -> AddEntryType.entries.firstOrNull { it.name == f.getOrNull(1) }?.let { type ->
             AddEntryTarget.Form(type, FuelSubType.entries.firstOrNull { it.name == f.getOrNull(2) })
         }
+        "HEALTH" -> AddEntryTarget.HealthCheckIn
         "INJURY" -> AddEntryTarget.InjuryForm
         "ILLNESS" -> AddEntryTarget.IllnessForm
         "BODY" -> AddEntryTarget.BodyCheckIn

@@ -103,9 +103,9 @@ import java.time.LocalDate
 // stranded on the old Analysis sub-tab -- DAV-71 moved them here, unordered;
 // this only reorders what TrainingLoadSection()/TrainingScreen() already
 // render, nothing new).
-// DAV-216 (24/9 fixes): Injury moved in from Heart as a second subtab --
-// HealthEventsScreen()/OstrcCard content is unchanged, just relocated (see
-// InjuryTab() below).
+// DAV-216 (24/9 fixes): Injury moved in from Heart as a second subtab (see
+// InjuryTab() below). Health concerns replaced its old injury/illness list with
+// the concerns of the body (ui/screens/health/ConcernsTab.kt); the OSTRC card stays.
 // DAV-206 (24/9 fixes): the standalone REST CADENCE card is gone -- its
 // underlying evaluateRestCadence() is still used (InjuryTab()'s "days
 // without rest" stat on the OSTRC card reads from it), just no longer as
@@ -114,6 +114,7 @@ import java.time.LocalDate
 fun TrainingTileScreen(
     onBack: () -> Unit,
     onOpenSessionDetail: (Long) -> Unit = {},
+    onOpenConcern: (String) -> Unit = {},
     // Set by a deep link (Status's injury flag -> INJURY, the User tab's level buttons -> RUNNING / STRENGTH); applied
     // once, then cleared via the callback.
     requestedTab: TrainingTab? = null,
@@ -158,7 +159,7 @@ fun TrainingTileScreen(
             TrainingTab.Running -> com.bioscan.fieldterminal.ui.screens.user.RunningTab()
             TrainingTab.Strength -> com.bioscan.fieldterminal.ui.screens.user.StrengthTab()
             TrainingTab.Sessions -> TrainingSessionsTab(onOpenSessionDetail)
-            TrainingTab.Injury -> InjuryTab()
+            TrainingTab.Injury -> InjuryTab(onOpenConcern)
         }
     }
 }
@@ -169,7 +170,7 @@ fun TrainingTileScreen(
 // each subtab loading its own data (same as FuelTileScreen's Nutrition vs
 // Digestion tabs).
 @Composable
-private fun InjuryTab() {
+private fun InjuryTab(onOpenConcern: (String) -> Unit) {
     var sessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
@@ -193,6 +194,10 @@ private fun InjuryTab() {
         }
     }
 
+    // Health concerns of the body (docs/health-concerns): the same list as Health › CONCERNS, without general symptoms.
+    // It replaces the old injury and illness list and loads on its own, so it shows before the load context below.
+    com.bioscan.fieldterminal.ui.screens.health.ConcernsTab(onOpenConcern = onOpenConcern, anatomicalOnly = true)
+
     val s = sessions
     val w = wearable
     val wb = wellbeing
@@ -212,7 +217,6 @@ private fun InjuryTab() {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        HealthEventsScreen()
         // DAV-205 (24/9 fixes): TRIMP fallback, same shared builder Load tab uses.
         val sessionLoads = buildTrainingSessionLoads(s, restingSeries(w))
         val trainingLoadEval = evaluateTrainingLoad(sessionLoads, spans = injuryLoadSpans)

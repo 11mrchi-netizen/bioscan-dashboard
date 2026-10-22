@@ -83,6 +83,14 @@ private val DEFAULT_RULES = listOf(
         conditions = NotificationConditions(skipIfLogged = true),
         limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 60),
     ),
+    // Health concerns: 21:00 (owner decision 7.2.3), skipped once today's check-in is saved (NOTHING counts).
+    NewNotificationRuleRow(
+        kind = NotificationKind.HEALTH_CHECKIN,
+        enabled = true,
+        schedule = NotificationSchedule(times = listOf("21:00")),
+        conditions = NotificationConditions(skipIfLogged = true),
+        limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 30),
+    ),
     // Fuel planning: no clock times; the worker reads the planned sessions and races (domain/notifications/FuelPrompts.kt).
     NewNotificationRuleRow(
         kind = NotificationKind.FUEL_SESSION,

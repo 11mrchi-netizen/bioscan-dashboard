@@ -102,6 +102,10 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 bodyCheckInRequested = true
                 navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
             }
+            NotificationDestination.HEALTH -> {
+                healthRequestedTab = HealthTab.Concerns
+                navController.navigate(TileRoute.Health.route) { launchSingleTop = true }
+            }
             NotificationDestination.FUEL -> {
                 planningRequestedSection = PlanningSection.Food
                 navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
@@ -179,6 +183,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 TrainingTileScreen(
                     onBack = { navController.popBackStack() },
                     onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") },
+                    onOpenConcern = { id -> navController.navigate("concern/$id") },
                     requestedTab = trainingRequestedTab,
                     onRequestedTabConsumed = { trainingRequestedTab = null },
                 )
@@ -204,6 +209,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     onBack = { navController.popBackStack() },
                     requestedTab = healthRequestedTab,
                     onRequestedTabConsumed = { healthRequestedTab = null },
+                    onOpenConcern = { id -> navController.navigate("concern/$id") },
                 )
             }
             composable(TileRoute.Lab.route) {
@@ -274,6 +280,17 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 if (eventId != null) {
                     com.bioscan.fieldterminal.ui.screens.events.EventScreen(
                         eventId = eventId,
+                        onBack = { navController.popBackStack() },
+                        onOpenSession = { id -> navController.navigate("session_detail/$id") },
+                    )
+                }
+            }
+            // Health concerns: one concern's page (from Health › CONCERNS, Training › INJURY and the Status figure).
+            composable("concern/{concernId}") { backStackEntry ->
+                val concernId = backStackEntry.arguments?.getString("concernId")
+                if (concernId != null) {
+                    com.bioscan.fieldterminal.ui.screens.health.ConcernScreen(
+                        concernId = concernId,
                         onBack = { navController.popBackStack() },
                         onOpenSession = { id -> navController.navigate("session_detail/$id") },
                     )

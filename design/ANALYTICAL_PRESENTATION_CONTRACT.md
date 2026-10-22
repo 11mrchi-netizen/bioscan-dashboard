@@ -209,6 +209,18 @@ From the analysis review (docs/analysis-review/README.md). Each one changes what
 
 **R8 · One vocabulary, one set of cut-offs, and composites that earn their place.** A composite (Today's recovery, READY FOR, the Sleep Index) speaks the vocabulary of the morning band: AS EXPECTED, ABOVE EXPECTED, BELOW EXPECTED, UNUSUALLY LOW (recovery adds MIXED SIGNALS when its contributors disagree). Each metric has one set of cut-offs, defined once and used by every screen and every composite that reads it (the Sleep Index's 75 and 55; one regularity mark for the SRI, 80; the circadian-timing score says STEADY / VARIABLE TIMING, never "regular"). Each composite carries a scorecard from the person's own history: what it should forecast, and whether it does so better than its best single input. A composite whose scorecard reads NO BETTER drops its own word for INPUTS ONLY and shows its inputs; UNCLEAR or NOT YET SCORED keep the word with the scorecard line beside it. A retired composite (the 7-day HRV "condition" band) is not shown, and its place says what replaced it. A model element fitted to the person (the fitness and fatigue spans) is used only when it forecast better on held-out data, and the screen says which spans are in use and why.
 
+**R9 · Health concerns (docs/health-concerns).** A concern's state is one of UNOBSERVED (no check-in for a week, shown
+as Unavailable, never as fine), ACTIVE, STABLE, IMPROVING (a favourable change), WORSENING (Warning, the only amber state
+besides the safety prompts) or RESOLVED. A day without a check-in is a gap in every chart, never a zero; a symptom-free
+check-in is a zero, drawn as a dot on the baseline (hollow when it came from "nothing since"). Episode durations whose
+edges fall on days without check-ins are ranges. Findings sit on the ASSOCIATED rung and use these words only: NOT
+ENOUGH YET (with what is missing), RECURRING (it came back; nothing about why), NO PATTERN, HINT · RE-CHECKING (one pass,
+not shown as a pattern), POSSIBLE · EXPLORATORY, PERSISTENT, FADED, with WEAKENING after one failed re-check. Every
+finding shows its base rate (how often the exposure happens on comparable days or sessions), what else could explain it,
+how uncertain it is and a next step that is an observation or a trial, never an instruction to train differently. A
+trial is OBSERVED: INTERIM until its date, then LOWER SINCE, HIGHER SINCE or NO CLEAR CHANGE. Safety prompts are fixed
+rules that suggest seeing a clinician and are never presented as findings or diagnoses.
+
 ## Acceptance tests
 
 - The same card renders Warning + Declining + High confidence and Optimal + Improving + High confidence solely by changing presentation input.
@@ -220,6 +232,7 @@ From the analysis review (docs/analysis-review/README.md). Each one changes what
 - An associated finding never uses a cause verb or an arrow; every evidence row shows its verdict word and rung, and a NEGLIGIBLE row stays on the board.
 - A composite whose scorecard reads NO BETTER shows INPUTS ONLY on every screen it appears on; the same cut-off never differs between two screens.
 - A randomised experiment shows no verdict before its last period or day is read; a blinded experiment never shows today's arm; an observational read never yields a proposal to stop, cut back, pause or step up.
+- A health concern with no check-in for a week reads UNOBSERVED; a missed day is a gap, a symptom-free day a zero; no finding shows without its base rate.
 - Range shows its type and never infers desirability from position.
 - State uses text and icon/shape as well as color.
 - No component receives raw data and makes metric-specific interpretation.

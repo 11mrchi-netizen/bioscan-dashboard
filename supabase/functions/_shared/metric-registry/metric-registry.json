@@ -1103,6 +1103,75 @@
       ],
       "productDefined": false,
       "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "health_concern_state",
+      "docName": null,
+      "kind": "derived",
+      "methodology": "Each concern's check-ins become one row per day: checked in (with the day's highest severity, 0 when the check-in said symptom-free), recalled (a later 'nothing since' check-in), or unobserved. An episode starts on a day at severity 2 or more and ends after a run of symptom-free days spanning the resolution span (7 days for the body, 3 for general illness) with at least three of them checked in; unobserved days neither extend nor break the run, and both edges are shown as ranges when days were missed. The state is UNOBSERVED after a week without a check-in, RESOLVED outside an episode, ACTIVE with fewer than four check-ins in the episode, and otherwise WORSENING, IMPROVING or STABLE from the median of the last three rated check-ins against the three before (a change of two points), or a one-level change in training impact at the last two check-ins. The person's marks override the edges.",
+      "limitations": [
+        "Depends on check-ins: a missed day is never read as symptom-free, so sparse logging leaves wide ranges and an UNOBSERVED state.",
+        "Severity is self-rated on a 0-10 scale; the two-point threshold is a common minimal important change for pain ratings, not a validated cut-off for every symptom.",
+        "Not a diagnosis; the safety prompts are fixed rules that suggest seeing a clinician."
+      ],
+      "references": [
+        {
+          "citation": "Farrar JT, Young JP, LaMoreaux L, Werth JL, Poole RM. Clinical importance of changes in chronic pain intensity measured on an 11-point numerical pain rating scale. Pain 2001;94(2):149-158.",
+          "doi": "10.1016/S0304-3959(01)00349-9"
+        },
+        {
+          "citation": "Clarsen B, Rønsen O, Myklebust G, Flørenes TW, Bahr R. The Oslo Sports Trauma Research Center questionnaire on health problems: a new approach to prospective monitoring of illness and injury in elite athletes. Br J Sports Med 2014;48(9):754-760.",
+          "doi": "10.1136/bjsports-2012-092087"
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "health_finding",
+      "docName": null,
+      "kind": "modeled",
+      "methodology": "A fixed list of exposures, chosen before any data per kind of concern (runs, long, trail and quality runs, a jump in weekly running, back-to-back run days, strength work for the area, no rest day, short sleep, HRV below its expected band, a high training week, alcohol, high stress, a change of time zone), each with one primary window of days. For a session kind the primary comparison is the share of sessions followed by symptoms within the window against other sessions of the same sport (risk ratio, Katz interval, Fisher's exact one-sided p), leaving out comparison sessions whose follow-up overlaps an exposed one; otherwise flare-up starts are compared with checked-in symptom-free days in the same 28-day stratum and kind of day (time-stratified case-crossover; Mantel-Haenszel odds ratio with the Robins-Breslow-Greenland interval and an exact conditional p). The p-values of one concern are adjusted together (Benjamini-Hochberg, q < 0.10), with minimum counts, an effect of at least 1.5 and agreement of the sensitivity windows. A first pass is a hint; it is shown as POSSIBLE once it passes again at least 14 days later with more data, and as PERSISTENT once the flare-ups or sessions after that hold up on their own (exact one-sided p of 0.2 or less on at least three). Two failed re-checks with new data fade it. Every finding lists what else could explain it, how uncertain it is and a next step.",
+      "limitations": [
+        "An association in one person's history, never proof of cause; the exposures that go together (a trail run is often a long one) are named but not separated.",
+        "With about ten flare-ups a year, only large effects are found, and only after a year or two (docs/health-concerns/02-validation.md).",
+        "Single events (a knock, a sprain) are not searched for patterns.",
+        "Descent, footwear, surface and weather are not in the data."
+      ],
+      "references": [
+        {
+          "citation": "Maclure M. The case-crossover design: a method for studying transient effects on the risk of acute events. Am J Epidemiol 1991;133(2):144-153.",
+          "doi": "10.1093/oxfordjournals.aje.a115853"
+        },
+        {
+          "citation": "Benjamini Y, Hochberg Y. Controlling the false discovery rate: a practical and powerful approach to multiple testing. J R Stat Soc B 1995;57(1):289-300.",
+          "doi": "10.1111/j.2517-6161.1995.tb02031.x"
+        },
+        {
+          "citation": "Bahr R. Why screening tests to predict injury do not work - and probably never will: a critical review. Br J Sports Med 2016;50(13):776-780.",
+          "doi": "10.1136/bjsports-2016-096256"
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "health_trial_read",
+      "docName": null,
+      "kind": "derived",
+      "methodology": "A change chosen by the person, registered with its hypothesis and outcome before it starts, is read once on its date (at least four weeks after the start) against the same number of weeks before it (at least four), and the read is kept. Flare-ups per unit of exposure (per 100 km run by default) are compared as a ratio of two rates with an exact interval (conditional binomial, Clopper-Pearson); mean severity, the share of symptom-free days and the share of days with training affected are compared on weekly values with a Welch interval. Each side needs check-ins on at least 60% of its days. The words are LOWER SINCE, HIGHER SINCE or NO CLEAR CHANGE, never 'worked'.",
+      "limitations": [
+        "Before and after, not randomised: natural recovery, a change in total training and other changes at the same time are listed as other explanations.",
+        "Adherence is what the person logged."
+      ],
+      "references": [
+        {
+          "citation": "Clopper CJ, Pearson ES. The use of confidence or fiducial limits illustrated in the case of the binomial. Biometrika 1934;26(4):404-413.",
+          "doi": "10.1093/biomet/26.4.404"
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
     }
   ]
 }

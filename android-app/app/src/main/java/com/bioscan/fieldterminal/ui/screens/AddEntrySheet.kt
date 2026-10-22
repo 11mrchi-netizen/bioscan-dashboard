@@ -55,6 +55,8 @@ import com.bioscan.fieldterminal.data.CronometerEnrichment
 import com.bioscan.fieldterminal.data.CronometerItemInput
 import com.bioscan.fieldterminal.data.NutritionBarcodeLookupRepository
 import com.bioscan.fieldterminal.data.NutritionCronometerLookupRepository
+import com.bioscan.fieldterminal.data.BarcodeLookupFood
+import com.bioscan.fieldterminal.data.withMicronutrients
 import com.bioscan.fieldterminal.data.NutritionImageEstimateRepository
 import com.bioscan.fieldterminal.data.NutritionMealEstimate
 import com.bioscan.fieldterminal.data.NutritionMealSaveRepository
@@ -115,12 +117,12 @@ import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.components.softLoad
-import com.bioscan.fieldterminal.ui.screens.status.IllnessFormSheet
-import com.bioscan.fieldterminal.ui.screens.status.InjuryFormSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
+import com.bioscan.fieldterminal.domain.normalizeBarcode
 import com.bioscan.fieldterminal.util.createCameraCaptureUri
+import com.bioscan.fieldterminal.util.scanBarcode
 import com.bioscan.fieldterminal.util.readAndCompressImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -186,8 +188,9 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
     }
 
     when (healthForm) {
-        AddEntryTarget.InjuryForm -> InjuryFormSheet(onDismiss = onDismiss, onSaved = onSaved)
-        AddEntryTarget.IllnessForm -> IllnessFormSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.HealthCheckIn -> com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.InjuryForm -> com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = onDismiss, onSaved = onSaved, start = com.bioscan.fieldterminal.ui.screens.health.CheckInStart.NewBody)
+        AddEntryTarget.IllnessForm -> com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = onDismiss, onSaved = onSaved, start = com.bioscan.fieldterminal.ui.screens.health.CheckInStart.NewGeneral)
         AddEntryTarget.BodyCheckIn -> com.bioscan.fieldterminal.ui.screens.status.BodyCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
         AddEntryTarget.EventForm -> com.bioscan.fieldterminal.ui.screens.events.EventFormSheet(onDismiss = onDismiss, onSaved = { onSaved() })
         AddEntryTarget.SweatTest -> com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = onDismiss, onSaved = onSaved)
@@ -678,7 +681,8 @@ private fun choiceColor(choice: AddEntryChoice): Color = when (choice) {
     AddEntryChoice.Drink -> FT.Category.Intake.c300
     AddEntryChoice.Supplements -> FT.Category.Intake.c700
     AddEntryChoice.Wellbeing -> FT.Category.Wellbeing.c500
-    AddEntryChoice.Stool, AddEntryChoice.InjuryCheckIn, AddEntryChoice.Injury, AddEntryChoice.Illness -> FT.Category.Digestion.c500
+    AddEntryChoice.Stool, AddEntryChoice.InjuryCheckIn -> FT.Category.Digestion.c500
+    AddEntryChoice.HealthCheckIn, AddEntryChoice.Injury, AddEntryChoice.Illness -> FT.DomainHeart
     AddEntryChoice.Grip, AddEntryChoice.BodyCheckIn, AddEntryChoice.SweatTest -> FT.Category.Activity.c500
     AddEntryChoice.Event -> FT.DomainTraining
     AddEntryChoice.SexualActivity, AddEntryChoice.Encounter -> FT.Category.Arousal.c500
@@ -847,6 +851,10 @@ private fun FoodForm(
     // DAV-168: candidates from any of the three sources funnel into the
     // same review sheet before ever touching meal_items.
     var reviewSeedItems by remember { mutableStateOf<List<ReviewSeedItem>?>(null) }
+    // A barcode no database has calories for: the label-scan sheet for it, and the photos taken of that label.
+    var labelTarget by remember { mutableStateOf<LabelTarget?>(null) }
+    var labelPhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var photoForLabel by remember { mutableStateOf(false) }
     var barcodeInput by remember { mutableStateOf("") }
     var barcodeLooking by remember { mutableStateOf(false) }
     var barcodeError by remember { mutableStateOf<String?>(null) }
@@ -908,7 +916,7 @@ private fun FoodForm(
                     fiberG = enrichResult.fiberG,
                     sugarG = enrichResult.sugarG,
                     sodiumMg = enrichResult.sodiumMg,
-                    confidence = 0.85,
+                    confidence = enrichResult.confidence,
                 )
                 mealEstimateId = null
             } catch (e: Exception) {
@@ -920,8 +928,64 @@ private fun FoodForm(
         }
     }
 
-    fun runBarcodeLookup() {
-        val barcode = barcodeInput.trim()
+    // A barcode product as one catalog item (its label numbers, servings and package size), topped up with a good
+    // Cronometer match's micronutrients; the confirm sheet then offers serving / package / count portions.
+    suspend fun showBarcodeProduct(food: BarcodeLookupFood) {
+        val foodDesc = if (food.brand != null) "${food.name} (${food.brand})" else food.name
+        val lookup = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
+        enriching = true
+        try {
+            val product = lookup.enrichItems(listOf(CronometerItemInput(foodDesc, catalogFoodId = food.id)))
+            val micros = try {
+                lookup.enrichItems(listOf(CronometerItemInput(food.name, quantityG = product.items.firstOrNull()?.quantityG)))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            val enrichResult = withMicronutrients(product, micros).copy(confidence = 0.95, aiEstimateTotal = null)
+            cronometerEnrichment = enrichResult
+            mealEstimate = NutritionMealEstimate(
+                description = foodDesc,
+                calories = enrichResult.calories ?: 0.0,
+                proteinG = enrichResult.proteinG ?: 0.0,
+                carbsG = enrichResult.carbsG ?: 0.0,
+                fatG = enrichResult.fatG ?: 0.0,
+                fiberG = enrichResult.fiberG,
+                sugarG = enrichResult.sugarG,
+                sodiumMg = enrichResult.sodiumMg,
+                confidence = enrichResult.confidence,
+            )
+            mealEstimateId = null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            reviewSeedItems = listOf(
+                ReviewSeedItem(
+                    description = food.name,
+                    isBeverage = food.beverageClass != null,
+                    foodConfidence = 1.0,
+                    source = MealItemSource.Barcode,
+                    preMatchedFood = com.bioscan.fieldterminal.data.model.FoodRow(
+                        id = food.id,
+                        foodSourceId = 0,
+                        name = food.name,
+                        brand = food.brand,
+                        barcode = food.barcode,
+                        category = food.category,
+                        beverageClass = food.beverageClass,
+                        beverageSubtype = food.beverageSubtype,
+                    ),
+                ),
+            )
+        } finally {
+            enriching = false
+        }
+    }
+
+    // Known product -> confirm sheet. Unknown barcode, or a product without calories -> scan its nutrition label.
+    fun runBarcodeLookup(raw: String = barcodeInput) {
+        val barcode = normalizeBarcode(raw) ?: raw.trim()
         if (barcode.isBlank()) return
         barcodeLooking = true
         barcodeError = null
@@ -929,50 +993,13 @@ private fun FoodForm(
         mealEstimateSource = MealItemSource.Barcode
         scope.launch {
             try {
-                val food = NutritionBarcodeLookupRepository(SupabaseClientProvider.client).lookup(barcode)
-                if (food == null) {
-                    barcodeError = "Barcode not recognized -- try search instead."
+                val result = NutritionBarcodeLookupRepository(SupabaseClientProvider.client).lookup(barcode)
+                val food = result.food
+                if (food == null || result.needsLabel) {
+                    labelPhotos = emptyList()
+                    labelTarget = LabelTarget(barcode, food?.nameZh ?: food?.name ?: "", food?.brand)
                 } else {
-                    val foodDesc = if (food.brand != null) "${food.name} (${food.brand})" else food.name
-                    enriching = true
-                    try {
-                        val enrichResult = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
-                            .enrichItems(listOf(CronometerItemInput(food.name)))
-                        cronometerEnrichment = enrichResult
-                        mealEstimate = NutritionMealEstimate(
-                            description = foodDesc,
-                            calories = enrichResult.calories ?: 0.0,
-                            proteinG = enrichResult.proteinG ?: 0.0,
-                            carbsG = enrichResult.carbsG ?: 0.0,
-                            fatG = enrichResult.fatG ?: 0.0,
-                            fiberG = enrichResult.fiberG,
-                            sugarG = enrichResult.sugarG,
-                            sodiumMg = enrichResult.sodiumMg,
-                            confidence = 0.9,
-                        )
-                        mealEstimateId = null
-                    } catch (_: Exception) {
-                        reviewSeedItems = listOf(
-                            ReviewSeedItem(
-                                description = food.name,
-                                isBeverage = food.beverageClass != null,
-                                foodConfidence = 1.0,
-                                source = MealItemSource.Barcode,
-                                preMatchedFood = com.bioscan.fieldterminal.data.model.FoodRow(
-                                    id = food.id,
-                                    foodSourceId = 0,
-                                    name = food.name,
-                                    brand = food.brand,
-                                    barcode = food.barcode,
-                                    category = food.category,
-                                    beverageClass = food.beverageClass,
-                                    beverageSubtype = food.beverageSubtype,
-                                ),
-                            ),
-                        )
-                    } finally {
-                        enriching = false
-                    }
+                    showBarcodeProduct(food)
                 }
             } catch (e: Exception) {
                 barcodeError = e.functionErrorMessage()
@@ -985,7 +1012,11 @@ private fun FoodForm(
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         externalActivityActive?.value = false
         com.bioscan.fieldterminal.util.PendingCameraCapture.clear(context)
-        if (success) pendingCameraUri?.let { if (it !in pendingPhotos) pendingPhotos = pendingPhotos + it }
+        if (success) pendingCameraUri?.let {
+            if (photoForLabel) labelPhotos = labelPhotos + it
+            else if (it !in pendingPhotos) pendingPhotos = pendingPhotos + it
+        }
+        photoForLabel = false
     }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
@@ -995,12 +1026,34 @@ private fun FoodForm(
             // externalActivityActive stays true: camera is about to take foreground
         } else {
             externalActivityActive?.value = false
+            photoForLabel = false
             estimationError = "Camera permission denied"
         }
     }
     val pickPhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
         externalActivityActive?.value = false
-        if (uris.isNotEmpty()) pendingPhotos = pendingPhotos + uris
+        if (uris.isNotEmpty()) {
+            if (photoForLabel) labelPhotos = labelPhotos + uris else pendingPhotos = pendingPhotos + uris
+        }
+        photoForLabel = false
+    }
+
+    // Meal photos and label photos share the camera and the picker; photoForLabel says where the result goes.
+    fun launchCamera() {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        externalActivityActive?.value = true
+        if (granted) {
+            val uri = createCameraCaptureUri(context)
+            pendingCameraUri = uri
+            takePictureLauncher.launch(uri)
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    fun launchPicker() {
+        externalActivityActive?.value = true
+        pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1016,19 +1069,12 @@ private fun FoodForm(
             FormLabel("LOG WITH AI OR BARCODE")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PhotoActionButton(label = "TAKE PHOTO", modifier = Modifier.weight(1f)) {
-                    val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-                    externalActivityActive?.value = true
-                    if (granted) {
-                        val uri = createCameraCaptureUri(context)
-                        pendingCameraUri = uri
-                        takePictureLauncher.launch(uri)
-                    } else {
-                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                    }
+                    photoForLabel = false
+                    launchCamera()
                 }
                 PhotoActionButton(label = "CHOOSE PHOTOS", modifier = Modifier.weight(1f)) {
-                    externalActivityActive?.value = true
-                    pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    photoForLabel = false
+                    launchPicker()
                 }
             }
             strandedPhoto?.let { photo ->
@@ -1096,6 +1142,15 @@ private fun FoodForm(
                 )
                 PhotoActionButton(label = if (barcodeLooking) "..." else "LOOKUP", enabled = barcodeInput.isNotBlank() && !barcodeLooking) {
                     runBarcodeLookup()
+                }
+                PhotoActionButton(label = "SCAN", enabled = !barcodeLooking) {
+                    scope.launch {
+                        val code = scanBarcode(context) { barcodeError = it }
+                        if (code != null) {
+                            barcodeInput = code
+                            runBarcodeLookup(code)
+                        }
+                    }
                 }
             }
             barcodeError?.let {
@@ -1195,6 +1250,33 @@ private fun FoodForm(
         )
     }
 
+    labelTarget?.let { target ->
+        LabelEntrySheet(
+            barcode = target.barcode,
+            initialName = target.name,
+            initialBrand = target.brand,
+            photos = labelPhotos,
+            onTakePhoto = {
+                photoForLabel = true
+                launchCamera()
+            },
+            onChoosePhoto = {
+                photoForLabel = true
+                launchPicker()
+            },
+            onSaved = { food ->
+                labelTarget = null
+                labelPhotos = emptyList()
+                mealEstimateSource = MealItemSource.Barcode
+                scope.launch { showBarcodeProduct(food) }
+            },
+            onDismiss = {
+                labelTarget = null
+                labelPhotos = emptyList()
+            },
+        )
+    }
+
     mealEstimate?.let { estimate ->
         NutritionEstimateConfirmSheet(
             estimate = estimate,
@@ -1213,6 +1295,10 @@ private fun FoodForm(
         )
     }
 }
+
+// The barcode a label scan is for, with what the database knew about the product (an Open Food Facts entry without a
+// nutrition table still has a name).
+private data class LabelTarget(val barcode: String, val name: String, val brand: String?)
 
 // Beverage classes from DAV-181's hydration_factor_models vocabulary that
 // go through the meal_items path (non-water). Water stays on the simple

@@ -55,6 +55,7 @@ private val RULE_LABELS = mapOf(
     NotificationKind.EVENING_LOG to "EVENING LOG",
     NotificationKind.EVENING_CHECKIN to "EVENING CHECK-IN",
     NotificationKind.BODY_CHECKIN to "MONTHLY BODY CHECK-IN",
+    NotificationKind.HEALTH_CHECKIN to "HEALTH CHECK-IN",
     NotificationKind.FUEL_SESSION to "FUEL BEFORE AND AFTER KEY SESSIONS",
     NotificationKind.FUEL_EVENT to "RACE WEEK FUELLING",
 )

@@ -1759,6 +1759,18 @@ async function fetchDashboardData(sb){
     medication: r.medication, severity: r.severity, status: r.status,
     start: r.start_date, end: r.end_date, notes: r.notes
   }));
+  // Health concerns (docs/health-concerns): the app now logs concerns, not rows in the two tables above. Concerns created
+  // in the app come from v_health_events (legacy shape: kind, title, status, start, end; the copies of the old rows are
+  // left out there, since the old rows are read above). Before the migration the view is missing: nothing is added.
+  try {
+    const concernRes = await sb.from('v_health_events').select('kind,id,title,detail,status,start_date,end_date');
+    if (!concernRes.error) {
+      for (const r of (concernRes.data || []).filter(x => String(x.id).includes('-'))) {
+        if (r.kind === 'illness') illnesses.push({ id: r.id, name: r.title, symptoms: r.detail, diagnosis: null, medication: null, severity: null, status: r.status, start: r.start_date, end: r.end_date, notes: null });
+        else injuries.push({ id: r.id, part: r.title, type: '', severity: null, status: r.status, start: r.start_date, end: r.end_date, notes: r.detail });
+      }
+    }
+  } catch (e) { /* the view is optional until the migration is applied */ }
   const labDraws = labDrawsRows.map(r => ({ date: r.draw_date, lab: r.lab_name }));
 
   // ---- stool: most-recent-first log, not a chart — matches how the panel

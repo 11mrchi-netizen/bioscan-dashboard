@@ -164,3 +164,13 @@ data class LogSupplementTakenRow(
     @SerialName("dose_value") val doseValue: Double? = null,
     @SerialName("dose_unit") val doseUnit: String? = null,
 )
+
+// The roster columns the Log tab needs to know which daily supplements were expected on a past day.
+@Serializable
+data class SupplementScheduleRow(
+    val id: Long,
+    val status: String,
+    @SerialName("start_date") val startDate: String? = null,
+    @SerialName("end_date") val endDate: String? = null,
+    @SerialName("every_n_days") val everyNDays: Int? = null,
+)

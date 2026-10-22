@@ -26,20 +26,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
-import com.bioscan.fieldterminal.domain.training.definition.ConditioningProtocolDef
-import com.bioscan.fieldterminal.domain.training.definition.StrengthModuleDef
-import com.bioscan.fieldterminal.domain.training.definition.TemplateDef
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.domain.ZoneMethod
+import com.bioscan.fieldterminal.domain.zoneMethodExplanation
+import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.TimeField
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalTime
 
 private val PLATE_CHOICES = listOf(0.5, 1.25, 2.5, 5.0, 10.0, 15.0, 20.0, 25.0)
@@ -47,61 +44,28 @@ private val PLATE_CHOICES = listOf(0.5, 1.25, 2.5, 5.0, 10.0, 15.0, 20.0, 25.0)
 private fun plateText(p: Double) = if (p == Math.floor(p)) p.toInt().toString() else p.toString()
 private fun time(s: String) = runCatching { LocalTime.parse(s) }.getOrDefault(LocalTime.of(7, 0))
 
-// DAV-345. Settings > Training programs: the program library, what the lifter owns (plates) and
-// the default session times. Starting a block from a program opens the setup flow at its modules.
+// DAV-345. Setup › Training setup: what the lifter owns (plates) and the default session times.
+// UX review P5 / P8: the program library and its import moved into PLAN A NEW BLOCK (TrainingPlannerScreen's first step),
+// so Setup keeps only true settings and a block is started, seen and edited in Training › Plan alone.
 @Composable
-fun TrainingSettingsScreen(onBack: () -> Unit, onStart: (String) -> Unit) {
+fun TrainingSettingsScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val state = remember { TrainingPlannerState(TrainingProgramRepository(SupabaseClientProvider.client), scope) }
     LaunchedEffect(Unit) { state.load() }
 
     Column(Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack)
+        TileHeader(onBack = onBack, title = "TRAINING SETUP", subtitle = "EQUIPMENT · SESSION TIMES", accent = FT.DomainTraining)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("TRAINING PROGRAMS", color = FT.TextPrimary, fontFamily = RobotoMono, fontSize = 15.sp, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 8.dp))
             if (state.loading) {
                 Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.DomainTraining) }
             } else {
-                state.error?.let { Text(it, color = FT.Critical, fontFamily = Inter, fontSize = 13.sp) }
-                ImportCard(state)
-                ProgramLibrary(state, onStart)
+                state.error?.let { Text(it, color = FT.Critical, style = FTType.BodySmall) }
                 EquipmentCard(state)
                 ScheduleCard(state)
+                HeartRateZonesCard(state)
                 Spacer(Modifier.height(24.dp))
             }
         }
-    }
-}
-
-@Composable
-private fun ProgramLibrary(state: TrainingPlannerState, onStart: (String) -> Unit) {
-    val templates = state.catalog?.definitions.orEmpty().filterIsInstance<TemplateDef>()
-    val strength = state.catalog?.definitions.orEmpty().count { it is StrengthModuleDef }
-    val protocols = state.catalog?.definitions.orEmpty().count { it is ConditioningProtocolDef }
-    if (templates.isEmpty() && strength == 0) return
-    var method by remember { mutableStateOf("all") }
-    val methods = listOf("all") + templates.map { methodologyOf(it.key) }.distinct().sorted()
-    FTCard(title = "BUILD A BLOCK") {
-        Body("Pick one of $strength strength templates and one of $protocols conditioning templates, then decide the days, the length and the deload weeks.", muted = true)
-        AmberButton("BUILD A BLOCK") { onStart("build") }
-    }
-    FTCard(title = "PUBLISHED PROGRAMS") {
-        Body("Fixed week-by-day programs where strength and conditioning are already placed. Tap START to plan one.", muted = true)
-        Chips(methods, setOf(method), { methodologyLabels[it] ?: it.uppercase() }) { method = it }
-        templates.filter { method == "all" || methodologyOf(it.key) == method }.sortedBy { it.title }.forEach { t ->
-            ProgramRow(t.title, "${t.weeks} weeks") { onStart(t.key) }
-        }
-    }
-}
-
-@Composable
-private fun ProgramRow(title: String, meta: String, onStart: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Column(Modifier.weight(1f)) {
-            Text(title, color = FT.TextPrimary, fontFamily = Inter, fontSize = 14.sp)
-            Text(meta, color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 11.sp)
-        }
-        AmberButton("START", onClick = onStart)
     }
 }
 
@@ -119,8 +83,20 @@ private fun EquipmentCard(state: TrainingPlannerState) {
         Body("Added weight follows your own logs; total load follows the books (bodyweight included).", muted = true)
         Chips(listOf("added", "total"), setOf(base), { if (it == "added") "ADDED WEIGHT" else "TOTAL LOAD" }) { base = it }
         Spacer(Modifier.height(8.dp))
-        AmberButton("SAVE EQUIPMENT", enabled = plates.isNotEmpty()) { state.saveSettings(state.settings.copy(platesKg = plates.sorted(), weightedPercentBase = base)) }
+        FTButton("SAVE EQUIPMENT", enabled = plates.isNotEmpty()) { state.saveSettings(state.settings.copy(platesKg = plates.sorted(), weightedPercentBase = base)) }
         state.settingsMessage?.let { Body(it, muted = true) }
+    }
+}
+
+// The default for every session's heart-rate chart (domain/HeartRateZones.kt); a session can still be switched there.
+@Composable
+private fun HeartRateZonesCard(state: TrainingPlannerState) {
+    FTCard(title = "HEART-RATE ZONES") {
+        Body("Where a session's zone edges sit. A session's heart-rate chart opens on this and can be switched there.", muted = true)
+        Chips(ZoneMethod.entries.map { it.key }, setOf(state.zoneMethod.key), { ZoneMethod.of(it).label }) { state.saveZoneMethod(ZoneMethod.of(it)) }
+        Spacer(Modifier.height(4.dp))
+        Body(zoneMethodExplanation(state.zoneMethod), muted = true)
+        state.zoneMessage?.let { Body(it, muted = true) }
     }
 }
 
@@ -144,7 +120,7 @@ private fun ScheduleCard(state: TrainingPlannerState) {
             Box(Modifier.width(110.dp)) { FieldTextField(secondMin, { secondMin = it }, "min", keyboardType = KeyboardType.Number) }
         }
         Spacer(Modifier.height(8.dp))
-        AmberButton("SAVE TIMES", enabled = firstMin.toIntOrNull() != null && secondMin.toIntOrNull() != null) {
+        FTButton("SAVE TIMES", enabled = firstMin.toIntOrNull() != null && secondMin.toIntOrNull() != null) {
             state.saveSettings(
                 s.copy(
                     defaultStartTime = first.toString() + ":00", defaultDurationMin = firstMin.toInt(),

@@ -60,7 +60,9 @@ export function buildSeriesBreakResult(i: SeriesBreakInput): SeriesBreakResult {
     if (decision) {
       status = decision.decision === 'source_change' ? 'confirmed' : 'dismissed'
       reason = 'user_decision'
-    } else if (i.originChanges.some((d) => dayDiff(d, b.date) <= win)) {
+    } else if (i.deviceSensitive && i.originChanges.some((d) => dayDiff(d, b.date) <= win)) {
+      // Only metrics a device or classifier can shift on its own (HRV, sleep stages) are confirmed by a source change.
+      // Resting heart rate, steps and sleep hours also change for real reasons, so they wait for the user's decision.
       status = 'confirmed'
       reason = 'origin_change'
     }

@@ -16,6 +16,8 @@
 import { autocorr1, benjaminiHochberg, mean, pFromT, sd, tCritical, weekdayDemean } from './stats.ts'
 import type { Num } from './stats.ts'
 import type { Frame } from './relationship.ts'
+import { analyseDaily, analysePairs, FOUR_WORDS, fourWord, shiftDay } from './randomized.ts'
+import type { FourWord, PeriodPhase } from './randomized.ts'
 
 export type MetricId = 'hrv' | 'rhr' | 'sleep_hours' | 'deep_rem_min' | 'energy' | 'mood' | 'stress' | 'soreness' | 'fueling_carb_rate'
 
@@ -53,12 +55,28 @@ export interface Phase {
 }
 
 export interface Protocol {
-  design: 'AB' | 'ABAB'
+  design: 'AB' | 'ABAB' | 'randomized_pairs' | 'micro_randomized'
   phases: Phase[]
   washoutDays: number
   /** Share of B-phase days with a supplement log below which the result carries a low-adherence note. */
   minAdherence: number
   excludeAlcoholDays: boolean
+  // ---- Analysis review phase F (protocol version 2): randomised designs, judged against a zone set at registration ----
+  version?: 2
+  /** No-effect zone of the primary outcome, natural units (% for HRV, minutes for sleep, as the outcome reports). */
+  zone?: number
+  /** A partner filled a weekly organiser with the real thing or a placebo, so the person did not know the schedule. */
+  blinded?: boolean
+  /** randomized_pairs: which pair each phase belongs to (the order inside a pair was drawn at random). */
+  pairs?: number
+  periodDays?: number
+  /** micro_randomized: the drawn daily schedule (B = with) and how many days later the outcome is read. */
+  assignments?: { date: string; arm: 'A' | 'B' }[]
+  lag?: number
+  /** micro_randomized: the behaviour a with-day asks for, checked against the log (e.g. no caffeine after 14:00). */
+  behaviour?: { series: string; withValue: number; label: string }
+  /** How the schedule was drawn (recorded at registration). */
+  randomization?: { method: string; drawnAt: string }
 }
 
 export interface ExperimentSpec {
@@ -69,7 +87,7 @@ export interface ExperimentSpec {
   protocol: Protocol
 }
 
-export type Verdict = 'effect_detected' | 'no_detectable_effect' | 'insufficient' | 'running'
+export type Verdict = 'effect_detected' | 'no_detectable_effect' | 'insufficient' | 'running' | FourWord
 
 export interface MetricResult {
   metric: MetricId
@@ -93,6 +111,9 @@ export interface MetricResult {
   replicated: boolean | null
   summary: string
   notes: string[]
+  /** Phase F designs: the zone the verdict used and the exact randomisation p. */
+  zone?: number | null
+  randomizationP?: number | null
 }
 
 export interface ExperimentResult {
@@ -202,8 +223,19 @@ function signedText(v: number, unit: string): string {
   return `${v >= 0 ? '+' : '-'}${Math.abs(v).toFixed(d)}${unit === '%' ? '%' : ' ' + unit}`
 }
 
-/** Analyse one registered experiment on the daily frame. `taken` = dates with a supplement log (from the real log). */
-export function analyseExperiment(spec: ExperimentSpec, frame: Frame, taken: Set<string>, today: string): ExperimentResult {
+/** Analyse one registered experiment on the daily frame. `taken` = dates with a supplement log (from the real log).
+ *  `frozen` = days left out of periods that have ended, as recorded when each ended (phase F), used instead of the live
+ *  illness and alcohol logs for those periods. */
+/** The registration defaults, for protocols stored without them: the phone's JSON encoder leaves out a field equal to
+ *  its default, so a protocol registered with no washout, a 70% minimum and alcohol days excluded arrived without those
+ *  three keys (and read as no exclusion and failed adherence). Explicit values always win. */
+export function withProtocolDefaults(protocol: Protocol): Protocol {
+  return { ...protocol, washoutDays: protocol.washoutDays ?? 0, minAdherence: protocol.minAdherence ?? 0.7, excludeAlcoholDays: protocol.excludeAlcoholDays ?? true }
+}
+
+export function analyseExperiment(spec: ExperimentSpec, frame: Frame, taken: Set<string>, today: string, frozen?: FrozenExclusions): ExperimentResult {
+  spec = { ...spec, protocol: withProtocolDefaults(spec.protocol) }
+  if (spec.protocol.version === 2) return analyseRandomized(spec, frame, taken, today, frozen)
   const { protocol } = spec
   const labels = dayLabels(frame.dates, protocol)
   const first = protocol.phases[0]?.start ?? today
@@ -366,3 +398,163 @@ export function daysPerPhaseFor(preview: MdePreview, delta: number): number {
   for (let n = MIN_PHASE_DAYS; n <= 730; n++) if (mdeFor(info, preview.sigma, preview.rho, n, n) <= delta) return n
   return 730
 }
+
+// ---- Analysis review phase F: randomised designs (protocol version 2) ----
+
+/** Days left out of each ended period, frozen when it ended: key = period start date. */
+export type FrozenExclusions = Map<string, Set<string>>
+
+// The favourable direction of each outcome (more HRV, lower resting heart rate, more sleep, more energy and mood, less
+// stress and soreness, a steadier carb rate is neither).
+const FAVOURABLE: Record<MetricId, 1 | -1> = {
+  hrv: 1, rhr: -1, sleep_hours: 1, deep_rem_min: 1, energy: 1, mood: 1, stress: -1, soreness: -1, fueling_carb_rate: 1,
+}
+
+/** Each outcome's default no-effect zone in its display unit (% for HRV, minutes for sleep), as the evidence board uses;
+ *  `scale` turns the metric's own unit into the display unit. */
+export const DEFAULT_ZONE: Record<MetricId, { zone: number; unit: string; scale?: number }> = {
+  hrv: { zone: 2, unit: '%' }, rhr: { zone: 1, unit: 'bpm' }, sleep_hours: { zone: 10, unit: 'min', scale: 60 }, deep_rem_min: { zone: 10, unit: 'min' },
+  energy: { zone: 0.5, unit: 'points' }, mood: { zone: 0.5, unit: 'points' }, stress: { zone: 0.5, unit: 'points' }, soreness: { zone: 0.5, unit: 'points' },
+  fueling_carb_rate: { zone: 5, unit: 'g/h' },
+}
+
+/** The blocks whose exclusions are frozen when they end: the periods, or for a daily design each week of the schedule
+ *  (through the morning its last outcome is read). */
+export function freezeBlocks(protocol: Protocol): { start: string; end: string }[] {
+  if (protocol.design === 'micro_randomized') {
+    const days = protocol.assignments ?? []
+    const out: { start: string; end: string }[] = []
+    for (let k = 0; k < days.length; k += 7) out.push({ start: days[k].date, end: shiftDay(days[Math.min(days.length, k + 7) - 1].date, protocol.lag ?? 1) })
+    return out
+  }
+  return protocol.phases.map((p) => ({ start: p.start, end: p.end }))
+}
+
+/** Days to leave out on the frame: frozen sets for ended blocks, the live illness and alcohol logs otherwise. */
+export function exclusionMask(frame: Frame, protocol: Protocol, frozen: FrozenExclusions | undefined): boolean[] {
+  const alcohol = frame.series.alcohol_any ?? []
+  const live = frame.dates.map((_, i) => frame.excluded[i] === true || (protocol.excludeAlcoholDays && (alcohol[i] === 1 || (i > 0 && alcohol[i - 1] === 1))))
+  if (!frozen || frozen.size === 0) return live
+  const blocks = freezeBlocks(protocol)
+  return frame.dates.map((d, i) => {
+    const b = blocks.find((x) => d >= x.start && d <= x.end)
+    const set = b ? frozen.get(b.start) : undefined
+    return set ? set.has(d) : live[i]
+  })
+}
+
+function natural(info: MetricInfo, v: number, unit: string): number {
+  if (info.ln) return (Math.exp(v) - 1) * 100
+  return unit === 'min' && info.unit === 'h' ? v * 60 : v
+}
+
+function zoneText(zone: number, unit: string): string {
+  return unit === '%' ? `±${zone}%` : `±${zone} ${unit}`
+}
+
+export function analyseRandomized(spec: ExperimentSpec, frame: Frame, taken: Set<string>, today: string, frozen?: FrozenExclusions): ExperimentResult {
+  const { protocol } = spec
+  const daily = protocol.design === 'micro_randomized'
+  const schedule = protocol.assignments ?? []
+  const first = daily ? schedule[0]?.date ?? today : protocol.phases[0]?.start ?? today
+  const lastDay = daily ? shiftDay(schedule[schedule.length - 1]?.date ?? today, protocol.lag ?? 1) : protocol.phases[protocol.phases.length - 1]?.end ?? today
+  const stage: ExperimentResult['stage'] = today < first ? 'before' : today <= lastDay ? 'running' : 'complete'
+  const excluded = exclusionMask(frame, protocol, frozen)
+
+  // Adherence: with-periods from the supplement log; with-days from the behaviour series (e.g. no caffeine after 14:00).
+  let adherence: ExperimentResult['adherence']
+  if (daily && protocol.behaviour) {
+    const series = frame.series[protocol.behaviour.series] ?? []
+    const idx = new Map(frame.dates.map((d, i) => [d, i]))
+    const withDays = schedule.filter((a) => a.arm === 'B' && a.date <= today)
+    const known = withDays.filter((a) => { const v = series[idx.get(a.date) ?? -1]; return v !== null && v !== undefined })
+    const followed = known.filter((a) => series[idx.get(a.date) as number] === protocol.behaviour!.withValue).length
+    const rate = known.length ? followed / known.length : null
+    adherence = { interventionDays: withDays.length, interventionLogged: followed, rate: rate === null ? null : r(rate), baselineLogged: 0, ok: rate === null ? null : rate >= protocol.minAdherence }
+  } else {
+    const labels = dayLabels(frame.dates, protocol)
+    const bDays = frame.dates.filter((d, i) => labels[i] === 'B' && d <= today)
+    const bLogged = bDays.filter((d) => taken.has(d)).length
+    const aLogged = frame.dates.filter((d, i) => labels[i] === 'A' && taken.has(d)).length
+    const rate = bDays.length ? bLogged / bDays.length : null
+    adherence = { interventionDays: bDays.length, interventionLogged: bLogged, rate: rate === null ? null : r(rate), baselineLogged: aLogged, ok: rate === null ? null : rate >= protocol.minAdherence }
+  }
+
+  const metrics: MetricResult[] = []
+  const wanted: { id: MetricId; role: 'primary' | 'secondary' }[] = [{ id: spec.primary, role: 'primary' }, ...spec.secondary.map((id) => ({ id, role: 'secondary' as const }))]
+  for (const { id, role } of wanted) {
+    const info = METRIC_INFO[id]
+    const unit = info.unit === 'h' ? 'min' : info.unit
+    const raw = frame.series[info.series] ?? []
+    const values: Num[] = frame.dates.map((d, i) => {
+      const v = raw[i]
+      if (d > today || excluded[i] || v === null || v === undefined || !Number.isFinite(v)) return null
+      return info.ln ? (v > 0 ? Math.log(v) : null) : v
+    })
+    const notes: string[] = []
+    const zone = role === 'primary' ? protocol.zone ?? null : null
+    const base: MetricResult = {
+      metric: id, label: info.label, role, verdict: 'insufficient', n0: 0, n1: 0, mean0: null, mean1: null, diff: null, mde: null, p: null, pAdjusted: null,
+      preTrendPerWeek: null, trendWarning: false, replicated: null, summary: '', notes, zone, randomizationP: null,
+    }
+    let est: number | null = null
+    let lo: number | null = null
+    let hi: number | null = null
+    let pRand: number | null = null
+    let se: number | null = null
+    if (daily) {
+      const d = analyseDaily({ dates: frame.dates, values, assignments: schedule.filter((a) => a.date <= today), lag: protocol.lag ?? 1 }, `${spec.id}:${id}`)
+      base.n0 = d.daysWithout
+      base.n1 = d.daysWith
+      est = d.estimate
+      lo = d.lo
+      hi = d.hi
+      pRand = d.p
+      if (lo !== null && hi !== null) se = (hi - lo) / (2 * 1.96)
+    } else {
+      const phases = protocol.phases.map((ph, k) => ({ ...ph, pair: (ph as Phase & { pair?: number }).pair ?? Math.floor(k / 2) })) as PeriodPhase[]
+      const a = analysePairs({ dates: frame.dates, values, phases, washoutDays: protocol.washoutDays })
+      base.n0 = a.daysWithout
+      base.n1 = a.daysWith
+      est = a.estimate
+      lo = a.lo
+      hi = a.hi
+      pRand = a.usablePairs >= 6 ? a.p : null
+      if (lo !== null && hi !== null && est !== null) se = (hi - est) / tCritical(Math.max(1, a.usablePairs - 1))
+      if (a.usablePairs < a.pairs && stage === 'complete') notes.push(`${a.pairs - a.usablePairs} of ${a.pairs} pairs had too few usable days in one of their periods and were left out.`)
+    }
+    if (est === null || lo === null || hi === null) {
+      base.summary = daily
+        ? `Not enough usable days yet: ${base.n0} without and ${base.n1} with, at least 10 of each are needed.`
+        : `Not enough usable periods yet: at least two complete pairs are needed.`
+      metrics.push(base)
+      continue
+    }
+    base.diff = { value: r(natural(info, est, unit)), lo: r(natural(info, lo, unit)), hi: r(natural(info, hi, unit)), unit }
+    base.randomizationP = pRand === null ? null : r(pRand, 4)
+    base.p = pRand === null ? null : r(pRand, 5)
+    if (se !== null) base.mde = r(Math.abs(natural(info, 2.8 * se, unit)))
+    if (protocol.blinded) notes.push('Blinded: a placebo filled the without-periods, so expectation should not explain a difference.')
+    if (adherence.rate !== null && adherence.rate < protocol.minAdherence) notes.push(`The schedule was followed on ${Math.round(adherence.rate * 100)}% of with-days; analysed as assigned, which shrinks any effect toward zero.`)
+
+    const words = (v: number) => `${v >= 0 ? '+' : '-'}${Math.abs(v).toFixed(unit === 'min' ? 0 : 1)}${unit === '%' ? '%' : ' ' + unit}`
+    const interval = `95% interval ${words(base.diff.lo)} to ${words(base.diff.hi)}`
+    if (stage !== 'complete') {
+      base.verdict = 'running'
+      base.summary = `Interim, not a result: so far ${words(base.diff.value)} with it (${interval}). The verdict comes when the last ${daily ? 'day' : 'period'} ends.`
+    } else if (zone !== null) {
+      const v = fourWord({ lo: base.diff.lo, hi: base.diff.hi, zone, favourable: FAVOURABLE[id] })
+      base.verdict = v
+      const what = `${info.label} ${words(base.diff.value)} with it (${interval}), against a ${zoneText(zone, unit)} zone set at registration`
+      base.summary = v === 'unclear' ? `Unclear: ${what}. A longer test would settle it.` : `${FOUR_WORDS[v]}: ${what}.`
+    } else {
+      // Secondary outcomes have no zone of their own: their intervals are reported, not judged.
+      base.verdict = 'unclear'
+      base.summary = `${info.label} ${words(base.diff.value)} with it (${interval}); a secondary outcome, reported without a verdict.`
+    }
+    metrics.push(base)
+  }
+  return { id: spec.id, name: spec.name, asOf: today, stage, adherence, metrics }
+}
+
+export type { FourWord }

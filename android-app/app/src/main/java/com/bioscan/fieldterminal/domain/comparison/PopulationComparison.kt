@@ -59,8 +59,29 @@ private fun specificity(artifact: BenchmarkArtifact, context: PopulationContext)
     return score
 }
 
+// Analysis review A7: an artifact restricted to an age band or a sex the person is known NOT to belong to is never used.
+// It used to win whenever it was the only candidate (specificity 0 ties with an unqualified table), so a 30-year-old
+// could be placed against a 60-69 table.
+private fun excludes(artifact: BenchmarkArtifact, context: PopulationContext): Boolean {
+    val pop = artifact.population
+    val ageOut = context.ageYears != null && pop.ageLow != null && pop.ageHigh != null && context.ageYears !in pop.ageLow..pop.ageHigh
+    val sexOut = context.sex != null && pop.sex != null && !context.sex.equals(pop.sex, ignoreCase = true)
+    return ageOut || sexOut
+}
+
 fun resolveArtifact(metric: String, context: PopulationContext, artifacts: List<BenchmarkArtifact>): BenchmarkArtifact? =
-    artifacts.filter { it.metric == metric }.maxByOrNull { specificity(it, context) }
+    artifacts.filter { it.metric == metric && !excludes(it, context) }.maxByOrNull { specificity(it, context) }
+
+// How specifically the table describes this person: one point each for a confirmed age-band and sex match, out of two.
+// An unqualified table (or one whose strata can't be checked because age or sex is unknown) is a weaker reference, and
+// the chip says so instead of a constant 2 of 2.
+fun populationFit(artifact: BenchmarkArtifact, context: PopulationContext): Confidence {
+    val pop = artifact.population
+    var have = 0
+    if (context.ageYears != null && pop.ageLow != null && pop.ageHigh != null && context.ageYears in pop.ageLow..pop.ageHigh) have++
+    if (context.sex != null && pop.sex != null && context.sex.equals(pop.sex, ignoreCase = true)) have++
+    return Confidence(have, 2)
+}
 
 // Conservative linear interpolation between the artifact's own published
 // points -- never extrapolated past the table's own min/max percentile, per
@@ -80,6 +101,44 @@ fun interpolatePercentile(current: Double, sortedQuantiles: List<Map.Entry<Int, 
         }
     }
     return last.key.toDouble()
+}
+
+// A percentile carried past the table's lowest and highest published points, for the Healthspan 1-100 scale only
+// (comparePopulation keeps the rule above). Inside the table it is interpolatePercentile. Past it, a split normal: the spread
+// below the median comes from the lowest point, above it from the highest, so a skewed table (the ACSM women's VO2max rows
+// spread about two-thirds as far below the median as above) keeps its shape. An estimate, so the caller says so; capped to
+// 1..99. Null when the table has no median or no point on each side of it.
+fun extendedPercentile(current: Double, quantiles: Map<Int, Double>): Double? {
+    val sorted = quantiles.entries.sortedBy { it.key }
+    val median = quantiles[50] ?: return null
+    val low = sorted.first()
+    val high = sorted.last()
+    if (low.key >= 50 || high.key <= 50) return null
+    if (current in low.value..high.value) return interpolatePercentile(current, sorted)
+    val (p, v) = if (current < low.value) low.key to low.value else high.key to high.value
+    val sigma = (v - median) / inverseNormalCdf(p / 100.0)
+    if (sigma <= 0.0) return interpolatePercentile(current, sorted)
+    return (100.0 * normalCdf((current - median) / sigma)).coerceIn(1.0, 99.0)
+}
+
+// Standard normal CDF, Phi(z) = (1 + erf(z / sqrt 2)) / 2, with Abramowitz & Stegun 7.1.26 for erf (error under 1.5e-7).
+internal fun normalCdf(z: Double): Double {
+    val x = kotlin.math.abs(z) / kotlin.math.sqrt(2.0)
+    val t = 1.0 / (1.0 + 0.3275911 * x)
+    val poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))))
+    val erf = 1.0 - poly * kotlin.math.exp(-x * x)
+    return if (z >= 0) 0.5 * (1.0 + erf) else 0.5 * (1.0 - erf)
+}
+
+// Its inverse by bisection: only ever asked for a table's end points (P10, P90), so speed does not matter.
+internal fun inverseNormalCdf(p: Double): Double {
+    var lo = -8.0
+    var hi = 8.0
+    repeat(80) {
+        val mid = (lo + hi) / 2
+        if (normalCdf(mid) < p) lo = mid else hi = mid
+    }
+    return (lo + hi) / 2
 }
 
 const val POPULATION_COMPARISON_ALGORITHM_VERSION = "1"
@@ -118,7 +177,7 @@ fun comparePopulation(
             delta = null, standardizedDelta = null, percentile = null, rank = null, rankDenominator = artifact.sampleSize,
             directionality = artifact.directionality, referenceIdentity = artifact.sourceName,
             referenceVersion = artifact.artifactVersion.toString(),
-            confidence = if (bandLabel != null) Confidence(2, 2) else Confidence(1, 2),
+            confidence = if (bandLabel != null) populationFit(artifact, context) else Confidence(0, 2),
             breadth = InputCompleteness(setOf(artifact.sourceName), setOf(artifact.sourceName)),
             provenance = Provenance(origin, "population_comparison", artifact.artifactVersion.toString()),
             bandLabel = bandLabel,
@@ -144,7 +203,7 @@ fun comparePopulation(
         directionality = artifact.directionality,
         referenceIdentity = artifact.sourceName,
         referenceVersion = artifact.artifactVersion.toString(),
-        confidence = Confidence(2, 2),
+        confidence = populationFit(artifact, context),
         breadth = InputCompleteness(setOf(artifact.sourceName), setOf(artifact.sourceName)),
         provenance = Provenance(origin, "population_comparison", artifact.artifactVersion.toString()),
     )

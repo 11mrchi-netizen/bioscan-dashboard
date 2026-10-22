@@ -4,6 +4,9 @@ import android.content.Context
 import android.util.Log
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
+import com.bioscan.fieldterminal.domain.DistanceInterval
+import com.bioscan.fieldterminal.domain.workoutDistanceMeters
+import com.bioscan.fieldterminal.domain.sessionAvgSpeedKmh
 import androidx.health.connect.client.records.ElevationGainedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
@@ -99,10 +102,18 @@ class HealthConnectExerciseSyncRepository(
         // 62 real rows would have been "corrected", most likely wrongly).
         // Detection only -- see DataIntegrityValidator's matching check --
         // never silently rewrite what actually gets stored.
-        val summedDistanceKm = client.readAllRecords(DistanceRecord::class, start, end)
-            .groupBy { it.metadata.dataOrigin.packageName }
-            .maxOfOrNull { (_, records) -> records.sumOf { it.distance.inMeters } }
-            ?.div(1000.0) ?: 0.0
+        // Oct 2026: within one app a stretch of time is counted once (the source app wrote some workouts, and their
+        // distance records, twice), and a record reaching outside the session counts only for its part inside
+        // (domain/HealthConnectDistance.kt).
+        val summedDistanceKm = workoutDistanceMeters(
+            client.readAllRecords(DistanceRecord::class, start, end)
+                .groupBy { it.metadata.dataOrigin.packageName }
+                .mapValues { (_, records) ->
+                    records.map { DistanceInterval(it.startTime.toEpochMilli(), it.endTime.toEpochMilli(), it.distance.inMeters) }
+                },
+            start.toEpochMilli(),
+            end.toEpochMilli(),
+        ) / 1000.0
         val elevationM = client.readAllRecords(ElevationGainedRecord::class, start, end)
             .groupBy { it.metadata.dataOrigin.packageName }
             .maxOfOrNull { (_, records) -> records.sumOf { it.elevation.inMeters } } ?: 0.0
@@ -121,9 +132,13 @@ class HealthConnectExerciseSyncRepository(
         val avgPowerW = powerSamples.map { it.power.inWatts }.average().takeIf { powerSamples.isNotEmpty() }
 
         val speedSamples = client.readAllRecords(SpeedRecord::class, start, end).flatMap { it.samples }
-        val avgSpeedKmh = speedSamples.map { it.speed.inKilometersPerHour }.average().takeIf { speedSamples.isNotEmpty() }
+        val sampleMeanKmh = speedSamples.map { it.speed.inKilometersPerHour }.average().takeIf { speedSamples.isNotEmpty() }
 
         val durationMin = Duration.between(start, end).toMinutes().toDouble()
+        val type = mapHealthConnectExerciseType(session.exerciseType)
+        // Distance over time, as the Zepp sync writes it; the plain mean of the speed samples (unweighted, so it
+        // ran well under distance over time) only when there is no distance.
+        val avgSpeedKmh = sessionAvgSpeedKmh(type, sampleMeanKmh, summedDistanceKm.takeIf { it > 0 }, durationMin)
 
         // Every other real-time-of-day column in this app stores the
         // device's local wall-clock reading labeled with a FAKE zero/UTC
@@ -145,7 +160,7 @@ class HealthConnectExerciseSyncRepository(
         val endLocal = end.atZone(zone).toLocalDateTime().atOffset(ZoneOffset.UTC).toString()
 
         return NewExerciseSessionRow(
-            type = mapHealthConnectExerciseType(session.exerciseType),
+            type = type,
             startTime = startLocal,
             endTime = endLocal,
             durationMin = durationMin,

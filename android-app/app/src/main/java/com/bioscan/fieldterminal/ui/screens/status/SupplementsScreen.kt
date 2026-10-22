@@ -1,8 +1,8 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.ExperimentResultRow
 import com.bioscan.fieldterminal.data.ExperimentRow
 import com.bioscan.fieldterminal.data.ExperimentsRepository
@@ -38,10 +37,13 @@ import com.bioscan.fieldterminal.domain.DetectedInteraction
 import com.bioscan.fieldterminal.domain.InteractionRecord
 import com.bioscan.fieldterminal.domain.RosterItem
 import com.bioscan.fieldterminal.domain.detectInteractions
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 // Step 8 (Phase C). Real data from `supplements`. Ports index.html's
 // isSupplementActive()/supplementOutcome() 1:1 (domain/Supplements.kt) --
@@ -75,6 +77,7 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     val detections = remember(interactionRecords, rosterItems) { detectInteractions(rosterItems, interactionRecords) }
 
     var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(reloadKey) {
         isLoading = true
@@ -92,7 +95,8 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
                 rosterItems = interactionRepo.rosterItems(loaded.active)
             }.onFailure { interactionRecords = emptyList(); rosterItems = emptyList() }
             val expRepo = ExperimentsRepository(SupabaseClientProvider.client)
-            experiments = expRepo.loadExperiments()
+            // Daily tests of a behaviour live on the Today page; supplements and fueling products here.
+            experiments = expRepo.loadExperiments().filter { it.protocol?.behaviour == null }
             experimentResults = expRepo.loadResults()
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
@@ -116,6 +120,13 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
             onExperiment = { experimenting = it },
             experiments = experiments,
             experimentResults = experimentResults,
+            onDeleteExperiment = { e ->
+                scope.launch {
+                    runCatching { ExperimentsRepository(SupabaseClientProvider.client).delete(e.id) }
+                        .onSuccess { reloadKey++ }
+                        .onFailure { error = it.message ?: "Could not delete the experiment" }
+                }
+            },
             detections = detections,
         )
     }
@@ -160,6 +171,7 @@ private fun SupplementsContent(
     onExperiment: (SupplementRow) -> Unit,
     experiments: List<ExperimentRow>,
     experimentResults: Map<String, ExperimentResultRow>,
+    onDeleteExperiment: (ExperimentRow) -> Unit,
     detections: List<DetectedInteraction>,
 ) {
     Column(
@@ -173,8 +185,8 @@ private fun SupplementsContent(
                 color = FT.TextSecondary,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                AmberButton(label = "PANTRY") { onOpenPantry() }
-                AmberButton(label = "+ ADD") { onAddClick() }
+                FTButton(label = "PANTRY") { onOpenPantry() }
+                FTButton(label = "+ ADD") { onAddClick() }
             }
         }
 
@@ -196,7 +208,9 @@ private fun SupplementsContent(
                     val items = grouped[timeOfDay] ?: return@forEach
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(timeOfDay.uppercase(), style = sectionLabelStyle, color = FT.TextSecondary)
-                        Column(modifier = Modifier.fillMaxWidth().background(FT.GlassFill)) {
+                        // App restructure: the time-of-day groups had square corners; they use the module radius like every other block.
+                        val groupShape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusModule)
+                        Column(modifier = Modifier.fillMaxWidth().clip(groupShape).background(FT.GlassFill, groupShape).border(FT.BorderWidth, FT.GlassBorder, groupShape)) {
                             items.forEachIndexed { i, s ->
                                 ActiveRow(s, outcomes[s.id].orEmpty(), showDivider = i < items.lastIndex, onClick = { onSupplementClick(s) }, onExperiment = { onExperiment(s) })
                             }
@@ -208,7 +222,7 @@ private fun SupplementsContent(
 
         InteractionsSection(detections)
 
-        ExperimentsSection(experiments, experimentResults)
+        ExperimentsSection(experiments, experimentResults, onDelete = onDeleteExperiment)
 
         if (overview.ended.isNotEmpty()) {
             SectionLabel("ENDED", FT.TextSecondary)
@@ -235,7 +249,7 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+                .ftClickable(onClick = onClick)
                 .padding(14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -260,7 +274,7 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
                     color = FT.DomainLog,
                     modifier = Modifier
                         .padding(top = 6.dp)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onExperiment),
+                        .ftClickable(onClick = onExperiment),
                 )
             }
             Column(horizontalAlignment = Alignment.End) {

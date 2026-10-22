@@ -1,7 +1,5 @@
 package com.bioscan.fieldterminal.ui.screens
 
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,17 +25,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -50,34 +47,36 @@ fun TrainingBlocksScreen(onBack: () -> Unit) {
     }
 
     val b = blocks
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(FT.Base),
-        contentPadding = PaddingValues(bottom = 24.dp),
-    ) {
-        item { TileHeader(onBack = onBack) }
-        if (b == null && guard.error != null) {
-            item { LoadErrorCard(guard) }
-        } else if (b == null) {
-            item {
-                Box(
-                    Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                    contentAlignment = Alignment.Center,
-                ) { CircularProgressIndicator(color = FT.DomainTraining) }
-            }
-        } else if (b.isEmpty()) {
-            item {
-                Text(
-                    "No training blocks found.",
-                    color = FT.TextSecondary, fontFamily = Inter, fontSize = 14.sp,
-                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 32.dp),
-                )
-            }
-        } else {
-            items(b, key = { it.id }) { block ->
-                TrainingBlockCard(
-                    block = block,
-                    modifier = Modifier.padding(horizontal = 22.dp).padding(top = 18.dp),
-                )
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+        TileHeader(onBack = onBack, title = "TRAINING BLOCKS", subtitle = "EVERY BLOCK · SESSIONS · OUTCOMES", accent = FT.DomainTraining)
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentPadding = PaddingValues(bottom = 24.dp),
+        ) {
+            if (b == null && guard.error != null) {
+                item { LoadErrorCard(guard) }
+            } else if (b == null) {
+                item {
+                    Box(
+                        Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { CircularProgressIndicator(color = FT.DomainTraining) }
+                }
+            } else if (b.isEmpty()) {
+                item {
+                    Text(
+                        "No training blocks found.",
+                        color = FT.TextSecondary, style = FTType.BodySmall,
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 32.dp),
+                    )
+                }
+            } else {
+                items(b, key = { it.id }) { block ->
+                    TrainingBlockCard(
+                        block = block,
+                        modifier = Modifier.padding(horizontal = 22.dp).padding(top = 18.dp),
+                    )
+                }
             }
         }
     }
@@ -104,7 +103,7 @@ private fun TrainingBlockCard(block: TrainingBlockSummaryRow, modifier: Modifier
     FTCard(title = cardTitle, modifier = modifier) {
         Text(
             formatBlockDateRange(block.startDate, block.endDate),
-            color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 11.sp,
+            color = FT.TextSecondary, style = FTType.MonoCaption,
         )
         Spacer(Modifier.height(4.dp))
 
@@ -112,7 +111,7 @@ private fun TrainingBlockCard(block: TrainingBlockSummaryRow, modifier: Modifier
         BlockSection("SESSIONS") {
             Text(
                 "${block.strengthSessions} STR  ${block.conditioningSessions} COND  ${block.enduranceSessions} END",
-                color = FT.TextPrimary, fontFamily = RobotoMono, fontSize = 13.sp,
+                color = FT.TextPrimary, style = FTType.Value,
             )
         }
 
@@ -127,11 +126,11 @@ private fun TrainingBlockCard(block: TrainingBlockSummaryRow, modifier: Modifier
                 } ?: ""
                 Text(
                     "avg ${block.avgConditioningHr.toInt()} bpm$earlyLate$delta",
-                    color = FT.TextPrimary, fontFamily = RobotoMono, fontSize = 13.sp,
+                    color = FT.TextPrimary, style = FTType.Value,
                 )
                 Text(
                     "n=${block.linkedWearableCount} linked sessions",
-                    color = FT.TextMuted, fontFamily = RobotoMono, fontSize = 10.sp,
+                    color = FT.TextMuted, style = FTType.Micro,
                 )
             }
         }
@@ -195,8 +194,7 @@ private fun BlockSection(label: String, content: @Composable ColumnScope.() -> U
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text(
             label,
-            color = FT.TextMuted, fontFamily = RobotoMono,
-            fontWeight = FontWeight.Bold, fontSize = 10.sp,
+            color = FT.TextMuted, style = FTType.Label,
         )
         content()
     }
@@ -205,12 +203,12 @@ private fun BlockSection(label: String, content: @Composable ColumnScope.() -> U
 @Composable
 private fun MetricRow(label: String, value: String, note: String = "") {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 12.sp,
+        Text(label, color = FT.TextSecondary, style = FTType.Value,
             modifier = Modifier.width(64.dp))
-        Text(value, color = FT.TextPrimary, fontFamily = RobotoMono, fontSize = 12.sp,
+        Text(value, color = FT.TextPrimary, style = FTType.Value,
             modifier = Modifier.weight(1f))
         if (note.isNotEmpty()) {
-            Text(note, color = FT.TextMuted, fontFamily = RobotoMono, fontSize = 10.sp)
+            Text(note, color = FT.TextMuted, style = FTType.Micro)
         }
     }
 }

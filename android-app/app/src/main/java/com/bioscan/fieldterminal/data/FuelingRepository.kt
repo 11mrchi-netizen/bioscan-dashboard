@@ -22,6 +22,8 @@ data class FuelingVersionRow(
     @SerialName("fluid_ml") val fluidMl: Double? = null,
     @SerialName("sodium_mg") val sodiumMg: Double? = null,
     @SerialName("caffeine_mg") val caffeineMg: Double? = null,
+    // Fuel planning: above 60 g/h the plan checks for glucose plus fructose.
+    @SerialName("fructose_g") val fructoseG: Double? = null,
 )
 
 @Serializable
@@ -105,7 +107,7 @@ class FuelingRepository(private val supabase: SupabaseClient) {
             .decodeList<FuelingProductRow>()
         if (products.isEmpty()) return emptyList()
         val versions = supabase.postgrest.from("fueling_recipe_versions")
-            .select(columns = Columns.list("id,product_id,version,serving_size,serving_unit,carbs_g,fluid_ml,sodium_mg,caffeine_mg"))
+            .select(columns = Columns.list("id,product_id,version,serving_size,serving_unit,carbs_g,fluid_ml,sodium_mg,caffeine_mg,fructose_g"))
             .decodeList<FuelingVersionRow>()
             .groupBy { it.productId }
             .mapValues { (_, v) -> v.maxByOrNull { it.version } }

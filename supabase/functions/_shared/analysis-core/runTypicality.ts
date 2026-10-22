@@ -3,7 +3,9 @@
 // (kind 'typicality', key 'personal_normal'). Duck-typed client, tested in Node, run unchanged in analysis-run.
 import type { Admin, LoadedFrame } from './runRelationships.ts'
 import { analyseTypicality, BASELINE_DAYS, EVAL_DAYS, MIN_COMPLETE } from './typicality.ts'
-import type { SignalName, TypicalityResult } from './typicality.ts'
+import type { SignalName, TypicalityInput, TypicalityResult } from './typicality.ts'
+import { typicalityScorecard } from './typicalityScorecard.ts'
+import type { TypicalityScorecard } from './typicalityScorecard.ts'
 import { fnv1a } from './hash.ts'
 import { CORE_VERSION } from './version.ts'
 
@@ -41,7 +43,7 @@ export async function runTypicality(admin: Admin, loaded: LoadedFrame, now: Date
   const restartIndex = latest ? Math.max(0, frame.dates.findIndex((d) => d >= latest)) : 0
 
   const s = frame.series
-  const result: TypicalityResult = analyseTypicality({
+  const input: TypicalityInput = {
     dates: frame.dates,
     hrv: s.hrv,
     rhr: s.rhr,
@@ -51,7 +53,9 @@ export async function runTypicality(admin: Admin, loaded: LoadedFrame, now: Date
     excluded: frame.excluded,
     restartIndex,
     skip,
-  })
+  }
+  // Analysis review phase G: the strain flag's scorecard against logged illness, replayed on this history.
+  const result: TypicalityResult & { scorecard: TypicalityScorecard } = { ...analyseTypicality(input), scorecard: typicalityScorecard(input) }
 
   const { error } = await admin.from('analysis_results').upsert(
     {

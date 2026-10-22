@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { runInterventionResponses } from './runInterventionResponse.ts'
+import { ITS_KIND, runInterventionIts, runInterventionResponses } from './runInterventionResponse.ts'
+import type { InterventionItsPayload } from './runInterventionResponse.ts'
 import { loadFrame } from './runRelationships.ts'
 import type { LoadedFrame } from './runRelationships.ts'
 import { dateAxis, gaussian, mulberry32 } from './stats.ts'
@@ -99,4 +100,50 @@ test('an intervention with no outcome the frame can measure is skipped', async (
   const now = new Date(`${shift(START, 89)}T20:00:00Z`)
   const run = await runInterventionResponses(admin, (await loadFrame(admin, USER, now)) as LoadedFrame, now)
   assert.deepEqual(run.results, [])
+})
+
+// Analysis review phase F: the interrupted-time-series read, once, on its date.
+const itsRun = async (t: Record<string, Row[]>, day: number) => {
+  const admin = fakeAdmin(t)
+  const now = new Date(`${shift(START, day)}T20:00:00Z`)
+  const run = await runInterventionIts(admin, (await loadFrame(admin, USER, now)) as LoadedFrame, now)
+  return { admin, run, rows: admin.upserts.filter((r) => r.kind === ITS_KIND) }
+}
+
+test('the interrupted-time-series read waits for its date, then publishes once and is kept', async () => {
+  const early = await itsRun(tables(), 60)
+  assert.deepEqual(early.run.results, [{ id: 'iv-1', state: 'collecting' }])
+  assert.equal(early.rows[0].state, 'collecting')
+
+  const { run, rows } = await itsRun(tables(), 89)
+  assert.deepEqual(run.results, [{ id: 'iv-1', state: 'evaluated' }])
+  const payload = rows[0].payload as InterventionItsPayload
+  assert.equal(payload.evaluateOn, shift(START, 45 + 27), 'four weeks after the start')
+  assert.equal(payload.preStart, shift(START, 45 - 56), 'the eight weeks before the start')
+  assert.equal(payload.metrics[0].rung, 'observed')
+  assert.equal(payload.metrics[0].verdict, 'clear')
+  assert.ok(payload.metrics[0].gap!.lo < 24.6 && payload.metrics[0].gap!.hi > 24.6, JSON.stringify(payload.metrics[0].gap))
+
+  // The next night, with the read already published: kept, not redone.
+  const later = await itsRun(tables({ analysis_results: [{ user_id: USER, kind: ITS_KIND, key: 'iv-1', state: 'evaluated' }] }), 95)
+  assert.deepEqual(later.run.results, [{ id: 'iv-1', state: 'kept' }])
+  assert.equal(later.rows.length, 0)
+})
+
+test('an intervention stopped before its date is read at its end; its own evaluate_on date wins otherwise', async () => {
+  const t = tables()
+  Object.assign(t.interventions[0], { lifecycle_state: 'stopped', ended_at: shift(START, 70) })
+  const stopped = await itsRun(t, 89)
+  assert.equal((stopped.rows[0].payload as InterventionItsPayload).evaluateOn, shift(START, 70))
+  const own = tables()
+  Object.assign(own.interventions[0], { evaluate_on: shift(START, 80) })
+  assert.equal(((await itsRun(own, 89)).rows[0].payload as InterventionItsPayload).evaluateOn, shift(START, 80))
+})
+
+test('a device change after the start leaves nothing to read', async () => {
+  const t = tables({ analysis_results: [{ user_id: USER, kind: 'series_break', key: 'hrv', payload: { breaks: [{ date: shift(START, 50), status: 'confirmed' }] } }] })
+  const { rows } = await itsRun(t, 89)
+  const payload = rows[0].payload as InterventionItsPayload
+  assert.equal(payload.state, 'insufficient')
+  assert.match(payload.metrics[0].summary, /source changed/)
 })

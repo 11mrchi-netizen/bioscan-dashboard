@@ -35,4 +35,12 @@ class HydrationIntelligenceTest {
         val result = computeHydrationIntelligence(1000.0, 1000.0, 30.0)
         assertFalse(result.environmentalContextAvailable)
     }
+
+    @Test
+    fun aPersonalSweatRateReplacesTheFixedOne() {
+        val result = computeHydrationIntelligence(1000.0, 1000.0, 90.0, sweatRateMlPerHour = 900.0, environmentKnown = true)
+        assertEquals(1350.0, result.inferredDemandMl!!, 0.01)
+        org.junit.Assert.assertTrue(result.environmentalContextAvailable)
+        assertFalse(computeHydrationIntelligence(1000.0, 1000.0, 90.0, sweatRateMlPerHour = 900.0).environmentalContextAvailable)
+    }
 }

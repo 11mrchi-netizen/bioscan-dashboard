@@ -1,191 +1,50 @@
-// Relationship Lab. Three views:
-//   CONFIRMATORY  published results of a fixed hypothesis catalogue (Analysis Layer 3, Phase 3): weekday-adjusted, tested once,
-//                 corrected across the catalogue, effect sizes with intervals and the smallest detectable effect.
-//   EXPLORATORY   free scatter and a scan of 29 lags between any two metrics. Nothing here is corrected for the 29 looks, so a
-//                 pattern is a lead to test, not a finding.
-//   EXPERIMENTS   pre-registered supplement N-of-1 tests (read-only; plans are registered in the app).
-// Explicit n= and missingness caveats shown on every view.
+// Relationship Lab. Views:
+//   EVIDENCE      the evidence board (analysis review phase D): every question of the fixed catalogue drawn to scale
+//                 against its no-effect zone with a verdict word, its event and lag curves, and what came before off
+//                 mornings (case-crossover, exploratory). Internal key 'confirmatory'.
+//   EXPLORATORY   retired (analysis review, 2026-10): see RetiredScanNote and docs/analysis-review/README.md, "Revisit".
+//   EXPERIMENTS   randomised self-experiments (read-only; plans are registered in the app).
+//   INTERVENTIONS, FUELING  read-only views of those engines.
+//   LEDGER        every nightly verdict of every question, and every change of verdict (analysis review phase G).
+//   EVENTS        the event explorer: any logged exposure against a morning outcome, on the nightly engine, in the browser.
+//   DIAGNOSTICS   expected-band calibration, flags and regimes, series breaks, typicality and its scorecard, the
+//                 personal fitness-fatigue spans.
 
-import { LoadBanner } from '../components/shared/LoadBanner'
-import { useLoadEffect } from '../lib/useLoadEffect'
-import { useEffect, useState, useMemo, useRef } from 'react'
-import { useChart } from '../lib/useChart'
-import { useRange } from '../lib/analysisStore'
-import { fetchMetric, type MetricResult } from '../lib/metricAdapter'
-import { pearson, buildPairs } from '../lib/stats'
-import { PALETTE } from '../lib/palette'
-import { METRIC_OPTIONS, type MetricOption } from '../lib/metricOptions'
+import { useState } from 'react'
 import { Confirmatory } from './Confirmatory'
 import { Experiments } from './Experiments'
 import { Interventions } from './Interventions'
 import { Fueling } from './Fueling'
+import { Ledger } from './Ledger'
+import { EventExplorer } from './EventExplorer'
+import { Diagnostics } from './Diagnostics'
 import './RelationshipLab.css'
 
-function Exploratory() {
-  const range = useRange()
-  const [metricX, setMetricX] = useState<MetricOption>(METRIC_OPTIONS[3]) // Sleep
-  const [metricY, setMetricY] = useState<MetricOption>(METRIC_OPTIONS[0]) // HRV
-  const [lag, setLag]         = useState(0)
-  const [resultX, setResultX] = useState<MetricResult | null>(null)
-  const [resultY, setResultY] = useState<MetricResult | null>(null)
-
-  const scatterRef = useRef<HTMLDivElement>(null)
-  const lagRef     = useRef<HTMLDivElement>(null)
-  const scatterChart = useChart(scatterRef)
-  const lagChart     = useChart(lagRef)
-
-  const { loading, error: loadError, retry } = useLoadEffect(async (isCurrent) => {
-    const [rx, ry] = await Promise.all([
-      fetchMetric({ table: metricX.table, column: metricX.column, range, aggregation: 'daily_avg' }),
-      fetchMetric({ table: metricY.table, column: metricY.column, range, aggregation: 'daily_avg' }),
-    ])
-    if (isCurrent()) { setResultX(rx); setResultY(ry) }
-  }, [metricX, metricY, range])
-
-  // Scatter chart
-  const { xs, ys, dates } = useMemo(() => {
-    if (!resultX || !resultY) return { xs: [], ys: [], dates: [] }
-    return buildPairs(resultX, resultY, lag)
-  }, [resultX, resultY, lag])
-
-  useEffect(() => {
-    const chart = scatterChart.current
-    if (!chart) return
-    chart.setOption({
-      backgroundColor: 'transparent', animation: false,
-      grid: { top: 16, right: 16, bottom: 40, left: 52 },
-      xAxis: {
-        type: 'value', name: metricX.unit,
-        nameTextStyle: { color: PALETTE.textMuted, fontSize: 10 },
-        axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
-        splitLine: { lineStyle: { color: PALETTE.border } },
-        axisLine: { show: false }, axisTick: { show: false },
-      },
-      yAxis: {
-        type: 'value', name: metricY.unit,
-        nameTextStyle: { color: PALETTE.textMuted, fontSize: 10 },
-        axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
-        splitLine: { lineStyle: { color: PALETTE.border } },
-        axisLine: { show: false }, axisTick: { show: false },
-      },
-      tooltip: {
-        trigger: 'item', backgroundColor: PALETTE.surface, borderColor: PALETTE.border,
-        textStyle: { color: PALETTE.text, fontFamily: 'Roboto Mono', fontSize: 11 },
-        formatter: (p: { dataIndex: number; data: [number, number] }) =>
-          `${dates[p.dataIndex] ?? ''}<br/>${metricX.label}: <b>${p.data[0]}</b><br/>${metricY.label}: <b>${p.data[1]}</b>`,
-      },
-      series: [{
-        type: 'scatter',
-        data: xs.map((x, i) => [x, ys[i]]),
-        symbolSize: 7,
-        itemStyle: { color: PALETTE.emerald, opacity: 0.7 },
-      }],
-    }, true)
-  }, [xs, ys, dates, metricX, metricY])
-
-  // Lag correlation chart — compute r across lags -14..+14
-  const lagCorrs = useMemo(() => {
-    if (!resultX || !resultY) return []
-    return Array.from({ length: 29 }, (_, i) => {
-      const l = i - 14
-      const { xs: lxs, ys: lys } = buildPairs(resultX, resultY, l)
-      return { lag: l, r: pearson(lxs, lys), n: lxs.length }
-    })
-  }, [resultX, resultY])
-
-  useEffect(() => {
-    const chart = lagChart.current
-    if (!chart || !lagCorrs.length) return
-    chart.setOption({
-      backgroundColor: 'transparent', animation: false,
-      grid: { top: 16, right: 16, bottom: 40, left: 52 },
-      xAxis: {
-        type: 'category', data: lagCorrs.map(l => String(l.lag)),
-        axisLine: { lineStyle: { color: PALETTE.border } },
-        axisTick: { show: false },
-        axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
-        name: 'Lag (days)', nameTextStyle: { color: PALETTE.textMuted, fontSize: 10 },
-        splitLine: { show: false },
-      },
-      yAxis: {
-        type: 'value', name: 'r', min: -1, max: 1,
-        nameTextStyle: { color: PALETTE.textMuted, fontSize: 10 },
-        axisLabel: { color: PALETTE.textMuted, fontSize: 10, fontFamily: 'Roboto Mono' },
-        splitLine: { lineStyle: { color: PALETTE.border } },
-        axisLine: { show: false }, axisTick: { show: false },
-      },
-      tooltip: {
-        trigger: 'axis', backgroundColor: PALETTE.surface, borderColor: PALETTE.border,
-        textStyle: { color: PALETTE.text, fontFamily: 'Roboto Mono', fontSize: 11 },
-        formatter: (params: { axisValue: string; data: number; dataIndex: number }[]) => {
-          const p = params[0]
-          const c = lagCorrs[p.dataIndex]
-          return `Lag ${p.axisValue}d · r=${p.data?.toFixed(3)} · n=${c?.n}`
-        },
-      },
-      series: [{
-        type: 'bar', data: lagCorrs.map(l => isNaN(l.r) ? null : Math.round(l.r * 1000) / 1000),
-        itemStyle: {
-          color: (p: { data: number }) => p.data >= 0 ? PALETTE.emerald : PALETTE.critical,
-          opacity: 0.85,
-        },
-      }],
-    }, true)
-  }, [lagCorrs])
-
-  const r = isNaN(pearson(xs, ys)) ? null : pearson(xs, ys)
-  const caveatStr = `EXPLORATORY · 29 lags scanned, no correction for multiple comparisons · n=${xs.length}  ·  lag=${lag}d  ·  r=${r !== null ? r.toFixed(3) : '—'}  ·  observational only`
-
+// The exploratory scan ran raw Pearson correlations over +/-14 lags between any two metrics, with no adjustment for day
+// of week, trend or carry-over and no correction for the number of looks: seven metrics gave 609 correlations, about 30
+// of them "significant" by chance on every view. The owner retired it in October 2026 and asked for it to be revisited.
+function RetiredScanNote() {
   return (
     <div className="rlab">
-      <div className="rlab-header">
-        <h2 className="rlab-title">Exploratory scan</h2>
-        <div className="rlab-selectors">
-          <div className="rlab-selector-group">
-            <span className="rlab-selector-label mono">X</span>
-            <select className="rlab-select mono" value={metricX.id}
-              onChange={e => setMetricX(METRIC_OPTIONS.find(m => m.id === e.target.value) ?? METRIC_OPTIONS[0])}>
-              {METRIC_OPTIONS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
-          </div>
-          <div className="rlab-selector-group">
-            <span className="rlab-selector-label mono">Y</span>
-            <select className="rlab-select mono" value={metricY.id}
-              onChange={e => setMetricY(METRIC_OPTIONS.find(m => m.id === e.target.value) ?? METRIC_OPTIONS[0])}>
-              {METRIC_OPTIONS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
-          </div>
-          <div className="rlab-selector-group">
-            <span className="rlab-selector-label mono">LAG</span>
-            <input className="rlab-lag mono" type="number" min={-14} max={14} value={lag}
-              onChange={e => setLag(Number(e.target.value))} />
-            <span className="rlab-selector-label mono">days</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="rlab-caveat mono">{caveatStr}</div>
-
-      {loading && <div className="state-loading mono">LOADING…</div>}
-      {loadError && <LoadBanner error={loadError} onRetry={retry} />}
-
-      <div className="card rlab-chart-card" style={{ visibility: loading ? 'hidden' : 'visible' }}>
-        <div className="rlab-chart-label mono">SCATTER  {metricX.label} → {metricY.label}</div>
-        <div ref={scatterRef} style={{ width: '100%', height: 300 }} />
-      </div>
-
-      <div className="card rlab-chart-card" style={{ visibility: loading ? 'hidden' : 'visible' }}>
-        <div className="rlab-chart-label mono">LAG CORRELATION  −14d to +14d</div>
-        <div ref={lagRef} style={{ width: '100%', height: 200 }} />
-        <p className="rlab-footnote mono">
-          Pearson r per lag window · each bar's n may differ · uncorrected for 29 looks, so a tall bar is a lead, not a finding · correlation ≠ causation
+      <div className="card rlab-chart-card">
+        <div className="rlab-chart-label mono">EXPLORATORY SCAN · RETIRED · TO BE REVISITED</div>
+        <p className="rlab-footnote">
+          The lag scan between any two metrics was retired in October 2026. It tested hundreds of raw correlations per view
+          with no adjustment for day of week, trends or day-to-day carry-over and no correction for the number of looks, so
+          about one in twenty of its bars stood out by chance alone.
+        </p>
+        <p className="rlab-footnote">
+          To revisit: a discovery screen that prewhitens each series, uses effective sample sizes and a false-discovery
+          correction, draws chance bands on a lag heatmap, runs on the older two-thirds of the history only, and can register a
+          promising pair as a question to confirm on new days. Until then, the EVIDENCE view here and the evidence board in the
+          app are the places to read relationships.
         </p>
       </div>
     </div>
   )
 }
 
-type Tab = 'confirmatory' | 'exploratory' | 'experiments' | 'interventions' | 'fueling'
+type Tab = 'confirmatory' | 'exploratory' | 'experiments' | 'interventions' | 'fueling' | 'ledger' | 'events' | 'diagnostics'
 
 export function RelationshipLab() {
   const [tab, setTab] = useState<Tab>('confirmatory')
@@ -193,15 +52,18 @@ export function RelationshipLab() {
     <div className="rlab-shell">
       <div className="rlab-tabs">
         <h2 className="rlab-shell-title">Relationship Lab</h2>
-        {(['confirmatory', 'exploratory', 'experiments', 'interventions', 'fueling'] as const).map(t => (
-          <button key={t} className={`rlab-tab mono ${tab === t ? 'rlab-tab-on' : ''}`} onClick={() => setTab(t)}>{t.toUpperCase()}</button>
+        {(['confirmatory', 'ledger', 'events', 'diagnostics', 'exploratory', 'experiments', 'interventions', 'fueling'] as const).map(t => (
+          <button key={t} className={`rlab-tab mono ${tab === t ? 'rlab-tab-on' : ''}`} onClick={() => setTab(t)}>{t === 'confirmatory' ? 'EVIDENCE' : t.toUpperCase()}</button>
         ))}
       </div>
       {tab === 'confirmatory' ? <div className="rlab"><Confirmatory /></div>
         : tab === 'experiments' ? <div className="rlab"><Experiments /></div>
         : tab === 'interventions' ? <div className="rlab"><Interventions /></div>
         : tab === 'fueling' ? <div className="rlab"><Fueling /></div>
-        : <Exploratory />}
+        : tab === 'ledger' ? <div className="rlab"><Ledger /></div>
+        : tab === 'events' ? <div className="rlab"><EventExplorer /></div>
+        : tab === 'diagnostics' ? <div className="rlab"><Diagnostics /></div>
+        : <RetiredScanNote />}
     </div>
   )
 }

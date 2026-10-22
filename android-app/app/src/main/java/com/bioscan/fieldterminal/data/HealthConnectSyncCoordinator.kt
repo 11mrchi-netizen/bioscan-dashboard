@@ -5,8 +5,6 @@ import android.util.Log
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Columns
-import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -111,16 +109,7 @@ class HealthConnectSyncCoordinator(private val context: Context, private val sup
         }
     }
 
-    private suspend fun readWatermark(): Instant? =
-        supabase.postgrest.from("sync_log")
-            .select(columns = Columns.list("synced_at")) {
-                filter { eq("sync_source", "health_connect") }
-                order("synced_at", Order.DESCENDING)
-                limit(1)
-            }
-            .decodeList<SyncLogRow>()
-            .firstOrNull()
-            ?.let { Instant.parse(it.syncedAt) }
+    private suspend fun readWatermark(): Instant? = loadLastHealthConnectSync(supabase)
 
     private suspend fun writeWatermark(at: Instant, counts: Map<String, Int>) {
         val summary: JsonObject = buildJsonObject {
@@ -131,9 +120,6 @@ class HealthConnectSyncCoordinator(private val context: Context, private val sup
         )
     }
 }
-
-@Serializable
-private data class SyncLogRow(@SerialName("synced_at") val syncedAt: String)
 
 @Serializable
 private data class NewSyncLogRow(

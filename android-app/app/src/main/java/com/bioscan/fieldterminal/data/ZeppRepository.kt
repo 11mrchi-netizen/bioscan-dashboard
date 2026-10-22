@@ -16,6 +16,7 @@ import com.bioscan.fieldterminal.domain.training.movementKey
 import com.bioscan.fieldterminal.domain.training.parsePlannedLifts
 import com.bioscan.fieldterminal.domain.training.warmupSets
 import kotlinx.serialization.json.Json
+import com.bioscan.fieldterminal.domain.ZeppHistoryPullRow
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -68,7 +69,45 @@ class ZeppRepository(private val supabase: SupabaseClient) {
     // corrected /v1/ endpoint; training_load and vo2max still 404/500.
     suspend fun sync(daysBack: Long = 3, metrics: String? = "sport_history,stress,band_data"): ZeppSyncResult {
         val to = LocalDate.now()
-        val from = to.minusDays(daysBack)
+        return syncRange(to.minusDays(daysBack), to, metrics)
+    }
+
+    // The server-side history pull (domain/ZeppHistoryPull.kt): the app reads its row, starts it or resumes it.
+    suspend fun loadHistoryPull(): ZeppHistoryPullRow? =
+        supabase.postgrest.from("zepp_history_pull")
+            .select(columns = Columns.list("next_end,workouts,band_days,weeks_done,oldest_with_data,done,error,running_since,updated_at"))
+            .decodeList<ZeppHistoryPullRow>()
+            .firstOrNull()
+
+    /** Starts the pull from [today] back, forgetting any earlier progress. */
+    suspend fun startHistoryPull(today: LocalDate = LocalDate.now()) {
+        supabase.postgrest.from("zepp_history_pull").upsert(
+            buildJsonObject {
+                put("next_end", today.toString())
+                put("empty_streak", 0)
+                put("workouts", 0)
+                put("band_days", 0)
+                put("weeks_done", 0)
+                put("oldest_with_data", null as String?)
+                put("done", false)
+                put("error", null as String?)
+                put("running_since", null as String?)
+            },
+        ) { onConflict = "user_id" }
+    }
+
+    /** Clears a paused pull's error so the server carries on from where it stopped. */
+    suspend fun carryOnHistoryPull() {
+        supabase.postgrest.from("zepp_history_pull").update(
+            buildJsonObject {
+                put("error", null as String?)
+                put("running_since", null as String?)
+            },
+        ) { filter { eq("done", false) } }
+    }
+
+    // A fixed date range (at most 31 days, the server's cap): RE-IMPORT FROM ZEPP on one workout pulls the days around it.
+    suspend fun syncRange(from: LocalDate, to: LocalDate, metrics: String? = "sport_history"): ZeppSyncResult {
         return try {
             // The generic invoke(function, body: T) overload didn't attach a
             // body at all in practice (confirmed on-device: server saw

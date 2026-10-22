@@ -58,6 +58,13 @@ data class ExerciseSessionDetails(
     @SerialName("route_type") val routeType: String? = null,
     @SerialName("run_type") val runType: String? = null,
     val exercises: List<StrengthExerciseDto>? = null,
+    // Where `exercises` came from: "zepp" (written by the Zepp import, follows later corrections made in Zepp) or "app"
+    // (changed in the edit form, never overwritten by a sync). Null on rows from before the marker; see
+    // domain/StrengthImport.kt and supabase/functions/zepp-extract/strengthImport.ts.
+    @SerialName("exercises_source") val exercisesSource: String? = null,
+    // Fingerprint of the Zepp version the exercises are based on; Zepp's current one differing from it is what makes
+    // the session offer "Zepp has a different version".
+    @SerialName("zepp_fingerprint") val zeppFingerprint: String? = null,
 )
 
 @Serializable

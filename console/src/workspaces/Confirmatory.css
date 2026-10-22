@@ -23,3 +23,42 @@
 .conf-warn { color: var(--color-warning); }
 .conf-foot { font-size: 10px; color: var(--color-text-muted); }
 .conf-metric { display: flex; flex-direction: column; gap: var(--sp-2); border-top: 1px solid var(--color-border); padding-top: var(--sp-3); }
+
+/* Analysis review phase D: the evidence board. */
+.ev-tally { font-size: 11px; color: var(--color-text-muted); letter-spacing: 0.06em; }
+.ev-group { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4); }
+.ev-group-head { display: flex; justify-content: space-between; gap: var(--sp-3); font-size: 11px; letter-spacing: 0.1em; color: var(--color-text-secondary); }
+.ev-axis { color: var(--color-text-muted); letter-spacing: 0.04em; }
+.ev-row { display: grid; grid-template-columns: minmax(180px, 1.2fr) auto minmax(160px, 1.6fr) minmax(200px, 1.3fr); align-items: center; gap: var(--sp-3); background: transparent; border: 0; border-top: 1px solid var(--color-border); padding: 8px 0; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.ev-row:hover { background: var(--color-surface); }
+.ev-label { font-size: 13px; color: var(--color-text-primary); }
+.ev-chips { display: flex; gap: 4px; font-size: 10px; letter-spacing: 0.06em; }
+.ev-verdict, .ev-rung { border: 1px solid var(--color-border); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.ev-rung { color: var(--color-text-muted); }
+.ev-clear { color: var(--color-text-primary); border-color: var(--color-text-primary); background: color-mix(in srgb, var(--color-text-primary) 10%, transparent); }
+.ev-negligible { color: var(--color-text-primary); border-color: var(--color-text-secondary); }
+.ev-unclear { color: var(--color-text-secondary); }
+.ev-not_yet { color: var(--color-text-muted); }
+.ev-plot { display: block; height: 18px; }
+.ev-forest { width: 100%; height: 18px; display: block; }
+.ev-zone { fill: var(--color-text-secondary); opacity: 0.18; }
+.ev-zero { stroke: var(--color-text-muted); stroke-width: 0.4; vector-effect: non-scaling-stroke; }
+.ev-mde { stroke: var(--color-text-muted); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.ev-ci { stroke: var(--color-text-primary); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.ev-est { fill: var(--color-text-primary); stroke: var(--color-surface); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.ev-size { font-size: 11px; color: var(--color-text-secondary); }
+.ev-detail { display: flex; flex-direction: column; gap: var(--sp-2); padding: 0 0 var(--sp-3) var(--sp-3); border-left: 2px solid var(--color-border); }
+.ev-chart { display: flex; flex-direction: column; gap: 4px; max-width: 520px; }
+.ev-chart-label { font-size: 10px; letter-spacing: 0.08em; color: var(--color-text-muted); }
+.ev-curve { width: 100%; height: auto; }
+.ev-grid { stroke: var(--color-border); stroke-width: 1; }
+.ev-zero-line { stroke: var(--color-text-muted); stroke-dasharray: 4 3; }
+.ev-marker { stroke: var(--color-text-secondary); stroke-dasharray: 3 3; }
+.ev-chance { fill: var(--color-text-secondary); opacity: 0.16; }
+.ev-ci-band { fill: var(--color-analysis); opacity: 0.18; }
+.ev-line { fill: none; stroke: var(--color-analysis); stroke-width: 2; }
+.ev-dot { fill: var(--color-analysis); stroke: var(--color-surface); stroke-width: 1.5; }
+.ev-tick { fill: var(--color-text-muted); font-size: 9px; font-family: var(--font-mono, monospace); }
+.ev-cc { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--color-border); padding-top: var(--sp-2); }
+.ev-cc-row { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(140px, auto) minmax(150px, auto); gap: var(--sp-3); font-size: 11px; color: var(--color-text-secondary); }
+.ev-cc-hit { color: var(--color-text-primary); }

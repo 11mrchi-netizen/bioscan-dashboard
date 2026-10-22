@@ -32,11 +32,9 @@ fun longestRunKm(sessions: List<ExerciseSessionRow>): Double? = sessions.mapNotN
 // DAV-283: trail runs (confirmed via SportType, i.e. details.routeType ==
 // "trail") are excluded -- their pace reflects terrain/climbing, not road
 // effort, and would drag a "road" average pace in a way that misrepresents
-// fitness. An untagged run merely *suspected* of being a trail run (see
-// suspectedTrailReason) is NOT excluded here -- same detection-only stance
-// as everywhere else in this codebase until a person confirms it via MARK AS
-// TRAIL. Unknown/other types never reach this function (callers already
-// filter to running sessions).
+// fitness. Zepp's trail sport is written as the trail tag by the sync, so a
+// Zepp trail run is excluded too. Unknown/other types never reach this
+// function (callers already filter to running sessions).
 fun averagePaceMinPerKmSince(sessions: List<ExerciseSessionRow>, today: LocalDate, days: Long): Double? {
     val paces = sessions.filter { s -> ChronoUnit.DAYS.between(localDateOf(s.startTime), today) < days }
         .filter { s -> SportType.from(s) != SportType.TRAIL_RUN }
@@ -228,25 +226,6 @@ fun dedupeRunSessions(
 }
 
 
-// 25/9 rework: Health Connect carries no trail signal, so a trail run often sits
-// in the log as an untagged "run". Flag (never auto-change) an untagged run as a
-// suspected trail run when Zepp itself called it one (sport code 7) or it climbs
-// like one. Explicit road/mixed/track tags are the user's word and stay alone.
-const val TRAIL_CLIMB_M_PER_KM = 40.0
-const val ZEPP_SPORT_TRAIL_RUN = "7"
-
-// Null = not suspected; otherwise the short reason shown next to the run.
-fun suspectedTrailReason(row: ExerciseSessionRow, zeppSportType: String?): String? {
-    if (row.type != "run" || row.details.routeType != null) return null
-    if (zeppSportType == ZEPP_SPORT_TRAIL_RUN) return "ZEPP TRAIL RUN"
-    val distance = row.distanceKm
-    val climb = row.elevationGainM
-    if (distance != null && distance > 0 && climb != null && climb / distance >= TRAIL_CLIMB_M_PER_KM) {
-        return "%.0f M/KM CLIMB".format(climb / distance)
-    }
-    return null
-}
-
 // DAV-272: Efficiency Factor is noisy run to run, so the trend shown is a 28-day
 // rolling median, and only once enough aerobic runs exist to mean something
 // (DAV-40's gate). Returns one point per run date that has >= EF_MIN_RUNS_28D
@@ -254,8 +233,8 @@ fun suspectedTrailReason(row: ExerciseSessionRow, zeppSportType: String?): Strin
 const val EF_MIN_RUNS_28D = 6
 
 fun efficiencyRollingMedian28(series: List<Pair<LocalDate, Double>>): List<Pair<LocalDate, Double>> =
-    series.sortedBy { it.first }.mapNotNull { (date, _) ->
-        val window = series.filter { !it.first.isAfter(date) && it.first.isAfter(date.minusDays(28)) }.map { it.second }.sorted()
-        if (window.size < EF_MIN_RUNS_28D) null
-        else date to (if (window.size % 2 == 1) window[window.size / 2] else (window[window.size / 2 - 1] + window[window.size / 2]) / 2)
-    }
+    rollingMedian(series, 28, EF_MIN_RUNS_28D)
+
+// The efficiency factor's baseline: on road the 28-day gate above; on trail, where 28 days holds at most four or
+// five runs, the trail baseline (last 5 trail runs within 60 days, from 3).
+fun efficiencyBaseline(trail: Boolean): RunBaseline = if (trail) RunBaseline.TRAIL else RunBaseline(28, EF_MIN_RUNS_28D)

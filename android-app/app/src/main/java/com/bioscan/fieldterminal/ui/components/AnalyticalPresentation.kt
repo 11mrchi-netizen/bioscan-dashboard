@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import com.bioscan.fieldterminal.domain.helpText
+import com.bioscan.fieldterminal.domain.summary
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,8 +27,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.domain.ChartPresentation
+import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.ConfidenceLevel
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.DisplayValue
@@ -37,6 +38,7 @@ import com.bioscan.fieldterminal.domain.PersonalRange
 import com.bioscan.fieldterminal.domain.Provenance
 import com.bioscan.fieldterminal.domain.RangeComparison
 import com.bioscan.fieldterminal.domain.RangeKind
+import com.bioscan.fieldterminal.domain.StateWord
 import com.bioscan.fieldterminal.domain.TrendState
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -57,19 +59,31 @@ fun FTMetricValue(value: DisplayValue, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun FTStatePill(state: MetricState, modifier: Modifier = Modifier) {
-    val treatment = stateTreatment(state)
+fun FTStatePill(state: MetricState, modifier: Modifier = Modifier) = FTStatePill(StateWord(state), modifier)
+
+// Contract amendment "State words" (analysis review A1): the evaluation may name its comparison (STEADY, ABOVE
+// BASELINE, MIXED SIGNALS...). The semantic state still sets colour and symbol, and screen readers hear both.
+// App restructure, fix 1: with [onClick] the pill opens its explanation (a "›" marks it tappable); the details that
+// used to sit in sentences beside it live there.
+@Composable
+fun FTStatePill(word: StateWord, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
+    val treatment = stateTreatment(word.state)
+    val label = word.word ?: treatment.label
+    val shape = RoundedCornerShape(FT.RadiusSmall)
     Row(
         modifier = modifier
-            .semantics { contentDescription = treatment.label }
-            .border(FT.BorderWidth, treatment.color.copy(alpha = 0.65f), RoundedCornerShape(FT.RadiusSmall))
-            .background(treatment.color.copy(alpha = 0.12f), RoundedCornerShape(FT.RadiusSmall))
+            .semantics { contentDescription = if (word.word != null) "$label, ${treatment.label.lowercase()}" else label }
+            .clip(shape)
+            .border(FT.BorderWidth, treatment.color.copy(alpha = 0.65f), shape)
+            .background(treatment.color.copy(alpha = 0.12f), shape)
+            .then(if (onClick != null) Modifier.ftClickable(shape = shape, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Explain", onClick = onClick) else Modifier)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(treatment.symbol, color = treatment.color, style = FTType.Label)
         Spacer(Modifier.width(5.dp))
-        Text(treatment.label, color = treatment.color, style = FTType.Label)
+        Text(label, color = treatment.color, style = FTType.Label)
+        if (onClick != null) Text("  ›", color = treatment.color, style = FTType.Label)
     }
 }
 
@@ -88,6 +102,39 @@ fun FTTrendIndicator(trend: TrendState, modifier: Modifier = Modifier) {
         color = FT.TextSecondary,
         style = FTType.Label,
     )
+}
+
+// Analysis review A7. Most evaluations carry an observation count against what their gate needs (Confidence(have,
+// need)), which says how much data backs the card, not how sure the result is. This chip says exactly that: GOOD at 80%
+// of the need or more, PARTIAL at 50%, THIN below. FTConfidenceChip stays for results that carry a real precision.
+@Composable
+fun FTDataChip(confidence: Confidence, modifier: Modifier = Modifier) {
+    val ratio = if (confidence.need > 0) confidence.have.toDouble() / confidence.need else 0.0
+    val (word, color) = when {
+        ratio >= 0.8 -> "GOOD" to FT.TextSecondary
+        ratio >= 0.5 -> "PARTIAL" to FT.Info
+        else -> "THIN" to FT.Warning
+    }
+    Text(
+        text = "DATA: $word",
+        modifier = modifier
+            .semantics { contentDescription = "data ${word.lowercase()}, ${confidence.have} of ${confidence.need} needed" }
+            .border(FT.BorderWidth, color.copy(alpha = 0.5f), RoundedCornerShape(FT.RadiusSmall))
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        color = color,
+        style = FTType.Label,
+    )
+}
+
+// The data-quality line of a card's help (fix 3): the same GOOD / PARTIAL / THIN cut-offs the chip used.
+fun dataQualityLine(confidence: Confidence): String {
+    val ratio = if (confidence.need > 0) confidence.have.toDouble() / confidence.need else 0.0
+    val word = when {
+        ratio >= 0.8 -> "good"
+        ratio >= 0.5 -> "partial"
+        else -> "thin"
+    }
+    return "Data behind it: $word, ${confidence.have} of the ${confidence.need} observations its rule needs."
 }
 
 @Composable
@@ -124,7 +171,9 @@ fun FTProvenanceCue(provenance: List<Provenance>, modifier: Modifier = Modifier)
 }
 
 @Composable
-fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, currentColor: Color = FT.TextPrimary) {
+// zoned: the nutrition layout (ZonedScale.kt), the band at 70-90 % of the bar, with the value as a fill and dot in
+// currentColor. Off by default, so other screens keep the padded layout.
+fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, currentColor: Color = FT.TextPrimary, zoned: Boolean = false) {
     val minimum = range.lower
     val maximum = range.upper
     if (!range.sufficientHistory || minimum == null || maximum == null) {
@@ -153,7 +202,13 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
             Text(range.label.uppercase(), color = FT.TextSecondary, style = FTType.MonoCaption, modifier = Modifier.weight(1f))
             comparisonLabel?.let { Text(it, color = FT.TextSecondary, style = FTType.Label) }
         }
-        Canvas(modifier = Modifier.fillMaxWidth().height(28.dp).padding(top = 6.dp)) {
+        val edges = if (zoned) zoneEdges(minimum, maximum) else null
+        if (edges != null) Canvas(modifier = Modifier.fillMaxWidth().height(28.dp).padding(top = 6.dp)) {
+            val y = size.height / 2f
+            val bar = 8.dp.toPx()
+            drawZonedTrack(y, bar, edges, currentColor)
+            range.current?.let { drawZonedValue(y, bar, zonedFraction(it, minimum, maximum) ?: 0f, currentColor, 5.dp.toPx()) }
+        } else Canvas(modifier = Modifier.fillMaxWidth().height(28.dp).padding(top = 6.dp)) {
             val y = size.height / 2f
             val stroke = 8.dp.toPx()
             drawLine(FT.GlassTrack, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), strokeWidth = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
@@ -183,6 +238,9 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
     }
 }
 
+// Contract A3: Hero = the one lead card of a tab (strong glass, primary title); Supporting = every other card.
+enum class FTCardEmphasis { Hero, Supporting }
+
 // Titled container matching Card.kt's exact shape/API (title bar + padded
 // content) for screens that have migrated to Futuristic Material -- Card.kt
 // itself stays legacy-amber until every one of its callers migrates (see
@@ -197,15 +255,31 @@ fun FTCard(
     // Analysis Layer 3 / Phase 7: a metric-registry key. When set, the help button also shows that metric's methodology,
     // limits and references (after `info`, if any), so the text comes from the single registry instead of per-screen strings.
     methodology: String? = null,
+    // The longer part of `info` (thresholds, references): shown in the help dialog behind METHOD, LIMITS AND REFERENCES,
+    // with the registry's text, so the dialog opens on a short explanation.
+    infoDetails: String? = null,
+    // A card that opens something (Aging -> the full profile): the press/focus feedback is drawn inside the card's shape.
+    onClick: (() -> Unit)? = null,
+    // Contract A3: one Hero card leads a tab; every other card is Supporting.
+    emphasis: FTCardEmphasis = FTCardEmphasis.Supporting,
+    // App restructure, fix 3: how much data backs the card (was a DATA: GOOD / PARTIAL / THIN pill under the state pill,
+    // two pills on two lines). It is a line in the card's "?" now, which appears for it when the card has no other help.
+    dataQuality: Confidence? = null,
+    // A line about this reading for the card's "?" (Today's recovery: how its votes fell), after the explanation.
+    helpExtra: String? = null,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(FT.RadiusCard)
     val context = androidx.compose.ui.platform.LocalContext.current
     // remembered: the help text is a pure function of the key, so it is built once, not on every recomposition of the card
-    val registryText = androidx.compose.runtime.remember(methodology) {
-        methodology?.let { key -> com.bioscan.fieldterminal.data.MetricRegistryStore.get(context, key)?.helpText() }
+    val registryEntry = androidx.compose.runtime.remember(methodology) {
+        methodology?.let { key -> com.bioscan.fieldterminal.data.MetricRegistryStore.get(context, key) }
     }
-    val helpBody = listOfNotNull(info, registryText).joinToString("\n\n").ifBlank { null }
+    // The dialog opens on the card's own short text (or, without one, the registry's opening sentences); the details and
+    // the registry's full methodology, limits and references are one tap further.
+    val helpBody = listOfNotNull(helpExtra, (info ?: registryEntry?.summary())?.ifBlank { null }, dataQuality?.let(::dataQualityLine))
+        .joinToString("\n\n").ifBlank { null }
+    val helpDetails = listOfNotNull(infoDetails, registryEntry?.helpText()).joinToString("\n\n").ifBlank { null }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -217,19 +291,21 @@ fun FTCard(
             // this. clip() is what actually confines any child to the shape.
             .clip(shape)
             .border(FT.BorderWidth, FT.GlassBorder, shape)
-            .background(FT.GlassFill, shape),
+            .background(if (emphasis == FTCardEmphasis.Hero) FT.GlassStrongFill else FT.GlassFill, shape)
+            .then(if (onClick != null) Modifier.ftClickable(shape = shape, onClick = onClick) else Modifier),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Card titles are neutral (A3): emerald stays a state signal, so a title never reads as "optimal".
             Text(
                 text = title.uppercase(),
-                color = FT.Emerald,
+                color = if (emphasis == FTCardEmphasis.Hero) FT.TextPrimary else FT.TextSecondary,
                 style = FTType.CardTitle,
                 modifier = Modifier.weight(1f),
             )
-            helpBody?.let { InfoHelpButton(title = title, body = it) }
+            helpBody?.let { InfoHelpButton(title = title, body = it, details = helpDetails) }
         }
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             content()
@@ -238,7 +314,7 @@ fun FTCard(
 }
 
 @Composable
-fun FTDataState(availability: DataAvailability, reason: String? = null, modifier: Modifier = Modifier) {
+fun FTDataState(availability: DataAvailability, reason: String?, modifier: Modifier = Modifier) {
     val label = when (availability) {
         DataAvailability.Available -> return
         DataAvailability.Sparse -> "SPARSE DATA"

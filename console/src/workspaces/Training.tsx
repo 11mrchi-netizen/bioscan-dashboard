@@ -1,6 +1,6 @@
 // DAV-314: Training workspace — stress balance, VO2max trend, session list.
-// CTL/ATL/TSB computed from runs using duration-based TSS proxy.
-// VO2max estimated from best recent pace via Daniels VDOT.
+// CTL/ATL/TSB from session load (sRPE, else TRIMP from heart rate), with the same model and EWMA convention as the
+// Android app (analysis review A5). VO2max estimated per effort via Daniels & Gilbert.
 
 import { LoadBanner } from '../components/shared/LoadBanner'
 import { useLoadEffect } from '../lib/useLoadEffect'
@@ -8,7 +8,7 @@ import { useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRange, useInspect } from '../lib/analysisStore'
 import { ENDURANCE_TYPES, dayBounds, localDate, warnOnError } from '../lib/schema'
-import { tss, vo2maxFromPace, ema } from '../lib/training'
+import { loadAnchorsByDate, sessionLoad, vo2maxFromPace, ema } from '../lib/training'
 import { FTChart } from '../components/shared/FTChart'
 import type { MetricResult } from '../lib/metricAdapter'
 import type { ChartSpec } from '../lib/chartSpec'
@@ -21,6 +21,8 @@ interface RunRow {
   duration_minutes: number | null
   activity_type: string | null
   avg_hr: number | null
+  max_hr: number | null
+  rpe: number | null
   source: string | null
 }
 
@@ -32,6 +34,22 @@ interface TrainingData {
   vo2maxDates: string[]
   vo2maxValues: (number | null)[]
   sessions: RunRow[]
+  /** Analysis review phase G: the spans the averages use, and the published personal fit behind them. */
+  spans: { ctl: number; atl: number; personal: boolean }
+  spansSummary: string | null
+}
+
+// PostgREST stops at 1,000 rows (metricAdapter.ts does the same): ask for the next page until a short one comes back.
+async function paged<T>(page: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<{ rows: T[]; error: { message: string } | null }> {
+  const PAGE = 1000
+  const rows: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await page(from, from + PAGE - 1)
+    if (error) return { rows, error }
+    const got = (data ?? []) as T[]
+    rows.push(...got)
+    if (got.length < PAGE) return { rows, error: null }
+  }
 }
 
 function useTrainingData(start: string, end: string): { data: TrainingData | null; loading: boolean; error: string | null; retry: () => void } {
@@ -46,11 +64,30 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
     // exercise_sessions replaced the old `runs` table; only endurance types feed this run-based load model
     // (4,000+ auto-detected walks would otherwise dominate the TSS proxy).
     const { from, to } = dayBounds(warmupStr, end)
-    const { data: rows, error } = await supabase.from('exercise_sessions')
-      .select('id, start_time, distance_km, duration_min, type, avg_hr, source')
-      .in('type', ENDURANCE_TYPES)
-      .gte('start_time', from).lte('start_time', to)
-      .order('start_time', { ascending: true })
+    const [{ data: rows, error }, maximaRes, restingRes, ffRes] = await Promise.all([
+      supabase.from('exercise_sessions')
+        .select('id, start_time, distance_km, duration_min, type, avg_hr, max_hr, rpe, source')
+        .in('type', ENDURANCE_TYPES)
+        .gte('start_time', from).lte('start_time', to)
+        .order('start_time', { ascending: true }),
+      // TRIMP's anchors, as on Android: every session's maximum (all types) for the robust maximum, and the daily resting
+      // heart rate, both over the same window, taken as of each session's date.
+      paged<{ start_time: string; max_hr: number }>((a, b) => supabase.from('exercise_sessions').select('start_time, max_hr')
+        .gt('max_hr', 0).gte('start_time', from).lte('start_time', to).order('start_time').range(a, b)),
+      paged<{ date: string; rhr: number }>((a, b) => supabase.from('wearable_daily').select('date, rhr')
+        .gt('rhr', 0).gte('date', warmupStr).lte('date', end).order('date').range(a, b)),
+      // Analysis review phase G: the personal fitness-fatigue spans, used only when adopted (as on Android).
+      supabase.from('analysis_results').select('payload, calculated_at').eq('kind', 'fitness_fatigue').eq('key', 'hrv').order('calculated_at', { ascending: false }).limit(1),
+    ])
+    type FfPayload = { adopted?: boolean; personal?: { ctl: number; atl: number } | null; summary?: string }
+    const ff = ((ffRes.data ?? [])[0] as { payload?: FfPayload } | undefined)?.payload
+    const spans = ff?.adopted && ff.personal ? { ctl: ff.personal.ctl, atl: ff.personal.atl, personal: true } : { ctl: 42, atl: 7, personal: false }
+    warnOnError('session maxima', maximaRes.error)
+    warnOnError('resting heart rate', restingRes.error)
+    const anchorsOn = loadAnchorsByDate(
+      maximaRes.rows.map((r) => [localDate(r.start_time), r.max_hr] as [string, number]),
+      restingRes.rows.map((r) => [r.date, r.rhr] as [string, number]),
+    )
     {
         warnOnError('training sessions', error)
         if (error) throw new Error(error.message)
@@ -61,6 +98,8 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
           duration_minutes: r.duration_min as number | null,
           activity_type: r.type as string | null,
           avg_hr: r.avg_hr as number | null,
+          max_hr: r.max_hr as number | null,
+          rpe: r.rpe as number | null,
           source: r.source as string | null,
         }))
 
@@ -74,11 +113,14 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
         }
 
         const tssMap = new Map<string, number>()
-        for (const r of runs) tssMap.set(r.date, (tssMap.get(r.date) ?? 0) + tss(r))
+        for (const r of runs) {
+          const load = sessionLoad(r, anchorsOn(r.date))
+          if (load !== null) tssMap.set(r.date, (tssMap.get(r.date) ?? 0) + load)
+        }
         const dailyTss = allDates.map(dt => tssMap.get(dt) ?? 0)
 
-        const ctlAll = ema(dailyTss, 42)
-        const atlAll = ema(dailyTss, 7)
+        const ctlAll = ema(dailyTss, spans.ctl)
+        const atlAll = ema(dailyTss, spans.atl)
 
         // Slice to visible range only
         const visibleStart = allDates.indexOf(start)
@@ -95,7 +137,7 @@ function useTrainingData(start: string, end: string): { data: TrainingData | nul
           vo2maxFromPace(r.distance_km ?? 0, r.duration_minutes ?? 0)
         )
 
-        if (isCurrent()) setData({ dates: visibleDates, ctl, atl, tsb, vo2maxDates, vo2maxValues, sessions: visibleRuns.slice().reverse() })
+        if (isCurrent()) setData({ dates: visibleDates, ctl, atl, tsb, vo2maxDates, vo2maxValues, sessions: visibleRuns.slice().reverse(), spans, spansSummary: ff?.summary ?? null })
     }
   }, [start, end])
 
@@ -152,6 +194,10 @@ export function Training() {
             <FTChart spec={tsbSpec} result={tsbResult!} height={140} />
           </div>
         </div>
+        <p className="training-footnote mono">
+          Spans: fitness {data.spans.ctl} days, fatigue {data.spans.atl} days · {data.spans.personal ? 'yours (predictive)' : 'standard'}
+        </p>
+        {data.spansSummary && <p className="training-footnote">{data.spansSummary}</p>}
       </section>
 
       <section className="training-section">

@@ -5,6 +5,13 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   base: './',
+  // Analysis review phase G: the lab's event explorer runs the shared analysis core from ../supabase/functions/_shared;
+  // the dev server only serves files from the allowed folders.
+  server: {
+    fs: {
+      allow: [fileURLToPath(new URL('.', import.meta.url)), fileURLToPath(new URL('../supabase/functions/_shared', import.meta.url))],
+    },
+  },
   build: {
     outDir: 'dist',
     rolldownOptions: {

@@ -22,6 +22,10 @@ fun TypicalityCard(view: TypicalityView) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(view.headline, style = FTType.Label, color = FT.TextPrimary)
             view.lines.forEach { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
+            view.scorecard?.let { (word, sentence) ->
+                Text("SCORECARD · $word", style = FTType.LabelCaps, color = FT.TextSecondary)
+                Text(sentence, style = FTType.Caption, color = FT.TextMuted)
+            }
         }
     }
 }

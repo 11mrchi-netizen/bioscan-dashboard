@@ -15,7 +15,7 @@ import io.github.jan.supabase.postgrest.postgrest
 class BenchmarkArtifactRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadArtifacts(metric: String): List<BenchmarkArtifact> =
-        ReadCache.get("benchmark.$metric", ReadCache.LONG_TTL_MS) { fetchArtifacts(metric) }
+        ReadCache.get("benchmark.$metric", ReadCache.LONG_TTL_MS, tables = setOf("benchmark_artifacts")) { fetchArtifacts(metric) }
 
     private suspend fun fetchArtifacts(metric: String): List<BenchmarkArtifact> =
         supabase.postgrest.from("benchmark_artifacts")

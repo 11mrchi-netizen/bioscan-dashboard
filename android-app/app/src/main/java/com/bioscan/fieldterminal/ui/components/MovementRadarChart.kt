@@ -10,14 +10,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -106,7 +103,7 @@ private fun DrawScope.drawAxisLabel(
 ) {
     val result = measurer.measure(
         text,
-        style = TextStyle(fontFamily = Inter, fontSize = 10.sp, fontWeight = FontWeight.Medium, color = color),
+        style = FTType.Caption.copy(color = color),
     )
     val x = cx - result.size.width / 2f
     val y = cy - result.size.height / 2f

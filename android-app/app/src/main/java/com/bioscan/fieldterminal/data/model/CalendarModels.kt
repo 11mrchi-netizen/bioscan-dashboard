@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.data.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -31,6 +33,10 @@ data class NewCalendarEventRow(
     @SerialName("end_time") val endTime: String? = null,
     @SerialName("color_id") val colorId: String? = null,
     val attachments: List<CalendarAttachmentRow>? = null,
+    // Always written: the encoder leaves a default out, and a bulk upsert then sends null for it, which the not-null
+    // column rejects for the whole batch (the calendar cache has never been filled because of it).
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault
     @SerialName("is_cancelled") val isCancelled: Boolean = false,
     @SerialName("google_updated_at") val googleUpdatedAt: String? = null,
 )

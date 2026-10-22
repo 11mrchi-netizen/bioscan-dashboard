@@ -44,14 +44,20 @@ class HealthspanTest {
 
     private fun HealthspanSummary.of(id: HealthspanFactorId) = factors.single { it.id == id }
 
+    private fun HealthspanSummary.score(id: HealthspanFactorId) = of(id).score
+
     @Test
-    fun allFavorableIsGradeAOverSevenAssessed() {
+    fun allFavorableScoresTheMeanOverSevenAssessed() {
         val s = healthspanSummary(good())
         assertEquals(7, s.assessed)
         assertEquals(7, s.favorable)
-        assertEquals("A", s.grade)
         assertFalse(s.preliminary)
         assertEquals(FactorStatus.UNASSESSED, s.of(HealthspanFactorId.STRENGTH).status)
+        assertNull(s.score(HealthspanFactorId.STRENGTH))
+        // cardio 70 (its percentile), PhenoAge -3 y 56, waist/height 0.444 77, sleep min(7.5 h 75, SRI 85 75) 75,
+        // 11,000 steps 70, lipids min(TG 90 100, HDL 55 87) 87, HbA1c 5.2 100: mean 76.4.
+        assertEquals(listOf(70, 56, 77, 75, 70, 87, 100), s.factors.mapNotNull { it.score })
+        assertEquals(76, s.score)
     }
 
     @Test
@@ -61,19 +67,79 @@ class HealthspanTest {
             stepsMedian = 11000.0, stepsDays = 30, stepsBand = "active"))
         assertEquals(4, s.assessed)
         assertTrue(s.preliminary)
-        assertNull(s.grade)
+        assertNull(s.score)
+        // The factors still carry their own scores.
+        assertEquals(77, s.score(HealthspanFactorId.BODY_COMPOSITION))
     }
 
     @Test
-    fun gradeBandsFollowTheShareFavorable() {
-        // good() has 7 assessed. Turn factors to opportunity one by one: 7/7 A, 5/7 B, 3/7 C, 2/7 D.
-        fun grade(i: HealthspanInputs) = healthspanSummary(i).grade
-        val two = good().copy(stepsBand = "sedentary", fastingGlucoseMgDl = lab(130.0, "mg/dL"), hba1cPct = null) // 5/7 = .71
-        assertEquals("B", grade(two))
-        val four = two.copy(waistCm = lab(120.0, "cm"), hdlMgDl = lab(30.0, "mg/dL"), triglyceridesMgDl = lab(200.0, "mg/dL")) // 3/7 = .43
-        assertEquals("C", grade(four))
-        val five = four.copy(vo2Percentile = 10.0) // 2/7 = .29
-        assertEquals("D", grade(five))
+    fun statusFollowsTheScoreLines() {
+        assertEquals(FactorStatus.FAVORABLE, statusFor(50))
+        assertEquals(FactorStatus.NEUTRAL, statusFor(49))
+        assertEquals(FactorStatus.NEUTRAL, statusFor(25))
+        assertEquals(FactorStatus.OPPORTUNITY, statusFor(24))
+        healthspanSummary(good().copy(stepsBand = "sedentary", fastingGlucoseMgDl = lab(130.0, "mg/dL"), hba1cPct = null)).factors
+            .filter { it.score != null }
+            .forEach { assertEquals(it.id.name, statusFor(it.score!!), it.status) }
+    }
+
+    // Every cited cut-off lands on the 50 or 25 line, on the side its source puts it (a value of exactly 150 mg/dL is a
+    // flagged triglyceride), so a single-input factor's status is what it was before the scale.
+    @Test
+    fun citedCutOffsSitOnTheLines() {
+        fun glucose(mgdl: Double) = healthspanSummary(good().copy(hba1cPct = null, fastingGlucoseMgDl = lab(mgdl, "mg/dL"))).score(HealthspanFactorId.GLYCAEMIC)
+        assertEquals(49, glucose(100.0))
+        assertEquals(24, glucose(126.0))
+        assertTrue(glucose(99.0)!! >= 50)
+        assertEquals(49, healthspanSummary(good().copy(hba1cPct = lab(5.7, "%"))).score(HealthspanFactorId.GLYCAEMIC))
+        fun whtr(waist: Double) = healthspanSummary(good().copy(waistCm = lab(waist, "cm"))).score(HealthspanFactorId.BODY_COMPOSITION)
+        assertEquals(49, whtr(90.0)) // 0.50
+        assertEquals(24, whtr(108.0)) // 0.60
+        fun phenoScore(a: Double) = healthspanSummary(good().copy(phenoAge = pheno(a))).score(HealthspanFactorId.BIOLOGICAL_AGE)
+        assertEquals(50, phenoScore(-2.0))
+        assertEquals(24, phenoScore(2.0))
+        fun cardio(p: Double) = healthspanSummary(good().copy(vo2Percentile = p)).score(HealthspanFactorId.CARDIO_FITNESS)
+        assertEquals(50, cardio(50.0))
+        assertEquals(25, cardio(25.0))
+        assertEquals(24, cardio(24.9))
+        fun sleep(h: Double, sri: Double) = healthspanSummary(good().copy(sleepMeanHours = h, sri = SriEvaluation(sri, Confidence(30, 14)))).score(HealthspanFactorId.SLEEP)
+        assertEquals(50, sleep(7.0, 80.0))
+        assertEquals(50, healthspanSummary(good().copy(stepsMedian = 10_000.0)).score(HealthspanFactorId.ACTIVITY))
+    }
+
+    @Test
+    fun scoresRiseTowardsTheOptimumAndStayInOneToHundred() {
+        fun tg(v: Double) = healthspanSummary(good().copy(triglyceridesMgDl = lab(v, "mg/dL"), hdlMgDl = lab(70.0, "mg/dL"))).score(HealthspanFactorId.METABOLIC)!!
+        assertTrue(tg(80.0) == 100 && tg(120.0) > tg(140.0) && tg(140.0) > tg(149.0))
+        assertEquals(1, tg(900.0))
+        fun glu(v: Double) = healthspanSummary(good().copy(hba1cPct = null, fastingGlucoseMgDl = lab(v, "mg/dL"))).score(HealthspanFactorId.GLYCAEMIC)!!
+        assertEquals(100, glu(85.0))
+        assertTrue(glu(95.0) in 50..99)
+        assertEquals(50, glu(55.0)) // hypoglycaemic range falls back to the line, never above it
+        fun steps(v: Double) = healthspanSummary(good().copy(stepsMedian = v)).score(HealthspanFactorId.ACTIVITY)!!
+        assertEquals(100, steps(15_000.0))
+        assertEquals(60, steps(10_500.0))
+        // Long sleep is not penalised.
+        fun hours(h: Double) = healthspanSummary(good().copy(sleepMeanHours = h, sri = SriEvaluation(95.0, Confidence(30, 14)))).score(HealthspanFactorId.SLEEP)!!
+        assertEquals(100, hours(9.5))
+    }
+
+    // Two-part factors score their weaker part, and both parts below the favorable line is an opportunity, as the flag count
+    // had it: favorable still needs both parts fine.
+    @Test
+    fun twoPartFactorsScoreTheirWeakerPart() {
+        assertEquals(30, weakerPart(30, 80))
+        assertEquals(24, weakerPart(40, 45))
+        assertEquals(10, weakerPart(10, 45))
+        fun lipids(tg: Double, hdl: Double) = healthspanSummary(good().copy(triglyceridesMgDl = lab(tg, "mg/dL"), hdlMgDl = lab(hdl, "mg/dL"))).of(HealthspanFactorId.METABOLIC)
+        assertEquals(FactorStatus.OPPORTUNITY, lipids(150.0, 39.0).status) // two flags, as before
+        assertTrue(lipids(150.0, 39.0).reading!!.contains("(49)"))
+        // The one change from the flag count: a single flag far past its line is an opportunity (it was neutral).
+        assertEquals(FactorStatus.OPPORTUNITY, lipids(300.0, 55.0).status)
+        assertEquals(FactorStatus.NEUTRAL, lipids(180.0, 55.0).status)
+        fun sleep(h: Double, sri: Double) = healthspanSummary(good().copy(sleepMeanHours = h, sri = SriEvaluation(sri, Confidence(30, 14)))).of(HealthspanFactorId.SLEEP)
+        assertEquals(FactorStatus.OPPORTUNITY, sleep(5.5, 85.0).status) // was neutral
+        assertEquals(75, sleep(7.5, 85.0).score)
     }
 
     @Test
@@ -158,6 +224,23 @@ class HealthspanTest {
         assertEquals(FactorStatus.UNASSESSED, healthspanSummary(good().copy(stepsDays = 5)).of(HealthspanFactorId.ACTIVITY).status)
     }
 
+    // ACSM men 30-39 (the live table): 10: 33.0, 25: 37.9, 50: 42.4, 75: 48.3, 90: 52.9 mL/kg/min.
+    private val acsmMen30 = mapOf(10 to 33.0, 25 to 37.9, 50 to 42.4, 75 to 48.3, 90 to 52.9)
+
+    @Test
+    fun cardioScoresPastTheTableAndSaysItIsAnEstimate() {
+        // Inside the table the score is its percentile; past its 90th the split normal carries on (98th at 60 mL/kg/min).
+        val inside = healthspanSummary(good().copy(vo2max = DatedValue(45.0, today.minusDays(10), "mL/kg/min"), vo2Percentile = 61.0, vo2Quantiles = acsmMen30)).of(HealthspanFactorId.CARDIO_FITNESS)
+        assertEquals(61, inside.score)
+        assertFalse(inside.reading!!.contains("estimated"))
+        val top = healthspanSummary(good().copy(vo2max = DatedValue(60.0, today.minusDays(10), "mL/kg/min"), vo2Percentile = 90.0, vo2Quantiles = acsmMen30)).of(HealthspanFactorId.CARDIO_FITNESS)
+        assertEquals(98, top.score)
+        assertEquals(ScoreBasis.POPULATION_PERCENTILE, top.basis)
+        assertTrue(top.reading!!.contains("estimated"))
+        // Without the table's points the score stops at the table's own percentile, as before.
+        assertEquals(90, healthspanSummary(good().copy(vo2Percentile = 90.0)).score(HealthspanFactorId.CARDIO_FITNESS))
+    }
+
     @Test
     fun cardioNeedsAFreshReadingAndAFittingTable() {
         assertEquals(FactorStatus.NEUTRAL, healthspanSummary(good().copy(vo2Percentile = 30.0)).of(HealthspanFactorId.CARDIO_FITNESS).status)
@@ -187,6 +270,8 @@ class HealthspanTest {
     fun strengthIsTheMedianLiftLevel() {
         val fav = strengthOf(good().copy(bodyWeightKg = bw80, lifts = listOf(lift("barbell_squat", 150.0), lift("barbell_deadlift", 130.0), lift("chest_press", 70.0))))
         assertEquals(FactorStatus.FAVORABLE, fav.status) // advanced, intermediate, intermediate
+        assertEquals(56, fav.score) // the lower middle lift: deadlift 130 kg, a quarter of the way from intermediate to advanced
+        assertEquals(ScoreBasis.LIFTER_STANDARD, fav.basis)
         val neutral = strengthOf(good().copy(bodyWeightKg = bw80, lifts = listOf(lift("barbell_squat", 70.0), lift("barbell_deadlift", 90.0), lift("chest_press", 45.0))))
         assertEquals(FactorStatus.NEUTRAL, neutral.status)
         val opp = strengthOf(good().copy(bodyWeightKg = bw80, lifts = listOf(lift("barbell_squat", 50.0), lift("barbell_deadlift", 60.0), lift("chest_press", 30.0))))
@@ -227,13 +312,52 @@ class HealthspanTest {
     }
 
     @Test
-    fun gripIsShownButNeverScored() {
+    fun gripWithoutAFittingTableIsShownButNotScored() {
         val without = healthspanSummary(good())
         val with = healthspanSummary(good().copy(grip = GripReading(46.5, "right", today.minusDays(3))))
         assertEquals(without.assessed, with.assessed)
-        assertEquals(without.grade, with.grade)
+        assertEquals(without.score, with.score)
         val note = with.of(HealthspanFactorId.STRENGTH).notes.last()
-        assertTrue(note.startsWith("Latest grip: ") && note.contains("does not change the grade"))
+        assertTrue(note.startsWith("Latest grip: ") && note.contains("does not change the score"))
+    }
+
+    @Test
+    fun aGripPercentileScoresStrengthAloneOrAveragedWithTheLifts() {
+        val grip = GripReading(46.5, "right", today.minusDays(3))
+        val alone = strengthOf(good().copy(grip = grip, gripPercentile = 70.0))
+        assertEquals(70, alone.score)
+        assertEquals(FactorStatus.FAVORABLE, alone.status)
+        assertEquals(ScoreBasis.POPULATION_PERCENTILE, alone.basis)
+        val lifts = listOf(lift("barbell_squat", 150.0), lift("barbell_deadlift", 130.0), lift("chest_press", 70.0)) // lifts 56
+        val mixed = strengthOf(good().copy(bodyWeightKg = bw80, lifts = lifts, grip = grip, gripPercentile = 30.0))
+        assertEquals(43, mixed.score) // (56 + 30) / 2
+        assertEquals(FactorStatus.NEUTRAL, mixed.status)
+        assertEquals(ScoreBasis.MIXED, mixed.basis)
+        // A percentile without a reading is never used, nor one for a reading older than six months.
+        assertEquals(FactorStatus.UNASSESSED, strengthOf(good().copy(gripPercentile = 70.0)).status)
+        val old = strengthOf(good().copy(grip = GripReading(46.5, "right", today.minusDays(200)), gripPercentile = 70.0))
+        assertEquals(FactorStatus.UNASSESSED, old.status)
+        assertTrue(old.notes.last().contains("Older than 6 months"))
+    }
+
+    @Test
+    fun gripIsPlacedOnThePublishedTableAndCarriedPastIt() {
+        // Dodds et al. 2014, Table 2, men at age 30 (the row a 28-32-year-old man is placed on).
+        val men30 = mapOf(10 to 38.0, 25 to 44.0, 50 to 51.0, 75 to 58.0, 90 to 64.0)
+        fun strengthAt(kg: Double): HealthspanFactor {
+            val clamped = com.bioscan.fieldterminal.domain.comparison.interpolatePercentile(kg, men30.entries.sortedBy { it.key })
+            return strengthOf(good().copy(grip = GripReading(kg, "right", today.minusDays(3)), gripPercentile = clamped, gripQuantiles = men30))
+        }
+        val weak = strengthAt(41.0) // between P10 and P25: 10 + 3/6 x 15 = 17.5
+        assertEquals(17, weak.score)
+        assertEquals(FactorStatus.OPPORTUNITY, weak.status)
+        assertFalse(weak.reading!!.contains("estimated"))
+        val strong = strengthAt(70.0) // past P90: Phi((70 - 51) / ((64 - 51) / 1.2816)) = 96.9
+        assertEquals(96, strong.score)
+        assertEquals(FactorStatus.FAVORABLE, strong.status)
+        assertTrue(strong.reading!!.contains("past the table's published range: estimated"))
+        // Exactly on the median is favorable (the higher-is-better line is included).
+        assertEquals(50, strengthAt(51.0).score)
     }
 
     @Test
@@ -262,7 +386,7 @@ class HealthspanTest {
         assertNull(latestLab(obs) { it == "HDL" })
     }
 
-    // The grade is for the User profile page only. Anything else importing it would reintroduce a cross-metric score.
+    // The score is for the User profile page only. Anything else importing it would reintroduce a cross-metric score.
     @Test
     fun onlyTheProfileScreensUseHealthspan() {
         val allowed = setOf("Healthspan.kt", "HealthspanRepository.kt", "HealthspanCard.kt", "UserProfileScreen.kt", "AgingProfileScreen.kt")

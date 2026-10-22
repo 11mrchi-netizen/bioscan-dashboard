@@ -18,6 +18,7 @@ import com.bioscan.fieldterminal.domain.comparison.PopulationContext
 import com.bioscan.fieldterminal.domain.comparison.comparePopulation
 import com.bioscan.fieldterminal.domain.comparison.resolveArtifact
 import com.bioscan.fieldterminal.domain.evaluateSri
+import com.bioscan.fieldterminal.domain.ratioWaist
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -52,6 +53,31 @@ private const val WINDOW_DAYS = 30L
 
 private fun later(a: LocalDate, b: LocalDate?): LocalDate = if (b != null && b.isAfter(a)) b else a
 
+// A value placed against the table for exactly this age and sex: the comparison, and that table's published points (the
+// Healthspan score carries a percentile past them). Null when age, sex or value is unknown or no table covers this person
+// (never the nearest table).
+data class Placement(val comparison: ComparisonResult, val quantiles: Map<Int, Double>?)
+
+suspend fun strictPlacement(supabase: SupabaseClient, metric: String, value: Double?, age: Int?, sex: String?): Placement? {
+    if (value == null || age == null || (sex != "male" && sex != "female")) return null
+    val artifacts = BenchmarkArtifactRepository(supabase).loadArtifacts(metric)
+    val context = PopulationContext(ageYears = age, sex = sex, geography = null)
+    val table = resolveArtifact(metric, context, artifacts)
+    val fits = table != null && table.population.sex.equals(sex, ignoreCase = true) &&
+        age >= (table.population.ageLow ?: Int.MAX_VALUE) && age <= (table.population.ageHigh ?: Int.MIN_VALUE)
+    if (!fits) return null
+    val comparison = comparePopulation(metric, value, context, artifacts).takeIf { it.state == ComparisonState.OK && it.confidence.met } ?: return null
+    return Placement(comparison, table?.quantiles)
+}
+
+// VO2max placement. Shared by the Healthspan cardio factor and the Running level on the User tab.
+suspend fun vo2Placement(supabase: SupabaseClient, aging: AgingProfileOverview): ComparisonResult? = vo2Table(supabase, aging)?.comparison
+
+private suspend fun vo2Table(supabase: SupabaseClient, aging: AgingProfileOverview): Placement? {
+    val sex = UserProfileRepository(supabase).loadProfile()?.sex?.takeIf { it == "male" || it == "female" }
+    return strictPlacement(supabase, "vo2max", aging.latestVo2Max?.second, aging.chronologicalAgeYears, sex)
+}
+
 // Analysis Layer 3 / Phase 8. Gathers what the Healthspan factors need and hands it, unmodified, to the pure domain
 // function. This class decides nothing about cut-offs; it only refuses to pass a value it cannot vouch for.
 class HealthspanRepository(private val supabase: SupabaseClient) {
@@ -66,17 +92,8 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
 
         // VO2max against a table that actually covers this age and sex; never the nearest table.
         val vo2 = aging.latestVo2Max
-        var vo2Comparison: ComparisonResult? = null
-        if (vo2 != null && age != null && sex != null) {
-            val artifacts = benchmarks.loadArtifacts("vo2max")
-            val context = PopulationContext(ageYears = age, sex = sex, geography = null)
-            val table = resolveArtifact("vo2max", context, artifacts)
-            val fits = table != null && table.population.sex.equals(sex, ignoreCase = true) &&
-                age >= (table.population.ageLow ?: Int.MAX_VALUE) && age <= (table.population.ageHigh ?: Int.MIN_VALUE)
-            if (fits) {
-                vo2Comparison = comparePopulation("vo2max", vo2.second, context, artifacts).takeIf { it.state == ComparisonState.OK && it.confidence.met }
-            }
-        }
+        val vo2Table = vo2Table(supabase, aging)
+        val vo2Comparison = vo2Table?.comparison
 
         // Sleep and steps: last 30 days, restarted at the last confirmed series break.
         val sleepRows = analysis.loadSleepDaily()
@@ -100,19 +117,23 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
             .sorted()
         val stepsMedian = steps.takeIf { it.isNotEmpty() }?.let { if (it.size % 2 == 1) it[it.size / 2] else (it[it.size / 2 - 1] + it[it.size / 2]) / 2.0 }
         val stepsBand = stepsMedian?.let {
-            comparePopulation("steps", it, PopulationContext(age, sex, null), benchmarks.loadArtifacts("steps")).bandLabel
+            // The bands are whole steps (9,999 then 10,000): an even-day median of 9,999.5 would fall between them.
+            comparePopulation("steps", kotlin.math.floor(it), PopulationContext(age, sex, null), benchmarks.loadArtifacts("steps")).bandLabel
         }
 
         // Strength: best estimated 1RM per lift over about six months, the latest body weight, the latest logged grip.
-        val liftSets = supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("id,type,start_time,source,details")) {
-                filter {
-                    eq("type", "strength")
-                    gte("start_time", asOf.minusDays(183).toString())
+        // Cached: the User tab reloads this card on every visit (back from a skill page included).
+        val liftSets = ReadCache.get("healthspan.strength.$asOf", tables = setOf("exercise_sessions")) {
+            supabase.postgrest.from("exercise_sessions")
+                .select(columns = Columns.list("id,type,start_time,source,details")) {
+                    filter {
+                        eq("type", "strength")
+                        gte("start_time", asOf.minusDays(183).toString())
+                    }
+                    limit(1000)
                 }
-                limit(1000)
-            }
-            .decodeList<ExerciseSessionRow>()
+                .decodeList<ExerciseSessionRow>()
+        }
             .flatMap { session ->
                 val date = runCatching { OffsetDateTime.parse(session.startTime).toLocalDate() }.getOrNull() ?: return@flatMap emptyList()
                 session.details.exercises.orEmpty().flatMap { ex -> ex.sets.map { LiftSet(ex.name, it.weightKg, it.reps, date) } }
@@ -129,9 +150,21 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
                 .decodeList<HsGripRow>()
                 .mapNotNull { r -> runCatching { OffsetDateTime.parse(r.occurredAt).toLocalDate() }.getOrNull()?.let { GripReading(r.kg, r.hand, it) } },
         )
+        // Grip against the age- and sex-matched grip table (benchmark_artifacts "grip_strength", Dodds 2014).
+        val gripTable = strictPlacement(supabase, "grip_strength", grip?.kg, age, sex)
 
         val labs = loadLabObservations()
         fun lab(vararg names: String) = latestLab(labs) { m -> names.any { m.equals(it, ignoreCase = true) } }
+        // Waist from the monthly body check-in's tape (the WHO site, else the navel) when it is newer than a lab value;
+        // height from Health Connect or the check-in when no lab has it (an adult height does not age out, so it is dated
+        // today for the freshness gate).
+        val checkins = BodyCheckinRepository(supabase)
+        val tapeWaist = runCatching { checkins.loadHistory() }.getOrElse { emptyList() }
+            .lastOrNull { ratioWaist(it) != null }
+            ?.let { DatedValue(ratioWaist(it)!!, it.date, "cm") }
+        val labWaist = lab("Waistline")
+        val waist = listOfNotNull(labWaist, tapeWaist).maxByOrNull { it.date }
+        val height = lab("Body Height") ?: runCatching { checkins.latestHeightCm() }.getOrNull()?.let { DatedValue(it, asOf, "cm") }
         return HealthspanBundle(
             summary = healthspanSummary(
                 HealthspanInputs(
@@ -139,12 +172,15 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
                     sex = sex,
                     vo2max = vo2?.let { DatedValue(it.second, it.first, "mL/kg/min") },
                     vo2Percentile = vo2Comparison?.percentile,
+                    vo2Quantiles = vo2Table?.quantiles,
                     phenoAge = aging.phenoAge,
                     lifts = bestLifts(liftSets),
                     bodyWeightKg = bodyWeight?.let { DatedValue(it.weightKg!!, LocalDate.parse(it.date), "kg") },
                     grip = grip,
-                    waistCm = lab("Waistline"),
-                    heightCm = lab("Body Height"),
+                    gripPercentile = gripTable?.comparison?.percentile,
+                    gripQuantiles = gripTable?.quantiles,
+                    waistCm = waist,
+                    heightCm = height,
                     sleepMeanHours = hours.takeIf { it.isNotEmpty() }?.average(),
                     sleepNights = hours.size,
                     sri = evaluateSri(nights),

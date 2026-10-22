@@ -2,13 +2,15 @@
 //
 //   { items: [{ description, quantity_g?, food_id? }] }  direct lookup of each item, or of the given Cronometer food_id
 //   { description: "one apple" | "Pan-seared steak with brown rice..." }  a single food or a whole meal
+//   { suggest: { query: "pepperoni pi", limit?: 8 } }  foods to pick while typing a replacement or a new ingredient
+//   Items may name a Cronometer food (food_id) or an app catalog food (catalog_food_id: barcode products, label scans).
 //
 // The lookup itself lives in ../_shared/nutrition-lookup (shared with nutrition-backfill); this file is the signed-in
 // user's HTTP entry point. Secrets: CRONOMETER_EMAIL, CRONOMETER_PASSWORD, GEMINI_API_KEY (existing).
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { cronoLogin, isFailure, lookupDescription, lookupItems, memoryLoader } from "../_shared/nutrition-lookup/lookup.ts";
+import { cronoLogin, isFailure, lookupDescription, lookupItems, memoryLoader, suggestFoods } from "../_shared/nutrition-lookup/lookup.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,8 +54,9 @@ Deno.serve(async (req: Request) => {
     }
 
     let body: {
-      items?: Array<{ description: string; quantity_g?: number; food_id?: number }>;
+      items?: Array<{ description: string; quantity_g?: number; food_id?: number; catalog_food_id?: number }>;
       description?: string;
+      suggest?: { query?: string; limit?: number };
     };
     try {
       body = await req.json();
@@ -65,7 +68,12 @@ Deno.serve(async (req: Request) => {
       session: await cronoLogin(cronoEmail, cronoPassword),
       geminiKey: Deno.env.get("GEMINI_API_KEY"),
       loadMemory: memoryLoader(callerClient, user.id),
+      db: callerClient,
     };
+
+    if (body.suggest) {
+      return json({ suggestions: await suggestFoods(ctx, body.suggest.query ?? "", body.suggest.limit ?? 8) }, 200);
+    }
 
     if (body.items && Array.isArray(body.items) && body.items.length > 0) {
       return json(await lookupItems(ctx, body.items), 200);
@@ -77,7 +85,7 @@ Deno.serve(async (req: Request) => {
       return json(result, 200);
     }
 
-    return json({ error: "missing_input", message: "Provide either 'items' or 'description'." }, 400);
+    return json({ error: "missing_input", message: "Provide 'items', 'description' or 'suggest'." }, 400);
   } catch (e) {
     return json({ error: "internal_error", message: String(e) }, 500);
   }

@@ -348,6 +348,9 @@ export function matchName(query: string, name: string): NameMatch {
   const nameTokens = new Set(tokens(name));
   const covered = core.filter((t) => nameTokens.has(t)).length / core.length;
   const cookedByDefault = defaultState(query) === "cooked";
+  // Dish words only mean "a different food" for a plain food ("apple" is not apple pie); when the query is a dish
+  // itself ("pepperoni pizza"), "crust" or "topping" just describe it.
+  const queryIsDish = [...qSet].some((t) => DISH.has(t));
 
   let penalty = 0;
   let dish = 0;
@@ -358,7 +361,7 @@ export function matchName(query: string, name: string): NameMatch {
     }
     if (cookedByDefault && COOKING.has(t)) continue;
     if (qSet.has(t) || STOP.has(t) || NEUTRAL.has(t) || BASELINE.has(t) || /^\d/.test(t)) continue;
-    if (DISH.has(t)) {
+    if (DISH.has(t) && !queryIsDish) {
       dish++;
       penalty += 4;
     } else if (PREP.has(t)) {
@@ -407,6 +410,76 @@ export function rankCandidates(query: string, results: CronoFoodSearchResult[]):
       sourceRank(b.result.source) - sourceRank(a.result.source) ||
       a.order - b.order
     );
+}
+
+// ---------------------------------------------------------------------------
+// Suggestions while typing (replace or add an ingredient)
+// ---------------------------------------------------------------------------
+
+export type SuggestionKind = "cronometer" | "catalog";
+
+export interface Measure {
+  name: string;
+  grams: number;
+}
+
+export interface Suggestion {
+  ref: { kind: SuggestionKind; id: number };
+  name: string;
+  source: string | null;
+  kcal_per_100g: number | null;
+  measures: Measure[];
+  default_grams: number;
+  remembered: boolean;
+}
+
+// Like rankCandidates, but nothing is dropped: while typing, "pepp" matches no whole word yet and Cronometer's own order
+// is the best signal. Whole-word matches still come first.
+export function rankForSuggestions(query: string, results: CronoFoodSearchResult[]): CronoFoodSearchResult[] {
+  return results
+    .map((result, order) => ({ result, order, match: matchName(query, result.name) }))
+    .sort((a, b) =>
+      qualityRank(b.match.quality) - qualityRank(a.match.quality) ||
+      (b.match.quality === "none" ? 0 : a.match.penalty - b.match.penalty) ||
+      a.order - b.order
+    )
+    .map((c) => c.result);
+}
+
+// One of the food's servings to start a new ingredient with: a whole unit ("1 medium"), else the first real serving,
+// else 100 g. Volumes and cuts ("1 cup, sliced") are only used when nothing else exists.
+export function defaultServing(measures: Measure[]): Measure {
+  const usable = measures.filter((m) => m.grams > 0 && !PLAIN_WEIGHT_MEASURE.test(m.name));
+  return usable.find((m) => /\bmedium\b/i.test(m.name)) ??
+    usable.find((m) => WHOLE_UNIT.test(m.name) && !VOLUME_OR_CUT.test(m.name)) ??
+    usable.find((m) => !VOLUME_OR_CUT.test(m.name)) ??
+    usable[0] ??
+    { name: "100 g", grams: 100 };
+}
+
+const suggestionKey = (s: Suggestion) => `${s.ref.kind}:${s.ref.id}`;
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+// The user's remembered choice first, then catalog foods whose name matches the query word for word, then Cronometer,
+// then the remaining catalog hits. Duplicates (same ref, or same name) keep their first place.
+export function mergeSuggestions(
+  query: string,
+  remembered: Suggestion[],
+  catalog: Suggestion[],
+  cronometer: Suggestion[],
+  limit: number,
+): Suggestion[] {
+  const strongCatalog = catalog.filter((s) => qualityRank(matchName(query, s.name).quality) >= qualityRank("good"));
+  const weakCatalog = catalog.filter((s) => !strongCatalog.includes(s));
+  const out: Suggestion[] = [];
+  const keys = new Set<string>();
+  for (const s of [...remembered, ...strongCatalog, ...cronometer, ...weakCatalog]) {
+    if (out.length >= limit) break;
+    if (keys.has(suggestionKey(s)) || out.some((o) => sameName(o.name, s.name))) continue;
+    keys.add(suggestionKey(s));
+    out.push(s);
+  }
+  return out;
 }
 
 // Simplify a query by stripping cooking modifiers and portion words to get a more generic search
@@ -493,6 +566,9 @@ export interface Alternative {
 export interface ResolvedItem {
   query: string;
   cronometer_food_id: number | null;
+  // Set instead of cronometer_food_id when the food comes from the app's own catalog (barcode products, label scans,
+  // USDA rows): the two id spaces are separate.
+  catalog_food_id: number | null;
   cronometer_food_name: string | null;
   cronometer_source: string | null;
   search_score: number | null;
@@ -512,6 +588,32 @@ export interface ResolvedItem {
   // The AI estimate stands in for this item: no trustworthy match, or a non-exact match that disagrees with it.
   used_estimate: boolean;
   disagreement: boolean;
+}
+
+export function emptyResolvedItem(query: string, grams: number): ResolvedItem {
+  return {
+    query,
+    cronometer_food_id: null,
+    catalog_food_id: null,
+    cronometer_food_name: null,
+    cronometer_source: null,
+    search_score: null,
+    quantity_g: grams,
+    serving_used: null,
+    nutrients_per_100g: {},
+    nutrients_for_portion: {},
+    all_measures: [],
+    match_quality: "none",
+    alternatives: [],
+    rejected: [],
+    memory_key: memoryKey(query),
+    portion_count: null,
+    portion_unit: null,
+    from_memory: false,
+    ai_estimate: null,
+    used_estimate: false,
+    disagreement: false,
+  };
 }
 
 // Database match vs. the independent AI estimate for the same item.

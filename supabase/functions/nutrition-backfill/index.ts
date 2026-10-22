@@ -164,7 +164,7 @@ async function reviewBatch(
     const failed = (message: string) => ({ ...base, error: (retryable.has(item.id) ? RETRIED : "") + message });
     if (!meal || !description) return failed("meal or description missing");
     try {
-      const result = await lookupDescription({ session, geminiKey, loadMemory: memoryLoader(admin, item.user_id) }, description);
+      const result = await lookupDescription({ session, geminiKey, loadMemory: memoryLoader(admin, item.user_id), db: admin }, description);
       if (isFailure(result)) return failed(result.message);
       const t = result.totals;
       const newKcal = t.calories ?? null;

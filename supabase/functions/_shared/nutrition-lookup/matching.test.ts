@@ -3,18 +3,22 @@ import assert from "node:assert/strict";
 import {
   type CronoFoodDetail,
   confidence,
+  defaultServing,
   defaultState,
   implausibility,
   isPlainQuery,
   looksCompound,
   matchName,
   memoryKey,
+  mergeSuggestions,
   parseAmount,
   parsePortion,
   portionGrams,
   rankCandidates,
+  rankForSuggestions,
   reconcile,
   type ResolvedItem,
+  type Suggestion,
   simplifyQuery,
   sumNutrients,
 } from "./matching.ts";
@@ -154,7 +158,7 @@ assert.equal(isPlainQuery("baked apple"), false);
 // Reconciling the database match with the independent AI estimate.
 function item(quality: ResolvedItem["match_quality"], kcal: number | null, est: number | null): ResolvedItem {
   return {
-    query: "x", cronometer_food_id: 1, cronometer_food_name: "x", cronometer_source: "USDAsr", search_score: null,
+    query: "x", cronometer_food_id: 1, catalog_food_id: null, cronometer_food_name: "x", cronometer_source: "USDAsr", search_score: null,
     quantity_g: 100, serving_used: null, nutrients_per_100g: {},
     nutrients_for_portion: kcal == null ? {} : { calories: kcal, protein: 1, carbs: 10, fat: 1, vitamin_c: 5 },
     all_measures: [], match_quality: quality, alternatives: [], rejected: [], memory_key: "x", portion_count: null,
@@ -206,5 +210,35 @@ assert.equal(memoryKey("apple, baked"), "apple baked");
 assert.equal(simplifyQuery("grilled chicken breast"), "chicken breast");
 assert.equal(looksCompound("one apple"), false);
 assert.equal(looksCompound("one scoop of whey protein and one banana"), true);
+
+// Suggestions while typing: nothing is dropped (a half-typed word matches no whole word yet), whole words still lead.
+const typed = rankForSuggestions("pepp", [
+  { id: 1, name: "Pepperoni pizza", source: "NCCDB" },
+  { id: 2, name: "Peppers, sweet, red, raw", source: "USDAsr" },
+]);
+assert.deepEqual(typed.map((r) => r.id), [1, 2]);
+const full = rankForSuggestions("pepperoni pizza", [
+  { id: 1, name: "Pizza Shell", source: "CRDB" },
+  { id: 2, name: "Pizza, pepperoni topping, regular crust", source: "USDAsr" },
+]);
+assert.equal(full[0].id, 2);
+
+assert.deepEqual(defaultServing([{ name: "1 cup, sliced", grams: 109 }, { name: "medium (3\" dia)", grams: 182 }, { name: "100 g", grams: 100 }]),
+  { name: "medium (3\" dia)", grams: 182 });
+assert.deepEqual(defaultServing([{ name: "1 cup", grams: 158 }]), { name: "1 cup", grams: 158 });
+assert.deepEqual(defaultServing([{ name: "100 g", grams: 100 }]), { name: "100 g", grams: 100 });
+assert.deepEqual(defaultServing([]), { name: "100 g", grams: 100 });
+
+const sug = (kind: "cronometer" | "catalog", id: number, name: string, remembered = false): Suggestion =>
+  ({ ref: { kind, id }, name, source: null, kcal_per_100g: null, measures: [], default_grams: 100, remembered });
+const merged = mergeSuggestions(
+  "greek yogurt",
+  [sug("cronometer", 9, "Greek yogurt, plain, nonfat", true)],
+  [sug("catalog", 1, "希臘優格"), sug("catalog", 2, "Greek Yogurt, Fage"), sug("catalog", 3, "Yogurt, plain")],
+  [sug("cronometer", 9, "Greek yogurt, plain, nonfat"), sug("cronometer", 10, "Greek Yogurt, Fage"), sug("cronometer", 11, "Greek yogurt, vanilla")],
+  5,
+);
+// Remembered first; the catalog's word-for-word match before Cronometer; duplicates by id or name dropped; capped.
+assert.deepEqual(merged.map((s) => `${s.ref.kind}:${s.ref.id}`), ["cronometer:9", "catalog:2", "cronometer:11", "catalog:1", "catalog:3"]);
 
 console.log("matching.test.ts: all assertions passed");

@@ -31,8 +31,10 @@ import {
   sumNutrients,
   WEIGHT_UNIT_GRAMS,
 } from "./matching.ts";
+import { defaultServing, emptyResolvedItem, mergeSuggestions, rankForSuggestions, type Suggestion } from "./matching.ts";
+import { catalogMeasures, catalogPer100, catalogResolvedItem, catalogSuggestion, loadCatalogFood, searchCatalog } from "./catalog.ts";
 
-export type { ResolvedItem } from "./matching.ts";
+export type { ResolvedItem, Suggestion } from "./matching.ts";
 
 // ---------------------------------------------------------------------------
 // Cronometer mobile API client
@@ -169,28 +171,7 @@ const SEARCH_POOL = 20; // search hits considered per query
 const DETAIL_FETCH = 3; // best-ranked candidates fetched in full for the plausibility check
 
 export function emptyItem(query: string, grams: number): ResolvedItem {
-  return {
-    query,
-    cronometer_food_id: null,
-    cronometer_food_name: null,
-    cronometer_source: null,
-    search_score: null,
-    quantity_g: grams,
-    serving_used: null,
-    nutrients_per_100g: {},
-    nutrients_for_portion: {},
-    all_measures: [],
-    match_quality: "none",
-    alternatives: [],
-    rejected: [],
-    memory_key: memoryKey(query),
-    portion_count: null,
-    portion_unit: null,
-    from_memory: false,
-    ai_estimate: null,
-    used_estimate: false,
-    disagreement: false,
-  };
+  return emptyResolvedItem(query, grams);
 }
 
 function itemFromFood(
@@ -336,7 +317,8 @@ async function searchItem(
 
 interface MemoryRow {
   query_key: string;
-  cronometer_food_id: number;
+  cronometer_food_id: number | null;
+  catalog_food_id: number | null;
   grams_per_unit: number | null;
   unit: string | null;
 }
@@ -350,7 +332,7 @@ export function memoryLoader(client: SupabaseClient, userId: string): MemoryLoad
     if (keys.length === 0) return new Map();
     const { data, error } = await client
       .from("food_match_memory")
-      .select("query_key, cronometer_food_id, grams_per_unit, unit")
+      .select("query_key, cronometer_food_id, catalog_food_id, grams_per_unit, unit")
       .eq("user_id", userId)
       .in("query_key", keys);
     if (error) {
@@ -366,32 +348,52 @@ interface ItemSpec {
   quantityG?: number;
   portion?: Portion;
   foodId?: number;
+  catalogFoodId?: number;
   liquid?: boolean;
 }
 
-async function resolveItem(session: CronoSession, spec: ItemSpec, memory: Map<string, MemoryRow>): Promise<ResolvedItem> {
+async function resolveItem(
+  session: CronoSession,
+  db: SupabaseClient | undefined,
+  spec: ItemSpec,
+  memory: Map<string, MemoryRow>,
+): Promise<ResolvedItem> {
   const key = memoryKey(spec.query);
   const portion = spec.portion;
   const portionCount = portion && !(portion.unit && WEIGHT_UNIT_GRAMS[portion.unit]) ? portion.count : null;
   const portionUnit = portionCount != null ? portion!.unit : null;
-  const remembered = spec.foodId == null ? memory.get(key) : undefined;
-  const foodId = spec.foodId ?? remembered?.cronometer_food_id;
+  const pinned = spec.foodId != null || spec.catalogFoodId != null;
+  const remembered = pinned ? undefined : memory.get(key);
+  const catalogId = spec.catalogFoodId ?? (spec.foodId == null ? remembered?.catalog_food_id ?? undefined : undefined);
+  const cronoId = spec.foodId ?? (catalogId == null ? remembered?.cronometer_food_id ?? undefined : undefined);
+
+  let quantityG = spec.quantityG;
+  let label: string | null = null;
+  if (quantityG == null && remembered?.grams_per_unit && portionCount != null && (remembered.unit ?? null) === portionUnit) {
+    quantityG = Math.round(portionCount * remembered.grams_per_unit * 10) / 10;
+    label = `${portionCount} x your usual portion`;
+  }
 
   let item: ResolvedItem | null = null;
-  if (foodId != null) {
-    const food = await cronoGetFood(session, foodId).catch(() => null);
-    if (food) {
-      let quantityG = spec.quantityG;
-      let label: string | null = null;
-      if (quantityG == null && remembered?.grams_per_unit && portionCount != null && (remembered.unit ?? null) === portionUnit) {
-        quantityG = Math.round(portionCount * remembered.grams_per_unit * 10) / 10;
-        label = `${portionCount} x your usual portion`;
+  if (catalogId != null && db) {
+    const loaded = await loadCatalogFood(db, catalogId);
+    if (loaded) {
+      // "2 bottles" of a catalog product: its own default serving, counted.
+      if (quantityG == null && portionCount != null && portionUnit == null) {
+        const serving = defaultServing(catalogMeasures(loaded.servings));
+        quantityG = Math.round(portionCount * serving.grams * 10) / 10;
+        label = `${portionCount} x ${serving.name}`;
       }
+      item = catalogResolvedItem(spec.query, loaded.food, loaded.nutrients, loaded.servings, quantityG, label);
+    }
+  } else if (cronoId != null) {
+    const food = await cronoGetFood(session, cronoId).catch(() => null);
+    if (food) {
       const g = gramsFor(food, quantityG, portion);
       item = itemFromFood(spec.query, food, g.grams, label ?? g.label, "exact");
-      item.from_memory = remembered != null;
     }
   }
+  if (item) item.from_memory = remembered != null;
   item ??= await searchItem(session, spec.query, spec.quantityG, portion, spec.liquid ?? false);
 
   item.memory_key = key;
@@ -507,9 +509,15 @@ interface DecomposedItem extends MacroEstimate {
   notes?: string;
 }
 
-async function gemini<T>(apiKey: string, prompt: string, schema: unknown, timeoutMs: number, label: string): Promise<T | null> {
+function gemini<T>(apiKey: string, prompt: string, schema: unknown, timeoutMs: number, label: string): Promise<T | null> {
+  return geminiParts<T>(apiKey, [{ text: prompt }], schema, timeoutMs, label);
+}
+
+// Structured JSON from Gemini for any parts (text, inline images), trying the second model tier when the first is
+// overloaded, rate-limited or slow. Null when neither answers.
+export async function geminiParts<T>(apiKey: string, parts: unknown[], schema: unknown, timeoutMs: number, label: string): Promise<T | null> {
   const requestBody = JSON.stringify({
-    contents: [{ parts: [{ text: prompt }] }],
+    contents: [{ parts }],
     generationConfig: { response_mime_type: "application/json", response_schema: schema, temperature: 0 },
   });
   for (const model of GEMINI_MODELS) {
@@ -577,6 +585,8 @@ export interface LookupContext {
   session: CronoSession;
   geminiKey: string | undefined;
   loadMemory: MemoryLoader;
+  // Reads the app catalog (foods, search_foods); without it catalog references and catalog suggestions are skipped.
+  db?: SupabaseClient;
 }
 
 function summarize(mode: string, results: ResolvedItem[], extra: Partial<LookupResult> = {}): LookupResult {
@@ -601,13 +611,23 @@ function summarize(mode: string, results: ResolvedItem[], extra: Partial<LookupR
 // Mode 1: direct item lookup (barcode products, a food the user picked, an edited portion).
 export async function lookupItems(
   ctx: LookupContext,
-  items: Array<{ description: string; quantity_g?: number; food_id?: number }>,
+  items: Array<{ description: string; quantity_g?: number; food_id?: number; catalog_food_id?: number }>,
 ): Promise<LookupResult> {
   const wanted = items.filter((item) => item.description?.trim());
-  const memory = await ctx.loadMemory(wanted.filter((i) => i.food_id == null).map((i) => i.description));
+  const memory = await ctx.loadMemory(wanted.filter((i) => i.food_id == null && i.catalog_food_id == null).map((i) => i.description));
   const results = await mapLimit(wanted, 4, async (item) =>
     finalize(
-      await resolveItem(ctx.session, { query: item.description, quantityG: item.quantity_g, foodId: item.food_id ?? undefined }, memory),
+      await resolveItem(
+        ctx.session,
+        ctx.db,
+        {
+          query: item.description,
+          quantityG: item.quantity_g,
+          foodId: item.food_id ?? undefined,
+          catalogFoodId: item.catalog_food_id ?? undefined,
+        },
+        memory,
+      ),
       null,
       "direct",
     ));
@@ -626,7 +646,7 @@ export async function lookupDescription(ctx: LookupContext, description: string)
     const amount = parseAmount(desc);
     const memory = await ctx.loadMemory([amount.query]);
     const [item, estimate] = await Promise.all([
-      resolveItem(ctx.session, { query: amount.query, quantityG: amount.weightG, portion: amount.portion, liquid: amount.liquid }, memory),
+      resolveItem(ctx.session, ctx.db, { query: amount.query, quantityG: amount.weightG, portion: amount.portion, liquid: amount.liquid }, memory),
       estimateFood(ctx.geminiKey, desc),
     ]);
     return summarize("direct_auto", [finalize(item, estimate, "direct_auto")], { original_description: desc });
@@ -648,10 +668,85 @@ export async function lookupDescription(ctx: LookupContext, description: string)
 
   const memory = await ctx.loadMemory(decomposed.map((d) => d.description));
   const results = await mapLimit(decomposed, 4, async (d) =>
-    finalize(await resolveItem(ctx.session, { query: d.description, quantityG: d.quantity_g }, memory), asEstimate(d), "decompose"));
+    finalize(await resolveItem(ctx.session, ctx.db, { query: d.description, quantityG: d.quantity_g }, memory), asEstimate(d), "decompose"));
   return summarize("decompose", results, { original_description: desc, decomposed });
 }
 
 export function isFailure(r: LookupResult | LookupFailure): r is LookupFailure {
   return "error" in r;
+}
+
+// ---------------------------------------------------------------------------
+// Suggestions while typing: the user's remembered food, the app catalog, Cronometer
+// ---------------------------------------------------------------------------
+
+const SUGGEST_TTL_MS = 5 * 60 * 1000;
+// Cronometer results do not depend on the user, so they are shared across requests to this instance.
+const suggestCache = new Map<string, { at: number; value: Promise<Suggestion[]> }>();
+
+function cronometerSuggestion(food: CronoFoodDetail, remembered: boolean): Suggestion {
+  const measures = food.measures.filter((m) => m.value > 0).map((m) => ({ name: m.name, grams: m.value }));
+  return {
+    ref: { kind: "cronometer", id: food.id },
+    name: food.name,
+    source: food.source,
+    kcal_per_100g: kcalPer100g(food),
+    measures,
+    default_grams: defaultServing(measures).grams,
+    remembered,
+  };
+}
+
+function cronometerSuggestions(session: CronoSession, query: string, n: number): Promise<Suggestion[]> {
+  const key = `${query.toLowerCase()}|${n}`;
+  const hit = suggestCache.get(key);
+  if (hit && Date.now() - hit.at < SUGGEST_TTL_MS) return hit.value;
+
+  const value = (async () => {
+    // One search call per pause in typing; details (kcal, servings) for the top 3 only.
+    const ranked = rankForSuggestions(query, await cronoFindFood(session, query)).slice(0, n);
+    const details = await Promise.all(ranked.slice(0, 3).map((r) => cronoGetFood(session, r.id).catch(() => null)));
+    return ranked.map((r, i) =>
+      details[i] ? cronometerSuggestion(details[i]!, false) : {
+        ref: { kind: "cronometer" as const, id: r.id },
+        name: r.name,
+        source: r.source,
+        kcal_per_100g: null,
+        measures: [],
+        default_grams: 100,
+        remembered: false,
+      }
+    );
+  })();
+  suggestCache.set(key, { at: Date.now(), value });
+  value.catch(() => suggestCache.delete(key));
+  if (suggestCache.size > 300) suggestCache.delete(suggestCache.keys().next().value!);
+  return value;
+}
+
+export async function suggestFoods(ctx: LookupContext, query: string, limit = 8): Promise<Suggestion[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const n = Math.min(Math.max(limit, 1), 12);
+
+  const [memory, catalog, cronometer] = await Promise.all([
+    ctx.loadMemory([q]),
+    ctx.db ? searchCatalog(ctx.db, q, n) : Promise.resolve([] as Suggestion[]),
+    cronometerSuggestions(ctx.session, q, n).catch((e) => {
+      console.log(`suggest ${q}: ${String(e)}`);
+      return [] as Suggestion[];
+    }),
+  ]);
+
+  const remembered: Suggestion[] = [];
+  const row = memory.get(memoryKey(q));
+  if (row?.catalog_food_id != null && ctx.db) {
+    const loaded = await loadCatalogFood(ctx.db, row.catalog_food_id);
+    if (loaded) remembered.push(catalogSuggestion(loaded.food, catalogPer100(loaded.nutrients).calories ?? null, loaded.servings, true));
+  } else if (row?.cronometer_food_id != null) {
+    const food = await cronoGetFood(ctx.session, row.cronometer_food_id).catch(() => null);
+    if (food) remembered.push(cronometerSuggestion(food, true));
+  }
+
+  return mergeSuggestions(q, remembered, catalog, cronometer, n);
 }

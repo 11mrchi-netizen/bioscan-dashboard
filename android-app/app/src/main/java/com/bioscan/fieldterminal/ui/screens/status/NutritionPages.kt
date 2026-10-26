@@ -2,6 +2,8 @@ package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -132,7 +134,7 @@ private fun MacrosPerKgCard(overview: NutritionOverview, weights: List<Pair<Loca
         if (dates.size < 2) {
             Text("Needs logged days and a weigh-in in this range.", style = FTType.Caption, color = FT.TextMuted)
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("PROTEIN" to protein, "CARBS" to carbs, "FAT" to fat).forEach { (name, s) ->
                     macroMove(s.map { it.second })?.let { FTStatePill(StateWord(MetricState.Neutral, "$name ${moveWord(it)}")) }
                 }

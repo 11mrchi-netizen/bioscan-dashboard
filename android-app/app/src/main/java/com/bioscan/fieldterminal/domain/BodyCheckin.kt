@@ -46,7 +46,7 @@ enum class BodySite(
     WAIST_NAVEL("waist_navel", "Waist at the navel", MeasureMethod.TAPE, false, 50.0..180.0,
         "Level with the navel, standing relaxed, belly not held in. Read at the end of a normal breath out."),
     WAIST_MIDPOINT("waist_midpoint", "Waist, mid (WHO)", MeasureMethod.TAPE, false, 50.0..180.0,
-        "At the side, find the lowest rib and the top of the hip bone; the tape goes halfway between, level all round. End of a normal breath out. This is the waist the waist-to-height ratio uses."),
+        "At the side, find the lowest rib and the top of the hip bone; the tape goes halfway between, level all round. End of a normal breath out. Older check-ins only: the waist is now taken at the navel."),
     HIPS("hips", "Hips", MeasureMethod.TAPE, false, 60.0..180.0,
         "Around the widest part of the buttocks, feet together, tape level (check in a mirror)."),
     BICEPS_RELAXED("biceps_relaxed", "Upper arm, relaxed", MeasureMethod.TAPE, true, 15.0..60.0,

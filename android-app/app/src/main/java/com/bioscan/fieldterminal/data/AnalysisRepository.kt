@@ -56,8 +56,10 @@ import java.time.OffsetDateTime
 // convention) decide what actually falls inside each window -- no server-
 // side date-range filter, consistent with how every other repository in
 // this app reads a daily table.
-// Redesign: the range selector reaches ALL (years of daily rows), so the daily histories are not cut at 200 days.
+// Redesign: the range selector reaches ALL (years of daily rows), so the daily histories are not cut at 200 days. The hosted API
+// returns at most 1000 rows a request whatever limit() says (wearable_daily has 3,600+ days), so these are read a page at a time.
 private const val DAILY_HISTORY_ROWS = 3650L
+private const val PAGE_ROWS = 1000L
 
 class AnalysisRepository(private val supabase: SupabaseClient) {
 
@@ -190,16 +192,28 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             emptyMap()
         }
 
+    // Oldest first, like the single-request reads they replace; pages of PAGE_ROWS newest-first until one comes back short.
+    private suspend inline fun <reified T : Any> pagedByDate(table: String, columns: String): List<T> {
+        val out = mutableListOf<T>()
+        var from = 0L
+        while (from < DAILY_HISTORY_ROWS) {
+            val page = supabase.postgrest.from(table)
+                .select(columns = Columns.list(columns)) {
+                    order("date", Order.DESCENDING)
+                    range(from, from + PAGE_ROWS - 1)
+                }
+                .decodeList<T>()
+            out += page
+            if (page.size < PAGE_ROWS) break
+            from += PAGE_ROWS
+        }
+        return out.reversed()
+    }
+
     suspend fun loadWearableDaily(): List<WearableAnalysisRow> = ReadCache.get("analysis.WearableDaily", tables = setOf("wearable_daily")) { fetchWearableDaily() }
 
     private suspend fun fetchWearableDaily(): List<WearableAnalysisRow> =
-        supabase.postgrest.from("wearable_daily")
-            .select(columns = Columns.list("date,hrv,rhr,steps,spo2_avg")) {
-                order("date", Order.DESCENDING)
-                limit(DAILY_HISTORY_ROWS)
-            }
-            .decodeList<WearableAnalysisRow>()
-            .reversed()
+        pagedByDate<WearableAnalysisRow>("wearable_daily", "date,hrv,rhr,steps,spo2_avg")
 
     // The intraday heart-rate series the Heart tab charts: the NEWEST day that has one, with its date. It used to be the
     // oldest day of the 200-row window (an ascending list's first row), so the card showed a day from months ago
@@ -223,40 +237,22 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Redesign: each day's lowest and highest heart rate for the Range Trend card, from the wearable_hr_daily_range view
     // (migration 20261104). Empty until that view exists, so the card says "no readings" instead of failing the page.
     suspend fun loadHeartRateRanges(): List<Pair<LocalDate, com.bioscan.fieldterminal.domain.DayRange>> =
-        ReadCache.get("analysis.hr_ranges", tables = setOf("wearable_daily")) {
-            runCatching {
-                supabase.postgrest.from("wearable_hr_daily_range")
-                    .select(columns = Columns.list("date,hr_min,hr_max")) {
-                        order("date", Order.DESCENDING)
-                        limit(DAILY_HISTORY_ROWS)
-                    }
-                    .decodeList<HrRangeRow>()
+        runCatching {
+            ReadCache.get("analysis.hr_ranges", tables = setOf("wearable_daily")) {
+                pagedByDate<HrRangeRow>("wearable_hr_daily_range", "date,hr_min,hr_max")
                     .map { LocalDate.parse(it.date) to com.bioscan.fieldterminal.domain.DayRange(it.low, it.high) }
-                    .reversed()
-            }.getOrDefault(emptyList())
-        }
+            }
+        }.getOrDefault(emptyList())
 
     suspend fun loadSleepDaily(): List<SleepAnalysisRow> = ReadCache.get("analysis.SleepDaily", tables = setOf("sleep_daily")) { fetchSleepDaily() }
 
     private suspend fun fetchSleepDaily(): List<SleepAnalysisRow> =
-        supabase.postgrest.from("sleep_daily")
-            .select(columns = Columns.list("date,hours,bedtime,wake_time,respiratory_rate,deep_min,rem_min,light_min")) {
-                order("date", Order.DESCENDING)
-                limit(DAILY_HISTORY_ROWS)
-            }
-            .decodeList<SleepAnalysisRow>()
-            .reversed()
+        pagedByDate<SleepAnalysisRow>("sleep_daily", "date,hours,bedtime,wake_time,respiratory_rate,deep_min,rem_min,light_min")
 
     suspend fun loadBodyMetrics(): List<BodyMetricsAnalysisRow> = ReadCache.get("analysis.BodyMetrics", tables = setOf("body_metrics")) { fetchBodyMetrics() }
 
     private suspend fun fetchBodyMetrics(): List<BodyMetricsAnalysisRow> =
-        supabase.postgrest.from("body_metrics")
-            .select(columns = Columns.list("date,weight_kg,body_fat_pct")) {
-                order("date", Order.DESCENDING)
-                limit(DAILY_HISTORY_ROWS)
-            }
-            .decodeList<BodyMetricsAnalysisRow>()
-            .reversed()
+        pagedByDate<BodyMetricsAnalysisRow>("body_metrics", "date,weight_kg,body_fat_pct")
 
     // Phase A4 (Category 6). CTL/ATL's 42-day EWMA needs the same generous
     // margin as everything else here -- exercise_sessions is smaller today
@@ -334,13 +330,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     suspend fun loadWellbeingDaily(): List<WellbeingAnalysisRow> = ReadCache.get("analysis.WellbeingDaily", tables = setOf("wellbeing_daily")) { fetchWellbeingDaily() }
 
     private suspend fun fetchWellbeingDaily(): List<WellbeingAnalysisRow> =
-        supabase.postgrest.from("wellbeing_daily")
-            .select(columns = Columns.list("date,energy,mood,stress,soreness,morning_erection_quality,arousal_level")) {
-                order("date", Order.DESCENDING)
-                limit(DAILY_HISTORY_ROWS)
-            }
-            .decodeList<WellbeingAnalysisRow>()
-            .reversed()
+        pagedByDate<WellbeingAnalysisRow>("wellbeing_daily", "date,energy,mood,stress,soreness,morning_erection_quality,arousal_level")
 
     // Phase A4 (Category 4). Reuses domain/Nutrition.kt's own
     // aggregateMealsByDay() (Step 6) rather than re-deriving daily totals a

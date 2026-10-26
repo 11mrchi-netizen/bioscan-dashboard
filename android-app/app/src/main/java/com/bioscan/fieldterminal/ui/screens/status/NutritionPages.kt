@@ -7,6 +7,15 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import com.bioscan.fieldterminal.data.HydrationAccountingRepository
+import com.bioscan.fieldterminal.data.MapSettingsStore
+import com.bioscan.fieldterminal.domain.fuel.DayHydration
+import com.bioscan.fieldterminal.domain.fuel.HydrationStatus
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,7 +31,6 @@ import com.bioscan.fieldterminal.data.NutrientBreakdownRepository
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.hydrationBoundsMl
 import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.EvalState
 import com.bioscan.fieldterminal.domain.MacroMove
@@ -205,22 +213,75 @@ private fun MicrosCard(range: TimeRange, onOpen: () -> Unit) {
 @Composable
 internal fun HydrationCharts(overview: NutritionOverview, range: TimeRange = GlobalTimeRange.selected) {
     val water = overview.hydrationHistory.mapNotNull { r -> r.ml?.let { LocalDate.parse(r.date) to it / 1000.0 } }
-    val goals = NutritionGoalsStore.getGoals(LocalContext.current)
     TrendBaselineCard(
         "HYDRATION", water, "L", color = NutrientColor.Water,
         info = "Water logged each day, in litres. Drinks logged as meals count towards today's total on Today but are not in this history yet.",
     )
-    val bounds = hydrationBoundsMl(goals, 0.0)
+    HydrationAccountingCard(overview, range)
+}
+
+private const val ACCOUNTING_INFO =
+    "Each day's fluid intake (the water log plus the effective hydration of logged drinks) against the range your body is likely to " +
+        "need that day: your daily baseline range (Setup; 2.5 to 3.5 L if none is set) plus the sweat that day's sessions probably cost, " +
+        "worked out from your weight, how hard the session was (its effort rating), the temperature at home and your sweat tests. " +
+        "The shaded band is that range; a dot is the day's intake. Days with nothing logged are left empty, not counted as zero. " +
+        "It is an estimate from logged data, not a dehydration test, and intake under or over the band is not a diagnosis. " +
+        "A session day whose temperature could not be read assumes a mild 18 °C. The last 7 days show at 7D, otherwise the last 28."
+
+@Composable
+private fun HydrationAccountingCard(overview: NutritionOverview, range: TimeRange) {
+    val context = LocalContext.current
+    val goals = remember { NutritionGoalsStore.getGoals(context) }
+    val loaded by produceState<List<DayHydration>?>(initialValue = null, overview) {
+        value = runCatching { HydrationAccountingRepository(SupabaseClientProvider.client).load(overview, MapSettingsStore.getHome(context), goals) }.getOrNull()
+    }
+    val days = loaded?.takeLast(if (range == TimeRange.Week) 7 else 28)
     RedesignCard {
+        val lastLogged = days?.lastOrNull { it.intakeMl != null }
         MetricCardHeader(
-            title = "HYDRATION ACCOUNTING", latest = null,
-            helpBody = "Daily water intake against your daily range (Setup; a generic 2.5 to 3.5 L if none is set). Hydration is a range, not a single goal. " +
-                "Demand that rises with training and heat is worked out for today only so far; a per-day demand band is planned. Intake under or over the range is not a dehydration test.",
+            title = "HYDRATION ACCOUNTING",
+            latest = lastLogged?.intakeMl?.let { "%.1f".format(it / 1000.0) }, unit = if (lastLogged != null) "L" else null,
+            pill = lastLogged?.let { StateWord(MetricState.Neutral, it.status.label) },
+            helpBody = ACCOUNTING_INFO,
         )
-        DualAxisChart(
-            left = listOf(AxisLine("Water", aggregate(water, range), NutrientColor.Water)),
-            right = emptyList(),
-            leftBand = (bounds.start / 1000.0)..(bounds.endInclusive / 1000.0), bandLabel = "DAILY RANGE", leftUnit = "L", rightUnit = "",
-        )
+        when {
+            days == null -> Text("Working out demand from your sessions and the weather…", style = FTType.Caption, color = FT.TextMuted)
+            days.none { it.intakeMl != null } -> Text("No water or drinks logged in this period.", style = FTType.Caption, color = FT.TextMuted)
+            else -> {
+                DemandRangeChart(days)
+                val logged = days.filter { it.intakeMl != null }
+                val within = logged.count { it.status == HydrationStatus.Within }
+                val sessionDays = days.count { it.workoutMinutes > 0 }
+                val noWeather = days.count { !it.temperatureKnown }
+                Text(
+                    "Within the range on $within of ${logged.size} logged days · $sessionDays training days" +
+                        if (noWeather > 0) " ($noWeather without a temperature, a mild day assumed)" else "",
+                    style = FTType.Caption, color = FT.TextSecondary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DemandRangeChart(days: List<DayHydration>) {
+    val top = (days.maxOf { maxOf(it.demandHighMl, it.intakeMl ?: 0.0) } * 1.05).coerceAtLeast(1.0)
+    Column(Modifier.fillMaxWidth()) {
+        Text("L  0–%.1f".format(top / 1000.0), style = FTType.Micro, color = FT.TextMuted)
+        Canvas(Modifier.fillMaxWidth().height(130.dp)) {
+            val slot = size.width / days.size
+            val w = (slot * 0.7f).coerceIn(3.dp.toPx(), 20.dp.toPx())
+            fun y(ml: Double) = size.height - (ml / top).toFloat() * size.height
+            days.forEachIndexed { i, d ->
+                val cx = i * slot + slot / 2f
+                drawRect(NutrientColor.Water.copy(alpha = 0.22f), Offset(cx - w / 2f, y(d.demandHighMl)), Size(w, y(d.demandLowMl) - y(d.demandHighMl)))
+                d.intakeMl?.let { ml ->
+                    val color = when (d.status) { HydrationStatus.Within -> FT.Emerald; else -> FT.Warning }
+                    drawCircle(color, 3.5.dp.toPx(), Offset(cx, y(ml)))
+                }
+                if (d.workoutMinutes > 0) drawCircle(FT.TextMuted, 1.5.dp.toPx(), Offset(cx, size.height - 2.dp.toPx()))
+            }
+        }
+        Text("${days.first().date}  →  ${days.last().date}   ·   band = needed range · dot = intake (green within, amber outside) · grey dot = training day", style = FTType.Micro, color = FT.TextMuted)
     }
 }

@@ -8,6 +8,9 @@ import com.bioscan.fieldterminal.data.model.BeverageItemRow
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
@@ -17,6 +20,8 @@ import java.time.OffsetDateTime
 // is one weather request.
 
 private const val MIN_SESSION_MINUTES = 10.0
+
+private data class Session(val start: OffsetDateTime, val minutes: Double, val rpe: Int?, val type: String)
 private const val FALLBACK_WEIGHT_KG = 70.0
 
 class HydrationAccountingRepository(private val supabase: SupabaseClient) {
@@ -49,16 +54,25 @@ class HydrationAccountingRepository(private val supabase: SupabaseClient) {
             .mapNotNull { s ->
                 val start = runCatching { OffsetDateTime.parse(s.startTime) }.getOrNull() ?: return@mapNotNull null
                 val minutes = s.durationMin ?: return@mapNotNull null
-                if (start.toLocalDate() < first || minutes < MIN_SESSION_MINUTES) null else Triple(start, minutes, s.rpe)
+                if (start.toLocalDate() < first || minutes < MIN_SESSION_MINUTES) null else Session(start, minutes, s.rpe, s.type ?: "run")
             }
         val weather = WeatherRepository()
-        val tempByDay = sessions.groupBy { it.first.toLocalDate() }.mapValues { (_, day) ->
-            home?.let { (lat, lon) ->
-                val at = day.first().first.toZonedDateTime()
-                runCatching { weather.fetchHistoricalAt(lat, lon, at).temperatureC }
-                    .recoverCatching { weather.fetchAt(lat, lon, at).temperatureC }
-                    .getOrNull()
-            }
+        // One request per session day, together, and remembered: the archive does not change for a past day.
+        val tempByDay = coroutineScope {
+            sessions.groupBy { it.start.toLocalDate() }.map { (day, list) ->
+                async {
+                    day to home?.let { (lat, lon) ->
+                        val at = list.first().start.toZonedDateTime()
+                        runCatching {
+                            ReadCache.get("hydration.temp.$day.$lat,$lon", tables = setOf("exercise_sessions")) {
+                                runCatching { weather.fetchHistoricalAt(lat, lon, at).temperatureC }
+                                    .recoverCatching { weather.fetchAt(lat, lon, at).temperatureC }
+                                    .getOrThrow()
+                            }
+                        }.getOrNull()
+                    }
+                }
+            }.awaitAll().toMap()
         }
 
         val inputs = dates.map { d ->
@@ -67,7 +81,7 @@ class HydrationAccountingRepository(private val supabase: SupabaseClient) {
             HydrationDayInputs(
                 date = d,
                 intakeMl = if (water1 == null && drink1 == null) null else (water1 ?: 0.0) + (drink1 ?: 0.0),
-                workouts = sessions.filter { it.first.toLocalDate() == d }.map { HydrationWorkout(it.second, it.third) },
+                workouts = sessions.filter { it.start.toLocalDate() == d }.map { HydrationWorkout(it.minutes, it.rpe, it.type) },
                 tempC = tempByDay[d],
             )
         }

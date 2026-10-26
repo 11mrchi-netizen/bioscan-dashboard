@@ -290,7 +290,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     private suspend fun fetchExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> =
         supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("start_time,duration_min,rpe,avg_hr,max_hr")) {
+            .select(columns = Columns.list("start_time,duration_min,rpe,avg_hr,max_hr,type")) {
                 // 25/9 rework: the Load tab charts up to 1Y of CTL/ATL/TSB, and a
                 // 200-row cap (newest first) only reached ~7 weeks once Health
                 // Connect noise landed (913 rows/400 days). A date window keeps

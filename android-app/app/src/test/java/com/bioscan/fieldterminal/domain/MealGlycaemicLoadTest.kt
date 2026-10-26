@@ -22,6 +22,7 @@ class MealGlycaemicLoadTest {
         val balanced = estimateMealResponses(listOf(meal("08:00", 80.0, fibre = 12.0, sugar = 10.0, protein = 35.0, fat = 25.0))).single()
         assertEquals(GlycaemicBand.High, bare.band)
         assertTrue(balanced.score!! < bare.score!!)
+        assertEquals(GlycaemicBand.Moderate, balanced.band)
         assertEquals(ConfidenceLevel.Medium, balanced.confidence)
     }
 
@@ -29,7 +30,7 @@ class MealGlycaemicLoadTest {
     fun unloggedFibreIsUnknownNotZero() {
         val e = estimateMealResponses(listOf(meal("08:00", 30.0, fibre = null, sugar = 0.0, protein = 0.0, fat = 0.0))).single()
         assertEquals(listOf("fibre"), e.missing)
-        assertEquals(30.0, e.score!!, 1e-9)               // fibre not subtracted, no fibre credit
+        assertEquals(30.0 * ASSUMED_GI, e.score!!, 1e-9)  // fibre not subtracted, no fibre credit
         assertEquals(ConfidenceLevel.Low, e.confidence)
     }
 
@@ -39,6 +40,17 @@ class MealGlycaemicLoadTest {
         assertNull(e.band)
         assertNull(e.score)
         assertTrue("carbs" in e.missing)
+    }
+
+    @Test
+    fun anOrdinaryMixedMealIsModerateNotHigh() {
+        // Replica over the 272 logged meals with carbs: 14 % LOW, 49 % MODERATE, 37 % HIGH (median score 17.5).
+        // 62 g carbs (the average logged meal), 5 g fibre, 12 g sugar, 25 g protein, 20 g fat.
+        val e = estimateMealResponses(listOf(meal("12:30", 62.0, fibre = 5.0, sugar = 12.0, protein = 25.0, fat = 20.0))).single()
+        assertEquals(GlycaemicBand.Moderate, e.band)
+        // The same carbs on their own, mostly sugar, climb to High.
+        val bare = estimateMealResponses(listOf(meal("12:30", 62.0, fibre = 1.0, sugar = 40.0, protein = 2.0, fat = 1.0))).single()
+        assertEquals(GlycaemicBand.High, bare.band)
     }
 
     @Test

@@ -11,12 +11,16 @@ import java.time.OffsetDateTime
 // Load = available carbohydrate (carbs minus fibre) scaled up for a high share of sugar and down for protein, fat and
 // fibre eaten with it (slower gastric emptying and absorption; direction from the food-order and mixed-meal literature,
 // size chosen conservatively). Bands are the conventional glycaemic-load cut-offs (10 and 20 per serving) applied to that
-// score, a proxy because the glycaemic index is taken as mid-range.
+// score. The glycaemic index of a logged meal is not known, so a mid-range one is assumed (ASSUMED_GI, 0.55 on the
+// glucose = 100 scale) and the load is GI x available carbohydrate, as glycaemic load is defined.
 
 enum class GlycaemicBand(val label: String) { Low("LOW"), Moderate("MODERATE"), High("HIGH") }
 
 /** Meals closer together than this share one rise. */
 const val MEAL_GROUP_GAP_MIN = 90
+
+/** Glycaemic index assumed for every meal: mid-range (low is 55 or under, high 70 or over), as a fraction of glucose. */
+const val ASSUMED_GI = 0.55
 
 const val GL_LOW_MAX = 10.0
 const val GL_MODERATE_MAX = 20.0
@@ -80,7 +84,7 @@ fun estimateMealResponses(meals: List<MealRow>): List<MealGlycaemicEstimate> = g
         (protein?.let { PROTEIN_SLOWS_BY * (it / PROTEIN_FULL_G).coerceAtMost(1.0) } ?: 0.0) -
         (fat?.let { FAT_SLOWS_BY * (it / FAT_FULL_G).coerceAtMost(1.0) } ?: 0.0) -
         (fibre?.let { FIBRE_SLOWS_BY * (it / FIBRE_FULL_G).coerceAtMost(1.0) } ?: 0.0)
-    val score = available * (1.0 + SUGAR_SPEEDS_BY * sugarShare) * buffer
+    val score = available * ASSUMED_GI * (1.0 + SUGAR_SPEEDS_BY * sugarShare) * buffer
     val band = when {
         score <= GL_LOW_MAX -> GlycaemicBand.Low
         score <= GL_MODERATE_MAX -> GlycaemicBand.Moderate

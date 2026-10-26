@@ -8,7 +8,7 @@ import java.time.LocalDate
 // target to hit: intake under or over it is not a dehydration test, and a day with nothing logged is a gap, not zero.
 // docs/ft-redesign/model-plans.md, section 3.
 
-data class HydrationWorkout(val minutes: Double, val rpe: Int?)
+data class HydrationWorkout(val minutes: Double, val rpe: Int?, val type: String = "run")
 
 /** What is known about one day before the model runs. [intakeMl] is null when nothing was logged. */
 data class HydrationDayInputs(val date: LocalDate, val intakeMl: Double?, val workouts: List<HydrationWorkout>, val tempC: Double?)
@@ -61,7 +61,7 @@ fun hydrationAccounting(
     var low = 0.0
     var high = 0.0
     d.workouts.forEach { w ->
-        val sweat = predictSweatRate(profile, hydrationIntensity(w.minutes, w.rpe), "run", d.tempC ?: HYDRATION_FALLBACK_TEMP_C, weightKg)
+        val sweat = predictSweatRate(profile, hydrationIntensity(w.minutes, w.rpe), w.type, d.tempC ?: HYDRATION_FALLBACK_TEMP_C, weightKg)
         low += sweat.lowMlPerHour * w.minutes / 60.0
         high += sweat.highMlPerHour * w.minutes / 60.0
     }

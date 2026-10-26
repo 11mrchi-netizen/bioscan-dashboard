@@ -317,7 +317,7 @@ export function summariseConcern(concern: ConcernRow, cells: DayCell[], marks: M
 
   const stale = current && concern.kind === 'systemic' ? HEALTH_RULES.staleDaysSystemic : HEALTH_RULES.staleDays
   // the person's own end mark is the last thing known when nothing was logged after it (the copied legacy rows)
-  const markedOver = !current && lastEpisode?.endedBy === 'mark' && (lastObserved === null || lastEpisode.end >= lastObserved)
+  const markedOver = !current && lastEpisode?.endedBy === 'mark' && lastEpisode.end !== null && (lastObserved === null || lastEpisode.end >= lastObserved)
   let state: ConcernState
   let stateReason: string
   if (markedOver) {

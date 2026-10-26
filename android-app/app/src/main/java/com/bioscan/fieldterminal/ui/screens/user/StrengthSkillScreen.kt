@@ -57,6 +57,7 @@ fun StrengthTab() {
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(18.dp),
     ) {
         LoadedContent(load = { UserDataCache.strength() }) { StrengthContent(it) }
+        GripStrengthCard()
     }
 }
 

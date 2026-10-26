@@ -86,9 +86,9 @@ fun MetricCardHeader(
     trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(latest ?: "—", style = FTType.MetricMedium, color = FT.TextPrimary)
+        if (latest != null || pill != null) Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (latest != null) Row(verticalAlignment = Alignment.Bottom) {
+                Text(latest, style = FTType.MetricMedium, color = FT.TextPrimary)
                 unit?.let { Text(" $it", style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp)) }
             }
             pill?.let { FTStatePill(it) }
@@ -176,6 +176,7 @@ fun TrendCard(
     color: Color = FT.DomainHeart,
     scale: ClosedFloatingPointRange<Double>? = null,
     format: (Double) -> String = { if (abs(it) >= 100) "%.0f".format(it) else "%.1f".format(it) },
+    footer: (@Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit)? = null,
 ) {
     val (helpBody, helpDetails) = rememberHelp(methodology, info)
     val latest = points.maxByOrNull { it.first }?.second
@@ -187,6 +188,7 @@ fun TrendCard(
         } else {
             Text("Not enough readings in this range yet.", style = FTType.Caption, color = FT.TextMuted)
         }
+        footer?.invoke(this)
     }
 }
 

@@ -42,6 +42,13 @@ import com.bioscan.fieldterminal.domain.PROTEIN_PCT_HIGH
 import com.bioscan.fieldterminal.domain.PROTEIN_PCT_LOW
 import com.bioscan.fieldterminal.domain.TdeeEvaluation
 import com.bioscan.fieldterminal.domain.WeightEvaluation
+import com.bioscan.fieldterminal.domain.jacksonPollockBodyFat
+import com.bioscan.fieldterminal.domain.navyBodyFat
+import com.bioscan.fieldterminal.domain.rollingBodyFat
+import com.bioscan.fieldterminal.ui.components.MetricCardHeader
+import com.bioscan.fieldterminal.ui.components.RedesignCard
+import com.bioscan.fieldterminal.ui.components.TrendBaselineCard
+import com.bioscan.fieldterminal.ui.components.TrendCard
 import com.bioscan.fieldterminal.domain.evaluateBodyFat
 import com.bioscan.fieldterminal.domain.evaluateBristol
 import com.bioscan.fieldterminal.domain.evaluateNutrition
@@ -182,72 +189,55 @@ private fun BodyTab(allDays: List<DailyNutrition>, reloadKey: Int, onStartCheckI
     ) {
         val weightPoints = b.mapNotNull { row -> row.weightKg?.let { LocalDate.parse(row.date) to it } }
         val weightEval = evaluateWeightTrend(weightPoints)
-        WeightCard(weightEval)
-
-        BodyMeasurementsCard(
-            history = checkins,
-            heightCm = heightCm,
-            sex = profile?.sex?.takeIf { it == "male" || it == "female" },
-            ageYears = profile?.dateOfBirth?.let { runCatching { ChronoUnit.YEARS.between(LocalDate.parse(it), LocalDate.now()).toInt() }.getOrNull() },
-            scaleBodyFat = b.lastOrNull { it.bodyFatPct != null }?.bodyFatPct,
-            onStart = onStartCheckIn,
+        TrendCard(
+            "WEIGHT TREND", weightEval.emaSeries, "kg", pill = trendStateWord(weightEval.state), color = FT.DomainFuel,
+            footer = { weightEval.rateKgPerWeek?.let { FTMetricRow("Rate", "%+.2f kg/week".format(it)) } },
         )
 
+        BodyMeasurementsCard(history = checkins, heightCm = heightCm, onStart = onStartCheckIn)
 
-        val bodyFatPoints = b.mapNotNull { row -> row.bodyFatPct?.let { LocalDate.parse(row.date) to it } }
-        BodyFatCard(evaluateBodyFat(bodyFatPoints))
+        // Body fat folded in beside the measurements: scale, tape and skinfold estimates blended over a rolling 28 days.
+        val sex = profile?.sex?.takeIf { it == "male" || it == "female" }
+        val age = profile?.dateOfBirth?.let { runCatching { ChronoUnit.YEARS.between(LocalDate.parse(it), LocalDate.now()).toInt() }.getOrNull() }
+        val scale = b.mapNotNull { row -> row.bodyFatPct?.let { LocalDate.parse(row.date) to it } }
+        val tape = checkins.mapNotNull { c -> navyBodyFat(c, heightCm, sex)?.let { c.date to it } }
+        val folds = checkins.mapNotNull { c -> jacksonPollockBodyFat(c, age, sex)?.let { c.date to it } }
+        BodyFatCard(scale, tape, folds)
 
-        // DAV-104: real post-fact TDEE, gated on both this evaluation's own
-        // weight-EMA state above and Category 4's nutrition-completeness
-        // gate -- reuses both verbatim rather than a third data pipeline.
-        TdeeCard(evaluateTdee(evaluateNutrition(allDays), weightEval))
-    }
-}
-
-private const val TREND_WINDOW_DAYS = 90L
-
-@Composable
-private fun WeightCard(eval: WeightEvaluation) {
-    FTCard(dataQuality = eval.confidence, title = "WEIGHT TREND") {
-        FTStatePill(trendStateWord(eval.state))
-        eval.emaToday?.let { FTMetricRow("EMA (today)", "%.1f kg".format(it)) }
-        eval.rateKgPerWeek?.let { FTMetricRow("Rate", "%+.2f kg/week".format(it)) }
-        val today = LocalDate.now()
-        val recentSeries = eval.emaSeries.filter { ChronoUnit.DAYS.between(it.first, today) <= TREND_WINDOW_DAYS }
-        DateTrendLine(points = recentSeries, color = FT.DomainFuel, modifier = Modifier.padding(top = 6.dp), unit = "kg (EMA)")
+        // DAV-104: real post-fact TDEE, gated on both this evaluation's own weight-EMA state above and Category 4's
+        // nutrition-completeness gate -- reuses both verbatim rather than a third data pipeline.
+        EnergyBalanceCard(evaluateTdee(evaluateNutrition(allDays), weightEval), allDays)
     }
 }
 
 @Composable
-private fun BodyFatCard(eval: BodyFatEvaluation) {
-    FTCard(dataQuality = eval.confidence, title = "BODY FAT %") {
-        FTStatePill(trendStateWord(eval.state))
-        eval.latest?.let { FTMetricRow("Latest", "%.1f%%".format(it)) }
-        eval.previous?.let { FTMetricRow("Previous (≥30d prior)", "%.1f%%".format(it)) }
-        eval.delta?.let { FTMetricRow("Delta", "%+.1f pp".format(it)) }
-    }
+private fun BodyFatCard(scale: List<Pair<LocalDate, Double>>, tape: List<Pair<LocalDate, Double>>, folds: List<Pair<LocalDate, Double>>) {
+    val blended = rollingBodyFat(scale + tape + folds)
+    TrendCard(
+        "BODY FAT", blended, "%", color = FT.DomainFuel,
+        info = "Scale (impedance), tape (US Navy equation) and skinfold (Jackson-Pollock) estimates, averaged over a rolling 28 days. " +
+            "Each method is a few points off for one person: follow the trend, not the gap between methods.",
+        footer = {
+            scale.lastOrNull()?.let { FTMetricRow("Scale", "%.1f%%".format(it.second)) }
+            tape.lastOrNull()?.let { FTMetricRow("Tape", "%.1f%%".format(it.second)) }
+            folds.lastOrNull()?.let { FTMetricRow("Skinfolds", "%.1f%%".format(it.second)) }
+        },
+    )
 }
 
-// DAV-104: post-fact adaptive TDEE. Building state is the honest, expected
-// default while either input gate is unmet -- FTDataState (not a fabricated
-// number or a decorative placeholder) makes that explicit, per the ticket's
-// own "must not use glow, color, or large typography to imply precision
-// the data gate does not support."
+// Energy balance: each logged day's intake against the post-fact TDEE. Building is the honest default while either input
+// gate is unmet (DAV-104: no fabricated number to imply precision the data does not support).
 @Composable
-private fun TdeeCard(eval: TdeeEvaluation) {
-    FTCard(dataQuality = eval.confidence,
-        title = "ENERGY BALANCE (TDEE ESTIMATE)",
-        info = "Post-fact estimate from your own logged intake and real weight trend — not a predictive formula, and not a target to hit.",
-    ) {
-        if (eval.state == EvalState.Stable && eval.tdeeKcal != null && eval.rangeLowKcal != null && eval.rangeHighKcal != null) {
-            FTMetricValue(
-                DisplayValue(
-                    primary = eval.tdeeKcal.roundToInt().toString(),
-                    unit = "KCAL/DAY",
-                    secondary = "likely ${eval.rangeLowKcal.roundToInt()}–${eval.rangeHighKcal.roundToInt()} kcal/day",
-                ),
-            )
-        } else {
+private fun EnergyBalanceCard(eval: TdeeEvaluation, days: List<DailyNutrition>) {
+    val info = "Each day's logged intake minus your estimated expenditure (TDEE, worked out after the fact from your intake and weight trend). " +
+        "Not a predictive formula, and not a target to hit."
+    val tdee = eval.tdeeKcal
+    if (eval.state == EvalState.Stable && tdee != null) {
+        val balance = days.filter { it.calories > 0 }.map { LocalDate.parse(it.date) to it.calories - tdee }
+        TrendBaselineCard("ENERGY BALANCE", balance, "kcal / day", info = info, format = { "%+.0f".format(it) })
+    } else {
+        RedesignCard {
+            MetricCardHeader(title = "ENERGY BALANCE", latest = null, helpBody = info)
             FTDataState(
                 com.bioscan.fieldterminal.domain.DataAvailability.Building,
                 "Needs 10+ complete-logged days in the last 14 and an established weight trend (10+ weigh-ins across 14+ days) before an estimate is trustworthy.",
@@ -255,4 +245,3 @@ private fun TdeeCard(eval: TdeeEvaluation) {
         }
     }
 }
-

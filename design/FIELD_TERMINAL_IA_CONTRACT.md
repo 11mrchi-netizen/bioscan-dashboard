@@ -159,3 +159,16 @@ for it doesn't get designed twice.
 - **Exact visual treatment of the Cardio/Wellbeing merges** (e.g. whether Respiratory gets its own
   sub-heading inside Cardio, or Arousal its own row inside Wellbeing's small multiples) — a DAV-99/101
   visualization-layer decision, not an IA one; this doc only fixes which screen owns the data.
+
+## Redesign amendment (2026-10): cards, range, page contents
+
+Supersedes earlier rules where they differ. The code is authoritative; this records the intent.
+
+- **Header band**: page title only. The context line / subline of metric names is gone from Training, Nutrition, Health and Today.
+- **Global range**: one top-bar selector (7D · 1M · 3M · 6M · 1Y · ALL, `GlobalTimeRange`) sets the window and grain of every graph on Training, Nutrition and Health. Daily values up to 1M, weekly means for 3M and 6M, monthly means for 1Y and ALL. Per-page timeframe toggles are removed. Training charts take whole months (7D/1M read as a month; ALL as a year).
+- **Card layouts** (`ui/components/RedesignCards.kt`): Trend, Trend and Baseline, Range Trend (floating low-to-high columns), Hypnogram. Header: latest reading top left with its direction pill below; title right; the "?" at the title's end holds the explanatory notes (no explanatory paragraphs inside cards).
+- **Baseline shift band**: baseline at the centre, limits at 10 % and 90 % of the bar, current day a dot without a number, limit values in a quiet font. The baseline is the selected window's mean and the limits one standard deviation either side (five readings minimum).
+- **Range columns at week/month grain** span the mean of the daily lows to the mean of the daily highs.
+- **Health**: no glance-chip strip. Cardio = HRV, Heart rate (range), RHR, SpO2, Steps, Respiratory rate (blood pressure hidden until a manual log exists). Sleep = Sleep index (score on the right; regularity inside it), Duration, REM / Light / Deep trend cards, Circadian alignment (unchanged, pending refinement). Body = Weight, Body measurements (body map), Body fat (blended), Energy balance. Wellbeing = four trend cards and Physiological stress. Grip strength lives on Training › Strength.
+- **Today**: This morning, Is today typical, Recovery and Ready for, Nutrition today, Glucose spiking (placeholder), Intraday heart rate, Sleep phase breakdown (stage minutes until timed stages are stored), Physiological stress (intraday).
+- **Log picker**: one Health entry replaces Health check-in, Injury check-in, Injury / pain and Illness / symptom. See `docs/ft-redesign/model-plans.md` for the three models still to build (hypnogram, glucose spiking, hydration accounting).

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -278,4 +279,112 @@ private fun FloatingColumns(columns: List<Pair<LocalDate, DayRange>>, color: Col
         }
     }
     Text("${columns.first().first}  →  ${columns.last().first}", style = FTType.Micro, color = FT.TextMuted)
+}
+
+/** One line on a [DualAxisChart]. */
+data class AxisLine(val label: String, val points: List<Pair<LocalDate, Double>>, val color: Color)
+
+/**
+ * Two value axes on one date axis (nutrition: kcal on the left, grams on the right). Each axis scales to its own lines;
+ * [leftBand] shades a range on the left axis (the TDEE range). Axis ends are labelled; a key names every line.
+ */
+@Composable
+fun DualAxisChart(
+    left: List<AxisLine>,
+    right: List<AxisLine>,
+    modifier: Modifier = Modifier,
+    leftBand: ClosedFloatingPointRange<Double>? = null,
+    leftUnit: String = "kcal",
+    bandLabel: String = "RANGE",
+    rightUnit: String = "g",
+    height: androidx.compose.ui.unit.Dp = 150.dp,
+) {
+    val all = (left + right).flatMap { it.points }
+    if (all.size < 2) return
+    val d0 = all.minOf { it.first }
+    val d1 = all.maxOf { it.first }
+    val span = java.time.temporal.ChronoUnit.DAYS.between(d0, d1).coerceAtLeast(1).toFloat()
+    fun bounds(lines: List<AxisLine>, band: ClosedFloatingPointRange<Double>?): Pair<Double, Double>? {
+        val v = lines.flatMap { l -> l.points.map { it.second } } + listOfNotNull(band?.start, band?.endInclusive)
+        if (v.isEmpty()) return null
+        val lo = 0.0
+        val hi = v.max().takeIf { it > lo } ?: 1.0
+        return lo to hi * 1.08
+    }
+    val lb = bounds(left, leftBand)
+    val rb = bounds(right, null)
+    Column(modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth()) {
+            Text(leftUnit.uppercase() + (lb?.let { "  0–%.0f".format(it.second) } ?: ""), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
+            Text(rightUnit.uppercase() + (rb?.let { "  0–%.0f".format(it.second) } ?: ""), style = FTType.Micro, color = FT.TextMuted, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+        }
+        Canvas(Modifier.fillMaxWidth().height(height)) {
+            fun x(d: LocalDate) = java.time.temporal.ChronoUnit.DAYS.between(d0, d).toFloat() / span * size.width
+            fun y(v: Double, b: Pair<Double, Double>) = size.height - ((v - b.first) / (b.second - b.first)).toFloat() * size.height
+            if (leftBand != null && lb != null) {
+                drawRect(FT.Emerald.copy(alpha = 0.14f), Offset(0f, y(leftBand.endInclusive, lb)), Size(size.width, y(leftBand.start, lb) - y(leftBand.endInclusive, lb)))
+            }
+            fun draw(lines: List<AxisLine>, b: Pair<Double, Double>?) {
+                if (b == null) return
+                lines.forEach { l ->
+                    val pts = l.points.sortedBy { it.first }
+                    pts.zipWithNext().forEach { (a, c) ->
+                        drawLine(l.color, Offset(x(a.first), y(a.second, b)), Offset(x(c.first), y(c.second, b)), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                    }
+                    if (pts.size == 1) drawCircle(l.color, 3.dp.toPx(), Offset(x(pts[0].first), y(pts[0].second, b)))
+                }
+            }
+            draw(left, lb)
+            draw(right, rb)
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            (left + right).forEach { l ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    androidx.compose.foundation.layout.Box(Modifier.height(3.dp).width(12.dp).background(l.color))
+                    Text(l.label, style = FTType.Micro, color = FT.TextSecondary)
+                }
+            }
+            if (leftBand != null) Text(bandLabel, style = FTType.Micro, color = FT.Emerald)
+        }
+    }
+}
+
+/** One stacked column: its date and its parts, bottom to top. */
+data class StackedColumn(val date: LocalDate, val parts: List<Double>)
+
+/** Stacked columns (macros per kg, protein per meal); [colors] gives one colour per part, [labels] the key. */
+@Composable
+fun StackedColumns(
+    columns: List<StackedColumn>,
+    colors: List<Color>,
+    labels: List<String>,
+    modifier: Modifier = Modifier,
+    unit: String,
+    height: androidx.compose.ui.unit.Dp = 130.dp,
+) {
+    if (columns.isEmpty()) return
+    val top = columns.maxOf { it.parts.sum() }.takeIf { it > 0 } ?: return
+    Column(modifier.fillMaxWidth()) {
+        Text("$unit  0–%.1f".format(top), style = FTType.Micro, color = FT.TextMuted)
+        Canvas(Modifier.fillMaxWidth().height(height)) {
+            val slot = size.width / columns.size
+            val w = (slot * 0.7f).coerceIn(2.dp.toPx(), 22.dp.toPx())
+            columns.forEachIndexed { i, c ->
+                var yBottom = size.height
+                c.parts.forEachIndexed { p, v ->
+                    val h = (v / top).toFloat() * size.height
+                    drawRect(colors[p % colors.size], Offset(i * slot + (slot - w) / 2f, yBottom - h), Size(w, h))
+                    yBottom -= h
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            labels.forEachIndexed { i, l ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    androidx.compose.foundation.layout.Box(Modifier.height(8.dp).width(8.dp).background(colors[i % colors.size]))
+                    Text(l, style = FTType.Micro, color = FT.TextSecondary)
+                }
+            }
+        }
+    }
 }

@@ -29,18 +29,20 @@ data class NutritionOverview(
     // DAV-181: beverage meal_items logged today via the food/AI path, each
     // carrying its own effective_hydration_ml and optional caffeine_mg.
     val todayBeverageItems: List<BeverageItemRow> = emptyList(),
+    // Redesign: the logged meals (newest first) and the water log by day, for the range-driven Nutrition and Hydration charts.
+    val meals: List<MealRow> = emptyList(),
+    val hydrationHistory: List<HydrationDailyRow> = emptyList(),
 )
 
 class NutritionRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadOverview(): NutritionOverview {
-        // 500 is a generous row-count margin, not a real 90-day date filter
-        // -- fine while this account's real meal volume is under 100 total,
-        // same "bounded, not unbounded" tradeoff LogRepository already makes.
+        // Redesign: the range selector reaches ALL, so this margin is 5000 meals (years of logging), not 500.
+        // Still a row-count margin rather than a date filter, the "bounded, not unbounded" tradeoff LogRepository makes.
         val meals = supabase.postgrest.from("meals")
             .select(columns = Columns.list("id,logged_at,description,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg")) {
                 order("logged_at", Order.DESCENDING)
-                limit(500)
+                limit(5000)
             }
             .decodeList<MealRow>()
 
@@ -54,6 +56,16 @@ class NutritionRepository(private val supabase: SupabaseClient) {
             }
             .decodeList<HydrationDailyRow>()
             .firstOrNull()
+
+        val hydrationHistory = runCatching {
+            supabase.postgrest.from("hydration_daily")
+                .select(columns = Columns.list("date,ml")) {
+                    order("date", Order.DESCENDING)
+                    limit(3650)
+                }
+                .decodeList<HydrationDailyRow>()
+                .reversed()
+        }.getOrDefault(emptyList())
 
         val today = LocalDate.now().toString()
         val todayMealIds = meals.filter { it.loggedAt.take(10) == today }.mapNotNull { it.id }
@@ -80,6 +92,8 @@ class NutritionRepository(private val supabase: SupabaseClient) {
             todayHydrationMl = hydration?.takeIf { it.date == today }?.ml,
             lastHydrationLoggedDate = hydration?.date,
             todayBeverageItems = todayBeverageItems,
+            meals = meals,
+            hydrationHistory = hydrationHistory,
         )
     }
 

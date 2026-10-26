@@ -38,6 +38,16 @@ import com.bioscan.fieldterminal.ui.components.RedesignCard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.format.DateTimeFormatter
+import java.time.OffsetDateTime
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextOverflow
+import com.bioscan.fieldterminal.data.model.MealRow
+import com.bioscan.fieldterminal.domain.GlycaemicBand
+import com.bioscan.fieldterminal.domain.MetricState
+import com.bioscan.fieldterminal.domain.StateWord
+import com.bioscan.fieldterminal.domain.estimateMealResponses
+import com.bioscan.fieldterminal.ui.components.FTStatePill
 
 // Redesign (spec §4): the intraday cards that left the Health page now live on Today.
 
@@ -169,16 +179,40 @@ private fun HypnogramChart(night: HypnogramNight, showHeartRate: Boolean) {
     )
 }
 
-/** Glucose-spiking model slot, grouped by meal. The estimate needs its own model (docs/ft-redesign/model-plans.md, section 2). */
+private const val GLUCOSE_INFO =
+    "An estimate, meal by meal, of how large a glucose rise today's food is likely to bring, worked from its carbohydrate, fibre, sugar, " +
+        "protein and fat. It is a relative load (LOW, MODERATE or HIGH), not measured glucose and not a number in mg/dL: how one person " +
+        "responds to the same meal varies widely, and the effect of protein, fat and fibre is a rough allowance. Meals within 90 minutes " +
+        "count as one. A nutrient you did not log is left out (not counted as zero) and lowers the confidence. Not a health assessment."
+
+/** Glucose spiking: one row per meal (meals within 90 minutes grouped), each a relative load band with what drove it. */
 @Composable
-internal fun GlucoseSpikingCard() {
+internal fun GlucoseSpikingCard(meals: List<MealRow>) {
+    val rows = remember(meals) { estimateMealResponses(meals) }
     RedesignCard {
-        MetricCardHeader(
-            title = "GLUCOSE SPIKING",
-            latest = null,
-            helpBody = "Will estimate, meal by meal, how large a glucose rise your food is likely to bring, from its carbohydrate, " +
-                "fibre, protein and fat. It will be a relative estimate, not a measured glucose.",
-        )
-        Text("Not available yet.", style = FTType.Caption, color = FT.TextMuted, modifier = Modifier.padding(top = 2.dp))
+        MetricCardHeader(title = "GLUCOSE SPIKING", latest = null, helpBody = GLUCOSE_INFO)
+        if (rows.isEmpty()) {
+            Text("No meals logged yet today.", style = FTType.Caption, color = FT.TextMuted)
+        }
+        rows.forEach { e ->
+            val time = runCatching { OffsetDateTime.parse(e.startedAt).format(DateTimeFormatter.ofPattern("HH:mm")) }.getOrDefault("—")
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(time, style = FTType.Value, color = FT.TextPrimary)
+                    Text(e.description, style = FTType.BodySmall, color = FT.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    FTStatePill(
+                        e.band?.let { b ->
+                            StateWord(MetricState.Neutral, when (b) { GlycaemicBand.Low -> "▽ LOW"; GlycaemicBand.Moderate -> "◇ MODERATE"; GlycaemicBand.High -> "△ HIGH" })
+                        } ?: StateWord(MetricState.Unavailable, "NO CARBS LOGGED"),
+                    )
+                }
+                if (e.drivers.isNotEmpty()) Text(e.drivers.joinToString(" · "), style = FTType.Caption, color = FT.TextSecondary)
+                Text(
+                    "ESTIMATE · ${e.confidence.name.uppercase()} CONFIDENCE" + if (e.missing.isNotEmpty()) " · NOT LOGGED: ${e.missing.joinToString(", ")}" else "",
+                    style = FTType.Micro, color = FT.TextMuted,
+                )
+            }
+        }
+        Text("Estimate from carbs, fibre, protein and fat. Not measured glucose.", style = FTType.Caption, color = FT.TextMuted)
     }
 }

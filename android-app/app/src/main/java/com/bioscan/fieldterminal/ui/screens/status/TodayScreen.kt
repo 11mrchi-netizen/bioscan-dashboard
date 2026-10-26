@@ -235,7 +235,7 @@ fun TodayScreen(
             DynamicRecoveryCard(recovery, emphasis = if (bandInputs.isEmpty()) FTCardEmphasis.Hero else FTCardEmphasis.Supporting, scorecard = scorecards?.recovery)
             TrainingReadinessCard(computeTrainingReadiness(recovery), scorecard = scorecards?.readyFor)
             NutritionTodayCard(nut, fuel, onOpenPlan = onOpenFuel)
-            GlucoseSpikingCard()
+            GlucoseSpikingCard(nut.todaysMeals)
             IntradayHeartRateCard(hrDay)
             HypnogramCard(sl.lastOrNull())
             stressDays.firstOrNull()?.let { today ->

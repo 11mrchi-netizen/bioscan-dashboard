@@ -51,6 +51,117 @@ metadata" ask, acceptable because today's extractor changes (endpoint fixes, hea
 so far always affected the whole function's request shape, never one metric's decode logic in
 isolation.
 
+## Run distance: Zepp's own, on every copy
+
+Health Connect stored most runs from January to mid-August 2026 at about twice their real distance
+(a 37.4 km "longest run" Zepp has at a little over 18 km; a 2:45/km "fastest run" that was a treadmill session).
+The source app wrote some workouts, and their distance records, twice (some sessions are stored twice
+with identical times), and the per-app rule (largest single app's total) cannot see duplicates from
+one app. Fixes (`zepp-extract/workoutDistance.ts`, `domain/HealthConnectDistance.kt`):
+
+- The Zepp sync writes Zepp's distance: the GPS track's, else the summary's. The summary distance was
+  read from a `distance` key that sport_history entries do not have; they carry `dis` and
+  `highPrecisionDistance` (metres). A treadmill run (no track) is now corrected too.
+- The distance goes to every row of the same session (same type, start within two minutes), so a
+  duplicated session can no longer keep a wrong copy.
+- Health Connect ingestion counts each stretch of time once within one app, and a record reaching
+  outside the workout only for its part inside.
+- Runs Zepp does not have keep their Health Connect distance.
+
+## Which session a Zepp workout is
+
+`zepp-extract/sessionMatch.ts` (Node tests). A Zepp workout is the stored session that starts within 2 minutes of it
+(any type; the original rule), or else the session of the same type whose time span overlaps the workout's by at least
+half of the **longer** of the two spans; the largest overlap wins, then the closest start, and a session already linked
+to another Zepp workout is never taken. The 2-minute rule alone missed Health Connect copies that start minutes earlier
+(a strength session's whole gym visit, a run's start pressed before the watch's): the history pull then inserted a
+second, `source='zepp'` session for the same workout, and both counted in records, weekly volume and load. Half of the
+longer span keeps a 6-minute Health Connect fragment inside a 70-minute run, or a 3-hour ride that contains a
+70-minute one, from counting as the same workout. Only sessions whose times a device recorded (Health Connect) take part in
+the overlap rule: imported logs carry placeholder times (Notion workouts "at 12:00") and match only by the 2-minute
+rule. A session matched by overlap takes the workout's own start, end and
+duration with Zepp's measurements, so its pace and load use the workout's time.
+
+`mergeOrphanedZeppSessions` (start of every sync) applies the same rule to every `source='zepp'` session and folds it
+into the Health Connect session it matches. The Health Connect row is kept: its record id serves the session page's
+series and route, and a Health Connect re-sync would bring it back if it were deleted. It takes the Zepp copy's
+distance, heart rate, calories, elevation, speed and timing where the copy has them, and the copy's RPE, notes and
+exercise list only where it has none (`mergedSessionFields`); every table referencing the copy (`zepp_workout_detail`,
+`planned_routes`, `fueling_intake_log`, `calendar_strength_staging`, and `planned_sessions` when the kept row has no
+plan) is moved over before the copy is deleted. Two Health Connect copies of one workout (the source app wrote some
+twice) are not merged: neither is a Zepp copy, and the run list's own de-duplication keeps one.
+
+## Duplicates inside Health Connect and from Notion
+
+Migration `20261023_session_duplicates.sql`. The source app wrote many workouts to Health Connect twice, so two Health
+Connect sessions described one workout; same-type Health Connect sessions overlapping by at least half of the longer
+span are now folded into one per connected group (kept: the one linked to a Zepp workout, else one with exercises, RPE
+or notes, else the longer, else the oldest). The Notion archive import created strength sessions at a placeholder 12:00;
+one on a day with a Zepp-linked strength session of a similar length (within half of the longer) is the same workout,
+and folds into Zepp's session, which takes its exercise list. Notion conditioning sessions are not folded: Zepp's
+"other" sessions on those days are far shorter, different activities.
+
+A fold (`private.fold_exercise_session`) gives the kept session the dropped one's RPE, notes and exercise or drill list
+only where it has none, moves every reference over and deletes the copy. A dropped Health Connect copy's record id goes
+to `exercise_session_tombstones`, and a trigger skips any later insert of that record id, so a Health Connect re-sync of
+the period cannot bring it back. `private.exercise_session_duplicate_plan()` lists what would be folded and can be run
+again at any time.
+
+## The whole history from Zepp
+
+Stored Zepp data started on 26 Aug 2026. The rest of the history is pulled on the server, with no
+phone involved: the Zepp token, user id and host are already Edge Function secrets
+(`zepp-extract/historyPull.ts`, migration `20261020_zepp_history_pull.sql`).
+
+- A row in `zepp_history_pull` starts the pull: inserted from Settings › Connected services › PULL
+  ALL ZEPP HISTORY, or by SQL (`insert into zepp_history_pull (user_id, next_end) values (…, current_date)`).
+- pg_cron calls `private.run_zepp_history()` every minute. While a pull is pending it posts to
+  zepp-extract with a random Vault secret in `x-zepp-history` (checked by a service role-only
+  function, the same pattern as the nightly analysis); otherwise it does nothing.
+- zepp-extract claims the pull (a four-minute lease, so calls never overlap), answers at once and
+  works on in the background for up to 100 s: a week at a time back in time, workouts, daily band
+  data (sleep, resting heart rate, steps, minute heart rate) and stress, saving after every week. It
+  runs the same per-day pipeline as the app's sync (`extract()`), as the service role writing the
+  pull's user_id, and leaves the "last synced" marker alone.
+- It stops after eight empty weeks in a row, where the account's history starts. A week Zepp refuses
+  (an expired token) pauses it with that reason; clearing `error` (CARRY ON in Settings) resumes.
+- Workouts get Zepp's distances, which repairs the doubled runs. For days already stored, Zepp's sleep,
+  resting heart rate and steps replace Health Connect's, the same "Zepp wins" rule as for recent days,
+  so the series no longer change source on 26 Aug. A workout adds about 0.4 MB (raw and decoded
+  detail), a day of band data about 7 kB.
+
+## Strength exercises: who owns the list
+
+A strength workout's `exercise_sessions.details.exercises` is written by the Zepp import from the
+workout's laps. A workout corrected in the Zepp app after the first sync (exercises not picked on
+the watch) used to stay wrong here: every re-sync fetched the corrected detail but skipped the
+write because "exercises already present" could not tell Zepp's own earlier import from an edit in
+the app. Now (`zepp-extract/strengthImport.ts`, `domain/StrengthImport.kt`):
+
+- `details.exercises_source` is `zepp` (written by the import) or `app` (exercises changed in the
+  edit form); `details.zepp_fingerprint` is the fingerprint (exercises in order, each set's reps and
+  weight) of the Zepp version the list is based on. Rows from before the markers: a list with an
+  `exercise_code` on every exercise is Zepp's (the edit form used to drop the codes).
+- A Zepp list is replaced on the next sync whenever Zepp's fingerprint changes. An app list is never
+  overwritten by a sync.
+- Every sync stores Zepp's current version and fingerprint in
+  `zepp_workout_detail.decoded.strengthData` (`exercises`, `fingerprint`). When an app edit and
+  Zepp's version differ, the session shows ZEPP HAS A DIFFERENT VERSION with USE ZEPP'S VERSION /
+  KEEP MINE; KEEP MINE records the fingerprint seen, so it is asked again only if Zepp changes.
+- The app re-syncs the last three days when it opens; RE-IMPORT FROM ZEPP on a strength session
+  pulls the days around that workout for an older correction.
+- The edit form carries the watch-measured fields (set duration, heart rate, detected reps, the
+  exercise code unless renamed) through a save, and saving only RPE or notes keeps the list's
+  source, so it keeps following Zepp.
+
+## Trail runs: tagged by the sync
+
+Zepp records a trail run as sport `7`; Health Connect carries no trail signal. A Zepp trail run sets
+`exercise_sessions.details.route_type = "trail"` on its session: at insert for a new session, and on a matched
+session that has no route type yet. A road or mixed tag set by hand is never overwritten
+(`zepp-extract/workoutDistance.ts` `trailTaggedDetails`). The app reads trail runs from this tag, or from the sport
+code on the linked workout, so the old "trail runs to confirm" review is gone.
+
 ## What's a genuine gap, left open
 
 - **Units/resolution as queryable metadata.** Units are correct but live only in code comments

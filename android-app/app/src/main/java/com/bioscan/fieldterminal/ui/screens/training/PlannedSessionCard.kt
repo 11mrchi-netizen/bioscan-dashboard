@@ -20,7 +20,7 @@ import com.bioscan.fieldterminal.domain.training.generate.text
 import com.bioscan.fieldterminal.domain.training.looseMovementKey
 import com.bioscan.fieldterminal.domain.training.parsePlannedConditioning
 import com.bioscan.fieldterminal.domain.training.parsePlannedLifts
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -68,7 +68,7 @@ fun PlannedSessionCard(match: PlannedMatch, logged: List<StrengthExerciseDto>, a
         }
         if (!match.linked) {
             Text("This workout is not linked to the plan yet.", style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.padding(top = 8.dp))
-            AmberButton("LINK TO THIS PLANNED SESSION", onClick = onLink)
+            FTButton("LINK TO THIS PLANNED SESSION", onClick = onLink)
         } else {
             Text("Linked to the plan.", style = FTType.Caption, color = FT.TextMuted, modifier = Modifier.padding(top = 6.dp))
         }

@@ -10,12 +10,12 @@ import java.time.temporal.ChronoUnit
 // dashboard carries the old metric, untouched by this phase (see ROADMAP.md's
 // Phase A context: this effort is mobile-first, the web dashboard stays as-is).
 //
-// session_load = duration_minutes * sRPE, per the spec's own formula. The
-// offered alternative (HR-based TRIMP) needs per-minute heart-rate data this
-// app doesn't persist for logged sessions (only avg_hr per session survives
-// to Supabase), so sRPE is the only one actually computable from stored
-// data. A session with no logged RPE contributes nothing to that day's
-// load -- never impute, same convention every other category already uses.
+// session_load = duration_minutes * sRPE when an RPE was logged, otherwise
+// Banister's TRIMP from the session's average heart rate against the
+// person's maximum and resting heart rate as of its date (EnduranceLoad.kt,
+// built by AnalysisRepository.buildTrainingSessionLoads). A session with
+// neither contributes nothing to that day's load -- never impute, same
+// convention every other category already uses.
 //
 // GAP (Grade Adjusted Pace) and Efficiency Factor are not computed here
 // (this file only does load). For Zepp-synced runs they are computed in the
@@ -31,9 +31,16 @@ data class TrainingLoadEvaluation(
     val tsbBand: String?,
 )
 
-private const val CTL_TAU_DAYS = 42.0
-private const val ATL_TAU_DAYS = 7.0
 private const val CTL_GATE_DAYS = 42
+
+// Analysis review phase G: the spans of the fitness (CTL) and fatigue (ATL) averages. 42 and 7 days, the standard, unless
+// the person's own pair (analysis-run's `fitness_fatigue` result) forecast tomorrow's HRV better on weeks the fit never
+// saw; then every screen draws load with that pair. Callers pass the spans AnalysisRepository.loadLoadSpans() returns.
+data class LoadSpans(val ctlDays: Double = 42.0, val atlDays: Double = 7.0, val personal: Boolean = false) {
+    companion object {
+        val STANDARD = LoadSpans()
+    }
+}
 
 // Shared by Category 7 (domain/RestCadenceEvaluation.kt), so both categories
 // walk the identical daily total rather than two slightly-different ones.
@@ -47,7 +54,7 @@ fun dailySessionLoadMap(sessionLoads: List<Pair<LocalDate, Double>>): Map<LocalD
 // sessionLoads: one (date, session_load) pair per exercise session that has
 // both duration_min and rpe logged -- multiple sessions on the same day are
 // summed into that day's total load before the EWMA walk.
-fun evaluateTrainingLoad(sessionLoads: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): TrainingLoadEvaluation {
+fun evaluateTrainingLoad(sessionLoads: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now(), spans: LoadSpans = LoadSpans.STANDARD): TrainingLoadEvaluation {
     if (sessionLoads.isEmpty()) return TrainingLoadEvaluation(EvalState.NoData, Confidence(0, CTL_GATE_DAYS), null, null, null, null)
 
     val earliest = sessionLoads.minOf { it.first }
@@ -61,12 +68,12 @@ fun evaluateTrainingLoad(sessionLoads: List<Pair<LocalDate, Double>>, asOf: Loca
     // date-filtered windows Categories 1/2/5 use. dualEwma() (domain/Stats.kt,
     // DAV-59) is this same walk generalized for reuse across load dimensions.
     val dailyLoad = dailySessionLoadMap(sessionLoads)
-    val (ctl, atl) = dualEwma(dailyLoad, earliest, asOf, ATL_TAU_DAYS, CTL_TAU_DAYS)
+    val (ctl, atl) = dualEwma(dailyLoad, earliest, asOf, spans.atlDays, spans.ctlDays)
 
     // TSB = CTL_yesterday - ATL_yesterday, per the spec's own formula --
     // "yesterday" because today's own session (if any) hasn't yet been
     // absorbed into the fitness/fatigue trend it's being judged against.
-    val (ctlYesterday, atlYesterday) = dualEwma(dailyLoad, earliest, asOf.minusDays(1), ATL_TAU_DAYS, CTL_TAU_DAYS)
+    val (ctlYesterday, atlYesterday) = dualEwma(dailyLoad, earliest, asOf.minusDays(1), spans.atlDays, spans.ctlDays)
     val tsb = ctlYesterday - atlYesterday
     val state = when {
         tsb < TSB_HEAVILY_LOADED_BELOW -> EvalState.Unstable // "heavily loaded" -- the spec's own flagged band
@@ -101,11 +108,11 @@ data class TrainingLoadPoint(val date: LocalDate, val ctl: Double, val atl: Doub
 // history charts. Same EWMA as dualEwma() but recording every day instead of
 // only the final pair; TSB(d) = CTL(d-1) - ATL(d-1) keeps evaluateTrainingLoad's
 // "yesterday" convention, so the last point's tsb equals its tsb.
-fun trainingLoadSeries(sessionLoads: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now()): List<TrainingLoadPoint> {
+fun trainingLoadSeries(sessionLoads: List<Pair<LocalDate, Double>>, asOf: LocalDate = LocalDate.now(), spans: LoadSpans = LoadSpans.STANDARD): List<TrainingLoadPoint> {
     if (sessionLoads.isEmpty()) return emptyList()
     val dailyLoad = dailySessionLoadMap(sessionLoads)
-    val alphaAtl = 2.0 / (ATL_TAU_DAYS + 1.0)
-    val alphaCtl = 2.0 / (CTL_TAU_DAYS + 1.0)
+    val alphaAtl = 2.0 / (spans.atlDays + 1.0)
+    val alphaCtl = 2.0 / (spans.ctlDays + 1.0)
     val earliest = sessionLoads.minOf { it.first }
     // Same seeding as dualEwma() (domain/Stats.kt): start from the first
     // observed load, not 0, so this walk doesn't drift from evaluateTrainingLoad's.

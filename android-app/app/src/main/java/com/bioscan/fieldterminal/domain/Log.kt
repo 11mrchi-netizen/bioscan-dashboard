@@ -21,7 +21,7 @@ import java.time.OffsetDateTime
 enum class LogEntryKind(val label: String) {
     Exercise("EXERCISE"), Food("FOOD"), Sleep("SLEEP"), Stool("STOOL"),
     Encounter("ENC"), Note("NOTE"), Drink("DRINK"),
-    Wellness("WELL"), Supplement("SUPP"), Ostrc("OSTRC"), Masturbation("MASTURBATION"),
+    Wellness("WELL"), Supplement("SUPP"), Ostrc("CHECK-IN"), Masturbation("MASTURBATION"),
     Intercourse("INTERCOURSE"), Grip("GRIP"),
 }
 
@@ -69,6 +69,10 @@ data class LogEntry(
     val timestamp: LocalDateTime,
     val headline: String,
     val detail: String?,
+    // Raw numbers behind the headline, for the collapsed day summary (domain/LogDays.kt). Null where the kind has none.
+    val kcal: Double? = null,
+    val ml: Int? = null,
+    val minutes: Double? = null,
 )
 
 // `sleep_daily`/`hydration_daily`/`wellbeing_daily` only store a `date`, no
@@ -87,6 +91,24 @@ private val SEXUAL_ACTIVITY_NOMINAL_TIME = LocalTime.of(22, 0)
 private val DRINK_NOMINAL_TIME = LocalTime.of(12, 0)
 private val WELLNESS_NOMINAL_TIME = LocalTime.of(8, 0)
 private val OSTRC_NOMINAL_TIME = LocalTime.of(8, 15)
+
+// Whether an entry's time of day is real. The date-only tables above get a nominal sort time, which the Log's entry sheet
+// must not present as when it happened (an old encounter without occurred_at still shows its nominal 21:00).
+val LogSource.hasTimeOfDay: Boolean
+    get() = this != LogSource.Sleep && this != LogSource.Hydration && this != LogSource.Wellbeing &&
+        this != LogSource.Ostrc && this != LogSource.Masturbation
+
+// The entry sheet's first line: kind, day and -- only where it is real -- the time ("FOOD · TODAY · 07:20").
+fun logEntryWhen(entry: LogEntry, today: LocalDate): String {
+    val date = entry.timestamp.toLocalDate()
+    val day = when (date) {
+        today -> "TODAY"
+        today.minusDays(1) -> "YESTERDAY"
+        else -> date.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH)).uppercase()
+    }
+    val time = if (entry.source.hasTimeOfDay) " · " + entry.timestamp.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) else ""
+    return "${entry.kind.label} · $day$time"
+}
 
 fun buildLogEntries(
     meals: List<LogMealRow>,
@@ -117,6 +139,7 @@ fun buildLogEntries(
             timestamp = parseTimestamp(m.loggedAt),
             headline = m.description?.takeIf { it.isNotBlank() } ?: "Meal",
             detail = listOfNotNull(m.calories?.let { "${it.toInt()} kcal" }, macros.takeIf { it.isNotEmpty() }).joinToString(" · "),
+            kcal = m.calories,
         )
     }
 
@@ -133,6 +156,7 @@ fun buildLogEntries(
             timestamp = parseTimestamp(e.startTime),
             headline = headline,
             detail = e.avgHr?.let { "avg ${it.toInt()} bpm" },
+            minutes = e.durationMin,
         )
     }
 
@@ -145,6 +169,7 @@ fun buildLogEntries(
             timestamp = LocalDateTime.of(LocalDate.parse(s.date), SLEEP_NOMINAL_TIME),
             headline = formatDuration(hours * 60),
             detail = s.score?.let { "Score $it" },
+            minutes = hours * 60,
         )
     }
 
@@ -201,6 +226,7 @@ fun buildLogEntries(
             timestamp = LocalDateTime.of(LocalDate.parse(h.date), DRINK_NOMINAL_TIME),
             headline = "$ml ml (day total)",
             detail = null,
+            ml = ml,
         )
     }
 
@@ -310,7 +336,7 @@ private fun formatDose(value: Double?, unit: String?): String? = when {
     else -> unit
 }
 
-private fun parseTimestamp(iso: String): LocalDateTime =
+internal fun parseTimestamp(iso: String): LocalDateTime =
     try {
         OffsetDateTime.parse(iso).toLocalDateTime()
     } catch (_: Exception) {

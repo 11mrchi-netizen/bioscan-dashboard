@@ -40,8 +40,39 @@ fun readAndCompressImage(context: Context, uri: Uri): ByteArray {
 fun createCameraCaptureUri(context: Context): Uri {
     val dir = File(context.cacheDir, "camera_photos").apply { mkdirs() }
     val file = File(dir, "capture_${System.currentTimeMillis()}.jpg")
-    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    PendingCameraCapture.record(context, uri, file)
+    return uri
 }
+
+/**
+ * The capture the camera was last asked for, kept until its result arrives. The camera app can get this app killed;
+ * if the result is lost on the way back, the food form offers the photo (PHOTO JUST TAKEN) when it opens again.
+ */
+object PendingCameraCapture {
+    private const val PREFS = "ft_camera"
+    const val MAX_AGE_MS = 15 * 60_000L
+
+    fun record(context: Context, uri: Uri, file: File) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("uri", uri.toString()).putString("path", file.absolutePath).putLong("at", System.currentTimeMillis()).apply()
+    }
+
+    fun clear(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+    }
+
+    /** The recorded capture when its file holds a photo taken in the last [MAX_AGE_MS]; null otherwise. */
+    fun stranded(context: Context, now: Long = System.currentTimeMillis()): Uri? {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val uri = p.getString("uri", null) ?: return null
+        val file = p.getString("path", null)?.let(::File) ?: return null
+        return if (isUsableCapture(if (file.exists()) file.length() else 0L, now - p.getLong("at", 0L))) Uri.parse(uri) else null
+    }
+}
+
+/** A capture is worth offering when the camera wrote something and it is recent. */
+fun isUsableCapture(sizeBytes: Long, ageMs: Long): Boolean = sizeBytes > 0 && ageMs in 0..PendingCameraCapture.MAX_AGE_MS
 
 // DAV-85: unlike readAndCompressImage(), a lab report upload can be a PDF
 // (BitmapFactory can't decode those) as well as a photo, and Gemini accepts

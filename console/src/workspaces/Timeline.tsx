@@ -50,6 +50,21 @@ async function fetchSleep(start: string, end: string): Promise<TimelineEvent[]> 
 }
 
 
+// Health concerns (docs/health-concerns): v_health_events has the old injury and illness rows plus concerns logged in the
+// app, in the old shape. Before the migration it does not exist, and the old tables are read as before.
+async function fetchHealthEvents(start: string, end: string): Promise<TimelineEvent[] | null> {
+  const { data, error } = await supabase.from('v_health_events')
+    .select('id, kind, title, detail, status, start_date')
+    .gte('start_date', start).lte('start_date', end).order('start_date', { ascending: false })
+  if (error) return null
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: String(r.id), date: String(r.start_date), kind: (r.kind === 'illness' ? 'illness' : 'injury') as 'illness' | 'injury',
+    headline: `${r.kind === 'illness' ? 'Illness' : 'Injury'} · ${r.title ?? '—'}`,
+    sub: String(r.detail ?? r.status ?? ''),
+    source: null,
+  }))
+}
+
 async function fetchInjuries(start: string, end: string): Promise<TimelineEvent[]> {
   const { data, error } = await supabase.from('injuries')
     .select('id, start_date, part, type, notes, status')
@@ -106,11 +121,11 @@ export function Timeline() {
 
   const { loading, error, retry } = useLoadEffect(async (isCurrent) => {
     const { start, end } = range
+    const health = async () => (await fetchHealthEvents(start, end)) ?? [...await fetchInjuries(start, end), ...await fetchIllnesses(start, end)]
     const batches = await Promise.all([
       fetchRuns(start, end),
       fetchSleep(start, end),
-      fetchInjuries(start, end),
-      fetchIllnesses(start, end),
+      health(),
       fetchRestDays(start, end),
     ])
     if (isCurrent()) setEvents(batches.flat().sort((a, b) => b.date.localeCompare(a.date)))

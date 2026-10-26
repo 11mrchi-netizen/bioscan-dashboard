@@ -3,7 +3,6 @@ package com.bioscan.fieldterminal
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.os.Build
 import com.bioscan.fieldterminal.data.MetricRegistryStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.NotificationKind
@@ -27,7 +26,6 @@ class FieldTerminalApp : Application() {
     }
 
     private fun createNotificationChannels() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = getSystemService(NotificationManager::class.java)
         listOf(
             Triple(NotificationKind.SUPPLEMENT_DUE, "Supplement Reminders", NotificationManager.IMPORTANCE_DEFAULT),
@@ -35,6 +33,11 @@ class FieldTerminalApp : Application() {
             Triple(NotificationKind.CHECKIN_EVENING, "Evening Check-in", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.WELLBEING_CHECKIN, "Wellbeing Check-in", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.EVENING_LOG, "Evening Log", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(NotificationKind.EVENING_CHECKIN, "Evening Check-in (structured)", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(NotificationKind.BODY_CHECKIN, "Monthly Body Check-in", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(NotificationKind.HEALTH_CHECKIN, "Health Check-in", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(NotificationKind.FUEL_SESSION, "Fuel before and after sessions", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(NotificationKind.FUEL_EVENT, "Race week fuelling", NotificationManager.IMPORTANCE_HIGH),
         ).forEach { (id, name, importance) ->
             nm.createNotificationChannel(NotificationChannel(id, name, importance))
         }

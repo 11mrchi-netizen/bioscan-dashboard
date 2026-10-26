@@ -26,3 +26,10 @@
 -keep class * extends androidx.room.RoomDatabase { <init>(); }
 -keep class androidx.room.** { *; }
 -keep class androidx.work.** { *; }
+
+# MediaPipe Tasks (running form analyser): its Java classes are called from native code and its options are protobufs
+# read by reflection, so R8 must not rename or remove them.
+-keep class com.google.mediapipe.** { *; }
+-keep class com.google.protobuf.** { *; }
+-dontwarn com.google.mediapipe.**
+-dontwarn com.google.protobuf.**

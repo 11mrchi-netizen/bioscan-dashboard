@@ -53,3 +53,26 @@ fun dominantOriginByLocalDate(values: List<TimedValue>, zone: ZoneId = ZoneId.sy
             val top = counts.values.max()
             day.filter { counts.getValue(it.origin!!) == top }.maxBy { it.at }.origin!!
         }
+
+// Analysis review phase B (docs/analysis-review/README.md). Overnight readings (HRV, resting heart rate) belong to the
+// night they were taken in, keyed like sleep_daily by the morning that night ends on. A plain calendar-day average split
+// one night's samples across two dates (23:00 on one day, 03:00 on the next), so "next-day HRV" did not cleanly mean the
+// morning after. Readings from 18:00 count toward the next date; daytime readings before 18:00 stay on their own date.
+const val NIGHT_KEY_FROM_HOUR = 18
+
+fun nightDate(at: Instant, zone: ZoneId = ZoneId.systemDefault()): LocalDate {
+    val local = at.atZone(zone)
+    return if (local.hour >= NIGHT_KEY_FROM_HOUR) local.toLocalDate().plusDays(1) else local.toLocalDate()
+}
+
+fun averageByNightDate(values: List<TimedValue>, zone: ZoneId = ZoneId.systemDefault()): Map<LocalDate, Double> =
+    values.groupBy { nightDate(it.at, zone) }.mapValues { (_, v) -> v.map { it.value }.average() }
+
+fun dominantOriginByNightDate(values: List<TimedValue>, zone: ZoneId = ZoneId.systemDefault()): Map<LocalDate, String> =
+    values.filter { it.origin != null }
+        .groupBy { nightDate(it.at, zone) }
+        .mapValues { (_, day) ->
+            val counts = day.groupingBy { it.origin!! }.eachCount()
+            val top = counts.values.max()
+            day.filter { counts.getValue(it.origin!!) == top }.maxBy { it.at }.origin!!
+        }

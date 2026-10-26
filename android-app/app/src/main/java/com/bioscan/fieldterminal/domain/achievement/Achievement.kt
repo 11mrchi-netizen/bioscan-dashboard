@@ -12,7 +12,7 @@ import java.time.OffsetDateTime
 // the archive milestone's problem once real historical import needs
 // somewhere to write these. DAV-296's User page consumes mock data shaped
 // like this so no UI rewrite is needed once real records exist.
-enum class AchievementDomain { RUNNING, STRENGTH, CONDITIONING, MOUNTAIN }
+enum class AchievementDomain { RUNNING, STRENGTH, CONDITIONING }
 
 data class Achievement(
     val domain: AchievementDomain,

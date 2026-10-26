@@ -21,62 +21,62 @@ enum class TopLevelTab(val route: String, val label: String) {
     Setup("setup", "SETUP"),
 }
 
-// First feedback fixes (DAV-70): Status's old single sub-tab rail (6 chips,
-// one flat screen each) is replaced by 4 tiles, each its own pushed route
-// with its own internal tab strip. StatusSubTab is gone -- Training has no
-// sub-tabs at all (single page), Labs starts as one page (DAV-86 adds real
-// theme-bundle sub-navigation later), and Fuel/Heart get their own enums
-// below since their tab sets are real, named things a tile page switches
-// between, not simple flags.
+// First feedback fixes (DAV-70): Status's old single sub-tab rail is replaced by 4 tiles, each its own pushed route with
+// its own internal tab strip.
+// App restructure (the owner's "Field terminal new structure"): the tiles are Training, Nutrition (was Fuel), Health (was
+// Heart) and Lab (was Labs). The route strings are kept, so a restored back stack still resolves.
 enum class TileRoute(val route: String) {
     Training("tile_training"),
-    Fuel("tile_fuel"),
-    Heart("tile_heart"),
-    Labs("tile_labs"),
+    Nutrition("tile_fuel"),
+    Health("tile_heart"),
+    Lab("tile_labs"),
 }
 
-// DAV-96: Digestion is new (Stool content relocated here from Heart, see
-// design/FIELD_TERMINAL_IA_CONTRACT.md section 6); Weight renamed to Body
-// per the same doc rather than rebuilt (WeightTdeeTab's real trend content
-// carries over unchanged).
-// DAV-207/208/209 (24/9 fixes): Hydration folded into Nutrition and Body
-// folded into Digestion -- both were thin single-metric subtabs cluttering
-// the tab row rather than earning a separate destination. Supplements moved
-// out entirely to LabsTab (see below); Fuel is now just the two tabs whose
-// content is genuinely different in kind.
-enum class FuelTab(val label: String) {
+// App restructure: Nutrition shows trends over spot metrics. NUTRITION is what was logged (with protein on target, moved
+// from Body), HYDRATION its own tab again, PLAN the next three days of the fuel plan (the full plan and meal prep live
+// in Lab › Planning). BODY moved to Health.
+enum class NutritionTab(val label: String) {
     Nutrition("NUTRITION"),
-    Digestion("DIGESTION"),
+    Hydration("HYDRATION"),
+    Plan("PLAN"),
 }
 
-// DAV-97: 7 tabs collapsed to 4 per design/FIELD_TERMINAL_IA_CONTRACT.md
-// section 7 -- Heart+Respiratory merge into Cardio, Wellness+Arousal merge
-// into Wellbeing, Sleep renames to Recovery, Injuries renames to Injury.
-// Stool moves out entirely to Fuel/Digestion (FuelTab above), not collapsed
-// into any of these four.
-// DAV-216 (24/9 fixes): Injury moved out to TrainingTab -- it's a training-
-// context concern (load/rest-cadence context cards render alongside it
-// already), not a cardio/recovery/wellbeing one.
-enum class HeartTab(val label: String) {
+// DAV-97 collapsed seven tabs to four; the restructure adds BODY (from Fuel) and BLOODWORK (from Labs), and renames
+// RECOVERY to SLEEP (today's recovery now lives only on Today).
+enum class HealthTab(val label: String) {
     Cardio("CARDIO"),
-    Recovery("RECOVERY"),
+    Sleep("SLEEP"),
+    Body("BODY"),
+    // Health concerns (docs/health-concerns): injuries, recurring pain, symptoms and illness, tracked over time.
+    Concerns("CONCERNS"),
     Wellbeing("WELLBEING"),
     SexualHealth("SEXUAL HEALTH"),
-}
-
-// DAV-209 (24/9 fixes): Labs had no subtab structure; Supplements moves here
-// from Fuel since it's a substance-tracking concern closer to bloodwork than
-// to nutrition/hydration.
-enum class LabsTab(val label: String) {
     Bloodwork("BLOODWORK"),
-    Supplements("SUPPLEMENTS"),
 }
 
-// DAV-216 (24/9 fixes): Training had no subtab structure; Injury moves here
-// from Heart (see HeartTab above).
+// App restructure: Lab holds what is tried, planned and tested. N=1 has the analysis cards that were on Today; PLANNING
+// the training block, the food plan with meal prep and race fuel; TESTS starts the tests whose results are logged in Log.
+enum class LabTab(val label: String) {
+    N1("N=1"),
+    Supplements("SUPPLEMENTS"),
+    Planning("PLANNING"),
+    Tests("TESTS"),
+}
+
+// The three parts of Lab › Planning; a deep link (the fuel reminder, the User tab's block card) can ask for one.
+enum class PlanningSection(val label: String) {
+    Training("TRAINING"),
+    Food("FOOD PLAN"),
+    RaceFuel("RACE FUEL"),
+}
+
+// App restructure: Running and Strength moved in from the User tab's skill pages, and the sessions list has its own tab.
+// The block planner (was PLAN) moved to Lab › Planning; Injury moved in from Heart (DAV-216).
 enum class TrainingTab(val label: String) {
     Load("LOAD"),
-    Plan("PLAN"),
+    Running("RUNNING"),
+    Strength("STRENGTH"),
+    Sessions("SESSIONS"),
     Injury("INJURY"),
 }
 
@@ -97,7 +97,8 @@ enum class UserTab(val label: String) {
 
 enum class ConnectedServicesTab(val label: String) {
     AiNutrition("AI NUTRITION"),
-    Map("MAP"),
+    // UX review P8: it serves Session Detail's route preview now, not a Map tab.
+    Map("MAPS & ROUTES"),
     HealthConnect("HEALTH CONNECT"),
     Zepp("ZEPP"),
 }

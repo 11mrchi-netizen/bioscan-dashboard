@@ -10,7 +10,17 @@ object NotificationKind {
     // Analysis Layer 3 / R2: prompts that feed the sparsest capture streams (wellbeing scores; drinks, supplements, recovery).
     const val WELLBEING_CHECKIN = "wellbeing_checkin"
     const val EVENING_LOG = "evening_log"
-    val ALL = listOf(SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG)
+    // Analysis review phase B: the structured evening check-in (drinks, caffeine after 14:00, late meal, stress) at 22:25.
+    const val EVENING_CHECKIN = "evening_checkin"
+    // The monthly body check-in (grip, tape, skinfolds): Saturday 09:30, skipped until 28 days after the last one.
+    const val BODY_CHECKIN = "body_checkin"
+    // Fuel planning (domain/notifications/FuelPrompts.kt): relative to sessions and races, not clock times.
+    const val FUEL_SESSION = "fuel_session"
+    const val FUEL_EVENT = "fuel_event"
+    val FUEL = setOf(FUEL_SESSION, FUEL_EVENT)
+    // Health concerns (docs/health-concerns): the daily check-in at 21:00 (owner decision), skipped once one is saved.
+    const val HEALTH_CHECKIN = "health_checkin"
+    val ALL = listOf(SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG, EVENING_CHECKIN, BODY_CHECKIN, FUEL_SESSION, FUEL_EVENT, HEALTH_CHECKIN)
 }
 
 object NotificationOutcome {
@@ -81,6 +91,7 @@ data class NotificationLogRow(
     @SerialName("rule_kind") val ruleKind: String,
     @SerialName("fired_at") val firedAt: String,
     val outcome: String,
+    @SerialName("dedupe_key") val dedupeKey: String? = null,
 )
 
 @Serializable

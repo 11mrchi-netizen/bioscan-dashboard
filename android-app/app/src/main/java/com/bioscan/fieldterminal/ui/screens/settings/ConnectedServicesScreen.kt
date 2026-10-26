@@ -1,7 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
-import com.bioscan.fieldterminal.ui.components.launchSafe
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -28,14 +29,19 @@ import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.ZeppRepository
 import com.bioscan.fieldterminal.data.ZeppSyncStateRow
+import com.bioscan.fieldterminal.domain.describe
 import com.bioscan.fieldterminal.healthconnect.HealthConnectManager
 import com.bioscan.fieldterminal.healthconnect.HealthConnectSyncStatus
-import com.bioscan.fieldterminal.ui.components.AmberButton
 import com.bioscan.fieldterminal.ui.components.ClearChip
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.nav.ConnectedServicesTab
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -47,11 +53,11 @@ import kotlinx.coroutines.launch
 // Setup > Connected Services: AI Nutrition Estimation, Map, Health Connect, Zepp.
 @Composable
 fun ConnectedServicesScreen(scope: CoroutineScope, onBack: () -> Unit) {
-    var tab by remember { mutableStateOf(ConnectedServicesTab.AiNutrition) }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(ConnectedServicesTab.AiNutrition) }
     val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack)
+        TileHeader(onBack = onBack, title = "CONNECTED SERVICES", subtitle = "AI NUTRITION · MAPS · HEALTH CONNECT · ZEPP")
         SubTabRow(items = ConnectedServicesTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
@@ -85,7 +91,7 @@ private fun AiNutritionCard(context: android.content.Context) {
             placeholder = if (keySaved) "•••••••• (key saved — paste to replace)" else "Paste your Gemini API key",
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AmberButton(label = "SAVE KEY") {
+            FTButton(label = "SAVE KEY") {
                 if (apiKeyInput.isNotBlank()) {
                     GeminiApiKeyStore.save(context, apiKeyInput.trim())
                     keySaved = true
@@ -129,7 +135,7 @@ private fun MapCard(context: android.content.Context) {
             placeholder = if (cartoKeySaved) "•••••••• (key saved — paste to replace)" else "Paste your CARTO API key",
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AmberButton(label = "SAVE KEY") {
+            FTButton(label = "SAVE KEY") {
                 if (cartoKeyInput.isNotBlank()) {
                     MapSettingsStore.saveCartoKey(context, cartoKeyInput.trim())
                     cartoKeySaved = true
@@ -168,7 +174,7 @@ private fun MapCard(context: android.content.Context) {
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AmberButton(label = "SAVE HOME") {
+            FTButton(label = "SAVE HOME") {
                 val lat = homeLatInput.toDoubleOrNull()
                 val lon = homeLonInput.toDoubleOrNull()
                 if (lat != null && lon != null && lat in -90.0..90.0 && lon in -180.0..180.0) {
@@ -235,7 +241,7 @@ private fun HealthConnectCard(context: android.content.Context) {
             color = if (hcGranted) FT.Emerald else FT.TextSecondary,
         )
         if (hcAvailable && hcChecked && !hcGranted) {
-            AmberButton(label = "CONNECT HEALTH CONNECT") {
+            FTButton(label = "CONNECT HEALTH CONNECT") {
                 hcPermissionLauncher.launch(HealthConnectManager.PERMISSIONS)
             }
         }
@@ -326,7 +332,7 @@ private fun ZeppCard(scope: CoroutineScope) {
                 color = FT.TextSecondary,
             )
         }
-        AmberButton(label = if (zeppSyncing) "SYNCING…" else "SYNC NOW") {
+        FTButton(label = if (zeppSyncing) "SYNCING…" else "SYNC NOW") {
             if (!zeppSyncing) {
                 scope.launchSafe(onDone = { zeppSyncing = false }) {
                     zeppSyncing = true
@@ -336,69 +342,47 @@ private fun ZeppCard(scope: CoroutineScope) {
                 }
             }
         }
-        // Read-only check of Zepp's workout template/schedule API (zepp-training); answers land in zepp_raw_extracts.
+        // The whole Zepp history (workouts, daily band data, stress), pulled on the server back to where the account
+        // starts (domain/ZeppHistoryPull.kt); the app starts or resumes it and shows its row, re-read every few seconds.
+        var historyPull by remember { mutableStateOf<com.bioscan.fieldterminal.domain.ZeppHistoryPullRow?>(null) }
+        var historyBusy by remember { mutableStateOf(false) }
+        var historyError by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                runCatching { zeppRepository.loadHistoryPull() }.onSuccess { historyPull = it }
+                kotlinx.coroutines.delay(10_000)
+            }
+        }
+        Text(
+            "Pulls everything Zepp has, back to the start of your account: workouts (with Zepp's own distances), sleep, " +
+                "resting heart rate, steps, minute heart rate and stress. Runs on the server a week at a time, also with the " +
+                "app closed. For days already stored, Zepp's values replace the ones from Health Connect.",
+            style = FTType.Caption,
+            color = FT.TextSecondary,
+        )
+        historyPull?.let { Text(it.describe(), style = FTType.Caption, color = if (it.error != null) FT.Warning else FT.TextMuted) }
+        historyError?.let { Text("Couldn't reach the server: $it", style = FTType.Caption, color = FT.Warning) }
+        val pull = historyPull
+        fun act(block: suspend () -> Unit) {
+            scope.launchSafe(onError = { e -> historyError = e.message }, onDone = { historyBusy = false }) {
+                historyBusy = true
+                historyError = null
+                block()
+                historyPull = zeppRepository.loadHistoryPull()
+            }
+        }
+        when {
+            pull == null -> FTButton(label = if (historyBusy) "STARTING…" else "PULL ALL ZEPP HISTORY", enabled = !historyBusy) {
+                act { zeppRepository.startHistoryPull() }
+            }
+            pull.error != null -> FTButton(label = "CARRY ON", enabled = !historyBusy) { act { zeppRepository.carryOnHistoryPull() } }
+            pull.done -> FTButton(label = "PULL AGAIN FROM TODAY", enabled = !historyBusy) { act { zeppRepository.startHistoryPull() } }
+            else -> Unit
+        }
+        // Writes the next 7 days of planned sessions to Zepp's calendar: a real feature, so it stays next to SYNC NOW.
         var probing by remember { mutableStateOf(false) }
         var probeResult by remember { mutableStateOf<String?>(null) }
-        AmberButton(label = if (probing) "CHECKING…" else "CHECK TEMPLATE API") {
-            if (!probing) {
-                scope.launchSafe(onDone = { probing = false }) {
-                    probing = true
-                    probeResult = zeppRepository.probeTrainingApi()
-                    probing = false
-                }
-            }
-        }
-        AmberButton(label = if (probing) "CHECKING…" else "TEMPLATE WRITE TEST") {
-            if (!probing) {
-                scope.launchSafe(onDone = { probing = false }) {
-                    probing = true
-                    // Creates one throwaway template in the Zepp account, reads it back and deletes it.
-                    probeResult = zeppRepository.probeTrainingApi("write_test")
-                    probing = false
-                }
-            }
-        }
-        AmberButton(label = if (probing) "CHECKING…" else "TEMPLATE SCHEDULE TEST") {
-            if (!probing) {
-                scope.launchSafe(onDone = { probing = false }) {
-                    probing = true
-                    // Creates a throwaway template and a calendar entry for it, reads both back, deletes both.
-                    probeResult = zeppRepository.probeTrainingApi("schedule_test")
-                    probing = false
-                }
-            }
-        }
-        AmberButton(label = if (probing) "CHECKING…" else "BULK SCHEDULE TEST (KEEPS ENTRIES)") {
-            if (!probing) {
-                scope.launchSafe(onDone = { probing = false }) {
-                    probing = true
-                    // 3 templates + 13 calendar entries over 4 weeks and January, left in place to look at in Zepp.
-                    probeResult = zeppRepository.probeTrainingApi("bulk_test")
-                    probing = false
-                }
-            }
-        }
-        AmberButton(label = if (probing) "CHECKING…" else "STRUCTURE VARIANTS TEST") {
-            if (!probing) {
-                scope.launchSafe(onDone = { probing = false }) {
-                    probing = true
-                    // The same session written 3 ways, scheduled for tomorrow; BULK CLEANUP removes them.
-                    probeResult = zeppRepository.probeTrainingApi("variant_test")
-                    probing = false
-                }
-            }
-        }
-        AmberButton(label = if (probing) "CHECKING…" else "ICAL FORMAT TEST") {
-            if (!probing) {
-                scope.launchSafe(onDone = { probing = false }) {
-                    probing = true
-                    // Two calendar entries for tomorrow, written the way the Zepp app writes its own.
-                    probeResult = zeppRepository.probeTrainingApi("ical_test")
-                    probing = false
-                }
-            }
-        }
-        AmberButton(label = if (probing) "SENDING…" else "SEND NEXT 7 DAYS TO ZEPP") {
+        FTButton(label = if (probing) "SENDING…" else "SEND NEXT 7 DAYS TO ZEPP") {
             if (!probing) {
                 scope.launchSafe(onDone = { probing = false }) {
                     probing = true
@@ -407,34 +391,79 @@ private fun ZeppCard(scope: CoroutineScope) {
                 }
             }
         }
-        AmberButton(label = if (probing) "CHECKING…" else "REFERENCE ICAL TEST") {
-            if (!probing) {
-                scope.launchSafe(onDone = { probing = false }) {
-                    probing = true
-                    // Three entries for tomorrow afternoon, copying the app's local-id iCalendar lines.
-                    probeResult = zeppRepository.probeTrainingApi("ref_test")
-                    probing = false
-                }
-            }
+        // UX review F13: developer checks of Zepp's workout template/schedule API (zepp-training; answers land in
+        // zepp_raw_extracts) sit behind a collapsed row, and the ones that leave entries in the Zepp account or delete
+        // them ask first.
+        var showDiagnostics by remember { mutableStateOf(false) }
+        var confirming by remember { mutableStateOf<ZeppDiagnostic?>(null) }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .ftClickable { showDiagnostics = !showDiagnostics; confirming = null }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("DIAGNOSTICS", style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.weight(1f))
+            Text(if (showDiagnostics) "▾" else "▸", style = FTType.LabelCaps, color = FT.TextMuted)
         }
-        AmberButton(label = if (probing) "CHECKING…" else "CALENDAR DUMP") {
-            if (!probing) {
-                scope.launchSafe(onDone = { probing = false }) {
-                    probing = true
-                    probeResult = zeppRepository.probeTrainingApi("calendar_dump")
-                    probing = false
-                }
-            }
-        }
-        AmberButton(label = if (probing) "CHECKING…" else "BULK CLEANUP") {
-            if (!probing) {
-                scope.launchSafe(onDone = { probing = false }) {
-                    probing = true
-                    probeResult = zeppRepository.probeTrainingApi("bulk_cleanup")
-                    probing = false
+        if (showDiagnostics) {
+            Text(
+                "Developer checks of Zepp's template and calendar API. Results are saved to zepp_raw_extracts.",
+                style = FTType.Caption,
+                color = FT.TextSecondary,
+            )
+            ZeppDiagnostic.entries.forEach { diagnostic ->
+                if (confirming == diagnostic) {
+                    val run = {
+                        confirming = null
+                        if (!probing) {
+                            scope.launchSafe(onDone = { probing = false }) {
+                                probing = true
+                                probeResult = zeppRepository.probeTrainingApi(diagnostic.mode)
+                                probing = false
+                            }
+                        }
+                    }
+                    if (diagnostic == ZeppDiagnostic.BulkCleanup) {
+                        // Contract A2: deleting from the Zepp account is destructive, so it gets the destructive confirm.
+                        FTConfirmDestructive(diagnostic.writes.orEmpty(), confirmLabel = "DELETE TEST ENTRIES", onCancel = { confirming = null }, onConfirm = run)
+                    } else {
+                        Text(diagnostic.writes.orEmpty(), style = FTType.BodySmall, color = FT.TextSecondary)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            FTButton(label = "CANCEL") { confirming = null }
+                            FTButton(label = "RUN ${diagnostic.label}", emphasis = FTButtonEmphasis.Primary, onClick = run)
+                        }
+                    }
+                } else {
+                    FTButton(label = if (probing) "CHECKING…" else diagnostic.label) {
+                        if (diagnostic.writes != null) {
+                            confirming = diagnostic
+                        } else if (!probing) {
+                            scope.launchSafe(onDone = { probing = false }) {
+                                probing = true
+                                probeResult = zeppRepository.probeTrainingApi(diagnostic.mode)
+                                probing = false
+                            }
+                        }
+                    }
                 }
             }
         }
         probeResult?.let { Text(it, style = FTType.Caption, color = FT.TextSecondary) }
     }
+}
+
+// The zepp-training probe modes behind DIAGNOSTICS. `writes` says what a run leaves in (or removes from) the Zepp account;
+// those ask before running. The rest only read, or create a throwaway and delete it again.
+private enum class ZeppDiagnostic(val label: String, val mode: String?, val writes: String? = null) {
+    // No action: the function's read-only overview (the original CHECK TEMPLATE API request body, "{}").
+    CheckApi("CHECK TEMPLATE API", null),
+    WriteTest("TEMPLATE WRITE TEST", "write_test"),
+    ScheduleTest("TEMPLATE SCHEDULE TEST", "schedule_test"),
+    BulkTest("BULK SCHEDULE TEST", "bulk_test", "Adds 3 templates and 13 calendar entries over 4 weeks and January to your Zepp account and leaves them there."),
+    VariantTest("STRUCTURE VARIANTS TEST", "variant_test", "Adds the same session written 3 ways to tomorrow in your Zepp calendar. BULK CLEANUP removes them."),
+    IcalTest("ICAL FORMAT TEST", "ical_test", "Adds two calendar entries for tomorrow to your Zepp calendar."),
+    RefTest("REFERENCE ICAL TEST", "ref_test", "Adds three entries for tomorrow afternoon to your Zepp calendar."),
+    CalendarDump("CALENDAR DUMP", "calendar_dump"),
+    BulkCleanup("BULK CLEANUP", "bulk_cleanup", "Deletes the test templates and calendar entries from your Zepp account."),
 }

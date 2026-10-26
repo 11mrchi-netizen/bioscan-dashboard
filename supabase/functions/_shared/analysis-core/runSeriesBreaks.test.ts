@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { stationarySeries, stepChangeSeries } from './fixtures.ts'
-import { runSeriesBreaks } from './runSeriesBreaks.ts'
+import { runSeriesBreaks, sustainedOriginChanges } from './runSeriesBreaks.ts'
 import { dateAxis } from './stats.ts'
 import { CORE_VERSION } from './version.ts'
 
@@ -22,10 +22,13 @@ function fakeAdmin(tables: Record<string, Row[]>) {
         gte(c: string, v: unknown) { filters.push(['gte', c, v]); return q },
         lt(c: string, v: unknown) { filters.push(['lt', c, v]); return q },
         order() { return q },
+        range(a: number, b: number) { (q as { __range?: [number, number] }).__range = [a, b]; return q },
         delete() { (q as { __delete?: boolean }).__delete = true; return q },
         upsert(row: Row) { upserts.push(row); return Promise.resolve({ error: null }) },
         then(resolve: (v: { data: Row[]; error: null }) => void) {
-          const rows = (tables[table] ?? []).filter((r) => filters.every(([op, c, v]) => (op === 'eq' ? r[c] === v : op === 'gte' ? String(r[c]) >= String(v) : String(r[c]) < String(v))))
+          const all = (tables[table] ?? []).filter((r) => filters.every(([op, c, v]) => (op === 'eq' ? r[c] === v : op === 'gte' ? String(r[c]) >= String(v) : String(r[c]) < String(v))))
+          const range = (q as { __range?: [number, number] }).__range
+          const rows = range ? all.slice(range[0], range[1] + 1) : all
           if ((q as { __delete?: boolean }).__delete) deletes.push({ table, filters })
           resolve({ data: rows, error: null })
         },
@@ -69,10 +72,9 @@ test('provenance origin changes confirm a break; user decisions are applied', as
   const first = await runSeriesBreaks(fakeAdmin({ wearable_daily: rows(ds, 'hrv', hrv) }), USER)
   const breakDate = first.results.find((r) => r.metric === 'hrv')!.breaks![0].date
 
-  const provenance: Row[] = [
-    { user_id: USER, date: ds[100], field: 'wearable_daily.hrv', origin: 'com.google.android.apps.fitness' },
-    { user_id: USER, date: breakDate, field: 'wearable_daily.hrv', origin: 'com.huami.watch.hmwatchmanager' },
-  ]
+  // One provenance row per day, as the sync writes them: one source before the break, another from the break on.
+  const switchAt = ds.indexOf(breakDate)
+  const provenance: Row[] = ds.map((d, i) => ({ user_id: USER, date: d, field: 'wearable_daily.hrv', origin: i < switchAt ? 'com.google.android.apps.fitness' : 'com.huami.watch.hmwatchmanager' }))
   const confirmed = await runSeriesBreaks(fakeAdmin({ wearable_daily: rows(ds, 'hrv', hrv), daily_field_provenance: provenance }), USER)
   assert.equal(confirmed.results.find((r) => r.metric === 'hrv')!.breaks![0].status, 'confirmed')
 
@@ -81,4 +83,36 @@ test('provenance origin changes confirm a break; user decisions are applied', as
     USER,
   )
   assert.equal(dismissed.results.find((r) => r.metric === 'hrv')!.breaks![0].status, 'dismissed')
+})
+
+test('analysis review B10: only device-sensitive metrics are confirmed by a source change, and only a lasting one', async () => {
+  // Alternating sources (phone one day, watch the next) never count as a switch; a switch that holds does.
+  const alternating = Array.from({ length: 10 }, (_, i) => ({ date: dates(10)[i], origin: i % 2 ? 'watch' : 'phone' }))
+  assert.deepEqual(sustainedOriginChanges(alternating), [])
+  const lasting = dates(10).map((d, i) => ({ date: d, origin: i < 4 ? 'phone' : 'watch' }))
+  assert.deepEqual(sustainedOriginChanges(lasting), [dates(10)[4]])
+
+  // Resting heart rate (not device-sensitive) keeps a candidate break even when a source switch sits on it.
+  const ds = dates(140)
+  const rhr = stepChangeSeries(3, 140, 110, 52, 3, 0, 8)
+  const first = await runSeriesBreaks(fakeAdmin({ wearable_daily: rows(ds, 'rhr', rhr) }), USER)
+  const breakDate = first.results.find((r) => r.metric === 'rhr')!.breaks![0].date
+  const switchAt = ds.indexOf(breakDate)
+  const provenance: Row[] = ds.map((d, i) => ({ user_id: USER, date: d, field: 'wearable_daily.rhr', origin: i < switchAt ? 'phone' : 'watch' }))
+  const res = await runSeriesBreaks(fakeAdmin({ wearable_daily: rows(ds, 'rhr', rhr), daily_field_provenance: provenance }), USER)
+  assert.equal(res.results.find((r) => r.metric === 'rhr')!.breaks![0].status, 'candidate')
+})
+
+test('the provenance read pages past the row cap, so a recent source switch is seen', async () => {
+  const ds = dates(140)
+  const hrv = stepChangeSeries(1, 140, 110, 62, 6, 0, 3)
+  const first = await runSeriesBreaks(fakeAdmin({ wearable_daily: rows(ds, 'hrv', hrv) }), USER)
+  const breakDate = first.results.find((r) => r.metric === 'hrv')!.breaks![0].date
+  const switchAt = ds.indexOf(breakDate)
+  // Ten fields a day: the switch (day ~110) sits past the first 1,000 provenance rows.
+  const fields = ['wearable_daily.hrv', ...Array.from({ length: 9 }, (_, k) => `other.f${k}`)]
+  const provenance: Row[] = ds.flatMap((d, i) => fields.map((field) => ({ user_id: USER, date: d, field, origin: i < switchAt ? 'phone' : 'watch' })))
+  assert.ok(switchAt * fields.length > 1000)
+  const res = await runSeriesBreaks(fakeAdmin({ wearable_daily: rows(ds, 'hrv', hrv), daily_field_provenance: provenance }), USER)
+  assert.equal(res.results.find((r) => r.metric === 'hrv')!.breaks![0].status, 'confirmed')
 })

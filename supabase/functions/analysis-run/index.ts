@@ -13,15 +13,28 @@
 //                no human-held secret and no service role key is involved
 //
 // Publishes `series_break` (Phase 1), `relationship` (Phase 3, the confirmatory catalogue), `typicality` (Phase 4,
-// "is today typical for you"), `experiment` (Phase 5, pre-registered supplement N-of-1) and `intervention_response`
-// (Intervention & Protocol Intelligence 08.6, observational baseline-vs-active for any active intervention) results.
+// "is today typical for you"), `expected_band` (analysis review phase C: each morning against a forecast band, with
+// flags), `event_curve`, `case_crossover` and `lag_curve` (analysis review phase D: the evidence board's three views),
+// `experiment` (Phase 5, pre-registered supplement N-of-1; analysis review phase F adds the randomised designs) and
+// `intervention_response` (Intervention & Protocol Intelligence 08.6, observational baseline-vs-active for any active
+// intervention) and `intervention_its` (analysis review phase F: each intervention read once against a forecast from
+// the eight weeks before it started) and `fitness_fatigue` (analysis review phase G: the personal fitness and fatigue
+// spans, adopted only when they forecast tomorrow's HRV better than 42 and 7 on held-out weeks) results; the `typicality`
+// payload carries its scorecard against logged illness.
 // The action `experiment_preview` returns the smallest detectable effect of a planned design for the signed-in user.
+// Health concerns (docs/health-concerns): `health_overview`, `health_concern_state`, `health_finding` and
+// `health_trial_read` rows, nightly after the evidence engines, and on demand with the action `health` (user JWT; the app
+// calls it right after a check-in so the new state shows at once).
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildPreview, runExperiments } from "../_shared/analysis-core/runExperiments.ts";
-import { runInterventionResponses } from "../_shared/analysis-core/runInterventionResponse.ts";
+import { runInterventionIts, runInterventionResponses } from "../_shared/analysis-core/runInterventionResponse.ts";
 import { loadFrame, runRelationships } from "../_shared/analysis-core/runRelationships.ts";
+import { runEvidence } from "../_shared/analysis-core/runEvidence.ts";
+import { runExpectedBands } from "../_shared/analysis-core/runExpectedBands.ts";
+import { runFitnessFatigue } from "../_shared/analysis-core/runFitnessFatigue.ts";
+import { runHealth } from "../_shared/analysis-core/runHealth.ts";
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
 import { runTypicality } from "../_shared/analysis-core/runTypicality.ts";
 import { pearson, pFromR } from "../_shared/analysis-core/stats.ts";
@@ -75,6 +88,20 @@ Deno.serve(async (req) => {
     return json(await buildPreview(admin, loaded, plannedA, plannedB), 200);
   }
 
+  if (body.action === "health") {
+    // On demand for the signed-in user only: the frame (for sleep, load and the HRV band) and the health engine.
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const userClient = createClient(url, anon, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } });
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) return json({ error: "unauthorized" }, 401);
+    const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const loaded = await loadFrame(admin, user.id);
+    if ("error" in loaded) return json({ error: "load_failed", message: loaded.error }, 500);
+    const health = await runHealth(admin, loaded).catch((e) => ({ userId: user.id, error: String(e) }));
+    return json({ coreVersion: CORE_VERSION, health }, "error" in health && health.error ? 500 : 200);
+  }
+
   if (body.action === "run") {
     const url = Deno.env.get("SUPABASE_URL")!;
     const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -108,17 +135,22 @@ Deno.serve(async (req) => {
     for (const id of userIds) {
       const breaks = await runSeriesBreaks(admin, id);
       // The frame is read once and shared; one engine failing must not hide the others: each reports its own error.
-      // Typicality runs after the series breaks because it restarts its baseline at the last confirmed one.
+      // Typicality and the expected bands run after the series breaks because they restart at confirmed ones.
       const loaded = await loadFrame(admin, id).catch((e) => ({ userId: id, error: String(e) }));
       if ("error" in loaded) {
-        results.push({ ...breaks, relationships: loaded, typicality: loaded, experiments: loaded });
+        results.push({ ...breaks, relationships: loaded, typicality: loaded, expectedBands: loaded, evidence: loaded, experiments: loaded });
         continue;
       }
       const relationships = await runRelationships(admin, id, new Date(), loaded).catch((e) => ({ userId: id, error: String(e) }));
       const typicality = await runTypicality(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      const expectedBands = await runExpectedBands(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      const evidence = await runEvidence(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const experiments = await runExperiments(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const interventionResponses = await runInterventionResponses(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      results.push({ ...breaks, relationships, typicality, experiments, interventionResponses });
+      const interventionIts = await runInterventionIts(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      const fitnessFatigue = await runFitnessFatigue(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      const health = await runHealth(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      results.push({ ...breaks, relationships, typicality, expectedBands, evidence, experiments, interventionResponses, interventionIts, fitnessFatigue, health });
     }
     return json({ coreVersion: CORE_VERSION, results }, 200);
   }

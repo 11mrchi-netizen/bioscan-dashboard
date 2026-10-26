@@ -30,7 +30,7 @@ class SleepIndexTest {
         assertEquals(4, result.components.size)
         assertEquals(EvalState.Stable, result.state)
         assertTrue("expected a near-maximum score, got ${result.score}", result.score!! > 95.0)
-        assertEquals("Good", result.band)
+        assertEquals("AS EXPECTED", result.band)
     }
 
     @Test
@@ -56,5 +56,16 @@ class SleepIndexTest {
 
         assertEquals(2, result.components.size)
         assertTrue("expected a high score from two clean components, got ${result.score}", result.score!! > 95.0)
+    }
+
+    // Analysis review phase G: one set of cut-offs, shared by the word and by Today's recovery.
+    @Test
+    fun oneSetOfCutOffsForTheWordAndForRecovery() {
+        assertEquals("AS EXPECTED", sleepIndexBand(SLEEP_INDEX_AS_EXPECTED))
+        assertEquals("BELOW EXPECTED", sleepIndexBand(SLEEP_INDEX_AS_EXPECTED - 0.1))
+        assertEquals("UNUSUALLY LOW", sleepIndexBand(SLEEP_INDEX_UNUSUALLY_LOW - 0.1))
+        assertEquals(0, sleepIndexDirection(90.0))
+        assertEquals(-1, sleepIndexDirection(72.0))
+        assertEquals(-1, sleepIndexDirection(40.0))
     }
 }

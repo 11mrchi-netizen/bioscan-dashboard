@@ -142,14 +142,32 @@ export function analyseTypicality(input: TypicalityInput): TypicalityResult {
   if (!full) return empty(asOf, 'insufficient', baseIdx.length, skipped)
 
   // The person's own distribution of distances: each baseline day against a fit that has never seen it.
-  const loo: number[] = []
-  for (let k = 0; k < fitRows.length; k++) {
-    const rest = fitRows.filter((_, m) => m !== k)
-    const f = shrunkCovariance(rest)
-    const inv = invert(f.cov)
-    if (inv) loo.push(quad(inv, fitRows[k].map((v, j) => v - f.mean[j])) / p)
+  // Analysis review B9: the reference distances are computed exactly the way a judged day's distance is -- over the same
+  // subset of signals, divided by that subset's size, from the raw (unwinsorised) z of the left-out day. Before, they were
+  // always computed over all p signals from winsorised rows, while today (which never has a full step count) was judged
+  // on k < p signals, which pushed the nominal 10 % / 2.5 % flag rates to roughly 12-14 % / 4-5 %.
+  const rawRows = baseIdx.map((i) => names.map((_, j) => z(i, j)))
+  const looFits = fitRows.map((_, k) => shrunkCovariance(fitRows.filter((__, m) => m !== k)))
+  const looCache = new Map<string, number[]>()
+  const looFor = (dims: number[]): number[] => {
+    const key = dims.join(',')
+    const hit = looCache.get(key)
+    if (hit) return hit
+    const out: number[] = []
+    looFits.forEach((f, k) => {
+      const inv = invert(dims.length === p ? f.cov : sub(f.cov, dims))
+      if (inv) out.push(quad(inv, dims.map((j) => rawRows[k][j] - f.mean[j])) / dims.length)
+    })
+    looCache.set(key, out)
+    return out
   }
-  const thresholds = { elevated: quantile(loo, Q_ELEVATED), unusual: quantile(loo, Q_UNUSUAL) }
+  const thresholdsFor = (dims: number[]) => {
+    const loo = looFor(dims)
+    return { elevated: quantile(loo, Q_ELEVATED), unusual: quantile(loo, Q_UNUSUAL) }
+  }
+  const allDims = names.map((_, j) => j)
+  const loo = looFor(allDims)
+  let thresholds = thresholdsFor(allDims)
 
   const distance = (zc: number[], dims: number[]): number | null => {
     const inv = dims.length === p ? full : invert(sub(fit.cov, dims))
@@ -165,7 +183,9 @@ export function analyseTypicality(input: TypicalityInput): TypicalityResult {
     }
     const zc = dims.map((j) => z(i, j) - fit.mean[j])
     const d = distance(zc, dims)
-    const state: DayState = d === null ? 'insufficient' : d > thresholds.unusual ? 'unusual' : d > thresholds.elevated ? 'elevated' : 'typical'
+    const thr = thresholdsFor(dims)
+    const state: DayState = d === null ? 'insufficient' : d > thr.unusual ? 'unusual' : d > thr.elevated ? 'elevated' : 'typical'
+    if (d !== null) thresholds = thr // the result reports the thresholds of the last scored day
     const byName = (name: SignalName) => {
       const k = dims.indexOf(names.indexOf(name))
       return k < 0 ? null : zc[k]

@@ -16,59 +16,151 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
 import com.bioscan.fieldterminal.data.model.GeneratedBlockRow
+import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
 import com.bioscan.fieldterminal.data.model.UpcomingSessionRow
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.domain.TrainingCycle
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.parallel
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.screens.TrainingBlockFormSheet
+import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 // DAV-345. The PLAN tab: start a block, see the generated blocks and what is coming up.
+// UX review F8: a failed load shows COULDN'T LOAD + RETRY instead of reading as "nothing planned", and DELETE asks first
+// (it removes the block and every planned session in it) and says when it failed.
+// UX review P5 / F6: the one home of the training block. The current block (edited here, moved from the User tab), PLAN A
+// NEW BLOCK, what is coming up, the planned blocks and the history (moved from the User tab) all live on this tab; the
+// User tab keeps a compact card that opens it, and Setup keeps only equipment and session times.
+// App restructure: it is Lab › Planning › TRAINING; the events list moved to Planning's RACE FUEL section.
 @Composable
-fun TrainingPlanTab(onOpenPlanner: () -> Unit) {
+fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {}) {
     val repo = remember { TrainingProgramRepository(SupabaseClientProvider.client) }
+    val cyclesRepo = remember { TrainingCyclesRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var blocks by remember { mutableStateOf<List<GeneratedBlockRow>?>(null) }
     var upcoming by remember { mutableStateOf<List<UpcomingSessionRow>>(emptyList()) }
-    var reload by remember { mutableStateOf(0) }
-    LaunchedEffect(reload) {
-        blocks = runCatching { repo.loadGeneratedBlocks() }.getOrDefault(emptyList())
-        upcoming = runCatching { repo.loadUpcoming(LocalDate.now()) }.getOrDefault(emptyList())
+    // Fuel planning phase 9: a planned session on an event's day is shown as such (the event is the day's real work).
+    var eventDays by remember { mutableStateOf<Map<LocalDate, String>>(emptyMap()) }
+    var cycles by remember { mutableStateOf<List<TrainingCycle>?>(null) }
+    var history by remember { mutableStateOf<List<TrainingBlockSummaryRow>?>(null) }
+    var confirmingDelete by remember { mutableStateOf<Long?>(null) }
+    var deleting by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
+    var editingCycle by remember { mutableStateOf<TrainingCycle?>(null) }
+    var addingCycle by remember { mutableStateOf(false) }
+    val guard = rememberLoadGuard()
+    LaunchedEffect(guard.attempt) {
+        guard.run {
+            parallel(
+                { blocks = repo.loadGeneratedBlocks() },
+                { upcoming = repo.loadUpcoming(LocalDate.now()) },
+                { cycles = cyclesRepo.loadCycles() },
+                { history = cyclesRepo.loadBlockSummaries() },
+                {
+                    eventDays = runCatching {
+                        com.bioscan.fieldterminal.data.AthleteEventsRepository(SupabaseClientProvider.client).loadUpcoming(LocalDate.now(), days = 120)
+                            .associate { it.date to it.name }
+                    }.getOrDefault(emptyMap())
+                },
+            )
+        }
     }
+    val activeCycle = cycles?.firstOrNull { it.isActiveOn(LocalDate.now()) }
+
     Column(Modifier.padding(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        AmberButton("PLAN A NEW BLOCK", onClick = onOpenPlanner)
+        if (guard.error != null) {
+            FTButton("PLAN A NEW BLOCK", onClick = onOpenPlanner, emphasis = FTButtonEmphasis.Primary)
+            LoadErrorCard(guard)
+            return@Column
+        }
+        if (cycles != null) {
+            CurrentBlockCard(
+                cycle = activeCycle,
+                currentValue = null,
+                onEdit = { editingCycle = activeCycle },
+                onAdd = { addingCycle = true },
+            )
+        }
+        FTButton("PLAN A NEW BLOCK", onClick = onOpenPlanner, emphasis = FTButtonEmphasis.Primary)
         FTCard(title = "UPCOMING") {
-            if (upcoming.isEmpty()) Text("No planned sessions yet.", color = FT.TextSecondary, fontFamily = Inter, fontSize = 13.sp)
+            if (upcoming.isEmpty()) Text("No planned sessions yet.", color = FT.TextSecondary, style = FTType.BodySmall)
             upcoming.forEach { s ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
                     Text(
                         LocalDate.parse(s.scheduledDate).format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)).uppercase(),
-                        color = FT.DomainTraining, fontFamily = RobotoMono, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp),
+                        color = FT.DomainTraining, style = FTType.MonoCaption, modifier = Modifier.padding(top = 2.dp),
                     )
-                    Text(s.title, color = FT.TextPrimary, fontFamily = Inter, fontSize = 13.5.sp)
+                    Column {
+                        Text(s.title, color = FT.TextPrimary, style = FTType.BodySmall)
+                        eventDays[LocalDate.parse(s.scheduledDate)]?.let { name ->
+                            Text("EVENT DAY: ${name.uppercase()} · move or drop this session", color = FT.Warning, style = FTType.MonoCaption)
+                        }
+                    }
                 }
             }
         }
         FTCard(title = "PLANNED BLOCKS") {
             val b = blocks.orEmpty()
-            if (b.isEmpty()) Text("No generated blocks yet.", color = FT.TextSecondary, fontFamily = Inter, fontSize = 13.sp)
+            if (blocks != null && b.isEmpty()) Text("No generated blocks yet.", color = FT.TextSecondary, style = FTType.BodySmall)
+            deleteError?.let { Text("Couldn't delete: $it", color = FT.Critical, style = FTType.BodySmall) }
             b.forEach { blk ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(blk.name, color = FT.TextPrimary, fontFamily = Inter, fontSize = 14.sp)
-                        Text("${blk.startDate} to ${blk.endDate} · ${blk.status.uppercase()}", color = FT.TextSecondary, fontFamily = RobotoMono, fontSize = 11.sp)
+                Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(blk.name, color = FT.TextPrimary, style = FTType.BodySmall)
+                            Text("${blk.startDate} to ${blk.endDate} · ${blk.status.uppercase()}", color = FT.TextSecondary, style = FTType.MonoCaption)
+                        }
+                        if (confirmingDelete != blk.id) {
+                            FTButton("DELETE", emphasis = FTButtonEmphasis.Destructive) { confirmingDelete = blk.id; deleteError = null }
+                        }
                     }
-                    AmberButton("DELETE") { scope.launch { runCatching { repo.deleteBlock(blk.id) }; reload++ } }
+                    if (confirmingDelete == blk.id) {
+                        FTConfirmDestructive(
+                            message = "Delete this block and all its planned sessions? This can't be undone.",
+                            confirmLabel = "DELETE BLOCK",
+                            busy = deleting,
+                            onCancel = { confirmingDelete = null },
+                            onConfirm = {
+                                deleting = true
+                                scope.launchSafe(
+                                    onError = { e -> deleteError = describeLoadFailure(e) },
+                                    onDone = { deleting = false; confirmingDelete = null },
+                                ) {
+                                    repo.deleteBlock(blk.id)
+                                    guard.retry()
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }
+        BlockHistoryCard(history, onViewAll = onOpenAllBlocks)
+    }
+
+    if (addingCycle || editingCycle != null) {
+        TrainingBlockFormSheet(
+            cycle = editingCycle,
+            onDismiss = { addingCycle = false; editingCycle = null },
+            onSaved = {
+                addingCycle = false
+                editingCycle = null
+                guard.retry()
+            },
+        )
     }
 }

@@ -26,9 +26,11 @@ The app reads scalars only. Only sport types 1 (run) and 7 (trail run) get them.
 
 ## Display
 
-- RUN EFFICIENCY card (Training tab): 28-day rolling median of EF, shown only once
-  `EF_MIN_RUNS_28D` = 6 eligible runs exist in the trailing 28 days (DAV-40's gate); a per-run and
-  a median line on the shared timeframe switch.
+- RUN EFFICIENCY card (Training tab): a per-run and a median line on the shared timeframe switch.
+  - Road: 28-day rolling median of EF, shown only once `EF_MIN_RUNS_28D` = 6 eligible runs exist in
+    the trailing 28 days (DAV-40's gate).
+  - Trail: the median of the last 5 trail runs within 60 days, from 3 (`RunBaseline.TRAIL`). Trail runs
+    come about once a week, so 28 days held at most 5 and the 6-run gate never opened.
 - RUN DYNAMICS card (session detail): that run's GAP, EF and decoupling.
 
 ## Validation

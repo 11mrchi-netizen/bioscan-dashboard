@@ -12,17 +12,47 @@ Every field below was decoded by hypothesis-and-check against one real run: trac
 `max_pace`, `location` geohash, `avgAltitude`/`highestAltitude`/`lowestAltitude`) served
 as independent ground truth to check each decoded series against — not guessed, checked.
 
-All per-second fields have 2924–2975 entries for this 2974 s run, i.e. **1 Hz sampling**.
+All per-second fields have 2924–2975 entries for this 2974 s run, i.e. **1 Hz sampling**, mostly: see Timing.
+
+## Timing: every series carries its own time step (corrected 2026-10-20)
+
+The first decode took entry *n* of a series as second *n*. That holds only for a series with no gaps. Every series
+records the seconds since its previous sample, and they are not all 1:
+
+- `heart_rate`, `speed` and `gait` lead each entry with that step (the field first read as a "flag", below). An
+  empty step means 1 s. The first entry's step is the offset from the start, usually 0.
+- `longitude_latitude` and `altitude` have one entry per GPS point and no step of their own. They are timed by the
+  separate **`time`** field: one step per GPS point, in the same order.
+- Steps are mostly 1 s, with gaps of 2–3 s (most often in `heart_rate`) and **one long step across each pause**.
+- **`pause`**: `"<unix start>,<seconds>,-1,-1,2;..."`, one entry per pause.
+- **`trackid`** is the workout's unix start.
+
+Checked on stored workouts, read-only: on a paused multi-hour run the steps of `heart_rate`, `speed` and `time` add up
+to the same elapsed time. That time equals moving time plus the pause. Read entry by entry instead, heart rate had
+fewer entries than the route and ended up to half an hour ahead of it after the pause. Most stored workouts have some
+gaps in heart rate; a few dozen have a pause. A workout whose GPS track stops a little before the end keeps a slightly
+shorter `time` sum. That is a short track, not a timing error.
+
+Two consequences, both fixed in `zepp-extract` (decoder version 2, `decodeSeries.ts`):
+
+- **Offsets.** Each series' `offsetSeconds` is the running sum of its own steps, so every series shares one axis:
+  elapsed seconds from the start. The decode also writes `pauses: [{startOffset, durationSec}]`.
+- **Start time.** The list entry's `run_time` is moving time, so `end_time − run_time` starts a paused workout late
+  by its pauses. The start is now `trackid` when that is plausible (no later than `end − run_time`, within a day of
+  the end). `duration_min` stays moving time.
+
+Stored rows are re-decoded from their `raw` through `zepp-extract`'s `x-zepp-redecode` path (dry run by default, 25 per
+call). A paused workout's `start_time` moves to `end − elapsed`. Its session moves too, but only while the session
+still has the old start, so a start edited by hand is left alone.
 
 ## Confirmed fields
 
 ### `heart_rate` — absolute start + per-second signed delta
 
-Format: `"<flag>,<value>;<flag>,<value>;..."`. The **first** entry's value is the
+Format: `"<step>,<value>;<step>,<value>;..."`. The **first** entry's value is the
 absolute starting HR; every entry after that is a signed integer delta to add to the
-running total. `flag` (seen: `7` only on entry 1, then `""`/`0`/`2`) does **not** gate
-the decode — every entry's value participates in the same running sum regardless of
-its flag.
+running total. The first field, first read as a flag, is the seconds since the previous
+sample (empty = 1 s; see Timing). It does not gate the value: every entry joins the running sum.
 
 ```
 running_hr[0] = value[0]
@@ -45,8 +75,7 @@ simple time-weighted over a session with pauses).
 
 ### `speed` — `<flag>,<value>` per second, meters/second
 
-Format: `"<flag>,<value>;..."`, flag meaning not yet determined (doesn't gate the
-value). Checked: max speed 4.03 m/s → 1000/4.03 = 248 s/km, an **exact** match to the
+Format: `"<step>,<value>;..."`: seconds since the previous sample (see Timing), then the speed. Checked: max speed 4.03 m/s → 1000/4.03 = 248 s/km, an **exact** match to the
 summary's `max_pace` = 248 s/km-equivalent — the two fields agree via `pace = 1000 /
 speed`.
 
@@ -80,9 +109,9 @@ points over the whole run gives 7770 m, within 1.4% of the summary's own `dis`
 
 ### `gait` — per-second cadence and vertical stride ratio
 
-Format: `"<f1>,<f2>,<vertRatio×10>,<cadence_spm>;..."`. `f1`/`f2` are low-integer
-state flags (0 before the run starts, settling to small values once steady) with
-no summary field to check them against, so left undecoded.
+Format: `"<step>,<state>,<vertRatio×10>,<cadence_spm>;..."`. `step` is the seconds since the previous sample (see
+Timing). `state` is a low-integer flag (0 before the run starts, settling to small values once steady); there is no
+summary field to check it against, so it is left undecoded.
 
 Checked against this run's summary: avg of the 4th field (excluding the pre-run
 zeros) = 175.5 vs `avg_frequency` 173.0; max = 200 vs `max_frequency` 201 — cadence,

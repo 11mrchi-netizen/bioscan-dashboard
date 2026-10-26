@@ -15,15 +15,6 @@ data class Confidence(val have: Int, val need: Int) {
     val label: String get() = "$have/$need"
 }
 
-// DAV-210/DAV-212: single shared mapping, replacing 4 byte-identical private
-// copies (SessionDetailScreen/FuelTileScreen/HeartTileScreen/TrainingTileScreen).
-// Unstable maps to Warning, not Critical -- it flags elevated week-over-week
-// variability, a milder signal than a genuine ShiftUp/ShiftDown, so it shouldn't
-// read as more alarming than a real shift.
-fun EvalState.toMetricState(): MetricState = when (this) {
-    EvalState.NoData -> MetricState.Unavailable
-    EvalState.Building -> MetricState.Building
-    EvalState.Stable -> MetricState.Optimal
-    EvalState.ShiftUp, EvalState.ShiftDown -> MetricState.Warning
-    EvalState.Unstable -> MetricState.Warning
-}
+// Analysis review A1: the single generic EvalState -> MetricState mapping (DAV-210) is gone. It read Stable as OPTIMAL
+// and every shift as ATTENTION whatever the metric's direction. Each kind of evaluation now maps through its own
+// function in StateWords.kt (baseline, recovery, training load, trend, data gate), which also supplies the pill's word.

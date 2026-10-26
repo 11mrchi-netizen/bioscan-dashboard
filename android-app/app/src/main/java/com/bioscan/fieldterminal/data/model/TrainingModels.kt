@@ -24,6 +24,7 @@ data class ExerciseSessionRow(
     // other fields (run_type, exercises) aren't needed here.
     @SerialName("elevation_gain_m") val elevationGainM: Double? = null,
     val details: ExerciseSessionDetails = ExerciseSessionDetails(),
+    @SerialName("avg_power_w") val avgPowerW: Double? = null,
 )
 
 @Serializable

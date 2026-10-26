@@ -4,6 +4,7 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.exp
 import kotlin.math.ln
+import kotlin.math.sqrt
 
 // Phase A2 (Analysis Layer). Evaluation Method Spec, Category 1 (HRV & RHR):
 // 7-day rolling Ln rMSSD + Smallest Worthwhile Change band, with 7-day CV as
@@ -27,11 +28,27 @@ data class SwcEvaluation(
     val mean60d: Double?,
     val swcPct: Double?,
     val cv7d: Double?,
+    // Analysis review A2/B7: the band that decides the state, in the evaluation's own space (ln for HRV; see
+    // toExpSpace()). A shift needs the 7-day mean outside BOTH the smallest worthwhile change (0.5 SD) and the noise of
+    // a weekly mean (1.96 standard errors, widened for day-to-day carry-over). Drawing this band, not mean x swcPct, is
+    // what keeps the chart and the pill in agreement.
+    val bandLow: Double? = null,
+    val bandHigh: Double? = null,
 )
 
 private const val BASELINE_WINDOW_DAYS = 60
 private const val ROLLING_WINDOW_DAYS = 7
 private const val MIN_READINGS_PER_WINDOW = 4
+
+// Analysis review B7. The old rule (7-day mean outside the 60-day mean +/- 0.5 SD of DAILY values) left Stable on about
+// 1 day in 5 with no real change, and on 1 in 3 or more with realistic day-to-day carry-over, because a 7-day mean
+// already wanders by ~0.4 SD by chance. Simulated on stationary AR(1) data (rho 0 to 0.5) the rule below leaves Stable on
+// 4-8% of days and still flags a 1-SD drop over the last week 37-67% of the time and a regime change every time
+// (HrvRhrEvaluationTest). Carry-over is estimated from residuals around a +/-7-reading running median, as the series-break
+// engine does, so a level shift inside the window doesn't masquerade as autocorrelation.
+private const val SHIFT_Z = 1.96
+private const val CARRY_OVER_MEDIAN_HALF_WIDTH = 7
+private const val MAX_CARRY_OVER = 0.8
 
 // Generic over any daily-value stream needing the SWC treatment -- takes
 // values already in whatever space they should be compared in (log-space
@@ -63,14 +80,16 @@ fun evaluateSwcStream(
     }
 
     val window60 = windowEndingAt(past, asOf, BASELINE_WINDOW_DAYS)
+    val values60 = window60.sortedBy { it.first }.map { it.second }
     val baseline7d = mean(window7.map { it.second })
-    val mean60d = mean(window60.map { it.second })
-    val sd60d = populationStdDev(window60.map { it.second })
+    val mean60d = mean(values60)
+    val sd60d = populationStdDev(values60)
     val cvBaseline = if (mean60d != 0.0) sd60d / mean60d * 100 else 0.0
     val swcPct = 0.5 * cvBaseline
-    val swcAbs = mean60d * swcPct / 100
-    val bandLow = mean60d - swcAbs
-    val bandHigh = mean60d + swcAbs
+    val swcAbs = 0.5 * sd60d
+    val half = maxOf(swcAbs, SHIFT_Z * weeklyMeanStandardError(values60, window7.size, sd60d))
+    val bandLow = mean60d - half
+    val bandHigh = mean60d + half
 
     val cv7dToday = cv7dAt(past, asOf)
     val historicalCv7d = (0 until BASELINE_WINDOW_DAYS).mapNotNull { offset -> cv7dAt(past, asOf.minusDays(offset.toLong())) }
@@ -84,8 +103,47 @@ fun evaluateSwcStream(
         else -> EvalState.Stable
     }
 
-    return SwcEvaluation(state, Confidence(window7.size, MIN_READINGS_PER_WINDOW), baseline7d, mean60d, swcPct, cv7dToday)
+    return SwcEvaluation(state, Confidence(window7.size, MIN_READINGS_PER_WINDOW), baseline7d, mean60d, swcPct, cv7dToday, bandLow, bandHigh)
 }
+
+// Standard error of (7-day mean - 60-day mean) when nothing has changed. The 60-day window contains the 7 days, so the
+// difference is (nRest / n60) x (7-day mean - mean of the other readings); carry-over widens both terms by
+// (1 + rho) / (1 - rho).
+internal fun weeklyMeanStandardError(values60: List<Double>, n7: Int, sd: Double): Double {
+    val n60 = values60.size
+    val nRest = n60 - n7
+    if (n7 <= 0 || nRest <= 0 || sd <= 0.0) return 0.0
+    val rho = carryOver(values60)
+    val inflation = (1 + rho) / (1 - rho)
+    return nRest.toDouble() / n60 * sd * sqrt(inflation * (1.0 / n7 + 1.0 / nRest))
+}
+
+// Lag-1 autocorrelation of the residuals around a running median, small-sample bias corrected (r + (1 + 3r) / n, the
+// same correction the server's experiment engine uses) and clipped to [0, 0.8].
+internal fun carryOver(values: List<Double>): Double {
+    val n = values.size
+    if (n < 4) return 0.0
+    val residuals = values.indices.map { i ->
+        val lo = (i - CARRY_OVER_MEDIAN_HALF_WIDTH).coerceAtLeast(0)
+        val hi = (i + CARRY_OVER_MEDIAN_HALF_WIDTH).coerceAtMost(n - 1)
+        values[i] - median(values.subList(lo, hi + 1))
+    }
+    val m = mean(residuals)
+    val centered = residuals.map { it - m }
+    val denominator = centered.sumOf { it * it }
+    if (denominator == 0.0) return 0.0
+    val r1 = (1 until n).sumOf { centered[it] * centered[it - 1] } / denominator
+    return (r1 + (1 + 3 * r1) / n).coerceIn(0.0, MAX_CARRY_OVER)
+}
+
+// HRV is evaluated on ln(ms) (evaluateHrv); everything shown to a person is in ms. The band is exponentiated end by end,
+// so it stays the band that decided the state (it is no longer symmetric in ms, which is correct for a log-normal metric).
+fun SwcEvaluation.toExpSpace(): SwcEvaluation = copy(
+    baseline7d = expValue(baseline7d),
+    mean60d = expValue(mean60d),
+    bandLow = expValue(bandLow),
+    bandHigh = expValue(bandHigh),
+)
 
 // windowEndingAt() moved to domain/Stats.kt (Phase A3) -- Category 3 needs
 // the identical "last N calendar days ending here" logic, so this is no

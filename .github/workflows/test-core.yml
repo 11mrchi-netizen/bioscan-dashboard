@@ -4,12 +4,14 @@ on:
   push:
     paths:
       - 'supabase/functions/_shared/**'
+      - 'supabase/functions/zepp-extract/*.ts'
       - 'console/src/lib/**'
       - 'docs/analysis-layer-2/02-metric-registry.md'
       - '.github/workflows/test-core.yml'
   pull_request:
     paths:
       - 'supabase/functions/_shared/**'
+      - 'supabase/functions/zepp-extract/*.ts'
       - 'console/src/lib/**'
       - 'docs/analysis-layer-2/02-metric-registry.md'
       - '.github/workflows/test-core.yml'
@@ -31,6 +33,9 @@ jobs:
 
       - name: Log-agent core tests
         run: node --test "supabase/functions/_shared/log-core/*.test.ts"
+
+      - name: Zepp extraction decoder tests
+        run: node --test "supabase/functions/zepp-extract/*.test.ts"
 
       - name: Console schema tests
         run: node --test "console/src/lib/*.test.ts"

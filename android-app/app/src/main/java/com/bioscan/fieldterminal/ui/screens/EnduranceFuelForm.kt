@@ -22,7 +22,8 @@ import com.bioscan.fieldterminal.data.FuelingSessionRow
 import com.bioscan.fieldterminal.data.NewFuelingIntake
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.functionErrorMessage
-import com.bioscan.fieldterminal.ui.components.AmberButton
+import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.screens.status.FuelingExperimentSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -114,7 +115,7 @@ internal fun EnduranceFuelForm(onSaved: () -> Unit) {
             loading -> Text("Loading...", style = FTType.BodySmall, color = FT.TextSecondary)
             loadError != null -> {
                 Text("Could not load ($loadError).", style = FTType.BodySmall, color = FT.Critical)
-                AmberButton(label = "RETRY") { reload++ }
+                FTButton(label = "RETRY") { reload++ }
             }
             sessions.isEmpty() -> Text("No run, hike or ride in the last three weeks to attach fueling to. Sync your watch or log the activity first.", style = FTType.BodySmall, color = FT.TextSecondary)
             else -> {
@@ -160,10 +161,10 @@ internal fun EnduranceFuelForm(onSaved: () -> Unit) {
                         FieldTextField(newSodium, { newSodium = it }, "Sodium mg (optional)", keyboardType = KeyboardType.Decimal)
                         FieldTextField(newFluid, { newFluid = it }, "Fluid ml (optional)", keyboardType = KeyboardType.Decimal)
                         FieldTextField(newCaffeine, { newCaffeine = it }, "Caffeine mg (optional)", keyboardType = KeyboardType.Decimal)
-                        AmberButton(label = if (saving) "SAVING..." else "SAVE PRODUCT") {
+                        FTButton(label = if (saving) "SAVING..." else "SAVE PRODUCT", emphasis = FTButtonEmphasis.Primary) {
                             if (saving || newName.isBlank() || newKind == null || num(newCarbs) == null) {
                                 error = "A product needs a name and its carbs per serving."
-                                return@AmberButton
+                                return@FTButton
                             }
                             saving = true
                             error = null
@@ -198,10 +199,10 @@ internal fun EnduranceFuelForm(onSaved: () -> Unit) {
                     Column { Label("MINUTES INTO THE ACTIVITY"); FieldTextField(minutes, { minutes = it }, "e.g. 45", keyboardType = KeyboardType.Number) }
                     Column { Label("STATUS"); TextChipRow(STATUSES, status, perRow = 4) { status = it ?: status } }
 
-                    AmberButton(label = if (saving) "SAVING..." else "SAVE") {
+                    FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
                         if (!valid || saving) {
                             error = "Pick an activity, a product, servings above 0 and minutes between 0 and 1440."
-                            return@AmberButton
+                            return@FTButton
                         }
                         saving = true
                         error = null
@@ -234,7 +235,7 @@ internal fun EnduranceFuelForm(onSaved: () -> Unit) {
                             }
                         }
                     }
-                    AmberButton(label = "TEST THIS PRODUCT (N-OF-1)") { experimenting = true }
+                    FTButton(label = "TEST THIS PRODUCT (N-OF-1)") { experimenting = true }
                 }
                 error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
             }

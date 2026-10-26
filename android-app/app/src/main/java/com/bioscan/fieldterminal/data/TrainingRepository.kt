@@ -6,10 +6,8 @@ import com.bioscan.fieldterminal.domain.averagePaceMinPerKmSince
 import com.bioscan.fieldterminal.domain.lactateThresholdPaceMinPerKmSeries
 import com.bioscan.fieldterminal.domain.latestNonNullVo2Max
 import com.bioscan.fieldterminal.domain.longestRunKm
-import com.bioscan.fieldterminal.domain.runClusterIdsBatch
 import com.bioscan.fieldterminal.domain.dedupeRunSessions
 import com.bioscan.fieldterminal.domain.sumDistanceKmSince
-import com.bioscan.fieldterminal.domain.suspectedTrailReason
 import com.bioscan.fieldterminal.domain.vo2MaxSeries
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -76,23 +74,11 @@ data class TrainingOverview(
     // screen's Training tile -- reuses the same 200-row fetch below rather
     // than a second query, sessions are already start_time-descending.
     val recentSessions: List<ExerciseSessionRow>,
-    // 25/9 rework: untagged runs that look like trail runs (see suspectedTrailReason).
-    val suspectedTrailRuns: List<SuspectedTrailRun>,
     // DAV-272: per-run efficiency factor (aerobic runs only) and the latest
     // run's grade-adjusted pace / decoupling, all computed server-side.
     val efficiencyPoints: List<Pair<LocalDate, Double>>,
     val latestGapMinPerKm: Double?,
     val latestHrDecouplingPct: Double?,
-)
-
-// sessionIds = every exercise_sessions row of this real run (HC/manual/Zepp
-// duplicates), so tagging it as trail sticks whichever copy a screen reads.
-data class SuspectedTrailRun(val row: ExerciseSessionRow, val reason: String, val sessionIds: List<Long>)
-
-@kotlinx.serialization.Serializable
-private data class ZeppSportRow(
-    @kotlinx.serialization.SerialName("exercise_session_id") val exerciseSessionId: Long? = null,
-    @kotlinx.serialization.SerialName("sport_type") val sportType: String? = null,
 )
 
 class TrainingRepository(private val supabase: SupabaseClient) {
@@ -122,13 +108,9 @@ class TrainingRepository(private val supabase: SupabaseClient) {
 
         // One row per synced Zepp workout; most won't have a lactate-threshold
         // estimate (only running workouts that qualify get one from Zepp),
-        // filtered out client-side rather than in the query since decoded is
+        // filtered out client-side rather than in the query since summary is
         // jsonb.
-        val lactateRows = supabase.postgrest.from("zepp_workout_detail")
-            .select(columns = Columns.raw("start_time,summary:decoded->summary")) {
-                order("start_time", Order.ASCENDING)
-            }
-            .decodeList<ZeppWorkoutDetailSummaryRow>()
+        val lactateRows = loadZeppWorkoutSummaries(supabase)
         val lactateThresholdPaceSecPerKmSeries = lactateRows.mapNotNull { row ->
             row.summary?.lactateThresholdPaceSecPerKm?.let { pace ->
                 OffsetDateTime.parse(row.startTime).toLocalDate() to pace
@@ -142,12 +124,6 @@ class TrainingRepository(private val supabase: SupabaseClient) {
             row.summary?.efficiencyFactor?.let { OffsetDateTime.parse(row.startTime).toLocalDate() to it }
         }
         val latestRunDynamics = lactateRows.lastOrNull { it.summary?.gapMinPerKm != null }?.summary
-
-        val zeppSportBySession = supabase.postgrest.from("zepp_workout_detail")
-            .select(columns = Columns.list("exercise_session_id,sport_type"))
-            .decodeList<ZeppSportRow>()
-            .mapNotNull { r -> r.exerciseSessionId?.let { it to r.sportType } }
-            .toMap()
 
         val running = dedupeRunSessions(sessions.filter { it.type == "run" })
         val strength = sessions.filter { it.type == "strength" }
@@ -196,17 +172,9 @@ class TrainingRepository(private val supabase: SupabaseClient) {
                         .thenBy { it.durationMin ?: 0.0 },
                 ) + sessions.filter { it.type != "run" }
             ).sortedByDescending { OffsetDateTime.parse(it.startTime) },
-            // Checked over ALL run rows, not just the deduped list: the Zepp
-            // sport code hangs off the HC row the Zepp workout was linked to,
-            // which dedupe may not have kept. Mark-as-trail is then applied to
-            // every row of the cluster below so the tag survives whichever wins.
             efficiencyPoints = efficiencyRuns,
             latestGapMinPerKm = latestRunDynamics?.gapMinPerKm,
             latestHrDecouplingPct = latestRunDynamics?.hrDecouplingPct,
-            suspectedTrailRuns = running.zip(runClusterIdsBatch(sessions, running)).mapNotNull { (r, clusterIds) ->
-                val zeppCode = clusterIds.firstNotNullOfOrNull { zeppSportBySession[it] }
-                suspectedTrailReason(r, zeppCode)?.let { SuspectedTrailRun(r, it, clusterIds) }
-            },
         )
     }
 }

@@ -56,6 +56,9 @@ import java.time.OffsetDateTime
 // convention) decide what actually falls inside each window -- no server-
 // side date-range filter, consistent with how every other repository in
 // this app reads a daily table.
+// Redesign: the range selector reaches ALL (years of daily rows), so the daily histories are not cut at 200 days.
+private const val DAILY_HISTORY_ROWS = 3650L
+
 class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Analysis Layer 3 / R1. The start of each metric's current regime = its last CONFIRMED series break, published by the
@@ -193,7 +196,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("wearable_daily")
             .select(columns = Columns.list("date,hrv,rhr,steps,spo2_avg")) {
                 order("date", Order.DESCENDING)
-                limit(200)
+                limit(DAILY_HISTORY_ROWS)
             }
             .decodeList<WearableAnalysisRow>()
             .reversed()
@@ -217,13 +220,29 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             }
     }
 
+    // Redesign: each day's lowest and highest heart rate for the Range Trend card, from the wearable_hr_daily_range view
+    // (migration 20261104). Empty until that view exists, so the card says "no readings" instead of failing the page.
+    suspend fun loadHeartRateRanges(): List<Pair<LocalDate, com.bioscan.fieldterminal.domain.DayRange>> =
+        ReadCache.get("analysis.hr_ranges", tables = setOf("wearable_daily")) {
+            runCatching {
+                supabase.postgrest.from("wearable_hr_daily_range")
+                    .select(columns = Columns.list("date,hr_min,hr_max")) {
+                        order("date", Order.DESCENDING)
+                        limit(DAILY_HISTORY_ROWS)
+                    }
+                    .decodeList<HrRangeRow>()
+                    .map { LocalDate.parse(it.date) to com.bioscan.fieldterminal.domain.DayRange(it.low, it.high) }
+                    .reversed()
+            }.getOrDefault(emptyList())
+        }
+
     suspend fun loadSleepDaily(): List<SleepAnalysisRow> = ReadCache.get("analysis.SleepDaily", tables = setOf("sleep_daily")) { fetchSleepDaily() }
 
     private suspend fun fetchSleepDaily(): List<SleepAnalysisRow> =
         supabase.postgrest.from("sleep_daily")
             .select(columns = Columns.list("date,hours,bedtime,wake_time,respiratory_rate,deep_min,rem_min,light_min")) {
                 order("date", Order.DESCENDING)
-                limit(200)
+                limit(DAILY_HISTORY_ROWS)
             }
             .decodeList<SleepAnalysisRow>()
             .reversed()
@@ -234,7 +253,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("body_metrics")
             .select(columns = Columns.list("date,weight_kg,body_fat_pct")) {
                 order("date", Order.DESCENDING)
-                limit(200)
+                limit(DAILY_HISTORY_ROWS)
             }
             .decodeList<BodyMetricsAnalysisRow>()
             .reversed()
@@ -318,7 +337,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("wellbeing_daily")
             .select(columns = Columns.list("date,energy,mood,stress,soreness,morning_erection_quality,arousal_level")) {
                 order("date", Order.DESCENDING)
-                limit(200)
+                limit(DAILY_HISTORY_ROWS)
             }
             .decodeList<WellbeingAnalysisRow>()
             .reversed()
@@ -436,6 +455,9 @@ private data class IntensitySessionRow(
 
 @kotlinx.serialization.Serializable
 private data class HrHistogramRow(@kotlinx.serialization.SerialName("hr_histogram") val histogram: Map<String, Double>? = null)
+
+@kotlinx.serialization.Serializable
+private data class HrRangeRow(val date: String, @kotlinx.serialization.SerialName("hr_min") val low: Double, @kotlinx.serialization.SerialName("hr_max") val high: Double)
 
 @kotlinx.serialization.Serializable
 private data class HrDayRow(

@@ -108,13 +108,8 @@ fun NutritionTileScreen(
     PinnedPage(
         onBack = onBack,
         title = "NUTRITION",
-        subtitle = when (tab) {
-            NutritionTab.Nutrition -> "CALORIES · MACROS · AVERAGES · TREND"
-            NutritionTab.Hydration -> "HYDRATION · CAFFEINE · INTELLIGENCE"
-            NutritionTab.Plan -> "TODAY AND THE NEXT 2 DAYS"
-        },
         accent = FT.DomainFuel,
-        rail = { SubTabRow(items = NutritionTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        rail = { com.bioscan.fieldterminal.ui.components.TimeRangeBar(); SubTabRow(items = NutritionTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
         scrollState = scroll,
     ) {
 

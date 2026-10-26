@@ -136,19 +136,8 @@ fun TrainingTileScreen(
     PinnedPage(
         onBack = onBack,
         title = "TRAINING",
-        subtitle = when (tab) {
-            TrainingTab.Load -> "LOAD · FITNESS · INTENSITY · " + when (timeframe.months) {
-                1L -> "LAST MONTH"
-                12L -> "LAST YEAR"
-                else -> "LAST ${timeframe.months} MONTHS"
-            }
-            TrainingTab.Running -> "LEVEL · VOLUME · EFFICIENCY · RECORDS"
-            TrainingTab.Strength -> "LEVEL · STANDARDS · E1RM · VOLUME · PRs"
-            TrainingTab.Sessions -> "EVERY SESSION, NEWEST FIRST"
-            TrainingTab.Injury -> "INJURIES · ILLNESSES · CHECK-INS"
-        },
         accent = FT.DomainTraining,
-        rail = { SubTabRow(items = TrainingTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        rail = { com.bioscan.fieldterminal.ui.components.TimeRangeBar(); SubTabRow(items = TrainingTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
         scrollState = scroll,
     ) {
 

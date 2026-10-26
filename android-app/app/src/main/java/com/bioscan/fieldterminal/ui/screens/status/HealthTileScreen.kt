@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import com.bioscan.fieldterminal.domain.LoadSpans
+import com.bioscan.fieldterminal.domain.DayRange
 import com.bioscan.fieldterminal.domain.compositeInputs
 import com.bioscan.fieldterminal.domain.evaluations
 import com.bioscan.fieldterminal.domain.recoveryFrom
@@ -152,9 +153,8 @@ fun HealthTileScreen(onBack: () -> Unit, requestedTab: HealthTab? = null, onRequ
     }
 
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
-    // Intraday HR of the newest day that has one, for the DAILY HEART RATE card; loaded apart from the daily list (it is
-    // ~50 kB per day).
-    var hrDay by remember { mutableStateOf<com.bioscan.fieldterminal.domain.HeartRateDay?>(null) }
+    // Each day's lowest and highest heart rate, for the HEART RATE range card (the minute curve lives on Today).
+    var hrRanges by remember { mutableStateOf<List<Pair<LocalDate, DayRange>>>(emptyList()) }
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
     var sexualActivity by remember { mutableStateOf<List<LogSexualActivityRow>?>(null) }
@@ -175,7 +175,7 @@ fun HealthTileScreen(onBack: () -> Unit, requestedTab: HealthTab? = null, onRequ
                 val repo = AnalysisRepository(SupabaseClientProvider.client)
                 parallel(
                     { wearable = repo.loadWearableDaily() },
-                    { hrDay = repo.loadHeartRateDay() },
+                    { hrRanges = repo.loadHeartRateRanges() },
                     { sleep = repo.loadSleepDaily() },
                     { wellbeing = repo.loadWellbeingDaily() },
                     // Arousal folded into wellbeing_daily -- see `wellbeing` above.
@@ -201,17 +201,8 @@ fun HealthTileScreen(onBack: () -> Unit, requestedTab: HealthTab? = null, onRequ
     PinnedPage(
         onBack = onBack,
         title = "HEALTH",
-        subtitle = when (tab) {
-            HealthTab.Cardio -> "HRV · HEART RATE · RHR · SPO2 · BREATHING · STEPS"
-            HealthTab.Sleep -> "INDEX · DURATION · REGULARITY · PHASES · CIRCADIAN"
-            HealthTab.Body -> "WEIGHT · MEASUREMENTS · BODY FAT · DIGESTION"
-            HealthTab.Concerns -> "INJURIES · PAIN · SYMPTOMS · ILLNESS"
-            HealthTab.Wellbeing -> "ENERGY · MOOD · STRESS · SORENESS"
-            HealthTab.SexualHealth -> "ACTIVITY · FREQUENCY · PATTERNS"
-            HealthTab.Bloodwork -> "LATEST DRAW · CHANGES BEYOND RCV"
-        },
         accent = FT.DomainHeart,
-        rail = { SubTabRow(items = HealthTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        rail = { com.bioscan.fieldterminal.ui.components.TimeRangeBar(); SubTabRow(items = HealthTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
         scrollState = scroll,
     ) {
         // These two load their own data, so they show without waiting for the shared load below.
@@ -242,185 +233,10 @@ fun HealthTileScreen(onBack: () -> Unit, requestedTab: HealthTab? = null, onRequ
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             when (tab) {
-                HealthTab.Cardio -> {
-                    // UX review P2: an index of the cards below, each chip carrying the state its card computes.
-                    val glance = rememberGlanceAnchors()
-                    FTGlanceStrip(glance, contentPadding = PaddingValues(0.dp))
-                    // DAV-285: one shared timeframe for both HRV and RHR's trend
-                    // charts -- they're the same kind of daily wearable stream, so
-                    // a person comparing them wants the same window on both, not
-                    // two independent toggles.
-                    var vitalsTimeframe by remember { mutableStateOf(VitalsTimeframe.Month) }
-                    SegmentedToggle(options = VitalsTimeframe.entries, selected = vitalsTimeframe, labelOf = { it.label }, onSelect = { vitalsTimeframe = it })
-
-                    val hrvPoints = w.mapNotNull { row -> row.hrv?.let { LocalDate.parse(row.date) to it } }
-                    // DAV-200: first live wiring of the new comparison layer --
-                    // real ms values (not the SWC evaluation's own log-space
-                    // baseline), the latest reading compared against every
-                    // earlier one.
-                    val hrvComparison = hrvPoints.maxByOrNull { it.first }?.let { latest ->
-                        comparePersonal(
-                            metric = "hrv",
-                            current = latest.second,
-                            history = hrvPoints.filter { it.first != latest.first },
-                            presentSources = setOf("wearable_daily"),
-                            idealSources = setOf("wearable_daily"),
-                            origin = "health_connect",
-                        )
-                    }
-                    val hrvEval = evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).toExpSpace()
-                    EvalCard(
-                        "HRV", hrvEval, "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), points = hrvPoints, comparison = hrvComparison,
-                        timeframe = vitalsTimeframe, methodology = "hrv", emphasis = FTCardEmphasis.Hero,
-                        modifier = Modifier.glanceAnchor(glance, "hrv", baselineStateWord(hrvEval.state, METRIC_DIRECTIONALITY.getValue("hrv")).let { GlanceChip(0, "HRV", state = it.state, headline = it.word) }),
-                    )
-                    // v12: intraday HR from Zepp band_data, the newest day that has it, named in the title; silently
-                    // absent when not yet synced. Minutes without a reading are gaps, not values (MinuteHeartRate.kt).
-                    hrDay?.let { day ->
-                        val summary = minuteHrSummary(day.points)
-                        FTCard(
-                            title = "HEART RATE · ${day.date.format(java.time.format.DateTimeFormatter.ofPattern("d MMM")).uppercase()}",
-                            info = DAILY_HR_INFO,
-                            modifier = Modifier.glanceAnchor(glance, "hr", GlanceChip(1, "DAILY HR")),
-                        ) {
-                            MinuteHeartRateChart(points = day.points, color = FT.DomainHeart)
-                            summary?.let {
-                                Text(
-                                    "Worn ${it.wornMinutes / 60} h ${it.wornMinutes % 60} min · ${it.low}–${it.high} bpm · average ${it.average} bpm",
-                                    style = FTType.Caption,
-                                    color = FT.TextSecondary,
-                                    modifier = Modifier.padding(top = 6.dp),
-                                )
-                            }
-                        }
-                    }
-                    val rhrPoints = w.mapNotNull { row -> row.rhr?.let { LocalDate.parse(row.date) to it } }
-                    // Same live comparison wiring as HRV above (DAV-200) --
-                    // "resting_heart_rate" is the canonical registry name
-                    // (docs/analysis-layer-2/02-metric-registry.md), not "rhr".
-                    val rhrComparison = rhrPoints.maxByOrNull { it.first }?.let { latest ->
-                        comparePersonal(
-                            metric = "resting_heart_rate",
-                            current = latest.second,
-                            history = rhrPoints.filter { it.first != latest.first },
-                            presentSources = setOf("wearable_daily"),
-                            idealSources = setOf("wearable_daily"),
-                            origin = "health_connect",
-                        )
-                    }
-                    val rhrEval = evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr"))
-                    EvalCard(
-                        "RESTING HEART RATE", rhrEval, "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), points = rhrPoints,
-                        comparison = rhrComparison, timeframe = vitalsTimeframe, methodology = "rhr",
-                        modifier = Modifier.glanceAnchor(glance, "rhr", baselineStateWord(rhrEval.state, METRIC_DIRECTIONALITY.getValue("resting_heart_rate")).let { GlanceChip(2, "RHR", state = it.state, headline = it.word) }),
-                    )
-                    val spo2Points = w.mapNotNull { row -> row.spo2?.let { LocalDate.parse(row.date) to it } }
-                    val spo2Eval = evaluateSpo2(spo2Points)
-                    EvalCard(
-                        "SPO2", spo2Eval, "%", directionality = Directionality.NON_DIRECTIONAL, points = spo2Points, timeframe = vitalsTimeframe,
-                        modifier = Modifier.glanceAnchor(glance, "spo2", baselineStateWord(spo2Eval.state, Directionality.NON_DIRECTIONAL).let { GlanceChip(3, "SPO2", state = it.state, headline = it.word) }),
-                    )
-                    val rrPoints = s.mapNotNull { row -> row.respiratoryRate?.let { LocalDate.parse(row.date) to it } }
-                    val rrEval = evaluateRespiratoryAnomaly(rrPoints)
-                    RespiratoryCard(
-                        rrEval,
-                        modifier = Modifier.glanceAnchor(glance, "resp", GlanceChip(4, "RESP", headline = if (rrEval.flagged) "FLAGGED" else "NO FLAG")),
-                    )
-                    val stepsPoints = w.mapNotNull { row -> row.steps?.let { LocalDate.parse(row.date) to it } }
-                    StepsCard(stepsPoints, stepsBenchmark, glance = glance, chipOrder = 5)
-                    val sessionStarts = exerciseSessions.mapNotNull { runCatching { OffsetDateTime.parse(it.startTime) }.getOrNull() }
-                    val movement = computeMovementIndex(stepsPoints, sessionStarts)
-                    MovementIndexCard(
-                        movement,
-                        modifier = Modifier.glanceAnchor(glance, "movement", GlanceChip(6, "MOVEMENT", headline = movement.score?.let { "%.0f / 100".format(it) } ?: "BUILDING")),
-                    )
-                }
-                HealthTab.Sleep -> {
-                    val glance = rememberGlanceAnchors()
-                    FTGlanceStrip(glance, contentPadding = PaddingValues(0.dp))
-                    val hoursPoints = s.mapNotNull { row -> row.hours?.let { LocalDate.parse(row.date) to it } }
-                    val nights = s.mapNotNull { row ->
-                        val bedtime = row.bedtime?.let { runCatching { Instant.parse(it) }.getOrNull() }
-                        val wake = row.wakeTime?.let { runCatching { Instant.parse(it) }.getOrNull() }
-                        if (bedtime != null && wake != null) SleepNight(LocalDate.parse(row.date), bedtime, wake) else null
-                    }
-                    val deepPoints = s.mapNotNull { row -> row.deepMin?.let { LocalDate.parse(row.date) to it } }
-                    // Perf pass: pure functions of the loaded rows, computed once per load, not on every recomposition.
-                    // Analysis review phase G: assembled by the shared builder (domain/Composites.kt), as on Today and Training.
-                    val composite = remember(s, w, wb, exerciseSessions, breakStarts, loadSpans) { compositeInputs(w, s, wb, exerciseSessions, breakStarts, loadSpans) }
-                    val sleepIndexResult = remember(composite) { composite.sleepIndex() }
-
-                    // Phase G: the composites' scorecards on this history (null while they are worked out).
-                    val scorecards by rememberScorecards(w, s, wb, exerciseSessions, breakStarts, loadSpans)
-                    // 09.1 Sleep Index: a headline aggregate above the same
-                    // component cards below it -- an aggregation layer, never
-                    // a replacement (DAV-235's own rule).
-                    val sleepDemoted = scorecards?.sleepIndex.demotes()
-                    SleepIndexCard(
-                        sleepIndexResult,
-                        scorecard = scorecards?.sleepIndex,
-                        emphasis = FTCardEmphasis.Hero,
-                        modifier = Modifier.glanceAnchor(
-                            glance, "index",
-                            GlanceChip(0, "SLEEP INDEX", headline = if (sleepDemoted) "INPUTS ONLY" else sleepIndexResult.score?.let { "%.0f".format(it) } ?: "BUILDING"),
-                        ),
-                    )
-                    val durationEval = evaluateSleepDuration(hoursPoints, windowStart = breakStarts.start("sleep_hours"))
-                    EvalCard(
-                        "SLEEP DURATION", durationEval, "h", directionality = METRIC_DIRECTIONALITY.getValue("sleep_duration"), points = hoursPoints,
-                        methodology = "sleep_duration", range = SLEEP_HOURS_RANGE,
-                        modifier = Modifier.glanceAnchor(glance, "duration", baselineStateWord(durationEval.state, METRIC_DIRECTIONALITY.getValue("sleep_duration"), SLEEP_HOURS_RANGE, durationEval.baseline7d).let { GlanceChip(2, "DURATION", state = it.state, headline = it.word) }),
-                    )
-                    val sriEval = remember(s) { evaluateSri(nights) }
-                    SriCard(sriEval, modifier = Modifier.glanceAnchor(glance, "sri", GlanceChip(3, "SRI", headline = sriEval.value?.let { "%.0f".format(it) } ?: "BUILDING")))
-                    SleepPhasesCard(s, glance = glance, chipOrder = 4)
-                    // 09.6 Circadian Alignment: sleep timing reuses the same
-                    // SriEvaluation above (no second algorithm); meal/exercise
-                    // timing reuse the meals/exercise-session data already
-                    // loaded for logging and Movement Index respectively.
-                    val mealTimestamps = recentMealsForTiming.mapNotNull { runCatching { OffsetDateTime.parse(it.loggedAt) }.getOrNull() }
-                    val exerciseTimestamps = exerciseSessions.mapNotNull { runCatching { OffsetDateTime.parse(it.startTime) }.getOrNull() }
-                    val circadian = computeCircadianAlignment(sriEval, mealTimestamps, exerciseTimestamps)
-                    CircadianAlignmentCard(
-                        circadian,
-                        modifier = Modifier.glanceAnchor(glance, "circadian", GlanceChip(5, "CIRCADIAN", headline = circadian.score?.let { "%.0f".format(it) } ?: "BUILDING")),
-                    )
-                }
-                HealthTab.Wellbeing -> {
-                    // DAV-101: small multiples, not one collapsed score.
-                    // DAV-214 (24/9 fixes): was a 2-column grid of compact
-                    // cards -- switched to 4 full-width stacked bands so each
-                    // card's existing DateTrendLine (SubjectiveCard already
-                    // rendered one) gets the full width instead of being
-                    // squeezed to half-screen.
-                    // Morning wood/arousal moved to the SEXUAL HEALTH tab
-                    // below (own qualitative card there) -- no longer
-                    // duplicated here.
-                    val dimensions = listOf(
-                        "ENERGY" to wb.mapNotNull { row -> row.energy?.let { LocalDate.parse(row.date) to it.toDouble() } },
-                        "MOOD" to wb.mapNotNull { row -> row.mood?.let { LocalDate.parse(row.date) to it.toDouble() } },
-                        "STRESS" to wb.mapNotNull { row -> row.stress?.let { LocalDate.parse(row.date) to it.toDouble() } },
-                        "SORENESS" to wb.mapNotNull { row -> row.soreness?.let { LocalDate.parse(row.date) to it.toDouble() } },
-                    )
-                    dimensions.forEach { (title, points) -> SubjectiveCard(title, points, modifier = Modifier.fillMaxWidth()) }
-                    // 05.1 Stress Rhythm: labeled distinctly from the
-                    // subjective STRESS card above so the two are never
-                    // conflated (DAV-246's own explicit requirement).
-                    val exerciseWindows = exerciseSessions.mapNotNull { session ->
-                        val start = runCatching { OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
-                        val durationMin = session.durationMin ?: return@mapNotNull null
-                        start to start.plusSeconds((durationMin * 60).toLong())
-                    }
-                    stressDays.firstOrNull()?.let { today ->
-                        PhysiologicalStressCard(analyzeStressDay(today, stressDays.drop(1), exerciseWindows), today)
-                    }
-                }
-                HealthTab.SexualHealth -> {
-                    SexualHealthOccurrencesCard(sa)
-                    SexualHealthFrequencyCard(sa)
-                    SexualHealthHeatmapCard(sa)
-                    SexualHealthQualitativeCard(wb, sa)
-                }
+                HealthTab.Cardio -> CardioPage(w, s, hrRanges, stepsBenchmark, breakStarts)
+                HealthTab.Sleep -> SleepPage(s, w, wb, exerciseSessions, recentMealsForTiming, breakStarts, loadSpans)
+                HealthTab.Wellbeing -> WellbeingPage(wb, stressDays)
+                HealthTab.SexualHealth -> SexualHealthPage(wb, sa)
                 HealthTab.Body, HealthTab.Bloodwork, HealthTab.Concerns -> Unit
             }
         }
@@ -432,7 +248,7 @@ fun HealthTileScreen(onBack: () -> Unit, requestedTab: HealthTab? = null, onRequ
 // loaded for Wellbeing above; no new repository call.
 
 @Composable
-private fun SexualHealthOccurrencesCard(sa: List<LogSexualActivityRow>) {
+internal fun SexualHealthOccurrencesCard(sa: List<LogSexualActivityRow>) {
     val intercourseDays = sa.count { it.activityType == "intercourse" }
     val masturbationDays = sa.count { it.activityType == "masturbation" }
     val totalOrgasms = sa.sumOf { row -> row.instances.count { it.orgasm } }
@@ -448,7 +264,7 @@ private fun SexualHealthOccurrencesCard(sa: List<LogSexualActivityRow>) {
 }
 
 @Composable
-private fun SexualHealthFrequencyCard(sa: List<LogSexualActivityRow>) {
+internal fun SexualHealthFrequencyCard(sa: List<LogSexualActivityRow>) {
     val dates = sa.mapNotNull { row -> runCatching { LocalDate.parse(row.date) }.getOrNull()?.let { it to row.activityType } }
     if (dates.isEmpty()) {
         FTCard(title = "FREQUENCY") { Text("No entries logged yet.", style = FTType.BodySmall, color = FT.TextSecondary) }
@@ -482,7 +298,7 @@ private fun SexualHealthFrequencyCard(sa: List<LogSexualActivityRow>) {
 }
 
 @Composable
-private fun SexualHealthHeatmapCard(sa: List<LogSexualActivityRow>) {
+internal fun SexualHealthHeatmapCard(sa: List<LogSexualActivityRow>) {
     val byDate = sa.mapNotNull { row -> runCatching { LocalDate.parse(row.date) }.getOrNull()?.let { it to row.activityType } }
         .groupBy({ it.first }, { it.second })
         .mapValues { (_, types) ->
@@ -497,10 +313,7 @@ private fun SexualHealthHeatmapCard(sa: List<LogSexualActivityRow>) {
 }
 
 @Composable
-private fun SexualHealthQualitativeCard(wb: List<WellbeingAnalysisRow>, sa: List<LogSexualActivityRow>) {
-    SubjectiveCard("MORNING ERECTION QUALITY", wb.mapNotNull { row -> row.morningErectionQuality?.let { LocalDate.parse(row.date) to it.toDouble() } }, modifier = Modifier.fillMaxWidth())
-    SubjectiveCard("AROUSAL", wb.mapNotNull { row -> row.arousalLevel?.let { LocalDate.parse(row.date) to it.toDouble() } }, modifier = Modifier.fillMaxWidth())
-
+internal fun SexualHealthIntensityCard(sa: List<LogSexualActivityRow>) {
     val intensities = sa.flatMap { it.instances }.mapNotNull { it.orgasmIntensity }
     val loadSizes = sa.flatMap { it.instances }.mapNotNull { it.loadSize }
     if (intensities.isNotEmpty() || loadSizes.isNotEmpty()) {
@@ -742,34 +555,7 @@ private fun recoveryBalanceLine(b: com.bioscan.fieldterminal.domain.RecoveryBala
     "This morning: %.0f votes, %.0f%% of them up and %.0f%% down (net %+.2f; ABOVE or BELOW from ±0.25).".format(b.votes, b.up * 100, b.down * 100, b.net)
 
 @Composable
-private fun SleepIndexCard(
-    result: SleepIndexResult,
-    modifier: Modifier = Modifier,
-    scorecard: ScorecardResult? = null,
-    emphasis: FTCardEmphasis = FTCardEmphasis.Supporting,
-) {
-    // App restructure: the lead card of Health › SLEEP, now TODAY'S RECOVERY lives on Today.
-    FTCard(dataQuality = result.confidence, title = "SLEEP INDEX", methodology = "sleep_index", modifier = modifier, emphasis = emphasis) {
-        // Analysis review phase G: demoted by its scorecard, the index gives way to its components.
-        if (scorecard.demotes()) FTStatePill(INPUTS_ONLY)
-        if (result.score != null) {
-            if (!scorecard.demotes()) FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
-            result.components.forEach { (component, componentScore) ->
-                FTScoreRow(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, componentScore.score, FT.Category.Sleep.c500)
-            }
-        } else {
-            Text(
-                "Not enough components yet -- needs at least 2 of duration/regularity/respiratory/stage-composition.",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
-        }
-        ScorecardLine(scorecard)
-    }
-}
-
-@Composable
-private fun CircadianAlignmentCard(result: CircadianAlignmentResult, modifier: Modifier = Modifier) {
+internal fun CircadianAlignmentCard(result: CircadianAlignmentResult, modifier: Modifier = Modifier) {
     FTCard(dataQuality = result.confidence, title = "CIRCADIAN ALIGNMENT", info = "A behavioral regularity proxy, not a measured circadian phase.", modifier = modifier) {
         if (result.score != null) {
             FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100", secondary = result.band))
@@ -787,7 +573,7 @@ private fun CircadianAlignmentCard(result: CircadianAlignmentResult, modifier: M
 }
 
 @Composable
-private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay) {
+internal fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay) {
     // "PHYSIOLOGICAL STRESS" not "STRESS" -- never visually conflated with
     // the subjective SubjectiveCard("STRESS") above it (DAV-246's own rule).
     FTCard(dataQuality = result.confidence, title = "PHYSIOLOGICAL STRESS") {
@@ -828,167 +614,13 @@ private fun PhysiologicalStressCard(result: StressRhythmResult, today: StressDay
     }
 }
 
-@Composable
-private fun SriCard(eval: SriEvaluation, modifier: Modifier = Modifier) {
-    FTCard(dataQuality = eval.confidence, title = "SLEEP REGULARITY (SRI)", methodology = "sri", modifier = modifier) {
-        if (eval.value != null) {
-            // Analysis review phase G: the one regularity mark (SRI_REGULAR), the same the Healthspan sleep factor uses.
-            FTMetricValue(DisplayValue(primary = "%.0f".format(eval.value), unit = "/ 100", secondary = sriWord(eval.value)))
-        } else {
-            Text(
-                "Not enough consecutive nights yet (gaps over 2 nights reset the count).",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
-        }
-    }
-}
-
 // Live check: HealthConnectDailySyncRepository.syncSleep() already computes
 // real per-night deep/rem/light minutes from SleepSessionRecord.stages and
 // syncs them to sleep_daily -- nothing in the app ever displayed them. Shows
 // the last 14 real nights' average as a proportion bar rather than one more
 // day-by-day trend line (this is a composition question -- "where does sleep
 // time go" -- not a day-to-day trend one).
-private const val SLEEP_PHASE_WINDOW_DAYS = 14L
-
-@Composable
-private fun SleepPhasesCard(nights: List<SleepAnalysisRow>, glance: GlanceAnchors? = null, chipOrder: Int = 0) {
-    val today = LocalDate.now()
-    val recent = nights.filter {
-        it.deepMin != null && it.remMin != null && it.lightMin != null &&
-            ChronoUnit.DAYS.between(LocalDate.parse(it.date), today) <= SLEEP_PHASE_WINDOW_DAYS
-    }
-    if (recent.isEmpty()) return
-
-    val avgDeep = recent.map { it.deepMin!! }.average()
-    val avgRem = recent.map { it.remMin!! }.average()
-    val avgLight = recent.map { it.lightMin!! }.average()
-    val avgTotal = (avgDeep + avgRem + avgLight).takeIf { it > 0 } ?: 1.0
-
-    // Anchored here, after the early return, so the glance strip never points at a card that is not shown.
-    FTCard(title = "SLEEP PHASES", methodology = "sleep_stages", modifier = Modifier.glanceAnchor(glance, "phases", GlanceChip(chipOrder, "PHASES"))) {
-        FTSegmentBar(
-            listOf(
-                FTSegment("Deep", avgDeep, FT.Category.Sleep.c700),
-                FTSegment("REM", avgRem, FT.Category.Sleep.c500),
-                FTSegment("Light", avgLight, FT.Category.Sleep.c300),
-            ),
-            showLegend = false,
-        )
-        PhaseRow("Deep", avgDeep, avgTotal, FT.Category.Sleep.c700)
-        PhaseRow("REM", avgRem, avgTotal, FT.Category.Sleep.c500)
-        PhaseRow("Light", avgLight, avgTotal, FT.Category.Sleep.c300)
-        FTMetricRow("Nights averaged", "${recent.size}")
-    }
-}
-
-@Composable
-private fun PhaseRow(label: String, minutes: Double, totalMinutes: Double, dotColor: androidx.compose.ui.graphics.Color) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.width(8.dp).height(8.dp).background(dotColor))
-            Text(label, style = FTType.Body, color = FT.TextSecondary)
-        }
-        Text(
-            "${minutes.toInt()} min  ·  %.0f%%".format(minutes / totalMinutes * 100),
-            style = FTType.Value,
-            color = FT.TextPrimary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f).padding(start = 8.dp),
-        )
-    }
-}
-
 // Live check: wearable_daily.steps has 1,000+ real synced days, never read
 // anywhere. No evaluate*() function exists for steps (no baseline/SWC
 // concept defined for it, unlike HRV/RHR) -- a plain daily count and trend,
 // not a full EvalCard, is the honest treatment.
-private const val STEPS_WINDOW_DAYS = 15L
-
-@Composable
-private fun MovementIndexCard(result: MovementIndexResult, modifier: Modifier = Modifier) {
-    FTCard(dataQuality = result.confidence, title = "MOVEMENT INDEX", modifier = modifier) {
-        if (result.score != null) {
-            FTMetricValue(DisplayValue(primary = "%.0f".format(result.score), unit = "/ 100"))
-            result.components.forEach { (component, componentScore) ->
-                FTScoreRow(component.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, componentScore.score, FT.Category.Activity.c500)
-            }
-            if (result.unavailableComponents.isNotEmpty()) {
-                Text(
-                    "Active calories and zone minutes stay unavailable -- too little of this account's data has them yet.",
-                    style = FTType.Caption,
-                    color = FT.TextMuted,
-                )
-            }
-        } else {
-            Text(
-                "Not enough step or session history yet.",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
-        }
-    }
-}
-
-@Composable
-private fun StepsCard(points: List<Pair<LocalDate, Double>>, benchmarkArtifacts: List<BenchmarkArtifact>, glance: GlanceAnchors? = null, chipOrder: Int = 0) {
-    val today = LocalDate.now()
-    val recent = points.filter { ChronoUnit.DAYS.between(it.first, today) <= STEPS_WINDOW_DAYS }
-    if (recent.size < 2) return
-    val avg = recent.map { it.second }.average()
-
-    // DAV-211: this used to compare today's single (often still-partial) day
-    // against the Tudor-Locke bands while the card displayed the 15-day
-    // average right above it -- e.g. "17k+ AVG/DAY" next to a "sedentary"
-    // badge that was actually describing an unrelated, much lower, in-progress
-    // today. Comparing the same `avg` the card shows keeps the two numbers honest.
-    val comparison = comparePopulation(
-        metric = "steps",
-        current = avg,
-        context = PopulationContext(ageYears = null, sex = null, geography = null),
-        artifacts = benchmarkArtifacts,
-    )
-
-    // Anchored after the early return, like SLEEP PHASES.
-    FTCard(title = "STEPS", modifier = Modifier.glanceAnchor(glance, "steps", GlanceChip(chipOrder, "STEPS", headline = "${avg.toInt()} / DAY"))) {
-        FTMetricValue(DisplayValue(primary = "${avg.toInt()}", unit = "AVG/DAY", secondary = "last 15 days"))
-        // DAV-196: first real population artifact (Tudor-Locke & Bassett's
-        // steps/day categories) -- no personal-history comparison wired for
-        // steps yet.
-        ComparisonStrip(population = comparison)
-        DateTrendLine(points = recent, color = FT.DomainHeart, unit = "steps / day", scale = personalScale(points.takeLast(365).map { it.second }), maxGapDays = 1)
-    }
-}
-
-@Composable
-private fun RespiratoryCard(eval: RespiratoryAnomalyEvaluation, modifier: Modifier = Modifier) {
-    FTCard(dataQuality = eval.confidence, title = "RESPIRATORY RATE", methodology = "respiratory_rate_sleep", modifier = modifier) {
-        eval.baseline?.let { FTMetricRow("14-night baseline", "%.1f breaths/min".format(it)) }
-        Text(
-            if (eval.flagged) {
-                "Physiological anomaly flagged — 2 consecutive nights outside your baseline ±2 SD. Not a diagnosis."
-            } else {
-                "No anomaly flagged."
-            },
-            style = FTType.BodySmall,
-            color = if (eval.flagged) FT.Critical else FT.TextSecondary,
-        )
-    }
-}
-
-@Composable
-private fun SubjectiveCard(title: String, points: List<Pair<LocalDate, Double>>, modifier: Modifier = Modifier) {
-    val eval = evaluateSubjective(points)
-    FTCard(dataQuality = eval.confidence, title = title, modifier = modifier) {
-        FTStatePill(trendStateWord(eval.state))
-        eval.median7d?.let { FTMetricRow("7-day median", "%.1f".format(it)) }
-        eval.medianBaseline30d?.let { FTMetricRow("30-day baseline", "%.1f".format(it)) }
-        eval.iqr7d?.let { FTMetricRow("7-day IQR", "%.1f".format(it)) }
-        eval.trendDirection?.let { FTMetricRow("14-day trend", if (it > 0) "↑ rising (p<0.05)" else "↓ falling (p<0.05)") }
-        recentTrendWindow(points)?.let { recent ->
-            DateTrendLine(points = recent, color = FT.Category.Wellbeing.c500, modifier = Modifier.padding(top = 8.dp), scale = personalScale(points.takeLast(365).map { it.second }), maxGapDays = 1)
-        }
-    }
-}
-

@@ -55,6 +55,7 @@ import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.resolveTier
 import com.bioscan.fieldterminal.domain.PerformanceTimeframe
+import com.bioscan.fieldterminal.domain.toPerformanceTimeframe
 import com.bioscan.fieldterminal.domain.TSB_DETRAINED_ABOVE
 import com.bioscan.fieldterminal.domain.TSB_FRESHENED_FROM
 import com.bioscan.fieldterminal.domain.TSB_HEAVILY_LOADED_BELOW
@@ -127,8 +128,8 @@ fun TrainingTileScreen(
             onRequestedTabConsumed()
         }
     }
-    // 25/9 rework: one switch for the Load tab's CTL/ATL/TSB charts (RUNNING and STRENGTH keep their own).
-    var timeframe by remember { mutableStateOf(PerformanceTimeframe.ThreeMonths) }
+    // Redesign: the global range (top bar) sets the window of every Training chart.
+    val timeframe = com.bioscan.fieldterminal.ui.components.GlobalTimeRange.selected.toPerformanceTimeframe()
 
     // Contract A4: title, context line and sub-tab rail stay pinned; only the tab's content scrolls, from the top on a tab change.
     val scroll = rememberScrollState()
@@ -144,7 +145,7 @@ fun TrainingTileScreen(
         when (tab) {
             // App restructure: TRAINING LOAD then INTENSITY. READY FOR lives on Today only; the running and strength
             // rollups gave way to their own tabs.
-            TrainingTab.Load -> TrainingLoadSection(timeframe, onTimeframeChange = { timeframe = it })
+            TrainingTab.Load -> TrainingLoadSection(timeframe)
             TrainingTab.Running -> com.bioscan.fieldterminal.ui.screens.user.RunningTab()
             TrainingTab.Strength -> com.bioscan.fieldterminal.ui.screens.user.StrengthTab()
             TrainingTab.Sessions -> TrainingSessionsTab(onOpenSessionDetail)
@@ -311,7 +312,7 @@ internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Mo
 }
 
 @Composable
-private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChange: (PerformanceTimeframe) -> Unit) {
+private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
     var sessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
@@ -363,7 +364,6 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChan
             resolveTier(MetricCategory.TrainingLoad, activeCycle),
             trainingLoadSeries(sessionLoads, spans = loadSpans),
             timeframe,
-            onTimeframeChange = onTimeframeChange,
             fitnessFatigue = fitnessFatigue,
         )
         // VO2max and lactate threshold, moved here from the Running page (owner's structure, Oct 2026).
@@ -379,7 +379,6 @@ internal fun TrainingLoadCard(
     series: List<TrainingLoadPoint>,
     timeframe: PerformanceTimeframe,
     modifier: Modifier = Modifier,
-    onTimeframeChange: ((PerformanceTimeframe) -> Unit)? = null,
     fitnessFatigue: FitnessFatigueRow? = null,
 ) {
     val cutoff = LocalDate.now().minusMonths(timeframe.months)
@@ -426,16 +425,6 @@ internal fun TrainingLoadCard(
             val spans = if (ff.adopted && personal != null) "%.0f AND %.0f DAYS · YOURS (PREDICTIVE)".format(personal.ctl, personal.atl) else "42 AND 7 DAYS · STANDARD"
             Text("SPANS · $spans", style = FTType.LabelCaps, color = FT.TextSecondary)
             if (ff.summary.isNotBlank()) Text(ff.summary, style = FTType.Caption, color = FT.TextMuted)
-        }
-        // The timeframe sits on the charts it controls (UX review P2; it used to float above the whole tab).
-        if (onTimeframeChange != null && (eval.ctl != null || eval.tsb != null)) {
-            SegmentedToggle(
-                options = PerformanceTimeframe.entries,
-                selected = timeframe,
-                labelOf = { it.label },
-                onSelect = onTimeframeChange,
-                accentColor = FT.DomainTraining,
-            )
         }
         // Trend lines: the numbers live above, so these carry only the history. Fitness and fatigue share one chart (same
         // unit, same axis) and are told apart by lightness, dash and a legend (UX review F10: two single-line charts read

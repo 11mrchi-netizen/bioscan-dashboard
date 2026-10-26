@@ -54,3 +54,10 @@ Steps
 4. Tests: baseline-only day, workout widens band, hot vs cool, no-intake is null, missing weather widens band, no-workout equals baseline.
 
 Rough size: hypnogram 3 to 4 days (migration + sync + backfill + UI), glucose 2 days, hydration 2 to 3 days.
+
+## Status (built)
+
+- **Hypnogram:** migration `20261105_sleep_stage_intervals.sql` applied to the live database and backfilled (473 nights from `zepp_raw_extracts`). Confirmed on a real night: stage `start`/`stop` are inclusive minutes from the local midnight of the day before the query date, so offsets are taken from the first stage, which equals `bedtime`. The `zepp-extract` change (`sleepStages.ts`) is committed but NOT deployed, so new nights have no stages until it is. The breathing overlay is not built (the band does not record it overnight). Cycles are estimated.
+- **Glucose spiking:** `domain/MealGlycaemicLoad.kt` and the Today card. A relative load band per meal, never mg/dL.
+- **Hydration accounting:** `domain/fuel/HydrationAccounting.kt`, `data/HydrationAccountingRepository.kt` and the Hydration chart. Demand range = baseline range plus predicted session sweat; the last 28 days (7 at 7D). Session type is assumed to be a run, effort comes from RPE.
+- **Migration `20261104_wearable_hr_daily_range.sql`** applied. The view unnests every day's minute series (about 1.4 s for 487 days).

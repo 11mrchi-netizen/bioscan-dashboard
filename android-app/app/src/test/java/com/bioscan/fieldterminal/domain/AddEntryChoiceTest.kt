@@ -12,14 +12,11 @@ class AddEntryChoiceTest {
     fun everyChoiceLeadsSomewhereAndFuelChoicesOpenTheirForm() {
         assertEquals(AddEntryTarget.Form(AddEntryType.Fuel, FuelSubType.Drink), AddEntryChoice.Drink.target)
         assertEquals(AddEntryTarget.Form(AddEntryType.Fuel, FuelSubType.Endurance), AddEntryChoice.RunFuel.target)
-        assertEquals(AddEntryTarget.Form(AddEntryType.Ostrc), AddEntryChoice.InjuryCheckIn.target)
-        assertEquals(AddEntryTarget.InjuryForm, AddEntryChoice.Injury.target)
-        assertEquals(AddEntryTarget.IllnessForm, AddEntryChoice.Illness.target)
         assertEquals(AddEntryTarget.HealthCheckIn, AddEntryChoice.HealthCheckIn.target)
         assertEquals(AddEntryTarget.EventForm, AddEntryChoice.Event.target)
-        // Every form the sheet has is reachable from the picker.
+        // Every form the sheet has is reachable from the picker, except the weekly OSTRC form (kept only to edit saved rows).
         val reachable = AddEntryChoice.entries.mapNotNull { (it.target as? AddEntryTarget.Form)?.type }.toSet()
-        assertEquals(AddEntryType.entries.toSet(), reachable)
+        assertEquals(AddEntryType.entries.toSet() - AddEntryType.Ostrc, reachable)
     }
 
     @Test

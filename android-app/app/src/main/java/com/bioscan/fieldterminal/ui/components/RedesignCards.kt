@@ -123,6 +123,27 @@ fun windowBaseline(values: List<Double>): WindowBaseline? {
 }
 
 /**
+ * The direction pill read from the band the card draws: the latest reading against the window's own limits (ABOVE BAND, BELOW
+ * BAND or WITHIN BAND), coloured by what that direction means for the metric. Building under five readings.
+ */
+fun windowStateWord(values: List<Double>, directionality: com.bioscan.fieldterminal.domain.analysis.Directionality, healthyRange: ClosedFloatingPointRange<Double>? = null): StateWord {
+    val band = windowBaseline(values) ?: return StateWord(com.bioscan.fieldterminal.domain.MetricState.Building)
+    val state = when {
+        values.last() > band.high -> com.bioscan.fieldterminal.domain.EvalState.ShiftUp
+        values.last() < band.low -> com.bioscan.fieldterminal.domain.EvalState.ShiftDown
+        else -> com.bioscan.fieldterminal.domain.EvalState.Stable
+    }
+    val word = com.bioscan.fieldterminal.domain.baselineStateWord(state, directionality, healthyRange, values.takeLast(7).average())
+    return word.copy(
+        word = when (state) {
+            com.bioscan.fieldterminal.domain.EvalState.ShiftUp -> "ABOVE BAND"
+            com.bioscan.fieldterminal.domain.EvalState.ShiftDown -> "BELOW BAND"
+            else -> "WITHIN BAND"
+        },
+    )
+}
+
+/**
  * Spec §1.2. The baseline is the centre of the bar; the shift limits sit at 10 % and 90 % (the range covers 80 % of the
  * bar); the current day is a dot with no number; the limit values are small and quiet. A reading beyond a limit stays on
  * the bar, pinned near its end, so an outlier is never lost off the edge.
@@ -203,6 +224,8 @@ fun TrendBaselineCard(
     modifier: Modifier = Modifier,
     range: TimeRange = GlobalTimeRange.selected,
     pill: StateWord? = null,
+    directionality: com.bioscan.fieldterminal.domain.analysis.Directionality? = null,
+    healthyRange: ClosedFloatingPointRange<Double>? = null,
     methodology: String? = null,
     info: String? = null,
     color: Color = FT.DomainHeart,
@@ -211,11 +234,12 @@ fun TrendBaselineCard(
 ) {
     val (helpBody, helpDetails) = rememberHelp(methodology, info)
     val inWindow = windowed(points, range)
+    val windowPill = pill ?: directionality?.let { windowStateWord(inWindow.map { p -> p.second }, it, healthyRange) }
     val band = windowBaseline(inWindow.map { it.second })
     val latest = inWindow.lastOrNull()?.second
     val shown = aggregate(points, range)
     RedesignCard(modifier) {
-        MetricCardHeader(title, latest?.let(format), unit, pill, helpBody, helpDetails)
+        MetricCardHeader(title, latest?.let(format), unit, windowPill, helpBody, helpDetails)
         if (band != null) BaselineShiftBand(band, latest, format = format) else Text("Baseline builds after five readings in this range.", style = FTType.Caption, color = FT.TextMuted)
         if (shown.size >= 2) {
             DateTrendLine(points = shown, color = color, unit = unit, scale = scale, maxGapDays = gapFor(range), valueFormat = format, highlightColor = color, refLow = band?.low, refHigh = band?.high)

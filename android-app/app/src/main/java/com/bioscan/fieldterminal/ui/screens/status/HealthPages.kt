@@ -167,20 +167,17 @@ internal fun CardioPage(
     breakStarts: SeriesBreakStarts,
 ) {
     val hrvPoints = w.series { it.hrv }
-    val hrvEval = evaluateHrv(hrvPoints, windowStart = breakStarts.start("hrv")).toExpSpace()
-    TrendBaselineCard("HRV", hrvPoints, "ms", pill = baselineStateWord(hrvEval.state, METRIC_DIRECTIONALITY.getValue("hrv")), methodology = "hrv", scale = personalScale(hrvPoints.takeLast(365).map { it.second }))
+    TrendBaselineCard("HRV", hrvPoints, "ms", directionality = METRIC_DIRECTIONALITY.getValue("hrv"), methodology = "hrv", scale = personalScale(hrvPoints.takeLast(365).map { it.second }))
 
     RangeTrendCard("HEART RATE", hrRanges, "bpm", info = HEART_RATE_INFO)
 
     val rhrPoints = w.series { it.rhr }
-    val rhrEval = evaluateRhr(rhrPoints, windowStart = breakStarts.start("rhr"))
-    TrendBaselineCard("RESTING HEART RATE", rhrPoints, "bpm", pill = baselineStateWord(rhrEval.state, METRIC_DIRECTIONALITY.getValue("resting_heart_rate")), methodology = "rhr", scale = personalScale(rhrPoints.takeLast(365).map { it.second }))
+    TrendBaselineCard("RESTING HEART RATE", rhrPoints, "bpm", directionality = METRIC_DIRECTIONALITY.getValue("resting_heart_rate"), methodology = "rhr", scale = personalScale(rhrPoints.takeLast(365).map { it.second }))
 
     // Blood pressure (a range trend with two baseline bars) stays hidden until a manual blood-pressure log exists.
 
     val spo2Points = w.series { it.spo2 }
-    val spo2Eval = evaluateSpo2(spo2Points)
-    TrendBaselineCard("SPO2", spo2Points, "%", pill = baselineStateWord(spo2Eval.state, Directionality.NON_DIRECTIONAL))
+    TrendBaselineCard("SPO2", spo2Points, "%", directionality = Directionality.NON_DIRECTIONAL)
 
     val stepsPoints = w.series { it.steps }
     val recent = stepsPoints.filter { ChronoUnit.DAYS.between(it.first, LocalDate.now()) <= 15 }
@@ -215,10 +212,9 @@ internal fun SleepPage(
     SleepIndexCard(sleepIndexResult, scorecards?.sleepIndex)
 
     val hoursPoints = s.series { it.hours }
-    val durationEval = evaluateSleepDuration(hoursPoints, windowStart = breakStarts.start("sleep_hours"))
     TrendBaselineCard(
         "SLEEP DURATION", hoursPoints, "h",
-        pill = baselineStateWord(durationEval.state, METRIC_DIRECTIONALITY.getValue("sleep_duration"), SLEEP_HOURS_RANGE, durationEval.baseline7d),
+        directionality = METRIC_DIRECTIONALITY.getValue("sleep_duration"), healthyRange = SLEEP_HOURS_RANGE,
         methodology = "sleep_duration",
     )
 

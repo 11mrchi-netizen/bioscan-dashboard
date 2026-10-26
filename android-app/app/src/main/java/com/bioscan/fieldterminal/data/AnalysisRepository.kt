@@ -244,6 +244,33 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             }
         }.getOrDefault(emptyList())
 
+    // Redesign: one night's timed stages and the overnight heart rate (the evening on the day before, the morning on the day), for
+    // the hypnogram. Null when the night has no stored stage intervals (older than the Zepp backfill, or a Health Connect night).
+    suspend fun loadHypnogramNight(date: LocalDate): com.bioscan.fieldterminal.domain.HypnogramNight? {
+        val row = supabase.postgrest.from("sleep_daily")
+            .select(columns = Columns.list("date,bedtime,stage_intervals,tz_offset_min")) {
+                filter { eq("date", date.toString()) }
+                limit(1)
+            }
+            .decodeList<HypnogramSleepRow>()
+            .firstOrNull() ?: return null
+        val raw = row.stageIntervals ?: return null
+        val bedtime = row.bedtime?.let { runCatching { java.time.OffsetDateTime.parse(it.replace(' ', 'T')).toInstant() }.getOrNull() } ?: return null
+        val blocks = com.bioscan.fieldterminal.domain.parseStageBlocks(raw)
+        if (blocks.isEmpty()) return null
+        val tz = row.tzOffsetMin ?: 0
+        val hrRows = runCatching {
+            supabase.postgrest.from("wearable_daily")
+                .select(columns = Columns.list("date,hr_timeseries")) {
+                    filter { isIn("date", listOf(date.minusDays(1).toString(), date.toString())) }
+                }
+                .decodeList<HrDayRow>()
+        }.getOrDefault(emptyList())
+        val span = blocks.maxOf { it.endMin }
+        val hr = com.bioscan.fieldterminal.domain.nightHeartRate(bedtime, tz, span, hrRows.map { LocalDate.parse(it.date) to it.hrTimeseries.orEmpty() })
+        return com.bioscan.fieldterminal.domain.HypnogramNight(date, bedtime, tz, blocks, com.bioscan.fieldterminal.domain.estimateCycles(blocks), hr)
+    }
+
     suspend fun loadSleepDaily(): List<SleepAnalysisRow> = ReadCache.get("analysis.SleepDaily", tables = setOf("sleep_daily")) { fetchSleepDaily() }
 
     private suspend fun fetchSleepDaily(): List<SleepAnalysisRow> =
@@ -448,6 +475,13 @@ private data class HrHistogramRow(@kotlinx.serialization.SerialName("hr_histogra
 
 @kotlinx.serialization.Serializable
 private data class HrRangeRow(val date: String, @kotlinx.serialization.SerialName("hr_min") val low: Double, @kotlinx.serialization.SerialName("hr_max") val high: Double)
+
+@kotlinx.serialization.Serializable
+private data class HypnogramSleepRow(
+    val bedtime: String? = null,
+    @kotlinx.serialization.SerialName("stage_intervals") val stageIntervals: List<List<Int>>? = null,
+    @kotlinx.serialization.SerialName("tz_offset_min") val tzOffsetMin: Int? = null,
+)
 
 @kotlinx.serialization.Serializable
 private data class HrDayRow(

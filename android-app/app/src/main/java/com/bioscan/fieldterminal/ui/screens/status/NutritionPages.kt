@@ -233,7 +233,7 @@ private fun HydrationAccountingCard(overview: NutritionOverview, range: TimeRang
     val context = LocalContext.current
     val goals = remember { NutritionGoalsStore.getGoals(context) }
     val loaded by produceState<List<DayHydration>?>(initialValue = null, overview) {
-        value = runCatching { HydrationAccountingRepository(SupabaseClientProvider.client).load(overview, MapSettingsStore.getHome(context), goals) }.getOrNull()
+        value = com.bioscan.fieldterminal.ui.components.softLoad { HydrationAccountingRepository(SupabaseClientProvider.client).load(overview, MapSettingsStore.getHome(context), goals) }
     }
     val days = loaded?.takeLast(if (range == TimeRange.Week) 7 else 28)
     RedesignCard {

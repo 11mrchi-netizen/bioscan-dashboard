@@ -96,15 +96,26 @@ val AddEntryChoice.target: AddEntryTarget
         AddEntryChoice.Note -> AddEntryTarget.Form(AddEntryType.Note)
     }
 
-// The RECENT row: the last few choices, newest first, each once. Stored as enum names; unknown names (a renamed or
-// removed choice) are dropped instead of failing.
+// The RECENT row: the last few choices, newest first, each once. Stored as enum names; a name retired in a later build
+// reads as the choice that replaced it, and anything else unknown is dropped instead of failing.
 const val RECENT_ADD_CHOICES = 3
+
+// Redesign (spec §6): Injury check-in, Injury / pain and Illness / symptom were folded into the one Health entry, which
+// opens the same check-in. These are the only choices ever removed since RECENT was introduced (checked in git history).
+private val RETIRED_CHOICE_NAMES = mapOf(
+    "InjuryCheckIn" to AddEntryChoice.HealthCheckIn,
+    "Injury" to AddEntryChoice.HealthCheckIn,
+    "Illness" to AddEntryChoice.HealthCheckIn,
+)
 
 fun recordRecentChoice(recent: List<AddEntryChoice>, picked: AddEntryChoice, keep: Int = RECENT_ADD_CHOICES): List<AddEntryChoice> =
     (listOf(picked) + recent.filter { it != picked }).take(keep)
 
 fun parseRecentChoices(stored: String?): List<AddEntryChoice> =
-    stored.orEmpty().split(',').mapNotNull { name -> AddEntryChoice.entries.firstOrNull { it.name == name } }.distinct().take(RECENT_ADD_CHOICES)
+    stored.orEmpty().split(',')
+        .mapNotNull { name -> AddEntryChoice.entries.firstOrNull { it.name == name } ?: RETIRED_CHOICE_NAMES[name] }
+        .distinct()
+        .take(RECENT_ADD_CHOICES)
 
 fun formatRecentChoices(recent: List<AddEntryChoice>): String = recent.joinToString(",") { it.name }
 

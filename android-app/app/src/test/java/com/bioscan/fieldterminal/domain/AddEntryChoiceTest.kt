@@ -40,6 +40,16 @@ class AddEntryChoiceTest {
     }
 
     @Test
+    fun recentsSavedBeforeTheHealthEntryUpgradeToIt() {
+        // An older build stored the three entries the unified Health entry replaced; together they become one Health.
+        assertEquals(
+            listOf(AddEntryChoice.HealthCheckIn, AddEntryChoice.Food),
+            parseRecentChoices("Injury,Food,Illness"),
+        )
+        assertEquals(listOf(AddEntryChoice.HealthCheckIn), parseRecentChoices("InjuryCheckIn"))
+    }
+
+    @Test
     fun theEntrySheetShowsATimeOnlyWhereItIsReal() {
         val today = LocalDate.of(2026, 10, 14)
         val meal = LogEntry(1, LogSource.Meal, LogEntryKind.Food, LocalDateTime.of(2026, 10, 14, 7, 20), "Oats", null)

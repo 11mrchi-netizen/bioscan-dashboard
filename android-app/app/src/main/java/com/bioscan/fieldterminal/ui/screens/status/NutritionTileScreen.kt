@@ -109,7 +109,8 @@ fun NutritionTileScreen(
         onBack = onBack,
         title = "NUTRITION",
         accent = FT.DomainFuel,
-        rail = { com.bioscan.fieldterminal.ui.components.TimeRangeBar(); SubTabRow(items = NutritionTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        rail = { SubTabRow(items = NutritionTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        headerAction = { com.bioscan.fieldterminal.ui.components.TimeRangeDropdown() },
         scrollState = scroll,
     ) {
 

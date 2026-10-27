@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -50,16 +51,34 @@ object GlobalTimeRange {
     var selected by mutableStateOf(TimeRange.Month)
 }
 
-/** Top-bar selector (7D · 1M · 3M · 6M · 1Y · ALL). */
+/** The range as a small dropdown for the page header's right corner (7D · 1M · 3M · 6M · 1Y · ALL). */
 @Composable
-fun TimeRangeBar(modifier: Modifier = Modifier) {
-    SegmentedToggle(
-        options = TimeRange.entries,
-        selected = GlobalTimeRange.selected,
-        labelOf = { it.label },
-        onSelect = { GlobalTimeRange.selected = it },
-        modifier = modifier.padding(horizontal = 22.dp, vertical = 8.dp),
-    )
+fun TimeRangeDropdown(modifier: Modifier = Modifier) {
+    var open by androidx.compose.runtime.remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(FT.RadiusSmall)
+    Box(modifier) {
+        Row(
+            Modifier
+                .height(32.dp)
+                .border(FT.BorderWidth, FT.GlassBorder, shape)
+                .background(FT.GlassFill, shape)
+                .ftClickable(shape = shape, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Change the time range") { open = true }
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(GlobalTimeRange.selected.label, style = FTType.LabelCaps, color = FT.TextPrimary)
+            Text("▾", style = FTType.Label, color = FT.TextSecondary)
+        }
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = FT.Elevated) {
+            TimeRange.entries.forEach { r ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(r.label, style = FTType.LabelCaps, color = if (r == GlobalTimeRange.selected) FT.DomainTraining else FT.TextPrimary) },
+                    onClick = { GlobalTimeRange.selected = r; open = false },
+                )
+            }
+        }
+    }
 }
 
 /** Card chrome without a built-in title row: the header below supplies it. */

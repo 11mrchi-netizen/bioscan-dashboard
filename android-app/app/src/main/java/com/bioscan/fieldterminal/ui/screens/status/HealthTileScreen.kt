@@ -202,7 +202,8 @@ fun HealthTileScreen(onBack: () -> Unit, requestedTab: HealthTab? = null, onRequ
         onBack = onBack,
         title = "HEALTH",
         accent = FT.DomainHeart,
-        rail = { com.bioscan.fieldterminal.ui.components.TimeRangeBar(); SubTabRow(items = HealthTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        rail = { SubTabRow(items = HealthTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        headerAction = { com.bioscan.fieldterminal.ui.components.TimeRangeDropdown() },
         scrollState = scroll,
     ) {
         // These two load their own data, so they show without waiting for the shared load below.

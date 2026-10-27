@@ -138,7 +138,8 @@ fun TrainingTileScreen(
         onBack = onBack,
         title = "TRAINING",
         accent = FT.DomainTraining,
-        rail = { com.bioscan.fieldterminal.ui.components.TimeRangeBar(); SubTabRow(items = TrainingTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        rail = { SubTabRow(items = TrainingTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        headerAction = { com.bioscan.fieldterminal.ui.components.TimeRangeDropdown() },
         scrollState = scroll,
     ) {
 

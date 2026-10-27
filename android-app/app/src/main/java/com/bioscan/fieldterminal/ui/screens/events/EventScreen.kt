@@ -139,9 +139,9 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
                 }
             }
             actionError?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
-            // After the event: what of the fuel plan was taken, how the gut coped, the weigh-ins (fuel planning phase 8).
+            // After the event: what of the fuel schedule was taken, any discomfort, how it felt, the weigh-ins (race fuel rework).
             if (!e.date.isAfter(LocalDate.now()) && e.status != EventStatus.CANCELLED && e.status != EventStatus.DNS) {
-                FTButton("REVIEW FUELLING", emphasis = FTButtonEmphasis.Primary) { reviewing = true }
+                FTButton("FUEL DEBRIEF", emphasis = FTButtonEmphasis.Primary) { reviewing = true }
             }
             FTButton("EDIT EVENT", emphasis = if (e.date.isAfter(LocalDate.now())) FTButtonEmphasis.Primary else FTButtonEmphasis.Secondary) { editing = true }
             e.exerciseSessionId?.let { sid -> FTButton("OPEN THE RECORDED SESSION") { onOpenSession(sid) } }
@@ -158,7 +158,11 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
         }
     }
     if (reviewing && e != null) {
-        com.bioscan.fieldterminal.ui.screens.fuel.FuelReviewSheet(e, onDismiss = { reviewing = false }, onSaved = { reviewing = false; guard.retry() })
+        // The debrief: the event's fuel schedule (or the planned run it was linked to) checked against what was taken.
+        val debrief by androidx.compose.runtime.produceState<com.bioscan.fieldterminal.data.DebriefTarget?>(initialValue = null, e.id) {
+            value = runCatching { com.bioscan.fieldterminal.data.FuelDebriefRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).targetForEvent(e) }.getOrNull()
+        }
+        debrief?.let { com.bioscan.fieldterminal.ui.screens.fuel.FuelDebriefSheet(it, onDismiss = { reviewing = false }, onSaved = { reviewing = false; guard.retry() }) }
     }
     if (editing && e != null) {
         EventFormSheet(

@@ -777,7 +777,7 @@ private fun FuelForm(
             )
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
             FuelSubType.Supplements -> SupplementsForm(saving, preselectBundle = supplementBundle, onSave = { takenAt, items, source, quantities -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities) } })
-            FuelSubType.Endurance -> EnduranceFuelForm(onSaved = onCanonicalSaved)
+            FuelSubType.Endurance -> com.bioscan.fieldterminal.ui.screens.fuel.RunFuelEntry(onSaved = onCanonicalSaved)
         }
     }
 }

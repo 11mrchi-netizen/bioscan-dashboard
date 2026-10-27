@@ -10,10 +10,12 @@ Replaces logging one gel at a time (Add entry > Run fuel) with an editable sched
 5. Discomfort list: nausea, cramps, bloating, reflux, side stitch, vomiting, dizziness, plus gut 0-10, energy, tiredness, thirst, notes, optional weigh-ins.
 
 ## Phases
-1. **Data and domain** (done): migration `20261106_fuel_schedule_debrief.sql` (written, not applied), `domain/fuel/FuelSchedule.kt` (blocks, expansion, totals, warnings, seeding, debrief rows, adherence), pre-start intake in `fuelingSummary.ts`.
-2. Schedule editor on the event's FUEL tab and on planned long runs.
-3. Debrief sheet, the post-race prompt, writing intake rows and the review.
-4. Shrink the old per-gel form to "add one intake"; feed symptoms to the tolerance suggestion; docs.
+1. **Data and domain** (done): migration `20261106_fuel_schedule_debrief.sql` (applied 2026-10-27), `domain/fuel/FuelSchedule.kt` (blocks, expansion, totals, warnings, seeding, debrief rows, adherence), pre-start intake in `fuelingSummary.ts`.
+2. **Schedule editor** (done): `FuelScheduleCard` on the event's FUEL tab (seeded from the plan or empty) and on planned runs of 90 minutes or more in the day plan (empty start; seeding from a long-run plan is not built). Blocks come from the fuel catalog, the supplement catalog (caffeine, sodium, carbohydrate read from the product's ingredients) or are typed.
+3. **Debrief** (done): `FuelDebriefSheet` (event page, FUEL DEBRIEF) and `RunFuelEntry` (Add entry > Run fuel: pick the activity, then the debrief). One tap per block (as planned, less, more, none), extras, discomfort ticks, gut, energy, tiredness, thirst, weigh-ins, notes. Writes one `fueling_intake_log` row per intake (key `debrief:<session>:<block>:<n>`; rows an earlier save wrote and this one does not, and the retired plan-step rows `plan:<event>:*`, are removed), the review row, and a sweat test with both weights.
+4. **Cleanup** (done): the old plan-step review sheet is gone; logging one intake stays as "log one intake instead"; the tolerance suggestion sees the ticked discomfort (`effectiveGutScore`).
+
+Not built: the post-race notification does not open the debrief directly; a schedule for a planned run is found again from its synced activity only when `planned_sessions.exercise_session_id` links them; calendar-only long runs are keyed by their calendar id and are not found from the activity.
 
 ## Open data facts
 - Existing supplement products (20) hold no caffeine or sodium ingredients yet; pre-workouts and electrolyte tablets must be added.

@@ -189,7 +189,7 @@ fun FuelScheduleCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () -> Unit, onSave: (FuelBlock) -> Unit, onDelete: () -> Unit) {
+internal fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () -> Unit, onSave: (FuelBlock) -> Unit, onDelete: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var form by remember { mutableStateOf(initial.fuelForm) }
     var label by remember { mutableStateOf(initial.label) }

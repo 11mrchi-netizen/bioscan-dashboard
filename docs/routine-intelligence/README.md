@@ -11,7 +11,7 @@ R2 (location capture) were started together on 27 Oct 2026 at the owner's reques
 | R3 Places, trips, commute | **Built and unit-tested; migration `20261107_routine_places.sql` applied (27 Oct 2026); not installed.** |
 | R4 Analysis integration | **Built and tested (core and Android); `analysis-run` not redeployed yet, so the nightly run still uses catalogue 2.0.0** (see "Deploying analysis-run" below). Day-type covariate and health-episode context deferred (below). |
 | R5 UX and alternatives | **Built and unit-tested; `transit-alternatives` written, not deployed, TDX calls not verified (no TDX account, host unreachable from the build session).** |
-| R6 | Not started. |
+| R6 Routine experiments | **Built and tested (core 306, Android 1,036); migration `20261108_routine_experiments.sql` not applied yet; needs the `analysis-run` redeploy above.** |
 
 ## Verification so far
 
@@ -87,6 +87,24 @@ Tests: `RoutineSummaryTest` (8), on a synthetic two-line network.
 Not in R5: shifting the departure time (needs travel times by time of day, which the API above does not give); splitting vehicle legs into rail and road (left for when TDX responses are verified); the plan's ≤ 1 notification a day (no notifications, owner decision 4).
 
 To switch the alternatives on: register a TDX account (free), set `TDX_CLIENT_ID` and `TDX_CLIENT_SECRET` as Edge Function secrets, deploy `transit-alternatives` (verify JWT on), and compare one response of each endpoint with the parser.
+
+## R6: experiments on routines
+
+The evidence board's TEST button now covers six routine questions, as daily randomised experiments (the micro-randomised design the other same-day choices use). Adherence is passive: each with-day is checked against what the phone measured, so nothing has to be logged.
+
+| Question | With-day rule | Adherence series | Outcome |
+|---|---|---|---|
+| `screen_bed_sleep`, `screen_bed_hrv` | no phone in the hour before sleep | `screen_bed_any` = 0 (at most 5 min) | sleep, HRV |
+| `night_phone_energy` | phone left outside the bedroom overnight | `night_phone` = 0 (no unlock after sleep onset) | energy |
+| `screen_pm_social_sleep` | no social or video apps after 21:00 | `screen_pm_social_any` = 0 (at most 5 min) | sleep |
+| `outdoor_daylight_sleep` | 30 minutes outdoors in daylight | `daylight_day` = 1 (estimated, ≥ 30 min, mobility coverage ≥ 80 %) | sleep |
+| `active_commute_hrv` | walk or cycle part of the commute | `active_commute` = 1 (≥ 10 min on foot or bicycle) | HRV |
+
+A habit can also be the outcome: `screen_bed_min`, `screen_pm_social` and `outdoor_daylight_min` are accepted as primary or secondary experiment metrics (unit minutes, default zone 10 min; less phone and more daylight are the favourable sides). That needs `20261108_routine_experiments.sql`, which widens the two `experiments` checks; the six daily choices above do not need it.
+
+A day the phone did not measure (Usage access off, mobility coverage under 80 %, no commute that day) counts as unknown adherence, not as a missed day.
+
+Tests: `routineExperiments.test.ts` (3): the plan's gate (one experiment end to end, adherence from `phone_usage_daily` only, planted effect found), a habit as the outcome, and the adherence series. `RandomisedExperimentTest` covers the new choices.
 
 ## Deploying analysis-run
 

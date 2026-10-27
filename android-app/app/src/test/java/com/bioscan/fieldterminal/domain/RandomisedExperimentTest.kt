@@ -113,7 +113,11 @@ class RandomisedExperimentTest {
         assertNull(fourWordLabel("effect_detected"))
         assertEquals("caffeine_pm_any", dailyChoiceFor("caffeine_pm_sleep")!!.behaviour.series)
         assertNull("slow exposures are not same-day choices", dailyChoiceFor("sleep_hrv"))
-        assertTrue(DAILY_CHOICES.all { it.behaviour.withValue == 0.0 && it.lag == 1 })
+        assertTrue(DAILY_CHOICES.all { it.lag == 1 })
+        // Routine choices read adherence from the phone; the two that ask for something to happen are positive rules.
+        assertEquals("screen_bed_any", dailyChoiceFor("screen_bed_sleep")!!.behaviour.series)
+        assertEquals(setOf("daylight_day", "active_commute"), DAILY_CHOICES.filter { it.behaviour.withValue == 1.0 }.map { it.behaviour.series }.toSet())
+        assertTrue(DAILY_CHOICES.all { it.behaviour.withValue == 0.0 || it.behaviour.withValue == 1.0 })
         assertEquals("±2%", zoneText(2.0, "%"))
         assertEquals("±0.5 points", zoneText(0.5, "points"))
         assertEquals("±0.25 points", zoneText(0.25, "points"))

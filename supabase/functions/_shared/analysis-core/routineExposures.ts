@@ -48,6 +48,11 @@ export const ACTIVE_COMMUTE_MIN = 10
 // A commute counts as long at this multiple of the median of the previous 28 days' commute days (from 5 of them).
 export const LONG_COMMUTE_FACTOR = 1.25
 export const LONG_COMMUTE_MIN_HISTORY = 5
+// R6: the with-day rules of the routine self-experiments, checked against what the phone measured (passive adherence).
+// Up to this many minutes still counts as none (a glance at an alarm, a notification lighting the screen).
+export const PHONE_NONE_MIN = 5
+// A daylight day: at least this many estimated minutes outdoors in daylight.
+export const DAYLIGHT_DAY_MIN = 30
 
 const num = (v: unknown): number | null => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
 
@@ -107,6 +112,17 @@ export function routineSeries(axis: string[], raw: RoutineInputs, clock: (stamp:
     travel_day: axis.map((d) => dayType(d, 'travel')),
     // Only commute days are compared with each other: a day without a commute says nothing about how one went.
     active_commute: axis.map((d) => (commuteMin.has(d) ? ((commuteActive.get(d) ?? 0) >= ACTIVE_COMMUTE_MIN ? 1 : 0) : null)),
+    // R6 adherence series (binary, known only on measured days): any phone use in the hour before sleep, any social or
+    // video use after 21:00, and a day with at least DAYLIGHT_DAY_MIN outdoors in daylight.
+    screen_bed_any: axis.map((d) => {
+      const v = num(phone.get(d)?.bed_window_min)
+      return v === null ? null : v > PHONE_NONE_MIN ? 1 : 0
+    }),
+    screen_pm_social_any: axis.map((d) => (phone.has(d) ? ((lateSocial.get(d) ?? 0) > PHONE_NONE_MIN ? 1 : 0) : null)),
+    daylight_day: axis.map((d) => {
+      const v = num(mobility.get(d)?.outdoor_daylight_min)
+      return v === null ? null : v >= DAYLIGHT_DAY_MIN ? 1 : 0
+    }),
     commute_long: axis.map((d) => {
       const today = commuteMin.get(d)
       if (today === undefined) return null

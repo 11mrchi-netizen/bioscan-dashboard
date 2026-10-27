@@ -237,6 +237,8 @@ data class DailyChoice(
 )
 
 private fun rule(series: String, label: String) = ExperimentBehaviour(series = series, withValue = 0.0, label = label)
+// A rule that asks for something to happen (a daylight day, an active commute) rather than not to.
+private fun positive(series: String, label: String) = ExperimentBehaviour(series = series, withValue = 1.0, label = label)
 
 // Each with-day asks for the rule; a without-day asks for nothing (never "drink" or "have caffeine": the test measures
 // what the rule changes against an ordinary day).
@@ -248,6 +250,13 @@ val DAILY_CHOICES: List<DailyChoice> = listOf(
     DailyChoice("alcohol_hrv", "No alcohol and next-morning HRV", rule("alcohol_any", "no alcohol"), "hrv", 1),
     DailyChoice("alcohol_rhr", "No alcohol and next-morning resting heart rate", rule("alcohol_any", "no alcohol"), "rhr", 1),
     DailyChoice("evening_training_sleep", "No evening training and sleep", rule("evening_training", "no training after 19:00"), "sleep_hours", 1),
+    // Routine (R6): adherence is read from what the phone measured, so a with-day needs no log.
+    DailyChoice("screen_bed_sleep", "No phone before bed and sleep", rule("screen_bed_any", "no phone in the hour before sleep"), "sleep_hours", 1),
+    DailyChoice("screen_bed_hrv", "No phone before bed and next-morning HRV", rule("screen_bed_any", "no phone in the hour before sleep"), "hrv", 1),
+    DailyChoice("night_phone_energy", "Phone out of the bedroom and next-day energy", rule("night_phone", "phone left outside the bedroom overnight"), "energy", 1),
+    DailyChoice("screen_pm_social_sleep", "No social apps late and sleep", rule("screen_pm_social_any", "no social or video apps after 21:00"), "sleep_hours", 1),
+    DailyChoice("outdoor_daylight_sleep", "Daylight outdoors and sleep", positive("daylight_day", "30 minutes outdoors in daylight"), "sleep_hours", 1),
+    DailyChoice("active_commute_hrv", "Active commute and next-morning HRV", positive("active_commute", "walk or cycle part of the commute"), "hrv", 1),
 )
 
 fun dailyChoiceFor(questionId: String): DailyChoice? = DAILY_CHOICES.firstOrNull { it.questionId == questionId }

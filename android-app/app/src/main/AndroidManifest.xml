@@ -11,6 +11,14 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!-- Body scale: its weigh-in is read from the BLE advertisement (domain/ScaleBroadcast.kt), no connection. Android 12+
+         needs BLUETOOTH_SCAN (never used to find a location); before that, scanning needs the legacy pair and location. -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+
     <!-- Phase G1: Health Connect. Package-visibility declaration required to
          detect/launch the Health Connect app/controller on any API level;
          on this project's target devices (Android 14+) it's framework-

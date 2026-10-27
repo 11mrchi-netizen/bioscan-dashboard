@@ -192,6 +192,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
         AddEntryTarget.BodyCheckIn -> com.bioscan.fieldterminal.ui.screens.status.BodyCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
         AddEntryTarget.EventForm -> com.bioscan.fieldterminal.ui.screens.events.EventFormSheet(onDismiss = onDismiss, onSaved = { onSaved() })
         AddEntryTarget.SweatTest -> com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.ScaleWeighIn -> com.bioscan.fieldterminal.ui.screens.status.ScaleWeighInSheet(onDismiss = onDismiss, onSaved = onSaved)
         else -> ModalBottomSheet(
             onDismissRequest = { if (!externalActivityActive.value && !com.bioscan.fieldterminal.util.ExternalActivityGuard.active) onDismiss() },
             sheetState = sheetState,
@@ -681,7 +682,7 @@ private fun choiceColor(choice: AddEntryChoice): Color = when (choice) {
     AddEntryChoice.Wellbeing -> FT.Category.Wellbeing.c500
     AddEntryChoice.Stool -> FT.Category.Digestion.c500
     AddEntryChoice.HealthCheckIn -> FT.DomainHeart
-    AddEntryChoice.Grip, AddEntryChoice.BodyCheckIn, AddEntryChoice.SweatTest -> FT.Category.Activity.c500
+    AddEntryChoice.Grip, AddEntryChoice.BodyCheckIn, AddEntryChoice.SweatTest, AddEntryChoice.ScaleWeighIn -> FT.Category.Activity.c500
     AddEntryChoice.Event -> FT.DomainTraining
     AddEntryChoice.SexualActivity, AddEntryChoice.Encounter -> FT.Category.Arousal.c500
     AddEntryChoice.Note -> FT.TextSecondary

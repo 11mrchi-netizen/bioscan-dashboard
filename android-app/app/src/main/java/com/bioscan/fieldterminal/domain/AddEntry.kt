@@ -51,6 +51,8 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
     Grip("Grip strength", AddEntryGroup.Body),
     // The monthly sitting: grip, tape girths and skinfolds (BodyCheckin.kt).
     BodyCheckIn("Body check-in", AddEntryGroup.Body),
+    // Weight and impedance read straight from the body scale over BLE (ScaleBroadcast.kt), no OKOK app.
+    ScaleWeighIn("Weigh-in", AddEntryGroup.Body),
     // Weigh-in before and after a session, for hydration plans (domain/fuel/SweatProfile.kt).
     SweatTest("Sweat test", AddEntryGroup.Body),
     // Redesign (spec §6): one Health entry for the check-in, an injury or pain, and an illness or symptom. It opens the daily
@@ -72,6 +74,7 @@ sealed interface AddEntryTarget {
     data object BodyCheckIn : AddEntryTarget
     data object EventForm : AddEntryTarget
     data object SweatTest : AddEntryTarget
+    data object ScaleWeighIn : AddEntryTarget
 }
 
 val AddEntryChoice.target: AddEntryTarget
@@ -87,6 +90,7 @@ val AddEntryChoice.target: AddEntryTarget
         AddEntryChoice.HealthCheckIn -> AddEntryTarget.HealthCheckIn
         AddEntryChoice.Event -> AddEntryTarget.EventForm
         AddEntryChoice.SweatTest -> AddEntryTarget.SweatTest
+        AddEntryChoice.ScaleWeighIn -> AddEntryTarget.ScaleWeighIn
         AddEntryChoice.SexualActivity -> AddEntryTarget.Form(AddEntryType.SexualActivity)
         AddEntryChoice.Encounter -> AddEntryTarget.Form(AddEntryType.Encounter)
         AddEntryChoice.Note -> AddEntryTarget.Form(AddEntryType.Note)
@@ -130,6 +134,7 @@ fun encodeTarget(t: AddEntryTarget?): String = when (t) {
     AddEntryTarget.BodyCheckIn -> "BODY"
     AddEntryTarget.EventForm -> "EVENT"
     AddEntryTarget.SweatTest -> "SWEAT"
+    AddEntryTarget.ScaleWeighIn -> "SCALE"
 }
 
 fun decodeTarget(s: String): AddEntryTarget? {
@@ -143,6 +148,7 @@ fun decodeTarget(s: String): AddEntryTarget? {
         "BODY" -> AddEntryTarget.BodyCheckIn
         "EVENT" -> AddEntryTarget.EventForm
         "SWEAT" -> AddEntryTarget.SweatTest
+        "SCALE" -> AddEntryTarget.ScaleWeighIn
         else -> null
     }
 }

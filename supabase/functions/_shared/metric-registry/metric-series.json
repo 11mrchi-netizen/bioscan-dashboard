@@ -1,6 +1,6 @@
 {
- "seriesVersion": "1.0.0",
- "note": "Query contracts for the stored series (analysis hub phase A, docs/analysis-console/PLAN.md); shape and rules in analysis-core/seriesContract.ts. One entry per stored series; `metric` names its methodology in metric-registry.json (null where none exists yet). day/period: how rows on one local day and days in a week or month combine (mean | sum | last). plausible: inclusive range outside which a value is invalid. Time kinds: local_date (a calendar date column), local_wall (a timestamp holding local wall time labelled UTC), utc (a true instant; the local day needs an offset).",
+ "seriesVersion": "1.1.0",
+ "note": "Query contracts for the stored series (analysis hub phase A, docs/analysis-console/PLAN.md); shape and rules in analysis-core/seriesContract.ts. One entry per stored series; `metric` names its methodology in metric-registry.json (null where none exists yet). day/period: how rows on one local day and days in a week or month combine (mean | sum | last). plausible: inclusive range outside which a value is invalid. Time kinds: local_date (a calendar date column), local_wall (a timestamp holding local wall time labelled UTC), utc (a true instant; the local day needs an offset). expect: when a value is due (daily: every day once the stream exists; worn: on days the band recorded heart rate; none: manual logs and events, where a day without a row is unknown, not missing). zeroIsSuspect: a 0 is more likely no data than a real reading.",
  "defaultUtcOffsetMin": 480,
  "series": [
   {
@@ -22,6 +22,7 @@
     1,
     300
    ],
+   "expect": "worn",
    "hasSource": true
   },
   {
@@ -43,6 +44,7 @@
     25,
     120
    ],
+   "expect": "worn",
    "hasSource": true
   },
   {
@@ -64,6 +66,8 @@
     0,
     200000
    ],
+   "expect": "daily",
+   "zeroIsSuspect": true,
    "hasSource": true
   },
   {
@@ -85,6 +89,7 @@
     10,
     90
    ],
+   "expect": "none",
    "hasSource": true
   },
   {
@@ -106,6 +111,7 @@
     50,
     100
    ],
+   "expect": "worn",
    "hasSource": true
   },
   {
@@ -127,6 +133,8 @@
     0,
     10000
    ],
+   "expect": "worn",
+   "zeroIsSuspect": true,
    "hasSource": true
   },
   {
@@ -148,6 +156,8 @@
     0,
     15000
    ],
+   "expect": "daily",
+   "zeroIsSuspect": true,
    "hasSource": true
   },
   {
@@ -169,6 +179,7 @@
     0,
     1440
    ],
+   "expect": "none",
    "hasSource": true
   },
   {
@@ -190,6 +201,7 @@
     0,
     24
    ],
+   "expect": "worn",
    "hasSource": true
   },
   {
@@ -211,6 +223,7 @@
     0,
     100
    ],
+   "expect": "worn",
    "hasSource": true
   },
   {
@@ -232,6 +245,7 @@
     4,
     40
    ],
+   "expect": "worn",
    "hasSource": true
   },
   {
@@ -253,6 +267,7 @@
     0,
     1440
    ],
+   "expect": "worn",
    "hasSource": true
   },
   {
@@ -274,6 +289,7 @@
     0,
     1440
    ],
+   "expect": "worn",
    "hasSource": true
   },
   {
@@ -295,6 +311,7 @@
     0,
     1440
    ],
+   "expect": "worn",
    "hasSource": true
   },
   {
@@ -316,6 +333,7 @@
     0,
     10
    ],
+   "expect": "none",
    "hasSource": false
   },
   {
@@ -337,6 +355,7 @@
     0,
     10
    ],
+   "expect": "none",
    "hasSource": false
   },
   {
@@ -358,6 +377,7 @@
     0,
     10
    ],
+   "expect": "none",
    "hasSource": false
   },
   {
@@ -379,6 +399,7 @@
     0,
     10
    ],
+   "expect": "none",
    "hasSource": false
   },
   {
@@ -400,6 +421,7 @@
     20,
     300
    ],
+   "expect": "none",
    "hasSource": true
   },
   {
@@ -421,6 +443,7 @@
     1,
     70
    ],
+   "expect": "none",
    "hasSource": true
   },
   {
@@ -442,6 +465,7 @@
     10,
     200
    ],
+   "expect": "none",
    "hasSource": true
   },
   {
@@ -463,6 +487,7 @@
     0,
     15000
    ],
+   "expect": "none",
    "hasSource": true
   },
   {
@@ -491,6 +516,7 @@
     0,
     5000
    ],
+   "expect": "none",
    "hasSource": true
   },
   {
@@ -519,6 +545,7 @@
     0,
     400
    ],
+   "expect": "none",
    "hasSource": true
   },
   {
@@ -547,6 +574,7 @@
     0,
     800
    ],
+   "expect": "none",
    "hasSource": true
   },
   {
@@ -575,6 +603,7 @@
     0,
     400
    ],
+   "expect": "none",
    "hasSource": true
   },
   {
@@ -603,6 +632,7 @@
     0,
     150
    ],
+   "expect": "none",
    "hasSource": true
   },
   {
@@ -624,6 +654,7 @@
     0,
     1440
    ],
+   "expect": "none",
    "filters": {
     "type": [
      "run"
@@ -650,6 +681,7 @@
     0,
     500
    ],
+   "expect": "none",
    "filters": {
     "type": [
      "run"
@@ -676,6 +708,7 @@
     30,
     230
    ],
+   "expect": "none",
    "filters": {
     "type": [
      "run"
@@ -702,6 +735,7 @@
     0,
     1440
    ],
+   "expect": "none",
    "filters": {
     "type": [
      "strength"
@@ -728,6 +762,7 @@
     0,
     10
    ],
+   "expect": "none",
    "hasSource": true
   }
  ]

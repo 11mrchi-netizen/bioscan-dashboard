@@ -22,6 +22,8 @@
 // spans, adopted only when they forecast tomorrow's HRV better than 42 and 7 on held-out weeks) results; the `typicality`
 // payload carries its scorecard against logged illness.
 // The action `experiment_preview` returns the smallest detectable effect of a planned design for the signed-in user.
+// Analysis hub phase C (docs/analysis-console/PLAN.md): `integrity`, one row a night with the last 28 days of every
+// stream of metric-series.json (coverage, freshness, implausible, conflicting and duplicate rows, source switches).
 // Health concerns (docs/health-concerns): `health_overview`, `health_concern_state`, `health_finding` and
 // `health_trial_read` rows, nightly after the evidence engines, and on demand with the action `health` (user JWT; the app
 // calls it right after a check-in so the new state shows at once).
@@ -35,6 +37,9 @@ import { runEvidence } from "../_shared/analysis-core/runEvidence.ts";
 import { runExpectedBands } from "../_shared/analysis-core/runExpectedBands.ts";
 import { runFitnessFatigue } from "../_shared/analysis-core/runFitnessFatigue.ts";
 import { runHealth } from "../_shared/analysis-core/runHealth.ts";
+import { runIntegrity } from "../_shared/analysis-core/runIntegrity.ts";
+import type { SeriesFile } from "../_shared/analysis-core/seriesContract.ts";
+import seriesFile from "../_shared/metric-registry/metric-series.json" with { type: "json" };
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
 import { runTypicality } from "../_shared/analysis-core/runTypicality.ts";
 import { pearson, pFromR } from "../_shared/analysis-core/stats.ts";
@@ -134,11 +139,13 @@ Deno.serve(async (req) => {
     const results = [];
     for (const id of userIds) {
       const breaks = await runSeriesBreaks(admin, id);
+      // Integrity reads its own rows, so a frame that fails to load does not hide it.
+      const integrity = await runIntegrity(admin, id, seriesFile as SeriesFile).catch((e) => ({ userId: id, error: String(e) }));
       // The frame is read once and shared; one engine failing must not hide the others: each reports its own error.
       // Typicality and the expected bands run after the series breaks because they restart at confirmed ones.
       const loaded = await loadFrame(admin, id).catch((e) => ({ userId: id, error: String(e) }));
       if ("error" in loaded) {
-        results.push({ ...breaks, relationships: loaded, typicality: loaded, expectedBands: loaded, evidence: loaded, experiments: loaded });
+        results.push({ ...breaks, integrity, relationships: loaded, typicality: loaded, expectedBands: loaded, evidence: loaded, experiments: loaded });
         continue;
       }
       const relationships = await runRelationships(admin, id, new Date(), loaded).catch((e) => ({ userId: id, error: String(e) }));
@@ -150,7 +157,7 @@ Deno.serve(async (req) => {
       const interventionIts = await runInterventionIts(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const fitnessFatigue = await runFitnessFatigue(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const health = await runHealth(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      results.push({ ...breaks, relationships, typicality, expectedBands, evidence, experiments, interventionResponses, interventionIts, fitnessFatigue, health });
+      results.push({ ...breaks, integrity, relationships, typicality, expectedBands, evidence, experiments, interventionResponses, interventionIts, fitnessFatigue, health });
     }
     return json({ coreVersion: CORE_VERSION, results }, 200);
   }

@@ -5,7 +5,7 @@ import { Shell } from './components/layout/Shell'
 import { Login } from './workspaces/Login'
 
 // The analysis hub's five workspaces (docs/analysis-console/IA.md §4).
-const DataQuality  = lazy(() => import('./workspaces/DataQuality'))
+const Integrity    = lazy(() => import('./workspaces/Integrity'))
 const Evidence     = lazy(() => import('./workspaces/Evidence'))
 const Explore      = lazy(() => import('./workspaces/Explore'))
 const DataExplorer = lazy(() => import('./workspaces/DataExplorer'))
@@ -37,7 +37,7 @@ export default function App() {
         }
       >
         <Route index element={<Navigate to="integrity" replace />} />
-        <Route path="integrity" element={<DataQuality />} />
+        <Route path="integrity" element={<Integrity />} />
         <Route path="evidence"  element={<Evidence />} />
         <Route path="explore"   element={<Explore />} />
         <Route path="data"      element={<DataExplorer />} />

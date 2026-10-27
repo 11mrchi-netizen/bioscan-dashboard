@@ -49,10 +49,47 @@ data accessible, the decision layer turns evidence into recorded decisions. Andr
 | 0. Clear the ground | Remove Overview, Timeline, Training, Recovery, Nutrition, Comparison and the pre-Vite root `console.html`; five-workspace navigation (Integrity, Evidence, Explore, Data, Models) with v1 routes redirected; IA v2.0 | Build, lint and console tests pass | Done |
 | A. Contracts | Query fields in the metric registry and the console map generated from it; typed aggregation semantics (sum, mean, last, min/max, each with sample count); the local-time contract; the five quality states (unknown, missing, invalid, conflict, valid) as a type; the evidence-link convention | Unit tests for week/month boundaries, sparse data, missing periods; null never becomes 0 | Done |
 | B. Query foundation | Period aggregation in the metric adapter with drill-down period → day → records; keyset paging; request cancellation; materialised HR daily range; Explore and the rebuilt Data workspace; benchmarks for 7D, 1Y and all-time, cold and warm | No silent truncation at the 1,000-row cap; drill-down values reconcile with source records | Done, except the HR summary migration (written, not applied) and signed-in browser timings |
-| C. Integrity v1 | `analysis-core/integrity.ts` (ranges, duplicates, conflicts, coverage) published by `analysis-run` as kind `integrity`; Health Connect and Zepp sync heartbeats; freshness from provenance and heartbeats; health overview, source matrix and issue investigation; the series-break review joins the issue list | Every core stream has a coverage rule; unknown is shown where it applies | |
+| C. Integrity v1 | `analysis-core/integrity.ts` (ranges, duplicates, conflicts, coverage) published by `analysis-run` as kind `integrity`; Health Connect and Zepp sync heartbeats; freshness from provenance and heartbeats; health overview, source matrix and issue investigation; the series-break review joins the issue list | Every core stream has a coverage rule; unknown is shown where it applies || Done in code; the sync-heartbeat migration and the analysis-run deploy wait for approval |
 | C2. Discovery | The corrected discovery screen (prewhitened cross-correlations, effective sample sizes, false-discovery correction, chance bands, older two-thirds of the history only) with a "register this question" action, labelled exploratory | Null data flags at most the corrected rate | |
 | D. Decision layer v1 | Evidence-item interface across the engines; the queue derived from ledger verdicts (`not_yet` needs data, `unclear` under observation, actionable without a running experiment ready to test, `clear`/`negligible` without a later decision in review); the workbench; the append-only `decisions` table and decision records | Every decision links to its snapshotted evidence; insufficient data reads blocked; no composite score | |
 | E. Integration | Issue → records → evidence → decision links end to end; saved workspaces; regression tests | Workflow walkthrough passes | |
+
+## Phase C: what was built
+
+- **Coverage rule per series** (`metric-series.json` 1.1.0, `expect`): `daily` (steps, total energy: due every day
+  from the stream's first reading), `worn` (HRV, resting HR, SpO2, active energy, every sleep series: due on days the
+  band recorded minute heart rate), `none` (manual logs, meals, sessions, body measures: never due, so a day without a
+  row is unknown, not missing). `zeroIsSuspect` marks daily totals where a 0 more likely means no data. Today is never
+  due: it is still syncing.
+- **Engine** (`analysis-core/integrity.ts`): every day of every stream gets one of the five quality states; per stream
+  coverage of due days, freshness (late after 2 days, stale after 7) and the logging frequency of streams that are not
+  due; issues for implausible values, conflicting and duplicate rows on a daily series, suspect zeros, runs of missing
+  due days, staleness (for band streams the wear signal says whether it is an ingestion gap or a wear gap), and stable
+  source switches (at least 3 days from each source, so day-to-day flip-flopping is not reported). Each issue names its
+  days and links its records or period (`DataRef`).
+- **Nightly publisher** (`analysis-core/runIntegrity.ts`, wired into `analysis-run`): the last 28 local days into one
+  `integrity` row of `analysis_results` a night (history kept). Needs the `analysis-run` Edge Function deployed.
+- **Integrity workspace** (`console/src/workspaces/Integrity.tsx`, replacing the Data Quality page): the same engine live
+  over the selected range. Health overview (coverage of due days, freshness of due streams, problems by severity,
+  streams with at least 80% coverage, series breaks to review); collectors (newest heartbeat per collector, newest write
+  per provenance writer); the source matrix (one row per series grouped by table, the analyses that read it in its
+  tooltip; selecting a row filters the issues); the issue list with severity filters and links to Explore and to the
+  records in Data. Series-break candidates are in the list with the review that was on the Data Quality page.
+- **Sync heartbeats**: the Health Connect and Zepp sync workers write a `collector_heartbeats` row after each successful
+  sync (`android-app data/SyncHeartbeat.kt`, best effort); `20261109_sync_heartbeats.sql` allows the two stream names.
+  Until it is applied the writes are refused and logged, and the collectors panel reads "no heartbeat".
+- **Tests**: `integrity.test.ts` (one test per rule), `runIntegrity.test.ts` (the publisher against an in-memory client:
+  window, first and newest readings, wear signal, filters, the meals UTC exception, other users' rows). The console was
+  checked in Chromium against a mocked Supabase with planted problems (a three-night gap, a 30-hour night, two
+  disagreeing rows, a source switch, a series-break candidate). The Android change was not compiled (no Android SDK in
+  this environment).
+
+### Waiting for approval (live project)
+
+1. Apply `20261108_wearable_hr_daily.sql` (phase B; the daily heart-rate summary). The apply prompt timed out twice.
+2. Apply `20261109_sync_heartbeats.sql`.
+3. Deploy `analysis-run` so the nightly job publishes `integrity` rows (the console does not need it: it computes the
+   report live).
 
 ## Phase B: what was built
 

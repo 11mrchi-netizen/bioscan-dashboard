@@ -24,7 +24,10 @@ class ZeppSyncWorker(context: Context, params: WorkerParameters) : CoroutineWork
 
         return when (result) {
             is ZeppSyncResult.Failed -> if (runAttemptCount < 5) Result.retry() else Result.failure()
-            is ZeppSyncResult.Success -> Result.success()
+            is ZeppSyncResult.Success -> {
+                SyncHeartbeat.record(SupabaseClientProvider.client, SyncHeartbeat.ZEPP)
+                Result.success()
+            }
         }
     }
 

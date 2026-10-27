@@ -1,0 +1,57 @@
+.ig { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-4); }
+.ig-header { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
+.ig-title { font-size: 20px; font-weight: 700; margin: 0; }
+.ig-window { font-size: 11px; color: var(--color-text-secondary); flex: 1; }
+.ig-message { font-size: 12px; color: var(--color-warning); }
+.ig-muted { color: var(--color-text-muted); }
+.ig-small { font-size: 11px; }
+
+.ig-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3); }
+.ig-tile { padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-1); }
+.ig-tile-label { font-size: 10px; letter-spacing: 0.12em; color: var(--color-text-muted); }
+.ig-tile-value { font-size: 26px; font-weight: 700; }
+.ig-tile-of { font-size: 13px; font-weight: 500; color: var(--color-text-muted); }
+.ig-tile-sub { font-size: 10px; color: var(--color-text-muted); line-height: 1.5; }
+
+.sev-critical { color: var(--color-critical); }
+.sev-warning { color: var(--color-warning); }
+.sev-info { color: var(--color-info); }
+
+.ig-collectors { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); padding: var(--sp-2) var(--sp-4); font-size: 11px; color: var(--color-text-secondary); }
+.ig-collectors-label { color: var(--color-text-muted); letter-spacing: 0.12em; font-size: 10px; }
+
+.ig-matrix { padding: 0; overflow-x: auto; }
+.ig-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ig-table th { text-align: left; font-size: 10px; letter-spacing: 0.08em; color: var(--color-text-muted); font-weight: 500; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+.ig-table td { padding: 6px var(--sp-3); border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+.ig-table td.mono { white-space: nowrap; }
+.ig-name { min-width: 140px; }
+.ig-group td { font-size: 10px; letter-spacing: 0.1em; color: var(--color-text-muted); background: var(--color-glass); padding-top: 4px; padding-bottom: 4px; }
+.ig-row { cursor: pointer; }
+.ig-row:hover td { background: var(--color-glass); }
+.ig-row.on td { background: var(--color-emerald-wash); }
+.fr-fresh { color: var(--color-emerald); }
+.fr-late { color: var(--color-warning); }
+.fr-stale, .fr-never { color: var(--color-critical); }
+.ig-cov { display: inline-flex; align-items: center; gap: 6px; }
+.ig-cov-track { display: inline-block; width: 48px; height: 4px; background: var(--color-glass-strong); border-radius: 2px; overflow: hidden; }
+.ig-cov-track i { display: block; height: 100%; background: var(--color-emerald); }
+
+.ig-issues { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ig-issues-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); font-size: 11px; color: var(--color-text-secondary); }
+.ig-sev-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer; }
+.ig-issue { padding: var(--sp-3) var(--sp-4); border-left: 3px solid var(--color-border); display: flex; flex-direction: column; gap: var(--sp-1); }
+.sev-border-critical { border-left-color: var(--color-critical); }
+.sev-border-warning { border-left-color: var(--color-warning); }
+.sev-border-info { border-left-color: var(--color-info); }
+.ig-issue-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-2); font-size: 13px; }
+.ig-pill { font-size: 10px; border: 1px solid currentColor; border-radius: 99px; padding: 1px 7px; text-transform: uppercase; }
+.ig-kind { font-size: 10px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.ig-dates { font-size: 11px; color: var(--color-text-muted); margin-left: auto; }
+.ig-issue-detail { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
+.ig-refs { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); font-size: 11px; }
+.ig-link { color: var(--color-emerald); text-decoration: none; }
+.ig-link:hover { text-decoration: underline; }
+.ig-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-1); }
+.ig-question { font-size: 12px; flex-basis: 100%; color: var(--color-text-secondary); }
+@media (max-width: 900px) { .ig-dates { margin-left: 0; } }

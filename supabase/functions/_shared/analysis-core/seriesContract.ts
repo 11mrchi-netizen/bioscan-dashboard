@@ -26,6 +26,14 @@ export type Grain = (typeof GRAINS)[number]
 export const CADENCES = ['daily', 'per_event'] as const
 export type Cadence = (typeof CADENCES)[number]
 
+/**
+ * When a value is due (analysis hub phase C, the coverage rule of each stream): 'daily' every day once the stream has
+ * started; 'worn' on days the band recorded heart rate; 'none' never (manual logs, events), so a day without a row is
+ * unknown, not missing.
+ */
+export const EXPECTS = ['daily', 'worn', 'none'] as const
+export type Expect = (typeof EXPECTS)[number]
+
 /** Rows whose raw time value starts (first ten characters) before `before` are read with `kind` instead. */
 export interface TimeException {
   before: string
@@ -61,6 +69,10 @@ export interface SeriesContract {
   longGrain: 'day' | 'week'
   /** Inclusive plausible range; a value outside it is invalid, not an outlier. Null when no range is defined. */
   plausible: [number, number] | null
+  /** The coverage rule: when a value is due. */
+  expect: Expect
+  /** A reading of exactly 0 more likely means no data than a real 0 (daily totals such as steps). */
+  zeroIsSuspect?: boolean
   /** Extra row filters: column -> allowed values. */
   filters?: Record<string, (string | number)[]>
   hasSource: boolean
@@ -354,6 +366,9 @@ export function validateSeriesFile(file: SeriesFile, registryKeys: string[]): st
       if (!SNAKE.test(col) || !Array.isArray(vals) || vals.length === 0) problems.push(`${id}: filter ${col} needs a column and at least one value`)
     }
     if (typeof s.hasSource !== 'boolean') problems.push(`${id}: hasSource must be a boolean`)
+    if (!(EXPECTS as readonly string[]).includes(s.expect)) problems.push(`${id}: expect must be daily, worn or none`)
+    if (s.expect !== 'none' && s.cadence !== 'daily') problems.push(`${id}: only a daily series can expect a value every day`)
+    if (s.zeroIsSuspect !== undefined && typeof s.zeroIsSuspect !== 'boolean') problems.push(`${id}: zeroIsSuspect must be a boolean`)
   }
   return problems
 }

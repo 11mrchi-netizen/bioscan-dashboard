@@ -56,6 +56,9 @@ interface Crossover { outcome: string; text: string; caseDays: number; rows: Cro
 const CATALOGUE = [
   'alcohol_hrv', 'alcohol_rhr', 'alcohol_sleep', 'caffeine_pm_sleep', 'late_meal_sleep', 'late_meal_hrv', 'stress_sleep',
   'evening_training_sleep', 'training_hrv', 'recovery_hrv', 'sleep_hrv', 'steps_hrv', 'sleep_energy',
+  // Routine intelligence R4 (catalogue 2.1.0).
+  'screen_bed_sleep', 'screen_bed_hrv', 'night_phone_energy', 'screen_pm_social_sleep', 'outdoor_daylight_sleep',
+  'home_day_energy', 'travel_day_hrv', 'travel_day_rhr', 'active_commute_hrv', 'commute_long_sleep',
 ]
 const GROUPS: [Payload['outcome'] | 'registered', string][] = [['hrv', 'HRV'], ['rhr', 'RESTING HEART RATE'], ['sleep', 'SLEEP'], ['energy', 'ENERGY'], ['registered', 'QUESTIONS YOU REGISTERED']]
 

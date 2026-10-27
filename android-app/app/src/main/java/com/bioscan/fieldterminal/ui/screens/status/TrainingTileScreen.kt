@@ -370,6 +370,8 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
         // VO2max and lactate threshold, moved here from the Running page (owner's structure, Oct 2026).
         com.bioscan.fieldterminal.ui.screens.user.RunningFitnessCard(timeframe)
         IntensityCard()
+        // Routine intelligence R4: walking and cycling between places, beside the load above, never added to it.
+        ActiveTravelCard()
     }
 }
 

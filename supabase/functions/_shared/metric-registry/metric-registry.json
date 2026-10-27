@@ -1,5 +1,5 @@
 {
-  "registryVersion": "1.0.0",
+  "registryVersion": "1.1.0",
   "note": "Methodology as data (Analysis Layer 3, Phase 7). One entry per canonical metric of docs/analysis-layer-2/02-metric-registry.md plus the composites and Layer 3 engines. Read by the Node tests, the console and, copied as an asset, the Android app. kind: raw | derived | modeled | inferred | composite. A modeled/inferred entry needs a reference or productDefined=true; a composite is always productDefined. Citations are primary sources only.",
   "metrics": [
     {
@@ -1171,6 +1171,102 @@
         }
       ],
       "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "phone_bed_window",
+      "docName": "Phone use before sleep",
+      "kind": "derived",
+      "methodology": "Screen-on minutes in the hour before the night's sleep onset, from Android's usage events (screen interactive to non-interactive) and the night's sleep record from Health Connect (sleep_daily for the next date). The phone day runs 04:00 to 04:00; days without Usage access or without a sleep record are left empty, never zero.",
+      "limitations": [
+        "Sleep onset comes from the watch and can be off by several minutes.",
+        "Screen time is the screen being on, not attention: a video playing counts, reading a paper book with the screen on does too."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "phone_night_use",
+      "docName": "Phone use at night",
+      "kind": "derived",
+      "methodology": "Screen-on minutes and unlocks (keyguard dismissed) between the night's sleep onset and wake, from Android's usage events and the night's sleep record. A night counts as one with the phone unlocked from one unlock on.",
+      "limitations": [
+        "A notification that lights the screen without an unlock adds minutes but not an unlock.",
+        "Awake time the watch scored as sleep moves use into or out of the night."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "late_social_video",
+      "docName": "Late social and video use",
+      "kind": "derived",
+      "methodology": "Foreground minutes after 21:00 (to 04:00) in apps whose declared Android category is social or video, or that the person filed under those categories. Zero on a measured day without any.",
+      "limitations": [
+        "Apps declare their own category; many leave it blank and count as other until filed by hand.",
+        "Foreground time includes an app left open on screen."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "outdoor_daylight",
+      "docName": "Outdoor daylight time (estimated)",
+      "kind": "modeled",
+      "methodology": "Minutes between sunrise and sunset (NOAA solar formulas at home or the day's first place) spent on foot or on a bicycle in recorded trips, plus time at places labelled Outdoor. An estimate of time in daylight outdoors: no light sensor is read.",
+      "limitations": [
+        "Time outdoors at an unlabelled place, or on a terrace of a labelled cafe, is missed.",
+        "Walking legs come from activity recognition and can include time under cover (stations, malls)."
+      ],
+      "references": [
+        {
+          "citation": "Burns AC, et al. Time spent in outdoor light is associated with mood, sleep, and circadian rhythm-related outcomes: a cross-sectional and longitudinal study in over 400,000 UK Biobank participants. J Affect Disord. 2021.",
+          "doi": null
+        }
+      ],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "mobility_day_type",
+      "docName": "Day type (places)",
+      "kind": "inferred",
+      "methodology": "Rule on the day's places: unknown under 50% coverage; travel when a visit is more than 50 km from home; workday from 3 hours at a Work place; home day from 80% of the covered time at Home; otherwise mixed.",
+      "limitations": [
+        "Depends on Home and Work being labelled.",
+        "Thresholds are fixed, not fitted to the person."
+      ],
+      "references": [],
+      "productDefined": true,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "commute_time",
+      "docName": "Commute time",
+      "kind": "derived",
+      "methodology": "Door-to-door minutes of a trip between a Home and a Work place: from the end of the visit at one to the start of the visit at the other. Visits are stays of 10 minutes or more within 150 m.",
+      "limitations": [
+        "A stop of 10 minutes or more on the way splits the commute into two trips.",
+        "Departure is when the stay ended by the recorded fixes, which can lag the real departure by a few minutes."
+      ],
+      "references": [],
+      "productDefined": false,
+      "methodologyVersion": "1.0.0"
+    },
+    {
+      "key": "active_travel",
+      "docName": "Active travel minutes",
+      "kind": "derived",
+      "methodology": "Minutes of walking, running or cycling legs in trips between places, from Android's activity transitions. Shown beside training load, never added to it.",
+      "limitations": [
+        "Activity recognition can miss short or slow walking legs.",
+        "Watch-recorded workouts are not trips and are not counted."
+      ],
+      "references": [],
+      "productDefined": false,
       "methodologyVersion": "1.0.0"
     }
   ]

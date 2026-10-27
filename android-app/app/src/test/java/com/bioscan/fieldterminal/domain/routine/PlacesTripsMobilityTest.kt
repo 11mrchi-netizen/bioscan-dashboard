@@ -127,4 +127,22 @@ class PlacesTripsMobilityTest {
         assertEquals(DayType.UNKNOWN, day.dayType)
         assertEquals(1200.0, day.minutesByCategory["unknown"]!!, 1e-9)
     }
+
+    @Test
+    fun activeTravelSumsFootAndBicycleMinutesPerWeek() {
+        val now = t(d, 20)
+        fun trip(daysAgo: Long, vararg legs: TripLeg) = Trip(now - daysAgo * 86_400_000L, now - daysAgo * 86_400_000L + 3_600_000L, null, null, 1.0, legs.toList())
+        val trips = listOf(
+            trip(1, TripLeg("walking", 12.0), TripLeg("in_vehicle", 25.0)),
+            trip(3, TripLeg("on_bicycle", 20.0)),
+            trip(5, TripLeg("in_vehicle", 30.0)),
+            trip(9, TripLeg("walking", 15.0)),
+        )
+        val w = activeTravel(trips, now)
+        assertEquals(32.0, w.lastWeekMin, 1e-9)
+        assertEquals(15.0, w.previousWeekMin, 1e-9)
+        assertEquals(12.0, w.onFootMin, 1e-9)
+        assertEquals(20.0, w.bicycleMin, 1e-9)
+        assertEquals(2, w.trips)
+    }
 }

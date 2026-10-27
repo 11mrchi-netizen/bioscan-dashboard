@@ -85,3 +85,22 @@ fun isCommute(trip: Trip, categoryOf: (String?) -> PlaceCategory?): Boolean {
     val ends = setOf(categoryOf(trip.fromPlaceId), categoryOf(trip.toPlaceId))
     return ends == setOf(PlaceCategory.HOME, PlaceCategory.WORK)
 }
+
+data class ActiveTravelWeek(val lastWeekMin: Double, val previousWeekMin: Double, val onFootMin: Double, val bicycleMin: Double, val trips: Int)
+
+// Routine intelligence R4: the minutes on foot or on a bicycle in trips between places over the last 7 days, and the 7
+// before, for Training › Load. Shown beside training load, never added to it: the session-load model needs a session's
+// effort, and a walk to the station has none recorded. A trip counts in the week it started.
+fun activeTravel(trips: List<Trip>, nowMs: Long): ActiveTravelWeek {
+    val week = 7 * 86_400_000L
+    val last = trips.filter { it.startMs in (nowMs - week) until nowMs }
+    val previous = trips.filter { it.startMs in (nowMs - 2 * week) until (nowMs - week) }
+    val legs = last.flatMap { it.legs }
+    return ActiveTravelWeek(
+        lastWeekMin = last.sumOf { it.activeMinutes },
+        previousWeekMin = previous.sumOf { it.activeMinutes },
+        onFootMin = legs.filter { it.mode == "walking" || it.mode == "running" }.sumOf { it.minutes },
+        bicycleMin = legs.filter { it.mode == "on_bicycle" }.sumOf { it.minutes },
+        trips = last.count { it.activeMinutes > 0 },
+    )
+}

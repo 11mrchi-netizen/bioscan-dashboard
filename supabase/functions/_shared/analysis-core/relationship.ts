@@ -218,11 +218,22 @@ function buildDesign(cause: Num[], target: Num[], dates: string[], lag: number, 
   const prevMean = known.reduce((a, r) => a + (r.prevX as number), 0) / Math.max(1, known.length)
   const anyUnknownPrev = known.length < rowsRaw.length && known.length > 0
   const usePrev = known.length > 0
-  const rows = rowsRaw.map((r) => [
+  const full = rowsRaw.map((r) => [
     1, ...(withExposure ? [r.x] : []), r.pre - preMean, ...(anyFar ? [r.far, r.far * (r.pre - preMean)] : []),
     ...(usePrev ? [r.prevX === null ? 0 : r.prevX - prevMean] : []), ...(anyUnknownPrev ? [r.prevX === null ? 1 : 0] : []),
     ...weekdayColumns(dates[r.t]), ...trendColumns(r.t, first, last),
   ])
+  // Routine intelligence R4: an exposure that exists only on some weekdays (a commute) leaves no rows on the others. Their
+  // weekday columns are then all zero, and without Monday rows (the reference level) the remaining weekday columns add up
+  // to the intercept: either way the fit could not be inverted. Empty weekday columns are dropped, and without Monday
+  // rows the first weekday present becomes the reference. A design with every weekday present is unchanged.
+  const wdFrom = 1 + (withExposure ? 1 : 0) + 1 + (anyFar ? 2 : 0) + (usePrev ? 1 : 0) + (anyUnknownPrev ? 1 : 0)
+  const wdCols = [0, 1, 2, 3, 4, 5].map((k) => wdFrom + k)
+  const present = wdCols.filter((j) => full.some((row) => row[j] !== 0))
+  const hasReference = full.some((row) => wdCols.every((j) => row[j] === 0))
+  const dropped = new Set(wdCols.filter((j) => !present.includes(j)))
+  if (!hasReference && present.length > 0) dropped.add(present[0])
+  const rows = dropped.size === 0 ? full : full.map((row) => row.filter((_, j) => !dropped.has(j)))
   return { rows, y: rowsRaw.map((r) => target[r.t] as number), days: rowsRaw.map((r) => r.t), x: rowsRaw.map((r) => r.x), xCol: 1 }
 }
 

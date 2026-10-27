@@ -11,6 +11,8 @@ import type { Num } from './stats.ts'
 import { CORE_VERSION } from './version.ts'
 import { fetchAll } from './paging.ts'
 import { baselineExclusionSpans, loadHealthInputs } from './healthLoad.ts'
+import { LATE_SCREEN_CATEGORIES, routineSeries } from './routineExposures.ts'
+import type { RoutineInputs } from './routineExposures.ts'
 
 export const RELATIONSHIP_LOOKBACK_DAYS = 365
 // A day counts as having "afternoon caffeine" from this local hour on.
@@ -39,6 +41,8 @@ export interface RawInputs {
   checkins?: CheckinRow[]
   /** The phone's UTC offset per local date (daily_context); timestamps become local dates and hours with it. */
   context?: { date: string; utc_offset_min: number }[]
+  /** Routine intelligence R4: phone use and mobility published by the phone (routineExposures.ts). */
+  routine?: RoutineInputs
 }
 
 // Until 04:00 the small hours belong to the evening before: a drink or a late meal logged at 00:40 is part of that night.
@@ -210,6 +214,9 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
   const firstRecovery = [...recoveryDays].sort()[0]
   series.recovery_any = axis.map((d) => (recoveryDays.has(d) ? 1 : firstRecovery !== undefined && d >= firstRecovery ? 0 : null))
 
+  // Routine intelligence R4: phone use, places and commutes, each known only on days its source covers.
+  Object.assign(series, routineSeries(axis, raw.routine ?? {}, clock))
+
   // Illness days (and the day after recovery) are left out of every comparison.
   const excludedDays = new Set<string>()
   for (const ill of raw.illnesses) {
@@ -257,7 +264,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
   const q = (table: string, cols: string, col: string, from: string) => (a: number, b: number) =>
     admin.from(table).select(cols).eq('user_id', userId).gte(col, from).order(col).range(a, b)
 
-  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health] = await Promise.all([
+  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes] = await Promise.all([
     fetchAll<RawInputs['wearable'][number]>(q('wearable_daily', 'date, hrv, rhr, steps', 'date', since)),
     fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min', 'date', since)),
     fetchAll<RawInputs['wellbeing'][number]>(q('wellbeing_daily', 'date, energy, mood, stress, soreness', 'date', since)),
@@ -271,6 +278,13 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
     // Health concerns (docs/health-concerns): systemic episodes leave their days out as logged illness does. Read softly;
     // for one release both are read (owner decision 7.2.7), and the copied legacy rows give the same spans.
     loadHealthInputs(admin, userId),
+    // Routine intelligence (R1-R3 tables): read softly, like the phase B tables. Apps are filtered to the late-screen
+    // categories here rather than in the query, so the reader needs only eq / gte / order / range.
+    fetchAll<NonNullable<RoutineInputs['phone']>[number]>(q('phone_usage_daily', 'date, bed_window_min, night_screen_min, night_unlocks', 'date', since)),
+    fetchAll<NonNullable<RoutineInputs['phoneApps']>[number]>(q('phone_app_usage_daily', 'date, category, after_21_min', 'date', since)),
+    fetchAll<NonNullable<RoutineInputs['mobility']>[number]>(q('mobility_daily', 'date, coverage_pct, day_type, outdoor_daylight_min', 'date', since)),
+    fetchAll<NonNullable<RoutineInputs['commutes']>[number]>((a: number, b: number) =>
+      admin.from('trips').select('start_at, end_at, active_min').eq('user_id', userId).eq('is_commute', true).gte('start_at', sinceStamp).order('start_at').range(a, b)),
   ])
   const failed = [wearable, sleep, wellbeing, meals, sessions, recovery].find((r) => r.error)
   if (failed) return { userId, error: failed.error as string }
@@ -283,6 +297,12 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
       illnesses: [...((ill.data ?? []) as RawInputs['illnesses']), ...(health.error ? [] : baselineExclusionSpans(health, today))],
       checkins: checkins.error ? [] : checkins.rows,
       context: context.error ? [] : context.rows,
+      routine: {
+        phone: phone.error ? [] : phone.rows,
+        phoneApps: phoneApps.error ? [] : phoneApps.rows.filter((r) => LATE_SCREEN_CATEGORIES.includes(String(r.category))),
+        mobility: mobility.error ? [] : mobility.rows,
+        commutes: commutes.error ? [] : commutes.rows,
+      },
     },
     today,
   )

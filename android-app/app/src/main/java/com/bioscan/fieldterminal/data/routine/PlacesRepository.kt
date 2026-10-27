@@ -326,7 +326,8 @@ class PlacesRepository(private val supabase: SupabaseClient) {
         }.mapNotNull { v -> val s = ms(v.startAt); val e = ms(v.endAt); if (s == null || e == null) null else Triple(s, e, v) }
             .sortedBy { it.first }
 
-    private suspend fun loadTrips(since: Instant): List<Trip> =
+    // Trips since [since], oldest first (Training › Load's ACTIVE TRAVEL card, and mobility_daily).
+    suspend fun loadTrips(since: Instant): List<Trip> =
         supabase.postgrest.from("trips")
             .select(columns = Columns.list("start_at,end_at,from_place_id,to_place_id,distance_km,legs,active_min,is_commute")) {
                 filter { gte("start_at", since.toString()) }

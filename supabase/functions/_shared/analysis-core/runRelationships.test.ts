@@ -107,7 +107,7 @@ test('runRelationships publishes one row per hypothesis from raw tables and repl
   assert.equal(row('steps_hrv').state, 'not_yet') // no steps recorded
   assert.equal(row('caffeine_pm_sleep').state, 'not_yet') // no caffeine logged
   const payload = row('alcohol_hrv').payload as Row
-  assert.equal(payload.catalogueVersion, '2.0.0')
+  assert.equal(payload.catalogueVersion, '2.1.0')
   assert.equal(payload.rung, 'associated')
   assert.equal(payload.noEffect, 2)
   assert.ok('capture' in payload)

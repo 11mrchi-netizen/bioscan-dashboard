@@ -9,7 +9,8 @@ R2 (location capture) were started together on 27 Oct 2026 at the owner's reques
 | R1 Phone use | **Built and unit-tested; migration applied (27 Oct 2026); not installed on the phone yet.** |
 | R2 Location capture | **Built and unit-tested; migration applied (27 Oct 2026); not installed on the phone yet.** |
 | R3 Places, trips, commute | **Built and unit-tested; migration `20261107_routine_places.sql` written, not applied; not installed.** |
-| R4–R6 | Not started. |
+| R4 Analysis integration | **Built and tested (core and Android); `analysis-run` not redeployed yet, so the nightly run still uses catalogue 2.0.0.** Day-type covariate and health-episode context deferred (below). |
+| R5–R6 | Not started. |
 
 ## Verification so far
 
@@ -48,6 +49,26 @@ Tests: `PlacesTripsMobilityTest` (8).
 R3 gate (plan section 10), to run on the phone: ≥ 90 % of the week's time attributed to a labelled place or a trip; commute door-to-door within 3 min of the diary; `daily_context` weather filled on ≥ 90 % of days.
 
 Not built in R3, deliberately: the visit and trip map in the console; calendar event locations as place suggestions; place centroids that move with later visits (a place stays where its first visit was); circadian movement (needs 14 days of history per point; routine similarity covers the same idea for now); splitting vehicle legs into rail and road (R5, with TDX).
+
+## R4: routine data in the analysis engine
+
+| Piece | Where | Notes |
+|---|---|---|
+| Routine series | `analysis-core/routineExposures.ts`, `runRelationships.ts` (`buildFrame`, `loadFrame`) | `screen_bed_min`, `night_phone`, `screen_pm_social` from phone use (a value only on a measured day); `outdoor_daylight_min`, `home_day`, `travel_day` from `mobility_daily` (only days covered 80 % or more; an unknown day type is unknown); `active_commute` (10 min or more on foot or bicycle) and `commute_long` (at least 1.25 times the median of the last 28 days' commute days, from 5 of them) on commute days only. The four tables are read softly, like the phase B tables. |
+| Catalogue 2.1.0 | `analysis-core/hypotheses.ts` | Ten questions: phone in the hour before sleep (per 15 min) and that night's sleep and next-morning HRV; the phone unlocked at night and next-day energy; social and video apps after 21:00 (per 30 min) and sleep; outdoor daylight (per 30 min) and sleep; a home day and next-day energy; a travel day and next-morning HRV and resting heart rate; an active commute and next-morning HRV; a longer commute and that night's sleep. No-effect zones as the existing outcomes'. `CORE_VERSION` 3.0.0-alpha.10. |
+| Engine fix | `analysis-core/relationship.ts` `buildDesign` | An exposure that exists only on some weekdays (commutes) left weekday columns empty or the weekday set without its reference level, so the fit could not be inverted and every commute question read "too few distinct days". Empty weekday columns are dropped and the first weekday present becomes the reference. A design with every weekday present is unchanged (all 289 core tests pass, the existing gates included). |
+| Gates | `analysis-core/routineExposures.test.ts` | Null data: 0 of 401 routine questions read clear over 60 simulated histories (gate 5 %). A home pattern locked to weekends reads not testable ("follows a fixed weekly schedule"), not an effect. |
+| Evidence board | Android `domain/EvidenceBoard.kt`, console `Confirmatory.tsx` | The new questions in catalogue order, in the existing HRV / resting heart rate / sleep / energy groups. |
+| Active travel | Android `ui/screens/status/ActiveTravelCard.kt` on Training › Load, `domain/routine/Trips.kt` `activeTravel` | Minutes on foot and on a bicycle in trips over the last 7 days and the 7 before, beside training load, never added to it (the session-load model needs a session's effort). Shown once Locations is on. |
+| Metric registry | `metric-registry.json` 1.1.0, doc 02 | Phone use before sleep, phone use at night, late social and video use, outdoor daylight time (estimated, product-defined), day type (product-defined), commute time, active travel minutes. |
+
+Deviation: the plan's "commute over its usual time and evening stress" is asked of that night's sleep, because the evidence board's outcome groups are HRV, resting heart rate, sleep and energy, and stress is already an exposure.
+
+Deferred from R4, with the reason:
+- **Day type as a covariate in the expected bands and the typicality scorecard.** Both are calibrated models with published gates (band coverage 78-82 %, flag rates); a new covariate needs those gates re-run on real day-type data, and there is none yet. Revisit after 8 weeks of `mobility_daily`.
+- **Mobility context on health-concern episodes.** Same reason: no mobility history exists to show against an episode yet.
+
+To go live: redeploy the `analysis-run` Edge Function (it bundles `_shared/analysis-core`). Until then the nightly run keeps publishing catalogue 2.0.0 under engine 3.0.0-alpha.9.
 
 ## Deviations from the plan
 

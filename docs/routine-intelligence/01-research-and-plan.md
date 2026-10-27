@@ -1,7 +1,8 @@
 # Routine intelligence: places, commutes, time use and phone use (research and plan)
 
-Status: research and plan only. Nothing here is built. Written 27 Oct 2026 against `main` at `b31b313`; the owner's
-decisions (section 11) were recorded the same day and the sections they touch (3, 5, 8.3, 9, 10) were revised to match.
+Status: R1 and R2 code written 27 Oct 2026, not yet built or installed; see [README.md](README.md) for what is where.
+Written 27 Oct 2026 against `main` at `b31b313`; the owner's decisions (section 11) were recorded the same day and the
+sections they touch (3, 5, 8.3, 9, 10) were revised to match.
 Scope: a feature that passively records where the person spends time, how they move between places, and how they use
 the phone, then reads those habits against the data the app already holds (sleep, HRV, training, nutrition, check-ins)
 so the person can spot what to change and try alternatives. It is a personal routine mirror, not a productivity score,
@@ -295,7 +296,7 @@ is not there" to "the database is locked down", so these rules apply:
    (enough to redraw a route); visits and trips stay. Volume is small: roughly 150–300 fixes a day, about 100,000 rows
    a year, well inside the free tier.
 6. **Google account and Supabase dashboard access are the real perimeter** now; two-factor on both is worth confirming.
-7. The on-phone buffer (Room) only holds what has not synced yet; Android auto-backup stays as it is.
+7. The on-phone outbox only holds what has not synced yet; Android auto-backup stays as it is.
 
 ### 8.4 Analytical risks
 
@@ -320,8 +321,8 @@ is not there" to "the database is locked down", so these rules apply:
 
 ## 9. Data model (sketch)
 
-**On the phone (Room):** an outbox only — fixes, transitions and visits not yet synced, plus the stay-point and
-clustering state. Synced rows are dropped after 7 days.
+**On the phone:** an outbox only (JSON-lines files, `data/routine/RoutineOutbox.kt`) — fixes, transitions and
+heartbeats not yet synced. Deleted once uploaded.
 
 **Supabase (RLS, same `(select auth.uid())` pattern, provenance column `source`):**
 
@@ -330,10 +331,11 @@ clustering state. Synced rows are dropped after 7 days.
 | `location_fixes` | `ts`, `lat`, `lon`, `accuracy_m`, `activity`, `trip_id` (nullable); unique (user, ts) so re-syncs are idempotent |
 | `activity_transitions` | `ts`, `activity`, `transition` (enter / exit) |
 | `places` | `id`, `label`, `category`, `lat`, `lon`, `radius_m`, `created_at`, `source` (learned / home_setting / calendar / zepp / manual) |
-| `place_visits` | `place_id`, `start_at`, `end_at`, `confidence` |
+| `place_visits` | `start_at`, `end_at`, `lat`, `lon`, `n_fixes`, `confidence`, `open`, `place_id` (from R3) |
+| `collector_heartbeats` | `stream`, `ts` — proof the collector was alive, so gaps read as unknown |
 | `trips` | `start_at`, `end_at`, `from_place_id`, `to_place_id`, `distance_km`, `legs` jsonb (mode, minutes, distance), `is_commute`, `corrected` |
 | `mobility_daily` | `date`, `coverage_pct`, minutes by category, `n_places`, `new_places`, `entropy_norm`, `radius_gyration_km`, `routine_similarity`, `outdoor_daylight_min`, `day_type` |
-| `phone_usage_daily` | `date`, `coverage_pct`, `screen_min`, `unlocks`, `first_unlock_at`, `last_use_before_sleep_at`, `bed_window_min`, `night_unlocks`, `by_category` jsonb, `longest_free_min`, `by_place_category` jsonb |
+| `phone_usage_daily` | `date`, `coverage_pct`, `screen_min`, `unlocks`, `first_unlock_at`, `last_use_before_sleep_at`, `bed_window_min`, `night_screen_min`, `night_unlocks`, `by_category` jsonb, `longest_free_min`, `by_place_category` jsonb |
 | `phone_app_usage_daily` | `date`, `package`, `app_label`, `category` (system category, overridable), `foreground_min`, `launches`, `bed_window_min`, `after_21_min` |
 | `phone_app_categories` | `package`, `category` — the person's overrides |
 | `daily_context` (existing) | fill `temp_max_c`, `humidity_mean_pct`, `daylight_hours` from the day's main place |

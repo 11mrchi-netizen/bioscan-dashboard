@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Step 13: camera capture for AI food-photo estimation; gallery/upload
@@ -69,6 +70,32 @@
          grant regardless of the record-type-specific READ_* permission. -->
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
 
+    <!-- Routine intelligence R1 (docs/routine-intelligence/01-research-and-plan.md): phone use from Android's usage
+         events. Granted by the person under Settings > Special app access > Usage access, not at runtime. Other apps'
+         names and declared categories need package visibility on Android 11+; this personal, sideloaded app takes it
+         whole instead of listing packages (no Play policy applies). -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- Routine intelligence R2: places and trips. "Allow all the time" location, activity transitions, and a
+         foreground service of type location while a trip is being recorded (TripRecordingService). The battery
+         exemption keeps the OEM's optimiser from killing the collector; boot re-arms Play services' registrations. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-permission
+        android:name="com.google.android.gms.permission.ACTIVITY_RECOGNITION"
+        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
         android:name=".FieldTerminalApp"
         android:allowBackup="true"
@@ -88,6 +115,27 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Routine intelligence R2: trip recording and the broadcasts that drive it (data/routine/). -->
+        <service
+            android:name=".data.routine.TripRecordingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+        <receiver
+            android:name=".data.routine.RoutineTransitionReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".data.routine.RoutineGeofenceReceiver"
+            android:exported="false" />
+        <!-- Exported only so the system can deliver its own protected boot and update broadcasts. -->
+        <receiver
+            android:name=".data.routine.RoutineBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- "LOG ALL" action on the supplement reminder notification. Internal
              only (fired by our own PendingIntent). -->

@@ -1,179 +1,257 @@
-// Data Explorer workspace — virtualized table over canonical Supabase tables.
-// Inspector "VIEW RAW RECORDS →" deep-links here via ?table=X&date=Y; a record reference (lib/links.ts) via ?table=X&id=N.
+// Data workspace (rebuilt in the analysis hub's phase B): raw rows of the canonical tables.
+// - Filters live in the URL (table, from, to or date, id, source, a column that is or is not empty), so issues, evidence
+//   and the Inspector link straight to a filtered view (lib/links.ts: #/data?table=meals&id=42).
+// - The count of matching rows is exact; rows load newest first in pages of 200 with keyset paging (time column, id), so
+//   nothing is cut silently and LOAD MORE never repeats or skips a row.
+// - Large JSON columns stay out of the table; selecting a row loads the whole record, those columns included.
+// Times are shown as stored: a date filter on a timestamp table matches the stored day (local wall time for sessions and
+// meals since 2026-09-17; seriesContract.ts has the per-series rules).
 // ponytail: native HTML table + useVirtualizer; skipped TanStack Table v9 (breaking API change).
 
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
-import { dayBounds, LIVE_COLUMNS } from '../lib/schema'
+import { dayBounds, LIVE_COLUMNS, SERIES } from '../lib/schema'
+import { HEAVY_COLUMNS } from '../lib/seriesQuery'
+import { keysetFilter, type Cursor } from '../lib/pager'
+import { hrefFor } from '../lib/links'
 import './DataExplorer.css'
 
-// `runs` was replaced by exercise_sessions; meals and sessions are timestamped, lab draws use draw_date (lib/schema.ts).
-const KNOWN_TABLES = [
-  'exercise_sessions', 'sleep_daily', 'wearable_daily', 'wellbeing_daily',
-  'meals', 'body_metrics', 'hydration_daily', 'injuries', 'illnesses', 'rest_days', 'lab_draws',
-]
-
-const DATE_COLUMN: Record<string, string> = {
-  exercise_sessions: 'start_time', sleep_daily: 'date', wearable_daily: 'date',
-  wellbeing_daily: 'date', meals: 'logged_at', body_metrics: 'date', hydration_daily: 'date',
-  injuries: 'start_date', illnesses: 'start_date', rest_days: 'date',
-  lab_draws: 'draw_date',
+// Time column of each table; a table without one is ordered by id. Every table listed here has an id primary key, which
+// keyset paging needs (daily_field_provenance and wearable_hr_daily are keyed by user and date, so they are not listed).
+const TIME_COLUMN: Record<string, string> = {
+  exercise_sessions: 'start_time', sleep_daily: 'date', wearable_daily: 'date', wellbeing_daily: 'date',
+  meals: 'logged_at', body_metrics: 'date', hydration_daily: 'date', injuries: 'start_date', illnesses: 'start_date',
+  rest_days: 'date', lab_draws: 'draw_date', evening_checkins: 'date', supplement_log: 'taken_at',
 }
-
-const TIMESTAMP_COLUMNS = new Set(['start_time', 'logged_at'])
+const DATE_ONLY = new Set(['date', 'start_date', 'draw_date'])
+const TABLES = [...new Set([...SERIES.map(s => s.table), ...Object.keys(TIME_COLUMN)])].sort()
+const PAGE = 200
 
 type Row = Record<string, unknown>
 
-// Large JSON columns (about 50 kB per day for hr_timeseries) are not worth shipping to a 500-row table view that truncates
-// them in the cell anyway. For a table whose columns are known, list them minus the heavy ones; otherwise select everything.
-const HEAVY_COLUMNS = new Set(['hr_timeseries', 'raw_body', 'details'])
-function explorerColumns(table: string): string {
+interface Filters {
+  table: string
+  from: string
+  to: string
+  id: string
+  source: string
+  col: string
+  empty: '' | 'null' | 'notnull'
+}
+
+function readFilters(p: URLSearchParams): Filters {
+  const date = p.get('date') ?? ''
+  return {
+    table: p.get('table') ?? 'wearable_daily',
+    from: p.get('from') ?? date,
+    to: p.get('to') ?? date,
+    id: p.get('id') ?? '',
+    source: p.get('source') ?? '',
+    col: p.get('col') ?? '',
+    empty: (p.get('empty') as Filters['empty']) ?? '',
+  }
+}
+
+function listColumns(table: string): string {
   const known = LIVE_COLUMNS[table]
   return known ? known.filter(c => !HEAVY_COLUMNS.has(c)).join(', ') : '*'
 }
 
-async function fetchRows(table: string, dateFilter: string | null, idFilter: string | null): Promise<Row[]> {
-  let q = supabase.from(table).select(explorerColumns(table)).order(DATE_COLUMN[table] ?? 'id', { ascending: false }).limit(500)
-  if (idFilter) q = q.eq('id', idFilter)
-  if (dateFilter) {
-    const col = DATE_COLUMN[table] ?? 'date'
-    if (TIMESTAMP_COLUMNS.has(col)) {
-      const { from, to } = dayBounds(dateFilter, dateFilter)
-      q = q.gte(col, from).lte(col, to)
+// supabase-js builders are thenables with filter methods; typed loosely so one helper serves count and page queries.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyFilters(q: any, f: Filters): any {
+  const tcol = TIME_COLUMN[f.table]
+  if (tcol && (f.from || f.to)) {
+    if (DATE_ONLY.has(tcol)) {
+      if (f.from) q = q.gte(tcol, f.from)
+      if (f.to) q = q.lte(tcol, f.to)
     } else {
-      q = q.eq(col, dateFilter)
+      const b = dayBounds(f.from || '0001-01-01', f.to || '9999-12-31')
+      if (f.from) q = q.gte(tcol, b.from)
+      if (f.to) q = q.lte(tcol, b.to)
     }
   }
-  const { data, error } = await q
-  if (error) throw error
-  return (data ?? []) as unknown as Row[]
+  if (f.id) q = q.eq('id', f.id)
+  if (f.source) q = q.eq('source', f.source)
+  if (f.col && f.empty === 'null') q = q.is(f.col, null)
+  if (f.col && f.empty === 'notnull') q = q.not(f.col, 'is', null)
+  return q
 }
 
 export function DataExplorer() {
   const [params, setParams] = useSearchParams()
+  const applied = useMemo(() => readFilters(params), [params])
+  const [draft, setDraft] = useState<Filters>(applied)
+  useEffect(() => setDraft(applied), [applied])
 
-  const [selectedTable, setSelectedTable] = useState<string>(params.get('table') ?? KNOWN_TABLES[0])
-  const [dateFilter, setDateFilter]       = useState<string>(params.get('date') ?? '')
-  const [idFilter, setIdFilter]           = useState<string>(params.get('id') ?? '')
-  const [rows, setRows]                   = useState<Row[]>([])
-  const [columns, setColumns]             = useState<string[]>([])
-  const [loading, setLoading]             = useState(false)
-  const [error, setError]                 = useState<string | null>(null)
-  const [sortKey, setSortKey]             = useState<string | null>(null)
-  const [sortDir, setSortDir]             = useState<'asc' | 'desc'>('asc')
+  const [rows, setRows] = useState<Row[]>([])
+  const [total, setTotal] = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+  const [selected, setSelected] = useState<Row | null>(null)
+  const [full, setFull] = useState<Row | null>(null)
 
+  const tcol = TIME_COLUMN[applied.table]
+  const hasSource = (LIVE_COLUMNS[applied.table] ?? []).includes('source')
+
+  async function loadPage(after: Cursor | null, signal: AbortSignal): Promise<Row[]> {
+    let q = applyFilters(supabase.from(applied.table).select(listColumns(applied.table)), applied)
+    if (tcol) {
+      if (after) q = q.or(keysetFilter(tcol, after, 'desc'))
+      q = q.order(tcol, { ascending: false }).order('id', { ascending: false })
+    } else {
+      if (after) q = q.lt('id', after.id)
+      q = q.order('id', { ascending: false })
+    }
+    const { data, error: e } = await q.limit(PAGE).abortSignal(signal)
+    if (e) throw new Error(e.message)
+    return (data ?? []) as Row[]
+  }
+
+  // First page and the exact count whenever the applied filters change.
   useEffect(() => {
+    const ac = new AbortController()
     setLoading(true)
     setError(null)
-    fetchRows(selectedTable, dateFilter || null, idFilter || null)
-      .then(r => {
-        setRows(r)
-        setColumns(r.length ? Object.keys(r[0]) : [])
+    setSelected(null)
+    const count = applyFilters(supabase.from(applied.table).select('id', { count: 'exact', head: true }), applied).abortSignal(ac.signal)
+    Promise.all([loadPage(null, ac.signal), count])
+      .then(([page, c]) => {
+        if (ac.signal.aborted) return
+        setRows(page)
+        setDone(page.length < PAGE)
+        setTotal((c as { count: number | null }).count ?? null)
         setLoading(false)
       })
-      .catch(e => { setError(String((e as Error)?.message ?? e)); setLoading(false) })
-  }, [selectedTable, dateFilter, idFilter])
+      .catch((e: unknown) => {
+        if (ac.signal.aborted) return
+        setError(e instanceof Error ? e.message : String(e))
+        setLoading(false)
+      })
+    return () => ac.abort()
+  }, [applied]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sortedRows = useMemo(() => {
-    if (!sortKey) return rows
-    return [...rows].sort((a, b) => {
-      const av = a[sortKey] ?? ''
-      const bv = b[sortKey] ?? ''
-      const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true })
-      return sortDir === 'asc' ? cmp : -cmp
-    })
-  }, [rows, sortKey, sortDir])
-
-  const parentRef = useRef<HTMLDivElement>(null)
-  const virtualizer = useVirtualizer({
-    count: sortedRows.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 36,
-    overscan: 20,
-  })
-  const virtualItems = virtualizer.getVirtualItems()
-  const totalSize   = virtualizer.getTotalSize()
-
-  function toggleSort(col: string) {
-    if (sortKey === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(col); setSortDir('asc') }
+  const loadMore = () => {
+    const last = rows[rows.length - 1]
+    if (!last) return
+    setLoading(true)
+    const after: Cursor = { time: tcol ? String(last[tcol]) : '', id: last.id as string | number }
+    loadPage(after, new AbortController().signal)
+      .then(page => { setRows(r => [...r, ...page]); setDone(page.length < PAGE); setLoading(false) })
+      .catch((e: unknown) => { setError(e instanceof Error ? e.message : String(e)); setLoading(false) })
   }
 
-  function applyFilters() {
+  // The whole record (heavy columns included) for the selected row.
+  useEffect(() => {
+    setFull(null)
+    if (!selected || selected.id === undefined) return
+    const ac = new AbortController()
+    supabase.from(applied.table).select('*').eq('id', selected.id as string).abortSignal(ac.signal).maybeSingle()
+      .then(({ data }) => { if (!ac.signal.aborted) setFull((data as Row | null) ?? null) })
+    return () => ac.abort()
+  }, [selected, applied.table])
+
+  const apply = (f: Filters) => {
     const next = new URLSearchParams()
-    if (selectedTable) next.set('table', selectedTable)
-    if (dateFilter)    next.set('date',  dateFilter)
-    if (idFilter)      next.set('id',    idFilter)
+    next.set('table', f.table)
+    if (f.from) next.set('from', f.from)
+    if (f.to) next.set('to', f.to)
+    if (f.id) next.set('id', f.id)
+    if (f.source) next.set('source', f.source)
+    if (f.col && f.empty) { next.set('col', f.col); next.set('empty', f.empty) }
     setParams(next)
   }
+
+  const columns = useMemo(() => (rows.length ? Object.keys(rows[0]) : []), [rows])
+  const parentRef = useRef<HTMLDivElement>(null)
+  const virtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => parentRef.current, estimateSize: () => 36, overscan: 20 })
+  const allColumns = LIVE_COLUMNS[draft.table] ?? []
 
   return (
     <div className="de">
       <div className="de-toolbar">
-        <h2 className="de-title">Data Explorer</h2>
-        <div className="de-controls">
-          <select className="de-select mono" value={selectedTable} onChange={e => setSelectedTable(e.target.value)}>
-            {(KNOWN_TABLES.includes(selectedTable) ? KNOWN_TABLES : [selectedTable, ...KNOWN_TABLES]).map(t => <option key={t} value={t}>{t}</option>)}
+        <h2 className="de-title">Data</h2>
+        <form className="de-controls" onSubmit={e => { e.preventDefault(); apply(draft) }}>
+          <select className="de-select mono" value={draft.table} onChange={e => apply({ ...readFilters(new URLSearchParams()), table: e.target.value })} aria-label="Table">
+            {(TABLES.includes(draft.table) ? TABLES : [draft.table, ...TABLES]).map(t => <option key={t} value={t}>{t}</option>)}
           </select>
-          <input
-            className="de-input mono"
-            type="date"
-            value={dateFilter}
-            onChange={e => setDateFilter(e.target.value)}
-          />
-          <button className="de-btn mono" onClick={applyFilters}>APPLY</button>
-          {dateFilter && <button className="de-btn-ghost mono" onClick={() => setDateFilter('')}>CLEAR DATE</button>}
-          {idFilter && <button className="de-btn-ghost mono" onClick={() => setIdFilter('')}>RECORD {idFilter} ✕</button>}
-        </div>
+          {TIME_COLUMN[draft.table] && <>
+            <input className="de-input mono" type="date" value={draft.from} onChange={e => setDraft({ ...draft, from: e.target.value })} aria-label="From" />
+            <input className="de-input mono" type="date" value={draft.to} onChange={e => setDraft({ ...draft, to: e.target.value })} aria-label="To" />
+          </>}
+          <input className="de-input mono de-narrow" placeholder="id" value={draft.id} onChange={e => setDraft({ ...draft, id: e.target.value.trim() })} aria-label="Record id" />
+          {(LIVE_COLUMNS[draft.table] ?? []).includes('source') && (
+            <input className="de-input mono de-narrow" placeholder="source" value={draft.source} onChange={e => setDraft({ ...draft, source: e.target.value.trim() })} aria-label="Source" />
+          )}
+          {allColumns.length > 0 && <>
+            <select className="de-select mono" value={draft.col} onChange={e => setDraft({ ...draft, col: e.target.value })} aria-label="Column">
+              <option value="">column…</option>
+              {allColumns.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select className="de-select mono" value={draft.empty} onChange={e => setDraft({ ...draft, empty: e.target.value as Filters['empty'] })} aria-label="Empty or not">
+              <option value="">any</option>
+              <option value="null">is empty</option>
+              <option value="notnull">has a value</option>
+            </select>
+          </>}
+          <button className="de-btn mono" type="submit">APPLY</button>
+          <button className="de-btn-ghost mono" type="button" onClick={() => apply({ ...readFilters(new URLSearchParams()), table: draft.table })}>CLEAR</button>
+        </form>
         <div className="de-meta mono">
-          {!loading && !error && `${rows.length} rows${rows.length === 500 ? ' (capped)' : ''}`}
+          {!error && total !== null && `${rows.length.toLocaleString()} of ${total.toLocaleString()} matching rows`}
+          {tcol ? ` · newest first by ${tcol}` : ' · by id'}{hasSource ? '' : ' · no source column'}
         </div>
       </div>
 
-      {loading && <div className="state-loading mono">LOADING…</div>}
-      {error   && <div className="state-error mono">ERROR: {error}</div>}
+      {error && <div className="state-error mono">ERROR: {error}</div>}
       {!loading && !error && rows.length === 0 && <div className="state-empty mono">NO ROWS</div>}
 
-      {!loading && !error && rows.length > 0 && (
-        <div className="de-table-wrap" ref={parentRef}>
-          <table className="de-table">
-            <thead>
-              <tr>
-                {columns.map(col => (
-                  <th key={col} className="de-th mono" onClick={() => toggleSort(col)}>
-                    {col}
-                    {sortKey === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody style={{ height: totalSize, position: 'relative', display: 'block' }}>
-              {virtualItems.map(vr => {
-                const row = sortedRows[vr.index]
-                return (
-                  <tr
-                    key={vr.index}
-                    className="de-tr"
-                    style={{ position: 'absolute', top: vr.start, width: '100%', display: 'flex' }}
-                  >
-                    {columns.map(col => {
-                      const v = row[col]
-                      const s = v === null || v === undefined ? null : String(v)
-                      return (
-                        <td key={col} className="de-td mono">
-                          {s === null ? <span className="de-null">—</span> : s.length > 80 ? <span title={s}>{s.slice(0, 80)}…</span> : s}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="de-body">
+        {rows.length > 0 && (
+          <div className="de-table-wrap" ref={parentRef}>
+            <table className="de-table">
+              <thead>
+                <tr>{columns.map(col => <th key={col} className="de-th mono">{col}</th>)}</tr>
+              </thead>
+              <tbody style={{ height: virtualizer.getTotalSize(), position: 'relative', display: 'block' }}>
+                {virtualizer.getVirtualItems().map(vr => {
+                  const row = rows[vr.index]
+                  return (
+                    <tr key={vr.index} className={`de-tr ${selected === row ? 'de-row-on' : ''}`} onClick={() => setSelected(row)}
+                      style={{ position: 'absolute', top: vr.start, width: '100%', display: 'flex' }}>
+                      {columns.map(col => {
+                        const v = row[col]
+                        const s = v === null || v === undefined ? null : typeof v === 'object' ? JSON.stringify(v) : String(v)
+                        return (
+                          <td key={col} className="de-td mono">
+                            {s === null ? <span className="de-null">—</span> : s.length > 80 ? <span title={s}>{s.slice(0, 80)}…</span> : s}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {!done && <button className="de-btn mono de-more" disabled={loading} onClick={loadMore}>{loading ? 'LOADING…' : `LOAD ${PAGE} MORE`}</button>}
+          </div>
+        )}
+
+        {selected && (
+          <aside className="de-detail">
+            <div className="de-detail-head mono">
+              <span>{applied.table} #{String(selected.id)}</span>
+              <a className="de-link" href={hrefFor({ kind: 'record', table: applied.table, id: selected.id as string | number }) ?? '#'}>LINK</a>
+              <button className="de-btn-ghost mono" onClick={() => setSelected(null)}>✕</button>
+            </div>
+            <pre className="de-json mono">{JSON.stringify(full ?? selected, null, 2)}</pre>
+            {!full && <div className="de-meta mono">loading the full record…</div>}
+          </aside>
+        )}
+      </div>
     </div>
   )
 }

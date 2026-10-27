@@ -48,11 +48,64 @@ data accessible, the decision layer turns evidence into recorded decisions. Andr
 |---|---|---|---|
 | 0. Clear the ground | Remove Overview, Timeline, Training, Recovery, Nutrition, Comparison and the pre-Vite root `console.html`; five-workspace navigation (Integrity, Evidence, Explore, Data, Models) with v1 routes redirected; IA v2.0 | Build, lint and console tests pass | Done |
 | A. Contracts | Query fields in the metric registry and the console map generated from it; typed aggregation semantics (sum, mean, last, min/max, each with sample count); the local-time contract; the five quality states (unknown, missing, invalid, conflict, valid) as a type; the evidence-link convention | Unit tests for week/month boundaries, sparse data, missing periods; null never becomes 0 | Done |
-| B. Query foundation | Period aggregation in the metric adapter with drill-down period → day → records; keyset paging; request cancellation; materialised HR daily range; Explore and the rebuilt Data workspace; benchmarks for 7D, 1Y and all-time, cold and warm | No silent truncation at the 1,000-row cap; drill-down values reconcile with source records | |
+| B. Query foundation | Period aggregation in the metric adapter with drill-down period → day → records; keyset paging; request cancellation; materialised HR daily range; Explore and the rebuilt Data workspace; benchmarks for 7D, 1Y and all-time, cold and warm | No silent truncation at the 1,000-row cap; drill-down values reconcile with source records | Done, except the HR summary migration (written, not applied) and signed-in browser timings |
 | C. Integrity v1 | `analysis-core/integrity.ts` (ranges, duplicates, conflicts, coverage) published by `analysis-run` as kind `integrity`; Health Connect and Zepp sync heartbeats; freshness from provenance and heartbeats; health overview, source matrix and issue investigation; the series-break review joins the issue list | Every core stream has a coverage rule; unknown is shown where it applies | |
 | C2. Discovery | The corrected discovery screen (prewhitened cross-correlations, effective sample sizes, false-discovery correction, chance bands, older two-thirds of the history only) with a "register this question" action, labelled exploratory | Null data flags at most the corrected rate | |
 | D. Decision layer v1 | Evidence-item interface across the engines; the queue derived from ledger verdicts (`not_yet` needs data, `unclear` under observation, actionable without a running experiment ready to test, `clear`/`negligible` without a later decision in review); the workbench; the append-only `decisions` table and decision records | Every decision links to its snapshotted evidence; insufficient data reads blocked; no composite score | |
 | E. Integration | Issue → records → evidence → decision links end to end; saved workspaces; regression tests | Workflow walkthrough passes | |
+
+## Phase B: what was built
+
+- **One data path** (`console/src/lib/seriesQuery.ts`, replacing `metricAdapter.ts`): a series (`metric-series.json`)
+  over a range of local days. Rows are paged with keyset paging on (time column, id) (`lib/pager.ts`), so a range is
+  never cut at the 1,000-row cap and a row written between pages is neither skipped nor repeated; after 500 full pages
+  it throws rather than return a partial result. Timestamp series are read with a day of margin and placed on local
+  days with the time contract (`lib/seriesRows.ts`). Series that share a table, filters and time column are read in one
+  query (Explore's default four series: two reads, not four).
+- **Cache with cancellation** (`lib/rangeCache.ts`, replacing `metricCache.ts`): per series at the widest range loaded,
+  narrower ranges sliced from it, simultaneous callers share one load, failures are not stored, and a shared load is
+  aborted only when every caller waiting on it has gone.
+- **Explore**: series picker; one panel per unit; grain automatic (day to 90 days, the series' long grain to a year,
+  month beyond) or chosen; bars for amounts (from zero), lines for levels; a point with under half of its days observed
+  is faded, a period without an observation is a gap. Click a week or month to open its days (the window is in the URL,
+  so back returns); click a day for the Inspector. A readout gives requests, rows, cache hits and load time.
+- **Inspector**: a series point states period, value, method, days observed of the period, rows, the day range, sources,
+  the series' time rule (with its exceptions) and the plausible range; a day lists its rows (local clock time, value,
+  source, whether the offset was assumed), each linked to its record in Data. Day values and these records come from the
+  same conversion (`toObservations`), so they reconcile by construction.
+- **Data**: filters in the URL (table, from/to or a day, id, source, a column empty or not); an exact count of matching
+  rows next to the rows loaded; newest first in pages of 200 with descending keyset paging; heavy JSON columns left out
+  of the table and shown for the selected record with its link.
+- **Removed**: `metricAdapter.ts`, `metricTypes.ts`, `metricCache.ts`, `stats.ts`, `FTChart`, and the metric-point
+  inspection.
+- **Migration `20261108_wearable_hr_daily.sql`** (NOT applied: the apply prompt was not answered): a trigger-kept daily
+  heart-rate summary (min, max, mean, minutes with a reading) behind the unchanged `wearable_hr_daily_range` view. A
+  read-only check reproduced the view exactly (488 days, 0 mismatches). Once applied, add its series to the contracts.
+
+### Benchmarks (2026-10-27)
+
+Server time per query (best of three, run as the database owner, so without the row-level-security filter):
+
+| Query | Rows | ms |
+|---|---|---|
+| 7D wearable_daily (HRV, resting HR, steps) | 7 | 0.3 |
+| 1Y wearable_daily | 365 | 0.4 |
+| All time wearable_daily, first page / fourth (keyset) page | 1,000 / 685 | 1.4 / 0.8 |
+| All time sleep_daily, first page | 1,000 | 0.6 |
+| 1Y meals energy | 310 | 0.2 |
+| All time runs | 184 | 1.2 |
+| Data: count / first 200 rows of wearable_daily / of exercise_sessions | 200 | 0.0 / 1.8 / 2.4 |
+| `wearable_hr_daily_range` 28D / all (the view the migration replaces) | 28 / 488 | 37 / 624 (1,488 cold) |
+
+Requests: 7D and 1Y need one request per table; all time needs four for wearable_daily (3,685 rows since 2016) and
+two for sleep_daily. Narrower ranges after a wider one need none (cache). Aggregation in the browser for the whole
+wearable history (3,685 days): 6 ms to months, 11 ms to weeks, 21 ms to days; 3,000 meals: 2 to 12 ms.
+
+With every query in single milliseconds, load time in the browser is network round trips: about one per table for
+ranges up to a year, four for all of wearable_daily. Signed-in browser timings (cold and warm) still need a run by the
+owner: the Explore readout shows them. The UI was checked in Chromium against a mocked Supabase (synthetic data in the
+same shapes): ten years at monthly grain, the month to days drill-down, the day inspector with the backfilled meals'
+local times, Data count, LOAD MORE and filters, and the legacy redirects.
 
 ## Phase A: what was built
 

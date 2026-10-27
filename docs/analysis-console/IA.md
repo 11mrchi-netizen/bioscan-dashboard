@@ -170,7 +170,7 @@ interface AnalysisContext {
 }
 ```
 
-Timezone is always explicit. Daily aggregations are bounded by the user's local midnight (IANA timezone stored in Supabase profile, defaulting to `Asia/Taipei` for this account).
+Timezone is always explicit. Daily aggregations are bounded by the user's local midnight. How each stored column carries local time (a calendar date, local wall time labelled UTC, or a true UTC instant with an offset, defaulting to +480 for this account) is declared per series in the series contract (`metric-series.json`, `analysis-core/seriesContract.ts`; PLAN.md, phase A).
 
 ---
 

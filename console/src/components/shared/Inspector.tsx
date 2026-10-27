@@ -96,7 +96,7 @@ function MetricPointView({ target, timezone, navigate }: {
 
       <div className="inspector-section">
         <div className="inspector-label mono">AGGREGATION</div>
-        <div className="inspector-value mono">{target.aggregation || 'daily_avg'}</div>
+        <div className="inspector-value mono">{target.aggregation || 'mean'}</div>
       </div>
 
       <div className="inspector-section">

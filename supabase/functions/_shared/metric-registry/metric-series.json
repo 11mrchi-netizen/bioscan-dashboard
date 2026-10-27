@@ -1,0 +1,734 @@
+{
+ "seriesVersion": "1.0.0",
+ "note": "Query contracts for the stored series (analysis hub phase A, docs/analysis-console/PLAN.md); shape and rules in analysis-core/seriesContract.ts. One entry per stored series; `metric` names its methodology in metric-registry.json (null where none exists yet). day/period: how rows on one local day and days in a week or month combine (mean | sum | last). plausible: inclusive range outside which a value is invalid. Time kinds: local_date (a calendar date column), local_wall (a timestamp holding local wall time labelled UTC), utc (a true instant; the local day needs an offset).",
+ "defaultUtcOffsetMin": 480,
+ "series": [
+  {
+   "id": "hrv",
+   "metric": "hrv",
+   "label": "HRV (RMSSD)",
+   "unit": "ms",
+   "table": "wearable_daily",
+   "column": "hrv",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    1,
+    300
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "rhr",
+   "metric": "rhr",
+   "label": "Resting heart rate",
+   "unit": "bpm",
+   "table": "wearable_daily",
+   "column": "rhr",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    25,
+    120
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "steps",
+   "metric": null,
+   "label": "Steps",
+   "unit": "steps",
+   "table": "wearable_daily",
+   "column": "steps",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    200000
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "vo2max",
+   "metric": "vo2max",
+   "label": "VO2max (watch estimate)",
+   "unit": "mL/kg/min",
+   "table": "wearable_daily",
+   "column": "vo2max",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "last",
+   "longGrain": "day",
+   "plausible": [
+    10,
+    90
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "spo2",
+   "metric": null,
+   "label": "SpO2, daily average",
+   "unit": "%",
+   "table": "wearable_daily",
+   "column": "spo2_avg",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    50,
+    100
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "calories_active",
+   "metric": null,
+   "label": "Active energy",
+   "unit": "kcal",
+   "table": "wearable_daily",
+   "column": "calories_active",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    10000
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "calories_total",
+   "metric": null,
+   "label": "Total energy",
+   "unit": "kcal",
+   "table": "wearable_daily",
+   "column": "calories_total",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    15000
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "zone_minutes",
+   "metric": null,
+   "label": "Heart-rate zone minutes",
+   "unit": "min",
+   "table": "wearable_daily",
+   "column": "zone_minutes",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    1440
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "sleep_hours",
+   "metric": "sleep_duration",
+   "label": "Sleep duration",
+   "unit": "h",
+   "table": "sleep_daily",
+   "column": "hours",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    24
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "sleep_score",
+   "metric": null,
+   "label": "Sleep score (band)",
+   "unit": "/100",
+   "table": "sleep_daily",
+   "column": "score",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    100
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "sleep_respiratory_rate",
+   "metric": "respiratory_rate_sleep",
+   "label": "Respiratory rate, sleep",
+   "unit": "br/min",
+   "table": "sleep_daily",
+   "column": "respiratory_rate",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    4,
+    40
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "sleep_deep_min",
+   "metric": "sleep_stages",
+   "label": "Deep sleep",
+   "unit": "min",
+   "table": "sleep_daily",
+   "column": "deep_min",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    1440
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "sleep_rem_min",
+   "metric": "sleep_stages",
+   "label": "REM sleep",
+   "unit": "min",
+   "table": "sleep_daily",
+   "column": "rem_min",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    1440
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "sleep_light_min",
+   "metric": "sleep_stages",
+   "label": "Light sleep",
+   "unit": "min",
+   "table": "sleep_daily",
+   "column": "light_min",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    1440
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "energy",
+   "metric": "wellbeing",
+   "label": "Energy",
+   "unit": "/10",
+   "table": "wellbeing_daily",
+   "column": "energy",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    10
+   ],
+   "hasSource": false
+  },
+  {
+   "id": "mood",
+   "metric": "wellbeing",
+   "label": "Mood",
+   "unit": "/10",
+   "table": "wellbeing_daily",
+   "column": "mood",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    10
+   ],
+   "hasSource": false
+  },
+  {
+   "id": "stress",
+   "metric": "wellbeing",
+   "label": "Stress",
+   "unit": "/10",
+   "table": "wellbeing_daily",
+   "column": "stress",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    10
+   ],
+   "hasSource": false
+  },
+  {
+   "id": "soreness",
+   "metric": "wellbeing",
+   "label": "Soreness",
+   "unit": "/10",
+   "table": "wellbeing_daily",
+   "column": "soreness",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    10
+   ],
+   "hasSource": false
+  },
+  {
+   "id": "body_weight",
+   "metric": "body_weight",
+   "label": "Body weight",
+   "unit": "kg",
+   "table": "body_metrics",
+   "column": "weight_kg",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "day",
+   "plausible": [
+    20,
+    300
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "body_fat_pct",
+   "metric": "body_fat_pct",
+   "label": "Body fat",
+   "unit": "%",
+   "table": "body_metrics",
+   "column": "body_fat_pct",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "day",
+   "plausible": [
+    1,
+    70
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "lean_mass",
+   "metric": "lean_mass",
+   "label": "Lean mass",
+   "unit": "kg",
+   "table": "body_metrics",
+   "column": "lean_mass_kg",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "day",
+   "plausible": [
+    10,
+    200
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "water_intake",
+   "metric": "hydration",
+   "label": "Water intake",
+   "unit": "mL",
+   "table": "hydration_daily",
+   "column": "ml",
+   "time": {
+    "column": "date",
+    "kind": "local_date"
+   },
+   "cadence": "daily",
+   "day": "last",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    15000
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "meal_energy",
+   "metric": "macros",
+   "label": "Energy intake",
+   "unit": "kcal",
+   "table": "meals",
+   "column": "calories",
+   "time": {
+    "column": "logged_at",
+    "kind": "local_wall",
+    "exceptions": [
+     {
+      "before": "2026-09-17",
+      "kind": "utc",
+      "note": "Meals before 2026-09-17 were backfilled with true UTC instants at templated times (00:00, 05:00, 11:30 UTC); live logging since writes local wall time."
+     }
+    ]
+   },
+   "cadence": "per_event",
+   "day": "sum",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    5000
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "meal_protein",
+   "metric": "macros",
+   "label": "Protein intake",
+   "unit": "g",
+   "table": "meals",
+   "column": "protein_g",
+   "time": {
+    "column": "logged_at",
+    "kind": "local_wall",
+    "exceptions": [
+     {
+      "before": "2026-09-17",
+      "kind": "utc",
+      "note": "Meals before 2026-09-17 were backfilled with true UTC instants at templated times (00:00, 05:00, 11:30 UTC); live logging since writes local wall time."
+     }
+    ]
+   },
+   "cadence": "per_event",
+   "day": "sum",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    400
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "meal_carbs",
+   "metric": "macros",
+   "label": "Carbohydrate intake",
+   "unit": "g",
+   "table": "meals",
+   "column": "carbs_g",
+   "time": {
+    "column": "logged_at",
+    "kind": "local_wall",
+    "exceptions": [
+     {
+      "before": "2026-09-17",
+      "kind": "utc",
+      "note": "Meals before 2026-09-17 were backfilled with true UTC instants at templated times (00:00, 05:00, 11:30 UTC); live logging since writes local wall time."
+     }
+    ]
+   },
+   "cadence": "per_event",
+   "day": "sum",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    800
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "meal_fat",
+   "metric": "macros",
+   "label": "Fat intake",
+   "unit": "g",
+   "table": "meals",
+   "column": "fat_g",
+   "time": {
+    "column": "logged_at",
+    "kind": "local_wall",
+    "exceptions": [
+     {
+      "before": "2026-09-17",
+      "kind": "utc",
+      "note": "Meals before 2026-09-17 were backfilled with true UTC instants at templated times (00:00, 05:00, 11:30 UTC); live logging since writes local wall time."
+     }
+    ]
+   },
+   "cadence": "per_event",
+   "day": "sum",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    400
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "meal_fiber",
+   "metric": "macros",
+   "label": "Fibre intake",
+   "unit": "g",
+   "table": "meals",
+   "column": "fiber_g",
+   "time": {
+    "column": "logged_at",
+    "kind": "local_wall",
+    "exceptions": [
+     {
+      "before": "2026-09-17",
+      "kind": "utc",
+      "note": "Meals before 2026-09-17 were backfilled with true UTC instants at templated times (00:00, 05:00, 11:30 UTC); live logging since writes local wall time."
+     }
+    ]
+   },
+   "cadence": "per_event",
+   "day": "sum",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    150
+   ],
+   "hasSource": true
+  },
+  {
+   "id": "run_duration",
+   "metric": "session_duration",
+   "label": "Run time",
+   "unit": "min",
+   "table": "exercise_sessions",
+   "column": "duration_min",
+   "time": {
+    "column": "start_time",
+    "kind": "local_wall"
+   },
+   "cadence": "per_event",
+   "day": "sum",
+   "period": "sum",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    1440
+   ],
+   "filters": {
+    "type": [
+     "run"
+    ]
+   },
+   "hasSource": true
+  },
+  {
+   "id": "run_distance",
+   "metric": "distance",
+   "label": "Run distance",
+   "unit": "km",
+   "table": "exercise_sessions",
+   "column": "distance_km",
+   "time": {
+    "column": "start_time",
+    "kind": "local_wall"
+   },
+   "cadence": "per_event",
+   "day": "sum",
+   "period": "sum",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    500
+   ],
+   "filters": {
+    "type": [
+     "run"
+    ]
+   },
+   "hasSource": true
+  },
+  {
+   "id": "run_avg_hr",
+   "metric": "heart_rate_session_avg",
+   "label": "Run average heart rate",
+   "unit": "bpm",
+   "table": "exercise_sessions",
+   "column": "avg_hr",
+   "time": {
+    "column": "start_time",
+    "kind": "local_wall"
+   },
+   "cadence": "per_event",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    30,
+    230
+   ],
+   "filters": {
+    "type": [
+     "run"
+    ]
+   },
+   "hasSource": true
+  },
+  {
+   "id": "strength_duration",
+   "metric": "session_duration",
+   "label": "Strength time",
+   "unit": "min",
+   "table": "exercise_sessions",
+   "column": "duration_min",
+   "time": {
+    "column": "start_time",
+    "kind": "local_wall"
+   },
+   "cadence": "per_event",
+   "day": "sum",
+   "period": "sum",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    1440
+   ],
+   "filters": {
+    "type": [
+     "strength"
+    ]
+   },
+   "hasSource": true
+  },
+  {
+   "id": "session_rpe",
+   "metric": "rpe",
+   "label": "Session RPE",
+   "unit": "/10",
+   "table": "exercise_sessions",
+   "column": "rpe",
+   "time": {
+    "column": "start_time",
+    "kind": "local_wall"
+   },
+   "cadence": "per_event",
+   "day": "mean",
+   "period": "mean",
+   "longGrain": "week",
+   "plausible": [
+    0,
+    10
+   ],
+   "hasSource": true
+  }
+ ]
+}

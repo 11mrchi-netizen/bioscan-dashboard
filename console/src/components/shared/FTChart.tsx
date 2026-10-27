@@ -107,7 +107,7 @@ export const FTChart = memo(function FTChart({ spec, result, height = 200, onDat
           source: point.source,
           confidence: point.confidence,
           provenance: point.provenance,
-          aggregation: 'daily_avg',
+          aggregation: spec.aggregation ?? 'mean',
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         })
       }

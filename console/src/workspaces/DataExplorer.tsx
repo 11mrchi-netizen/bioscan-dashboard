@@ -1,5 +1,5 @@
 // Data Explorer workspace — virtualized table over canonical Supabase tables.
-// Inspector "VIEW RAW RECORDS →" deep-links here via ?table=X&date=Y.
+// Inspector "VIEW RAW RECORDS →" deep-links here via ?table=X&date=Y; a record reference (lib/links.ts) via ?table=X&id=N.
 // ponytail: native HTML table + useVirtualizer; skipped TanStack Table v9 (breaking API change).
 
 import { useEffect, useState, useRef, useMemo } from 'react'
@@ -12,12 +12,12 @@ import './DataExplorer.css'
 // `runs` was replaced by exercise_sessions; meals and sessions are timestamped, lab draws use draw_date (lib/schema.ts).
 const KNOWN_TABLES = [
   'exercise_sessions', 'sleep_daily', 'wearable_daily', 'wellbeing_daily',
-  'meals', 'body_metrics', 'injuries', 'illnesses', 'rest_days', 'lab_draws',
+  'meals', 'body_metrics', 'hydration_daily', 'injuries', 'illnesses', 'rest_days', 'lab_draws',
 ]
 
 const DATE_COLUMN: Record<string, string> = {
   exercise_sessions: 'start_time', sleep_daily: 'date', wearable_daily: 'date',
-  wellbeing_daily: 'date', meals: 'logged_at', body_metrics: 'date',
+  wellbeing_daily: 'date', meals: 'logged_at', body_metrics: 'date', hydration_daily: 'date',
   injuries: 'start_date', illnesses: 'start_date', rest_days: 'date',
   lab_draws: 'draw_date',
 }
@@ -34,8 +34,9 @@ function explorerColumns(table: string): string {
   return known ? known.filter(c => !HEAVY_COLUMNS.has(c)).join(', ') : '*'
 }
 
-async function fetchRows(table: string, dateFilter: string | null): Promise<Row[]> {
+async function fetchRows(table: string, dateFilter: string | null, idFilter: string | null): Promise<Row[]> {
   let q = supabase.from(table).select(explorerColumns(table)).order(DATE_COLUMN[table] ?? 'id', { ascending: false }).limit(500)
+  if (idFilter) q = q.eq('id', idFilter)
   if (dateFilter) {
     const col = DATE_COLUMN[table] ?? 'date'
     if (TIMESTAMP_COLUMNS.has(col)) {
@@ -55,6 +56,7 @@ export function DataExplorer() {
 
   const [selectedTable, setSelectedTable] = useState<string>(params.get('table') ?? KNOWN_TABLES[0])
   const [dateFilter, setDateFilter]       = useState<string>(params.get('date') ?? '')
+  const [idFilter, setIdFilter]           = useState<string>(params.get('id') ?? '')
   const [rows, setRows]                   = useState<Row[]>([])
   const [columns, setColumns]             = useState<string[]>([])
   const [loading, setLoading]             = useState(false)
@@ -65,14 +67,14 @@ export function DataExplorer() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    fetchRows(selectedTable, dateFilter || null)
+    fetchRows(selectedTable, dateFilter || null, idFilter || null)
       .then(r => {
         setRows(r)
         setColumns(r.length ? Object.keys(r[0]) : [])
         setLoading(false)
       })
       .catch(e => { setError(String((e as Error)?.message ?? e)); setLoading(false) })
-  }, [selectedTable, dateFilter])
+  }, [selectedTable, dateFilter, idFilter])
 
   const sortedRows = useMemo(() => {
     if (!sortKey) return rows
@@ -103,6 +105,7 @@ export function DataExplorer() {
     const next = new URLSearchParams()
     if (selectedTable) next.set('table', selectedTable)
     if (dateFilter)    next.set('date',  dateFilter)
+    if (idFilter)      next.set('id',    idFilter)
     setParams(next)
   }
 
@@ -112,7 +115,7 @@ export function DataExplorer() {
         <h2 className="de-title">Data Explorer</h2>
         <div className="de-controls">
           <select className="de-select mono" value={selectedTable} onChange={e => setSelectedTable(e.target.value)}>
-            {KNOWN_TABLES.map(t => <option key={t} value={t}>{t}</option>)}
+            {(KNOWN_TABLES.includes(selectedTable) ? KNOWN_TABLES : [selectedTable, ...KNOWN_TABLES]).map(t => <option key={t} value={t}>{t}</option>)}
           </select>
           <input
             className="de-input mono"
@@ -122,6 +125,7 @@ export function DataExplorer() {
           />
           <button className="de-btn mono" onClick={applyFilters}>APPLY</button>
           {dateFilter && <button className="de-btn-ghost mono" onClick={() => setDateFilter('')}>CLEAR DATE</button>}
+          {idFilter && <button className="de-btn-ghost mono" onClick={() => setIdFilter('')}>RECORD {idFilter} ✕</button>}
         </div>
         <div className="de-meta mono">
           {!loading && !error && `${rows.length} rows${rows.length === 500 ? ' (capped)' : ''}`}

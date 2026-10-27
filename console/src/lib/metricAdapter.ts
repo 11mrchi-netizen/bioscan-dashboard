@@ -116,6 +116,4 @@ export async function fetchMetrics(reqs: MetricRequest[]): Promise<MetricResult[
   return results as MetricResult[]
 }
 
-// Well-known metric IDs live in ./schema (importable without a Supabase client).
-export { METRICS } from './schema'
 export { metricIdOf }

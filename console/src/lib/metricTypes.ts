@@ -1,7 +1,9 @@
 // Types and the pure result assembly of the metric adapter. No Supabase import, so node --test can load it.
 import type { DateRange, Source } from '../types/analysis'
+import { aggregateDays, type Method } from '../../../supabase/functions/_shared/analysis-core/seriesContract.ts'
 
-export type Aggregation = 'latest' | 'daily_avg' | 'daily_sum' | 'raw'
+// How rows on one day combine (the series contract's day methods), or 'raw' for every row as stored.
+export type Aggregation = Method | 'raw'
 
 export interface MetricRequest {
   table: string
@@ -55,27 +57,17 @@ export function errorResult(req: MetricRequest, message: string): MetricResult {
 
 // Analysis review A6: the adapter always returned raw rows, whatever aggregation a chart asked for, so a table with
 // several rows a day (body_metrics, sessions) plotted every row and the inspector still said "daily_avg". This applies
-// the requested aggregation per calendar day (the first 10 characters of the date or timestamp). Days whose values are
-// all null stay in the result as a null point, so gaps remain gaps.
+// the requested day method (analysis-core/seriesContract.ts) per calendar day, the first 10 characters of the date or
+// timestamp. Phase B replaces that with the series' time contract (localDateOf). Days whose values are all null stay in
+// the result as a null point, so gaps remain gaps.
 export function aggregatePoints(points: MetricPoint[], aggregation: Aggregation): MetricPoint[] {
   if (aggregation === 'raw') return points
-  const byDay = new Map<string, MetricPoint[]>()
-  for (const p of points) {
-    const day = p.date.slice(0, 10)
-    const list = byDay.get(day)
-    if (list) list.push(p)
-    else byDay.set(day, [p])
-  }
-  const out: MetricPoint[] = []
-  for (const [day, list] of [...byDay.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
-    const values = list.map((p) => p.value).filter((v): v is number => v !== null && Number.isFinite(v))
-    const sources = [...new Set(list.map((p) => p.source).filter((s): s is string => s !== null))]
-    const value =
-      values.length === 0 ? null :
-      aggregation === 'daily_sum' ? values.reduce((a, b) => a + b, 0) :
-      aggregation === 'latest' ? values[values.length - 1] :
-      values.reduce((a, b) => a + b, 0) / values.length
-    out.push({ date: day, value, source: sources.length === 1 ? sources[0] : sources.length > 1 ? 'mixed' : null, confidence: null, provenance: null })
-  }
-  return out
+  const days = aggregateDays(points.map((p) => ({ date: p.date.slice(0, 10), value: p.value, source: p.source })), aggregation)
+  return days.map((d) => ({
+    date: d.date,
+    value: d.value,
+    source: d.sources.length === 1 ? d.sources[0] : d.sources.length > 1 ? 'mixed' : null,
+    confidence: null,
+    provenance: null,
+  }))
 }

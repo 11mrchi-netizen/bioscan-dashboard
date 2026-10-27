@@ -11,7 +11,7 @@ R2 (location capture) were started together on 27 Oct 2026 at the owner's reques
 | R3 Places, trips, commute | **Built and unit-tested; migration `20261107_routine_places.sql` applied (27 Oct 2026); not installed.** |
 | R4 Analysis integration | **Built and tested (core and Android); `analysis-run` not redeployed yet, so the nightly run still uses catalogue 2.0.0** (see "Deploying analysis-run" below). Day-type covariate and health-episode context deferred (below). |
 | R5 UX and alternatives | **Built and unit-tested; `transit-alternatives` written, not deployed, TDX calls not verified (no TDX account, host unreachable from the build session).** |
-| R6 Routine experiments | **Built and tested (core 306, Android 1,036); migration `20261108_routine_experiments.sql` not applied yet; needs the `analysis-run` redeploy above.** |
+| R6 Routine experiments | **Built and tested (core 306, Android 1,036); migration `20261108_routine_experiments.sql` applied (27 Oct 2026); needs the `analysis-run` redeploy above.** |
 
 ## Verification so far
 
@@ -100,7 +100,7 @@ The evidence board's TEST button now covers six routine questions, as daily rand
 | `outdoor_daylight_sleep` | 30 minutes outdoors in daylight | `daylight_day` = 1 (estimated, ≥ 30 min, mobility coverage ≥ 80 %) | sleep |
 | `active_commute_hrv` | walk or cycle part of the commute | `active_commute` = 1 (≥ 10 min on foot or bicycle) | HRV |
 
-A habit can also be the outcome: `screen_bed_min`, `screen_pm_social` and `outdoor_daylight_min` are accepted as primary or secondary experiment metrics (unit minutes, default zone 10 min; less phone and more daylight are the favourable sides). That needs `20261108_routine_experiments.sql`, which widens the two `experiments` checks; the six daily choices above do not need it.
+A habit can also be the outcome: `screen_bed_min`, `screen_pm_social` and `outdoor_daylight_min` are accepted as primary or secondary experiment metrics (unit minutes, default zone 10 min; less phone and more daylight are the favourable sides). `20261108_routine_experiments.sql` (applied 27 Oct 2026) widens the two `experiments` checks; the six daily choices above do not need it.
 
 A day the phone did not measure (Usage access off, mobility coverage under 80 %, no commute that day) counts as unknown adherence, not as a missed day.
 

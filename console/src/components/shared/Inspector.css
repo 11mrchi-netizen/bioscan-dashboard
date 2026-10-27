@@ -98,3 +98,15 @@
   border-color: var(--color-emerald);
   color: var(--color-emerald);
 }
+
+/* Records behind a day (series point view) */
+.inspector-record {
+  display: grid;
+  grid-template-columns: 48px 1fr auto auto;
+  gap: var(--sp-2);
+  align-items: baseline;
+  font-size: 12px;
+  padding: 2px 0;
+}
+.inspector-link { color: var(--color-emerald); text-decoration: none; font-size: 11px; }
+.inspector-link:hover { text-decoration: underline; }

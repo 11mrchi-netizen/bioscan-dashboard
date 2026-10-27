@@ -107,8 +107,8 @@ Routes are hash routes under `/console/` (`#/integrity`, …). Old v1 routes red
 |---|---|---|---|
 | Integrity | `#/integrity` | What needs attention: capture coverage, source freshness, anomalies by severity, analysis readiness; a row per source or metric family; each issue traced to its records. Holds the series-break review. | Phase C (today: series-break review) |
 | Evidence | `#/evidence` | A queue of questions by state (needs data, under observation, ready to test, decision review); a workbench per question with shared time context; append-only decision records that snapshot their evidence. Evidence-board, ledger, event, experiment, intervention and fueling views live here as evidence-item views. | Phase D (today: the former Relationship Lab tabs) |
-| Explore | `#/explore` | The one general charting surface: any metrics on one time axis, resolution following the range, drill-down period → day → records. | Phase B |
-| Data | `#/data` | Raw and derived tables with keyset paging and composable filters (range, source, field, identifier, null/duplicate); heavy payloads fetched only for a selected record. | Phase B (today: 500-row explorer) |
+| Explore | `#/explore` | The one general charting surface: any metrics on one time axis, resolution following the range, drill-down period → day → records. | Exists (phase B) |
+| Data | `#/data` | Raw and derived tables with keyset paging and composable filters (range, source, identifier, empty or not); heavy payloads fetched only for a selected record. Duplicate rows are found by the integrity checks (phase C), which link to them here. | Exists (phase B) |
 | Models | `#/models` | How far the models can be trusted: expected-band calibration, flags and regimes, series breaks, typicality and its scorecard, fitness-fatigue spans. | Exists |
 
 A corrected discovery screen (docs/analysis-review/README.md, "Revisit") feeds the Evidence queue with exploratory pairs

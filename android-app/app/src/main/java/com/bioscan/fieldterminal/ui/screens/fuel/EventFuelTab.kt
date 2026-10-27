@@ -130,6 +130,12 @@ private fun PlanView(f: EventFuel) {
         Text("Sweat about ${(p.sweat.mlPerHour / 10).roundToInt() * 10} ml an hour (${p.sweat.basis}).", style = FTType.Caption, color = FT.TextSecondary)
         if (p.expectedLossPct > 0) Text("Expected loss at the finish: %.1f %% of body weight.".format(p.expectedLossPct), style = FTType.Caption, color = FT.TextSecondary)
     }
+    // The editable schedule: seeded from this plan, then yours. The debrief after the race is checked against it.
+    FuelScheduleCard(
+        kind = "event", refKey = f.event.id.toString(), durationMin = p.durationMin.roundToInt(),
+        toleratedGPerHour = com.bioscan.fieldterminal.data.FuelSettingsStore.get(context).toleratedGPerHour,
+        seed = { com.bioscan.fieldterminal.domain.fuel.seedBlocks(p) },
+    )
     if (f.changes.isNotEmpty()) {
         FTCard(title = "CHANGED SINCE LAST SHOWN") { f.changes.forEach { Text("· $it", style = FTType.BodySmall, color = FT.TextPrimary) } }
     }

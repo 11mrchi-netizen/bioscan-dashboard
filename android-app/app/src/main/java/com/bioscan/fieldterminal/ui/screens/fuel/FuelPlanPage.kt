@@ -228,6 +228,14 @@ private fun DayRow(d: HorizonDay, open: Boolean, onToggle: () -> Unit) {
                 Text("Fuel steps and weather for the long session appear in TODAY'S FUEL from three days before.", style = FTType.Caption, color = FT.TextSecondary)
             }
             Timeline(d.coded, emptyMap(), emptyMap(), d.suggestions, d.prep)
+            // A long planned run is where fuelling gets tested: its own schedule, checked against what you took in the debrief.
+            d.day.items.filter { it.durationMin >= 90 && it.eventId == null && !it.recorded }.forEach { item ->
+                FuelScheduleCard(
+                    kind = "planned", refKey = "${item.source.name}:${item.sourceId}".take(64), durationMin = item.durationMin.roundToInt(),
+                    toleratedGPerHour = com.bioscan.fieldterminal.data.FuelSettingsStore.get(androidx.compose.ui.platform.LocalContext.current).toleratedGPerHour,
+                    seed = null,
+                )
+            }
         }
     }
 }

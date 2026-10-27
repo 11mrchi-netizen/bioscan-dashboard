@@ -75,6 +75,9 @@ data class RaceFuelInput(
     val loadingDays: Boolean = false,
 )
 
+/** How many servings of a product a step takes (the structured form of the step's "2 × name" item). */
+data class StepPart(val product: FuelProductOption, val count: Int)
+
 data class FuelStep(
     val elapsedMin: Double,
     val km: Double?,
@@ -85,6 +88,7 @@ data class FuelStep(
     val caffeineMg: Double,
     val items: List<String>,
     val aidStation: AidStation? = null,
+    val parts: List<StepPart> = emptyList(),
 )
 
 data class CarryLeg(
@@ -189,6 +193,7 @@ fun planRaceFuel(input: RaceFuelInput): RaceFuelPlan {
         val stepFluid = fluidPlan(stepSweat, duration, kg, stepBand, input.settings.saltySweater)
         val fluid = (stepFluid.mlPerHourLow + stepFluid.mlPerHourHigh) / 2 * span / 60
         val items = mutableListOf<String>()
+        val parts = mutableListOf<StepPart>()
         var carbs = 0.0
         var sodium = fluid / 1000 * stepFluid.sodiumMgPerL
         // A drink mix covers the fluid first (and brings its carbohydrate), solid products the rest.
@@ -196,12 +201,14 @@ fun planRaceFuel(input: RaceFuelInput): RaceFuelPlan {
             val servings = max(1, (fluid / drink.fluidMl).roundToInt())
             carbs += servings * drink.carbsG
             items += "$servings × ${drink.name}"
+            parts += StepPart(drink, servings)
         }
         val remaining = need - carbs
         val n = floor(remaining / solid.carbsG + 0.4).toInt().coerceAtLeast(0)
         if (n > 0) {
             carbs += n * solid.carbsG
             items += "$n × ${solid.name}"
+            parts += StepPart(solid, n)
             sodium += n * (solid.sodiumMg ?: 0.0)
         }
         carbDebt = need - carbs
@@ -209,7 +216,7 @@ fun planRaceFuel(input: RaceFuelInput): RaceFuelPlan {
         val caffeine = inRaceCaffeine.filter { (at, _) -> at > t - span && at <= t }.sumOf { it.second }
         if (caffeine > 0) items += "${caffeine.roundToInt()} mg caffeine"
         val station = stationTimes.firstOrNull { kotlin.math.abs(it.second - t) <= STEP_MIN / 2 }?.first
-        FuelStep(t, kmAtElapsed(input.course, times, t, duration, totalKm), temp, carbs, fluid, sodium, caffeine, items, station)
+        FuelStep(t, kmAtElapsed(input.course, times, t, duration, totalKm), temp, carbs, fluid, sodium, caffeine, items, station, parts)
     }
 
     // What to carry between the places you can refill (aid stations with water or food), start to finish.

@@ -246,6 +246,8 @@ fun TodayScreen(
                 }
                 PhysiologicalStressCard(analyzeStressDay(today, stressDays.drop(1), windows), today)
             }
+            // Routine intelligence R5: yesterday's places, commute and phone before sleep (nothing until a stream is on).
+            RoutineTodayCard()
         }
     }
 

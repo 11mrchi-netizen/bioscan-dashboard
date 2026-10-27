@@ -61,6 +61,8 @@ enum class LabTab(val label: String) {
     Supplements("SUPPLEMENTS"),
     Planning("PLANNING"),
     Tests("TESTS"),
+    // Routine intelligence R5: the week by place, the commute and the phone (docs/routine-intelligence).
+    Routine("ROUTINE"),
 }
 
 // The three parts of Lab › Planning; a deep link (the fuel reminder, the User tab's block card) can ask for one.

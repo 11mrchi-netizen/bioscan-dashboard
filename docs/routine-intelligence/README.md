@@ -8,9 +8,10 @@ R2 (location capture) were started together on 27 Oct 2026 at the owner's reques
 | R0 Decisions | Done (plan section 11). TDX registration still to do before R5. |
 | R1 Phone use | **Built and unit-tested; migration applied (27 Oct 2026); not installed on the phone yet.** |
 | R2 Location capture | **Built and unit-tested; migration applied (27 Oct 2026); not installed on the phone yet.** |
-| R3 Places, trips, commute | **Built and unit-tested; migration `20261107_routine_places.sql` written, not applied; not installed.** |
-| R4 Analysis integration | **Built and tested (core and Android); `analysis-run` not redeployed yet, so the nightly run still uses catalogue 2.0.0.** Day-type covariate and health-episode context deferred (below). |
-| R5–R6 | Not started. |
+| R3 Places, trips, commute | **Built and unit-tested; migration `20261107_routine_places.sql` applied (27 Oct 2026); not installed.** |
+| R4 Analysis integration | **Built and tested (core and Android); `analysis-run` not redeployed yet, so the nightly run still uses catalogue 2.0.0** (see "Deploying analysis-run" below). Day-type covariate and health-episode context deferred (below). |
+| R5 UX and alternatives | **Built and unit-tested; `transit-alternatives` written, not deployed, TDX calls not verified (no TDX account, host unreachable from the build session).** |
+| R6 | Not started. |
 
 ## Verification so far
 
@@ -69,6 +70,33 @@ Deferred from R4, with the reason:
 - **Mobility context on health-concern episodes.** Same reason: no mobility history exists to show against an episode yet.
 
 To go live: redeploy the `analysis-run` Edge Function (it bundles `_shared/analysis-core`). Until then the nightly run keeps publishing catalogue 2.0.0 under engine 3.0.0-alpha.9.
+
+## R5: screens and commute alternatives
+
+| Piece | Where | Notes |
+|---|---|---|
+| Lab › ROUTINE | Android `ui/screens/status/RoutineTab.kt`, `nav/TopLevelTab.kt` (`LabTab.Routine`) | THE WEEK BY PLACE: the last 7 days as bars by Home, Work, Transit, Elsewhere and Unknown (from `mobility_daily`). COMMUTE: median, range and active minutes per direction over 4 weeks, and LOOK UP OTHER WAYS. PHONE · LAST 7 DAYS: daily screen time, the hour before sleep, nights unlocked, the five most used apps. |
+| Today | `RoutineCards.kt` `RoutineTodayCard`, at the end of Today | YESTERDAY'S ROUTINE in up to three sentences (time by place, commute against its 4-week median from 3 commutes, phone in the hour before sleep); hidden until a routine stream is on and yesterday has something to say. |
+| Log | `RoutineCards.kt` `UnloggedVisitsCard`, first item of the Log | Visits of 30 min or more to a place labelled Exercise with no session starting within 30 min of them, last 7 days. A line, not a notification (owner decision 4). |
+| Summaries (pure) | `domain/routine/RoutineSummary.kt` | Week strip, commute by direction, phone week, unlogged visits, Today's lines. |
+| Alternatives (pure) | `domain/routine/CommuteAlternatives.kt` | MRT (nearest 3 stations at each end, Dijkstra over hops and 250 m interchange walks, a 3 min platform wait), MRT from a farther station (most walking for at most 8 min more), MRT then YouBike (a station 1-4 km from work with a dock that has bikes, a dock near work with room), YouBike all the way (up to 8 km), walking (up to 3 km). Street distance = 1.3 × straight line; walking 80 m/min, YouBike 220 m/min. Computed on the phone. |
+| transit-alternatives | `supabase/functions/transit-alternatives/index.ts` | Returns TRTC stations, adjacent-station travel times and Taipei / New Taipei YouBike docks with live availability, from TDX with a client-credentials token (`TDX_CLIENT_ID`, `TDX_CLIENT_SECRET`); 503 `tdx_not_configured` without them. Receives no location and reads no user data. **Paths and field names follow TDX's documented v2 layout but were not called**: check one response of each before trusting the numbers. |
+
+Tests: `RoutineSummaryTest` (8), on a synthetic two-line network.
+
+Not in R5: shifting the departure time (needs travel times by time of day, which the API above does not give); splitting vehicle legs into rail and road (left for when TDX responses are verified); the plan's ≤ 1 notification a day (no notifications, owner decision 4).
+
+To switch the alternatives on: register a TDX account (free), set `TDX_CLIENT_ID` and `TDX_CLIENT_SECRET` as Edge Function secrets, deploy `transit-alternatives` (verify JWT on), and compare one response of each endpoint with the parser.
+
+## Deploying analysis-run
+
+The function bundles 41 files (about 420 kB) from `_shared/analysis-core`. The deploy tool available to Claude sessions takes the whole source inline, which is beyond what one call can carry, and the build session had no Supabase CLI login. From a machine with the CLI:
+
+```
+supabase functions deploy analysis-run --project-ref ugfrglbcoivkprjqvjzz
+```
+
+Then call it once (or wait for the 04:30 nightly run) and check that `analysis_results` gains `relationship` rows with engine `3.0.0-alpha.10` and the ten routine keys.
 
 ## Deviations from the plan
 

@@ -16,7 +16,7 @@ class NavigationMapTest {
         assertEquals(listOf("LOAD", "RUNNING", "STRENGTH", "SESSIONS", "INJURY"), TrainingTab.entries.map { it.label })
         assertEquals(listOf("NUTRITION", "HYDRATION", "PLAN"), NutritionTab.entries.map { it.label })
         assertEquals(listOf("CARDIO", "SLEEP", "BODY", "CONCERNS", "WELLBEING", "SEXUAL HEALTH", "BLOODWORK"), HealthTab.entries.map { it.label })
-        assertEquals(listOf("N=1", "SUPPLEMENTS", "PLANNING", "TESTS"), LabTab.entries.map { it.label })
+        assertEquals(listOf("N=1", "SUPPLEMENTS", "PLANNING", "TESTS", "ROUTINE"), LabTab.entries.map { it.label })
         assertEquals(listOf("TRAINING", "FOOD PLAN", "RACE FUEL"), PlanningSection.entries.map { it.label })
     }
 }

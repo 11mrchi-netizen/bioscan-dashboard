@@ -72,7 +72,7 @@ function MetricPointView({ target, timezone, navigate }: {
   const [table, column] = target.metricId.split('.')
 
   const drillToExplorer = () =>
-    navigate(`/data-explorer?table=${table}&date=${target.date}`)
+    navigate(`/data?table=${table}&date=${target.date}`)
 
   return (
     <div className="inspector-body">

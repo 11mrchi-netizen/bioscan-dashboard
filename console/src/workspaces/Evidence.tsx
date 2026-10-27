@@ -1,4 +1,6 @@
-// Relationship Lab. Views:
+// Evidence workspace (was the Relationship Lab). Phase 0 of the analysis hub (docs/analysis-console/PLAN.md) moved the
+// existing views here unchanged; Phase D replaces the tabs with the decision queue, the evidence workbench and decision
+// records, and the views below become evidence-item views. Views:
 //   EVIDENCE      the evidence board (analysis review phase D): every question of the fixed catalogue drawn to scale
 //                 against its no-effect zone with a verdict word, its event and lag curves, and what came before off
 //                 mornings (case-crossover, exploratory). Internal key 'confirmatory'.
@@ -7,8 +9,7 @@
 //   INTERVENTIONS, FUELING  read-only views of those engines.
 //   LEDGER        every nightly verdict of every question, and every change of verdict (analysis review phase G).
 //   EVENTS        the event explorer: any logged exposure against a morning outcome, on the nightly engine, in the browser.
-//   DIAGNOSTICS   expected-band calibration, flags and regimes, series breaks, typicality and its scorecard, the
-//                 personal fitness-fatigue spans.
+// The model diagnostics that used to be a tab here are the Models workspace.
 
 import { useState } from 'react'
 import { Confirmatory } from './Confirmatory'
@@ -17,8 +18,7 @@ import { Interventions } from './Interventions'
 import { Fueling } from './Fueling'
 import { Ledger } from './Ledger'
 import { EventExplorer } from './EventExplorer'
-import { Diagnostics } from './Diagnostics'
-import './RelationshipLab.css'
+import './Evidence.css'
 
 // The exploratory scan ran raw Pearson correlations over +/-14 lags between any two metrics, with no adjustment for day
 // of week, trend or carry-over and no correction for the number of looks: seven metrics gave 609 correlations, about 30
@@ -44,15 +44,15 @@ function RetiredScanNote() {
   )
 }
 
-type Tab = 'confirmatory' | 'exploratory' | 'experiments' | 'interventions' | 'fueling' | 'ledger' | 'events' | 'diagnostics'
+type Tab = 'confirmatory' | 'exploratory' | 'experiments' | 'interventions' | 'fueling' | 'ledger' | 'events'
 
-export function RelationshipLab() {
+export function Evidence() {
   const [tab, setTab] = useState<Tab>('confirmatory')
   return (
     <div className="rlab-shell">
       <div className="rlab-tabs">
-        <h2 className="rlab-shell-title">Relationship Lab</h2>
-        {(['confirmatory', 'ledger', 'events', 'diagnostics', 'exploratory', 'experiments', 'interventions', 'fueling'] as const).map(t => (
+        <h2 className="rlab-shell-title">Evidence</h2>
+        {(['confirmatory', 'ledger', 'events', 'exploratory', 'experiments', 'interventions', 'fueling'] as const).map(t => (
           <button key={t} className={`rlab-tab mono ${tab === t ? 'rlab-tab-on' : ''}`} onClick={() => setTab(t)}>{t === 'confirmatory' ? 'EVIDENCE' : t.toUpperCase()}</button>
         ))}
       </div>
@@ -62,10 +62,9 @@ export function RelationshipLab() {
         : tab === 'fueling' ? <div className="rlab"><Fueling /></div>
         : tab === 'ledger' ? <div className="rlab"><Ledger /></div>
         : tab === 'events' ? <div className="rlab"><EventExplorer /></div>
-        : tab === 'diagnostics' ? <div className="rlab"><Diagnostics /></div>
         : <RetiredScanNote />}
     </div>
   )
 }
 
-export default RelationshipLab
+export default Evidence

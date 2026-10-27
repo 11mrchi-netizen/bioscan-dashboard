@@ -1,6 +1,8 @@
-// Data quality workspace (Analysis Layer 3, R1): runs the analysis-run Edge Function and shows the published
-// series-break results. A detected break is only a candidate; here the user says whether it was a device/source change
-// (restarts personal baselines) or a real physiological change (dismissed). Decisions go to series_break_decisions.
+// Integrity workspace. For now the data-quality view of Analysis Layer 3, R1; Phase C of the analysis hub
+// (docs/analysis-console/PLAN.md) rebuilds it as health overview, source matrix and issue investigation.
+// Runs the analysis-run Edge Function and shows the published series-break results. A detected break is only a candidate;
+// here the user says whether it was a device/source change (restarts personal baselines) or a real physiological change
+// (dismissed). Decisions go to series_break_decisions.
 
 import { LoadBanner } from '../components/shared/LoadBanner'
 import { useCallback, useEffect, useState } from 'react'
@@ -96,7 +98,7 @@ export function DataQuality() {
   return (
     <div className="dq">
       <div className="dq-header">
-        <h2 className="dq-title">Data quality</h2>
+        <h2 className="dq-title">Integrity · series breaks</h2>
         <button className="btn-ghost mono" disabled={running} onClick={() => void run()}>{running ? 'RUNNING…' : 'RUN ANALYSIS'}</button>
       </div>
       <p className="dq-note">

@@ -4,15 +4,18 @@ import { useAuth } from './context/AuthContext'
 import { Shell } from './components/layout/Shell'
 import { Login } from './workspaces/Login'
 
-const Overview        = lazy(() => import('./workspaces/Overview'))
-const Timeline        = lazy(() => import('./workspaces/Timeline'))
-const Training        = lazy(() => import('./workspaces/Training'))
-const Recovery        = lazy(() => import('./workspaces/Recovery'))
-const Nutrition       = lazy(() => import('./workspaces/Nutrition'))
-const DataExplorer    = lazy(() => import('./workspaces/DataExplorer'))
-const Comparison      = lazy(() => import('./workspaces/Comparison'))
-const RelationshipLab = lazy(() => import('./workspaces/RelationshipLab'))
-const DataQuality     = lazy(() => import('./workspaces/DataQuality'))
+// The analysis hub's five workspaces (docs/analysis-console/IA.md §4).
+const DataQuality  = lazy(() => import('./workspaces/DataQuality'))
+const Evidence     = lazy(() => import('./workspaces/Evidence'))
+const Explore      = lazy(() => import('./workspaces/Explore'))
+const DataExplorer = lazy(() => import('./workspaces/DataExplorer'))
+const Models       = lazy(() => import('./workspaces/Models'))
+
+// Routes of the removed dashboards and the renamed workspaces, so bookmarks still land somewhere sensible.
+const LEGACY_ROUTES: Record<string, string> = {
+  overview: 'explore', timeline: 'explore', training: 'explore', recovery: 'explore', nutrition: 'explore',
+  comparison: 'explore', 'data-explorer': 'data', relationship: 'evidence', 'data-quality': 'integrity',
+}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth()
@@ -33,16 +36,15 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<Navigate to="overview" replace />} />
-        <Route path="overview"      element={<Overview />} />
-        <Route path="timeline"      element={<Timeline />} />
-        <Route path="training"      element={<Training />} />
-        <Route path="recovery"      element={<Recovery />} />
-        <Route path="nutrition"     element={<Nutrition />} />
-        <Route path="comparison"    element={<Comparison />} />
-        <Route path="data-explorer" element={<DataExplorer />} />
-        <Route path="relationship"  element={<RelationshipLab />} />
-        <Route path="data-quality"  element={<DataQuality />} />
+        <Route index element={<Navigate to="integrity" replace />} />
+        <Route path="integrity" element={<DataQuality />} />
+        <Route path="evidence"  element={<Evidence />} />
+        <Route path="explore"   element={<Explore />} />
+        <Route path="data"      element={<DataExplorer />} />
+        <Route path="models"    element={<Models />} />
+        {Object.entries(LEGACY_ROUTES).map(([from, to]) => (
+          <Route key={from} path={from} element={<Navigate to={`/${to}`} replace />} />
+        ))}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

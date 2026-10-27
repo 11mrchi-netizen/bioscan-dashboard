@@ -104,3 +104,16 @@ test('a duplicate-looking event (same values twice) is simply summed twice -- de
   const events = [ev({ id: 1, carbsG: 24 }), ev({ id: 2, carbsG: 24 })]
   assert.equal(summariseFueling(events, 3600).actualTotals.carbsG, 48)
 })
+
+test('intake before the start counts in the totals but not in the per-hour rates', () => {
+  const events = [
+    ev({ id: 1, elapsedSeconds: -1800, carbsG: 40, caffeineMg: 200 }), // a pre-workout half an hour before the start
+    ev({ id: 2, elapsedSeconds: 600, carbsG: 30 }),
+  ]
+  const s = summariseFueling(events, 3600)
+  assert.equal(s.actualTotals.carbsG, 70)
+  assert.equal(s.preStartTotals.carbsG, 40)
+  assert.equal(s.preStartTotals.caffeineMg, 200)
+  assert.equal(s.carbsPerHour, 30) // only the 30 g taken during the hour
+  assert.equal(s.gaps.length, 1) // the 30-60 min bucket; the pre-start gel does not close the first bucket
+})

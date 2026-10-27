@@ -138,3 +138,6 @@ lags with no adjustment (seven metrics give 609 correlations, about 30 significa
 discovery screen the review proposed: prewhitened cross-correlations with effective sample sizes, a false-discovery
 correction, chance bands on a lag heatmap, run on the older two-thirds of the history, and a "register this question"
 action that sends a promising pair into the confirmation ledger.
+
+Built 2026-10-27 as the console's Evidence > DISCOVERY screen (analysis hub phase C2, `analysis-core/discovery.ts`;
+calibration and design in `docs/analysis-console/PLAN.md`).

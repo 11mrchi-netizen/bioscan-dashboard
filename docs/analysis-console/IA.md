@@ -111,8 +111,8 @@ Routes are hash routes under `/console/` (`#/integrity`, …). Old v1 routes red
 | Data | `#/data` | Raw and derived tables with keyset paging and composable filters (range, source, identifier, empty or not); heavy payloads fetched only for a selected record. Duplicate rows are found by the integrity checks (phase C), which link to them here. | Exists (phase B) |
 | Models | `#/models` | How far the models can be trusted: expected-band calibration, flags and regimes, series breaks, typicality and its scorecard, fitness-fatigue spans. | Exists |
 
-A corrected discovery screen (docs/analysis-review/README.md, "Revisit") feeds the Evidence queue with exploratory pairs
-that can be registered as questions; it is built before the decision layer (PLAN.md, phase C2).
+The corrected discovery screen (Evidence > DISCOVERY, phase C2) scans the registrable questions on the older two-thirds of
+the history with a false-discovery correction and registers a promising pair as a question tested on new days only.
 
 ---
 

@@ -50,9 +50,32 @@ data accessible, the decision layer turns evidence into recorded decisions. Andr
 | A. Contracts | Query fields in the metric registry and the console map generated from it; typed aggregation semantics (sum, mean, last, min/max, each with sample count); the local-time contract; the five quality states (unknown, missing, invalid, conflict, valid) as a type; the evidence-link convention | Unit tests for week/month boundaries, sparse data, missing periods; null never becomes 0 | Done |
 | B. Query foundation | Period aggregation in the metric adapter with drill-down period → day → records; keyset paging; request cancellation; materialised HR daily range; Explore and the rebuilt Data workspace; benchmarks for 7D, 1Y and all-time, cold and warm | No silent truncation at the 1,000-row cap; drill-down values reconcile with source records | Done, except the HR summary migration (written, not applied) and signed-in browser timings |
 | C. Integrity v1 | `analysis-core/integrity.ts` (ranges, duplicates, conflicts, coverage) published by `analysis-run` as kind `integrity`; Health Connect and Zepp sync heartbeats; freshness from provenance and heartbeats; health overview, source matrix and issue investigation; the series-break review joins the issue list | Every core stream has a coverage rule; unknown is shown where it applies || Done in code; the sync-heartbeat migration and the analysis-run deploy wait for approval |
-| C2. Discovery | The corrected discovery screen (prewhitened cross-correlations, effective sample sizes, false-discovery correction, chance bands, older two-thirds of the history only) with a "register this question" action, labelled exploratory | Null data flags at most the corrected rate | |
+| C2. Discovery | The corrected discovery screen (prewhitened cross-correlations, effective sample sizes, false-discovery correction, chance bands, older two-thirds of the history only) with a "register this question" action, labelled exploratory | Null data flags at most the corrected rate || Done |
 | D. Decision layer v1 | Evidence-item interface across the engines; the queue derived from ledger verdicts (`not_yet` needs data, `unclear` under observation, actionable without a running experiment ready to test, `clear`/`negligible` without a later decision in review); the workbench; the append-only `decisions` table and decision records | Every decision links to its snapshotted evidence; insufficient data reads blocked; no composite score | |
 | E. Integration | Issue → records → evidence → decision links end to end; saved workspaces; regression tests | Workflow walkthrough passes | |
+
+## Phase C2: what was built
+
+- **Engine** (`analysis-core/discovery.ts`): the registrable questions only (six exposures x HRV, resting HR and sleep,
+  lags 0-3: 72 cells), on the older two-thirds of the history; the newest third is held out, and a registered question
+  is tested only on days after its registration. Both series lose the weekday pattern and a 29-day moving-average trend
+  (HRV on the log scale); Box-Jenkins prewhitening applies the exposure's AR(1) filter to both; each correlation is
+  judged on Bartlett's effective sample size over lags 1-30 and all testable cells are corrected together with
+  Benjamini-Hochberg at a 10% false-discovery rate. Each cell carries its 95% chance band (+/-1.96/sqrt(n_eff)); below
+  60 pairs or 12 days with and without the exposure it reads "too few".
+- **Calibration** (`discovery.test.ts`, 200 synthetic histories with weekend-heavy exposures, weekday patterns, slow
+  trends, carry-over and missing days, no true link): per-test p < 0.05 share 4.8%, and 7-8% of histories flag any
+  cell (the target is at most the 10% false-discovery rate; the retired raw scan's false-positive share on the same
+  data is above 10% per test). Two corrections came out of it: a lag-1-only effective n let 5.9% of null tests through
+  (12-16% of histories flagged something), and prewhitening the outcome with its own filter pushed a planted lag-1
+  effect into an opposite echo at lag 2. A planted alcohol -> next-morning HRV link is found at lag 1 in at least 16 of
+  20 histories; a link that exists only in the held-out third is not found.
+- **Console** (Evidence > DISCOVERY, `Discovery.tsx`, replacing the retired-scan note): the heatmap of the 18 pairs by
+  lag, colour by direction and strength against the chance band, flagged cells outlined, catalogue questions and live
+  registrations marked; a cell's detail gives r, band, pairs and effective n, exposed days, p and q, and REGISTER
+  (`registered_questions`, source `discovery`, the default no-effect zone of its outcome, a note with the discovery
+  numbers). Labelled exploratory throughout. Checked in Chromium against a mocked Supabase with a planted effect: it
+  was the one flagged cell of 32 testable, and registration inserted the row.
 
 ## Phase C: what was built
 

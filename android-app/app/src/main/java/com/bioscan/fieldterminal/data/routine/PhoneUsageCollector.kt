@@ -22,6 +22,7 @@ class PhoneUsageCollector(private val context: Context) {
     fun hasAccess(): Boolean {
         val appOps = context.getSystemService(AppOpsManager::class.java)
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            @Suppress("DEPRECATION") // deprecated in API 37 with no replacement that takes a package name
             appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
         } else {
             @Suppress("DEPRECATION")

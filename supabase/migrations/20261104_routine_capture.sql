@@ -107,7 +107,6 @@ create table public.place_visits (
   check (end_at >= start_at)
 );
 
-create index location_fixes_ts on public.location_fixes (user_id, ts desc);
 create index place_visits_end on public.place_visits (user_id, end_at desc);
 
 do $$

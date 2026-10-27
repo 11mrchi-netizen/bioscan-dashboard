@@ -6,20 +6,18 @@ R2 (location capture) were started together on 27 Oct 2026 at the owner's reques
 | Phase | Status |
 |---|---|
 | R0 Decisions | Done (plan section 11). TDX registration still to do before R5. |
-| R1 Phone use | **Code written; not built, not installed, migration not applied.** |
-| R2 Location capture | **Code written; not built, not installed, migration not applied.** |
+| R1 Phone use | **Built and unit-tested; migration applied (27 Oct 2026); not installed on the phone yet.** |
+| R2 Location capture | **Built and unit-tested; migration applied (27 Oct 2026); not installed on the phone yet.** |
 | R3–R6 | Not started. |
 
 ## Verification so far
 
-- The pure logic (`domain/routine/PhoneUsage.kt`, `domain/routine/StayPoints.kt`) has 15 unit tests
-  (`PhoneUsageTest`, `StayPointsTest`), run and passing on the JVM.
-- **Nothing Android-specific has been compiled.** The session that wrote it could not reach `dl.google.com` (the
-  Android SDK and Google's Maven are served from there), so `./gradlew :app:assembleDebug` and the app's own unit test
-  task were not run. First step on a machine with Android Studio: build, run `./gradlew :app:testDebugUnitTest`, and
-  fix whatever the compiler finds. The `play-services-location` version (21.3.0) was also not checked against the
-  repository.
-- `supabase/migrations/20261104_routine_capture.sql` is written, not applied.
+- `./gradlew :app:testDebugUnitTest :app:assembleDebug` passes: 957 tests, 0 failures (4 skipped, unchanged), among
+  them the 15 new ones in `PhoneUsageTest` and `StayPointsTest`. No new compiler warnings.
+- `20261104_routine_capture.sql` applied to `ugfrglbcoivkprjqvjzz`: 7 tables, RLS on, 4 owner-only policies each; the
+  security advisor reports nothing new.
+- Not yet exercised: everything that needs the phone (grants, usage events, transitions, the trip service, uploads).
+  Lint was not run.
 
 ## What was built
 
@@ -52,7 +50,7 @@ R2 (location capture) were started together on 27 Oct 2026 at the owner's reques
 
 ## Deploy order
 
-1. Apply `20261104_routine_capture.sql`; run the Supabase security advisor.
-2. Build and install the app; Setup › Profile & goals › Data capture: grant usage access, turn PHONE USE on.
+1. ~~Apply `20261104_routine_capture.sql`~~ (done).
+2. Build and install the app from your own machine (the Google sign-in client is registered to your debug key); Setup › Profile & goals › Data capture: grant usage access, turn PHONE USE on.
 3. Grant precise location, then "Allow all the time", physical activity and the battery exemption; turn LOCATIONS on.
 4. Keep the diary for the R2 gate for a week.

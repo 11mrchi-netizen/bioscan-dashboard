@@ -1,11 +1,11 @@
 # Routine intelligence: places, commutes, time use and phone use (research and plan)
 
-Status: research and plan only. Nothing here is built. Written 27 Oct 2026 against `main` at `b31b313`.
+Status: research and plan only. Nothing here is built. Written 27 Oct 2026 against `main` at `b31b313`; the owner's
+decisions (section 11) were recorded the same day and the sections they touch (3, 5, 8.3, 9, 10) were revised to match.
 Scope: a feature that passively records where the person spends time, how they move between places, and how they use
 the phone, then reads those habits against the data the app already holds (sleep, HRV, training, nutrition, check-ins)
-so the person can spot what to change and try alternatives. It is a personal routine mirror, not a productivity score
-and not surveillance: raw traces stay on the phone, and every finding speaks the evidence vocabulary the app already
-uses (OBSERVED / ASSOCIATED / TESTED, no cause verbs).
+so the person can spot what to change and try alternatives. It is a personal routine mirror, not a productivity score,
+and every finding speaks the evidence vocabulary the app already uses (OBSERVED / ASSOCIATED / TESTED, no cause verbs).
 
 Contents: 1 verdict · 2 what the app already has · 3 feasibility per signal · 4 metrics catalogue · 5 what it enriches
 and what enriches it · 6 existing products · 7 evidence for utility · 8 evaluation: value, impact, risks · 9 data model ·
@@ -23,8 +23,8 @@ and what enriches it · 6 existing products · 7 evidence for utility · 8 evalu
 | Is it reliable? | Phone use: yes, it is the operating system's own event log. Places: good for "where did I spend 20 minutes or more", fair for short stops, and dependent on keeping the phone's battery optimiser from killing the collector. Commute mode: good for walk/run/cycle/vehicle, weak for telling bus from MRT from car without extra rules. |
 | Battery cost | Phone use: negligible (one read a day). Places: aim under 3 % a day with transition-driven sampling (section 3.1); continuous GPS would cost far more and is ruled out. |
 | Does it add value to *this* app? | Yes, more than in a generic tracker, because the hard part (an honest association and experiment engine with weekday adjustment, explicit unknowns and a ledger) already exists and is starved of exposures. Section 5 lists 14 concrete hooks. |
-| Biggest risk | Privacy. Location is the most identifying data the app would hold, and this database already holds sexual-health and encounter records. Section 8.3 sets the rule: coordinates never leave the phone. |
-| Second risk | Insight that is only obvious ("you spend more time at the office on weekdays") or only nagging. The design answers with the existing analysis contracts and a strict cap on nudges. |
+| Biggest risk | Privacy. Location is the most identifying data the app would hold, and this database already holds sexual-health and encounter records. The owner chose to sync coordinates and app names to Supabase; section 8.3 sets the rules that come with that. |
+| Second risk | Insight that is only obvious ("you spend more time at the office on weekdays"). The design answers with the existing analysis contracts; nudges are out of scope for now (owner decision). |
 | Effort | Roughly 10–14 sessions over six phases (section 10). Phase R1 (phone use, measured instead of self-reported) ships value in 2 sessions on its own. |
 
 ---
@@ -39,7 +39,7 @@ and what enriches it · 6 existing products · 7 evidence for utility · 8 evalu
 | Calendar events with free-text locations, Nominatim geocoding | `GeocodingRepository.kt`, `MapScreen.kt` | Planned vs actual: did the person go where the calendar said, and when. |
 | Health Connect: steps, sleep sessions, exercise sessions and routes, heart rate | `healthconnect/`, manifest | Sleep onset and wake give the bed window for "phone in bed"; steps and HR confirm active commute legs; exercise routes are already GPS. |
 | Zepp workouts with a `location` geohash | `docs/zepp-integration/03-workout-detail-field-decode.md` | Workout start places without new permissions; trains the place model (gym, trailheads). |
-| WorkManager background sync, notification rules engine with `skip_if_logged`, `max_per_day` | `NotificationDispatchWorker.kt`, `notification_rules` | The collector and the nudges reuse both; no new background infrastructure. |
+| WorkManager background sync, notification rules engine with `skip_if_logged`, `max_per_day` | `NotificationDispatchWorker.kt`, `notification_rules` | The collector reuses WorkManager; the rules engine is there if nudges come back into scope. |
 | Analysis core: fixed hypothesis catalogue, weekday adjustment, explicit unknown vs zero, case-crossover, expected bands, typicality, randomised experiments, interrupted time series, evidence ledger | `supabase/functions/_shared/analysis-core/` | The engine that turns routine data into honest findings. It already refuses a weekly-schedule cause as "not testable", which matters a lot here (section 8.4). |
 | Interventions and experiments tables | `interventions`, `experiments` | "Phone out of the bedroom for two weeks" is an experiment the app can already run once its metric list is widened. |
 | Device context | Android 14+, one user, sideloaded, Taipei (UTC+8, no DST), Amazfit watch via Zepp | No Play Store constraints; one OEM to tune battery handling for; Taiwan's open transit data is available for commute alternatives. |
@@ -79,9 +79,9 @@ and what enriches it · 6 existing products · 7 evidence for utility · 8 evalu
 - A **trip** is the gap between two visits: start and end place, departure and arrival, distance, and legs by mode
   (from the transitions; vehicle legs split into rail/road later by matching to MRT lines, phase R5).
 
-**History backfill:** Google Maps Timeline moved to on-device storage in 2025 and has no API; the web viewer is gone and
-Takeout no longer carries it for migrated accounts. Its in-app export (Maps › Your Timeline › ⋮ › Export) writes a JSON
-file that an import screen could read once to seed places and a baseline. Optional, and only covers that device.
+**History backfill:** none. Google Maps Timeline moved to on-device storage in 2025 and has no API, and the owner has
+had it disabled for years, so there is nothing to import. Places are learned from the first weeks of collection,
+seeded by the home location, calendar locations and Zepp workout geohashes.
 
 **Known weak spots:** OEM battery optimisers (must ask for the battery-optimisation exemption and show collector health
 in Setup); indoor and underground positioning (MRT trips will look like a jump between stations, which is fine for
@@ -97,7 +97,7 @@ duration and mode, not for route); short errands under 10 minutes merge into tri
 | `ApplicationInfo.category` (API 26+) | The app's own category: social, video, game, audio, news, productivity, maps… | Groups without a hand-made list; the person can override per app. |
 
 The system keeps the detailed event stream for a limited time only, so a daily WorkManager job reads yesterday and
-stores aggregates; the raw events are discarded. Android's Digital Wellbeing dashboard has no public API, but its daily
+stores per-day totals overall and per app (package name and label, owner decision); the raw events are discarded. Android's Digital Wellbeing dashboard has no public API, but its daily
 totals are the reference to validate against (gate in phase R1).
 
 **Derived per day:** screen time, pickups, first unlock (against wake time from sleep), last use before sleep onset,
@@ -188,7 +188,7 @@ Newey-West intervals), so adding them widens the family and the Benjamini-Hochbe
 
 | Area | Hook |
 |---|---|
-| Capture (the app's main gap) | Leaving the gym geofence after 40 + minutes with no strength session logged → one LOG SESSION? notification (existing `skip_if_logged`). Arriving home after a long trip with no meal logged since noon → existing fuel reminder fires earlier. |
+| Capture (the app's main gap) | *Deferred: no nudges for now (owner decision).* Without notifications the same signal still helps: a gym visit with no strength session logged shows as an UNLOGGED VISIT line in the Log tab, where the person can add the session. The notification version (gym-exit prompt, earlier fuel reminder) stays on the shelf for later. |
 | Training load | Walk and cycle commute legs are real load that is never logged; show them as NEAT next to CTL/ATL (shown adjacent, not merged into the TRIMP model without a decision). |
 | Expected bands / typicality | Day type as a covariate: a home day or a travel day is often why a morning sits outside its band. |
 | Health concerns | Reduced mobility (time at home up, radius down) is an early illness signal; offered as context on an episode, never as a diagnosis. |
@@ -213,12 +213,12 @@ weather (outdoor plausibility), evening check-in (stress, mood as outcomes), and
 | **Google Maps Timeline** | Passive visits and trips with mode, now stored on the device | Excellent place matching from Google's place database; zero effort | No API, no analysis, moved off the cloud in 2025 partly over privacy. The bar for "it just works" on place labels. |
 | **Moves** (2013–2018) | Automatic walk/cycle/transport diary | Proved people want a passive daily story | Bought by Facebook and shut down; users lost their history. Own the data. |
 | **Arc Timeline** (iOS) | Visits, trips and 15 + transport modes, learns per user; GPX/JSON export | The closest reference design: an on-device learning classifier that improves with the person's corrections | Corrections must be cheap (one tap to fix a mode or a place). Exports are a feature. |
-| **Life360** | Family location sharing, drive detection | Battery-efficient detection with the Transition API | Sold precise location to about a dozen data brokers (The Markup, 2021). The reason the "coordinates stay on the phone" rule exists. |
+| **Life360** | Family location sharing, drive detection | Battery-efficient detection with the Transition API | Sold precise location to about a dozen data brokers (The Markup, 2021). The reason section 8.3 bars any third party from routine data. |
 | **Gyroscope** | All-in-one life dashboard incl. travel, productivity | Beautiful daily/annual reports | Wide but shallow; few honest statistics. |
 | **Exist** | Pulls many services, finds correlations | Correlations are what users value most | Naive correlation over many pairs finds noise; this app deliberately retired that approach (`docs/analysis-console/IA.md`). |
 | **Bearable** | Symptoms vs factors | Clear "factor → symptom" framing | Manual logging fatigue. |
 | **Android Digital Wellbeing / Apple Screen Time** | Screen time, unlocks, per-app limits | Accurate, built in | Numbers without context; no link to sleep or mood. No public API on Android. |
-| **one sec** | A pause before opening chosen apps | Field experiment (PNAS 2023, n = 280, 6 weeks): 36 % of opening attempts dismissed, opening attempts down 37 %; the option to cancel mattered most | Friction works better than reports. A candidate nudge in phase R5, not a feature to copy wholesale. |
+| **one sec** | A pause before opening chosen apps | Field experiment (PNAS 2023, n = 280, 6 weeks): 36 % of opening attempts dismissed, opening attempts down 37 %; the option to cancel mattered most | Friction works better than reports. A candidate for later, once nudges are back in scope; not part of this plan. |
 | **Apple Journaling Suggestions** | On-device "moments" from significant locations, workouts, media | On-device by design; the person chooses what leaves | The privacy pattern to copy. |
 | **Beiwe, AWARE, RADAR-base, mindLAMP** | Research digital-phenotyping platforms | Published feature definitions (entropy, circadian movement, home time), missing-data handling | Use their feature definitions and their honesty about missingness; do not adopt the platforms (multi-user servers, overkill for one person). |
 
@@ -271,23 +271,31 @@ daylight before noon, departure time, sleep regularity), not totals. Lead with t
 - **Not expected**: a "routine score". It would be a composite with no outcome to calibrate against; the healthspan
   grade's trust gate shows how much work an honest composite needs.
 
-### 8.3 Privacy and security (non-negotiable rules)
+### 8.3 Privacy and security
 
 Four time-stamped locations are enough to single out 95 % of people in a mobility dataset (de Montjoye et al., 2013,
 Scientific Reports). The same database holds `encounters`, `people`, `masturbation_log` and `arousal_daily`; joined
-with places and times, it would describe the person's private life in detail. So:
+with places and times, it describes the person's private life in detail. The owner decided (section 11) that
+coordinates, fixes and per-app names are synced to Supabase and that there are no private places. That is a
+reasonable choice for a single-user project whose database is the owner's own; it moves the protection from "the data
+is not there" to "the database is locked down", so these rules apply:
 
-1. **Raw fixes, raw usage events and place coordinates stay on the phone** (an encrypted Room database, excluded from
-   Android auto-backup: `allowBackup` is currently `true`, so add a backup rule excluding it).
-2. Supabase receives **daily aggregates, place ids with labels and categories, and visit/trip times** — no
-   latitude/longitude, no app package names (categories only, unless the person opts a specific app in).
-3. Raw fixes are kept 30 days on the phone (enough to re-cluster and correct), then deleted; visits and trips stay.
-4. One switch per stream in Setup (Phone use, Places, Commute), each with PAUSE FOR TODAY and DELETE ALL. A place can be
-   marked **private**: visits there are recorded as "private" with no label and excluded from every analysis.
-5. No routine data goes to Gemini (`log-agent`) or any third party. Reverse lookups to Nominatim send a rounded point
-   (about 100 m) once per new place, never a trace.
-6. RLS on every new table, as on every existing one; nothing in the web dashboard (`index.html` is public on GitHub
-   Pages and only RLS protects it).
+1. **RLS on every new table** with the same `(select auth.uid())` policies as the existing 22+, checked with the
+   Supabase security advisor after each migration. `index.html` is public on GitHub Pages with the publishable key, so
+   RLS is the only gate; no new table may get an anon or public policy.
+2. **No service-role reads outside the analysis run.** The nightly `analysis-run` reads aggregates
+   (`mobility_daily`, `phone_usage_daily`, visits, trips), never `location_fixes`; clustering of fixes happens on the
+   phone.
+3. **No third parties.** No routine data goes to Gemini (`log-agent`) or any other model or service. Nominatim gets one
+   rounded point (about 100 m) per new place, never a trace. TDX gets station and stop queries, never the person's
+   points (section 10, R5).
+4. **Delete per stream** in Setup (Phone use, Locations): PAUSE FOR TODAY, and DELETE ALL that removes the rows in
+   Supabase and on the phone.
+5. **Fix retention in Supabase:** raw fixes are kept for 12 months, then thinned to one fix per 5 minutes of trip
+   (enough to redraw a route); visits and trips stay. Volume is small: roughly 150–300 fixes a day, about 100,000 rows
+   a year, well inside the free tier.
+6. **Google account and Supabase dashboard access are the real perimeter** now; two-factor on both is worth confirming.
+7. The on-phone buffer (Room) only holds what has not synced yet; Android auto-backup stays as it is.
 
 ### 8.4 Analytical risks
 
@@ -297,7 +305,7 @@ with places and times, it would describe the person's private life in detail. So
 | Gaps read as behaviour (collector killed = "stayed home") | Unknown is stored as unknown; days under 80 % coverage are excluded from mobility metrics; coverage is shown as the DATA chip. |
 | Reverse causation (a bad night → more phone in bed) | Lags are fixed per question; bed-window use is measured *before* sleep onset for the sleep questions; the experiment path settles direction. |
 | Obvious findings ("more time at work on weekdays") | Never shown as findings; the time budget is a view, the evidence board only shows catalogue questions. |
-| Nudge fatigue | At most one routine notification a day across all kinds, each switchable; the gym prompt only when nothing was logged. |
+| Nudge fatigue | No routine notifications in this plan (owner decision). |
 
 ### 8.5 Technical risks
 
@@ -312,20 +320,26 @@ with places and times, it would describe the person's private life in detail. So
 
 ## 9. Data model (sketch)
 
-**On the phone (Room, encrypted, not backed up):** `location_fix` (ts, lat, lon, accuracy_m, source, activity),
-`activity_transition` (ts, activity, enter/exit), `place_geo` (place_id, centroid, radius_m), `usage_day_raw`
-(transient; aggregates written then cleared).
+**On the phone (Room):** an outbox only — fixes, transitions and visits not yet synced, plus the stay-point and
+clustering state. Synced rows are dropped after 7 days.
 
 **Supabase (RLS, same `(select auth.uid())` pattern, provenance column `source`):**
 
 | Table | Key columns |
 |---|---|
-| `places` | `id`, `label`, `category`, `is_private`, `created_at`, `source` (learned / home_setting / calendar / zepp) |
+| `location_fixes` | `ts`, `lat`, `lon`, `accuracy_m`, `activity`, `trip_id` (nullable); unique (user, ts) so re-syncs are idempotent |
+| `activity_transitions` | `ts`, `activity`, `transition` (enter / exit) |
+| `places` | `id`, `label`, `category`, `lat`, `lon`, `radius_m`, `created_at`, `source` (learned / home_setting / calendar / zepp / manual) |
 | `place_visits` | `place_id`, `start_at`, `end_at`, `confidence` |
 | `trips` | `start_at`, `end_at`, `from_place_id`, `to_place_id`, `distance_km`, `legs` jsonb (mode, minutes, distance), `is_commute`, `corrected` |
 | `mobility_daily` | `date`, `coverage_pct`, minutes by category, `n_places`, `new_places`, `entropy_norm`, `radius_gyration_km`, `routine_similarity`, `outdoor_daylight_min`, `day_type` |
 | `phone_usage_daily` | `date`, `coverage_pct`, `screen_min`, `unlocks`, `first_unlock_at`, `last_use_before_sleep_at`, `bed_window_min`, `night_unlocks`, `by_category` jsonb, `longest_free_min`, `by_place_category` jsonb |
+| `phone_app_usage_daily` | `date`, `package`, `app_label`, `category` (system category, overridable), `foreground_min`, `launches`, `bed_window_min`, `after_21_min` |
+| `phone_app_categories` | `package`, `category` — the person's overrides |
 | `daily_context` (existing) | fill `temp_max_c`, `humidity_mean_pct`, `daylight_hours` from the day's main place |
+
+With coordinates in Supabase, the web dashboard and the console can draw visits and trips on a map, and places can be
+re-clustered server side later if the phone-side model proves weak.
 
 Findings use the existing `analysis_results` + `evidence_ledger`; no new findings infrastructure.
 
@@ -337,31 +351,31 @@ Each phase ends with a gate, as in the analysis review. Estimates are sessions i
 
 | Phase | What | Gate | Est. |
 |---|---|---|---|
-| **R0** Decisions | Settle section 11; write the permission and privacy copy shown in Setup; add backup exclusion rule | Owner sign-off on 11.1–11.5 | 0.5 |
-| **R1** Phone use | `UsageStatsCollector` (daily WorkManager job, yesterday's events → aggregates; screen on/off, unlocks, categories; bed window from `sleep_daily`); `phone_usage_daily` migration; Setup › Data capture row with grant status; Health › SLEEP gains PHONE IN BED; Today's LAST EVENING shows the measured value; keep `late_screen` self-report one month for comparison | Daily rows on ≥ 95 % of days over 14 days; screen time within 5 % of Digital Wellbeing on 10 spot-checked days; measured bed-window use agrees with self-reported `late_screen` on ≥ 80 % of answered evenings (or the disagreement is explained) | 2 |
-| **R2** Location capture | Transition API + geofence + burst sampling; on-device Room store; collector heartbeat; Setup switch, pause, delete; stay-point detection to visits | 7-day test: battery under 3 %/day; ≥ 90 % of visits ≥ 20 min found against a hand-kept diary; no visit invented at home during collector gaps | 3 |
-| **R3** Places, trips, commute | Clustering to places; labelling and correction on the Map tab (pins for places, one-tap fix of a trip mode); suggestions from home, calendar, Zepp, OSM; `places`, `place_visits`, `trips`, `mobility_daily`; commute detection; weather and daylight into `daily_context`; optional Maps Timeline import | ≥ 90 % of the week's time attributed to a labelled place or a trip; commute door-to-door within 3 min of the diary; `daily_context` weather filled on ≥ 90 % of days | 3 |
+| **R0** Decisions | Section 11 — **done 27 Oct 2026**. Remaining: the permission copy shown in Setup, and a TDX account (free registration; client id and secret go into Supabase Vault for an Edge Function, never into the app) | — | 0.5 |
+| **R1** Phone use | `UsageStatsCollector` (daily WorkManager job, yesterday's events → per-day and per-app totals; screen on/off, unlocks, categories; bed window from `sleep_daily`); `phone_usage_daily`, `phone_app_usage_daily`, `phone_app_categories` migrations; Setup › Data capture row with grant status and category overrides; Health › SLEEP gains PHONE IN BED (top apps in the bed window by name); Today's LAST EVENING shows the measured value; keep `late_screen` self-report one month for comparison | Daily rows on ≥ 95 % of days over 14 days; screen time within 5 % of Digital Wellbeing on 10 spot-checked days, per-app minutes for the top 5 apps within 10 %; measured bed-window use agrees with self-reported `late_screen` on ≥ 80 % of answered evenings (or the disagreement is explained) | 2 |
+| **R2** Location capture | `ACCESS_FINE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`, `ACTIVITY_RECOGNITION`, battery-optimisation exemption; Transition API + geofence + burst sampling; Room outbox synced to `location_fixes` and `activity_transitions`; collector heartbeat; Setup switch, pause, delete; stay-point detection to visits | 7-day test: battery under 3 %/day; ≥ 98 % of fixes reach Supabase within 24 h; ≥ 90 % of visits ≥ 20 min found against a hand-kept diary; no visit invented at home during collector gaps | 3 |
+| **R3** Places, trips, commute | Clustering to places; labelling and correction on the Map tab (pins for places, one-tap fix of a trip mode); suggestions from home, calendar, Zepp, OSM; `places`, `place_visits`, `trips`, `mobility_daily`; commute detection; weather and daylight into `daily_context`; visit and trip map in the console | ≥ 90 % of the week's time attributed to a labelled place or a trip; commute door-to-door within 3 min of the diary; `daily_context` weather filled on ≥ 90 % of days | 3 |
 | **R4** Analysis integration | New series in `runRelationships.ts`; catalogue bump with the section 5.1 questions; day type covariate in expected bands and typicality; mobility context on health-concern episodes; NEAT beside load; metric-registry entries | Existing null-data gates still hold with the larger family (≤ 5 % "clear" on null data); simulation with synthetic routines shows weekly-scheduled place causes read "not testable" | 2 |
-| **R5** UX and nudges | Today: ROUTINE line (yesterday's time budget, commute vs usual, phone in bed) behind one pill; Lab › ROUTINE: week strip by place category, commute card (median, spread, active minutes, alternatives), phone card; gym-exit capture prompt; bedtime wind-down reminder (off by default); commute alternatives from Taiwan's TDX transit data or a routing API (walk-an-extra-stop, YouBike leg, departure shift) shown as time vs active minutes | Every new card passes the presentation contract (R1–R8); ≤ 1 routine notification/day in a 14-day log | 2–3 |
+| **R5** UX and alternatives | Today: ROUTINE line (yesterday's time budget, commute vs usual, phone in bed) behind one pill; Lab › ROUTINE: week strip by place category, commute card (median, spread, active minutes, alternatives), phone card (top apps by name, bed window); UNLOGGED VISIT lines in the Log tab. Commute alternatives from **TDX** through a `transit-alternatives` Edge Function: nearest MRT stations and YouBike docks to each end of the usual commute (station and stop lookups, cached), MRT travel times, live YouBike availability; options shown as time vs active minutes (walk an extra stop, YouBike leg, departure shift). **No notifications** (owner decision) | Every new card passes the presentation contract (R1–R8); alternatives compared with the measured commute on at least the two usual directions | 2–3 |
 | **R6** Experiments | Widen `experiments.primary_metric` to phone and mobility outcomes and adherence; ready-made designs: phone outside the bedroom, no social/video after 21:30, walk to the MRT, morning daylight walk | One experiment run end to end with passively measured adherence | 1 |
 
-**Recommended order and first step:** R0 → R1 ships independently and is useful in two weeks of data. Start R2 only
-after R1's gate, since R2 carries the permission, battery and privacy weight. R4 can start on R1 data alone (the four
-phone questions).
+**Recommended order and first step:** R1 ships independently and is useful after two weeks of data. R2 can start in
+parallel since location is approved; its 7-day battery test is the main unknown. R4 can start on R1 data alone (the
+four phone questions).
 
 ---
 
-## 11. Open decisions for the owner
+## 11. Owner decisions (27 Oct 2026)
 
-1. **Location at all?** R1 stands alone; R2–R5 need "Allow all the time" location. Recommended: yes, with the section
-   8.3 rules.
-2. **Coordinates in the cloud?** Recommended: never (8.3.1). The cost: the web dashboard and console cannot draw a map
-   of visits, only labels and times.
-3. **Per-app names or categories only in Supabase?** Recommended: categories, with an opt-in per app.
-4. **Notifications:** gym-exit prompt on by default, wind-down reminder off by default?
-5. **Commute alternatives source:** Taiwan TDX (free, registration) vs a paid routing API vs none in v1.
-6. **Private places:** which, if any, to mark before collection starts (recommended: decide before R2 runs, not after).
-7. **Maps Timeline import:** worth one session for history, or start fresh?
+| # | Question | Decision | Effect on the plan |
+|---|---|---|---|
+| 1 | Track location? | **Yes** | R2–R5 in scope. |
+| 2 | Coordinates in the cloud? | **Yes, sync to Supabase** | `location_fixes` and place coordinates in Supabase (section 9); rules in 8.3 rewritten around RLS and retention; console map possible. |
+| 3 | App names or categories only? | **Store names** | `phone_app_usage_daily` with package and label; categories still computed for the analysis. |
+| 4 | Notifications | **None for now** | No gym-exit prompt, no wind-down reminder, no one-sec-style friction. Unlogged visits surface in the Log tab instead. |
+| 5 | Commute alternatives source | **Taiwan TDX (free)** | `transit-alternatives` Edge Function in R5; credentials in Vault. |
+| 6 | Private places | **None** | `is_private` dropped from `places`; every visit is labelled and analysed. |
+| 7 | Maps Timeline import | **No** (Timeline disabled for years) | No backfill; places learned from collection. |
 
 ---
 

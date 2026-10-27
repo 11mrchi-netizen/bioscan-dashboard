@@ -56,4 +56,5 @@ object RoutineSettingsStore {
     const val KEY_LAST_UPLOAD = "location_last_upload"
     const val KEY_LAST_PHONE_RUN = "phone_usage_last_run"
     const val KEY_LAST_PHONE_ERROR = "phone_usage_last_error_at"
+    const val KEY_LAST_MOBILITY_RUN = "mobility_last_run"
 }

@@ -15,7 +15,8 @@ import java.util.concurrent.TimeUnit
 
 // Routine intelligence R1 + R2: the hourly heartbeat of both streams.
 // Locations: records that the collector is alive, takes one balanced-power fix (a stay's evidence), re-registers the
-// transitions and the stay geofence (Play services drops them now and then), uploads the outbox and recomputes visits.
+// transitions and the stay geofence (Play services drops them now and then), uploads the outbox, recomputes visits with
+// their places and the trips between them, and every 6 hours mobility_daily and the day's weather (R3).
 // Phone use: every 6 hours, recomputes the last completed days from Android's usage events.
 // An upload that fails leaves the outbox as it is for the next run, so the worker always reports success and keeps its
 // schedule rather than backing off for hours.
@@ -41,11 +42,26 @@ class RoutineCaptureWorker(context: Context, params: WorkerParameters) : Corouti
         }
 
         val repo = LocationRepository(SupabaseClientProvider.client)
-        runCatching {
+        val places = PlacesRepository(SupabaseClientProvider.client)
+        try {
             repo.uploadOutbox(ctx)
             RoutineSettingsStore.putLong(ctx, RoutineSettingsStore.KEY_LAST_UPLOAD, System.currentTimeMillis())
-            if (RoutineSettingsStore.isEnabled(ctx, RoutineStream.LOCATION)) repo.refreshVisits()
-        }.onFailure { android.util.Log.w("RoutineCaptureWorker", "location sync: ${it.message}") }
+            if (RoutineSettingsStore.isEnabled(ctx, RoutineStream.LOCATION)) {
+                // R3: each visit gets its place, then the trips between visits are rebuilt.
+                repo.refreshVisits(placeIdsFor = { stays -> places.assign(ctx, stays) })
+                places.refreshTrips()
+                // Mobility, the day's weather and OpenStreetMap suggestions change slowly: every 6 hours.
+                if (now - RoutineSettingsStore.getLong(ctx, RoutineSettingsStore.KEY_LAST_MOBILITY_RUN) >= PHONE_INTERVAL_MS) {
+                    places.refreshMobility(ctx)
+                    places.lookUpSuggestions()
+                    RoutineSettingsStore.putLong(ctx, RoutineSettingsStore.KEY_LAST_MOBILITY_RUN, now)
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("RoutineCaptureWorker", "location sync: ${e.message}")
+        }
 
         val phoneDue = now - RoutineSettingsStore.getLong(ctx, RoutineSettingsStore.KEY_LAST_PHONE_RUN) >= PHONE_INTERVAL_MS
         if (phoneDue && RoutineSettingsStore.isActive(ctx, RoutineStream.PHONE_USAGE)) {

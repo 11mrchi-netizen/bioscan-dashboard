@@ -45,6 +45,7 @@ data class VisitRow(
     @SerialName("n_fixes") val nFixes: Int,
     val confidence: Double,
     val open: Boolean,
+    @SerialName("place_id") val placeId: String? = null,
 )
 
 class LocationRepository(private val supabase: SupabaseClient) {
@@ -83,8 +84,8 @@ class LocationRepository(private val supabase: SupabaseClient) {
     }
 
     // Stays over the last 72 hours; the visits that start in the last 48 are replaced (earlier ones could be cut off by
-    // the window's edge, so they keep what an earlier run found).
-    suspend fun refreshVisits(now: Instant = Instant.now()): List<Stay> {
+    // the window's edge, so they keep what an earlier run found). placeIdsFor (R3) gives each stay its place.
+    suspend fun refreshVisits(now: Instant = Instant.now(), placeIdsFor: suspend (List<Stay>) -> List<String?> = { s -> s.map { null } }): List<Stay> {
         val windowStart = now.minusSeconds(72 * 3600)
         val writeFrom = now.minusSeconds(48 * 3600)
         // Paged: a few days of walking at one fix per 30 s passes the API's 1,000-row cap.
@@ -114,12 +115,13 @@ class LocationRepository(private val supabase: SupabaseClient) {
             .mapNotNull { parseTimestamp(it.ts)?.toEpochMilli() }
         val stays = detectStays(fixes, heartbeats).filter { it.startTs >= writeFrom.toEpochMilli() }
         supabase.postgrest.from("place_visits").delete { filter { gte("start_at", writeFrom.toString()) } }
+        val placeIds = if (stays.isEmpty()) emptyList() else placeIdsFor(stays)
         if (stays.isNotEmpty()) {
             supabase.postgrest.from("place_visits").insert(
-                stays.map {
+                stays.mapIndexed { i, it ->
                     VisitRow(
                         Instant.ofEpochMilli(it.startTs).toString(), Instant.ofEpochMilli(it.endTs).toString(),
-                        it.lat, it.lon, it.nFixes, it.confidence, it.open,
+                        it.lat, it.lon, it.nFixes, it.confidence, it.open, placeIds.getOrNull(i),
                     )
                 },
             )
@@ -129,16 +131,18 @@ class LocationRepository(private val supabase: SupabaseClient) {
 
     suspend fun recentVisits(since: Instant): List<VisitRow> =
         supabase.postgrest.from("place_visits")
-            .select(columns = Columns.list("start_at,end_at,lat,lon,n_fixes,confidence,open")) {
+            .select(columns = Columns.list("start_at,end_at,lat,lon,n_fixes,confidence,open,place_id")) {
                 filter { gte("start_at", since.toString()) }
                 order("start_at", Order.DESCENDING)
             }
             .decodeList<VisitRow>()
 
-    // DELETE ALL in Setup: every location row of this account, here and on the phone.
+    // DELETE ALL in Setup: every location row of this account, here and on the phone, with the places, trips and
+    // mobility_daily derived from them (R3).
     suspend fun deleteAll(context: Context) {
         RoutineOutbox.clear(context)
         val epoch = "1970-01-01T00:00:00Z"
+        PlacesRepository(supabase).deleteAll()
         supabase.postgrest.from("place_visits").delete { filter { gte("start_at", epoch) } }
         supabase.postgrest.from("location_fixes").delete { filter { gte("ts", epoch) } }
         supabase.postgrest.from("activity_transitions").delete { filter { gte("ts", epoch) } }

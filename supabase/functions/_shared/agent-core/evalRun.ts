@@ -26,8 +26,6 @@ export interface CaseRun {
   error?: string
 }
 
-/** OpenRouter's free endpoints log prompts, so they are allowed only for this synthetic set and only by name. */
-export const isFreeSlug = (model: string) => model.endsWith(':free')
 
 export async function runCase(c: GoldenCase, cfg: ModelConfig, today = '2026-10-28'): Promise<CaseRun> {
   const started = Date.now()

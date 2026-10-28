@@ -19,9 +19,9 @@
 
 // No edge-runtime.d.ts import: it only adds types, and fetching it from JSR timed out in the bundler repeatedly.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { isFreeSlug, runCase, summarise, type CaseRun } from "../_shared/agent-core/evalRun.ts";
+import { runCase, summarise, type CaseRun } from "../_shared/agent-core/evalRun.ts";
 import { GOLDEN } from "../_shared/agent-core/golden.ts";
-import type { ModelConfig } from "../_shared/agent-core/models.ts";
+import { AISTUDIO_NATIVE, modelConfig as routeConfig, REQUESTY } from "../_shared/agent-core/routes.ts";
 import { toOpenAiTools, toolsFor } from "../_shared/agent-core/tools.ts";
 
 const DEADLINE_MS = 100_000;
@@ -30,30 +30,7 @@ const CONCURRENCY = 3;
 // Reasoning models (Inkling) spend part of the output on hidden reasoning; at 1024 they returned empty replies.
 const EVAL_MAX_TOKENS = 4096;
 
-const AISTUDIO_NATIVE = "https://generativelanguage.googleapis.com/v1beta";
-// Requesty's OpenAI-compatible router; the account allows only models without data retention or training.
-const REQUESTY = "https://router.requesty.ai/v1";
-// AI Studio's OpenAI-compatible endpoint, so the same client and tool loop serve both providers.
-const AISTUDIO_OPENAI = `${AISTUDIO_NATIVE}/openai`;
-
-/**
- * "aistudio/<model>" goes to Google AI Studio with GEMINI_API_KEY (the key log-agent uses); anything else to OpenRouter
- * with OPENROUTER_API. OpenRouter's ":free" slugs allow logged endpoints; for AI Studio the data terms are the key's
- * tier (the free tier may use requests to improve Google's products), acceptable for planted data only.
- */
-function modelConfig(model: string): ModelConfig | { error: string } {
-  const common = { timeoutMs: 45_000, maxTokens: EVAL_MAX_TOKENS };
-  if (model.startsWith("requesty/")) {
-    const key = Deno.env.get("REQUESTY_API");
-    return key ? { ...common, baseUrl: REQUESTY, apiKey: key, model: model.slice("requesty/".length) } : { error: "REQUESTY_API is not set" };
-  }
-  if (model.startsWith("aistudio/")) {
-    const key = Deno.env.get("GEMINI_API_KEY");
-    return key ? { ...common, baseUrl: AISTUDIO_OPENAI, apiKey: key, model: model.slice("aistudio/".length) } : { error: "GEMINI_API_KEY is not set" };
-  }
-  const key = Deno.env.get("OPENROUTER_API");
-  return key ? { ...common, baseUrl: "https://openrouter.ai/api/v1", apiKey: key, model, allowLogged: isFreeSlug(model) } : { error: "OPENROUTER_API is not set" };
-}
+const modelConfig = (slug: string) => routeConfig(slug, (n) => Deno.env.get(n), { purpose: "eval", maxTokens: EVAL_MAX_TOKENS });
 
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });

@@ -85,8 +85,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
   ),
 }
 
-/** Free-text columns: served only when the person shared notes. */
-export const FREE_TEXT_COLUMN = /^(note|notes|comment|comments|text|utterance|description|detail|details|details_text|symptoms|free_text|rationale_text|journal)$/
+/** Free-text columns (what the person typed: notes, symptoms, a decision's rationale): served only when notes are shared. */
+export const FREE_TEXT_COLUMN = /^(note|notes|comment|comments|text|utterance|description|detail|details|details_text|symptoms|diagnosis|medication|medications|rationale|threshold|review_condition|free_text|rationale_text|journal)$/
 /** Location-like columns: never served, whatever the table. */
 export const LOCATION_COLUMN = /(^|_)(lat|lon|lng|latitude|longitude|coords?|coordinates|polyline|gps|geo|geom|track|route|address|place)(_|$)/
 

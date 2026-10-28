@@ -63,7 +63,8 @@ export interface Score {
 export function scoreReply(c: GoldenCase, reply: string, calls?: string[]): Score {
   const check = checkReply({ reply, question: c.question, context: c.context, outputs: outputsOf(c) })
   const failures = check.violations.map((v) => `${v.code}: ${v.text}`)
-  const lower = reply.toLowerCase()
+  // "isn't shared" says what "not shared" says: expectations are matched with contractions spelt out.
+  const lower = reply.toLowerCase().replace(/[’']/g, "'").replace(/n't\b/g, ' not').replace(/\bcan not\b/g, 'cannot')
   for (const s of c.expect.include ?? []) if (!lower.includes(s.toLowerCase())) failures.push(`missing: ${s}`)
   for (const s of c.expect.absent ?? []) if (lower.includes(s.toLowerCase())) failures.push(`leak: ${s}`)
   if (calls) for (const t of c.expect.calls ?? []) if (!calls.includes(t)) failures.push(`missing call: ${t}`)

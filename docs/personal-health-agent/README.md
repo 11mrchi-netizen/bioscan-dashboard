@@ -244,6 +244,32 @@ tier, while OpenRouter enforces zero retention. Two AI Studio behaviours are han
 arrives inside the reply as `<thought>...</thought>` (stripped before the guards), and each tool call carries a thought
 signature that must be sent back on the next turn.
 
+**Requesty (2026-10-28): the first complete run.** `requesty/<model>` slugs use Requesty's router with
+`REQUESTY_API`; the account allows only models without data retention or training, one request at a time, 200 a day.
+Of its three models, Ling 3.0 Tiny is listed but its provider answers "Not Found". About 171 of the 200 requests were
+used.
+
+| Model | EXPLAIN (12) | ASK (12) | COACH (9) | Symptoms, not urgent (5) | Urgent (5, no model call) | Requests per case | Typical turn |
+|---|---|---|---|---|---|---|---|
+| Ling 3.1 Flash | 12 | 10 | 8 | 3 | 5 | about 3 | 10 to 25 s |
+| Leanstral 1.5 | 8 | not run | not run | not run | | about 4.5 | 7 to 11 s |
+
+Ling 3.1 Flash passed 33 of 38 cases that call the model, with careful wording ("coincided with", "nothing recorded").
+Its misses: it offered to register a question instead of drafting the registration; on "how is my knee" it did not say
+that health concerns are not shared; COACH did not check the decision due for review; and two symptom cases, where it
+looked for the planted data under a different tool than the one that held it. Leanstral, a model for formal proofs,
+passed 8 of 12 EXPLAIN cases and three of its passes were wrong in meaning ("the composite hasn't been built yet",
+"the reason is an active cold", "short duration is the main factor").
+
+What the run changed in agent-core: the prompt now lists what is not shared (from the same settings as the tool layer),
+says an empty result means nothing recorded, reads a named evidence item first, and has COACH check decisions due for
+review; the claims check catches "the reason is", "main factor" and "is driving"; expectations read "isn't" as "is not".
+
+Two limits of the set showed: the guards check numbers and wording, not meaning, so a wrong explanation that uses the
+right numbers passes (an independent reviewer model or the owner's ratings are needed, as planned); and each case
+plants its data under one tool, so a model that looks in a reasonable other place fails. The next version of the set
+should plant data under every tool that would return it.
+
 To finish: top up the key, then run batches from SQL (one at a time; parallel batches exhaust the in-flight budget):
 `select net.http_post(url := '<project>/functions/v1/agent-eval', headers := <anon key + x-analysis-cron from Vault>,
 body := '{"models":[...],"offset":12,"limit":6}', timeout_milliseconds := 150000)` and read `net._http_response`.

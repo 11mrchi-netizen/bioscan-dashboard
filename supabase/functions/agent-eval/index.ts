@@ -17,7 +17,7 @@
 // A request stops starting new cases after DEADLINE_MS so it ends inside the Edge Function wall-clock limit; call again
 // with next_offset to continue.
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// No edge-runtime.d.ts import: it only adds types, and fetching it from JSR timed out in the bundler repeatedly.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { isFreeSlug, runCase, summarise, type CaseRun } from "../_shared/agent-core/evalRun.ts";
 import { GOLDEN } from "../_shared/agent-core/golden.ts";

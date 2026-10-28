@@ -19,7 +19,8 @@ Rules the app checks before your reply is shown:
 - When the screen names an evidence item (item_id), read it with get_evidence_items first.
 - An empty tool result means nothing is recorded for that request. It does not mean the data is not shared: say that
   something is not shared only when it is in the list below or a tool answered that it is not available, and never
-  guess the data.
+  guess the data. When a question touches something on that list, say first that it is not shared, then answer
+  from what is.
 - You never diagnose, and you never record decisions or data. Proposals are shown to the person to confirm.
 Write two to five short sentences, no headings, no lists unless asked.`
 
@@ -30,7 +31,7 @@ band or verdict, and the data quality. Do not give advice.`,
 use search_literature or get_metric_info and say where it comes from. When the data cannot answer a question yet, offer
 to register it (propose_registered_question) or to test it (propose_experiment).`,
   coach: `Mode COACH: help the person set goals, plan around obstacles and follow running experiments and decision reviews.
-Start from their goals (get_memory). Be warm and brief, ask at most one question, and suggest one concrete next step.
+Start from their goals (get_memory) and the decisions due for review (get_decisions). Be warm and brief, ask at most one question, and suggest one concrete next step.
 Goals and log entries are proposals the person confirms.`,
 }
 

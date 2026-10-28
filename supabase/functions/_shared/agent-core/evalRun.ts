@@ -38,7 +38,9 @@ export async function runCase(c: GoldenCase, cfg: ModelConfig, today = '2026-10-
       settings: settingsOf(c),
       today,
       chat: openAiChat(cfg),
-      executeTool: async (name) => (name in c.tools ? c.tools[name] : { error: 'no data for this request' }),
+      // A tool the case did not plant answers with an empty result, not an error: models read an error as "not shared"
+      // and say so, which would be a false statement about the person's sharing (first live run, 2026-10-28).
+      executeTool: async (name) => (name in c.tools ? c.tools[name] : { results: [], note: 'nothing recorded for this request' }),
     })
     const calls = turn.calls.filter((k) => k.ok).map((k) => k.name)
     const urgent = turn.triage !== null && !turn.triage.callModel

@@ -21,6 +21,8 @@ import { GOLDEN } from "../_shared/agent-core/golden.ts";
 const DEADLINE_MS = 100_000;
 const MAX_LIMIT = 12;
 const CONCURRENCY = 3;
+// Reasoning models (Inkling) spend part of the output on hidden reasoning; at 1024 they returned empty replies.
+const EVAL_MAX_TOKENS = 4096;
 
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -58,7 +60,7 @@ Deno.serve(async (req) => {
     async function worker() {
       while (next < jobs.length && Date.now() - started < DEADLINE_MS) {
         const { c, model } = jobs[next++];
-        runs.push(await runCase(c, { baseUrl: "https://openrouter.ai/api/v1", apiKey: apiKey!, model, allowLogged: isFreeSlug(model), timeoutMs: 45_000 }));
+        runs.push(await runCase(c, { baseUrl: "https://openrouter.ai/api/v1", apiKey: apiKey!, model, allowLogged: isFreeSlug(model), timeoutMs: 45_000, maxTokens: EVAL_MAX_TOKENS }));
       }
     }
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));

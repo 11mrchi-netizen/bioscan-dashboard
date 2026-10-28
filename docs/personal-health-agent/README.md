@@ -211,10 +211,26 @@ Functions, phase 1). No table, function or screen was added; nothing reaches a m
 
 | `supabase/functions/agent-eval` (deployed 2026-10-28) | The same live run server-side, reading the key from the `OPENROUTER_API` secret. Planted data only: it reads no table and writes nothing. Callable only with the scheduler's Vault secret (`x-analysis-cron`, checked by `analysis_cron_secret_ok()`), so runs start from SQL with pg_net; `next_offset` continues a run past the wall-clock limit. Free (`:free`) slugs run with logged endpoints allowed, any other slug requires zero data retention |
 
-**First live run (2026-10-28):** blocked before any model answered. The OpenRouter account itself enforces zero data
-retention and refuses free endpoints that train on prompts, which overrides the request; Inkling's free endpoint also
-accepts only listed agent apps. The paid endpoints of Nemotron 3 Ultra, Inkling and Gemma 4 31B and 26B all list tool
-calling, at USD 0.10 to 1.00 per million input tokens.
+**First live runs (2026-10-28), partial.** Free endpoints are refused by the account's own settings (zero data
+retention enforced, no free models that train on prompts; Inkling's free endpoint also takes only listed agent apps), so
+the runs used paid zero-retention endpoints. They stopped when the key's credit ran out (HTTP 402) after 13 of the 42
+cases; the first attempt had also failed because every request reserved credit for the model's full 131k output, now
+capped (`maxTokens`, 1024 in production, 4096 in eval).
+
+| Model | Non-urgent cases scored | Passed | What failed |
+|---|---|---|---|
+| Nemotron 3 Ultra | 9 | 8 | `explain-rhr-illness`: did not read the context events the ILLNESS LOGGED flag points to |
+| Gemma 4 31B | 13 | 11 | the same case; `explain-recovery-inputs-only`: left out NO BETTER and said the card "has not yet produced" a verdict |
+| Inkling | 4 | 2 | two empty replies, most likely its hidden reasoning using up the 1024-token cap; it also ran words and numbers together ("at52") |
+
+All urgent triage cases passed for every model (the model is never called). The guards did their job: 8 replies were
+regenerated once after a violation and then passed. Medians: Nemotron about 4 s a turn, Gemma 3 to 17 s, Inkling 6 to
+17 s. Two harness faults surfaced and are fixed: a tool without planted data answered with an error, which models read
+as "not shared" and repeated to the person (it now answers with an empty result), and the output cap above.
+
+To finish: top up the key, then run batches from SQL (one at a time; parallel batches exhaust the in-flight budget):
+`select net.http_post(url := '<project>/functions/v1/agent-eval', headers := <anon key + x-analysis-cron from Vault>,
+body := '{"models":[...],"offset":12,"limit":6}', timeout_milliseconds := 150000)` and read `net._http_response`.
 
 **Tests:** `node --test "supabase/functions/_shared/agent-core/*.test.ts"` (in CI, `test-core.yml`): 49 tests, among
 them every reference reply passing, every bad reply failing for the reason it was planted for, every table in the

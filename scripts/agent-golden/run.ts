@@ -35,7 +35,7 @@ async function main() {
   const runs: CaseRun[] = []
   for (const model of cfg.models) {
     for (const c of cases) {
-      const r = await runCase(c, { baseUrl: cfg.baseUrl, apiKey, model, providers: cfg.providers, allowLogged: cfg.allowLogged })
+      const r = await runCase(c, { baseUrl: cfg.baseUrl, apiKey, model, providers: cfg.providers, allowLogged: cfg.allowLogged, maxTokens: 4096 })
       runs.push(r)
       console.log(`${model}  ${r.pass ? 'PASS' : 'FAIL'}  ${c.id}${r.failures.length ? '  ' + r.failures.join('; ') : ''}${r.error ? '  ' + r.error : ''}`)
     }

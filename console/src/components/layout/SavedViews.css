@@ -1,0 +1,20 @@
+.sv { position: relative; }
+.sv-panel {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; width: 320px; max-height: 60vh; overflow-y: auto;
+  background: var(--color-elevated); border: 1px solid var(--color-border); border-radius: 8px; padding: var(--sp-3);
+  display: flex; flex-direction: column; gap: var(--sp-2); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.sv-save { display: flex; gap: var(--sp-2); }
+.sv-input {
+  flex: 1; min-width: 0; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px;
+  color: var(--color-text-primary); padding: 4px 8px; font-size: 12px;
+}
+.sv-message { font-size: 11px; color: var(--color-emerald); }
+.sv-muted { color: var(--color-text-muted); font-size: 10px; }
+.sv-row { display: flex; align-items: center; gap: var(--sp-1); }
+.sv-open {
+  flex: 1; min-width: 0; text-align: left; display: flex; flex-direction: column; gap: 2px; background: transparent;
+  border: 1px solid transparent; border-radius: 6px; padding: 6px 8px; color: var(--color-text-primary); cursor: pointer; font-size: 12px;
+}
+.sv-open:hover { border-color: var(--color-border); background: var(--color-glass); }
+.sv-del { background: none; border: none; color: var(--color-text-muted); cursor: pointer; font-size: 11px; }

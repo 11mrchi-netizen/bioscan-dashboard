@@ -16,6 +16,7 @@ import { dayBounds, LIVE_COLUMNS, SERIES } from '../lib/schema'
 import { HEAVY_COLUMNS } from '../lib/seriesQuery'
 import { keysetFilter, type Cursor } from '../lib/pager'
 import { hrefFor } from '../lib/links'
+import { readFilters, type Filters } from '../lib/dataFilters'
 import './DataExplorer.css'
 
 // Time column of each table; a table without one is ordered by id. Every table listed here has an id primary key, which
@@ -30,29 +31,6 @@ const TABLES = [...new Set([...SERIES.map(s => s.table), ...Object.keys(TIME_COL
 const PAGE = 200
 
 type Row = Record<string, unknown>
-
-interface Filters {
-  table: string
-  from: string
-  to: string
-  id: string
-  source: string
-  col: string
-  empty: '' | 'null' | 'notnull'
-}
-
-function readFilters(p: URLSearchParams): Filters {
-  const date = p.get('date') ?? ''
-  return {
-    table: p.get('table') ?? 'wearable_daily',
-    from: p.get('from') ?? date,
-    to: p.get('to') ?? date,
-    id: p.get('id') ?? '',
-    source: p.get('source') ?? '',
-    col: p.get('col') ?? '',
-    empty: (p.get('empty') as Filters['empty']) ?? '',
-  }
-}
 
 function listColumns(table: string): string {
   const known = LIVE_COLUMNS[table]

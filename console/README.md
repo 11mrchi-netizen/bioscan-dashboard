@@ -42,3 +42,10 @@ the source changes after 2026-09-30 reached the deployed console.
 
 The Supabase URL and publishable key are public (same values as the root `index.html` and the Android app). `src/lib/supabase.ts`
 uses them as defaults; the `VITE_SUPABASE_*` variables override them when set.
+
+## Checks
+
+- `node --test "src/lib/*.test.ts"` (from the repo root: `node --test "console/src/lib/*.test.ts"`): the console's pure
+  modules, including `workflow.test.ts`, the end-to-end chain from a data problem to a decision. Runs in CI.
+- `npm run build && npm run e2e`: the browser walkthrough (`e2e/walkthrough.cjs`) against a mocked Supabase; needs
+  Playwright with Chromium. Screenshots go to `e2e/out/`.

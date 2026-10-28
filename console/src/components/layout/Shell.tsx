@@ -7,6 +7,7 @@ import { useInspection, useClearInspection } from '../../lib/analysisStore'
 import { ErrorBoundary } from '../shared/ErrorBoundary'
 import { Inspector } from '../shared/Inspector'
 import { DateRangeControl } from './DateRangeControl'
+import { SavedViews } from './SavedViews'
 import './Shell.css'
 
 // docs/analysis-console/IA.md §3.1
@@ -45,6 +46,7 @@ export function Shell() {
         <span className="shell-wordmark mono">FIELD TERMINAL · CONSOLE</span>
         <DateRangeControl />
         <div className="header-actions">
+          <SavedViews />
           <span className="mono user-label">{user?.email}</span>
           <button className="btn-ghost mono" onClick={signOut}>SIGN OUT</button>
         </div>

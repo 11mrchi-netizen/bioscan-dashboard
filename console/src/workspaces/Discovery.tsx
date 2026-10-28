@@ -63,7 +63,7 @@ export function Discovery() {
     setSaving(false)
     if (e) { setMessage(`Could not register: ${e.message}`); return }
     setLive([...live, { exposure: c.exposure, outcome: c.outcome, lag: c.lag }])
-    setMessage('Registered. The nightly job tests it on days after today; its verdicts appear on the evidence board and in the ledger.')
+    setMessage('Registered. The nightly job tests it on days after today; it then appears in DECISIONS (needs data until enough new days arrive), on the evidence board and in the ledger.')
   }
 
   if (error) return <LoadBanner error={error} onRetry={() => setAttempt((a) => a + 1)} />

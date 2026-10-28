@@ -13,6 +13,7 @@
 // absent days are unknown, never missing. The wear signal (days with minute heart rate) decides when band data was due.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { LoadBanner } from '../components/shared/LoadBanner'
 import { useRange } from '../lib/analysisStore'
@@ -86,7 +87,11 @@ export function Integrity() {
   const [busy, setBusy] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [ms, setMs] = useState<number | null>(null)
-  const [focus, setFocus] = useState<string | null>(null)
+  // The focused series lives in the URL (#/integrity?series=hrv), so the Decisions workbench and saved views can open it.
+  const [params, setParams] = useSearchParams()
+  const focusParam = params.get('series')
+  const focus = focusParam && seriesById(focusParam) ? focusParam : null
+  const setFocus = (id: string | null) => setParams(id ? { series: id } : {})
   const [show, setShow] = useState<Record<Severity, boolean>>({ critical: true, warning: true, info: false })
   const [running, setRunning] = useState(false)
   const [message, setMessage] = useState<string | null>(null)

@@ -52,7 +52,29 @@ data accessible, the decision layer turns evidence into recorded decisions. Andr
 | C. Integrity v1 | `analysis-core/integrity.ts` (ranges, duplicates, conflicts, coverage) published by `analysis-run` as kind `integrity`; Health Connect and Zepp sync heartbeats; freshness from provenance and heartbeats; health overview, source matrix and issue investigation; the series-break review joins the issue list | Every core stream has a coverage rule; unknown is shown where it applies || Done in code; the sync-heartbeat migration and the analysis-run deploy wait for approval |
 | C2. Discovery | The corrected discovery screen (prewhitened cross-correlations, effective sample sizes, false-discovery correction, chance bands, older two-thirds of the history only) with a "register this question" action, labelled exploratory | Null data flags at most the corrected rate || Done |
 | D. Decision layer v1 | Evidence-item interface across the engines; the queue derived from ledger verdicts (`not_yet` needs data, `unclear` under observation, actionable without a running experiment ready to test, `clear`/`negligible` without a later decision in review); the workbench; the append-only `decisions` table and decision records | Every decision links to its snapshotted evidence; insufficient data reads blocked; no composite score || Done (v1: catalogue and registered questions, experiments, intervention reads) |
-| E. Integration | Issue → records → evidence → decision links end to end; saved workspaces; regression tests | Workflow walkthrough passes | |
+| E. Integration | Issue → records → evidence → decision links end to end; saved workspaces; regression tests | Workflow walkthrough passes || Done |
+
+## Phase E: what was built
+
+The workflow end to end: a data problem (Integrity) links to its records (Data) and its period (Explore); an evidence
+item's workbench (Evidence > DECISIONS) shows the integrity of the data its outcome rests on and links back to
+Integrity on that series; a promising pair (Evidence > DISCOVERY) is registered as a question that enters the decision
+queue; a decision keeps the evidence it rested on and a link to it; a view of any workspace can be saved and reopened.
+
+- **Links closed**: Integrity takes its focused series from the URL (`#/integrity?series=hrv`, `integrityHref`); the
+  Decisions workbench reads the newest nightly `integrity` report and lists the issues of the item's outcome series;
+  Evidence links resolve to their item through `itemIdFromParams` (`lib/links.ts`), Data's URL filters through
+  `readFilters` (`lib/dataFilters.ts`), both shared by the screens and the tests.
+- **Saved views** (`20261111_saved_views.sql`, applied 2026-10-28; `lib/savedViews.ts`, header VIEWS): a name, the
+  workspace route with its filters, and the date range in the range store's form, so a preset such as 90D stays
+  relative to today. Only the console's five workspaces can be saved or opened. Own rows only (row-level security).
+- **Regression tests**: `console/src/lib/workflow.test.ts` (in CI) follows the chain on the screens' own code: an
+  integrity issue to its record, period and day; every evidence item's result link back to the same item; a decision's
+  snapshot back to its evidence and the queue's response to it; saved views round-tripping with relative presets.
+- **Browser walkthrough** (`console/e2e/walkthrough.cjs`, `npm run e2e`; needs Playwright with Chromium, not in CI):
+  the built console against a mocked Supabase with planted data; 37 checks across Explore (ten years, keyset paging,
+  cache), the Inspector, Data, Integrity, Discovery, Decisions, saved views and the legacy redirects. Exits 1 on any
+  failed check. All pass on this commit.
 
 ## Phase D: what was built
 

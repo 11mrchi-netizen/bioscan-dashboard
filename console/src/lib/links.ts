@@ -5,6 +5,8 @@
 //   period   -> Explore, the series over that span
 //   result   -> Evidence, the published result
 //   question -> Evidence, the question
+// and the way back: itemIdFromParams reads an Evidence link into the evidence item it names (evidenceItems.ts ids), and
+// integrityHref opens the Integrity workspace on one series.
 import type { DataRef } from '../../../supabase/functions/_shared/analysis-core/dataRef.ts'
 import { seriesById } from './schema.ts'
 
@@ -28,4 +30,23 @@ export function hrefFor(ref: DataRef): string | null {
     case 'question':
       return href('evidence', { question: ref.questionId })
   }
+}
+
+/** The evidence item (analysis-core/evidenceItems.ts id) an Evidence link names, or null. */
+export function itemIdFromParams(p: URLSearchParams): string | null {
+  const q = p.get('question')
+  if (q) return q.startsWith('reg_') ? `reg:${q.slice(4)}` : `q:${q}`
+  const kind = p.get('result')
+  const key = p.get('key')
+  if (!kind || !key) return null
+  if (kind === 'relationship') return `q:${key}`
+  if (kind === 'registered_question') return `reg:${key.replace(/^reg_/, '')}`
+  if (kind === 'experiment') return `exp:${key}`
+  if (kind === 'intervention_its') return `its:${key}`
+  return null
+}
+
+/** The Integrity workspace focused on one series. */
+export function integrityHref(seriesId: string): string {
+  return href('integrity', { series: seriesId })
 }

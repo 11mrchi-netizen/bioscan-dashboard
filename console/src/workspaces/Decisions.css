@@ -49,3 +49,5 @@
 .dec-record { border-left: 2px solid var(--color-emerald); padding-left: var(--sp-3); margin-top: var(--sp-1); }
 .dec-changed { color: var(--color-warning); }
 @media (max-width: 1100px) { .dec-bench-grid { grid-template-columns: 1fr; } }
+.dec-link { color: var(--color-emerald); text-decoration: none; }
+.sev-critical { color: var(--color-critical); } .sev-warning { color: var(--color-warning); } .sev-info { color: var(--color-info); }

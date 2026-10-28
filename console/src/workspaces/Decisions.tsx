@@ -15,9 +15,10 @@ import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { localToday, localDaysAgo } from '../lib/dates'
-import { hrefFor } from '../lib/links'
+import { hrefFor, integrityHref, itemIdFromParams } from '../lib/links'
 import { LoadBanner } from '../components/shared/LoadBanner'
 import { HYPOTHESES } from '../../../supabase/functions/_shared/analysis-core/hypotheses.ts'
+import type { Issue } from '../../../supabase/functions/_shared/analysis-core/integrity.ts'
 import {
   CLASS_LIMITS,
   allowedDecisions,
@@ -102,12 +103,7 @@ export function Decisions() {
 
   // Deep links from lib/links.ts (result and question references).
   useEffect(() => {
-    const q = params.get('question')
-    const kind = params.get('result')
-    const key = params.get('key')
-    let id: string | null = null
-    if (q) id = q.startsWith('reg_') ? `reg:${q.slice(4)}` : `q:${q}`
-    else if (kind && key) id = kind === 'relationship' ? `q:${key}` : kind === 'registered_question' ? `reg:${key.replace(/^reg_/, '')}` : kind === 'experiment' ? `exp:${key}` : kind === 'intervention_its' ? `its:${key}` : null
+    const id = itemIdFromParams(params)
     if (id) setSelected(id)
   }, [params])
 
@@ -200,6 +196,20 @@ function Workbench({ item, state, reason, history, onClose, onRecorded }: {
   onRecorded: (d: DecisionRecord) => void
 }) {
   const [ledger, setLedger] = useState<LedgerRow[] | null>(null)
+  const series = OUTCOME_SERIES[item.outcome]
+  // The newest nightly integrity report (runIntegrity.ts): problems in the data this item's outcome rests on.
+  const [integrity, setIntegrity] = useState<{ asOf: string; issues: Issue[] } | null | 'none'>(null)
+  useEffect(() => {
+    if (!series) return
+    let current = true
+    supabase.from('analysis_results').select('as_of, payload').eq('kind', 'integrity').eq('key', 'report').order('as_of', { ascending: false }).limit(1)
+      .then(({ data }) => {
+        if (!current) return
+        const row = (data ?? [])[0] as { as_of: string; payload: { issues: Issue[] } } | undefined
+        setIntegrity(row ? { asOf: row.as_of, issues: row.payload.issues.filter((i) => i.seriesId === series) } : 'none')
+      })
+    return () => { current = false }
+  }, [series])
   const allowed = allowedDecisions(item)
   const [kind, setKind] = useState<DecisionKind>(allowed[0])
   const [threshold, setThreshold] = useState('')
@@ -238,7 +248,6 @@ function Workbench({ item, state, reason, history, onClose, onRecorded }: {
     setMessage('Recorded with a snapshot of the evidence above.')
   }
 
-  const series = OUTCOME_SERIES[item.outcome]
   const resultHref = hrefFor(item.result)
   const exploreHref = series ? hrefFor({ kind: 'period', series, start: localDaysAgo(180), end: localToday() }) : null
 
@@ -282,6 +291,18 @@ function Workbench({ item, state, reason, history, onClose, onRecorded }: {
         {exploreHref && <a href={exploreHref}>OUTCOME IN EXPLORE (180 D) →</a>}
         {resultHref && item.evidenceClass === 'association' && <a href="#/evidence">EVIDENCE BOARD →</a>}
       </div>
+
+      {series && (
+        <div className="dec-history">
+          <div className="dec-label mono">DATA INTEGRITY OF THE OUTCOME ({series})</div>
+          {integrity === null && <div className="mono dec-small dec-muted">loading…</div>}
+          {integrity === 'none' && <div className="mono dec-small dec-muted">No nightly integrity report yet: the live check is in Integrity.</div>}
+          {integrity && integrity !== 'none' && (integrity.issues.length === 0
+            ? <div className="mono dec-small dec-muted">No issues in the last 28 days (report of {integrity.asOf}).</div>
+            : integrity.issues.slice(0, 4).map((i) => <div key={i.key} className={`mono dec-small sev-${i.severity}`}>{i.severity} · {i.title}</div>))}
+          <a className="mono dec-small dec-link" href={integrityHref(series)}>OPEN IN INTEGRITY →</a>
+        </div>
+      )}
 
       {changes.length > 0 && (
         <div className="dec-history">

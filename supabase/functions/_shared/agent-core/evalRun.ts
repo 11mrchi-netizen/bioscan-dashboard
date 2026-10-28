@@ -21,6 +21,8 @@ export interface CaseRun {
   shown: string
   ms: number
   tokens: { prompt: number; completion: number }
+  /** Model requests the turn made (rate-limited keys count these). */
+  steps: number
   error?: string
 }
 
@@ -55,9 +57,10 @@ export async function runCase(c: GoldenCase, cfg: ModelConfig, today = '2026-10-
       shown: turn.shown,
       ms: Date.now() - started,
       tokens: turn.tokens,
+      steps: turn.steps,
     }
   } catch (e) {
-    return { ...base, pass: false, failures: ['error'], regenerated: false, refusedCalls: [], calls: [], shown: '', ms: Date.now() - started, tokens: { prompt: 0, completion: 0 }, error: String(e) }
+    return { ...base, pass: false, failures: ['error'], regenerated: false, refusedCalls: [], calls: [], shown: '', ms: Date.now() - started, tokens: { prompt: 0, completion: 0 }, steps: 0, error: String(e) }
   }
 }
 
@@ -69,6 +72,7 @@ export interface ModelSummary {
   regenerated: number
   refusedCalls: number
   tokens: number
+  requests: number
   medianMs: number
 }
 
@@ -85,6 +89,7 @@ export function summarise(runs: CaseRun[]): ModelSummary[] {
       regenerated: rs.filter((r) => r.regenerated).length,
       refusedCalls: rs.reduce((n, r) => n + r.refusedCalls.length, 0),
       tokens: rs.reduce((n, r) => n + r.tokens.prompt + r.tokens.completion, 0),
+      requests: rs.reduce((n, r) => n + r.steps, 0),
       medianMs: ms.length ? ms[ms.length >> 1] : 0,
     }
   })

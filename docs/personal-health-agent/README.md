@@ -170,6 +170,40 @@ Client: an `AgentRepository` beside `LogAgentRepository` (same Ktor call with th
 The last row is the agent's own scorecard, in the spirit of R8: if hints rarely become clear verdicts, the weekly pass
 reads NO BETTER and is switched off.
 
+## Proactive nudges (planned, after phase 2)
+
+The agent stays on-demand; a nudge is the one place the app speaks first. **Fixed rules decide when; the model only
+helps with what to say**, behind the same guards, with a fixed template when no model answers. A model watching the
+data every 15 minutes would cost 96 calls a day, be harder to trust and would not fit Requesty's 200 a day; rules cost
+nothing and 1 to 3 nudges a day cost about 2 requests each.
+
+**What already exists:** `NotificationDispatchWorker` (every 15 minutes, rules in `notification_rules`, daily limits,
+`notification_log`), the Zepp and Health Connect sync workers (sessions), Zepp all-day stress, the evening check-in
+(self-rated stress), `sleep_daily` (usual bedtime), training load and the fitness-fatigue spans, the hydration demand
+model and sweat tests, the fuel recipes, `recovery_sessions`, `decisions` (what was adopted) and experiments, and the
+sync heartbeats (how fresh each stream is).
+
+| Nudge | When (rule, no model) | What (catalogue, personalised) |
+|---|---|---|
+| `recovery_nudge` | A newly synced session above the person's own 75th percentile of effort or zone 4+ minutes; 30 to 90 minutes after it ends; outside quiet hours | Refuel (the fuel engine), fluids (the sweat-rate model), tonight's sleep-timing target, an easy day tomorrow if the morning read warrants it, and anything already adopted (a CLEAR experiment is named as the person's own) |
+| `winddown_nudge` | 60 to 90 minutes before the usual bedtime, when Zepp stress over the last two hours is above the person's own 80th percentile or the evening check-in rated stress 7 or more; optionally only after a late hard session | Two or three options from a fixed catalogue (slow breathing, dim lights, a set lights-out time, no hard session tomorrow morning); "tonight is a test night" when an experiment runs |
+
+**Rules for nudges:**
+- **Freshness first.** Stress reaches Supabase only when the watch syncs, sometimes hours late. A rule reads the sync
+  heartbeat and stays quiet on stale data.
+- **Nudges are exposures.** A nudge on high-stress nights would make wind-down go with high stress in the engine's
+  data. Every nudge is logged as an exposure, and the better design randomises: the nudge goes out on a random half of
+  the eligible nights, using the randomised design of the routine experiments (R6). "Do nudges help?" then has its own
+  scorecard; a nudge that reads NO BETTER is switched off (R8).
+- **Options, not promises.** No "this will lower your stress" unless the person's own experiment reads CLEAR; the claims
+  guard already enforces it.
+- **Privacy.** Triggers from phone use (late screens) run on the phone without a model: routine data never reaches one.
+- **Fatigue.** A daily cap, quiet hours, NOT NOW and a "was this useful?" tap, which feed the scorecard.
+
+**Order:** rules with fixed templates first (no model), then model wording behind the guards, then the randomised
+nudge nights with their scorecard. New pieces: the two notification kinds and their rules, a short NUDGE mode for the
+agent, and golden cases for it.
+
 ## Evaluation
 
 - **Golden set**: about 80 questions (55 so far, phase 0) across EXPLAIN, ASK and COACH plus red-flag symptoms, written against planted

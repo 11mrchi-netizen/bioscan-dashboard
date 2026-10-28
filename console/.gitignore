@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# browser walkthrough screenshots (e2e/walkthrough.cjs)
+e2e/out

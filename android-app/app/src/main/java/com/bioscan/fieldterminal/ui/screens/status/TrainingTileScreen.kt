@@ -55,6 +55,7 @@ import com.bioscan.fieldterminal.domain.evaluateSubjective
 import com.bioscan.fieldterminal.domain.evaluateTrainingLoad
 import com.bioscan.fieldterminal.domain.resolveTier
 import com.bioscan.fieldterminal.domain.PerformanceTimeframe
+import com.bioscan.fieldterminal.domain.toPerformanceTimeframe
 import com.bioscan.fieldterminal.domain.TSB_DETRAINED_ABOVE
 import com.bioscan.fieldterminal.domain.TSB_FRESHENED_FROM
 import com.bioscan.fieldterminal.domain.TSB_HEAVILY_LOADED_BELOW
@@ -127,8 +128,8 @@ fun TrainingTileScreen(
             onRequestedTabConsumed()
         }
     }
-    // 25/9 rework: one switch for the Load tab's CTL/ATL/TSB charts (RUNNING and STRENGTH keep their own).
-    var timeframe by remember { mutableStateOf(PerformanceTimeframe.ThreeMonths) }
+    // Redesign: the global range (top bar) sets the window of every Training chart.
+    val timeframe = com.bioscan.fieldterminal.ui.components.GlobalTimeRange.selected.toPerformanceTimeframe()
 
     // Contract A4: title, context line and sub-tab rail stay pinned; only the tab's content scrolls, from the top on a tab change.
     val scroll = rememberScrollState()
@@ -136,26 +137,16 @@ fun TrainingTileScreen(
     PinnedPage(
         onBack = onBack,
         title = "TRAINING",
-        subtitle = when (tab) {
-            TrainingTab.Load -> "LOAD · FITNESS · INTENSITY · " + when (timeframe.months) {
-                1L -> "LAST MONTH"
-                12L -> "LAST YEAR"
-                else -> "LAST ${timeframe.months} MONTHS"
-            }
-            TrainingTab.Running -> "LEVEL · VOLUME · EFFICIENCY · RECORDS"
-            TrainingTab.Strength -> "LEVEL · STANDARDS · E1RM · VOLUME · PRs"
-            TrainingTab.Sessions -> "EVERY SESSION, NEWEST FIRST"
-            TrainingTab.Injury -> "INJURIES · ILLNESSES · CHECK-INS"
-        },
         accent = FT.DomainTraining,
         rail = { SubTabRow(items = TrainingTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        headerAction = { com.bioscan.fieldterminal.ui.components.TimeRangeDropdown() },
         scrollState = scroll,
     ) {
 
         when (tab) {
             // App restructure: TRAINING LOAD then INTENSITY. READY FOR lives on Today only; the running and strength
             // rollups gave way to their own tabs.
-            TrainingTab.Load -> TrainingLoadSection(timeframe, onTimeframeChange = { timeframe = it })
+            TrainingTab.Load -> TrainingLoadSection(timeframe)
             TrainingTab.Running -> com.bioscan.fieldterminal.ui.screens.user.RunningTab()
             TrainingTab.Strength -> com.bioscan.fieldterminal.ui.screens.user.StrengthTab()
             TrainingTab.Sessions -> TrainingSessionsTab(onOpenSessionDetail)
@@ -293,25 +284,15 @@ private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
 internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Modifier = Modifier, scorecard: ScorecardResult? = null) {
     // UX review P6: "READY FOR" (was "TODAY'S READINESS"): readiness per kind of session, built on Today's Recovery.
     // Analysis review phase G: scored against whether planned sessions were done; demoted, it shows no per-session words.
-    FTCard(dataQuality = result.confidence, title = "READY FOR", methodology = "dynamic_recovery", modifier = modifier) {
+    FTCard(dataQuality = result.confidence, title = "READY FOR", methodology = "dynamic_recovery", modifier = modifier, why = readinessWhy(result, scorecard)) {
         val demoted = scorecard.demotes()
         if (demoted) FTStatePill(INPUTS_ONLY) else RecoveryStatePill(result.generalState)
         if (demoted) {
             Text("Its per-session words did not foresee your planned sessions better than one of its inputs: see the inputs under TODAY'S RECOVERY.", style = FTType.BodySmall, color = FT.TextSecondary)
         } else result.demandRelative.forEach { (tier, state) ->
-            val label = when (tier) {
-                TrainingDemandTier.EASY_AEROBIC -> "Easy aerobic"
-                TrainingDemandTier.THRESHOLD -> "Threshold"
-                TrainingDemandTier.LONG_HIGH_LOAD -> "Long / high-load"
-                TrainingDemandTier.STRENGTH -> "Strength"
-            }
+            val label = tierLabel(tier)
             // Fix 4: tinted like recovery's movements (faint green ready, faint red caution), always with the word.
-            val (direction, word) = when (state) {
-                EvalState.ShiftUp -> 1 to "READY"
-                EvalState.Stable -> 0 to "MATCHED"
-                EvalState.ShiftDown -> -1 to "CAUTION"
-                else -> null to "BUILDING"
-            }
+            val (direction, word) = tierWord(state)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(label, style = FTType.Body, color = FT.TextSecondary, modifier = Modifier.weight(1f))
                 com.bioscan.fieldterminal.ui.components.FTMovementChip(direction, word)
@@ -321,8 +302,34 @@ internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Mo
     }
 }
 
+private fun tierLabel(tier: TrainingDemandTier): String = when (tier) {
+    TrainingDemandTier.EASY_AEROBIC -> "Easy aerobic"
+    TrainingDemandTier.THRESHOLD -> "Threshold"
+    TrainingDemandTier.LONG_HIGH_LOAD -> "Long / high-load"
+    TrainingDemandTier.STRENGTH -> "Strength"
+}
+
+private fun tierWord(state: EvalState): Pair<Int?, String> = when (state) {
+    EvalState.ShiftUp -> 1 to "READY"
+    EvalState.Stable -> 0 to "MATCHED"
+    EvalState.ShiftDown -> -1 to "CAUTION"
+    else -> null to "BUILDING"
+}
+
+// WHY? on READY FOR: its general word and each kind of session's word (or INPUTS ONLY when its scorecard demotes it).
+private fun readinessWhy(result: TrainingReadinessResult, scorecard: ScorecardResult?): com.bioscan.fieldterminal.domain.WhyContext {
+    val demoted = scorecard.demotes()
+    val general = if (demoted) INPUTS_ONLY.word else recoveryStateWord(result.generalState).word
+    val tiers = if (demoted) emptyList() else result.demandRelative.map { (tier, state) -> tierLabel(tier).uppercase() to tierWord(state).second }
+    return com.bioscan.fieldterminal.domain.WhyContext(
+        "READY FOR",
+        words = listOf("" to (general ?: "")) + tiers,
+        shown = scorecard?.let { mapOf("scorecard" to "SCORECARD · ${com.bioscan.fieldterminal.domain.scorecardWord(it.verdict)}. ${it.sentence}") } ?: emptyMap(),
+    )
+}
+
 @Composable
-private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChange: (PerformanceTimeframe) -> Unit) {
+private fun TrainingLoadSection(timeframe: PerformanceTimeframe) {
     var sessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
     var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
     var activeCycle by remember { mutableStateOf<TrainingCycle?>(null) }
@@ -374,12 +381,13 @@ private fun TrainingLoadSection(timeframe: PerformanceTimeframe, onTimeframeChan
             resolveTier(MetricCategory.TrainingLoad, activeCycle),
             trainingLoadSeries(sessionLoads, spans = loadSpans),
             timeframe,
-            onTimeframeChange = onTimeframeChange,
             fitnessFatigue = fitnessFatigue,
         )
         // VO2max and lactate threshold, moved here from the Running page (owner's structure, Oct 2026).
         com.bioscan.fieldterminal.ui.screens.user.RunningFitnessCard(timeframe)
         IntensityCard()
+        // Routine intelligence R4: walking and cycling between places, beside the load above, never added to it.
+        ActiveTravelCard()
     }
 }
 
@@ -390,7 +398,6 @@ internal fun TrainingLoadCard(
     series: List<TrainingLoadPoint>,
     timeframe: PerformanceTimeframe,
     modifier: Modifier = Modifier,
-    onTimeframeChange: ((PerformanceTimeframe) -> Unit)? = null,
     fitnessFatigue: FitnessFatigueRow? = null,
 ) {
     val cutoff = LocalDate.now().minusMonths(timeframe.months)
@@ -437,16 +444,6 @@ internal fun TrainingLoadCard(
             val spans = if (ff.adopted && personal != null) "%.0f AND %.0f DAYS · YOURS (PREDICTIVE)".format(personal.ctl, personal.atl) else "42 AND 7 DAYS · STANDARD"
             Text("SPANS · $spans", style = FTType.LabelCaps, color = FT.TextSecondary)
             if (ff.summary.isNotBlank()) Text(ff.summary, style = FTType.Caption, color = FT.TextMuted)
-        }
-        // The timeframe sits on the charts it controls (UX review P2; it used to float above the whole tab).
-        if (onTimeframeChange != null && (eval.ctl != null || eval.tsb != null)) {
-            SegmentedToggle(
-                options = PerformanceTimeframe.entries,
-                selected = timeframe,
-                labelOf = { it.label },
-                onSelect = onTimeframeChange,
-                accentColor = FT.DomainTraining,
-            )
         }
         // Trend lines: the numbers live above, so these carry only the history. Fitness and fatigue share one chart (same
         // unit, same axis) and are told apart by lightness, dash and a legend (UX review F10: two single-line charts read

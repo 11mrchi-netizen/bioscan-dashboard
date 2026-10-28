@@ -105,6 +105,13 @@ provenance:
 | sRPE load | derived | RPE·minutes | per-session | rpe × duration | `exercise_sessions.rpe` × `duration_min` | mapped (fallback model, see DAV-55 doc) |
 | Lab marker (generic) | raw | marker-specific | per-draw | none | `lab_results.marker_name`/`value`/`unit`/`ref_low`/`ref_high`/`flag` | mapped — per-marker themes already exist in `domain/LabMarkerThemes.kt`, not re-enumerated here |
 | Injury/illness severity | raw | 0–10 | event-scoped | none | `injuries.severity` / `illnesses.severity` | mapped |
+| Phone use before sleep | derived | min | per-night | sum | `phone_usage_daily.bed_window_min` (routine intelligence R1) | mapped once Usage access is on |
+| Phone use at night | derived | min / count | per-night | sum | `phone_usage_daily.night_screen_min`, `night_unlocks` | mapped once Usage access is on |
+| Late social and video use | derived | min | per-day | sum | `phone_app_usage_daily.after_21_min` (categories social, video) | mapped once Usage access is on |
+| Outdoor daylight time (estimated) | modeled | min | per-day | sum | `mobility_daily.outdoor_daylight_min` (routine intelligence R3) | mapped once Locations is on |
+| Day type (places) | inferred | category | per-day | rule | `mobility_daily.day_type` | mapped once Locations is on |
+| Commute time | derived | min | per-trip | none | `trips` where `is_commute` | mapped once Locations is on and Home and Work are labelled |
+| Active travel minutes | derived | min | per-trip / per-week | sum | `trips.active_min` | mapped once Locations is on |
 
 ## Explicit gaps (not solved by this registry, tracked separately)
 

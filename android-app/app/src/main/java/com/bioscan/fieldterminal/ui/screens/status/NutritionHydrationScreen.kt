@@ -71,64 +71,6 @@ import kotlin.math.roundToInt
 // convention, ported from index.html's nutrition.cal[length-1], was a real
 // on-device bug: calories/macros never appeared to reset at the new day).
 //
-// Calories and macros are shown against the targets saved in Settings
-// (NutritionGoalsStore, RangeKind.TargetRange); only when a target isn't set
-// does a bar fall back to a generic RangeKind.ReferenceRange (0-3500 kcal,
-// 0-220g protein, 0-450g carbs, 0-180g fat), labelled REFERENCE so it never
-// reads as a personal goal. Hydration is a min-max range (set in Settings,
-// documented default otherwise), never a single hard-coded volume.
-// DAV-72 (First feedback fixes): split into separate public
-// NutritionTabContent/HydrationTabContent -- the Fuel tile page now hosts
-// Nutrition and Hydration as two switchable tabs sharing one
-// NutritionOverview load, instead of one combined screen.
-// DAV-100: calories headline -> macros -> meals logged -> 7-day trend,
-// migrated onto the shared Futuristic Material primitives (DAV-105).
-@Composable
-fun NutritionTabContent(overview: NutritionOverview, onOpenNutrientBreakdown: () -> Unit = {}) {
-    val goals = NutritionGoalsStore.getGoals(LocalContext.current)
-    val today = overview.today
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        // App restructure: trends over spot metrics, so a day with nothing logged yet keeps the averages and trend below.
-        if (today == null) {
-            Text("No meals logged yet today.", style = FTType.Body, color = FT.TextSecondary)
-        } else Column {
-            FTMetricValue(DisplayValue(primary = today.calories.roundToInt().toString(), unit = "KCAL"))
-            FTRangeIndicator(dailyRange("CALORIES", today.calories, goals.caloriesKcal, 3500.0), currentColor = NutrientColor.Calories, zoned = goals.caloriesKcal != null)
-            Text(
-                text = "${today.mealCount} MEAL${if (today.mealCount == 1) "" else "S"} LOGGED — ${today.date}",
-                style = FTType.LabelCaps,
-                color = FT.TextSecondary,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-        }
-
-        if (today != null) {
-            FTCard(title = "MACROS") {
-                FTRangeIndicator(dailyRange("PROTEIN (G)", today.proteinG, goals.proteinG, 220.0), currentColor = NutrientColor.Protein, zoned = goals.proteinG != null)
-                FTRangeIndicator(dailyRange("CARBS (G)", today.carbsG, goals.carbsG, 450.0), currentColor = NutrientColor.Carbs, zoned = goals.carbsG != null)
-                FTRangeIndicator(dailyRange("FAT (G)", today.fatG, goals.fatG, 180.0), currentColor = NutrientColor.Fat, zoned = goals.fatG != null)
-                NutrientBreakdownButton(onClick = onOpenNutrientBreakdown)
-            }
-        }
-        // MEALS TODAY moved to the Today page's NUTRITION TODAY card.
-
-        NutritionAveragesCard(overview.allDays)
-        NutritionGoalAdherenceCard(overview.allDays)
-
-        // 7-day trend -- relative to the week's own max, not a fixed target
-        // (matches the "TRAIN tile" histogram motif already used in the
-        // Status launch-screen mockups).
-        if (overview.last7Days.size > 1) {
-            FTCard(title = "7-DAY CALORIE TREND") {
-                CalorieTrendBars(overview.last7Days)
-            }
-        }
-    }
-}
-
 @Composable
 internal fun MealRowItem(meal: MealRow) {
     val time = runCatching { OffsetDateTime.parse(meal.loggedAt).format(DateTimeFormatter.ofPattern("HH:mm")) }.getOrDefault("—")
@@ -151,62 +93,6 @@ internal fun MealRowItem(meal: MealRow) {
             )
         }
     }
-}
-
-@Composable
-private fun NutrientBreakdownButton(onClick: () -> Unit) {
-    val shape = RoundedCornerShape(FT.RadiusSmall)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(FT.BorderWidth, FT.DomainFuel.copy(alpha = 0.5f), shape)
-            .background(FT.DomainFuel.copy(alpha = 0.08f), shape)
-            .ftClickable(onClick = onClick, shape = shape)
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            "VIEW DETAILED NUTRIENT BREAKDOWN",
-            style = FTType.LabelCaps,
-            color = FT.DomainFuel,
-        )
-    }
-}
-
-private fun referenceRange(label: String, current: Double, lower: Double, upper: Double) = PersonalRange(
-    kind = RangeKind.ReferenceRange,
-    lower = lower,
-    upper = upper,
-    current = current,
-    label = label,
-    sufficientHistory = true,
-)
-
-// Saved target when one exists, generic reference range otherwise -- the label
-// says which, so a reference band is never mistaken for a personal goal.
-private fun dailyRange(label: String, current: Double, target: Double?, referenceUpper: Double) =
-    if (target != null) targetRange("$label · TARGET", current, target)
-    else referenceRange("$label · REFERENCE", current, 0.0, referenceUpper)
-
-private fun hydrationRange(totalMl: Double, goals: NutritionGoals, exerciseDemandMl: Double): PersonalRange {
-    val userSet = goals.hasHydrationRange
-    val bounds = hydrationBoundsMl(goals, exerciseDemandMl)
-    val lower = bounds.start
-    val upper = bounds.endInclusive
-    val comparison = when {
-        totalMl < lower -> RangeComparison.Below
-        totalMl > upper -> RangeComparison.Above
-        else -> RangeComparison.Within
-    }
-    return PersonalRange(
-        kind = if (userSet) RangeKind.TargetRange else RangeKind.ReferenceRange,
-        lower = lower,
-        upper = upper,
-        current = totalMl,
-        label = if (userSet) "WATER (ML) · TARGET" else "WATER (ML) · REFERENCE",
-        comparison = comparison,
-        sufficientHistory = true,
-    )
 }
 
 // DAV-100 / DAV-181: liters headline combining hydration_daily (plain water)
@@ -274,36 +160,7 @@ fun HydrationTabContent(overview: NutritionOverview) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        FTCard(title = "HYDRATION") {
-            if (!hasAnyHydration) {
-                Text("No hydration logged yet today.", style = FTType.Body, color = FT.TextSecondary)
-            } else {
-                FTMetricValue(DisplayValue(primary = "%.1f".format(totalMl / 1000.0), unit = "L"))
-                FTRangeIndicator(hydrationRange(totalMl, NutritionGoalsStore.getGoals(LocalContext.current), hydrationIntelligence.inferredDemandMl ?: 0.0), currentColor = NutrientColor.Water, zoned = true)
-
-                // Breakdown by source when there are beverage entries alongside
-                // plain water, so the user can see each contribution.
-                if (overview.todayBeverageItems.isNotEmpty()) {
-                    Column(modifier = Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        overview.todayHydrationMl?.let { ml ->
-                            FTMetricRow("Water", "${ml} ml")
-                        }
-                        overview.todayBeverageItems.forEach { item ->
-                            val hydStr = item.effectiveHydrationMl?.let { "%.0f ml (est.)".format(it) } ?: "—"
-                            FTMetricRow(item.description ?: "Beverage", hydStr)
-                        }
-                    }
-                }
-
-                if (overview.todayBeverageItems.isNotEmpty()) {
-                    Text(
-                        "Beverage effective-hydration values are modelled estimates.",
-                        style = FTType.Caption,
-                        color = FT.TextMuted,
-                    )
-                }
-            }
-        }
+        HydrationCharts(overview)
 
         HydrationIntelligenceCard(hydrationIntelligence)
 
@@ -359,89 +216,6 @@ fun HydrationTabContent(overview: NutritionOverview) {
     }
 }
 
-// DAV-287: daily averages, not period totals -- summed over a selectable
-// window via the existing sumNutritionSince(), then divided by dayCount
-// (already tracked) so the headline reads as "per day" regardless of window
-// length. Raw totals stay available inside NutritionTotals for anything that
-// still wants a sum; this card just doesn't show them anymore.
-@Composable
-private fun NutritionAveragesCard(allDays: List<DailyNutrition>) {
-    var period by remember { mutableStateOf(TotalsPeriod.Week) }
-    val totals = sumNutritionSince(allDays, LocalDate.now(), period.days)
-    val days = totals.dayCount.coerceAtLeast(1)
-
-    FTCard(title = "NUTRITION AVERAGES") {
-        PeriodToggle(selected = period, onSelect = { period = it })
-        FTMetricValue(DisplayValue(primary = (totals.calories / days).roundToInt().toString(), unit = "KCAL/DAY"))
-        FTMetricRow("Fiber", "${(totals.fiberG / days).roundToInt()} g/day")
-        FTMetricRow("Sugar", "${(totals.sugarG / days).roundToInt()} g/day")
-        FTMetricRow("Sodium", "${(totals.sodiumMg / days).roundToInt()} mg/day")
-        MacroDonutChart(
-            carbsG = totals.carbsG / days,
-            proteinG = totals.proteinG / days,
-            fatG = totals.fatG / days,
-            modifier = Modifier.padding(top = 6.dp),
-        )
-        Text(
-            "daily average over the last ${period.label.lowercase()} — ${totals.dayCount} day${if (totals.dayCount == 1) "" else "s"} with logged meals",
-            style = FTType.Caption,
-            color = FT.TextMuted,
-        )
-    }
-}
-
-// DAV-288: adherence against the goals saved in Settings (NutritionGoalsStore)
-// -- reuses FTRangeIndicator/PersonalRange exactly as the reference-range bars
-// above do, just with RangeKind.TargetRange instead of ReferenceRange (an
-// enum case that existed but nothing used yet). Same 7-day window as the
-// averages card's default so "today's adherence" reads as a real week, not a
-// single noisy day.
-@Composable
-private fun NutritionGoalAdherenceCard(allDays: List<DailyNutrition>) {
-    val context = LocalContext.current
-    val goals = remember { NutritionGoalsStore.getGoals(context) }
-    if (!goals.isSet) {
-        FTCard(title = "GOAL ADHERENCE") {
-            FTDataState(DataAvailability.Unavailable, "No nutrition goals set yet — add them in Setup to see adherence here.")
-        }
-        return
-    }
-
-    val totals = sumNutritionSince(allDays, LocalDate.now(), TotalsPeriod.Week.days)
-    val days = totals.dayCount.coerceAtLeast(1)
-
-    FTCard(title = "GOAL ADHERENCE") {
-        goals.caloriesKcal?.let { FTRangeIndicator(targetRange("CALORIES (KCAL/DAY)", totals.calories / days, it), currentColor = NutrientColor.Calories, zoned = true) }
-        goals.proteinG?.let { FTRangeIndicator(targetRange("PROTEIN (G/DAY)", totals.proteinG / days, it), currentColor = NutrientColor.Protein, zoned = true) }
-        goals.carbsG?.let { FTRangeIndicator(targetRange("CARBS (G/DAY)", totals.carbsG / days, it), currentColor = NutrientColor.Carbs, zoned = true) }
-        goals.fatG?.let { FTRangeIndicator(targetRange("FAT (G/DAY)", totals.fatG / days, it), currentColor = NutrientColor.Fat, zoned = true) }
-        Text(
-            "7-day daily average vs. your saved targets",
-            style = FTType.Caption,
-            color = FT.TextMuted,
-        )
-    }
-}
-
-private fun targetRange(label: String, current: Double, target: Double): PersonalRange {
-    val comparison = when {
-        current < target * 0.9 -> RangeComparison.Below
-        current > target * 1.1 -> RangeComparison.Above
-        else -> RangeComparison.Within
-    }
-    // The band is the same +/-10% window the Below/Above comparison uses, so
-    // the shaded range and the label always agree.
-    return PersonalRange(
-        kind = RangeKind.TargetRange,
-        lower = target * 0.9,
-        upper = target * 1.1,
-        current = current,
-        label = label,
-        comparison = comparison,
-        sufficientHistory = true,
-    )
-}
-
 @Composable
 private fun HydrationIntelligenceCard(result: HydrationIntelligenceResult) {
     FTCard(dataQuality = result.confidence, title = "HYDRATION INTELLIGENCE") {
@@ -466,20 +240,3 @@ private fun HydrationIntelligenceCard(result: HydrationIntelligenceResult) {
     }
 }
 
-@Composable
-private fun CalorieTrendBars(days: List<DailyNutrition>) {
-    val maxCal = days.maxOf { it.calories }.coerceAtLeast(1.0)
-    Row(modifier = Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        days.forEach { day ->
-            val fraction = (day.calories / maxCal).toFloat().coerceIn(0.05f, 1f)
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height((40 * fraction).dp)
-                        .background(NutrientColor.Calories.copy(alpha = 0.8f)),
-                )
-            }
-        }
-    }
-}

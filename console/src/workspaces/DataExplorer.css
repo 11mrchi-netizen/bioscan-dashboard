@@ -122,3 +122,17 @@
 }
 
 .de-null { color: var(--color-text-muted); }
+
+/* Phase B rebuild: detail panel, load-more, selection */
+.de-narrow { width: 110px; }
+.de-body { display: flex; gap: var(--sp-3); flex: 1; min-height: 0; }
+.de-body .de-table-wrap { flex: 1; min-width: 0; }
+.de-row-on .de-td { background: var(--color-emerald-wash); }
+.de-tr { cursor: pointer; }
+.de-more { margin: var(--sp-3) auto; display: block; }
+.de-detail { width: 380px; flex-shrink: 0; border: 1px solid var(--color-border); border-radius: 8px; padding: var(--sp-3); overflow: auto; background: var(--color-surface); }
+.de-detail-head { display: flex; align-items: center; gap: var(--sp-3); font-size: 11px; color: var(--color-text-secondary); margin-bottom: var(--sp-2); }
+.de-detail-head button { margin-left: auto; }
+.de-link { color: var(--color-emerald); text-decoration: none; }
+.de-json { font-size: 11px; white-space: pre-wrap; word-break: break-word; color: var(--color-text-secondary); margin: 0; }
+@media (max-width: 1100px) { .de-body { flex-direction: column; } .de-detail { width: auto; } }

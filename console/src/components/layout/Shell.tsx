@@ -7,18 +7,16 @@ import { useInspection, useClearInspection } from '../../lib/analysisStore'
 import { ErrorBoundary } from '../shared/ErrorBoundary'
 import { Inspector } from '../shared/Inspector'
 import { DateRangeControl } from './DateRangeControl'
+import { SavedViews } from './SavedViews'
 import './Shell.css'
 
+// docs/analysis-console/IA.md §3.1
 const NAV = [
-  { to: 'overview',       label: 'Overview' },
-  { to: 'timeline',       label: 'Timeline' },
-  { to: 'training',       label: 'Training' },
-  { to: 'recovery',       label: 'Recovery / Body' },
-  { to: 'nutrition',      label: 'Nutrition' },
-  { to: 'comparison',     label: 'Comparison' },
-  { to: 'data-explorer',  label: 'Data Explorer' },
-  { to: 'relationship',   label: 'Relationship Lab' },
-  { to: 'data-quality',   label: 'Data Quality' },
+  { to: 'integrity', label: 'Integrity' },
+  { to: 'evidence',  label: 'Evidence' },
+  { to: 'explore',   label: 'Explore' },
+  { to: 'data',      label: 'Data' },
+  { to: 'models',    label: 'Models' },
 ]
 
 export function Shell() {
@@ -48,6 +46,7 @@ export function Shell() {
         <span className="shell-wordmark mono">FIELD TERMINAL · CONSOLE</span>
         <DateRangeControl />
         <div className="header-actions">
+          <SavedViews />
           <span className="mono user-label">{user?.email}</span>
           <button className="btn-ghost mono" onClick={signOut}>SIGN OUT</button>
         </div>

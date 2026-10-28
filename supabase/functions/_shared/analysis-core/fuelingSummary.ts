@@ -52,6 +52,8 @@ export interface FuelingSummary {
   /** Known-value count per nutrient out of `eventCount` (consumed+partial only) -- completeness, not a statistical confidence. */
   actualKnownCounts: NutrientKnownCounts
   plannedTotals: NutrientTotals
+  /** Consumed/partial intake before the start (a pre-workout, a gel at the line): in `actualTotals`, but not in the per-hour rates. */
+  preStartTotals: NutrientTotals
   carbsPerHour: number | null
   fluidPerHour: number | null
   sodiumPerHour: number | null
@@ -120,6 +122,8 @@ export function summariseFueling(events: FuelingEvent[], durationSeconds: number
   const actual = events.filter((e) => e.status === 'consumed' || e.status === 'partial')
   const planned = events.filter((e) => e.status === 'planned')
   const actualTotals = totalsOf(actual)
+  // Rates are per hour of the activity itself, so intake before the start (negative elapsed time) stays out of them.
+  const inRunTotals = totalsOf(actual.filter((e) => e.elapsedSeconds >= 0))
   return {
     durationKnown: durationSeconds !== null && durationSeconds > 0,
     durationSeconds,
@@ -129,9 +133,10 @@ export function summariseFueling(events: FuelingEvent[], durationSeconds: number
     actualTotals,
     actualKnownCounts: knownCountsOf(actual),
     plannedTotals: totalsOf(planned),
-    carbsPerHour: perHour(actualTotals.carbsG, durationSeconds),
-    fluidPerHour: perHour(actualTotals.fluidMl, durationSeconds),
-    sodiumPerHour: perHour(actualTotals.sodiumMg, durationSeconds),
+    preStartTotals: totalsOf(actual.filter((e) => e.elapsedSeconds < 0)),
+    carbsPerHour: perHour(inRunTotals.carbsG, durationSeconds),
+    fluidPerHour: perHour(inRunTotals.fluidMl, durationSeconds),
+    sodiumPerHour: perHour(inRunTotals.sodiumMg, durationSeconds),
     caffeineDoses: actual
       .filter((e): e is FuelingEvent & { caffeineMg: number } => e.caffeineMg !== null && e.caffeineMg > 0)
       .map((e) => ({ elapsedSeconds: e.elapsedSeconds, caffeineMg: e.caffeineMg }))

@@ -1,10 +1,11 @@
 // Analysis review phase G: the frame's session load is the apps' load, and the averages are seeded as Android seeds them.
+// The console kept a copy of this model (console/src/lib/training.ts) until the analysis hub's phase 0 removed it; the
+// expected values below are that copy's outputs, pinned when it was removed, so the agreement with Android stays tested.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { loadAnchorsByDate, sessionLoad, spanEma } from './trainingLoad.ts'
-import { loadAnchorsByDate as consoleAnchorsByDate, sessionLoad as consoleSessionLoad } from '../../../../console/src/lib/training.ts'
 
-test('the session load matches the console (and through it Android): RPE x minutes, else TRIMP, else nothing', () => {
+test('the session load matches the former console model (and through it Android): RPE x minutes, else TRIMP, else nothing', () => {
   const cases = [
     { duration_min: 60, rpe: 5 },
     { duration_min: 45, avg_hr: 150, max_hr: 185 },
@@ -15,18 +16,24 @@ test('the session load matches the console (and through it Android): RPE x minut
     { duration_min: 40 },
   ]
   const anchorSets = [{ restingHr: 55, maxHr: 192 }, { restingHr: null, maxHr: 192 }, { restingHr: 55, maxHr: null }]
-  for (const a of anchorSets) {
-    for (const c of cases) {
-      const ours = sessionLoad(c, a)
-      const theirs = consoleSessionLoad({ duration_minutes: c.duration_min, rpe: c.rpe, avg_hr: c.avg_hr, max_hr: c.max_hr }, a)
-      assert.equal(ours, theirs, JSON.stringify([c, a]))
-    }
-  }
+  // expected[anchor set][case]
+  const expected = [
+    [300, 75.61526752827001, null, 130.96240261038238, null, 52.27423222940505, null],
+    [300, null, null, null, null, null, null],
+    [300, null, null, null, null, null, null],
+  ]
+  anchorSets.forEach((a, i) => cases.forEach((c, j) => {
+    const ours = sessionLoad(c, a)
+    const want = expected[i][j]
+    const label = JSON.stringify([c, a])
+    if (want === null) assert.equal(ours, null, label)
+    else assert.ok(ours !== null && Math.abs(ours - want) < 1e-9, `${label}: ${ours} vs ${want}`)
+  }))
   assert.equal(sessionLoad({ duration_min: 60, rpe: 5 }, { restingHr: null, maxHr: null }), 300)
   assert.equal(sessionLoad({ duration_min: 45, avg_hr: 150, max_hr: 185 }, { restingHr: null, maxHr: 185 }), null, 'no resting heart rate, no TRIMP')
 })
 
-test('TRIMP golden values, shared with Android (EnduranceLoadTest) and the console', () => {
+test('TRIMP golden values, shared with Android (EnduranceLoadTest)', () => {
   const near = (x: number | null, y: number) => assert.ok(x !== null && Math.abs(x - y) < 1e-9, `${x} vs ${y}`)
   const anchors = { restingHr: 53, maxHr: 196 }
   near(sessionLoad({ duration_min: 60, avg_hr: 148, max_hr: 160 }, anchors), 91.34231903347344)
@@ -35,15 +42,20 @@ test('TRIMP golden values, shared with Android (EnduranceLoadTest) and the conso
   near(sessionLoad({ duration_min: 30, avg_hr: 210 }, anchors), 130.96240261038238)
 })
 
-test('the anchors by date match the console', () => {
+test('the anchors by date match the former console model', () => {
   const maxima: [string, number][] = [['2025-01-03', 201], ['2026-05-12', 190], ['2026-05-22', 186], ['2026-06-06', 199], ['2026-06-07', 241]]
   const resting: [string, number][] = [['2026-04-22', 60], ['2026-05-31', 52], ['2026-06-11', 48], ['2026-06-12', 140]]
   const ours = loadAnchorsByDate(maxima, resting)
-  const theirs = consoleAnchorsByDate(maxima, resting)
-  for (const d of ['2024-01-01', '2026-02-21', '2026-06-01', '2026-06-07', '2026-06-11', '2026-06-12', '2027-03-01']) {
-    assert.deepEqual(ours(d), theirs(d), d)
+  const expected: Record<string, { maxHr: number | null; restingHr: number | null }> = {
+    '2024-01-01': { maxHr: null, restingHr: 60 },
+    '2026-02-21': { maxHr: 201, restingHr: 60 },
+    '2026-06-01': { maxHr: 190, restingHr: 52 },
+    '2026-06-07': { maxHr: 199, restingHr: 52 },
+    '2026-06-11': { maxHr: 199, restingHr: 50 },
+    '2026-06-12': { maxHr: 199, restingHr: 50 },
+    '2027-03-01': { maxHr: 190, restingHr: 50 },
   }
-  assert.deepEqual(ours('2026-06-07'), { maxHr: 199, restingHr: 52 })
+  for (const [d, want] of Object.entries(expected)) assert.deepEqual(ours(d), want, d)
 })
 
 test('the span averages start at the first day with a load and treat later gaps as rest', () => {

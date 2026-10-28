@@ -1,8 +1,8 @@
 # Field Terminal — Analysis Console IA & Interaction Contract
 
-**Status:** Phase 1 lock — unblock for implementation  
-**Version:** 1.0  
-**Date:** 2026-09-30  
+**Status:** Revised for the analysis hub (Phase 0, see [PLAN.md](PLAN.md))  
+**Version:** 2.0  
+**Date:** 2026-10-27 (v1.0: 2026-09-30)  
 **Linear:** DAV-306  
 **Visual authority:** [Futuristic Material Visual Contract](../../design/FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md)  
 **Presentation authority:** [Analytical Presentation Contract](../../design/ANALYTICAL_PRESENTATION_CONTRACT.md)
@@ -15,6 +15,16 @@ The Analysis Console is a separate large-screen web client that shares the Field
 
 > Mobile Field Terminal = capture, glanceable state, in-the-moment action.  
 > Analysis Console = longitudinal investigation, comparison, cross-domain relationships, raw-data inspection.
+
+**v2.0 (2026-10-27):** the console becomes the hub for in-depth analysis, organised around three coordinated workstreams
+rather than one dashboard per domain:
+
+- **Data integrity**: is the data arriving, is it complete enough to trust, do derived metrics agree with their records?
+- **Decision layer**: question, then evidence, then experiment, then a recorded decision that keeps its evidence.
+- **Longitudinal engine**: one aggregation and time contract, adaptive resolution, detail on demand.
+
+The per-domain dashboards of v1 (Overview, Timeline, Training, Recovery / Body, Nutrition, Comparison) repeated what the
+Android app shows and were removed in Phase 0. Their charting role passes to Explore.
 
 ---
 
@@ -37,18 +47,18 @@ The Analysis Console is a separate large-screen web client that shares the Field
 The left rail (desktop) or top bar (tablet) carries:
 
 ```
-OVERVIEW
-TIMELINE
-TRAINING
-RECOVERY / BODY
-NUTRITION
-COMPARISON
-DATA EXPLORER
-RELATIONSHIP LAB
+INTEGRITY      health overview · source matrix · issue investigation
+EVIDENCE       decision queue · evidence workbench · decision records
+EXPLORE        any metrics, resolution follows the range, drill-down to records
+DATA           raw and derived tables, paged and filtered, linkable records
+MODELS         expected bands, typicality scorecard, series breaks, fitness-fatigue
 ─────────────
 [Workspace selector]
 [Settings / auth]
 ```
+
+The Inspector and the shared date range are global. Every issue, evidence point and decision links to the record it rests
+on through a Data URL (`#/data?table=…&…`).
 
 Workspaces are saved analytical environments, not fixed dashboards. The left rail navigation sets the *workspace type*; the workspace selector lets the user switch between named saved instances of that type.
 
@@ -91,16 +101,18 @@ Workspaces are saved analytical environments, not fixed dashboards. The left rai
 
 ## 4. Workspace catalogue
 
-| Workspace | Route | Primary audience use |
-|---|---|---|
-| Overview | `/console/overview` | Quick cross-domain status snapshot, comparison deltas |
-| Timeline | `/console/timeline` | Chronological event stream, "what happened on day X" |
-| Training | `/console/training` | Load curve, performance trends, session drill-down |
-| Recovery / Body | `/console/recovery` | Sleep, HRV, RHR, wellbeing, weight, injury context |
-| Nutrition | `/console/nutrition` | Macros, fluid, caffeine, meals table, TDEE overlay |
-| Comparison | `/console/comparison` | Personal-historical + population benchmarks |
-| Data Explorer | `/console/data-explorer` | Raw + derived canonical datasets, virtualized table |
-| Relationship Lab | `/console/relationship` | Evidence board (the fixed catalogue against its no-effect zones, with event curves, lag curves and an exploratory case-crossover table), experiments, interventions, fueling. The two-metric scatter/lag scan was retired in 2026-10 and is to be revisited as a corrected discovery screen (docs/analysis-review/README.md, "Revisit") |
+Routes are hash routes under `/console/` (`#/integrity`, …). Old v1 routes redirect to the workspace that took over their role.
+
+| Workspace | Route | Purpose | Built in |
+|---|---|---|---|
+| Integrity | `#/integrity` | What needs attention: capture coverage, source freshness, anomalies by severity, analysis readiness; a row per source or metric family; each issue traced to its records. Holds the series-break review. | Exists (phase C) |
+| Evidence | `#/evidence` | A queue of questions by state (needs data, under observation, ready to test, decision review); a workbench per question with shared time context; append-only decision records that snapshot their evidence. Evidence-board, ledger, event, experiment, intervention and fueling views live here as evidence-item views. | Exists (phase D: DECISIONS tab) |
+| Explore | `#/explore` | The one general charting surface: any metrics on one time axis, resolution following the range, drill-down period → day → records. | Exists (phase B) |
+| Data | `#/data` | Raw and derived tables with keyset paging and composable filters (range, source, identifier, empty or not); heavy payloads fetched only for a selected record. Duplicate rows are found by the integrity checks (phase C), which link to them here. | Exists (phase B) |
+| Models | `#/models` | How far the models can be trusted: expected-band calibration, flags and regimes, series breaks, typicality and its scorecard, fitness-fatigue spans. | Exists |
+
+The corrected discovery screen (Evidence > DISCOVERY, phase C2) scans the registrable questions on the older two-thirds of
+the history with a false-discovery correction and registers a promising pair as a question tested on new days only.
 
 ---
 
@@ -135,7 +147,7 @@ Every step is reversible — back navigation restores prior context state.
 - **Day cursor**: clicking a point on any time series broadcasts that date to all components in the canvas; every compatible chart highlights that day.
 - **Range brush**: dragging on any chart zooms all linked charts to that range.
 - **Event selection**: clicking a Timeline event or session row opens the Inspector; chart annotations for that event appear across all panels.
-- **Metric selection**: clicking a metric label in Overview navigates to its home workspace with the same date context.
+- **Metric selection**: clicking a metric (an Integrity row, an evidence item's outcome) opens it in Explore with the same date context.
 
 ### 5.2 Context dimensions (`AnalysisContext`)
 
@@ -158,7 +170,7 @@ interface AnalysisContext {
 }
 ```
 
-Timezone is always explicit. Daily aggregations are bounded by the user's local midnight (IANA timezone stored in Supabase profile, defaulting to `Asia/Taipei` for this account).
+Timezone is always explicit. Daily aggregations are bounded by the user's local midnight. How each stored column carries local time (a calendar date, local wall time labelled UTC, or a true UTC instant with an offset, defaulting to +480 for this account) is declared per series in the series contract (`metric-series.json`, `analysis-core/seriesContract.ts`; PLAN.md, phase A).
 
 ---
 
@@ -169,10 +181,10 @@ Timezone is always explicit. Daily aggregations are bounded by the user's local 
 | Pattern | Source | Adoption |
 |---|---|---|
 | Shared crosshair/cursor sync across charts | Intervals.icu | Full — `AnalysisContext.selectedDate` drives it |
-| Brushable load/performance chart with session list below | TrainingPeaks / Intervals.icu | Full — Training workspace |
-| Small-multiples KPI wall with comparison deltas | Oura / WHOOP | Full — Overview workspace |
+| Brushable load/performance chart with session list below | TrainingPeaks / Intervals.icu | Explore (the Training workspace was removed in v2.0) |
+| Small-multiples KPI wall with comparison deltas | Oura / WHOOP | Dropped in v2.0: the Integrity health overview replaces a metrics wall |
 | Virtualized raw-data table with provenance column | Heads Up Health | Full — Data Explorer |
-| Two-metric scatter with explicit n/missingness caveats | GoldenCheetah | Full — Relationship Lab |
+| Two-metric scatter with explicit n/missingness caveats | GoldenCheetah | Retired 2026-10 with the exploratory scan; returns as the corrected discovery screen |
 | Saved workspaces / configurable dashboards | RUNALYZE / MacroFactor | Full — workspace persistence |
 | Session detail: route + switchable perf chart + splits | Strava / RUNALYZE | Full — session drill-down |
 | Inspector panel with lineage chain | Heads Up Health / Welltory | Full — Inspector |
@@ -190,20 +202,26 @@ Timezone is always explicit. Daily aggregations are bounded by the user's local 
 
 ---
 
-## 7. v1 boundary
+## 7. Boundary
 
-### In scope for v1
+### In scope
 
-- All 8 workspaces (Overview, Timeline, Training, Recovery/Body, Nutrition, Comparison, Data Explorer, Relationship Lab)
-- Synchronized `AnalysisContext` across every workspace
-- Inspector with full provenance/lineage chain
-- Workspace save/load/share (Supabase-backed)
-- AI interpretation layer (Gemini over structured results only)
-- Performance validation on real longitudinal data
+- The five workspaces of §4, the shared `AnalysisContext` and the global Inspector with its provenance chain
+- One aggregation and local-time contract used by every workspace (PLAN.md, phase A)
+- Workspace save/load (Supabase-backed)
+- Performance validated on the real history (7D, 1Y and all-time, cold and warm)
 
-### Out of scope for v1
+### What the console writes
 
-- Editing or creating records (mobile owns capture)
+The console is an investigation and decision environment, not a second data-entry app. It writes only:
+
+- decision records (append-only `decisions`, phase D)
+- series-break verdicts (`series_break_decisions`)
+- question registrations (`registered_questions`)
+
+### Out of scope
+
+- Editing or creating records (mobile owns capture and record correction)
 - Multi-user / team features
 - Generic SQL or JavaScript user scripting
 - Arbitrary real-time streaming
@@ -242,24 +260,6 @@ Timezone is always explicit. Daily aggregations are bounded by the user's local 
 
 ---
 
-## 10. Design decisions not decided here
+## 10. Implementation plan
 
-The following are deferred to implementation issues:
-
-- Exact chart library sub-configuration (ECharts option shape) — DAV-309.
-- Metric query adapter TypeScript interface — DAV-309.
-- `AnalysisContext` React provider and subscription model — DAV-308.
-- Workspace schema in Supabase — workspace persistence issue.
-- Session detail internal layout beyond the contract in FIELD_TERMINAL_IA_CONTRACT.md §9.
-
----
-
-## 11. Acceptance checklist
-
-- [ ] IA and navigation map documented (this document).
-- [ ] Core interaction contract documented with concrete examples (§5).
-- [ ] Reference-pattern audit with adoption/rejection rationale (§6).
-- [ ] Desktop/tablet breakpoints and density rules documented (§8).
-- [ ] v1/out-of-scope boundary explicit (§7).
-- [ ] No new metric calculations invented in this document.
-- [ ] Scaffolding decision recorded (§2).
+Phases, gates and the owner's decisions of 2026-10-27 are in [PLAN.md](PLAN.md).

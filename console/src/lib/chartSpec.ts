@@ -1,5 +1,7 @@
 // DAV-309: Versioned chart specification model.
-// Charts are configured declaratively from this spec; no metric logic lives in components.
+// Charts are configured declaratively from this spec; no metric logic lives in components. Since the analysis hub's
+// phase A a spec is derived from the series contract (title, unit, aggregation) instead of a hand-kept map.
+import type { SeriesContract } from '../../../supabase/functions/_shared/analysis-core/seriesContract.ts'
 
 export type ChartKind = 'line' | 'area' | 'bar' | 'scatter' | 'dot_plot'
 
@@ -28,36 +30,20 @@ export interface ChartSpec {
   bands?: ChartBand[]
   smooth?: boolean
   stack?: boolean               // for 'bar' kind
+  aggregation?: string          // how rows on one day combine (series contract day method)
 }
 
-// Default specs for well-known metrics.
-export const CHART_SPECS: Record<string, ChartSpec> = {
-  'wearable_daily.hrv': {
-    specVersion: 1, kind: 'area', metricId: 'wearable_daily.hrv',
-    title: 'HRV (RMSSD)', unit: 'ms', yAxisLabel: 'ms', smooth: true,
-  },
-  'wearable_daily.rhr': {
-    specVersion: 1, kind: 'line', metricId: 'wearable_daily.rhr',
-    title: 'Resting HR', unit: 'bpm', smooth: true,
-  },
-  'wearable_daily.steps': {
-    specVersion: 1, kind: 'bar', metricId: 'wearable_daily.steps',
-    title: 'Steps', unit: 'steps',
-  },
-  'sleep_daily.hours': {
-    specVersion: 1, kind: 'bar', metricId: 'sleep_daily.hours',
-    title: 'Sleep Duration', unit: 'h',
-  },
-  'body_metrics.weight_kg': {
-    specVersion: 1, kind: 'line', metricId: 'body_metrics.weight_kg',
-    title: 'Body Weight', unit: 'kg', smooth: true,
-  },
-  'wellbeing_daily.energy': {
-    specVersion: 1, kind: 'area', metricId: 'wellbeing_daily.energy',
-    title: 'Energy Level', unit: '/10', smooth: true,
-  },
-  'wellbeing_daily.mood': {
-    specVersion: 1, kind: 'line', metricId: 'wellbeing_daily.mood',
-    title: 'Mood', unit: '/10', smooth: true,
-  },
+// Quantities that add up (a day's steps, a week's run time) are bars; levels (HRV, weight, scores) are lines.
+// metricId stays table.column: the Inspector's drill-down to Data reads the table from it.
+export function chartSpecFor(series: SeriesContract): ChartSpec {
+  const additive = series.day === 'sum' || series.period === 'sum' || series.unit === 'steps'
+  return {
+    specVersion: 1,
+    kind: additive ? 'bar' : 'line',
+    metricId: `${series.table}.${series.column}`,
+    title: series.label,
+    unit: series.unit || null,
+    smooth: !additive,
+    aggregation: series.day,
+  }
 }

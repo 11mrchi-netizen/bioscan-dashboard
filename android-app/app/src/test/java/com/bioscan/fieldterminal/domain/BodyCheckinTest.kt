@@ -44,11 +44,11 @@ class BodyCheckinTest {
 
     @Test
     fun `limbs are measured on both sides, skinfolds on the right, optional sites only when chosen`() {
-        assertEquals(20, BODY_CHECKIN_SLOTS.size)
+        assertEquals(19, BODY_CHECKIN_SLOTS.size)
         assertTrue(BODY_CHECKIN_SLOTS.filter { it.site.method == MeasureMethod.CALIPER }.all { it.side == BodySide.RIGHT })
         assertEquals(listOf(BodySide.RIGHT, BodySide.LEFT), BODY_CHECKIN_SLOTS.filter { it.site == BodySite.CALF }.map { it.side })
         val slots = activeSlots(tape = true, calipers = true, flexedArms = false, chestSkinfold = false)
-        assertEquals(17, slots.size)
+        assertEquals(16, slots.size)
         assertTrue(slots.none { it.site == BodySite.BICEPS_FLEXED || it.site == BodySite.SF_CHEST })
         assertTrue(activeSlots(tape = false, calipers = true, flexedArms = true, chestSkinfold = true).all { it.site.method == MeasureMethod.CALIPER })
     }
@@ -97,8 +97,8 @@ class BodyCheckinTest {
     fun `a change counts only beyond the smallest real difference`() {
         val down = siteChanges(
             listOf(
-                checkin(1, "2026-08-01", null, tape(BodySite.WAIST_MIDPOINT, 85.0, 85.0)),
-                checkin(2, "2026-09-01", null, tape(BodySite.WAIST_MIDPOINT, 83.5, 83.5)),
+                checkin(1, "2026-08-01", null, tape(BodySite.WAIST_NAVEL, 85.0, 85.0)),
+                checkin(2, "2026-09-01", null, tape(BodySite.WAIST_NAVEL, 83.5, 83.5)),
             ),
         ).single()
         assertEquals(-1.5, down.change!!, 1e-9)
@@ -106,8 +106,8 @@ class BodyCheckinTest {
         assertEquals(ChangeVerdict.DOWN, down.verdict)
         val small = siteChanges(
             listOf(
-                checkin(1, "2026-08-01", null, tape(BodySite.WAIST_MIDPOINT, 85.0, 85.0)),
-                checkin(2, "2026-09-01", null, tape(BodySite.WAIST_MIDPOINT, 84.5, 84.5)),
+                checkin(1, "2026-08-01", null, tape(BodySite.WAIST_NAVEL, 85.0, 85.0)),
+                checkin(2, "2026-09-01", null, tape(BodySite.WAIST_NAVEL, 84.5, 84.5)),
             ),
         ).single()
         assertEquals(ChangeVerdict.WITHIN_ERROR, small.verdict)
@@ -178,5 +178,19 @@ class BodyCheckinTest {
         assertTrue(NotificationKind.BODY_CHECKIN in NotificationKind.ALL)
         assertEquals(AddEntryTarget.BodyCheckIn, AddEntryChoice.BodyCheckIn.target)
         assertEquals(AddEntryGroup.Body, AddEntryChoice.BodyCheckIn.group)
+    }
+
+    @Test
+    fun rollingBodyFatBlendsMethodsOverTheWindow() {
+        val d = java.time.LocalDate.of(2026, 10, 1)
+        val out = rollingBodyFat(listOf(d to 20.0, d to 22.0, d.plusDays(10) to 24.0, d.plusDays(40) to 30.0))
+        assertEquals(21.0, out[0].second, 1e-9)
+        assertEquals(22.0, out[1].second, 1e-9)   // 20, 22, 24
+        assertEquals(30.0, out[2].second, 1e-9)   // the first three are older than 28 days
+    }
+
+    @Test
+    fun theWaistIsTakenOnceAtTheNavel() {
+        assertEquals(false, BODY_CHECKIN_SLOTS.any { it.site == BodySite.WAIST_MIDPOINT })
     }
 }

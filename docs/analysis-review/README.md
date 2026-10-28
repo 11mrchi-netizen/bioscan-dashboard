@@ -43,7 +43,7 @@ uncorrected correlation scan is retired, with a note to revisit it (section "Rev
 | Local time | The phone records its UTC offset and time zone per day (`daily_context`); the engine turns timestamps into local dates and hours with it. It used UTC: in UTC+8 a 15:00 coffee counted as morning caffeine and a 07:30 breakfast landed on the day before | EveningCheckinRepository.recordDailyContext, runRelationships.ts `localClock` | runRelationships.test.ts |
 | The small hours belong to the evening before | Food logged before 04:00 counts toward the previous evening; check-ins answered after midnight are filed under that evening | runRelationships.ts, domain/EveningCheckin.kt | both |
 | Overnight readings keyed to their night | HRV and resting heart rate from Health Connect are averaged per night (readings from 18:00 count toward the next morning), like sleep_daily, instead of per calendar day, which split one night across two dates. Applies to rows written from the next sync on | domain/DailyAggregation.kt, HealthConnectDailySyncRepository.kt | NightDateTest |
-| Passive weather and daylight | Not built: the app has no location source, and adding one needs a permission decision. `daily_context` has nullable columns ready for it | - | - |
+| Passive weather and daylight | Built with routine intelligence R3 (location approved by the owner, 27 Oct 2026): every 6 hours the day's peak temperature, mean humidity and day length go into `daily_context`, at the place most of the day was spent (docs/routine-intelligence/README.md) | data/routine/PlacesRepository.kt `recordDayContext`, domain/routine/Mobility.kt `sunTimes` | PlacesTripsMobilityTest |
 | Readiness meter per question | Moved to phase D, where each question gets its no-effect zone (the meter is computed from it) | - | - |
 
 ## Phase C: what changed
@@ -138,3 +138,6 @@ lags with no adjustment (seven metrics give 609 correlations, about 30 significa
 discovery screen the review proposed: prewhitened cross-correlations with effective sample sizes, a false-discovery
 correction, chance bands on a lag heatmap, run on the older two-thirds of the history, and a "register this question"
 action that sends a promising pair into the confirmation ledger.
+
+Built 2026-10-27 as the console's Evidence > DISCOVERY screen (analysis hub phase C2, `analysis-core/discovery.ts`;
+calibration and design in `docs/analysis-console/PLAN.md`).

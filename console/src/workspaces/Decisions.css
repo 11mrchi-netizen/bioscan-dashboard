@@ -1,0 +1,53 @@
+.dec { display: flex; flex-direction: column; gap: var(--sp-3); }
+.dec-note { padding: var(--sp-3) var(--sp-4); }
+.dec-note p { margin: 0 0 var(--sp-2); font-size: 13px; line-height: 1.55; max-width: 100ch; color: var(--color-text-secondary); }
+.dec-muted { color: var(--color-text-muted); }
+.dec-small { font-size: 12px; line-height: 1.5; }
+.dec-filters { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.dec-chip { background: transparent; border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-text-muted); font-size: 11px; padding: 4px 10px; cursor: pointer; }
+.dec-chip.on { color: var(--color-emerald); border-color: var(--color-emerald); background: var(--color-emerald-wash); }
+
+.dec-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--sp-2); }
+.dec-col { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.dec-col-head { font-size: 10px; letter-spacing: 0.08em; color: var(--color-text-secondary); padding: 0 2px; display: flex; flex-direction: column; gap: 2px; }
+.dec-col-head .dec-muted { letter-spacing: 0; font-size: 10px; }
+.dec-empty { color: var(--color-text-muted); font-size: 11px; padding: var(--sp-2); }
+.dec-card { text-align: left; display: flex; flex-direction: column; gap: 4px; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; }
+.dec-card.on { border-color: var(--color-emerald); }
+.dec-card-title { font-size: 12px; font-weight: 600; }
+.dec-card-meta { font-size: 10px; color: var(--color-text-muted); }
+.dec-card-reason { font-size: 11px; color: var(--color-text-secondary); line-height: 1.4; }
+.v-clear { color: var(--color-emerald); }
+.v-negligible { color: var(--color-info); }
+.v-unclear { color: var(--color-warning); }
+.v-not_yet { color: var(--color-text-muted); }
+
+.dec-bench { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
+.dec-bench-head { display: flex; justify-content: space-between; gap: var(--sp-3); }
+.dec-bench-title { margin: 2px 0; font-size: 17px; }
+.dec-eyebrow, .dec-label { font-size: 10px; letter-spacing: 0.12em; color: var(--color-text-muted); margin-bottom: 4px; }
+.dec-bench-grid { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: var(--sp-4); }
+.dec-verdict-big { font-size: 22px; font-weight: 700; text-transform: capitalize; }
+.dec-effect { width: 100%; height: 26px; }
+.dec-zone { fill: rgba(255, 255, 255, 0.07); }
+.dec-zero { stroke: var(--color-text-muted); stroke-width: 0.4; }
+.dec-ci { stroke: var(--color-text-primary); stroke-width: 1.4; }
+.dec-point { fill: var(--color-emerald); }
+.dec-summary { margin: 0; font-size: 13px; line-height: 1.5; }
+.dec-limits { margin: 0; font-size: 12px; line-height: 1.5; color: var(--color-text-secondary); border-left: 2px solid var(--color-border); padding-left: var(--sp-3); }
+.dec-links { display: flex; gap: var(--sp-4); font-size: 11px; }
+.dec-links a { color: var(--color-emerald); text-decoration: none; }
+.dec-history, .dec-records { display: flex; flex-direction: column; gap: 4px; }
+.dec-form { display: flex; flex-direction: column; gap: var(--sp-2); border-top: 1px solid var(--color-border); padding-top: var(--sp-3); }
+.dec-kinds { display: flex; flex-wrap: wrap; gap: var(--sp-4); font-size: 13px; }
+.dec-kind.off { color: var(--color-text-muted); }
+.dec-warn { font-size: 12px; color: var(--color-warning); }
+.dec-text { min-height: 60px; resize: vertical; font-family: var(--font-sans); }
+.dec-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.dec-grow { flex: 1; min-width: 200px; }
+.dec-message { color: var(--color-emerald); }
+.dec-record { border-left: 2px solid var(--color-emerald); padding-left: var(--sp-3); margin-top: var(--sp-1); }
+.dec-changed { color: var(--color-warning); }
+@media (max-width: 1100px) { .dec-bench-grid { grid-template-columns: 1fr; } }
+.dec-link { color: var(--color-emerald); text-decoration: none; }
+.sev-critical { color: var(--color-critical); } .sev-warning { color: var(--color-warning); } .sev-info { color: var(--color-info); }

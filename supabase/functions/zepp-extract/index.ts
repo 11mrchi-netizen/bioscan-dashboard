@@ -9,6 +9,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { computeEffort } from "./effort.ts";
 import { decodeMinuteHr, type HrMinutePoint } from "./minuteHr.ts";
+import { compactSleepStages, tzOffsetMinutes, type StageInterval } from "./sleepStages.ts";
 import { hrHistogram } from "./hrHistogram.ts";
 import { redecodeReport, sessionStartMatches } from "./redecode.ts";
 import {
@@ -441,6 +442,9 @@ interface BandDataDecoded {
   deepMin: number | null;
   remMin: number | null;
   lightMin: number | null;
+  // Timed stages (sleepStages.ts) and the band's UTC offset, for the hypnogram.
+  stageIntervals: StageInterval[] | null;
+  tzOffsetMin: number | null;
   rhr: number | null;
   steps: number | null;
   hrTimeseries: HrMinutePoint[] | null;
@@ -472,8 +476,10 @@ function decodeBandDataSummary(rawBody: unknown): BandDataDecoded | null {
   let deepMin: number | null = null;
   let remMin: number | null = null;
   let lightMin: number | null = null;
+  let stageIntervals: StageInterval[] | null = null;
 
   if (slp) {
+    stageIntervals = compactSleepStages(slp.stage);
     const st = Number(slp.st);
     const ed = Number(slp.ed);
     if (Number.isFinite(st) && Number.isFinite(ed) && ed > st) {
@@ -512,7 +518,7 @@ function decodeBandDataSummary(rawBody: unknown): BandDataDecoded | null {
   // Minute heart rate without the band's no-reading markers (minuteHr.ts).
   const hrTimeseries = decodeMinuteHr(entry.data_hr);
 
-  return { sleepHours, sleepScore, bedtimeIso, wakeTimeIso, deepMin, remMin, lightMin, rhr, steps, hrTimeseries };
+  return { sleepHours, sleepScore, bedtimeIso, wakeTimeIso, deepMin, remMin, lightMin, stageIntervals, tzOffsetMin: tzOffsetMinutes(summary.tz), rhr, steps, hrTimeseries };
 }
 
 function parseDateRange(
@@ -1032,6 +1038,8 @@ async function extract(
               if (decoded.deepMin !== null) sleepRow.deep_min = decoded.deepMin;
               if (decoded.remMin !== null) sleepRow.rem_min = decoded.remMin;
               if (decoded.lightMin !== null) sleepRow.light_min = decoded.lightMin;
+              if (decoded.stageIntervals !== null) sleepRow.stage_intervals = decoded.stageIntervals;
+              if (decoded.tzOffsetMin !== null) sleepRow.tz_offset_min = decoded.tzOffsetMin;
               const { error: sleepErr } = await supabase.from("sleep_daily")
                 .upsert(sleepRow, { onConflict: "user_id,date" });
               if (sleepErr) throw new Error(`sleep_daily upsert: ${sleepErr.message}`);

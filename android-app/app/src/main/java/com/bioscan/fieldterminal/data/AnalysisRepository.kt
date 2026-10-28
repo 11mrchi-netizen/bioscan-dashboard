@@ -56,6 +56,11 @@ import java.time.OffsetDateTime
 // convention) decide what actually falls inside each window -- no server-
 // side date-range filter, consistent with how every other repository in
 // this app reads a daily table.
+// Redesign: the range selector reaches ALL (years of daily rows), so the daily histories are not cut at 200 days. The hosted API
+// returns at most 1000 rows a request whatever limit() says (wearable_daily has 3,600+ days), so these are read a page at a time.
+private const val DAILY_HISTORY_ROWS = 3650L
+private const val PAGE_ROWS = 1000L
+
 class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Analysis Layer 3 / R1. The start of each metric's current regime = its last CONFIRMED series break, published by the
@@ -187,16 +192,24 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             emptyMap()
         }
 
+    // Oldest first, like the single-request reads they replace; pages of PAGE_ROWS newest-first until one comes back short.
+    // Keyset, not offset (PR #24 review): each page asks for dates before the last one read, so a day synced between two
+    // requests cannot shift the window and read a row twice or skip one. date is unique per user in every table read here.
+    private suspend inline fun <reified T : Any> pagedByDate(table: String, columns: String, crossinline dateOf: (T) -> String): List<T> =
+        keysetPagesDescending(PAGE_ROWS, DAILY_HISTORY_ROWS, { dateOf(it) }) { before ->
+            supabase.postgrest.from(table)
+                .select(columns = Columns.list(columns)) {
+                    if (before != null) filter { lt("date", before) }
+                    order("date", Order.DESCENDING)
+                    limit(PAGE_ROWS)
+                }
+                .decodeList<T>()
+        }.reversed()
+
     suspend fun loadWearableDaily(): List<WearableAnalysisRow> = ReadCache.get("analysis.WearableDaily", tables = setOf("wearable_daily")) { fetchWearableDaily() }
 
     private suspend fun fetchWearableDaily(): List<WearableAnalysisRow> =
-        supabase.postgrest.from("wearable_daily")
-            .select(columns = Columns.list("date,hrv,rhr,steps,spo2_avg")) {
-                order("date", Order.DESCENDING)
-                limit(200)
-            }
-            .decodeList<WearableAnalysisRow>()
-            .reversed()
+        pagedByDate<WearableAnalysisRow>("wearable_daily", "date,hrv,rhr,steps,spo2_avg") { it.date }
 
     // The intraday heart-rate series the Heart tab charts: the NEWEST day that has one, with its date. It used to be the
     // oldest day of the 200-row window (an ascending list's first row), so the card showed a day from months ago
@@ -217,27 +230,52 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             }
     }
 
+    // Redesign: each day's lowest and highest heart rate for the Range Trend card, from the wearable_hr_daily_range view
+    // (migration 20261104). Empty until that view exists, so the card says "no readings" instead of failing the page.
+    suspend fun loadHeartRateRanges(): List<Pair<LocalDate, com.bioscan.fieldterminal.domain.DayRange>> =
+        orNullUnlessCancelled {
+            ReadCache.get("analysis.hr_ranges", tables = setOf("wearable_daily")) {
+                pagedByDate<HrRangeRow>("wearable_hr_daily_range", "date,hr_min,hr_max") { it.date }
+                    .map { LocalDate.parse(it.date) to com.bioscan.fieldterminal.domain.DayRange(it.low, it.high) }
+            }
+        } ?: emptyList()
+
+    // Redesign: one night's timed stages and the overnight heart rate (the evening on the day before, the morning on the day), for
+    // the hypnogram. Null when the night has no stored stage intervals (older than the Zepp backfill, or a Health Connect night).
+    suspend fun loadHypnogramNight(date: LocalDate): com.bioscan.fieldterminal.domain.HypnogramNight? {
+        val row = supabase.postgrest.from("sleep_daily")
+            .select(columns = Columns.list("date,bedtime,stage_intervals,tz_offset_min")) {
+                filter { eq("date", date.toString()) }
+                limit(1)
+            }
+            .decodeList<HypnogramSleepRow>()
+            .firstOrNull() ?: return null
+        val raw = row.stageIntervals ?: return null
+        val bedtime = row.bedtime?.let { runCatching { java.time.OffsetDateTime.parse(it.replace(' ', 'T')).toInstant() }.getOrNull() } ?: return null
+        val blocks = com.bioscan.fieldterminal.domain.parseStageBlocks(raw)
+        if (blocks.isEmpty()) return null
+        val tz = row.tzOffsetMin ?: 0
+        val hrRows = orNullUnlessCancelled {
+            supabase.postgrest.from("wearable_daily")
+                .select(columns = Columns.list("date,hr_timeseries")) {
+                    filter { isIn("date", listOf(date.minusDays(1).toString(), date.toString())) }
+                }
+                .decodeList<HrDayRow>()
+        } ?: emptyList()
+        val span = blocks.maxOf { it.endMin }
+        val hr = com.bioscan.fieldterminal.domain.nightHeartRate(bedtime, tz, span, hrRows.map { LocalDate.parse(it.date) to it.hrTimeseries.orEmpty() })
+        return com.bioscan.fieldterminal.domain.HypnogramNight(date, bedtime, tz, blocks, com.bioscan.fieldterminal.domain.estimateCycles(blocks), hr)
+    }
+
     suspend fun loadSleepDaily(): List<SleepAnalysisRow> = ReadCache.get("analysis.SleepDaily", tables = setOf("sleep_daily")) { fetchSleepDaily() }
 
     private suspend fun fetchSleepDaily(): List<SleepAnalysisRow> =
-        supabase.postgrest.from("sleep_daily")
-            .select(columns = Columns.list("date,hours,bedtime,wake_time,respiratory_rate,deep_min,rem_min,light_min")) {
-                order("date", Order.DESCENDING)
-                limit(200)
-            }
-            .decodeList<SleepAnalysisRow>()
-            .reversed()
+        pagedByDate<SleepAnalysisRow>("sleep_daily", "date,hours,bedtime,wake_time,respiratory_rate,deep_min,rem_min,light_min") { it.date }
 
     suspend fun loadBodyMetrics(): List<BodyMetricsAnalysisRow> = ReadCache.get("analysis.BodyMetrics", tables = setOf("body_metrics")) { fetchBodyMetrics() }
 
     private suspend fun fetchBodyMetrics(): List<BodyMetricsAnalysisRow> =
-        supabase.postgrest.from("body_metrics")
-            .select(columns = Columns.list("date,weight_kg,body_fat_pct")) {
-                order("date", Order.DESCENDING)
-                limit(200)
-            }
-            .decodeList<BodyMetricsAnalysisRow>()
-            .reversed()
+        pagedByDate<BodyMetricsAnalysisRow>("body_metrics", "date,weight_kg,body_fat_pct") { it.date }
 
     // Phase A4 (Category 6). CTL/ATL's 42-day EWMA needs the same generous
     // margin as everything else here -- exercise_sessions is smaller today
@@ -248,7 +286,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     private suspend fun fetchExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> =
         supabase.postgrest.from("exercise_sessions")
-            .select(columns = Columns.list("start_time,duration_min,rpe,avg_hr,max_hr")) {
+            .select(columns = Columns.list("start_time,duration_min,rpe,avg_hr,max_hr,type")) {
                 // 25/9 rework: the Load tab charts up to 1Y of CTL/ATL/TSB, and a
                 // 200-row cap (newest first) only reached ~7 weeks once Health
                 // Connect noise landed (913 rows/400 days). A date window keeps
@@ -272,7 +310,8 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<IntensitySessionRow>()
             .map { row ->
                 IntensitySession(
-                    OffsetDateTime.parse(row.startTime).toLocalDate(),
+                    // The local day, not the UTC timestamp's own date (a 07:00 session in UTC+8 is the day before in UTC).
+                    OffsetDateTime.parse(row.startTime).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate(),
                     row.type,
                     row.zepp.firstNotNullOfOrNull { it.histogram }?.mapNotNull { (bpm, secs) -> bpm.toIntOrNull()?.let { it to secs } }?.toMap(),
                 )
@@ -282,12 +321,12 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Analysis review phase G: the personal fitness-fatigue result, and the spans every load chart uses (the standard 42 and
     // 7 unless the personal pair was adopted; standard too when nothing is published or the read fails).
     suspend fun loadFitnessFatigue(): FitnessFatigueRow? = ReadCache.get("analysis.FitnessFatigue", tables = setOf("analysis_results")) {
-        runCatching {
+        orNullUnlessCancelled {
             supabase.postgrest.from("analysis_results")
                 .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "fitness_fatigue"); eq("key", "hrv") }; newestFirst() }
                 .decodeList<FitnessFatigueRow>()
                 .firstOrNull()
-        }.getOrNull()
+        }
     }
 
     suspend fun loadLoadSpans(): LoadSpans = loadFitnessFatigue()?.payload?.let { p ->
@@ -315,13 +354,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     suspend fun loadWellbeingDaily(): List<WellbeingAnalysisRow> = ReadCache.get("analysis.WellbeingDaily", tables = setOf("wellbeing_daily")) { fetchWellbeingDaily() }
 
     private suspend fun fetchWellbeingDaily(): List<WellbeingAnalysisRow> =
-        supabase.postgrest.from("wellbeing_daily")
-            .select(columns = Columns.list("date,energy,mood,stress,soreness,morning_erection_quality,arousal_level")) {
-                order("date", Order.DESCENDING)
-                limit(200)
-            }
-            .decodeList<WellbeingAnalysisRow>()
-            .reversed()
+        pagedByDate<WellbeingAnalysisRow>("wellbeing_daily", "date,energy,mood,stress,soreness,morning_erection_quality,arousal_level") { it.date }
 
     // Phase A4 (Category 4). Reuses domain/Nutrition.kt's own
     // aggregateMealsByDay() (Step 6) rather than re-deriving daily totals a
@@ -436,6 +469,16 @@ private data class IntensitySessionRow(
 
 @kotlinx.serialization.Serializable
 private data class HrHistogramRow(@kotlinx.serialization.SerialName("hr_histogram") val histogram: Map<String, Double>? = null)
+
+@kotlinx.serialization.Serializable
+private data class HrRangeRow(val date: String, @kotlinx.serialization.SerialName("hr_min") val low: Double, @kotlinx.serialization.SerialName("hr_max") val high: Double)
+
+@kotlinx.serialization.Serializable
+private data class HypnogramSleepRow(
+    val bedtime: String? = null,
+    @kotlinx.serialization.SerialName("stage_intervals") val stageIntervals: List<List<Int>>? = null,
+    @kotlinx.serialization.SerialName("tz_offset_min") val tzOffsetMin: Int? = null,
+)
 
 @kotlinx.serialization.Serializable
 private data class HrDayRow(

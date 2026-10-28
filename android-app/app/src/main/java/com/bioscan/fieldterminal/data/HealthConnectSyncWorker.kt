@@ -44,6 +44,7 @@ class HealthConnectSyncWorker(context: Context, params: WorkerParameters) : Coro
             }
             else -> {
                 prefs.edit().putLong(KEY_LAST_SUCCESS, System.currentTimeMillis()).apply()
+                SyncHeartbeat.record(SupabaseClientProvider.client, SyncHeartbeat.HEALTH_CONNECT)
                 Result.success()
             }
         }

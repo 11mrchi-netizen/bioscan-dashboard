@@ -22,6 +22,7 @@ import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.domain.HILLS_MIN_M_PER_KM
 import com.bioscan.fieldterminal.domain.PerformanceTimeframe
+import com.bioscan.fieldterminal.domain.toPerformanceTimeframe
 import com.bioscan.fieldterminal.domain.QUALITY_Z4_SHARE
 import com.bioscan.fieldterminal.domain.RecordRun
 import com.bioscan.fieldterminal.domain.RunCategory
@@ -86,7 +87,7 @@ fun RunningTab() {
 
 @Composable
 private fun RunningContent(history: RunningHistory) {
-    var timeframe by remember { mutableStateOf(PerformanceTimeframe.ThreeMonths) }
+    val timeframe = com.bioscan.fieldterminal.ui.components.GlobalTimeRange.selected.toPerformanceTimeframe()
     var surfaceName by rememberSaveable { mutableStateOf(RunSurface.ROAD.name) }
     val surface = RunSurface.valueOf(surfaceName)
     val aging by produceState<AgingProfileOverview?>(initialValue = null) { value = runCatching { UserDataCache.aging() }.getOrNull() }
@@ -104,10 +105,6 @@ private fun RunningContent(history: RunningHistory) {
         history.roadRuns.maxByOrNull { it.date }?.let { FTMetricRow("Last road run", "${formatPace(it.paceMinPerKm)} · ${"%.1f".format(it.distanceKm)} km") }
     }
 
-    SegmentedToggle(
-        options = PerformanceTimeframe.entries, selected = timeframe, labelOf = { it.label }, onSelect = { timeframe = it },
-        accentColor = skillColor(Skill.RUNNING),
-    )
 
     VolumeCard(history, from, today)
 

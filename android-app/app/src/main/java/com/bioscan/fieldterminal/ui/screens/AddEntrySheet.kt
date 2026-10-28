@@ -189,11 +189,10 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
 
     when (healthForm) {
         AddEntryTarget.HealthCheckIn -> com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
-        AddEntryTarget.InjuryForm -> com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = onDismiss, onSaved = onSaved, start = com.bioscan.fieldterminal.ui.screens.health.CheckInStart.NewBody)
-        AddEntryTarget.IllnessForm -> com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = onDismiss, onSaved = onSaved, start = com.bioscan.fieldterminal.ui.screens.health.CheckInStart.NewGeneral)
         AddEntryTarget.BodyCheckIn -> com.bioscan.fieldterminal.ui.screens.status.BodyCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
         AddEntryTarget.EventForm -> com.bioscan.fieldterminal.ui.screens.events.EventFormSheet(onDismiss = onDismiss, onSaved = { onSaved() })
         AddEntryTarget.SweatTest -> com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.ScaleWeighIn -> com.bioscan.fieldterminal.ui.screens.status.ScaleWeighInSheet(onDismiss = onDismiss, onSaved = onSaved)
         else -> ModalBottomSheet(
             onDismissRequest = { if (!externalActivityActive.value && !com.bioscan.fieldterminal.util.ExternalActivityGuard.active) onDismiss() },
             sheetState = sheetState,
@@ -681,9 +680,9 @@ private fun choiceColor(choice: AddEntryChoice): Color = when (choice) {
     AddEntryChoice.Drink -> FT.Category.Intake.c300
     AddEntryChoice.Supplements -> FT.Category.Intake.c700
     AddEntryChoice.Wellbeing -> FT.Category.Wellbeing.c500
-    AddEntryChoice.Stool, AddEntryChoice.InjuryCheckIn -> FT.Category.Digestion.c500
-    AddEntryChoice.HealthCheckIn, AddEntryChoice.Injury, AddEntryChoice.Illness -> FT.DomainHeart
-    AddEntryChoice.Grip, AddEntryChoice.BodyCheckIn, AddEntryChoice.SweatTest -> FT.Category.Activity.c500
+    AddEntryChoice.Stool -> FT.Category.Digestion.c500
+    AddEntryChoice.HealthCheckIn -> FT.DomainHeart
+    AddEntryChoice.Grip, AddEntryChoice.BodyCheckIn, AddEntryChoice.SweatTest, AddEntryChoice.ScaleWeighIn -> FT.Category.Activity.c500
     AddEntryChoice.Event -> FT.DomainTraining
     AddEntryChoice.SexualActivity, AddEntryChoice.Encounter -> FT.Category.Arousal.c500
     AddEntryChoice.Note -> FT.TextSecondary
@@ -778,7 +777,7 @@ private fun FuelForm(
             )
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
             FuelSubType.Supplements -> SupplementsForm(saving, preselectBundle = supplementBundle, onSave = { takenAt, items, source, quantities -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities) } })
-            FuelSubType.Endurance -> EnduranceFuelForm(onSaved = onCanonicalSaved)
+            FuelSubType.Endurance -> com.bioscan.fieldterminal.ui.screens.fuel.RunFuelEntry(onSaved = onCanonicalSaved)
         }
     }
 }

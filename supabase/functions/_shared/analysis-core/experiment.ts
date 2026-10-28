@@ -20,6 +20,7 @@ import { analyseDaily, analysePairs, FOUR_WORDS, fourWord, shiftDay } from './ra
 import type { FourWord, PeriodPhase } from './randomized.ts'
 
 export type MetricId = 'hrv' | 'rhr' | 'sleep_hours' | 'deep_rem_min' | 'energy' | 'mood' | 'stress' | 'soreness' | 'fueling_carb_rate'
+  | 'screen_bed_min' | 'screen_pm_social' | 'outdoor_daylight_min'
 
 interface MetricInfo {
   label: string
@@ -44,6 +45,11 @@ export const METRIC_INFO: Record<MetricId, MetricInfo> = {
   // qualifying activity. This is the metric-vocabulary widening 08.5's notes flagged as future, separate work --
   // done now because 06.3.6 is a concrete, real caller, not a speculative one.
   fueling_carb_rate: { label: 'Carbohydrate rate', series: 'fueling_carb_rate', ln: false, unit: 'g/h', breakKeys: [] },
+  // Routine intelligence R6: phone and mobility outcomes (routineExposures.ts), so a habit itself can be the outcome
+  // (does a wind-down routine cut phone use in the hour before sleep?). Null on days the phone did not measure.
+  screen_bed_min: { label: 'Phone in the hour before sleep', series: 'screen_bed_min', ln: false, unit: 'min', breakKeys: [] },
+  screen_pm_social: { label: 'Social and video apps after 21:00', series: 'screen_pm_social', ln: false, unit: 'min', breakKeys: [] },
+  outdoor_daylight_min: { label: 'Outdoors in daylight (estimated)', series: 'outdoor_daylight_min', ln: false, unit: 'min', breakKeys: [] },
 }
 
 export const MIN_PHASE_DAYS = 14
@@ -408,6 +414,8 @@ export type FrozenExclusions = Map<string, Set<string>>
 // stress and soreness, a steadier carb rate is neither).
 const FAVOURABLE: Record<MetricId, 1 | -1> = {
   hrv: 1, rhr: -1, sleep_hours: 1, deep_rem_min: 1, energy: 1, mood: 1, stress: -1, soreness: -1, fueling_carb_rate: 1,
+  // Routine intelligence R6: less phone around bedtime and late at night, more daylight.
+  screen_bed_min: -1, screen_pm_social: -1, outdoor_daylight_min: 1,
 }
 
 /** Each outcome's default no-effect zone in its display unit (% for HRV, minutes for sleep), as the evidence board uses;
@@ -416,6 +424,7 @@ export const DEFAULT_ZONE: Record<MetricId, { zone: number; unit: string; scale?
   hrv: { zone: 2, unit: '%' }, rhr: { zone: 1, unit: 'bpm' }, sleep_hours: { zone: 10, unit: 'min', scale: 60 }, deep_rem_min: { zone: 10, unit: 'min' },
   energy: { zone: 0.5, unit: 'points' }, mood: { zone: 0.5, unit: 'points' }, stress: { zone: 0.5, unit: 'points' }, soreness: { zone: 0.5, unit: 'points' },
   fueling_carb_rate: { zone: 5, unit: 'g/h' },
+  screen_bed_min: { zone: 10, unit: 'min' }, screen_pm_social: { zone: 10, unit: 'min' }, outdoor_daylight_min: { zone: 10, unit: 'min' },
 }
 
 /** The blocks whose exclusions are frozen when they end: the periods, or for a daily design each week of the schedule

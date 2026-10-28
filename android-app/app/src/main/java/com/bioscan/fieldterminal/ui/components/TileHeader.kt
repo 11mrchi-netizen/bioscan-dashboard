@@ -64,10 +64,12 @@ fun PinnedPage(
     accent: Color? = null,
     rail: (@Composable () -> Unit)? = null,
     scrollState: ScrollState = rememberScrollState(),
+    // Sits in the header's right corner (the global range dropdown on Training, Nutrition and Health).
+    headerAction: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack, title = title, subtitle = subtitle, accent = accent)
+        TileHeader(onBack = onBack, title = title, subtitle = subtitle, accent = accent, action = headerAction)
         if (rail != null) {
             rail()
             Box(Modifier.fillMaxWidth().height(FT.BorderWidth).background(FT.GlassBorder))

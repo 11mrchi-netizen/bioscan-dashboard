@@ -83,6 +83,7 @@ fun LabTileScreen(
             LabTab.Supplements -> "ROSTER · PANTRY · EXPERIMENTS"
             LabTab.Planning -> "TRAINING · FOOD PLAN · RACE FUEL"
             LabTab.Tests -> "START A TEST · RESULTS GO TO LOG"
+            LabTab.Routine -> "THE WEEK BY PLACE · COMMUTE · PHONE"
         },
         accent = FT.DomainLabs,
         rail = { SubTabRow(items = LabTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
@@ -93,6 +94,7 @@ fun LabTileScreen(
             LabTab.Supplements -> SupplementsScreen(onOpenPantry = onOpenPantry)
             LabTab.Planning -> PlanningTab(section, onSection = { section = it }, onOpenPlanner, onOpenAllBlocks, onOpenEvent)
             LabTab.Tests -> TestsTab(onStart = { test = it })
+            LabTab.Routine -> RoutineTab()
         }
     }
 

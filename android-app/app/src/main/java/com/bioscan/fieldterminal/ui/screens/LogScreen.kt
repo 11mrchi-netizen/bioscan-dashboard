@@ -163,6 +163,8 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
                         },
                     )
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        // Routine intelligence R5: gym visits with no session recorded (nothing shows when there are none).
+                        item(key = "unlogged-visits") { com.bioscan.fieldterminal.ui.screens.status.UnloggedVisitsCard() }
                         if (visible.isEmpty()) {
                             item(key = "no-gaps") {
                                 Text(

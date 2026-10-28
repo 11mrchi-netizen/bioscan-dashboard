@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ConditioningHistory
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.PerformanceTimeframe
+import com.bioscan.fieldterminal.domain.toPerformanceTimeframe
 import com.bioscan.fieldterminal.domain.bucketWeekly
 import com.bioscan.fieldterminal.domain.trailingWeeklyAverage
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
@@ -44,7 +45,7 @@ fun ConditioningSkillScreen(onBack: () -> Unit) {
 
 @Composable
 private fun ConditioningContent(history: ConditioningHistory) {
-    var timeframe by remember { mutableStateOf(PerformanceTimeframe.ThreeMonths) }
+    val timeframe = com.bioscan.fieldterminal.ui.components.GlobalTimeRange.selected.toPerformanceTimeframe()
     val today = remember { LocalDate.now() }
     val from = today.minusMonths(timeframe.months)
     val level = remember(history) { conditioningLevelOf(history, today) }
@@ -65,10 +66,6 @@ private fun ConditioningContent(history: ConditioningHistory) {
         return
     }
 
-    SegmentedToggle(
-        options = PerformanceTimeframe.entries, selected = timeframe, labelOf = { it.label }, onSelect = { timeframe = it },
-        accentColor = skillColor(Skill.CONDITIONING),
-    )
 
     ConsistencyCard(history, from, today)
     HeartRateCard(inWindow)

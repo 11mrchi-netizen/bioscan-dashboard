@@ -12,14 +12,11 @@ class AddEntryChoiceTest {
     fun everyChoiceLeadsSomewhereAndFuelChoicesOpenTheirForm() {
         assertEquals(AddEntryTarget.Form(AddEntryType.Fuel, FuelSubType.Drink), AddEntryChoice.Drink.target)
         assertEquals(AddEntryTarget.Form(AddEntryType.Fuel, FuelSubType.Endurance), AddEntryChoice.RunFuel.target)
-        assertEquals(AddEntryTarget.Form(AddEntryType.Ostrc), AddEntryChoice.InjuryCheckIn.target)
-        assertEquals(AddEntryTarget.InjuryForm, AddEntryChoice.Injury.target)
-        assertEquals(AddEntryTarget.IllnessForm, AddEntryChoice.Illness.target)
         assertEquals(AddEntryTarget.HealthCheckIn, AddEntryChoice.HealthCheckIn.target)
         assertEquals(AddEntryTarget.EventForm, AddEntryChoice.Event.target)
-        // Every form the sheet has is reachable from the picker.
+        // Every form the sheet has is reachable from the picker, except the weekly OSTRC form (kept only to edit saved rows).
         val reachable = AddEntryChoice.entries.mapNotNull { (it.target as? AddEntryTarget.Form)?.type }.toSet()
-        assertEquals(AddEntryType.entries.toSet(), reachable)
+        assertEquals(AddEntryType.entries.toSet() - AddEntryType.Ostrc, reachable)
     }
 
     @Test
@@ -40,6 +37,16 @@ class AddEntryChoiceTest {
         assertEquals(recent, parseRecentChoices(formatRecentChoices(recent)))
         assertEquals(listOf(AddEntryChoice.Note), parseRecentChoices("Fuel,Note,,Note"))
         assertTrue(parseRecentChoices(null).isEmpty())
+    }
+
+    @Test
+    fun recentsSavedBeforeTheHealthEntryUpgradeToIt() {
+        // An older build stored the three entries the unified Health entry replaced; together they become one Health.
+        assertEquals(
+            listOf(AddEntryChoice.HealthCheckIn, AddEntryChoice.Food),
+            parseRecentChoices("Injury,Food,Illness"),
+        )
+        assertEquals(listOf(AddEntryChoice.HealthCheckIn), parseRecentChoices("InjuryCheckIn"))
     }
 
     @Test

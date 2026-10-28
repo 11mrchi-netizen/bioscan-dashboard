@@ -46,7 +46,7 @@ enum class BodySite(
     WAIST_NAVEL("waist_navel", "Waist at the navel", MeasureMethod.TAPE, false, 50.0..180.0,
         "Level with the navel, standing relaxed, belly not held in. Read at the end of a normal breath out."),
     WAIST_MIDPOINT("waist_midpoint", "Waist, mid (WHO)", MeasureMethod.TAPE, false, 50.0..180.0,
-        "At the side, find the lowest rib and the top of the hip bone; the tape goes halfway between, level all round. End of a normal breath out. This is the waist the waist-to-height ratio uses."),
+        "At the side, find the lowest rib and the top of the hip bone; the tape goes halfway between, level all round. End of a normal breath out. Older check-ins only: the waist is now taken at the navel."),
     HIPS("hips", "Hips", MeasureMethod.TAPE, false, 60.0..180.0,
         "Around the widest part of the buttocks, feet together, tape level (check in a mirror)."),
     BICEPS_RELAXED("biceps_relaxed", "Upper arm, relaxed", MeasureMethod.TAPE, true, 15.0..60.0,
@@ -79,8 +79,11 @@ data class BodySlot(val site: BodySite, val side: BodySide) {
     val label: String get() = if (side == BodySide.NONE || site.method == MeasureMethod.CALIPER) site.label else "${site.label} · ${side.label.lowercase()}"
 }
 
-/** The check-in's order: tape from the neck down (right before left), then the skinfolds. */
-val BODY_CHECKIN_SLOTS: List<BodySlot> = BodySite.entries.flatMap { site ->
+/**
+ * The check-in's order: tape from the neck down (right before left), then the skinfolds. Redesign: the waist is taken once, at the
+ * navel; the WHO midpoint stays in [BodySite] only so check-ins already saved with it still read.
+ */
+val BODY_CHECKIN_SLOTS: List<BodySlot> = BodySite.entries.filter { it != BodySite.WAIST_MIDPOINT }.flatMap { site ->
     when {
         site.method == MeasureMethod.CALIPER -> listOf(BodySlot(site, BodySide.RIGHT))
         site.bilateral -> listOf(BodySlot(site, BodySide.RIGHT), BodySlot(site, BodySide.LEFT))
@@ -205,8 +208,8 @@ fun asymmetries(history: List<BodyCheckinRecord>): List<Asymmetry> {
 
 val SKINFOLD_SUM_SITES = listOf(BodySite.SF_ABDOMINAL, BodySite.SF_SUPRAILIAC, BodySite.SF_THIGH)
 
-/** The waist the ratios use: the WHO midpoint, else the navel. */
-fun ratioWaist(c: BodyCheckinRecord): Double? = c.value(BodySite.WAIST_MIDPOINT) ?: c.value(BodySite.WAIST_NAVEL)
+/** The waist the ratios use: the navel, else (older check-ins) the WHO midpoint. */
+fun ratioWaist(c: BodyCheckinRecord): Double? = c.value(BodySite.WAIST_NAVEL) ?: c.value(BodySite.WAIST_MIDPOINT)
 
 fun waistToHeight(c: BodyCheckinRecord, heightCm: Double?): Double? =
     ratioWaist(c)?.let { w -> heightCm?.takeIf { it in 100.0..250.0 }?.let { w / it } }
@@ -320,3 +323,12 @@ fun nextSlot(slots: List<BodySlot>, readings: Map<BodySlot, List<Double>>, skipp
     }
     return null
 }
+
+/**
+ * Body fat blended across methods (scale, tape, skinfolds): at each reading date, the mean of every estimate from the
+ * [windowDays] days up to it. Each method is a few points off for one person, so the blend follows the trend, not the level.
+ */
+fun rollingBodyFat(readings: List<Pair<LocalDate, Double>>, windowDays: Long = 28): List<Pair<LocalDate, Double>> =
+    readings.map { it.first }.distinct().sorted().map { d ->
+        d to readings.filter { !it.first.isAfter(d) && it.first.isAfter(d.minusDays(windowDays)) }.map { it.second }.average()
+    }

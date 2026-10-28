@@ -108,13 +108,9 @@ fun NutritionTileScreen(
     PinnedPage(
         onBack = onBack,
         title = "NUTRITION",
-        subtitle = when (tab) {
-            NutritionTab.Nutrition -> "CALORIES · MACROS · AVERAGES · TREND"
-            NutritionTab.Hydration -> "HYDRATION · CAFFEINE · INTELLIGENCE"
-            NutritionTab.Plan -> "TODAY AND THE NEXT 2 DAYS"
-        },
         accent = FT.DomainFuel,
         rail = { SubTabRow(items = NutritionTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it }) },
+        headerAction = { com.bioscan.fieldterminal.ui.components.TimeRangeDropdown() },
         scrollState = scroll,
     ) {
 
@@ -124,17 +120,7 @@ fun NutritionTileScreen(
                 CircularProgressIndicator(color = FT.DomainFuel)
             }
             else -> when (tab) {
-                NutritionTab.Nutrition -> overview?.let {
-                    NutritionTabContent(it, onOpenNutrientBreakdown = onOpenNutrientBreakdown)
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(18.dp),
-                    ) {
-                        NutritionCard(evaluateNutrition(it.allDays))
-                        // DAV-76: the one real target this project has for protein (the AMDR band), day by day.
-                        NutritionOnTargetCard(proteinPercentSeries(it.allDays))
-                    }
-                }
+                NutritionTab.Nutrition -> overview?.let { NutritionPage(it, onOpenNutrientBreakdown = onOpenNutrientBreakdown) }
                 NutritionTab.Hydration -> overview?.let { HydrationTabContent(it) }
                 NutritionTab.Plan -> com.bioscan.fieldterminal.ui.screens.fuel.FuelPlanPage(
                     overview,
@@ -145,46 +131,6 @@ fun NutritionTileScreen(
                 )
             }
         }
-    }
-}
-
-// DAV-76. Green ("on-target here") already means "in range" everywhere else
-// in this app (BLOODWORK STABLE, 0 FLAGS), not a color picked fresh for
-// this card.
-@Composable
-private fun NutritionOnTargetCard(proteinSeries: List<Pair<LocalDate, Double>>) {
-    FTCard(title = "PROTEIN ON-TARGET (AMDR 10–35%)") {
-        if (proteinSeries.size < 2) {
-            Text(
-                "Not enough complete-day nutrition logs yet to chart a trend.",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
-        } else {
-            DateTrendLine(
-                points = proteinSeries,
-                color = NutrientColor.Protein,
-                refLow = PROTEIN_PCT_LOW * 100,
-                refHigh = PROTEIN_PCT_HIGH * 100,
-                unit = "% of calories from protein",
-                // Chart rules: a day without a complete log is a gap, not a straight line across it.
-                maxGapDays = 1,
-            )
-        }
-    }
-}
-
-// Phase A4 (Category 4). No SHIFT_UP/SHIFT_DOWN here -- the spec never
-// defines a threshold for calling an energy-trend move a "shift" the way it
-// does for Categories 1/2/3/5/6, so `Stable` is shown once the gate is met,
-// not because nothing moves but because there's no rule to judge it by.
-@Composable
-private fun NutritionCard(eval: NutritionEvaluation) {
-    FTCard(dataQuality = eval.confidence, title = "NUTRITION (ANALYSIS)") {
-        FTStatePill(gateStateWord(eval.state))
-        eval.energyTrend14d?.let { FTMetricRow("14-day energy trend", "%.0f kcal".format(it)) }
-        eval.energyCv28d?.let { FTMetricRow("28-day energy CV", "%.1f%%".format(it)) }
-        eval.proteinAdherence14d?.let { FTMetricRow("Protein in AMDR band (10-35% kcal)", "%.0f%%".format(it)) }
     }
 }
 

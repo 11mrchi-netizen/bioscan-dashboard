@@ -119,6 +119,8 @@ fun TodayScreen(
     var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
     var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
     var stressDays by remember { mutableStateOf<List<StressDay>>(emptyList()) }
+    // Newest day with minute heart rate, for the intraday HEART RATE card (moved here from Health).
+    var hrDay by remember { mutableStateOf<com.bioscan.fieldterminal.domain.HeartRateDay?>(null) }
     var nutrition by remember { mutableStateOf<NutritionOverview?>(null) }
     // Analysis Layer 3 / R1: start of each metric's current regime (last confirmed series break); NONE until loaded.
     var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
@@ -155,6 +157,7 @@ fun TodayScreen(
                     { wearable = repo.loadWearableDaily() },
                     { sleep = repo.loadSleepDaily() },
                     { wellbeing = repo.loadWellbeingDaily() },
+                    { hrDay = runCatching { repo.loadHeartRateDay() }.getOrNull() },
                     { stressDays = ZeppStressRepository(SupabaseClientProvider.client).loadStressDays() },
                     { nutrition = NutritionRepository(SupabaseClientProvider.client).loadOverview() },
                     { breakStarts = repo.loadSeriesBreakStarts() },
@@ -178,7 +181,7 @@ fun TodayScreen(
     val nut = nutrition
     if (s == null || w == null || sl == null || wb == null || nut == null) {
         Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-            TileHeader(onBack = onBack, title = "TODAY", subtitle = todayContextLine(), action = { LastEveningButton(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) } })
+            TileHeader(onBack = onBack, title = "TODAY", action = { LastEveningButton(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) } })
             if (guard.error != null) {
                 LoadErrorCard(guard)
             } else {
@@ -210,7 +213,7 @@ fun TodayScreen(
     val fuel = com.bioscan.fieldterminal.ui.screens.fuel.rememberTodayFuel(nut)
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).verticalScroll(rememberScrollState())) {
-        TileHeader(onBack = onBack, title = "TODAY", subtitle = todayContextLine(), action = { LastEveningButton(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) } })
+        TileHeader(onBack = onBack, title = "TODAY", action = { LastEveningButton(lastEvening) { checkInDate = lastEveningDate(LocalDate.now()) } })
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -231,27 +234,20 @@ fun TodayScreen(
             TypicalityCompactCard(typicalityView(typicality), typicality)
             DynamicRecoveryCard(recovery, emphasis = if (bandInputs.isEmpty()) FTCardEmphasis.Hero else FTCardEmphasis.Supporting, scorecard = scorecards?.recovery)
             TrainingReadinessCard(computeTrainingReadiness(recovery), scorecard = scorecards?.readyFor)
-            // The inputs behind recovery and READY FOR, one tap away instead of repeated on this page.
-            Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                val tsb = trainingLoadEval.tsb
-                LinkTile(
-                    title = "TRAINING LOAD",
-                    value = trainingLoadEval.tsbBand?.uppercase()?.let { band -> if (tsb != null) "$band · TSB " + "%+.0f".format(tsb) else band }
-                        ?: trainingLoadStateWord(trainingLoadEval.state).let { it.word ?: metricStateLabel(it.state) },
-                    accent = FT.DomainTraining,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    onClick = onOpenTrainingLoad,
-                )
-                LinkTile(
-                    title = "CARDIO",
-                    value = "HRV " + (w.lastOrNull()?.hrv?.let { "%.0f".format(it) } ?: "—") + " · RHR " + (w.lastOrNull()?.rhr?.let { "%.0f".format(it) } ?: "—"),
-                    accent = FT.DomainHeart,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    onClick = onOpenCardio,
-                )
-            }
-
             NutritionTodayCard(nut, fuel, onOpenPlan = onOpenFuel)
+            GlucoseSpikingCard(nut.todaysMeals)
+            IntradayHeartRateCard(hrDay)
+            HypnogramCard(sl.lastOrNull())
+            stressDays.firstOrNull()?.let { today ->
+                val windows = s.mapNotNull { session ->
+                    val start = runCatching { java.time.OffsetDateTime.parse(session.startTime) }.getOrNull()?.toInstant() ?: return@mapNotNull null
+                    val durationMin = session.durationMin ?: return@mapNotNull null
+                    start to start.plusSeconds((durationMin * 60).toLong())
+                }
+                PhysiologicalStressCard(analyzeStressDay(today, stressDays.drop(1), windows), today)
+            }
+            // Routine intelligence R5: yesterday's places, commute and phone before sleep (nothing until a stream is on).
+            RoutineTodayCard()
         }
     }
 

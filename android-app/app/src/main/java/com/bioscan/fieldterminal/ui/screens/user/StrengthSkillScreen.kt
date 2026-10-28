@@ -20,6 +20,7 @@ import com.bioscan.fieldterminal.data.StrengthHistory
 import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.LiftSeries
 import com.bioscan.fieldterminal.domain.PerformanceTimeframe
+import com.bioscan.fieldterminal.domain.toPerformanceTimeframe
 import com.bioscan.fieldterminal.domain.WeekAggregate
 import com.bioscan.fieldterminal.domain.bucketWeekly
 import com.bioscan.fieldterminal.domain.e1rmPrTimeline
@@ -57,12 +58,13 @@ fun StrengthTab() {
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(18.dp),
     ) {
         LoadedContent(load = { UserDataCache.strength() }) { StrengthContent(it) }
+        GripStrengthCard()
     }
 }
 
 @Composable
 private fun StrengthContent(history: StrengthHistory) {
-    var timeframe by remember { mutableStateOf(PerformanceTimeframe.ThreeMonths) }
+    val timeframe = com.bioscan.fieldterminal.ui.components.GlobalTimeRange.selected.toPerformanceTimeframe()
     val today = remember { LocalDate.now() }
     val from = today.minusMonths(timeframe.months)
     val series = remember(history) { liftE1rmSeries(history.sets) }
@@ -83,10 +85,6 @@ private fun StrengthContent(history: StrengthHistory) {
         return
     }
 
-    SegmentedToggle(
-        options = PerformanceTimeframe.entries, selected = timeframe, labelOf = { it.label }, onSelect = { timeframe = it },
-        accentColor = skillColor(Skill.STRENGTH),
-    )
 
     StandardsCard(rated, history.bodyWeightKg)
     E1rmCard(series, from)

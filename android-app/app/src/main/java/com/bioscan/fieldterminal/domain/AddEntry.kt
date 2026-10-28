@@ -38,7 +38,7 @@ sealed interface AddEntryStart {
 // UX review P3: the add sheet's picker lists what you log, grouped by what it is, with Fuel's four forms at the top level
 // (no second picker) and injury / illness reachable here as well as from Training › Injury.
 enum class AddEntryGroup(val label: String) {
-    Intake("INTAKE"), Body("BODY"), Training("TRAINING"), Intimacy("INTIMACY"), Other("OTHER"),
+    Intake("NUTRITION"), Body("BODY"), Intimacy("INTIMACY"), Other("OTHER"),
 }
 
 enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
@@ -51,16 +51,16 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
     Grip("Grip strength", AddEntryGroup.Body),
     // The monthly sitting: grip, tape girths and skinfolds (BodyCheckin.kt).
     BodyCheckIn("Body check-in", AddEntryGroup.Body),
+    // Weight and impedance read straight from the body scale over BLE (ScaleBroadcast.kt), no OKOK app.
+    ScaleWeighIn("Weigh-in", AddEntryGroup.Body),
     // Weigh-in before and after a session, for hydration plans (domain/fuel/SweatProfile.kt).
     SweatTest("Sweat test", AddEntryGroup.Body),
-    // Health concerns (docs/health-concerns): the daily check-in (NOTHING in one tap), and straight to the body map or the
-    // general symptoms for something new. Injury and Illness keep their names (stored in RECENT) but open the new check-in.
-    HealthCheckIn("Health check-in", AddEntryGroup.Body),
-    InjuryCheckIn("Injury check-in", AddEntryGroup.Training),
-    Injury("Injury / pain", AddEntryGroup.Training),
-    Illness("Illness / symptom", AddEntryGroup.Training),
+    // Redesign (spec §6): one Health entry for the check-in, an injury or pain, and an illness or symptom. It opens the daily
+    // check-in (NOTHING in one tap) and goes on to the body map or the general symptoms; the old Injury check-in,
+    // Injury / pain and Illness / symptom entries are gone from the picker. The weekly OSTRC form stays for editing saved rows.
+    HealthCheckIn("Health", AddEntryGroup.Body),
     // A race, long day or other hard day outside the training plan (domain/events/AthleteEvent.kt).
-    Event("Event", AddEntryGroup.Training),
+    Event("Event", AddEntryGroup.Other),
     SexualActivity("Sexual activity", AddEntryGroup.Intimacy),
     Encounter("Encounter", AddEntryGroup.Intimacy),
     Note("Note", AddEntryGroup.Other),
@@ -71,11 +71,10 @@ enum class AddEntryChoice(val label: String, val group: AddEntryGroup) {
 sealed interface AddEntryTarget {
     data class Form(val type: AddEntryType, val fuel: FuelSubType? = null) : AddEntryTarget
     data object HealthCheckIn : AddEntryTarget
-    data object InjuryForm : AddEntryTarget
-    data object IllnessForm : AddEntryTarget
     data object BodyCheckIn : AddEntryTarget
     data object EventForm : AddEntryTarget
     data object SweatTest : AddEntryTarget
+    data object ScaleWeighIn : AddEntryTarget
 }
 
 val AddEntryChoice.target: AddEntryTarget
@@ -89,25 +88,34 @@ val AddEntryChoice.target: AddEntryTarget
         AddEntryChoice.Grip -> AddEntryTarget.Form(AddEntryType.Grip)
         AddEntryChoice.BodyCheckIn -> AddEntryTarget.BodyCheckIn
         AddEntryChoice.HealthCheckIn -> AddEntryTarget.HealthCheckIn
-        AddEntryChoice.InjuryCheckIn -> AddEntryTarget.Form(AddEntryType.Ostrc)
-        AddEntryChoice.Injury -> AddEntryTarget.InjuryForm
-        AddEntryChoice.Illness -> AddEntryTarget.IllnessForm
         AddEntryChoice.Event -> AddEntryTarget.EventForm
         AddEntryChoice.SweatTest -> AddEntryTarget.SweatTest
+        AddEntryChoice.ScaleWeighIn -> AddEntryTarget.ScaleWeighIn
         AddEntryChoice.SexualActivity -> AddEntryTarget.Form(AddEntryType.SexualActivity)
         AddEntryChoice.Encounter -> AddEntryTarget.Form(AddEntryType.Encounter)
         AddEntryChoice.Note -> AddEntryTarget.Form(AddEntryType.Note)
     }
 
-// The RECENT row: the last few choices, newest first, each once. Stored as enum names; unknown names (a renamed or
-// removed choice) are dropped instead of failing.
+// The RECENT row: the last few choices, newest first, each once. Stored as enum names; a name retired in a later build
+// reads as the choice that replaced it, and anything else unknown is dropped instead of failing.
 const val RECENT_ADD_CHOICES = 3
+
+// Redesign (spec §6): Injury check-in, Injury / pain and Illness / symptom were folded into the one Health entry, which
+// opens the same check-in. These are the only choices ever removed since RECENT was introduced (checked in git history).
+private val RETIRED_CHOICE_NAMES = mapOf(
+    "InjuryCheckIn" to AddEntryChoice.HealthCheckIn,
+    "Injury" to AddEntryChoice.HealthCheckIn,
+    "Illness" to AddEntryChoice.HealthCheckIn,
+)
 
 fun recordRecentChoice(recent: List<AddEntryChoice>, picked: AddEntryChoice, keep: Int = RECENT_ADD_CHOICES): List<AddEntryChoice> =
     (listOf(picked) + recent.filter { it != picked }).take(keep)
 
 fun parseRecentChoices(stored: String?): List<AddEntryChoice> =
-    stored.orEmpty().split(',').mapNotNull { name -> AddEntryChoice.entries.firstOrNull { it.name == name } }.distinct().take(RECENT_ADD_CHOICES)
+    stored.orEmpty().split(',')
+        .mapNotNull { name -> AddEntryChoice.entries.firstOrNull { it.name == name } ?: RETIRED_CHOICE_NAMES[name] }
+        .distinct()
+        .take(RECENT_ADD_CHOICES)
 
 fun formatRecentChoices(recent: List<AddEntryChoice>): String = recent.joinToString(",") { it.name }
 
@@ -134,11 +142,10 @@ fun encodeTarget(t: AddEntryTarget?): String = when (t) {
     null -> ""
     is AddEntryTarget.Form -> "FORM|${t.type.name}|${t.fuel?.name.orEmpty()}"
     AddEntryTarget.HealthCheckIn -> "HEALTH"
-    AddEntryTarget.InjuryForm -> "INJURY"
-    AddEntryTarget.IllnessForm -> "ILLNESS"
     AddEntryTarget.BodyCheckIn -> "BODY"
     AddEntryTarget.EventForm -> "EVENT"
     AddEntryTarget.SweatTest -> "SWEAT"
+    AddEntryTarget.ScaleWeighIn -> "SCALE"
 }
 
 fun decodeTarget(s: String): AddEntryTarget? {
@@ -147,12 +154,12 @@ fun decodeTarget(s: String): AddEntryTarget? {
         "FORM" -> AddEntryType.entries.firstOrNull { it.name == f.getOrNull(1) }?.let { type ->
             AddEntryTarget.Form(type, FuelSubType.entries.firstOrNull { it.name == f.getOrNull(2) })
         }
-        "HEALTH" -> AddEntryTarget.HealthCheckIn
-        "INJURY" -> AddEntryTarget.InjuryForm
-        "ILLNESS" -> AddEntryTarget.IllnessForm
+        // INJURY and ILLNESS were separate targets before the unified Health entry; a state saved by an older build lands there.
+        "HEALTH", "INJURY", "ILLNESS" -> AddEntryTarget.HealthCheckIn
         "BODY" -> AddEntryTarget.BodyCheckIn
         "EVENT" -> AddEntryTarget.EventForm
         "SWEAT" -> AddEntryTarget.SweatTest
+        "SCALE" -> AddEntryTarget.ScaleWeighIn
         else -> null
     }
 }

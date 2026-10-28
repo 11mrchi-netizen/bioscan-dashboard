@@ -44,6 +44,8 @@ import com.bioscan.fieldterminal.data.HealthConnectSyncWorker
 import com.bioscan.fieldterminal.data.NotificationActionReceiver
 import com.bioscan.fieldterminal.data.NotificationDispatchWorker
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.routine.LocationCollector
+import com.bioscan.fieldterminal.data.routine.RoutineCaptureWorker
 import com.bioscan.fieldterminal.data.ZeppSyncWorker
 import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.ui.components.FTButton
@@ -118,6 +120,10 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
             HealthConnectSyncWorker.enqueue(context)
             ZeppSyncWorker.enqueue(context)
             NotificationDispatchWorker.enqueue(context)
+            // Routine intelligence: both streams stay idle until switched on in Setup; this only keeps the schedule and
+            // Play services' registrations alive.
+            RoutineCaptureWorker.schedule(context)
+            LocationCollector.registerAll(context)
         }
     }
 

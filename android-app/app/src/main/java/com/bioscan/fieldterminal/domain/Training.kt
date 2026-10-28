@@ -79,6 +79,17 @@ enum class PerformanceTimeframe(val label: String, val months: Long) {
     OneYear("1Y", 12),
 }
 
+/**
+ * The Training charts take whole months: the nearest window at or above the global range (7D and 1M read as a month;
+ * ALL as a year, the longest a Training chart draws).
+ */
+fun TimeRange.toPerformanceTimeframe(): PerformanceTimeframe = when (this) {
+    TimeRange.Week, TimeRange.Month -> PerformanceTimeframe.OneMonth
+    TimeRange.Quarter -> PerformanceTimeframe.ThreeMonths
+    TimeRange.Half -> PerformanceTimeframe.SixMonths
+    TimeRange.Year, TimeRange.All -> PerformanceTimeframe.OneYear
+}
+
 data class PerformanceTrendData(
     val raw: List<Pair<LocalDate, Double>>,
     val avg7d: List<Pair<LocalDate, Double>>,

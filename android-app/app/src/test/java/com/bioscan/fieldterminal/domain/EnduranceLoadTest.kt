@@ -5,8 +5,8 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.LocalDate
 
-// TRIMP golden values, shared with the server (analysis-core/trainingLoad.test.ts) and the console
-// (console/src/lib/training.test.ts): the three must agree to the digit.
+// TRIMP golden values, shared with the server (analysis-core/trainingLoad.test.ts, which also pins the outputs of the
+// console copy removed in the analysis hub's phase 0): they must agree to the digit.
 class EnduranceLoadTest {
 
     private fun session(min: Double, avg: Double, max: Double? = null) = EnduranceSessionInput(min, null, avg, max, null, null, null)

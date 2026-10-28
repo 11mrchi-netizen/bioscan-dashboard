@@ -31,19 +31,25 @@ export interface QualityWarning {
 }
 
 // What the Inspector is currently showing.
-export type InspectionKind = 'metric_point' | 'event' | 'metric_series'
+export type InspectionKind = 'series_point' | 'event'
 
-export interface MetricPointInspection {
-  kind: 'metric_point'
-  metricId: string
-  date: string
+// One point of a series chart: a day or a whole week or month (analysis hub phase B). It carries the aggregation facts
+// so the Inspector never shows an aggregate as if it were one reading.
+export interface SeriesPointInspection {
+  kind: 'series_point'
+  seriesId: string
+  start: string
+  end: string
+  grain: 'day' | 'week' | 'month'
+  method: 'mean' | 'sum' | 'last'
   value: number | null
-  unit: string | null
-  source: string | null
-  confidence: string | null
-  provenance: string | null
-  aggregation: string
-  timezone: string
+  daysObserved: number
+  days: number
+  samples: number
+  min: number | null
+  max: number | null
+  sources: string[]
+  clipped: boolean
 }
 
 export interface EventInspection {
@@ -52,7 +58,7 @@ export interface EventInspection {
   // Raw record loaded on demand by Inspector
 }
 
-export type InspectionTarget = MetricPointInspection | EventInspection | null
+export type InspectionTarget = SeriesPointInspection | EventInspection | null
 
 export interface AnalysisContext {
   inspectionTarget: InspectionTarget

@@ -61,6 +61,8 @@ data class TrainingLoadSessionRow(
     val rpe: Int? = null,
     @SerialName("avg_hr") val avgHr: Double? = null,
     @SerialName("max_hr") val maxHr: Double? = null,
+    // Redesign: the session type, so hydration accounting can tell a run from a strength session.
+    val type: String? = null,
 )
 
 // Phase A4 (Category 3). The Log tab's own LogRepository/LogWellbeingRow

@@ -515,6 +515,7 @@ internal fun DynamicRecoveryCard(
     FTCard(
         dataQuality = result.confidence, title = "TODAY'S RECOVERY", methodology = "dynamic_recovery", emphasis = emphasis, modifier = modifier,
         helpExtra = result.balance?.let { recoveryBalanceLine(it) },
+        why = recoveryWhy(result, scorecard),
     ) {
         if (scorecard.demotes()) FTStatePill(INPUTS_ONLY) else RecoveryStatePill(result.state)
         if (result.contributors.isEmpty()) {
@@ -525,12 +526,7 @@ internal fun DynamicRecoveryCard(
             )
         } else {
             result.contributors.forEach { contributor ->
-                val effect = when (contributor.direction) {
-                    1 -> "SUPPORTS"
-                    -1 -> "HOLDS BACK"
-                    0 -> "NEUTRAL"
-                    else -> "NO SIGNAL YET"
-                }
+                val effect = contributorEffect(contributor.direction)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(contributor.dimension.replace('_', ' ').replaceFirstChar { it.uppercase() }, style = FTType.Body, color = FT.TextSecondary, modifier = Modifier.weight(1f))
                     com.bioscan.fieldterminal.ui.components.FTMovementChip(contributor.direction, effect)
@@ -539,6 +535,26 @@ internal fun DynamicRecoveryCard(
         }
         ScorecardLine(scorecard)
     }
+}
+
+private fun contributorEffect(direction: Int?): String = when (direction) {
+    1 -> "SUPPORTS"
+    -1 -> "HOLDS BACK"
+    0 -> "NEUTRAL"
+    else -> "NO SIGNAL YET"
+}
+
+// WHY? on TODAY'S RECOVERY: its word, each contributor's effect, the vote balance and the scorecard, as the card shows them.
+private fun recoveryWhy(result: DynamicRecoveryResult, scorecard: ScorecardResult?): com.bioscan.fieldterminal.domain.WhyContext {
+    val word = if (scorecard.demotes()) INPUTS_ONLY.word else recoveryStateWord(result.state).word
+    val shown = buildMap {
+        if (result.contributors.isNotEmpty()) {
+            put("contributors", result.contributors.joinToString("; ") { "${it.dimension.replace('_', ' ')}: ${contributorEffect(it.direction)}" })
+        }
+        result.balance?.let { put("balance", recoveryBalanceLine(it)) }
+        scorecard?.let { put("scorecard", "SCORECARD · ${com.bioscan.fieldterminal.domain.scorecardWord(it.verdict)}. ${it.sentence}") }
+    }
+    return com.bioscan.fieldterminal.domain.WhyContext("TODAY'S RECOVERY", words = listOf("" to (word ?: "")), shown = shown)
 }
 
 // The recovery word as a movement: ABOVE in faint green, BELOW in faint red, AS EXPECTED and MIXED untinted.

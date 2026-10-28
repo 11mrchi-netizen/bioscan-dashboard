@@ -267,6 +267,8 @@ fun FTCard(
     dataQuality: Confidence? = null,
     // A line about this reading for the card's "?" (Today's recovery: how its votes fell), after the explanation.
     helpExtra: String? = null,
+    // Personal health agent, phase 1: what the card shows, for WHY? in the title bar (the assistant explains the card).
+    why: com.bioscan.fieldterminal.domain.WhyContext? = null,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(FT.RadiusCard)
@@ -305,6 +307,7 @@ fun FTCard(
                 style = FTType.CardTitle,
                 modifier = Modifier.weight(1f),
             )
+            why?.let { WhyButton(it, modifier = Modifier.padding(end = if (helpBody != null) 8.dp else 0.dp)) }
             helpBody?.let { InfoHelpButton(title = title, body = it, details = helpDetails) }
         }
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

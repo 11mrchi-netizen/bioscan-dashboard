@@ -23,6 +23,7 @@ import com.bioscan.fieldterminal.domain.Verdict
 import com.bioscan.fieldterminal.domain.MorningReadout
 import com.bioscan.fieldterminal.domain.SLEEP_HOURS_RANGE
 import com.bioscan.fieldterminal.domain.StateWord
+import com.bioscan.fieldterminal.domain.WhyContext
 import com.bioscan.fieldterminal.ui.components.InfoDialog
 import com.bioscan.fieldterminal.domain.bandLine
 import com.bioscan.fieldterminal.domain.bandPointFor
@@ -80,7 +81,13 @@ internal fun ThisMorningCard(
     if (metrics.isEmpty()) return
     val ordered = METRIC_ORDER.mapNotNull { key -> metrics[key]?.let { key to it } }
     val readouts = ordered.mapNotNull { (_, m) -> morningReadout(m.row.payload, today, m.readings.lastOrNull()) }
-    FTCard(title = "THIS MORNING", info = BAND_INFO, infoDetails = BAND_DETAILS, emphasis = FTCardEmphasis.Hero, modifier = modifier) {
+    // WHY?: each metric's word and the sentences of its pop-up, exactly as the card shows them.
+    val why = WhyContext(
+        card = "THIS MORNING",
+        words = ordered.map { (key, m) -> (METRIC_TITLES[key] ?: key.uppercase()) to (bandWord(m, readouts.firstOrNull { it.metric == key }).word ?: "") },
+        shown = ordered.associate { (key, m) -> (METRIC_TITLES[key] ?: key.uppercase()) to bandExplanation(m.row.payload, readouts.firstOrNull { it.metric == key }, today) },
+    )
+    FTCard(title = "THIS MORNING", info = BAND_INFO, infoDetails = BAND_DETAILS, emphasis = FTCardEmphasis.Hero, modifier = modifier, why = why) {
         ordered.forEach { (key, m) ->
             val readout = readouts.firstOrNull { it.metric == key }
             BandSection(METRIC_TITLES[key] ?: key.uppercase(), m, readout, today)
@@ -105,11 +112,7 @@ internal fun ThisMorningCard(
 private fun BandSection(title: String, inputs: BandInputs, readout: MorningReadout?, today: LocalDate) {
     val p = inputs.row.payload
     var open by remember { mutableStateOf(false) }
-    val word = when {
-        readout != null -> expectedStateWord(readout)
-        p.state == "building" -> StateWord(MetricState.Building, "BUILDING")
-        else -> StateWord(MetricState.Neutral, "NO READING YET")
-    }
+    val word = bandWord(inputs, readout)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(title, style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.weight(1f))
@@ -118,6 +121,12 @@ private fun BandSection(title: String, inputs: BandInputs, readout: MorningReado
         if (p.state != "building") BandChart(p, inputs.readings, readout, today)
     }
     if (open) InfoDialog(title, bandExplanation(p, readout, today), details = BAND_INFO + "\n\n" + BAND_DETAILS) { open = false }
+}
+
+private fun bandWord(inputs: BandInputs, readout: MorningReadout?): StateWord = when {
+    readout != null -> expectedStateWord(readout)
+    inputs.row.payload.state == "building" -> StateWord(MetricState.Building, "BUILDING")
+    else -> StateWord(MetricState.Neutral, "NO READING YET")
 }
 
 // The pop-up text for one metric: the answer, the range, how rare, any run or flag, how many recent mornings fell inside

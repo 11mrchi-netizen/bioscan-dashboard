@@ -284,25 +284,15 @@ private fun RestCadenceStrip(history: List<WeeklyRestCadencePoint>) {
 internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Modifier = Modifier, scorecard: ScorecardResult? = null) {
     // UX review P6: "READY FOR" (was "TODAY'S READINESS"): readiness per kind of session, built on Today's Recovery.
     // Analysis review phase G: scored against whether planned sessions were done; demoted, it shows no per-session words.
-    FTCard(dataQuality = result.confidence, title = "READY FOR", methodology = "dynamic_recovery", modifier = modifier) {
+    FTCard(dataQuality = result.confidence, title = "READY FOR", methodology = "dynamic_recovery", modifier = modifier, why = readinessWhy(result, scorecard)) {
         val demoted = scorecard.demotes()
         if (demoted) FTStatePill(INPUTS_ONLY) else RecoveryStatePill(result.generalState)
         if (demoted) {
             Text("Its per-session words did not foresee your planned sessions better than one of its inputs: see the inputs under TODAY'S RECOVERY.", style = FTType.BodySmall, color = FT.TextSecondary)
         } else result.demandRelative.forEach { (tier, state) ->
-            val label = when (tier) {
-                TrainingDemandTier.EASY_AEROBIC -> "Easy aerobic"
-                TrainingDemandTier.THRESHOLD -> "Threshold"
-                TrainingDemandTier.LONG_HIGH_LOAD -> "Long / high-load"
-                TrainingDemandTier.STRENGTH -> "Strength"
-            }
+            val label = tierLabel(tier)
             // Fix 4: tinted like recovery's movements (faint green ready, faint red caution), always with the word.
-            val (direction, word) = when (state) {
-                EvalState.ShiftUp -> 1 to "READY"
-                EvalState.Stable -> 0 to "MATCHED"
-                EvalState.ShiftDown -> -1 to "CAUTION"
-                else -> null to "BUILDING"
-            }
+            val (direction, word) = tierWord(state)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(label, style = FTType.Body, color = FT.TextSecondary, modifier = Modifier.weight(1f))
                 com.bioscan.fieldterminal.ui.components.FTMovementChip(direction, word)
@@ -310,6 +300,32 @@ internal fun TrainingReadinessCard(result: TrainingReadinessResult, modifier: Mo
         }
         ScorecardLine(scorecard)
     }
+}
+
+private fun tierLabel(tier: TrainingDemandTier): String = when (tier) {
+    TrainingDemandTier.EASY_AEROBIC -> "Easy aerobic"
+    TrainingDemandTier.THRESHOLD -> "Threshold"
+    TrainingDemandTier.LONG_HIGH_LOAD -> "Long / high-load"
+    TrainingDemandTier.STRENGTH -> "Strength"
+}
+
+private fun tierWord(state: EvalState): Pair<Int?, String> = when (state) {
+    EvalState.ShiftUp -> 1 to "READY"
+    EvalState.Stable -> 0 to "MATCHED"
+    EvalState.ShiftDown -> -1 to "CAUTION"
+    else -> null to "BUILDING"
+}
+
+// WHY? on READY FOR: its general word and each kind of session's word (or INPUTS ONLY when its scorecard demotes it).
+private fun readinessWhy(result: TrainingReadinessResult, scorecard: ScorecardResult?): com.bioscan.fieldterminal.domain.WhyContext {
+    val demoted = scorecard.demotes()
+    val general = if (demoted) INPUTS_ONLY.word else recoveryStateWord(result.generalState).word
+    val tiers = if (demoted) emptyList() else result.demandRelative.map { (tier, state) -> tierLabel(tier).uppercase() to tierWord(state).second }
+    return com.bioscan.fieldterminal.domain.WhyContext(
+        "READY FOR",
+        words = listOf("" to (general ?: "")) + tiers,
+        shown = scorecard?.let { mapOf("scorecard" to "SCORECARD · ${com.bioscan.fieldterminal.domain.scorecardWord(it.verdict)}. ${it.sentence}") } ?: emptyMap(),
+    )
 }
 
 @Composable

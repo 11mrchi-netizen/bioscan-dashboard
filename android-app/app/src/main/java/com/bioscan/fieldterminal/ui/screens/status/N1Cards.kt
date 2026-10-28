@@ -36,6 +36,7 @@ import com.bioscan.fieldterminal.domain.ScorecardResult
 import com.bioscan.fieldterminal.domain.ScorecardVerdict
 import com.bioscan.fieldterminal.domain.StateWord
 import com.bioscan.fieldterminal.domain.TypicalityView
+import com.bioscan.fieldterminal.domain.WhyContext
 import com.bioscan.fieldterminal.domain.fourWordLabel
 import com.bioscan.fieldterminal.domain.scheduleSpan
 import com.bioscan.fieldterminal.domain.scorecardWord
@@ -222,10 +223,12 @@ fun TypicalityCompactCard(view: TypicalityView, row: TypicalityResultRow?) {
         today.state == "elevated" -> StateWord(MetricState.Neutral, "DIFFERENT FROM USUAL")
         else -> StateWord(MetricState.Warning, "UNUSUAL FOR YOU")
     }
+    val popup = (listOf(view.headline) + view.lines + listOfNotNull(view.scorecard?.let { (w, s) -> "Scorecard: $w. $s" })).joinToString("\n\n")
     FTCard(
         title = "IS TODAY TYPICAL?",
         info = "Compares today with your own recent typical days across several signals together. It is experimental: on real history it flags more ordinary days than its nominal share, so it is a prompt to look, not a finding, and it does not feed Today's Recovery.",
         methodology = "typicality",
+        why = WhyContext("IS TODAY TYPICAL?", words = listOf("" to (word.word ?: "")), shown = mapOf("pop-up" to popup)),
     ) {
         FTStatePill(word, onClick = { open = true })
         val drivers = today?.drivers.orEmpty()
@@ -246,10 +249,7 @@ fun TypicalityCompactCard(view: TypicalityView, row: TypicalityResultRow?) {
             }
         }
     }
-    if (open) {
-        val body = (listOf(view.headline) + view.lines + listOfNotNull(view.scorecard?.let { (w, s) -> "Scorecard: $w. $s" })).joinToString("\n\n")
-        InfoDialog("IS TODAY TYPICAL?", body, details = null) { open = false }
-    }
+    if (open) InfoDialog("IS TODAY TYPICAL?", popup, details = null) { open = false }
 }
 
 @Composable

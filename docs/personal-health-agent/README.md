@@ -220,7 +220,7 @@ agent, and golden cases for it.
 | Phase | Deliverable | Gate | Status |
 |---|---|---|---|
 | 0. Core | `_shared/agent-core` (guards, scope classes, tool schemas), the model adapter, the golden set and its runner; no UI | Guards unit-tested; golden set runs against two models per role | Built; live model runs not done |
-| 1. EXPLAIN | `health-agent` with read-only tools; WHY? on the four Today cards; Inspector EXPLAIN; `agent_turns`; Setup ASSISTANT card | Eval gates on EXPLAIN questions | |
+| 1. EXPLAIN | `health-agent` with read-only tools; WHY? on the four Today cards; Inspector EXPLAIN; `agent_turns`; Setup ASSISTANT card | Eval gates on EXPLAIN questions | Built and deployed; not yet used on a device |
 | 2. ASK | Free questions, PubMed citations, proposals (register, experiment preview); the ASK entry on Status | Eval gates on ASK questions; proposals write only after confirmation | |
 | 3. Weekly pass | `agent-digest`, analysts and reviewer, `agent_hints`, Lab › N=1 HINTS, Discovery hints, Models › AGENT | Hints carry result ids; at most five a week; scorecard live | |
 | 4. COACH | `agent_memory`, goals in Lab › PLANNING, follow-ups tied to experiments and decision review dates | Owner rating ≥ 4 over a month | |
@@ -315,6 +315,36 @@ TypeScript check of the folder and the script passes.
 
 **Not done in phase 0:** a live run against real models (needs an OpenRouter key and the owner's choice of models), a
 Gemini-native adapter (OpenRouter can route to Gemini), and the remaining golden cases toward about 80.
+
+## Phase 1: what was built
+
+**Server** (`supabase/functions/health-agent`, deployed 2026-10-28; migration `20261112_agent_phase1.sql`, applied):
+- `explain` runs one EXPLAIN turn for the signed-in person; `rate` stores a 1-5 rating. The assistant answers only when
+  `agent_settings.enabled` is on (off by default); a retried tap returns the stored reply (`client_turn_id`); at most
+  `AGENT_DAILY_CAP` turns a day (40). Every turn is kept in `agent_turns`: question, screen context, tool calls, the
+  references of the results it read, guard results, the reply as shown, model, tokens, latency.
+- Model: `AGENT_MODEL`, default `requesty/novita/ling-3.1-flash` (the strongest on the golden set). Routes for real data
+  refuse OpenRouter's free endpoints and AI Studio (`agent-core/routes.ts`, shared with `agent-eval`).
+- Tools (`agent-core/executor.ts`): `get_results`, `get_evidence_items` (the decision layer's own items and queue
+  places), `get_decisions`, `get_integrity`, `get_series` (the series contract's day and period aggregation, with
+  display forms such as "7 h 02 min"), `get_metric_info`, `get_context_events`. All read with the caller's JWT and pass
+  `scope.ts`; payloads are trimmed. A decision's rationale and an illness's diagnosis and medication count as free
+  text now (shared only with notes).
+
+**Android:**
+- `WHY?` in the title bar of THIS MORNING, IS TODAY TYPICAL?, TODAY'S RECOVERY and READY FOR (the last two also where
+  they appear on Health and Training). The card sends what it shows: its words and the sentences of its pop-ups
+  (`domain/AgentWhy.kt`). The sheet shows the reply, a MODEL WRITTEN line and a 1-5 USEFUL? rating.
+- Setup › Profile & goals › Data capture › **ASSISTANT**: TURN ON/OFF, SHARE/STOP for the four opt-in groups, DELETE
+  HISTORY; it says that routine, location, other people and the calendar are never shared.
+
+**Console:** Inspector › **EXPLAIN THIS POINT** for a series point (`lib/agent.ts`), the same function and guards.
+
+**Tests:** agent-core 63 (executor 9, with an in-memory Db), console lib 25 (agent 3), Android `AgentWhyTest` (3) in the
+full unit suite. **Not verified:** a turn on real data. The function was checked only for refusing a caller without a
+sign-in; the first real WHY? tap, with the assistant turned on in Setup, is the end-to-end check. The golden set's
+planted results still use the phase 0 shapes, not the executor's; aligning them, and planting data under every tool
+that would return it, is the next eval step.
 
 ## Owner decisions needed
 

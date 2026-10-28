@@ -209,6 +209,13 @@ Functions, phase 1). No table, function or screen was added; nothing reaches a m
 | `golden/golden-set.json`, `golden.ts` | 42 reply cases (12 EXPLAIN, 21 ASK, 9 COACH; 10 of them symptom triage, 3 privacy), each with a reference reply and 42 planted bad replies in all, plus 6 privacy-filter cases and 7 tool-call cases. `scoreReply` is the one scoring rule for CI and live runs |
 | `scripts/agent-golden/run.ts` | Runs live models against the set: `OPENROUTER_API_KEY=... node scripts/agent-golden/run.ts --model <slug> --model <slug> --out report.json`. Checked against a local fake server only |
 
+| `supabase/functions/agent-eval` (deployed 2026-10-28) | The same live run server-side, reading the key from the `OPENROUTER_API` secret. Planted data only: it reads no table and writes nothing. Callable only with the scheduler's Vault secret (`x-analysis-cron`, checked by `analysis_cron_secret_ok()`), so runs start from SQL with pg_net; `next_offset` continues a run past the wall-clock limit. Free (`:free`) slugs run with logged endpoints allowed, any other slug requires zero data retention |
+
+**First live run (2026-10-28):** blocked before any model answered. The OpenRouter account itself enforces zero data
+retention and refuses free endpoints that train on prompts, which overrides the request; Inkling's free endpoint also
+accepts only listed agent apps. The paid endpoints of Nemotron 3 Ultra, Inkling and Gemma 4 31B and 26B all list tool
+calling, at USD 0.10 to 1.00 per million input tokens.
+
 **Tests:** `node --test "supabase/functions/_shared/agent-core/*.test.ts"` (in CI, `test-core.yml`): 49 tests, among
 them every reference reply passing, every bad reply failing for the reason it was planted for, every table in the
 migrations and the code classified, and the privacy cases' planted values never reaching a model request. A strict

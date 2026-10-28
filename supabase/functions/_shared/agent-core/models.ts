@@ -3,6 +3,8 @@
 //
 // OpenRouter routing for health data (docs/personal-health-agent, Models): zero data retention, no data collection,
 // pinned providers without fallback to others, and only providers that support every parameter sent (tool calls).
+// `allowLogged` drops the first two for the golden set's planted data only: OpenRouter's free endpoints log prompts and
+// would otherwise be filtered out. Real data never goes through a client built with it.
 
 import type { Chat, ChatReply } from './turn.ts'
 
@@ -15,6 +17,8 @@ export interface ModelConfig {
   providers?: string[]
   temperature?: number
   timeoutMs?: number
+  /** Synthetic data only: allow endpoints that log or train on prompts. */
+  allowLogged?: boolean
 }
 
 export function openAiChat(cfg: ModelConfig): Chat {
@@ -23,8 +27,7 @@ export function openAiChat(cfg: ModelConfig): Chat {
     const body: Record<string, unknown> = { model: cfg.model, messages, tools, tool_choice: 'auto', temperature: cfg.temperature ?? 0.2 }
     if (openRouter) {
       body.provider = {
-        zdr: true,
-        data_collection: 'deny',
+        ...(cfg.allowLogged ? {} : { zdr: true, data_collection: 'deny' }),
         require_parameters: true,
         ...(cfg.providers?.length ? { order: cfg.providers, allow_fallbacks: false } : {}),
       }

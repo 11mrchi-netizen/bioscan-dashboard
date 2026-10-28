@@ -12,6 +12,7 @@ import { loadDayRecords, type DayRecords } from '../../lib/seriesQuery'
 import { isAbort } from '../../lib/rangeCache'
 import { hrefFor } from '../../lib/links'
 import type { EventRef, SeriesPointInspection } from '../../types/analysis'
+import { explainError, explainRequest } from '../../lib/agent'
 import './Inspector.css'
 
 const EVENT_TABLE: Record<EventRef['kind'], string> = {
@@ -163,6 +164,17 @@ function SeriesPointView({ target, timezone }: { target: SeriesPointInspection; 
         </Section>
       )}
 
+      <ExplainSection
+        key={`${target.seriesId}|${target.start}|${target.end}`}
+        point={{
+          seriesId: series.id, label: series.label, unit: series.unit, grain: target.grain, start: target.start, end: target.end,
+          value: target.value === null ? 'no observation' : `${fmt(target.value)} ${series.unit}`,
+          aggregation: target.value === null ? 'no observation' : isDay
+            ? (target.samples > 1 ? `${DAY_METHOD_TEXT[series.day]} · ${target.samples} rows` : 'one row')
+            : `${METHOD_TEXT[target.method]} · ${target.daysObserved} of ${target.days} days observed · ${target.samples} rows`,
+        }}
+      />
+
       {isDay && (
         <Section label="RECORDS">
           {recordsError && <div className="inspector-value mono" style={{ color: 'var(--color-critical)' }}>{recordsError}</div>}
@@ -212,3 +224,41 @@ function EventView({ ref: eventRef, record }: { ref: EventRef; record: Record<st
     </div>
   )
 }
+
+// --- EXPLAIN (personal health agent, phase 1) ---
+
+type Explain = { state: 'idle' } | { state: 'loading' } | { state: 'done'; text: string } | { state: 'error'; text: string }
+
+function ExplainSection({ point }: { point: Parameters<typeof explainRequest>[0] }) {
+  const [explain, setExplain] = useState<Explain>({ state: 'idle' })
+  // One id per point: asking again after a failure returns a reply that did arrive instead of a second model call.
+  const [turnId] = useState(() => crypto.randomUUID())
+
+  async function run() {
+    setExplain({ state: 'loading' })
+    const { data, error } = await supabase.functions.invoke('health-agent', { body: explainRequest(point, new Date(), turnId) })
+    if (error) {
+      let body: { error?: string; message?: string } = {}
+      try { body = await (error as { context?: Response }).context?.json() ?? {} } catch { /* not JSON */ }
+      setExplain({ state: 'error', text: explainError(body.error, body.message) })
+      return
+    }
+    setExplain({ state: 'done', text: String((data as { shown?: string })?.shown ?? '') })
+  }
+
+  return (
+    <Section label="EXPLAIN">
+      {explain.state === 'idle' && <button className="inspector-explain mono" onClick={run}>EXPLAIN THIS POINT</button>}
+      {explain.state === 'loading' && <div className="inspector-value mono inspector-muted">READING THE DATA BEHIND THIS POINT…</div>}
+      {explain.state === 'done' && <>
+        <div className="inspector-value">{explain.text}</div>
+        <div className="inspector-value mono inspector-muted">MODEL WRITTEN · checked against your data before it was shown; not advice or a diagnosis</div>
+      </>}
+      {explain.state === 'error' && <>
+        <div className="inspector-value mono" style={{ color: 'var(--color-critical)' }}>{explain.text}</div>
+        <button className="inspector-explain mono" onClick={run}>TRY AGAIN</button>
+      </>}
+    </Section>
+  )
+}
+

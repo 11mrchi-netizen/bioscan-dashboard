@@ -19,12 +19,14 @@ export interface ModelConfig {
   timeoutMs?: number
   /** Synthetic data only: allow endpoints that log or train on prompts. */
   allowLogged?: boolean
+  /** Output cap per call. OpenRouter reserves credit for max_tokens up front (a model's full 131k without it). */
+  maxTokens?: number
 }
 
 export function openAiChat(cfg: ModelConfig): Chat {
   const openRouter = /openrouter\.ai/.test(cfg.baseUrl)
   return async ({ messages, tools }): Promise<ChatReply> => {
-    const body: Record<string, unknown> = { model: cfg.model, messages, tools, tool_choice: 'auto', temperature: cfg.temperature ?? 0.2 }
+    const body: Record<string, unknown> = { model: cfg.model, messages, tools, tool_choice: 'auto', temperature: cfg.temperature ?? 0.2, max_tokens: cfg.maxTokens ?? 1024 }
     if (openRouter) {
       body.provider = {
         ...(cfg.allowLogged ? {} : { zdr: true, data_collection: 'deny' }),

@@ -340,8 +340,8 @@ Gemini-native adapter (OpenRouter can route to Gemini), and the remaining golden
 
 **Console:** Inspector › **EXPLAIN THIS POINT** for a series point (`lib/agent.ts`), the same function and guards.
 
-**Tests:** agent-core 63 (executor 9, with an in-memory Db), console lib 25 (agent 3), Android `AgentWhyTest` (3) in the
-full unit suite. **Not verified:** a turn on real data. The function was checked only for refusing a caller without a
+**Tests:** agent-core 63 (executor 9, with an in-memory Db), console lib 25 (agent 3), Android `AgentWhyTest` (3); the
+full Android unit suite passes (1,039 tests, 0 failures, 4 skipped) and `assembleDebug` builds. **Not verified:** a turn on real data. The function was checked only for refusing a caller without a
 sign-in; the first real WHY? tap, with the assistant turned on in Setup, is the end-to-end check. The golden set's
 planted results still use the phase 0 shapes, not the executor's; aligning them, and planting data under every tool
 that would return it, is the next eval step.

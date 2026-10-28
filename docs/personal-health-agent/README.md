@@ -1,6 +1,6 @@
 # Personal health agent: design
 
-**Date:** 2026-10-28 · **Branch:** `feat/ft-redesign` (PR 24) · **Status:** exploratory design, nothing built
+**Date:** 2026-10-28 · **Branch:** `feat/ft-redesign` (PR 24) · **Status:** exploratory design; phase 0 built (below), nothing deployed
 
 This goes against the original design rule that no language model sits in the analysis pipeline. It is written as
 exploratory work: one design, the reasons for it, and the decisions it needs from the owner before anything is built.
@@ -60,9 +60,10 @@ existing decision queue as hints, never as findings.
 | ASK | Orchestrator over all three | Free questions on own data, general health knowledge, lab results in context | All read tools, PubMed | Register a question, preview an experiment |
 | COACH | Health coach | Goals, obstacles, "what should I change?", follow-up on running experiments and decision review dates | Read tools, `agent_memory` | Goal, experiment, a log entry (handed to `log-agent`) |
 
-Symptom assessment, the paper's fourth journey, is **not a mode**. Deterministic red-flag rules (chest pain, fainting,
-fever with a high resting heart rate, and the rules already in `docs/health-concerns`) return fixed text that sends the
-person to a clinician. The agent describes what the data shows and does not diagnose.
+Symptom assessment, the paper's fourth journey, is **not a mode**. Deterministic red-flag rules on the question
+(`agent-core/redFlags.ts`: chest pain, breathing, stroke signs, fainting, self-harm, sudden headache; bleeding, fever of
+39 °C or more, palpitations, numbness), worded like the health-concern safety prompts in `analysis-core/healthEpisodes.ts`,
+return fixed text that sends the person to a clinician. The agent describes what the data shows and does not diagnose.
 
 ### Coordination
 
@@ -108,7 +109,7 @@ prompt instruction alone.
 | Claim strength | An association never reads as a cause; "caused", "because of", "improves" are allowed only for experiment-class evidence with a clear verdict | `analysis-core/evidenceItems.ts` evidence classes |
 | Writes | Propose-only. The client shows proposals with confirm buttons and writes through the existing repositories and RLS. The agent never writes `decisions`: a decision's rationale is typed by the person | `log-agent` pattern; `decisions` trigger |
 | Budget | 8 tool steps, 60 s, a token cap per turn; a daily turn cap per user from `agent_turns` | Flash-lite quota experience in `log-agent` |
-| Red flags | Fixed text, no model output | Health concerns rules |
+| Red flags | Fixed text; urgent ones end the turn without a model call | Wording of `healthEpisodes.ts` safety prompts |
 
 ## Models
 
@@ -171,7 +172,7 @@ reads NO BETTER and is switched off.
 
 ## Evaluation
 
-- **Golden set**: about 80 questions across EXPLAIN, ASK and COACH plus red-flag symptoms, written against planted
+- **Golden set**: about 80 questions (55 so far, phase 0) across EXPLAIN, ASK and COACH plus red-flag symptoms, written against planted
   data in the console's mocked Supabase (`console/e2e`) and against the real history. PHIA's published benchmark
   questions are a source of wording.
 - **Automatic checks**: number grounding, vocabulary, claim strength against evidence class, valid tool calls, and a
@@ -182,13 +183,39 @@ reads NO BETTER and is switched off.
 
 ## Phases
 
-| Phase | Deliverable | Gate |
-|---|---|---|
-| 0. Core | `_shared/agent-core` (guards, scope classes, tool schemas), the model adapter (OpenRouter and Gemini), the golden set and its runner; no UI | Guards unit-tested; golden set runs against two models per role |
-| 1. EXPLAIN | `health-agent` with read-only tools; WHY? on the four Today cards; Inspector EXPLAIN; `agent_turns`; Setup ASSISTANT card | Eval gates on EXPLAIN questions |
-| 2. ASK | Free questions, PubMed citations, proposals (register, experiment preview); the ASK entry on Status | Eval gates on ASK questions; proposals write only after confirmation |
-| 3. Weekly pass | `agent-digest`, analysts and reviewer, `agent_hints`, Lab › N=1 HINTS, Discovery hints, Models › AGENT | Hints carry result ids; at most five a week; scorecard live |
-| 4. COACH | `agent_memory`, goals in Lab › PLANNING, follow-ups tied to experiments and decision review dates | Owner rating ≥ 4 over a month |
+| Phase | Deliverable | Gate | Status |
+|---|---|---|---|
+| 0. Core | `_shared/agent-core` (guards, scope classes, tool schemas), the model adapter, the golden set and its runner; no UI | Guards unit-tested; golden set runs against two models per role | Built; live model runs not done |
+| 1. EXPLAIN | `health-agent` with read-only tools; WHY? on the four Today cards; Inspector EXPLAIN; `agent_turns`; Setup ASSISTANT card | Eval gates on EXPLAIN questions | |
+| 2. ASK | Free questions, PubMed citations, proposals (register, experiment preview); the ASK entry on Status | Eval gates on ASK questions; proposals write only after confirmation | |
+| 3. Weekly pass | `agent-digest`, analysts and reviewer, `agent_hints`, Lab › N=1 HINTS, Discovery hints, Models › AGENT | Hints carry result ids; at most five a week; scorecard live | |
+| 4. COACH | `agent_memory`, goals in Lab › PLANNING, follow-ups tied to experiments and decision review dates | Owner rating ≥ 4 over a month | |
+
+## Phase 0: what was built
+
+All in `supabase/functions/_shared/agent-core/`, plain TypeScript that runs in Node (tests, CI) and Deno (Edge
+Functions, phase 1). No table, function or screen was added; nothing reaches a model unless a person runs the script.
+
+| File | What it does |
+|---|---|
+| `scope.ts` | Every table classified as shared, opt-in (notes, sexual health, health concerns, digestive), never (routine, location, other people, the calendar) or internal; an unclassified table reads as never. Rows pass through `serveRows`: free-text columns only with notes shared, location-like columns never, `user_profile` sex only. Results about routine series are withheld, using the engine's own list (`routineSeries`), so a new routine series is covered without an edit |
+| `numbers.ts` | Every number, date and time in a reply must come from the turn's tool results, the question or the screen. Rounding at the stated precision, either sign and a fraction shown as a percentage are allowed; a number the model worked out itself is not. Names with digits (VO2max, D3, omega-3) are not numbers |
+| `vocabulary.ts` | A label in capitals may appear only when the turn's sources used it, so the agent repeats verdicts and cannot coin one; score names and "n/100" ratings must come from the data |
+| `claims.ts` | Causal wording only with a clear experiment in the results; hedged suggestions to test pass. Per reply, not per sentence (noted as a phase 1 decision) |
+| `redFlags.ts` | Triage of the question before any model call: urgent (Taiwan 119; 1925 for self-harm) ends the turn, clinician puts fixed text first. Explicit negation clears a match; data words ("HRV collapsed") do not trigger |
+| `tools.ts` | 17 tools (12 read, 1 external, 4 propose) with JSON schemas, the tables each reads, and the modes that may call them; `toolsFor` drops a tool whose tables are not shared; `checkCall` validates name, mode, scope and arguments; literature queries carry no numbers or "my". The registered-question space is checked against its migration |
+| `guards.ts` | `checkReply`: all reply checks together, with the reply minus the sentences that broke a rule |
+| `turn.ts`, `prompts.ts`, `models.ts` | One turn independent of provider: triage, the tool loop with every call checked, one regeneration with the reasons, then the cleaned reply. An OpenAI-compatible client with OpenRouter's zero-retention routing (`zdr`, `data_collection: deny`, `require_parameters`, pinned providers) |
+| `golden/golden-set.json`, `golden.ts` | 42 reply cases (12 EXPLAIN, 21 ASK, 9 COACH; 10 of them symptom triage, 3 privacy), each with a reference reply and 42 planted bad replies in all, plus 6 privacy-filter cases and 7 tool-call cases. `scoreReply` is the one scoring rule for CI and live runs |
+| `scripts/agent-golden/run.ts` | Runs live models against the set: `OPENROUTER_API_KEY=... node scripts/agent-golden/run.ts --model <slug> --model <slug> --out report.json`. Checked against a local fake server only |
+
+**Tests:** `node --test "supabase/functions/_shared/agent-core/*.test.ts"` (in CI, `test-core.yml`): 49 tests, among
+them every reference reply passing, every bad reply failing for the reason it was planted for, every table in the
+migrations and the code classified, and the privacy cases' planted values never reaching a model request. A strict
+TypeScript check of the folder and the script passes.
+
+**Not done in phase 0:** a live run against real models (needs an OpenRouter key and the owner's choice of models), a
+Gemini-native adapter (OpenRouter can route to Gemini), and the remaining golden cases toward about 80.
 
 ## Owner decisions needed
 

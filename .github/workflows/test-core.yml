@@ -34,6 +34,9 @@ jobs:
       - name: Log-agent core tests
         run: node --test "supabase/functions/_shared/log-core/*.test.ts"
 
+      - name: Agent core tests and golden set
+        run: node --test "supabase/functions/_shared/agent-core/*.test.ts"
+
       - name: Zepp extraction decoder tests
         run: node --test "supabase/functions/zepp-extract/*.test.ts"
 

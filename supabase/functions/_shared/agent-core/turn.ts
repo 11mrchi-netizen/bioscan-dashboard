@@ -63,7 +63,7 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
 
   const tools = toOpenAiTools(toolsFor(input.mode, input.settings))
   const messages: ChatMessage[] = [
-    { role: 'system', content: systemPrompt(input.mode, input.today) },
+    { role: 'system', content: systemPrompt(input.mode, input.today, input.settings) },
     { role: 'user', content: input.context ? `${input.question}\n\nScreen: ${JSON.stringify(input.context)}` : input.question },
   ]
   const maxSteps = input.maxSteps ?? 8

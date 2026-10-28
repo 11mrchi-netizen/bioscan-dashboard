@@ -7,6 +7,8 @@ const phrases = (text: string) => causalClaims(text).map((c) => c.phrase.toLower
 test('causal wording is found in any case but capitals', () => {
   assert.deepEqual(phrases('Because of the wine, HRV dropped. Alcohol causes this and lowers your HRV.'), ['because of', 'causes', 'lowers your'])
   assert.deepEqual(phrases('Your trend reads IMPROVING.'), [])
+  // phrasings that got through in the first Requesty run (2026-10-28)
+  assert.deepEqual(phrases('The reason is an active cold. Short duration is the main factor pulling it down.'), ['the reason is', 'main factor'])
 })
 
 test('a hedged suggestion to test is advice, not a claim', () => {

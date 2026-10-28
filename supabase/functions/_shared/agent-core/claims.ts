@@ -6,7 +6,7 @@
 // The check is per reply, not per sentence: a clear experiment in the results lets the reply speak of cause. That is
 // looser than per-sentence attribution, which needs the reply to cite its result inline (a phase 1 decision).
 
-const CAUSAL = /\b(caus(?:e|es|ed|ing)|because of|due to|leads? to|led to|results? in|resulted in|is why|the reason (?:for|why)|improv(?:e|es|ed|ing)|worsen(?:s|ed|ing)?|boost(?:s|ed|ing)?|harm(?:s|ed|ing)?|damag(?:e|es|ed|ing)|trigger(?:s|ed)?|lower(?:s|ed) your|rais(?:es|ed) your|made your|makes your)\b/gi
+const CAUSAL = /\b(caus(?:e|es|ed|ing)|because of|due to|leads? to|led to|results? in|resulted in|is why|the reason (?:for|why|is)|is the reason|(?:main|key|biggest) (?:factor|driver)|is driving|improv(?:e|es|ed|ing)|worsen(?:s|ed|ing)?|boost(?:s|ed|ing)?|harm(?:s|ed|ing)?|damag(?:e|es|ed|ing)|trigger(?:s|ed)?|lower(?:s|ed) your|rais(?:es|ed) your|made your|makes your)\b/gi
 const HEDGE = /\b(may|might|could|would|can|whether|if|test|testing|try|trying|see if|find out)\b/
 
 export interface ClaimResult {

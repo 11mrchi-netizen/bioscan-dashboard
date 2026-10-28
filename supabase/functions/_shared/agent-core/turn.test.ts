@@ -62,3 +62,11 @@ test('a clinician symptom puts the fixed text before the reply', async () => {
   const r = await runTurn({ ...base, mode: 'ask', question: 'Fever of 39.5 since yesterday, why BELOW EXPECTED?', chat })
   assert.match(r.shown, /^A temperature of 39 °C or more[\s\S]*\n\nHRV was 38 ms, BELOW EXPECTED\.$/)
 })
+
+test('the system prompt lists what is not shared, from the same settings as the tool layer', async () => {
+  const { chat, sent } = scripted([say('It reads BELOW EXPECTED.')])
+  await runTurn({ ...base, settings: { enabled: true, optIn: ['health_concerns'] }, chat })
+  const system = String(sent[0].messages[0].content)
+  assert.match(system, /Not shared with you: phone use, places, trips and other routine data;[^\n]*sexual health/)
+  assert.doesNotMatch(system, /health concerns and their check-ins/)
+})

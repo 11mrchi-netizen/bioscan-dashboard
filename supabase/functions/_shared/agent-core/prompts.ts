@@ -1,6 +1,7 @@
 // Personal health agent, phase 0: the system prompt of each mode. The guards (guards.ts) enforce what matters; the
 // prompts only make a passing reply likely the first time.
 
+import type { OptInGroup, ScopeSettings } from './scope.ts'
 import type { Mode } from './tools.ts'
 
 const COMMON = `You are the assistant inside a personal health app used by one person. The app's analysis engine has already
@@ -15,7 +16,10 @@ Rules the app checks before your reply is shown:
   "improves" are only for an experiment whose verdict is clear. A suggestion to test something is fine ("could help; a
   test would show whether it does").
 - Check data quality (get_integrity) before reading meaning into a series.
-- Some data is not shared with you. If a question needs it, say plainly that it is not shared; never guess it.
+- When the screen names an evidence item (item_id), read it with get_evidence_items first.
+- An empty tool result means nothing is recorded for that request. It does not mean the data is not shared: say that
+  something is not shared only when it is in the list below or a tool answered that it is not available, and never
+  guess the data.
 - You never diagnose, and you never record decisions or data. Proposals are shown to the person to confirm.
 Write two to five short sentences, no headings, no lists unless asked.`
 
@@ -30,6 +34,19 @@ Start from their goals (get_memory). Be warm and brief, ask at most one question
 Goals and log entries are proposals the person confirms.`,
 }
 
-export function systemPrompt(mode: Mode, today: string): string {
-  return `${COMMON}\n\n${MODE[mode]}\n\nToday is ${today}.`
+const ALWAYS_PRIVATE = ['phone use, places, trips and other routine data', 'other people', 'the calendar']
+const GROUP_NAMES: Record<OptInGroup, string> = {
+  notes: 'free-text notes',
+  sexual_health: 'sexual health',
+  health_concerns: 'health concerns and their check-ins',
+  digestive: 'digestion (stool log)',
+}
+
+/** What the person has not shared, in words, from the same settings the tool layer enforces. */
+export function notShared(settings: ScopeSettings): string[] {
+  return [...ALWAYS_PRIVATE, ...(Object.keys(GROUP_NAMES) as OptInGroup[]).filter((g) => !settings.optIn.includes(g)).map((g) => GROUP_NAMES[g])]
+}
+
+export function systemPrompt(mode: Mode, today: string, settings: ScopeSettings): string {
+  return `${COMMON}\n\n${MODE[mode]}\n\nNot shared with you: ${notShared(settings).join('; ')}.\n\nToday is ${today}.`
 }

@@ -9,7 +9,7 @@
 // key. Users cannot call it: it spends the OpenRouter quota.
 //
 // POST { action: 'aistudio_models' }                                     -> the Gemma models the AI Studio key can call
-// POST { models: string[], only?: string, offset?: number, limit?: number }
+// POST { models: string[], only?: string, offset?: number, limit?: number, concurrency?: 1-3 }
 //   -> { summary, runs, next_offset }   next_offset is null when the selected cases are done
 // A request stops starting new cases after DEADLINE_MS so it ends inside the Edge Function wall-clock limit; call again
 // with next_offset to continue.
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     const { data: ok } = secret ? await admin.rpc("analysis_cron_secret_ok", { candidate: secret }) : { data: false };
     if (ok !== true) return json({ error: "unauthorized" }, 401);
 
-    let body: { action?: string; models?: string[]; only?: string; offset?: number; limit?: number };
+    let body: { action?: string; models?: string[]; only?: string; offset?: number; limit?: number; concurrency?: number };
     try {
       body = await req.json();
     } catch {
@@ -114,7 +114,9 @@ Deno.serve(async (req) => {
         else runs.push({ ...(await runCase(c, cfg)), model });
       }
     }
-    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    // 1 for rate-limited keys (AI Studio's per-minute quota); at most CONCURRENCY.
+    const workers = Math.min(CONCURRENCY, Math.max(1, Math.floor(body.concurrency ?? CONCURRENCY)));
+    await Promise.all(Array.from({ length: workers }, worker));
 
     // A case counts as done when every model ran it; the next call starts at the first case that is not.
     for (const c of batch) if (models.every((m) => runs.some((r) => r.id === c.id && r.model === m))) doneCases.add(c.id);

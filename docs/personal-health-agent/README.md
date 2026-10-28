@@ -228,6 +228,22 @@ regenerated once after a violation and then passed. Medians: Nemotron about 4 s 
 17 s. Two harness faults surfaced and are fixed: a tool without planted data answered with an error, which models read
 as "not shared" and repeated to the person (it now answers with an empty result), and the output cap above.
 
+**Gemma through Google AI Studio (2026-10-28).** `aistudio/<model>` slugs in agent-eval use AI Studio's
+OpenAI-compatible endpoint with `GEMINI_API_KEY`, on the first 12 cases (all EXPLAIN), compared with Gemma 4 31B on
+OpenRouter over the same cases:
+
+| Route | Attempts | Completed | Passed | Errors | Typical turn |
+|---|---|---|---|---|---|
+| OpenRouter, Gemma 4 31B | 12 | 12 | 10 | none | 3 to 17 s |
+| AI Studio, Gemma 4 26B | 12 | 7 | 7 | 3 quota (429), 2 internal (500) | 14 to 31 s |
+| AI Studio, Gemma 4 31B | 4 | 0 | 0 | every request with tools: internal error (500) or a 40 s timeout | |
+
+When AI Studio answered, the answers were as good (26B passed TODAY'S RECOVERY, which 31B on OpenRouter missed), but the
+route failed on about 4 in 10 attempts, was slower, and on this key is rate-limited; its data terms depend on the key's
+tier, while OpenRouter enforces zero retention. Two AI Studio behaviours are handled in agent-core: the model's reasoning
+arrives inside the reply as `<thought>...</thought>` (stripped before the guards), and each tool call carries a thought
+signature that must be sent back on the next turn.
+
 To finish: top up the key, then run batches from SQL (one at a time; parallel batches exhaust the in-flight budget):
 `select net.http_post(url := '<project>/functions/v1/agent-eval', headers := <anon key + x-analysis-cron from Vault>,
 body := '{"models":[...],"offset":12,"limit":6}', timeout_milliseconds := 150000)` and read `net._http_response`.

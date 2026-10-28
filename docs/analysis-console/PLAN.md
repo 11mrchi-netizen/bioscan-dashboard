@@ -51,8 +51,35 @@ data accessible, the decision layer turns evidence into recorded decisions. Andr
 | B. Query foundation | Period aggregation in the metric adapter with drill-down period → day → records; keyset paging; request cancellation; materialised HR daily range; Explore and the rebuilt Data workspace; benchmarks for 7D, 1Y and all-time, cold and warm | No silent truncation at the 1,000-row cap; drill-down values reconcile with source records | Done, except the HR summary migration (written, not applied) and signed-in browser timings |
 | C. Integrity v1 | `analysis-core/integrity.ts` (ranges, duplicates, conflicts, coverage) published by `analysis-run` as kind `integrity`; Health Connect and Zepp sync heartbeats; freshness from provenance and heartbeats; health overview, source matrix and issue investigation; the series-break review joins the issue list | Every core stream has a coverage rule; unknown is shown where it applies || Done in code; the sync-heartbeat migration and the analysis-run deploy wait for approval |
 | C2. Discovery | The corrected discovery screen (prewhitened cross-correlations, effective sample sizes, false-discovery correction, chance bands, older two-thirds of the history only) with a "register this question" action, labelled exploratory | Null data flags at most the corrected rate || Done |
-| D. Decision layer v1 | Evidence-item interface across the engines; the queue derived from ledger verdicts (`not_yet` needs data, `unclear` under observation, actionable without a running experiment ready to test, `clear`/`negligible` without a later decision in review); the workbench; the append-only `decisions` table and decision records | Every decision links to its snapshotted evidence; insufficient data reads blocked; no composite score | |
+| D. Decision layer v1 | Evidence-item interface across the engines; the queue derived from ledger verdicts (`not_yet` needs data, `unclear` under observation, actionable without a running experiment ready to test, `clear`/`negligible` without a later decision in review); the workbench; the append-only `decisions` table and decision records | Every decision links to its snapshotted evidence; insufficient data reads blocked; no composite score || Done (v1: catalogue and registered questions, experiments, intervention reads) |
 | E. Integration | Issue → records → evidence → decision links end to end; saved workspaces; regression tests | Workflow walkthrough passes | |
+
+## Phase D: what was built
+
+- **Evidence items** (`analysis-core/evidenceItems.ts`): the newest `relationship` and `registered_question` results
+  (association), `experiment` results (experiment) and `intervention_its` results (interrupted time series) on one
+  verdict scale: clear, negligible, unclear, not yet (experiment words map onto it: clear benefit or harm and effect
+  detected are clear, no detectable effect is unclear, running or insufficient is not yet). Each item keeps its effect
+  and interval, no-effect zone, sample, readiness, engine version, inputs hash and a reference to the published result.
+  Every exposure of the catalogue and of registration is classified as under the person's control or not (a test
+  fails on an unclassified one). Fueling and the observational intervention response are not decision items yet.
+- **Queue** (no composite score; each item's place comes from its own verdict and decision history): needs data
+  (blocked), under observation (unclear and not controllable, or running), ready to test (unclear and controllable),
+  decision review (settled without a decision, verdict changed since the decision, or review date reached), decided
+  (adopted or rejected and still standing). Continue testing and inconclusive keep an item in the flow.
+- **Decisions** (`20261110_decisions.sql`, applied 2026-10-28): append-only; a decision row keeps a snapshot of the
+  evidence it rested on, its threshold, rationale and review date or condition, and the decision it supersedes (same
+  question, same person). Adopt and reject need a settled verdict: the console offers only continue testing and
+  inconclusive otherwise, and a trigger refuses the rest. Row-level security: own rows, insert and select only.
+- **Console** (Evidence > DECISIONS, the default tab; `Decisions.tsx`): the queue with an evidence-class filter; the
+  workbench (verdict, effect drawn against the no-effect zone, data and readiness, as-of date and engine version, what
+  the class of evidence can and cannot say, verdict changes from the ledger, links to Explore); the decision form (with
+  a warning when adopting or rejecting on an association); the item's records, each with its evidence then and the
+  verdict now. Links to a question or a result (`lib/links.ts`) open the item.
+- **Tests**: `evidenceItems.test.ts` (normalisation per engine, every queue rule, latest decision, the adopt/reject
+  rule, the snapshot, exposure classification). Checked in Chromium against a mocked Supabase: six planted items in
+  the right columns, a short rationale refused, an adopt recorded with its snapshot and the item moved to decided, an
+  unclear item offering only continue testing and inconclusive, and a question link opening its workbench.
 
 ## Phase C2: what was built
 

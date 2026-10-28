@@ -1,6 +1,8 @@
 // Evidence workspace (was the Relationship Lab). Phase 0 of the analysis hub (docs/analysis-console/PLAN.md) moved the
 // existing views here unchanged; Phase D replaces the tabs with the decision queue, the evidence workbench and decision
 // records, and the views below become evidence-item views. Views:
+//   DECISIONS     the decision queue, the evidence workbench and decision records (phase D; Decisions.tsx). Default tab;
+//                 links to a question or a result (lib/links.ts) open the item here.
 //   EVIDENCE      the evidence board (analysis review phase D): every question of the fixed catalogue drawn to scale
 //                 against its no-effect zone with a verdict word, its event and lag curves, and what came before off
 //                 mornings (case-crossover, exploratory). Internal key 'confirmatory'.
@@ -20,21 +22,23 @@ import { Fueling } from './Fueling'
 import { Ledger } from './Ledger'
 import { EventExplorer } from './EventExplorer'
 import { Discovery } from './Discovery'
+import { Decisions } from './Decisions'
 import './Evidence.css'
 
-type Tab = 'confirmatory' | 'discovery' | 'experiments' | 'interventions' | 'fueling' | 'ledger' | 'events'
+type Tab = 'decisions' | 'confirmatory' | 'discovery' | 'experiments' | 'interventions' | 'fueling' | 'ledger' | 'events'
 
 export function Evidence() {
-  const [tab, setTab] = useState<Tab>('confirmatory')
+  const [tab, setTab] = useState<Tab>('decisions')
   return (
     <div className="rlab-shell">
       <div className="rlab-tabs">
         <h2 className="rlab-shell-title">Evidence</h2>
-        {(['confirmatory', 'ledger', 'events', 'discovery', 'experiments', 'interventions', 'fueling'] as const).map(t => (
+        {(['decisions', 'confirmatory', 'ledger', 'events', 'discovery', 'experiments', 'interventions', 'fueling'] as const).map(t => (
           <button key={t} className={`rlab-tab mono ${tab === t ? 'rlab-tab-on' : ''}`} onClick={() => setTab(t)}>{t === 'confirmatory' ? 'EVIDENCE' : t.toUpperCase()}</button>
         ))}
       </div>
-      {tab === 'confirmatory' ? <div className="rlab"><Confirmatory /></div>
+      {tab === 'decisions' ? <div className="rlab"><Decisions /></div>
+        : tab === 'confirmatory' ? <div className="rlab"><Confirmatory /></div>
         : tab === 'experiments' ? <div className="rlab"><Experiments /></div>
         : tab === 'interventions' ? <div className="rlab"><Interventions /></div>
         : tab === 'fueling' ? <div className="rlab"><Fueling /></div>

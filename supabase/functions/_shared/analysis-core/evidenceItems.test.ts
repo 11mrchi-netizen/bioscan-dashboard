@@ -1,7 +1,10 @@
 // Analysis hub phase D: evidence items, the decision queue and decision records.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { HYPOTHESES, REGISTRABLE_EXPOSURES } from './hypotheses.ts'
 import {
+  CONTROLLABLE,
+  NOT_CONTROLLABLE,
   allowedDecisions,
   decisionRow,
   evidenceItems,
@@ -98,4 +101,9 @@ test('adopt and reject need a settled verdict; a decision keeps a snapshot of it
   assert.equal(ok.row.evidence_class, 'association')
   const snap = ok.row.evidence as ReturnType<typeof snapshotOf>
   assert.deepEqual([snap.verdict, snap.effect?.value, snap.engineVersion, snap.inputsHash, snap.asOf], ['clear', -6.1, '3.0.0', 'h', '2026-10-26'])
+})
+
+test('every exposure of the catalogue and of registration is classified as controllable or not, once', () => {
+  const causes = new Set([...HYPOTHESES.map((h) => h.cause), ...Object.keys(REGISTRABLE_EXPOSURES)])
+  for (const c of causes) assert.ok(CONTROLLABLE.has(c) !== NOT_CONTROLLABLE.has(c), `${c} is ${CONTROLLABLE.has(c) ? 'in both sets' : 'unclassified'}`)
 })

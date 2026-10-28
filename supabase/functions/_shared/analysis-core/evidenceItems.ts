@@ -58,12 +58,15 @@ export interface EvidenceItem {
   result: DataRef
 }
 
-// Exposures a person can switch on and off at will (so a self-experiment can test them). High stress and training days
-// that follow a plan are not under day-to-day control in the same way.
+// Exposures a person can switch on and off at will (so a self-experiment can test them), and the ones that are not under
+// day-to-day control (stress, a training plan, sleep and steps themselves, where the day is spent). Every exposure of the
+// catalogue is in exactly one of the two (evidenceItems.test.ts), so a new question cannot fall through unclassified.
 export const CONTROLLABLE = new Set([
-  'alcohol_any', 'caffeine_pm_any', 'late_meal', 'evening_training', 'screen_bed_any', 'screen_pm_social_any', 'daylight_day',
-  'active_commute', 'recovery_any',
+  'alcohol_any', 'caffeine_pm_any', 'late_meal', 'evening_training', 'recovery_any', 'active_commute',
+  'screen_bed_min', 'screen_pm_social', 'night_phone', 'outdoor_daylight_min',
+  'screen_bed_any', 'screen_pm_social_any', 'daylight_day', // the routine experiments' adherence series
 ])
+export const NOT_CONTROLLABLE = new Set(['stress_high', 'training_day', 'sleep_hours', 'steps', 'home_day', 'travel_day', 'commute_long'])
 
 const ref = (r: ResultRow): DataRef => ({ kind: 'result', resultKind: r.kind, key: r.key, asOf: r.as_of })
 

@@ -5,3 +5,4 @@ console/.env
 *.local
 .DS_Store
 perf-harness/
+supabase/.temp/

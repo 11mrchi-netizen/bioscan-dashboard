@@ -9,9 +9,9 @@ R2 (location capture) were started together on 27 Oct 2026 at the owner's reques
 | R1 Phone use | **Built and unit-tested; migration applied (27 Oct 2026); not installed on the phone yet.** |
 | R2 Location capture | **Built and unit-tested; migration applied (27 Oct 2026); not installed on the phone yet.** |
 | R3 Places, trips, commute | **Built and unit-tested; migration `20261107_routine_places.sql` applied (27 Oct 2026); not installed.** |
-| R4 Analysis integration | **Built and tested (core and Android); `analysis-run` not redeployed yet, so the nightly run still uses catalogue 2.0.0** (see "Deploying analysis-run" below). Day-type covariate and health-episode context deferred (below). |
+| R4 Analysis integration | **Built and tested (core and Android); `analysis-run` deployed (28 Oct 2026, engine 3.0.0-alpha.10); the 02:20 UTC run published all ten routine questions**. Day-type covariate and health-episode context deferred (below). |
 | R5 UX and alternatives | **Built and unit-tested; `transit-alternatives` written, not deployed, TDX calls not verified (no TDX account, host unreachable from the build session).** |
-| R6 Routine experiments | **Built and tested (core 306, Android 1,036); migration `20261108_routine_experiments.sql` applied (27 Oct 2026); needs the `analysis-run` redeploy above.** |
+| R6 Routine experiments | **Built and tested (core 306, Android 1,036); migration `20261108_routine_experiments.sql` applied (27 Oct 2026); live with the `analysis-run` deploy above.** |
 
 ## Verification so far
 
@@ -107,6 +107,8 @@ A day the phone did not measure (Usage access off, mobility coverage under 80 %,
 Tests: `routineExperiments.test.ts` (3): the plan's gate (one experiment end to end, adherence from `phone_usage_daily` only, planted effect found), a habit as the outcome, and the adherence series. `RandomisedExperimentTest` covers the new choices.
 
 ## Deploying analysis-run
+
+Done on 28 Oct 2026 (version 14, `supabase functions deploy analysis-run --use-api` from `feat/ft-redesign` at 8bfa98e; selftest returns 200 with `coreVersion` 3.0.0-alpha.10). For later redeploys:
 
 The function bundles 41 files (about 420 kB) from `_shared/analysis-core`. The deploy tool available to Claude sessions takes the whole source inline, which is beyond what one call can carry, and the build session had no Supabase CLI login. From a machine with the CLI:
 

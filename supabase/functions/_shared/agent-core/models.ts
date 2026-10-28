@@ -42,12 +42,31 @@ export function openAiChat(cfg: ModelConfig): Chat {
     })
     const text = await res.text()
     if (!res.ok) throw new Error(`${cfg.model}: HTTP ${res.status} ${text.slice(0, 300)}`)
-    const json = JSON.parse(text)
-    const msg = json.choices?.[0]?.message ?? {}
-    return {
-      content: typeof msg.content === 'string' ? msg.content : null,
-      toolCalls: (msg.tool_calls ?? []).map((c: { id: string; function: { name: string; arguments: string } }) => ({ id: c.id, name: c.function.name, arguments: c.function.arguments })),
-      usage: json.usage,
-    }
+    return parseChatResponse(JSON.parse(text))
+  }
+}
+
+// Google AI Studio's OpenAI-compatible endpoint returns a thinking model's reasoning inside `content` as
+// <thought>...</thought> (cut off without its closing tag when the output cap is reached), and puts a thought
+// signature in `extra_content` on each tool call, which Google expects back on the next turn.
+const THOUGHT = /<thought>[\s\S]*?(?:<\/thought>|$)/g
+
+export function stripThoughts(content: string): string {
+  return content.replace(THOUGHT, '').trim()
+}
+
+// deno-lint-ignore no-explicit-any
+export function parseChatResponse(json: any): ChatReply {
+  const msg = json.choices?.[0]?.message ?? {}
+  const content = typeof msg.content === 'string' ? stripThoughts(msg.content) : null
+  return {
+    content: content || null,
+    toolCalls: (msg.tool_calls ?? []).map((c: { id?: string; function: { name: string; arguments: string }; extra_content?: unknown }, i: number) => ({
+      id: c.id || `call_${i}`,
+      name: c.function.name,
+      arguments: c.function.arguments,
+      ...(c.extra_content ? { extra: c.extra_content } : {}),
+    })),
+    usage: json.usage,
   }
 }

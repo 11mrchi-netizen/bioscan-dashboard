@@ -12,13 +12,14 @@ import { checkCall, toOpenAiTools, toolsFor, type Mode } from './tools.ts'
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string | null
-  tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[]
+  tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string }; extra_content?: unknown }[]
   tool_call_id?: string
 }
 
 export interface ChatReply {
   content: string | null
-  toolCalls: { id: string; name: string; arguments: string }[]
+  /** `extra` is provider data that must go back with the call on the next turn (AI Studio's thought signature). */
+  toolCalls: { id: string; name: string; arguments: string; extra?: unknown }[]
   usage?: { prompt_tokens?: number; completion_tokens?: number }
 }
 
@@ -74,7 +75,7 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
       result.tokens.prompt += r.usage?.prompt_tokens ?? 0
       result.tokens.completion += r.usage?.completion_tokens ?? 0
       if (!r.toolCalls.length) return r.content
-      messages.push({ role: 'assistant', content: r.content, tool_calls: r.toolCalls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } })) })
+      messages.push({ role: 'assistant', content: r.content, tool_calls: r.toolCalls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments }, ...(c.extra ? { extra_content: c.extra } : {}) })) })
       for (const c of r.toolCalls) {
         let args: unknown
         try {

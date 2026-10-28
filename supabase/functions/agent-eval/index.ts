@@ -19,6 +19,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { isFreeSlug, runCase, summarise, type CaseRun } from "../_shared/agent-core/evalRun.ts";
 import { GOLDEN } from "../_shared/agent-core/golden.ts";
 import type { ModelConfig } from "../_shared/agent-core/models.ts";
+import { toOpenAiTools, toolsFor } from "../_shared/agent-core/tools.ts";
 
 const DEADLINE_MS = 100_000;
 const MAX_LIMIT = 12;
@@ -61,6 +62,27 @@ Deno.serve(async (req) => {
       body = await req.json();
     } catch {
       return json({ error: "invalid_json" }, 400);
+    }
+
+    // Where a slow or failing AI Studio model breaks: plain text, one simple tool, then the full EXPLAIN tool set.
+    if (body.action === "aistudio_probe") {
+      const key = Deno.env.get("GEMINI_API_KEY");
+      if (!key) return json({ error: "not_configured" }, 500);
+      const model = String((body as { model?: string }).model ?? "gemma-4-31b-it");
+      const simple = [{ type: "function", function: { name: "get_value", description: "Returns a number.", parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } } }];
+      const full = toOpenAiTools(toolsFor("explain", { enabled: true, optIn: [] }));
+      const out: unknown[] = [];
+      for (const [label, tools] of [["text", undefined], ["one_tool", simple], ["explain_tools", full]] as const) {
+        const t0 = Date.now();
+        const res = await fetch(`${AISTUDIO_OPENAI}/chat/completions`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model, max_tokens: 256, messages: [{ role: "user", content: "What is the value called hrv? Use a tool if you have one." }], ...(tools ? { tools, tool_choice: "auto" } : {}) }),
+          signal: AbortSignal.timeout(40_000),
+        }).catch((e) => ({ status: 0, text: async () => String(e) }) as unknown as Response);
+        out.push({ label, status: res.status, ms: Date.now() - t0, body: (await res.text()).slice(0, 400) });
+      }
+      return json({ model, probes: out }, 200);
     }
 
     // The Gemma models this AI Studio key can call (free to list).

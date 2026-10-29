@@ -2,6 +2,8 @@
 // tested in Node with an in-memory fake and run unchanged in the analysis-run Edge Function.
 import { fetchAll } from './paging.ts'
 import { publishResults } from './publish.ts'
+import { stepTimer } from './trace.ts'
+import type { Trace } from './trace.ts'
 import type { ResultRow } from './publish.ts'
 import { buildSeriesBreakResult } from './seriesBreakResult.ts'
 import { alignToAxis, dateAxis } from './stats.ts'
@@ -33,7 +35,8 @@ export interface MetricOutcome {
   error?: string
 }
 
-export async function runSeriesBreaks(admin: Admin, userId: string, now: Date = new Date()): Promise<{ userId: string; results: MetricOutcome[] }> {
+export async function runSeriesBreaks(admin: Admin, userId: string, now: Date = new Date(), trace?: Trace): Promise<{ userId: string; results: MetricOutcome[] }> {
+  const mark = stepTimer(trace)
   const since = new Date(now.getTime() - LOOKBACK_DAYS * 86400000).toISOString().slice(0, 10)
   // Analysis review B10: the provenance read is paged. Unpaged and sorted oldest first, it lost the newest rows once a
   // user had more than PostgREST's row cap, which is exactly where a recent device change would be.
@@ -43,6 +46,7 @@ export async function runSeriesBreaks(admin: Admin, userId: string, now: Date = 
     admin.from('series_break_decisions').select('metric, break_date, decision').eq('user_id', userId),
   ])
   const provRows = prov.rows
+  mark('provenance', { rows: provRows.length })
   const decisions: { metric: string; break_date: string; decision: 'source_change' | 'real_change' | 'ignore' }[] = dec.data ?? []
 
   // The seven series are independent reads: issue them together rather than one after another.
@@ -50,6 +54,7 @@ export async function runSeriesBreaks(admin: Admin, userId: string, now: Date = 
     fetchAll<Record<string, unknown>>((a, b) =>
       admin.from(s.table).select(`date, ${s.column}`).eq('user_id', userId).gte('date', since).order('date').range(a, b))))
 
+  mark('reads', { series: SERIES.length, rows: reads.reduce((n, r) => n + r.rows.length, 0) })
   const outcomes = new Map<string, MetricOutcome>()
   const rows: ResultRow[] = []
   const details = new Map<string, MetricOutcome>()
@@ -73,6 +78,7 @@ export async function runSeriesBreaks(admin: Admin, userId: string, now: Date = 
     const values = alignToAxis(axis, pts)
 
     const originChanges = sustainedOriginChanges(provRows.filter((r) => r.field === `${s.table}.${s.column}`))
+    mark(`origin.${s.metric}`, { rows: provRows.length })
 
     const result = buildSeriesBreakResult({
       metric: s.metric,
@@ -82,6 +88,7 @@ export async function runSeriesBreaks(admin: Admin, userId: string, now: Date = 
       originChanges,
       decisions: decisions.filter((d) => d.metric === s.metric).map((d) => ({ break_date: d.break_date, decision: d.decision })),
     })
+    mark(`result.${s.metric}`, { points: pts.length })
     rows.push({ kind: 'series_break', key: result.key, state: result.state, have: result.confidenceHave, need: result.confidenceNeed, payload: result.payload, hash: result.inputsHash, asOf: result.asOf })
     details.set(result.key, {
       metric: s.metric, state: result.state, n: result.confidenceHave,
@@ -89,12 +96,14 @@ export async function runSeriesBreaks(admin: Admin, userId: string, now: Date = 
     })
   })
 
+  mark('compute')
   // One upsert per batch and one delete per batch (publish.ts); keeps one current row per metric and engine version.
   const published = await publishResults(admin, userId, now.toISOString().slice(0, 10), rows, now)
   const done = new Set(published.published.map((p) => p.key))
   for (const [key, d] of details) {
     outcomes.set(d.metric, done.has(key) ? d : { metric: d.metric, error: published.error ?? 'not published' })
   }
+  mark('publish', { rows: rows.length })
   const out: MetricOutcome[] = SERIES.map((s) => outcomes.get(s.metric)!)
   return { userId, results: out }
 }

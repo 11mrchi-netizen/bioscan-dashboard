@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
       const run = <T>(name: string, fn: () => Promise<T>) => timedEngine(id, name, timings, fn);
       const out: Record<string, unknown> = { userId: id, group };
       // Series breaks and integrity read their own rows, so a frame that fails to load does not hide them.
-      if (want.has("breaks")) Object.assign(out, await run("breaks", () => runSeriesBreaks(admin, id)));
+      if (want.has("breaks")) Object.assign(out, await run("breaks", () => runSeriesBreaks(admin, id, new Date(), engineTrace("series_breaks"))));
       if (want.has("integrity")) out.integrity = await run("integrity", () => runIntegrity(admin, id, seriesFile as SeriesFile));
       // The frame is read once and shared; one engine failing must not hide the others: each reports its own error.
       // Typicality and the expected bands run in a later group than the series breaks because they restart at confirmed ones.

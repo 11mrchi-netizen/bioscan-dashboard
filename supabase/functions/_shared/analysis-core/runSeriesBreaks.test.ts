@@ -117,3 +117,18 @@ test('the provenance read pages past the row cap, so a recent source switch is s
   const res = await runSeriesBreaks(fakeAdmin({ wearable_daily: rows(ds, 'hrv', hrv), daily_field_provenance: provenance }), USER)
   assert.equal(res.results.find((r) => r.metric === 'hrv')!.breaks![0].status, 'confirmed')
 })
+
+test('the timing hook reports the series-break steps and changes nothing', async () => {
+  const ds = dates(140)
+  const tables = () => ({ wearable_daily: rows(ds, 'hrv', stepChangeSeries(1, 140, 110, 62, 6, 0, 3)), sleep_daily: rows(ds, 'hours', stationarySeries(5, 140, 7, 0.5)) })
+  const a = fakeAdmin(tables())
+  const b = fakeAdmin(tables())
+  const steps: string[] = []
+  const traced = await runSeriesBreaks(a, USER, new Date('2026-09-18T12:00:00Z'), (step) => steps.push(step))
+  const plain = await runSeriesBreaks(b, USER, new Date('2026-09-18T12:00:00Z'))
+  assert.deepEqual(traced, plain)
+  assert.deepEqual(a.upserts, b.upserts)
+  assert.deepEqual(steps.slice(0, 2), ['provenance', 'reads'])
+  assert.ok(steps.includes('origin.hrv') && steps.includes('result.hrv') && steps.includes('compute'))
+  assert.equal(steps.at(-1), 'publish')
+})

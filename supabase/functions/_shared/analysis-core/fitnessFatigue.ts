@@ -4,7 +4,7 @@
 // (TrainingPeaks' convention, Banister's impulse-response model in its simplest form). Those spans are guesses for any one
 // person. Here they are fitted to the person: tomorrow morning's ln HRV is forecast from today's ln HRV, the weekday, and
 // fitness and fatigue at a pair of spans; the pair that fits the days before best is chosen. The fitted pair is kept only
-// if it forecasts better than 42 and 7 on weeks the fit never saw (rolling origin, one week at a time, log score of a
+// if the procedure of choosing spans from past days forecasts better than 42 and 7 on weeks after them (rolling origin, one week at a time, spans re-chosen for each week; the final pair is that procedure on the whole history; log score of a
 // Gaussian forecast), with a Newey-West interval on the daily score difference: PREDICTIVE when the interval lies above
 // zero, then the load chart uses the person's spans. Otherwise the standard ones stay.
 import { invert } from './linalg.ts'
@@ -181,11 +181,14 @@ export function analyseFitnessFatigue(dates: string[], hrv: Num[], load: Num[]):
     : adds.hi < FITNESS_FATIGUE.negligible
       ? ' Training load adds little to the forecast over HRV alone.'
       : ''
+  // What was tested is the procedure: for each held-out week, spans chosen only from the days before it. The pair now in use
+  // is that same procedure run on the whole history, so it is not itself a pair that was kept away from the data.
+  const tested = `each of ${heldOutDays} mornings forecast with spans chosen only from earlier days`
   const summary = state === 'predictive'
-    ? `Your own time constants (${yours}) forecast tomorrow's HRV better than the standard 42 and 7 on ${heldOutDays} mornings the fit never saw, so the load chart uses them.${loadLine}`
+    ? `Choosing time constants from your past days beat the standard 42 and 7 at forecasting the next morning's HRV (${tested}). The pair now in use (${yours}) is chosen on your whole history and is re-tested every night, so the load chart uses it.${loadLine}`
     : state === 'no_better'
-      ? `Fitted to you, the time constants (${yours}) forecast tomorrow's HRV no better than the standard 42 and 7 on ${heldOutDays} mornings the fit never saw; the standard ones stay.${loadLine}`
-      : `Fitted to you (${yours}), the time constants are not yet clearly better than the standard 42 and 7 at forecasting tomorrow's HRV (${heldOutDays} held-out mornings); the standard ones stay.${loadLine}`
+      ? `Choosing time constants from your past days forecast tomorrow's HRV no better than the standard 42 and 7 (${tested}); the standard ones stay (a fit on your whole history would pick ${yours}).${loadLine}`
+      : `Choosing time constants from your past days is not yet clearly better than the standard 42 and 7 at forecasting tomorrow's HRV (${tested}); the standard ones stay (a fit on your whole history would pick ${yours}).${loadLine}`
   return {
     state, standard, personal, adopted: state === 'predictive', heldOutDays, loadDays,
     difference: r4(diff.mean), lo: r4(diff.lo), hi: r4(diff.hi),

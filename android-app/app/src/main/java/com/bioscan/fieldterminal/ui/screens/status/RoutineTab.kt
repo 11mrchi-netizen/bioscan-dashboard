@@ -44,6 +44,7 @@ import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.screens.settings.PlacesCard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Instant
@@ -83,6 +84,8 @@ fun RoutineTab() {
     Column(verticalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp)) {
         error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
         WeekCard(strip)
+        // Naming places is what turns the week and the commute into categories, so it sits here as well as in Setup.
+        PlacesCard(showDay = false)
         CommuteCard(commute, places)
         PhoneCard(phone, apps)
     }

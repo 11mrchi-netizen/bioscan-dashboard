@@ -159,14 +159,39 @@ export function movementKey(name: string): string {
   return [...new Set(tokens)].sort().join(' ')
 }
 
+/**
+ * Lookup tables for one library, built once: the first row for each lower-cased name and for each movement key, which is
+ * what a linear `find` over the rows returns. The array's identity and length guard the cache, so a library that changes
+ * between calls is indexed again. (The linear scan recomputed `movementKey` for every library row on every miss: ~100,000
+ * key computations per strength-muscle concern per window in the nightly health run, which exceeded the Edge CPU limit.)
+ */
+const libraryIndexes = new WeakMap<LibraryRow[], { size: number; byName: Map<string, LibraryRow>; byKey: Map<string, LibraryRow> }>()
+
+function libraryIndex(library: LibraryRow[]) {
+  const cached = libraryIndexes.get(library)
+  if (cached && cached.size === library.length) return cached
+  const byName = new Map<string, LibraryRow>()
+  const byKey = new Map<string, LibraryRow>()
+  for (const row of library) {
+    const name = row.name.toLowerCase()
+    if (!byName.has(name)) byName.set(name, row)
+    const key = movementKey(row.name)
+    if (!byKey.has(key)) byKey.set(key, row)
+  }
+  const index = { size: library.length, byName, byKey }
+  libraryIndexes.set(library, index)
+  return index
+}
+
 /** Primary muscles of a logged exercise name: exact library name first, then the movement key; null when unknown. */
 export function musclesOf(name: string, library: LibraryRow[]): string[] | null {
   lookupStats.musclesOf++
-  const exact = library.find((l) => l.name.toLowerCase() === name.toLowerCase())
+  const index = libraryIndex(library)
+  const exact = index.byName.get(name.toLowerCase())
   if (exact) return exact.primary_muscles ?? []
   const key = movementKey(name)
   if (!key) return null
-  const byKey = library.find((l) => movementKey(l.name) === key)
+  const byKey = index.byKey.get(key)
   return byKey ? byKey.primary_muscles ?? [] : null
 }
 

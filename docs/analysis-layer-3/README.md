@@ -46,6 +46,10 @@ node --test "supabase/functions/_shared/analysis-core/*.test.ts" "supabase/funct
 
 Via the Supabase MCP `deploy_edge_function` (or the CLI) with the entrypoint `index.ts` plus every file under `../_shared/analysis-core/` that it imports (names relative to the function folder, e.g. `../_shared/analysis-core/stats.ts`). Verified 2026-10-12: shared files bundle and run in Deno; calls without a valid user get 401.
 
+## Nightly schedule: one request per engine group (2026-10-29)
+
+A single `analysis-run` request running every engine was killed with HTTP 546 "CPU Time exceeded" after about 10-12 s, so the engines at the end of the order (health) never finished. `analysis-run` now accepts `group` (`core`, `bands`, `interventions`, `fitness`, `health`; `runGroups.ts`; no group means all, the old behaviour, still used by the console's refresh buttons) and returns per-engine `timings` in ms. Migration `20261114_analysis_run_groups.sql` makes `private.run_analysis(p_group)` post one group with a 60 s `pg_net` timeout (so `net._http_response` keeps the status and timings) and schedules the groups in dependency order: `core` 20:30 (job `analysis-run-nightly`), `bands` 20:33 (reads the series breaks `core` confirms), `interventions` 20:36, `fitness` 20:39, `health` 20:42 UTC. Measured on 2026-10-29: core 4.9 s of engine time (breaks 2.4 s, relationships 1.8 s), bands 3.8 s (evidence 2.3 s), interventions 0.4 s, fitness 0.6 s, all HTTP 200. **`health` alone still returns 546** (killed after about 3 s), so it needs its own split or a cheaper path before the nightly health refresh works.
+
 ## Series-break detector: what was measured
 
 Method and thresholds are in the header of `seriesBreak.ts`. Calibration on synthetic series with a planted noise break (60 seeds): critical value 6 gives a false-alarm rate of 0.7 % (150 stationary AR(1) series) and power 0.90–0.97 with 30–40 readings after the break. A 7-metric run over a 420-day lookback takes about 0.7 s.

@@ -7,7 +7,8 @@
 //
 // Actions
 //   selftest  -> numbers from constants only (proves the shared core bundles in Deno); no user data
-//   run       -> series-break detection for the caller's own data (user JWT), or for a given/all users when the caller is
+//   run       -> every engine, or one group of them with `group` (core | bands | interventions | fitness | health; see
+//                runGroups.ts: one request per group keeps each under the Edge CPU limit). Series-break detection for the caller's own data (user JWT), or for a given/all users when the caller is
 //                the scheduler: pg_cron -> private.run_analysis() sends a random secret that lives only in Vault in the
 //                x-analysis-cron header; it is checked through public.analysis_cron_secret_ok() (service role only), so
 //                no human-held secret and no service role key is involved
@@ -43,6 +44,7 @@ import type { SeriesFile } from "../_shared/analysis-core/seriesContract.ts";
 import seriesFile from "../_shared/metric-registry/metric-series.json" with { type: "json" };
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
 import { runTypicality } from "../_shared/analysis-core/runTypicality.ts";
+import { enginesFor, needsFrame, parseGroup, timedEngine } from "../_shared/analysis-core/runGroups.ts";
 import { pearson, pFromR } from "../_shared/analysis-core/stats.ts";
 import { CORE_VERSION } from "../_shared/analysis-core/version.ts";
 
@@ -62,7 +64,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { action?: string; user_id?: string; planned_a?: number; planned_b?: number } = {};
+  let body: { action?: string; user_id?: string; planned_a?: number; planned_b?: number; group?: string } = {};
   try {
     body = await req.json();
   } catch {
@@ -137,29 +139,44 @@ Deno.serve(async (req) => {
       userIds = [user.id];
     }
 
+    // One request runs one group of engines (runGroups.ts), so each gets its own CPU budget; no group means all of them,
+    // the old single-invocation behaviour. Every engine reports its own error and its time in `timings` (ms).
+    const group = parseGroup(body.group);
+    if (group === null) return json({ error: "bad_request", message: "unknown group" }, 400);
+    const want = new Set(enginesFor(group));
+
     const results = [];
     for (const id of userIds) {
-      const breaks = await runSeriesBreaks(admin, id);
-      // Integrity reads its own rows, so a frame that fails to load does not hide it.
-      const integrity = await runIntegrity(admin, id, seriesFile as SeriesFile).catch((e) => ({ userId: id, error: String(e) }));
+      const timings: Record<string, number> = {};
+      const run = <T>(name: string, fn: () => Promise<T>) => timedEngine(id, name, timings, fn);
+      const out: Record<string, unknown> = { userId: id, group };
+      // Series breaks and integrity read their own rows, so a frame that fails to load does not hide them.
+      if (want.has("breaks")) Object.assign(out, await run("breaks", () => runSeriesBreaks(admin, id)));
+      if (want.has("integrity")) out.integrity = await run("integrity", () => runIntegrity(admin, id, seriesFile as SeriesFile));
       // The frame is read once and shared; one engine failing must not hide the others: each reports its own error.
-      // Typicality and the expected bands run after the series breaks because they restart at confirmed ones.
-      const loaded = await loadFrame(admin, id).catch((e) => ({ userId: id, error: String(e) }));
-      if ("error" in loaded) {
-        results.push({ ...breaks, integrity, relationships: loaded, typicality: loaded, expectedBands: loaded, evidence: loaded, experiments: loaded });
-        continue;
+      // Typicality and the expected bands run in a later group than the series breaks because they restart at confirmed ones.
+      if (needsFrame(group)) {
+        const loaded = await run("loadFrame", () => loadFrame(admin, id));
+        if ("error" in loaded) {
+          for (const name of want) if (name !== "breaks" && name !== "integrity") out[name] = loaded;
+        } else {
+          const engines: Record<string, () => Promise<unknown>> = {
+            relationships: () => runRelationships(admin, id, new Date(), loaded),
+            typicality: () => runTypicality(admin, loaded),
+            expectedBands: () => runExpectedBands(admin, loaded),
+            evidence: () => runEvidence(admin, loaded),
+            experiments: () => runExperiments(admin, loaded),
+            interventionResponses: () => runInterventionResponses(admin, loaded),
+            interventionIts: () => runInterventionIts(admin, loaded),
+            eventEvidence: () => runEventEvidence(admin, loaded, seriesFile as SeriesFile),
+            fitnessFatigue: () => runFitnessFatigue(admin, loaded),
+            health: () => runHealth(admin, loaded),
+          };
+          for (const name of want) if (engines[name]) out[name] = await run(name, engines[name]);
+        }
       }
-      const relationships = await runRelationships(admin, id, new Date(), loaded).catch((e) => ({ userId: id, error: String(e) }));
-      const typicality = await runTypicality(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      const expectedBands = await runExpectedBands(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      const evidence = await runEvidence(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      const experiments = await runExperiments(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      const interventionResponses = await runInterventionResponses(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      const interventionIts = await runInterventionIts(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      const eventEvidence = await runEventEvidence(admin, loaded, seriesFile as SeriesFile).catch((e) => ({ userId: id, error: String(e) }));
-      const fitnessFatigue = await runFitnessFatigue(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      const health = await runHealth(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      results.push({ ...breaks, integrity, relationships, typicality, expectedBands, evidence, experiments, interventionResponses, interventionIts, eventEvidence, fitnessFatigue, health });
+      out.timings = timings;
+      results.push(out);
     }
     return json({ coreVersion: CORE_VERSION, results }, 200);
   }

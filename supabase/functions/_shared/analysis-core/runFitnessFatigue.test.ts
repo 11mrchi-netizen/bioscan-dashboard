@@ -62,8 +62,9 @@ test('the frame carries the day\'s session load, and the run publishes one fitne
   const loaded = (await loadFrame(admin, USER, now)) as LoadedFrame
   const load = loaded.frame.series.training_load
   const day = loaded.frame.dates.indexOf(START)
-  assert.equal(load[day], 300, 'RPE 6 x 50 minutes')
-  assert.ok((load[day + 2] as number) > 0 && (load[day + 2] as number) !== 300, 'TRIMP when no RPE was logged')
+  // the session on `day` has an RPE of 6 and heart-rate inputs: it is scored by TRIMP like the others, not 6 x 50 = 300
+  assert.ok((load[day] as number) > 0 && (load[day] as number) !== 300, 'TRIMP, not RPE x minutes')
+  assert.ok(Math.abs((load[day] as number) - (load[day + 2] as number)) < 0.1 * (load[day + 2] as number), 'the same scale as a session without an RPE')
   assert.equal(load[day + 1], 0, 'a watch day without a session is rest')
   const run = await runFitnessFatigue(admin, loaded, now)
   assert.equal(run.error, undefined)

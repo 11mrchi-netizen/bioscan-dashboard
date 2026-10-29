@@ -21,12 +21,13 @@ function fakeAdmin(tables: Record<string, Row[]>) {
         eq(c: string, v: unknown) { filters.push(['eq', c, v]); return q },
         gte(c: string, v: unknown) { filters.push(['gte', c, v]); return q },
         lt(c: string, v: unknown) { filters.push(['lt', c, v]); return q },
+        in(c: string, v: unknown[]) { filters.push(['in', c, v]); return q },
         order() { return q },
         range(a: number, b: number) { (q as { __range?: [number, number] }).__range = [a, b]; return q },
         delete() { (q as { __delete?: boolean }).__delete = true; return q },
-        upsert(row: Row) { upserts.push(row); return Promise.resolve({ error: null }) },
+        upsert(row: Row | Row[]) { for (const r of Array.isArray(row) ? row : [row]) upserts.push(r); return Promise.resolve({ error: null }) },
         then(resolve: (v: { data: Row[]; error: null }) => void) {
-          const all = (tables[table] ?? []).filter((r) => filters.every(([op, c, v]) => (op === 'eq' ? r[c] === v : op === 'gte' ? String(r[c]) >= String(v) : String(r[c]) < String(v))))
+          const all = (tables[table] ?? []).filter((r) => filters.every(([op, c, v]) => (op === 'eq' ? r[c] === v : op === 'in' ? (v as unknown[]).includes(r[c]) : op === 'gte' ? String(r[c]) >= String(v) : String(r[c]) < String(v))))
           const range = (q as { __range?: [number, number] }).__range
           const rows = range ? all.slice(range[0], range[1] + 1) : all
           if ((q as { __delete?: boolean }).__delete) deletes.push({ table, filters })
@@ -115,4 +116,32 @@ test('the provenance read pages past the row cap, so a recent source switch is s
   assert.ok(switchAt * fields.length > 1000)
   const res = await runSeriesBreaks(fakeAdmin({ wearable_daily: rows(ds, 'hrv', hrv), daily_field_provenance: provenance }), USER)
   assert.equal(res.results.find((r) => r.metric === 'hrv')!.breaks![0].status, 'confirmed')
+})
+
+test('the timing hook reports the series-break steps and changes nothing', async () => {
+  const ds = dates(140)
+  const tables = () => ({ wearable_daily: rows(ds, 'hrv', stepChangeSeries(1, 140, 110, 62, 6, 0, 3)), sleep_daily: rows(ds, 'hours', stationarySeries(5, 140, 7, 0.5)) })
+  const a = fakeAdmin(tables())
+  const b = fakeAdmin(tables())
+  const steps: string[] = []
+  const traced = await runSeriesBreaks(a, USER, new Date('2026-09-18T12:00:00Z'), (step) => steps.push(step))
+  const plain = await runSeriesBreaks(b, USER, new Date('2026-09-18T12:00:00Z'))
+  assert.deepEqual(traced, plain)
+  assert.deepEqual(a.upserts, b.upserts)
+  assert.deepEqual(steps.slice(0, 2), ['provenance', 'reads'])
+  assert.ok(steps.includes('origin.hrv') && steps.includes('result.hrv') && steps.includes('compute'))
+  assert.equal(steps.at(-1), 'publish')
+})
+
+test('provenance of fields the engine does not use is not read and changes nothing', async () => {
+  const ds = dates(140)
+  const hrv = stepChangeSeries(1, 140, 110, 62, 6, 0, 3)
+  const base = ds.map((d, i) => ({ user_id: USER, date: d, field: 'wearable_daily.hrv', origin: i < 110 ? 'phone' : 'watch' }))
+  const noise = ds.flatMap((d) => [{ user_id: USER, date: d, field: 'meals.calories', origin: 'app' }, { user_id: USER, date: d, field: 'wearable_daily.vo2max', origin: 'watch' }])
+  const withNoise = fakeAdmin({ wearable_daily: rows(ds, 'hrv', hrv), daily_field_provenance: [...base, ...noise] })
+  const without = fakeAdmin({ wearable_daily: rows(ds, 'hrv', hrv), daily_field_provenance: base })
+  const a = await runSeriesBreaks(withNoise, USER, new Date('2026-09-18T12:00:00Z'))
+  const b = await runSeriesBreaks(without, USER, new Date('2026-09-18T12:00:00Z'))
+  assert.deepEqual(a, b)
+  assert.deepEqual(withNoise.upserts, without.upserts)
 })

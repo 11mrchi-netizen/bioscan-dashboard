@@ -6,6 +6,10 @@ import { buildFrame } from './runRelationships.ts'
 import { HEALTH_KINDS, runHealth } from './runHealth.ts'
 import { CORE_VERSION } from './version.ts'
 
+// analysis_results rows go up in batches (one upsert call carries several rows); the fake records each call's argument
+const resultRows = (x: { upserts: { table: string; row: unknown }[] }) =>
+  x.upserts.filter((u) => u.table === 'analysis_results').flatMap((u) => (Array.isArray(u.row) ? u.row : [u.row]) as Record<string, unknown>[])
+
 const U = 'u1'
 const TODAY = '2026-10-21'
 
@@ -51,7 +55,7 @@ test('runHealth publishes the overview, each concern, its findings, the trial an
   const admin = fakeAdmin(t)
   const run = await runHealth(admin, loadedFor(t), new Date(`${TODAY}T20:30:00Z`))
   assert.equal(run.error, undefined, run.error)
-  const rows = admin.upserts.filter((u) => u.table === 'analysis_results').map((u) => u.row)
+  const rows = resultRows(admin)
   const kinds = (k: string) => rows.filter((r) => r.kind === k)
   assert.equal(kinds(HEALTH_KINDS.overview).length, 1)
   assert.equal(kinds(HEALTH_KINDS.state).length, 2)
@@ -88,11 +92,11 @@ test('the same inputs give the same hashes; an evaluated trial read is never red
   const b = fakeAdmin(t)
   await runHealth(a, loadedFor(t))
   await runHealth(b, loadedFor(t))
-  const hashes = (x: typeof a) => x.upserts.filter((u) => u.table === 'analysis_results').map((u) => `${u.row.kind}:${u.row.key}:${u.row.inputs_hash}`).sort()
+  const hashes = (x: typeof a) => resultRows(x).map((r) => `${r.kind}:${r.key}:${r.inputs_hash}`).sort()
   assert.deepEqual(hashes(a), hashes(b))
   const frozen = fakeAdmin({ ...t, analysis_results: [{ user_id: U, kind: HEALTH_KINDS.trial, key: 'iv1:knee', as_of: '2026-10-01', payload: { state: 'evaluated' } }] })
   await runHealth(frozen, loadedFor(t))
-  assert.equal(frozen.upserts.filter((u) => u.row.kind === HEALTH_KINDS.trial).length, 0)
+  assert.equal(resultRows(frozen).filter((r) => r.kind === HEALTH_KINDS.trial).length, 0)
 })
 
 test('before the migration the engine skips quietly', async () => {
@@ -100,4 +104,32 @@ test('before the migration the engine skips quietly', async () => {
   const run = await runHealth(fakeAdmin(t, ['health_concerns']), loadedFor(t))
   assert.ok(run.skipped)
   assert.equal(run.error, undefined)
+})
+
+test('the timing hook sees every step in order, by position only, and changes nothing', async () => {
+  const { t } = tables()
+  const steps: { step: string; ms: number; info?: Record<string, number> }[] = []
+  const a = fakeAdmin(t)
+  const b = fakeAdmin(t)
+  const traced = await runHealth(a, loadedFor(t), new Date(`${TODAY}T20:30:00Z`), (step, ms, info) => steps.push({ step, ms, info }))
+  const plain = await runHealth(b, loadedFor(t), new Date(`${TODAY}T20:30:00Z`))
+  assert.deepEqual(traced, plain, 'same result with and without the hook')
+  assert.deepEqual(a.upserts, b.upserts, 'same rows written')
+  const names = steps.map((s) => s.step)
+  assert.deepEqual(names.slice(0, 4), ['inputs', 'reads', 'context', 'series'])
+  for (const i of [0, 1]) {
+    assert.deepEqual(names.filter((n) => n.startsWith(`c${i}.`)), [`c${i}.summary`, `c${i}.exposureSeries`, `c${i}.evaluate`, `c${i}.findings`, `c${i}.rows`])
+  }
+  assert.deepEqual(names.slice(-4), ['trials', 'overview', 'publish', 'ledger'])
+  // finer steps inside the exposure code: built once per concern, before that concern's evaluate step
+  assert.equal(names.filter((n) => n === 'exp.runs').length, 2)
+  assert.equal(names.filter((n) => n === 'exp.regional_strength').length, 2)
+  assert.equal(names.filter((n) => n === 'exp.rest').length, 2)
+  assert.ok(names.indexOf('exp.regional_strength') < names.indexOf('c0.exposureSeries'))
+  const reg = steps.find((s) => s.step === 'exp.regional_strength')!
+  assert.ok(typeof reg.info?.musclesOf === 'number' && typeof reg.info?.movementKey === 'number' && typeof reg.info?.library === 'number')
+  assert.ok(names.every((n) => !/^ev\.[a-z_]+\./.test(n) || /^ev\.(any_run|long_run|trail_run|quality_run|volume_jump|back_to_back|regional_strength|no_rest|short_sleep|hrv_below|high_load|alcohol|stress_high|travel)\./.test(n)), 'exposure steps are named by catalogue id')
+  assert.ok(steps.every((s) => Number.isFinite(s.ms) && s.ms >= 0))
+  const text = JSON.stringify(steps)
+  assert.ok(!text.includes('knee') && !text.includes('Right'), 'no concern title, region or symptom reaches the log')
 })

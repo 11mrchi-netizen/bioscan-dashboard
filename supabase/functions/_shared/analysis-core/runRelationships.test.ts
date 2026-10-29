@@ -26,16 +26,17 @@ function fakeAdmin(tables: Record<string, Row[]>) {
         eq(c: string, v: unknown) { filters.push(['eq', c, v]); return q },
         gte(c: string, v: unknown) { filters.push(['gte', c, v]); return q },
         lt(c: string, v: unknown) { filters.push(['lt', c, v]); return q },
+        in(c: string, v: unknown[]) { filters.push(['in', c, v]); return q },
         order() { return q },
         range(a: number, b: number) { window = [a, b]; return q },
         delete() { isDelete = true; return q },
         upsert(row: Row | Row[]) {
           if (table === 'evidence_ledger') ledger.push(...(row as Row[]))
-          else upserts.push(row as Row)
+          else for (const r of Array.isArray(row) ? row : [row]) upserts.push(r as Row)
           return Promise.resolve({ error: null })
         },
         then(resolve: (v: { data: Row[]; error: null }) => void) {
-          let rows = (tables[table] ?? []).filter((r) => filters.every(([op, c, v]) => (op === 'eq' ? r[c] === v : op === 'gte' ? String(r[c]) >= String(v) : String(r[c]) < String(v))))
+          let rows = (tables[table] ?? []).filter((r) => filters.every(([op, c, v]) => (op === 'eq' ? r[c] === v : op === 'in' ? (v as unknown[]).includes(r[c]) : op === 'gte' ? String(r[c]) >= String(v) : String(r[c]) < String(v))))
           if (isDelete) deletes.push({ table, filters })
           if (window) rows = rows.slice(window[0], window[1] + 1)
           resolve({ data: rows, error: null })

@@ -32,6 +32,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildPreview, runExperiments } from "../_shared/analysis-core/runExperiments.ts";
 import { runInterventionIts, runInterventionResponses } from "../_shared/analysis-core/runInterventionResponse.ts";
+import { runEventEvidence } from "../_shared/analysis-core/runEventEvidence.ts";
 import { loadFrame, runRelationships } from "../_shared/analysis-core/runRelationships.ts";
 import { runEvidence } from "../_shared/analysis-core/runEvidence.ts";
 import { runExpectedBands } from "../_shared/analysis-core/runExpectedBands.ts";
@@ -155,9 +156,10 @@ Deno.serve(async (req) => {
       const experiments = await runExperiments(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const interventionResponses = await runInterventionResponses(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const interventionIts = await runInterventionIts(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
+      const eventEvidence = await runEventEvidence(admin, loaded, seriesFile as SeriesFile).catch((e) => ({ userId: id, error: String(e) }));
       const fitnessFatigue = await runFitnessFatigue(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
       const health = await runHealth(admin, loaded).catch((e) => ({ userId: id, error: String(e) }));
-      results.push({ ...breaks, integrity, relationships, typicality, expectedBands, evidence, experiments, interventionResponses, interventionIts, fitnessFatigue, health });
+      results.push({ ...breaks, integrity, relationships, typicality, expectedBands, evidence, experiments, interventionResponses, interventionIts, eventEvidence, fitnessFatigue, health });
     }
     return json({ coreVersion: CORE_VERSION, results }, 200);
   }

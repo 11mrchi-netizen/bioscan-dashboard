@@ -37,8 +37,9 @@ create table public.tracked_outcome_values (
   outcome_id uuid not null references public.tracked_outcomes (id) on delete cascade,
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
   observed_at timestamptz not null default now(),
-  -- local calendar day of observed_at, set by the client from the phone's time zone
+  -- local calendar day and minute of the day of observed_at, set by the client from the phone's time zone
   local_date date not null,
+  local_minute smallint not null check (local_minute between 0 and 1439),
   value double precision not null,
   note text,
   created_at timestamptz not null default now(),
@@ -139,8 +140,9 @@ create table public.intervention_events (
   intervention_id uuid not null references public.interventions (id) on delete cascade,
   intervention_version integer not null default 1,
   occurred_at timestamptz not null default now(),
-  -- local calendar day of occurred_at, set by the client from the phone's time zone
+  -- local calendar day and minute of the day of occurred_at, set by the client from the phone's time zone
   local_date date not null,
+  local_minute smallint not null check (local_minute between 0 and 1439),
   adhered text not null default 'yes' check (adhered in ('yes', 'partial', 'no')),
   dose_note text,
   -- illness, travel, heavy_training, ... (alcohol, late caffeine and late meals come from the evening check-in instead)

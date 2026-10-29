@@ -58,6 +58,10 @@ Each engine used to publish one row at a time (an upsert, then a delete of the k
 
 Each of the six lag intervals used to be a separate 95% interval, so with no real effect 16% of 200 simulated histories showed at least one "clear" day (intended 5%); the week total (lags 1 to 6 as one contrast) was already near nominal (6%). Now the week total is the headline, and a day counts as clear only through a Bonferroni-widened interval (`simLo`/`simHi`, the fit's own critical value scaled by t(0.05/6)/t(0.05)); the per-lag `lo`/`hi` stay as descriptive. Under no effect a clear day now appears in about 3.5% of histories; a planted next-morning effect is still found. Payload gains `simultaneous: { family, individualCritical, criticalValue }`; `clearLags`/`lastClearLag` use the simultaneous interval; the summary says when a day was clear only on its own. `calibration.test.ts` keeps both null checks (lag curves; the 23-question catalogue, where a "clear" verdict needs the whole widened interval beyond the no-effect zone and none appeared in 150 simulated null histories).
 
+### Series-break engine: where its 1.9 s went (2026-10-29)
+
+`engine-timing` log lines (steps by metric id) showed: the provenance read 849 ms (4,439 rows, five sequential pages), the seven table reads 227 ms (parallel), break detection about 620 ms in total (20 to 160 ms per metric; binary segmentation, left alone: a rewrite would have to reproduce its results exactly for a saving of well under a second), per-metric provenance filtering about 1 ms, publish 157 ms. The provenance read now asks only for the seven fields the engine uses and fetches the pages after the first together (`fetchAllWaves`, same rows in the same order): the engine went from 1,872 to 1,181 ms with identical results (tested).
+
 ## Series-break detector: what was measured
 
 Method and thresholds are in the header of `seriesBreak.ts`. Calibration on synthetic series with a planted noise break (60 seeds): critical value 6 gives a false-alarm rate of 0.7 % (150 stationary AR(1) series) and power 0.90–0.97 with 30–40 readings after the break. A 7-metric run over a 420-day lookback takes about 0.7 s.

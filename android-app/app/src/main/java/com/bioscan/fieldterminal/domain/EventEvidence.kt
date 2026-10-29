@@ -130,11 +130,15 @@ data class PromotionTarget(val metric: String?, val reason: String?)
 
 /**
  * The formal randomised experiments compare a fixed set of daily outcomes (EXPERIMENT_METRICS). A stored series with the same
- * id (hrv, rhr, sleep_hours, energy...) can be promoted as it is; anything else (respiratory rate, SpO2, a tracked outcome)
- * is explained rather than offered as a dead button.
+ * id (hrv, rhr, sleep_hours, energy...) can be promoted as it is, and a few registry series have a differently named
+ * experiment metric (SERIES_TO_EXPERIMENT_METRIC); anything else (SpO2, a tracked outcome) is explained rather than
+ * offered as a dead button.
  */
+val SERIES_TO_EXPERIMENT_METRIC = mapOf("sleep_respiratory_rate" to "resp_rate")
+
 fun promotionTarget(outcomeKind: String, outcomeKey: String, label: String): PromotionTarget = when {
     outcomeKind == "tracked" -> PromotionTarget(null, "$label is an outcome you record yourself, which the formal experiments can't compare yet.")
     EXPERIMENT_METRICS.any { it.first == outcomeKey } -> PromotionTarget(outcomeKey, null)
+    SERIES_TO_EXPERIMENT_METRIC[outcomeKey] != null -> PromotionTarget(SERIES_TO_EXPERIMENT_METRIC.getValue(outcomeKey), null)
     else -> PromotionTarget(null, "$label isn't an outcome the formal experiments compare yet; the repeated events stay the evidence for now.")
 }

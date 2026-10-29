@@ -69,6 +69,7 @@ val EXPERIMENT_METRICS = listOf(
     "screen_bed_min" to "Phone before sleep",
     "screen_pm_social" to "Social apps after 21:00",
     "outdoor_daylight_min" to "Daylight outdoors",
+    "resp_rate" to "Respiratory rate (sleep)",
 )
 
 // Plain reading of a preview, so a person picks an outcome the design can actually resolve.

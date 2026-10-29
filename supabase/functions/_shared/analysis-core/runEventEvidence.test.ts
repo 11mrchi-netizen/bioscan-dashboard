@@ -88,6 +88,11 @@ test('publishes one row per episodic intervention, reading a night and a delayed
   assert.equal(lp.ladder, 'emerging')
   assert.equal(lp.expectations[0].observed, 'as_expected')
   assert.ok(lp.expectations[0].diff >= 2)
+  // one batched ledger append, one row per declared primary, worded by the ladder
+  const batches = admin.upserts.filter((u) => Array.isArray(u)) as unknown as Row[][]
+  assert.equal(batches.length, 1)
+  assert.deepEqual(batches[0].map((r) => r.question_id).sort(), ['event_x1', 'event_x2'])
+  assert.ok(batches[0].every((r) => r.source === 'event' && r.verdict === 'observed'))
 })
 
 test('alcohol on the day from the evening check-in leaves the event out', async () => {

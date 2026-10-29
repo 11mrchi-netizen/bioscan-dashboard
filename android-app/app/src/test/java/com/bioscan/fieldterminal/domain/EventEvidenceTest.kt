@@ -68,10 +68,17 @@ class EventEvidenceTest {
         assertEquals("sleep_hours", promotionTarget("series", "sleep_hours", "Sleep").metric)
     }
 
+    @Test fun `sleep respiratory rate maps to the resp_rate experiment outcome with its own no-effect zone`() {
+        assertEquals("resp_rate", promotionTarget("series", "sleep_respiratory_rate", "Respiratory rate").metric)
+        assertTrue(EXPERIMENT_METRICS.any { it.first == "resp_rate" })
+        assertEquals(0.3, zoneSpec("resp_rate").zone, 1e-9)
+        assertEquals("min", zoneSpec("screen_bed_min").unit)
+    }
+
     @Test fun `outcomes the formal experiments cannot compare are explained, not offered`() {
-        val resp = promotionTarget("series", "sleep_respiratory_rate", "Respiratory rate")
-        assertNull(resp.metric)
-        assertTrue(resp.reason!!.contains("Respiratory rate"))
+        val spo2 = promotionTarget("series", "spo2", "Blood oxygen")
+        assertNull(spo2.metric)
+        assertTrue(spo2.reason!!.contains("Blood oxygen"))
         val tracked = promotionTarget("tracked", "some-id", "Stool consistency")
         assertNull(tracked.metric)
         assertNotNull(tracked.reason)

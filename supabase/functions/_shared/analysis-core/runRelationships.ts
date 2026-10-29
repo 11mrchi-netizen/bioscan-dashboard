@@ -33,7 +33,7 @@ export interface CheckinRow {
 
 export interface RawInputs {
   wearable: { date: string; hrv: number | null; rhr: number | null; steps: number | null }[]
-  sleep: { date: string; hours: number | null; deep_min?: number | null; rem_min?: number | null }[]
+  sleep: { date: string; hours: number | null; deep_min?: number | null; rem_min?: number | null; respiratory_rate?: number | null }[]
   wellbeing: { date: string; energy: number | null; mood: number | null; stress: number | null; soreness: number | null }[]
   meals: { logged_at: string; meal_items: { alcohol_g: number | null; caffeine_mg: number | null }[] | null }[]
   sessions: { start_time: string; duration_min: number | null; type?: string | null; rpe?: number | null; avg_hr?: number | null; max_hr?: number | null }[]
@@ -112,6 +112,8 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
     stress: col(raw.wellbeing, 'stress', 0),
     soreness: col(raw.wellbeing, 'soreness', 0),
   }
+  // The night's mean respiratory rate (repeatable interventions such as a nasal strip); nothing below 1 br/min is real.
+  series.resp_rate = col(raw.sleep, 'respiratory_rate', 1)
   // Deep + REM minutes, only on nights where both stages were recorded (the typicality engine's fourth signal).
   series.deep_rem_min = alignToAxis(
     axis,
@@ -268,7 +270,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
 
   const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes] = await Promise.all([
     fetchAll<RawInputs['wearable'][number]>(q('wearable_daily', 'date, hrv, rhr, steps', 'date', since)),
-    fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min', 'date', since)),
+    fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min, respiratory_rate', 'date', since)),
     fetchAll<RawInputs['wellbeing'][number]>(q('wellbeing_daily', 'date, energy, mood, stress, soreness', 'date', since)),
     fetchAll<RawInputs['meals'][number]>(q('meals', 'logged_at, meal_items(alcohol_g, caffeine_mg)', 'logged_at', sinceStamp)),
     fetchAll<RawInputs['sessions'][number]>(q('exercise_sessions', 'start_time, duration_min, type, rpe, avg_hr, max_hr', 'start_time', sinceStamp)),

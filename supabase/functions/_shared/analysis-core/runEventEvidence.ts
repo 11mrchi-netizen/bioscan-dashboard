@@ -7,7 +7,7 @@
 // (HealthConnectDailySyncRepository.syncSleep), so a night sits at 04:00 on the morning it ends, and the overnight
 // wearable readings (hrv, rhr, spo2_avg) are placed with it; every other daily series sits at midday. A tracked outcome
 // enters at the local minute it was logged.
-import { analyseEventEvidence, dayNumber, EVENT_EVIDENCE } from './eventEvidence.ts'
+import { analyseEventEvidence, dayNumber, EVENT_EVIDENCE, eventLedgerRows } from './eventEvidence.ts'
 import type { EventEvidenceResult, EventInput, ExpectationInput, SeriesPoint } from './eventEvidence.ts'
 import { fetchAll } from './paging.ts'
 import { combine } from './seriesContract.ts'
@@ -40,6 +40,7 @@ export interface EventEvidenceRun {
   userId: string
   error?: string
   results?: { id: string; ladder: string; nUsed: number }[]
+  ledgerError?: string
 }
 
 const shiftDay = (date: string, n: number) => new Date(Date.parse(date + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10)
@@ -104,6 +105,7 @@ export async function runEventEvidence(admin: Admin, loaded: LoadedFrame, series
 
   const eventMin = (e: EventRow) => dayNumber(e.local_date) * 1440 + e.local_minute
   const results: NonNullable<EventEvidenceRun['results']> = []
+  const ledger: Record<string, unknown>[] = []
   for (const iv of interventions.rows) {
     const mine = evs.rows.filter((e) => e.intervention_id === iv.id)
     if (mine.length === 0) continue
@@ -147,6 +149,12 @@ export async function runEventEvidence(admin: Admin, loaded: LoadedFrame, series
     if (upErr) return { userId, error: upErr.message, results }
     await admin.from('analysis_results').delete().eq('user_id', userId).eq('kind', EVENT_KIND).eq('key', iv.id).eq('engine_version', CORE_VERSION).lt('as_of', today)
     results.push({ id: iv.id, ladder: result.ladder, nUsed: result.nUsed })
+    ledger.push(...eventLedgerRows(userId, today, CORE_VERSION, fnv1a(JSON.stringify([iv.id, iv.version, today, events.length])), result))
+  }
+  // One batched append; a re-run the same night keeps the first row, like the health ledger.
+  if (ledger.length > 0) {
+    const { error: ledgerError } = await admin.from('evidence_ledger').upsert(ledger, { onConflict: 'user_id,question_id,as_of,engine_version', ignoreDuplicates: true })
+    if (ledgerError) return { userId, results, ledgerError: ledgerError.message }
   }
   return { userId, results }
 }

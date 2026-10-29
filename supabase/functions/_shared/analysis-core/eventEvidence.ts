@@ -326,3 +326,39 @@ export function analyseEventEvidence(input: EventEvidenceInput): EventEvidenceRe
     notes,
   }
 }
+
+// ---- the evidence ledger (append-only nightly verdicts, source 'event') ----
+
+/**
+ * The ledger's existing verdict words for a declared expectation, driven by the ladder (how many events had data), never by
+ * significance: too few events is 'insufficient', a direction seen early is 'possible', a direction seen with enough events
+ * is 'observed', a flat result with enough events is 'negligible'.
+ */
+export function ledgerVerdict(ladder: Ladder, observed: Observed): 'insufficient' | 'possible' | 'observed' | 'negligible' | 'unclear' {
+  if (ladder === 'anecdote' || observed === 'too_few') return 'insufficient'
+  const directional = observed === 'as_expected' || observed === 'opposite' || observed === 'unexpected_change'
+  if (directional) return ladder === 'early_signal' ? 'possible' : 'observed'
+  if (observed === 'no_difference' && ladder !== 'early_signal') return 'negligible'
+  return 'unclear'
+}
+
+/** One ledger row per pre-declared (non-exploratory) primary or secondary expectation. */
+export function eventLedgerRows(userId: string, asOf: string, engineVersion: string, inputsHash: string, result: EventEvidenceResult): Record<string, unknown>[] {
+  return result.expectations
+    .filter((e) => !e.exploratory && (e.role === 'primary' || e.role === 'secondary'))
+    .map((e) => ({
+      user_id: userId,
+      question_id: `event_${e.expectationId}`,
+      source: 'event',
+      as_of: asOf,
+      engine_version: engineVersion,
+      inputs_hash: inputsHash,
+      verdict: ledgerVerdict(result.ladder, e.observed),
+      estimate: e.diff,
+      lo: e.lo,
+      hi: e.hi,
+      unit: e.unit,
+      n: e.nWithData,
+      n_on: result.nUsed,
+    }))
+}

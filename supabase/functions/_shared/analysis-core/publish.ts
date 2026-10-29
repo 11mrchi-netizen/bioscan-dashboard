@@ -19,6 +19,8 @@ export interface ResultRow {
   need: number | null
   payload: unknown
   hash: string
+  /** The row's day when it is not `today` (the series-break engine stamps each metric with its own latest day). */
+  asOf?: string
 }
 
 /** Rows per request. Health concern rows carry a year of daily series (tens of KB each), so a batch stays well under a MB. */
@@ -46,17 +48,22 @@ export async function publishResults(
     const chunk = unique.slice(i, i + batch)
     const { error } = await admin.from('analysis_results').upsert(
       chunk.map((r) => ({
-        user_id: userId, kind: r.kind, key: r.key, as_of: today, engine_version: engineVersion, inputs_hash: r.hash,
+        user_id: userId, kind: r.kind, key: r.key, as_of: r.asOf ?? today, engine_version: engineVersion, inputs_hash: r.hash,
         state: r.state, confidence_have: r.have, confidence_need: r.need, payload: r.payload, calculated_at: now.toISOString(),
       })),
       { onConflict: 'user_id,kind,key,as_of,engine_version' },
     )
     if (error) return { published, error: error.message }
     // Only the newest row per key is kept (the ledger keeps the history); a failed cleanup never fails the run.
-    const keysByKind = new Map<string, string[]>()
-    for (const r of chunk) keysByKind.set(r.kind, [...(keysByKind.get(r.kind) ?? []), r.key])
-    for (const [kind, keys] of keysByKind) {
-      await admin.from('analysis_results').delete().eq('user_id', userId).eq('kind', kind).in('key', keys).eq('engine_version', engineVersion).lt('as_of', today)
+    const groups = new Map<string, { kind: string; asOf: string; keys: string[] }>()
+    for (const r of chunk) {
+      const asOf = r.asOf ?? today
+      const g = groups.get(`${r.kind}\u0000${asOf}`) ?? { kind: r.kind, asOf, keys: [] }
+      g.keys.push(r.key)
+      groups.set(`${r.kind}\u0000${asOf}`, g)
+    }
+    for (const g of groups.values()) {
+      await admin.from('analysis_results').delete().eq('user_id', userId).eq('kind', g.kind).in('key', g.keys).eq('engine_version', engineVersion).lt('as_of', g.asOf)
     }
     for (const r of chunk) published.push({ kind: r.kind, key: r.key, state: r.state })
   }

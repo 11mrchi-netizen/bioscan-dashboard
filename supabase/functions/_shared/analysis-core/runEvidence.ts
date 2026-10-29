@@ -10,9 +10,9 @@ import {
 } from './evidence.ts'
 import type { BandModel } from './evidence.ts'
 import { fnv1a } from './hash.ts'
+import { publishResults } from './publish.ts'
 import { stepTimer } from './trace.ts'
 import type { Trace } from './trace.ts'
-import { CORE_VERSION } from './version.ts'
 
 export interface EvidenceRun {
   userId: string
@@ -58,29 +58,10 @@ export async function runEvidence(admin: Admin, loaded: LoadedFrame, now: Date =
     rows.push({ kind: 'lag_curve', key: spec.id, state: r.state, have: r.rows, need: LAG.minRows, payload: r, hash: hashOf(spec.id, frame.series[spec.exposure], m.values) })
   }
 
-  const published: NonNullable<EvidenceRun['published']> = []
   mark('hashes', { rows: rows.length })
-  for (const row of rows) {
-    const { error } = await admin.from('analysis_results').upsert(
-      {
-        user_id: userId,
-        kind: row.kind,
-        key: row.key,
-        as_of: today,
-        engine_version: CORE_VERSION,
-        inputs_hash: row.hash,
-        state: row.state,
-        confidence_have: row.have,
-        confidence_need: row.need,
-        payload: row.payload,
-        calculated_at: now.toISOString(),
-      },
-      { onConflict: 'user_id,kind,key,as_of,engine_version' },
-    )
-    if (error) return { userId, error: error.message, published }
-    await admin.from('analysis_results').delete().eq('user_id', userId).eq('kind', row.kind).eq('key', row.key).eq('engine_version', CORE_VERSION).lt('as_of', today)
-    published.push({ kind: row.kind, key: row.key, state: row.state })
-  }
+  // one upsert per batch of rows and one delete per kind and batch (publish.ts), not an upsert and a delete per row
+  const out = await publishResults(admin, userId, today, rows, now)
   mark('publish', { rows: rows.length })
-  return { userId, published }
+  if (out.error) return { userId, error: out.error, published: out.published }
+  return { userId, published: out.published }
 }

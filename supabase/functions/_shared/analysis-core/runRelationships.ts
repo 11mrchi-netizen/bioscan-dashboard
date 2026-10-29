@@ -10,6 +10,8 @@ import { alignToAxis, dateAxis } from './stats.ts'
 import type { Num } from './stats.ts'
 import { CORE_VERSION } from './version.ts'
 import { fetchAll } from './paging.ts'
+import { publishResults } from './publish.ts'
+import type { ResultRow } from './publish.ts'
 import { baselineExclusionSpans, loadHealthInputs } from './healthLoad.ts'
 import { LATE_SCREEN_CATEGORIES, routineSeries } from './routineExposures.ts'
 import type { RoutineInputs } from './routineExposures.ts'
@@ -317,39 +319,32 @@ export async function runRelationships(admin: Admin, userId: string, now: Date =
 
   const results: NonNullable<RelationshipRun['results']> = []
   const ledger: LedgerRow[] = []
+  // One upsert per batch of rows and one delete per batch (publish.ts), not an upsert and a delete per hypothesis.
+  const familySize = outcomes.filter((x) => x.state !== 'not_yet').length
+  const catalogueOut = await publishResults(admin, userId, today, outcomes.map((o) => ({
+    kind: 'relationship', key: o.id, state: o.state, have: o.readiness?.have ?? o.n, need: o.readiness?.need ?? MIN_PAIRS, hash: o.inputsHash,
+    payload: {
+      catalogueVersion: CATALOGUE_VERSION,
+      familySize,
+      window: { start: frame.dates[0], end: frame.dates[frame.dates.length - 1] },
+      // Analysis review phase D: how complete the exposure capture was, so a reader can tell thin logging from no effect.
+      capture: frame.capture ?? null,
+      ...o,
+    },
+  })), now)
+  const publishedIds = new Set(catalogueOut.published.map((p) => p.key))
   for (const o of outcomes) {
-    const { error } = await admin.from('analysis_results').upsert(
-      {
-        user_id: userId,
-        kind: 'relationship',
-        key: o.id,
-        as_of: today,
-        engine_version: CORE_VERSION,
-        inputs_hash: o.inputsHash,
-        state: o.state,
-        confidence_have: o.readiness?.have ?? o.n,
-        confidence_need: o.readiness?.need ?? MIN_PAIRS,
-        payload: {
-          catalogueVersion: CATALOGUE_VERSION,
-          familySize: outcomes.filter((x) => x.state !== 'not_yet').length,
-          window: { start: frame.dates[0], end: frame.dates[frame.dates.length - 1] },
-          // Analysis review phase D: how complete the exposure capture was, so a reader can tell thin logging from no effect.
-          capture: frame.capture ?? null,
-          ...o,
-        },
-        calculated_at: now.toISOString(),
-      },
-      { onConflict: 'user_id,kind,key,as_of,engine_version' },
-    )
-    if (error) return { userId, error: error.message, results }
-    await admin.from('analysis_results').delete().eq('user_id', userId).eq('kind', 'relationship').eq('key', o.id).eq('engine_version', CORE_VERSION).lt('as_of', today)
+    if (!publishedIds.has(o.id)) continue
     results.push({ id: o.id, state: o.state, n: o.n, p: o.p, pAdjusted: o.pAdjusted })
     ledger.push(ledgerRow(userId, today, 'catalogue', o))
   }
+  if (catalogueOut.error) return { userId, error: catalogueOut.error, results }
 
   // Analysis review phase E: registered questions, each tested only on days after its registration date. Read softly,
   // so the nightly run keeps working before the migration is applied.
   const registered: NonNullable<RelationshipRun['registered']> = []
+  const registeredRows: ResultRow[] = []
+  const registeredOutcomes = new Map<string, RelationshipOutcome>()
   const reg = await admin.from('registered_questions').select('id, exposure, outcome, lag, no_effect, registered_on, source, withdrawn_at').eq('user_id', userId)
   if (!reg.error) {
     for (const row of (reg.data ?? []) as RegisteredQuestionRow[]) {
@@ -362,27 +357,19 @@ export async function runRelationships(admin: Admin, userId: string, now: Date =
         : { ...frame, dates: frame.dates.slice(from), excluded: frame.excluded.slice(from), series: Object.fromEntries(Object.entries(frame.series).map(([k, v]) => [k, v.slice(from)])) }
       const o = after.dates.length > 0 ? analyseHypothesis(h, after) : null
       if (!o) continue
-      const { error } = await admin.from('analysis_results').upsert(
-        {
-          user_id: userId,
-          kind: 'registered_question',
-          key: h.id,
-          as_of: today,
-          engine_version: CORE_VERSION,
-          inputs_hash: o.inputsHash,
-          state: o.state,
-          confidence_have: o.readiness?.have ?? o.n,
-          confidence_need: o.readiness?.need ?? MIN_PAIRS,
-          payload: { registeredOn: row.registered_on, source: row.source ?? null, exposure: row.exposure, target: row.outcome, lag: row.lag, daysSince: after.dates.length, ...o },
-          calculated_at: now.toISOString(),
-        },
-        { onConflict: 'user_id,kind,key,as_of,engine_version' },
-      )
-      if (error) return { userId, error: error.message, results, registered }
-      await admin.from('analysis_results').delete().eq('user_id', userId).eq('kind', 'registered_question').eq('key', h.id).eq('engine_version', CORE_VERSION).lt('as_of', today)
-      registered.push({ id: h.id, state: o.state, n: o.n })
+      registeredRows.push({
+        kind: 'registered_question', key: h.id, state: o.state, have: o.readiness?.have ?? o.n, need: o.readiness?.need ?? MIN_PAIRS, hash: o.inputsHash,
+        payload: { registeredOn: row.registered_on, source: row.source ?? null, exposure: row.exposure, target: row.outcome, lag: row.lag, daysSince: after.dates.length, ...o },
+      })
+      registeredOutcomes.set(h.id, o)
+    }
+    const registeredOut = await publishResults(admin, userId, today, registeredRows, now)
+    for (const p of registeredOut.published) {
+      const o = registeredOutcomes.get(p.key)!
+      registered.push({ id: p.key, state: o.state, n: o.n })
       ledger.push(ledgerRow(userId, today, 'registered', o))
     }
+    if (registeredOut.error) return { userId, error: registeredOut.error, results, registered }
   }
 
   // Every verdict, every night, kept (append-only; a re-run the same night keeps the first row).

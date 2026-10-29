@@ -25,12 +25,13 @@ function fakeAdmin(tables: Record<string, Row[]>) {
         eq(c: string, v: unknown) { filters.push(['eq', c, v]); return q },
         gte(c: string, v: unknown) { filters.push(['gte', c, v]); return q },
         lt(c: string, v: unknown) { filters.push(['lt', c, v]); return q },
+        in(c: string, v: unknown[]) { filters.push(['in', c, v]); return q },
         order() { return q },
         range(a: number, b: number) { window = [a, b]; return q },
         delete() { isDelete = true; return q },
-        upsert(row: Row) { upserts.push(row); return Promise.resolve({ error: null }) },
+        upsert(row: Row | Row[]) { for (const r of Array.isArray(row) ? row : [row]) upserts.push(r); return Promise.resolve({ error: null }) },
         then(resolve: (v: { data: Row[]; error: null }) => void) {
-          let rows = (tables[table] ?? []).filter((r) => filters.every(([op, c, v]) => (op === 'eq' ? r[c] === v : op === 'gte' ? String(r[c]) >= String(v) : String(r[c]) < String(v))))
+          let rows = (tables[table] ?? []).filter((r) => filters.every(([op, c, v]) => (op === 'eq' ? r[c] === v : op === 'in' ? (v as unknown[]).includes(r[c]) : op === 'gte' ? String(r[c]) >= String(v) : String(r[c]) < String(v))))
           if (isDelete) deletes.push({ table, filters })
           if (window) rows = rows.slice(window[0], window[1] + 1)
           resolve({ data: rows, error: null })
@@ -84,7 +85,9 @@ test('one row per metric, in natural units, replacing older days of the same ver
   assert.ok((hrv.expected as number) > 40 && (hrv.expected as number) < 90, `HRV expected ${hrv.expected} ms`)
   const rhr = payload('rhr').recent[27]
   assert.ok((rhr.expected as number) > 45 && (rhr.expected as number) < 65, `RHR expected ${rhr.expected} bpm`)
-  assert.equal(admin.deletes.filter((d) => d.filters.some(([op, c]) => op === 'lt' && c === 'as_of')).length, 3)
+  const deletedKeys = admin.deletes.filter((d) => d.filters.some(([op, c]) => op === 'lt' && c === 'as_of'))
+    .flatMap((d) => d.filters.filter(([op, c]) => op === 'in' && c === 'key').flatMap(([, , v]) => v as string[]))
+  assert.equal(deletedKeys.length, 3, 'older days of the three metrics are removed, in one batched delete')
 })
 
 test('an unlogged illness is flagged on the unfavourable side; a logged one is shown but not flagged', async () => {

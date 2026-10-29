@@ -21,12 +21,13 @@ function fakeAdmin(tables: Record<string, Row[]>) {
         eq(c: string, v: unknown) { filters.push(['eq', c, v]); return q },
         gte(c: string, v: unknown) { filters.push(['gte', c, v]); return q },
         lt(c: string, v: unknown) { filters.push(['lt', c, v]); return q },
+        in(c: string, v: unknown[]) { filters.push(['in', c, v]); return q },
         order() { return q },
         range(a: number, b: number) { (q as { __range?: [number, number] }).__range = [a, b]; return q },
         delete() { (q as { __delete?: boolean }).__delete = true; return q },
-        upsert(row: Row) { upserts.push(row); return Promise.resolve({ error: null }) },
+        upsert(row: Row | Row[]) { for (const r of Array.isArray(row) ? row : [row]) upserts.push(r); return Promise.resolve({ error: null }) },
         then(resolve: (v: { data: Row[]; error: null }) => void) {
-          const all = (tables[table] ?? []).filter((r) => filters.every(([op, c, v]) => (op === 'eq' ? r[c] === v : op === 'gte' ? String(r[c]) >= String(v) : String(r[c]) < String(v))))
+          const all = (tables[table] ?? []).filter((r) => filters.every(([op, c, v]) => (op === 'eq' ? r[c] === v : op === 'in' ? (v as unknown[]).includes(r[c]) : op === 'gte' ? String(r[c]) >= String(v) : String(r[c]) < String(v))))
           const range = (q as { __range?: [number, number] }).__range
           const rows = range ? all.slice(range[0], range[1] + 1) : all
           if ((q as { __delete?: boolean }).__delete) deletes.push({ table, filters })

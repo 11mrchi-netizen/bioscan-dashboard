@@ -85,3 +85,12 @@ test('no rows means no requests', async () => {
   assert.deepEqual(out, { published: [] })
   assert.equal(a.calls.length, 0)
 })
+
+test('a row with its own day is stamped with it and its older copies are removed before that day, per day', async () => {
+  const a = fakeAdmin()
+  await publishResults(a, 'u1', '2026-10-29', [{ ...row('series_break', 'hrv'), asOf: '2026-10-27' }, { ...row('series_break', 'rhr'), asOf: '2026-10-28' }, row('series_break', 'steps')], NOW)
+  const sent = a.calls.find((c) => c.op === 'upsert')!.arg as Record<string, unknown>[]
+  assert.deepEqual(sent.map((r) => [r.key, r.as_of]), [['hrv', '2026-10-27'], ['rhr', '2026-10-28'], ['steps', '2026-10-29']])
+  const lt = a.calls.filter((c) => c.op === 'delete').map((c) => Object.fromEntries(c.filters!.map(([k, v]) => [k, v])))
+  assert.deepEqual(lt.map((f) => [f.key, f.as_of]), [[['hrv'], '2026-10-27'], [['rhr'], '2026-10-28'], [['steps'], '2026-10-29']])
+})

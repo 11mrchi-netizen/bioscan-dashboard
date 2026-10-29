@@ -101,3 +101,23 @@ test('before the migration the engine skips quietly', async () => {
   assert.ok(run.skipped)
   assert.equal(run.error, undefined)
 })
+
+test('the timing hook sees every step in order, by position only, and changes nothing', async () => {
+  const { t } = tables()
+  const steps: { step: string; ms: number; info?: Record<string, number> }[] = []
+  const a = fakeAdmin(t)
+  const b = fakeAdmin(t)
+  const traced = await runHealth(a, loadedFor(t), new Date(`${TODAY}T20:30:00Z`), (step, ms, info) => steps.push({ step, ms, info }))
+  const plain = await runHealth(b, loadedFor(t), new Date(`${TODAY}T20:30:00Z`))
+  assert.deepEqual(traced, plain, 'same result with and without the hook')
+  assert.deepEqual(a.upserts, b.upserts, 'same rows written')
+  const names = steps.map((s) => s.step)
+  assert.deepEqual(names.slice(0, 4), ['inputs', 'reads', 'context', 'series'])
+  for (const i of [0, 1]) {
+    assert.deepEqual(names.filter((n) => n.startsWith(`c${i}.`)), [`c${i}.summary`, `c${i}.exposureSeries`, `c${i}.evaluate`, `c${i}.findings`, `c${i}.rows`])
+  }
+  assert.deepEqual(names.slice(-4), ['trials', 'overview', 'publish', 'ledger'])
+  assert.ok(steps.every((s) => Number.isFinite(s.ms) && s.ms >= 0))
+  const text = JSON.stringify(steps)
+  assert.ok(!text.includes('knee') && !text.includes('Right'), 'no concern title, region or symptom reaches the log')
+})

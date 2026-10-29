@@ -48,6 +48,11 @@ import { enginesFor, needsFrame, parseGroup, timedEngine } from "../_shared/anal
 import { pearson, pFromR } from "../_shared/analysis-core/stats.ts";
 import { CORE_VERSION } from "../_shared/analysis-core/version.ts";
 
+// Per-step timings of the health engine, one log line each (steps are named by position, never by concern), so a request
+// the Edge runtime kills for CPU time still shows where the time went.
+const healthTrace = (step: string, ms: number, info?: Record<string, number>) =>
+  console.log(JSON.stringify({ tag: "health-timing", step, ms: Math.round(ms), ...info }));
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-analysis-cron",
@@ -106,7 +111,7 @@ Deno.serve(async (req) => {
     const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const loaded = await loadFrame(admin, user.id);
     if ("error" in loaded) return json({ error: "load_failed", message: loaded.error }, 500);
-    const health = await runHealth(admin, loaded).catch((e) => ({ userId: user.id, error: String(e) }));
+    const health = await runHealth(admin, loaded, new Date(), healthTrace).catch((e) => ({ userId: user.id, error: String(e) }));
     return json({ coreVersion: CORE_VERSION, health }, "error" in health && health.error ? 500 : 200);
   }
 
@@ -170,7 +175,7 @@ Deno.serve(async (req) => {
             interventionIts: () => runInterventionIts(admin, loaded),
             eventEvidence: () => runEventEvidence(admin, loaded, seriesFile as SeriesFile),
             fitnessFatigue: () => runFitnessFatigue(admin, loaded),
-            health: () => runHealth(admin, loaded),
+            health: () => runHealth(admin, loaded, new Date(), healthTrace),
           };
           for (const name of want) if (engines[name]) out[name] = await run(name, engines[name]);
         }

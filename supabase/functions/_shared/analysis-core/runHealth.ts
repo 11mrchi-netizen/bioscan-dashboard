@@ -53,9 +53,23 @@ const DAY_SERIES_DAYS = 365
 
 interface PublishRow { kind: string; key: string; state: string; have: number | null; need: number | null; payload: unknown; hash: string; keep?: boolean }
 
-export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = new Date()): Promise<HealthRun> {
+/**
+ * Optional timing hook: called with the name of the step that just finished, its wall time in ms and a few counts. Steps are
+ * named by position (c0, c1, ...) never by concern, so nothing about a person's health reaches a log. Wall time includes
+ * waits on the database, so read the compute steps (series, evaluate, findings) against the I/O ones (reads, publish).
+ */
+export type HealthTrace = (step: string, ms: number, info?: Record<string, number>) => void
+
+export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = new Date(), trace?: HealthTrace): Promise<HealthRun> {
   const { userId, frame, today } = loaded
+  let last = performance.now()
+  const mark = (step: string, info?: Record<string, number>) => {
+    const t = performance.now()
+    trace?.(step, t - last, info)
+    last = performance.now()
+  }
   const inputs = await loadHealthInputs(admin, userId)
+  mark('inputs', { concerns: inputs.concerns?.length ?? 0 })
   if (inputs.error) return { userId, skipped: `health tables not readable: ${inputs.error}` }
 
   const since = frame.dates[0]
@@ -77,6 +91,7 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
     fetchAll<{ key: string; payload: { state?: string } }>((a: number, b: number) => admin.from('analysis_results').select('key, payload').eq('user_id', userId).eq('kind', HEALTH_KINDS.trial).order('as_of').range(a, b)),
     loadConfirmedBreaks(admin, userId),
   ])
+  mark('reads', { sessions: sessions.rows.length, details: details.rows.length })
   const failed = [sessions, details].find((r) => r.error)
   if (failed) return { userId, error: failed.error }
 
@@ -124,9 +139,12 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
     timeZone: dates.map((d) => tzByDate.get(d) ?? null),
   }
 
+  mark('context', { days: dates.length })
+
   // ---- concerns ----
   const axisStart = [healthAxisStart(inputs, today), since].sort()[0]
   const built = buildConcernSeries(inputs.concerns, inputs.observations, inputs.signals, axisStart, today)
+  mark('series', { concerns: inputs.concerns.length })
   const rows: PublishRow[] = []
   const ledgerRows: Record<string, unknown>[] = []
   const overview: Record<string, unknown>[] = []
@@ -135,18 +153,23 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
   const versions = { core: CORE_VERSION, rules: HEALTH_RULES.version, catalogue: CATALOGUE_VERSION_HEALTH, vocab: vocab.vocabVersion }
 
   const concernData = new Map<string, { cells: ReturnType<typeof built.series.get> extends infer S ? S extends { cells: infer C } ? C : never : never; episodes: ReturnType<typeof summariseConcern>['episodes'] }>()
+  let ci = -1
   for (const concern of inputs.concerns) {
+    ci++
     const s = built.series.get(concern.id)
     if (!s) continue
     const marks = inputs.marks.filter((mk) => mk.concern_id === concern.id)
     const summary = summariseConcern(concern, s.cells, marks, today)
     const cellsWin = winStart >= 0 ? s.cells.slice(winStart) : s.cells.filter((c) => dateSet.has(c.date))
     concernData.set(concern.id, { cells: s.cells, episodes: summary.episodes })
+    mark(`c${ci}.summary`, { cells: s.cells.length, episodes: summary.episodes.length })
     const exposureSeries = buildExposureSeries(ctx, concern, vocab.regions)
+    mark(`c${ci}.exposureSeries`, { series: Object.keys(exposureSeries).length })
     const regionMuscles = new Set(concern.regions.flatMap((r) => vocab.regions.find((v) => v.code === r.code)?.muscles ?? []))
     const analysable = concern.onset_type !== 'acute' && !concern.archived_at
     const specs = analysable ? exposuresFor(concern, vocab.regions) : []
     const ev = evaluateExposures(ctx, cellsWin, summary.episodes, specs, exposureSeries, regionMuscles, summary.quality)
+    mark(`c${ci}.evaluate`, { specs: specs.length })
     const findings: Finding[] = buildFindings({
       concern, summary, evaluations: ev.evaluations, cases: ev.cases, referenceOk: ev.referenceOk, dates,
       series: exposureSeries, droppedCases: ev.dropped, history,
@@ -155,6 +178,7 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
         return kind ? sessionLevel(ctx, cellsWin, summary.episodes, kind, spec.window, from) : null
       },
     })
+    mark(`c${ci}.findings`, { findings: findings.length })
     const hash = fnv1a(JSON.stringify([
       versions,
       s.cells.map((c) => [c.observed ? (c.recalled ? 2 : 1) : 0, c.severity, c.impact, c.onset ? 1 : 0]),
@@ -208,6 +232,7 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
       findings: findings.filter((f) => f.status === 'possible' || f.status === 'persistent').length,
       hints: findings.filter((f) => f.status === 'emerging').length,
     })
+    mark(`c${ci}.rows`)
   }
 
   // ---- trials ----
@@ -228,6 +253,7 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
     rows.push({ kind: HEALTH_KINDS.trial, key, state: read.state, have: null, need: null, payload: { ...read, concernId: link.concern_id, hypothesis: link.hypothesis, name: iv.name, versions }, hash: fnv1a(JSON.stringify([key, read])), keep: read.state === 'evaluated' })
   }
 
+  mark('trials', { links: links.error ? 0 : links.rows.length })
   rows.push({
     kind: HEALTH_KINDS.overview, key: 'all', state: 'ready', have: inputs.concerns.length, need: null,
     payload: {
@@ -239,6 +265,7 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
     hash: fnv1a(JSON.stringify(overview)),
   })
 
+  mark('overview')
   const published: NonNullable<HealthRun['published']> = []
   for (const row of rows) {
     const { error } = await admin.from('analysis_results').upsert(
@@ -253,8 +280,10 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
     await admin.from('analysis_results').delete().eq('user_id', userId).eq('kind', row.kind).eq('key', row.key).eq('engine_version', CORE_VERSION).lt('as_of', today)
     published.push({ kind: row.kind, key: row.key, state: row.state })
   }
+  mark('publish', { rows: rows.length })
   const { error: ledgerError } = ledgerRows.length > 0
     ? await admin.from('evidence_ledger').upsert(ledgerRows, { onConflict: 'user_id,question_id,as_of,engine_version', ignoreDuplicates: true })
     : { error: null }
+  mark('ledger', { rows: ledgerRows.length })
   return { userId, published, ...(ledgerError ? { ledgerError: ledgerError.message } : {}) }
 }

@@ -132,3 +132,16 @@ test('the timing hook reports the series-break steps and changes nothing', async
   assert.ok(steps.includes('origin.hrv') && steps.includes('result.hrv') && steps.includes('compute'))
   assert.equal(steps.at(-1), 'publish')
 })
+
+test('provenance of fields the engine does not use is not read and changes nothing', async () => {
+  const ds = dates(140)
+  const hrv = stepChangeSeries(1, 140, 110, 62, 6, 0, 3)
+  const base = ds.map((d, i) => ({ user_id: USER, date: d, field: 'wearable_daily.hrv', origin: i < 110 ? 'phone' : 'watch' }))
+  const noise = ds.flatMap((d) => [{ user_id: USER, date: d, field: 'meals.calories', origin: 'app' }, { user_id: USER, date: d, field: 'wearable_daily.vo2max', origin: 'watch' }])
+  const withNoise = fakeAdmin({ wearable_daily: rows(ds, 'hrv', hrv), daily_field_provenance: [...base, ...noise] })
+  const without = fakeAdmin({ wearable_daily: rows(ds, 'hrv', hrv), daily_field_provenance: base })
+  const a = await runSeriesBreaks(withNoise, USER, new Date('2026-09-18T12:00:00Z'))
+  const b = await runSeriesBreaks(without, USER, new Date('2026-09-18T12:00:00Z'))
+  assert.deepEqual(a, b)
+  assert.deepEqual(withNoise.upserts, without.upserts)
+})

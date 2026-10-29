@@ -1,6 +1,6 @@
 // I/O orchestration for the series_break engine, written against a minimal duck-typed Supabase client so it can be
 // tested in Node with an in-memory fake and run unchanged in the analysis-run Edge Function.
-import { fetchAll } from './paging.ts'
+import { fetchAll, fetchAllWaves } from './paging.ts'
 import { publishResults } from './publish.ts'
 import { stepTimer } from './trace.ts'
 import type { Trace } from './trace.ts'
@@ -41,8 +41,10 @@ export async function runSeriesBreaks(admin: Admin, userId: string, now: Date = 
   // Analysis review B10: the provenance read is paged. Unpaged and sorted oldest first, it lost the newest rows once a
   // user had more than PostgREST's row cap, which is exactly where a recent device change would be.
   const [prov, dec] = await Promise.all([
-    fetchAll<{ date: string; field: string; origin: string }>((a, b) =>
-      admin.from('daily_field_provenance').select('date, field, origin').eq('user_id', userId).gte('date', since).order('date').order('field').range(a, b)),
+    // Only the seven fields of SERIES are used below, so the rest are not read (the same result, fewer rows); the pages after the
+    // first are requested together.
+    fetchAllWaves<{ date: string; field: string; origin: string }>((a, b) =>
+      admin.from('daily_field_provenance').select('date, field, origin').eq('user_id', userId).in('field', SERIES.map((s) => `${s.table}.${s.column}`)).gte('date', since).order('date').order('field').range(a, b)),
     admin.from('series_break_decisions').select('metric, break_date, decision').eq('user_id', userId),
   ])
   const provRows = prov.rows

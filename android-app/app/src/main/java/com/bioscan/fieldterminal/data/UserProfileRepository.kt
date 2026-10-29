@@ -14,11 +14,13 @@ class UserProfileRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadProfile(): UserProfileRow? =
         supabase.postgrest.from("user_profile")
-            .select(columns = Columns.list("date_of_birth,sex"))
+            .select(columns = Columns.list("date_of_birth,sex,height_cm,athlete_mode"))
             .decodeSingleOrNull<UserProfileRow>()
 
-    suspend fun saveProfile(dateOfBirth: LocalDate?, sex: String?) {
+    suspend fun saveProfile(dateOfBirth: LocalDate?, sex: String?, heightCm: Double?, athleteMode: Boolean) {
         supabase.postgrest.from("user_profile")
-            .upsert(UserProfileRow(dateOfBirth = dateOfBirth?.toString(), sex = sex)) { onConflict = "user_id" }
+            .upsert(UserProfileRow(dateOfBirth = dateOfBirth?.toString(), sex = sex, heightCm = heightCm, athleteMode = athleteMode)) {
+                onConflict = "user_id"
+            }
     }
 }

@@ -16,11 +16,11 @@ type Ladder = 'anecdote' | 'early_signal' | 'emerging' | 'ready'
 interface IvRow { id: string; name: string; instructions: string | null; lifecycle_state: string }
 interface ExpRow { intervention_id: string; outcome_key: string; role: string; direction: 'up' | 'down' | 'none'; window_start_h: number; window_end_h: number; exploratory: boolean }
 interface EventRow { id: string; intervention_id: string; local_date: string; adhered: string; feeling: number | null; confounders: string[] | null; note: string | null }
-interface ExpResult { label: string; role: string; exploratory: boolean; nWithData: number; nReference: number; diff: number | null; lo: number | null; hi: number | null; unit: string | null; observed: string; summary: string }
+interface ExpResult { label: string; role: string; exploratory: boolean; nWithData: number; nReference: number; diff: number | null; lo: number | null; hi: number | null; unit: string | null; observed: string; summary: string; randomised?: { nDo: number; nSkip: number; diff: number | null; lo: number | null; hi: number | null } | null }
 interface EvidenceRow {
   key: string
   calculated_at: string
-  payload: { nEvents: number; nUsed: number; ladder: Ladder; assignment: string; feeling: { n: number; mean: number | null }; expectations: ExpResult[]; notes: string[] }
+  payload: { nEvents: number; nUsed: number; ladder: Ladder; assignment: string; feeling: { n: number; mean: number | null }; draws?: { nDo: number; nSkip: number; kept: number; missed: number; broken: number } | null; expectations: ExpResult[]; notes: string[] }
 }
 
 const LADDER_LABEL: Record<Ladder, string> = { anecdote: 'ANECDOTE', early_signal: 'EARLY SIGNAL', emerging: 'EMERGING', ready: 'READY TO TEST PROPERLY' }
@@ -110,6 +110,7 @@ export function Repeatable() {
                 ))}
                 <span>{mine.length} logged</span>
                 {ev && <span>{ev.payload.nUsed} used</span>}
+                {ev?.payload.draws && <span>{ev.payload.draws.nDo} do / {ev.payload.draws.nSkip} skip draws · {ev.payload.draws.kept} kept{ev.payload.draws.missed > 0 ? ` · ${ev.payload.draws.missed} not logged` : ''}{ev.payload.draws.broken > 0 ? ` · ${ev.payload.draws.broken} done on a skip day` : ''}</span>}
                 {ev && ev.payload.feeling.n > 0 && <span>felt {ev.payload.feeling.mean?.toFixed(1) ?? '–'} on average ({ev.payload.feeling.n} rated)</span>}
               </div>
               {ev ? (
@@ -118,6 +119,9 @@ export function Repeatable() {
                   {ev.payload.expectations.map((x, i) => (
                     <div key={i} className="conf-metric">
                       <p className="conf-summary">{x.summary}</p>
+                      {x.randomised && x.randomised.diff !== null && (
+                        <p className="conf-footnote mono">drawn days only ({x.randomised.nDo} do, {x.randomised.nSkip} skip): {x.randomised.diff.toFixed(2)}{x.unit ? ` ${x.unit}` : ''}{x.randomised.lo !== null && x.randomised.hi !== null ? ` (${x.randomised.lo.toFixed(2)} to ${x.randomised.hi.toFixed(2)})` : ''}</p>
+                      )}
                     </div>
                   ))}
                   {ev.payload.notes.map((n, i) => <p key={i} className="conf-footnote">{n}</p>)}

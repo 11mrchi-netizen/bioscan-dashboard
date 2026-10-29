@@ -21,12 +21,17 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ExperimentsRepository
 import com.bioscan.fieldterminal.data.InterventionEventsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
+import com.bioscan.fieldterminal.data.model.DrawRow
 import com.bioscan.fieldterminal.data.model.EpisodicIntervention
 import com.bioscan.fieldterminal.data.model.EventEvidenceRow
 import com.bioscan.fieldterminal.data.model.EventRow
 import com.bioscan.fieldterminal.data.model.ExpectationRow
 import com.bioscan.fieldterminal.data.model.TrackedOutcomeRow
+import com.bioscan.fieldterminal.domain.DrawState
 import com.bioscan.fieldterminal.domain.ExpectedDirection
+import com.bioscan.fieldterminal.domain.drawCoin
+import com.bioscan.fieldterminal.domain.drawState
+import com.bioscan.fieldterminal.domain.drawText
 import com.bioscan.fieldterminal.domain.ladderHint
 import com.bioscan.fieldterminal.domain.ladderLabel
 import com.bioscan.fieldterminal.domain.promotionTarget
@@ -36,6 +41,7 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
+import java.time.LocalDate
 
 // Lab › N=1: interventions you repeat (nasal strips, a lactose meal, a cold shower), the events logged for them, how each
 // felt, and what the nightly analysis makes of them so far. The label climbs with the number of events that have data
@@ -64,7 +70,8 @@ fun InterventionEventsSection() {
     var creating by remember { mutableStateOf(false) }
     var creatingTracked by remember { mutableStateOf(false) }
     var loggingValue by remember { mutableStateOf(false) }
-    var logging by remember { mutableStateOf<EpisodicIntervention?>(null) }
+    var logging by remember { mutableStateOf<Pair<EpisodicIntervention, String?>?>(null) }
+    var draws by remember { mutableStateOf<List<DrawRow>>(emptyList()) }
     var rating by remember { mutableStateOf<Pair<EventRow, String>?>(null) }
     var parking by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -74,6 +81,7 @@ fun InterventionEventsSection() {
         expectations = repo.loadExpectations()
         events = repo.loadRecentEvents()
         evidence = repo.loadEvidence()
+        draws = repo.loadDraws()
         tracked = repo.loadTrackedOutcomes()
         tested = runCatching { ExperimentsRepository(SupabaseClientProvider.client).loadExperiments().mapNotNull { it.interventionId }.toSet() }.getOrDefault(emptySet())
     }
@@ -112,12 +120,34 @@ fun InterventionEventsSection() {
                         ).joinToString(" · "),
                         style = FTType.Caption, color = FT.TextMuted,
                     )
+                    if (iv.drawEnabled) {
+                        val today = LocalDate.now().toString()
+                        val todays = draws.firstOrNull { it.interventionId == iv.id && it.localDate == today }
+                        val state = drawState(todays?.result, todays?.eventId)
+                        Text(drawText(state), style = FTType.Caption, color = FT.TextSecondary)
+                        result?.payload?.draws?.takeIf { it.nDo + it.nSkip > 0 }?.let {
+                            Text(
+                                "${it.nDo} do and ${it.nSkip} skip draws; ${it.kept} done as drawn" +
+                                    (if (it.missed > 0) ", ${it.missed} drawn but not logged" else "") + (if (it.broken > 0) ", ${it.broken} done on a skip day" else ""),
+                                style = FTType.Caption, color = FT.TextMuted,
+                            )
+                        }
+                    }
                     if (result == null) {
                         Text("Not analysed yet. The nightly analysis publishes this once events have data.", style = FTType.BodySmall, color = FT.TextSecondary)
                     } else {
                         val primary = result.payload.expectations.firstOrNull { it.role == "primary" && !it.exploratory } ?: result.payload.expectations.firstOrNull()
                         Text(ladderHint(result.payload.ladder, primary?.nWithData ?: 0), style = FTType.BodySmall, color = FT.TextSecondary)
-                        result.payload.expectations.forEach { Text(it.summary, style = FTType.BodySmall, color = FT.TextPrimary) }
+                        result.payload.expectations.forEach { x ->
+                            Text(x.summary, style = FTType.BodySmall, color = FT.TextPrimary)
+                            x.randomised?.takeIf { it.diff != null }?.let {
+                                Text(
+                                    "Drawn days only (${it.nDo} do, ${it.nSkip} skip): ${"%+.2f".format(it.diff)}${x.unit?.let { u -> " $u" } ?: ""}" +
+                                        if (it.lo != null && it.hi != null) " (${"%+.2f".format(it.lo)} to ${"%+.2f".format(it.hi)})" else "",
+                                    style = FTType.Caption, color = FT.TextSecondary,
+                                )
+                            }
+                        }
                         result.payload.notes.forEach { Text(it, style = FTType.Caption, color = FT.TextMuted) }
                         if (result.payload.ladder == "ready") {
                             val main = expectations.firstOrNull { it.interventionId == iv.id && it.role == "primary" && !it.exploratory }
@@ -130,7 +160,24 @@ fun InterventionEventsSection() {
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FTButton(label = "LOG IT") { logging = iv }
+                        if (iv.drawEnabled) {
+                            val today = LocalDate.now().toString()
+                            val todays = draws.firstOrNull { it.interventionId == iv.id && it.localDate == today }
+                            when (drawState(todays?.result, todays?.eventId)) {
+                                DrawState.NOT_DRAWN -> FTButton(label = "DRAW TODAY") {
+                                    error = null
+                                    scope.launchSafe(onError = { e -> error = e.message ?: "Could not draw" }) {
+                                        // stored first; a second tap (or a second phone) hits the one-per-day rule and just reloads
+                                        runCatching { repo.saveDraw(iv.id, today, drawCoin()) }
+                                        draws = repo.loadDraws()
+                                    }
+                                }
+                                DrawState.DO_PENDING -> FTButton(label = "LOG THE DRAWN ONE") { logging = iv to todays?.id }
+                                else -> {}
+                            }
+                        }
+                        // chosen by you, not the coin: always possible, counted as such (and as a broken draw on a skip day)
+                        FTButton(label = if (iv.drawEnabled) "LOG ANYWAY" else "LOG IT") { logging = iv to null }
                         if (unrated != null) FTButton(label = "HOW IT FELT") { rating = unrated to iv.name }
                         FTButton(label = "PARK…") { parking = iv.id }
                     }
@@ -159,7 +206,7 @@ fun InterventionEventsSection() {
     if (creating) InterventionSheet(tracked, onDismiss = { creating = false }, onCreated = { creating = false; key++ })
     if (creatingTracked) TrackedOutcomeSheet(onDismiss = { creatingTracked = false }, onCreated = { creatingTracked = false; key++ })
     if (loggingValue) TrackedValueSheet(tracked, onDismiss = { loggingValue = false }, onLogged = { loggingValue = false; key++ })
-    logging?.let { iv -> LogEventSheet(iv, expectations, onDismiss = { logging = null }, onLogged = { logging = null; key++ }) }
+    logging?.let { (iv, drawId) -> LogEventSheet(iv, expectations, onDismiss = { logging = null }, onLogged = { logging = null; key++ }, drawId = drawId) }
     promoting?.let { (iv, metric) -> EventExperimentSheet(iv.id, iv.name, metric, onDismiss = { promoting = null }, onRegistered = { promoting = null; key++ }) }
     rating?.let { (event, name) -> RateEventSheet(event.id, name, onDismiss = { rating = null }, onRated = { rating = null; key++ }) }
 }

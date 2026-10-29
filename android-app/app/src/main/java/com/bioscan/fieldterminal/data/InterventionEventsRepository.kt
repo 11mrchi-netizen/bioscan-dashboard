@@ -1,16 +1,20 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.data.model.DrawEventLink
+import com.bioscan.fieldterminal.data.model.DrawRow
 import com.bioscan.fieldterminal.data.model.EpisodicIntervention
 import com.bioscan.fieldterminal.data.model.EventEvidenceRow
 import com.bioscan.fieldterminal.data.model.EventRatingPatch
 import com.bioscan.fieldterminal.data.model.EventRow
 import com.bioscan.fieldterminal.data.model.ExpectationRow
 import com.bioscan.fieldterminal.data.model.NewEpisodicIntervention
+import com.bioscan.fieldterminal.data.model.NewDraw
 import com.bioscan.fieldterminal.data.model.NewEvent
 import com.bioscan.fieldterminal.data.model.NewExpectation
 import com.bioscan.fieldterminal.data.model.NewTrackedOutcome
 import com.bioscan.fieldterminal.data.model.NewTrackedValue
 import com.bioscan.fieldterminal.data.model.TrackedOutcomeRow
+import com.bioscan.fieldterminal.domain.DrawResult
 import com.bioscan.fieldterminal.domain.ExpectationDraft
 import com.bioscan.fieldterminal.domain.LocalStamp
 import com.bioscan.fieldterminal.domain.validateExpectations
@@ -31,7 +35,7 @@ class InterventionEventsRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadInterventions(): List<EpisodicIntervention> = try {
         supabase.postgrest.from("interventions")
-            .select(columns = Columns.list("id,name,instructions,domain,lifecycle_state,version")) { filter { eq("mode", "episodic") } }
+            .select(columns = Columns.list("id,name,instructions,domain,lifecycle_state,version,draw_enabled")) { filter { eq("mode", "episodic") } }
             .decodeList<EpisodicIntervention>()
             .filter { it.lifecycleState != "stopped" }
             .sortedBy { it.name.lowercase() }
@@ -69,13 +73,13 @@ class InterventionEventsRepository(private val supabase: SupabaseClient) {
      * Declares the intervention and its expectations. The database locks an expectation once an event exists, so this is
      * the pre-registration of the windows. If the expectations can't be written the intervention is removed again.
      */
-    suspend fun createIntervention(name: String, instructions: String?, domain: String, drafts: List<ExpectationDraft>): String {
+    suspend fun createIntervention(name: String, instructions: String?, domain: String, drafts: List<ExpectationDraft>, drawEnabled: Boolean = false): String {
         validateExpectations(drafts)?.let { throw IllegalArgumentException(it) }
         val id = UUID.randomUUID().toString()
         supabase.postgrest.from("interventions").insert(
             NewEpisodicIntervention(
                 id = id, domain = domain, subjectType = "event_series", subjectKey = id, name = name.trim().take(80),
-                instructions = instructions?.trim()?.takeIf { it.isNotEmpty() }, mode = "episodic", lifecycleState = "active", source = "events",
+                instructions = instructions?.trim()?.takeIf { it.isNotEmpty() }, mode = "episodic", lifecycleState = "active", source = "events", drawEnabled = drawEnabled,
             ),
         )
         try {
@@ -126,6 +130,27 @@ class InterventionEventsRepository(private val supabase: SupabaseClient) {
             ),
         )
         return id
+    }
+
+    /** Recent draws, newest first; a failed read is an empty list (the draw button then simply shows). */
+    suspend fun loadDraws(limit: Long = 60): List<DrawRow> = try {
+        supabase.postgrest.from("intervention_draws").select { order("local_date", Order.DESCENDING); limit(limit) }.decodeList<DrawRow>()
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    /**
+     * Stores today's draw before anything is shown or logged. The (intervention, day) pair is unique in the database, so a
+     * second attempt fails rather than redrawing; the caller reloads and shows the stored result.
+     */
+    suspend fun saveDraw(interventionId: String, localDate: String, result: DrawResult): String {
+        val id = UUID.randomUUID().toString()
+        supabase.postgrest.from("intervention_draws").insert(NewDraw(id, interventionId, localDate, result.key))
+        return id
+    }
+
+    suspend fun linkDrawEvent(drawId: String, eventId: String) {
+        supabase.postgrest.from("intervention_draws").update(DrawEventLink(eventId)) { filter { eq("id", drawId) } }
     }
 
     /** The morning rating, saved before any numbers are shown. */

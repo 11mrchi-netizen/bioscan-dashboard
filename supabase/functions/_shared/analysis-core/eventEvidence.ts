@@ -22,6 +22,8 @@ export const EVENT_EVIDENCE = {
   minWith: 3,
   minReference: 5,
   referenceLookbackDays: 60,
+  /** Drawn 'do' days and drawn 'skip' days with data needed before the randomised comparison is shown. */
+  minRandomised: 3,
   /** Below this share of |effect| / personal SD the difference is called flat when the interval spans zero. */
   flatSd: 0.2,
 }
@@ -75,6 +77,8 @@ export interface EventEvidenceInput {
   otherEventMins: number[]
   /** Local dates known to be confounded (illness, travel, ...), excluded from the reference. */
   confoundedDays: string[]
+  /** The daily coin-flip draws, when the intervention uses them. */
+  draws?: { localDate: string; result: 'do' | 'skip' }[]
 }
 
 export interface ExpectationResult {
@@ -101,6 +105,8 @@ export interface ExpectationResult {
   /** Shown from the top rung only. */
   p: number | null
   pAdjusted: number | null
+  /** Drawn days only: events on days the coin said do, against days it said skip. Null until both sides have data. */
+  randomised: { nDo: number; nSkip: number; diff: number | null; lo: number | null; hi: number | null; observed: Observed } | null
   /** First three events alone vs all, on the primary only, once there are at least six (novelty). */
   firstThree: { diff: number | null; all: number | null } | null
   summary: string
@@ -116,6 +122,8 @@ export interface EventEvidenceResult {
   ladder: Ladder
   assignment: Assignment
   feeling: { n: number; mean: number | null }
+  /** How the draws went: days drawn, kept (a 'do' with an event), missed (a 'do' with none) and broken (an event on a 'skip'). */
+  draws: { nDo: number; nSkip: number; kept: number; missed: number; broken: number } | null
   expectations: ExpectationResult[]
   notes: string[]
 }
@@ -262,6 +270,18 @@ export function analyseEventEvidence(input: EventEvidenceInput): EventEvidenceRe
     refAnchors.push(anchor)
   }
 
+  // Drawn days: the coin, not the person, chose these, so 'skip' days are a clean reference for the 'do' days.
+  const draws = input.draws ?? []
+  const doDays = new Set(draws.filter((d) => d.result === 'do').map((d) => d.localDate))
+  const skipDays = new Set(draws.filter((d) => d.result === 'skip').map((d) => d.localDate))
+  const eventDays = new Set(events.filter((ev) => ev.adhered !== 'no').map((ev) => ev.localDate))
+  const drawnUsed = used.filter((ev) => doDays.has(ev.localDate))
+  const skipAnchors = [...skipDays].map((d) => dayNumber(d) * MIN_PER_DAY + refMinute).filter((anchor) => {
+    if (anchor + maxEndH * 60 > endOfAsOf) return false
+    if (confounded.has(new Date(Math.floor(anchor / MIN_PER_DAY) * 86400000).toISOString().slice(0, 10))) return false
+    return !allSpans.some((sp2) => intersects(sp2, span(anchor, minStartH, maxEndH)))
+  })
+
   const results: ExpectationResult[] = []
   for (const e of expectations) {
     const pts = input.points[e.outcomeKey] ?? []
@@ -279,13 +299,26 @@ export function analyseEventEvidence(input: EventEvidenceInput): EventEvidenceRe
     if (e === primary && w.length >= 6 && refVals.length > 0) {
       firstThree = { diff: r(hodgesLehmann(w.slice(0, 3), refVals).diff), all: r(hodgesLehmann(w, refVals).diff) }
     }
+    let randomised: ExpectationResult['randomised'] = null
+    if (draws.length > 0) {
+      const dw = drawnUsed.map((ev) => outcomeAt(pts, ev.wallMin, e)).filter((v): v is number => v !== null)
+      const ds = skipAnchors.map((a) => outcomeAt(pts, a, e)).filter((v): v is number => v !== null)
+      const enough = dw.length >= EVENT_EVIDENCE.minRandomised && ds.length >= EVENT_EVIDENCE.minRandomised
+      const dh = enough ? hodgesLehmann(dw, ds) : null
+      const dsd = ds.length >= 2 ? sd(ds) : 0
+      randomised = {
+        nDo: dw.length, nSkip: ds.length,
+        diff: dh ? r(dh.diff) : null, lo: dh?.lo != null ? r(dh.lo) : null, hi: dh?.hi != null ? r(dh.hi) : null,
+        observed: dh ? observedLabel(e.direction, dh.diff, dh.lo, dh.hi, dsd > 0 ? dh.diff / dsd : null) : 'too_few',
+      }
+    }
     results.push({
       expectationId: e.id, outcomeKey: e.outcomeKey, label: e.label, role: e.role, exploratory: e.exploratory, direction: e.direction,
       windowStartH: e.windowStartH, windowEndH: e.windowEndH, ...base,
       withMedian: w.length ? r(median(w)) : null, referenceMedian: refVals.length ? r(median(refVals)) : null,
       diffSd: diffSd === null ? null : r(diffSd, 2),
       p: w.length >= EVENT_EVIDENCE.minWith && refVals.length >= EVENT_EVIDENCE.minReference ? mannWhitneyP(w, refVals) : null,
-      pAdjusted: null, firstThree, summary: summarise(e, base),
+      pAdjusted: null, randomised, firstThree, summary: summarise(e, base),
     })
   }
 
@@ -308,6 +341,7 @@ export function analyseEventEvidence(input: EventEvidenceInput): EventEvidenceRe
   const rated = events.filter((ev) => ev.feeling !== null).map((ev) => ev.feeling as number)
   const notes: string[] = []
   if (refAnchors.length < EVENT_EVIDENCE.minReference) notes.push(`Only ${refAnchors.length} comparison occasions are available, so no interval is shown yet.`)
+  if (draws.length > 0 && results.some((x) => x.randomised && x.randomised.diff !== null)) notes.push('Drawn days are compared separately: the coin, not you, chose them, so that comparison is the cleaner one.')
   if (events.length > 0 && drawn === 0) notes.push('Every event was chosen by you, so a night you picked may differ from one you did not (a blocked nose, a heavy day); a drawn schedule removes that.')
   if (excluded.stacked > 0) notes.push(`${excluded.stacked} event${excluded.stacked === 1 ? '' : 's'} left out because another intervention fell in the same window.`)
   if (results.some((x) => x.exploratory || x.role !== 'primary')) notes.push('Secondary, watch and later-added outcomes are exploratory.')
@@ -322,6 +356,12 @@ export function analyseEventEvidence(input: EventEvidenceInput): EventEvidenceRe
     ladder,
     assignment: drawn === 0 ? 'self' : drawn === used.length ? 'drawn' : 'mixed',
     feeling: { n: rated.length, mean: rated.length ? r(mean(rated), 2) : null },
+    draws: draws.length === 0 ? null : {
+      nDo: doDays.size, nSkip: skipDays.size,
+      kept: [...doDays].filter((d) => eventDays.has(d)).length,
+      missed: [...doDays].filter((d) => !eventDays.has(d)).length,
+      broken: [...skipDays].filter((d) => eventDays.has(d)).length,
+    },
     expectations: results,
     notes,
   }

@@ -15,6 +15,7 @@ data class EpisodicIntervention(
     val domain: String = "other",
     @SerialName("lifecycle_state") val lifecycleState: String = "active",
     val version: Int = 1,
+    @SerialName("draw_enabled") val drawEnabled: Boolean = false,
 )
 
 @Serializable
@@ -64,7 +65,29 @@ data class NewEpisodicIntervention(
     val mode: String,
     @SerialName("lifecycle_state") val lifecycleState: String,
     val source: String,
+    @SerialName("draw_enabled") val drawEnabled: Boolean = false,
 )
+
+// The daily coin flip (20261115): one draw per intervention and local day, never redrawn.
+@Serializable
+data class DrawRow(
+    val id: String,
+    @SerialName("intervention_id") val interventionId: String,
+    @SerialName("local_date") val localDate: String = "",
+    val result: String = "skip",
+    @SerialName("event_id") val eventId: String? = null,
+)
+
+@Serializable
+data class NewDraw(
+    val id: String,
+    @SerialName("intervention_id") val interventionId: String,
+    @SerialName("local_date") val localDate: String,
+    val result: String,
+)
+
+@Serializable
+data class DrawEventLink(@SerialName("event_id") val eventId: String)
 
 @Serializable
 data class NewExpectation(
@@ -121,6 +144,16 @@ data class EventRatingPatch(
 
 // What analysis-run publishes (analysis_results kind 'event_evidence', key = intervention id).
 @Serializable
+data class EventRandomised(
+    val nDo: Int = 0,
+    val nSkip: Int = 0,
+    val diff: Double? = null,
+    val lo: Double? = null,
+    val hi: Double? = null,
+    val observed: String = "too_few",
+)
+
+@Serializable
 data class EventExpectationResult(
     val label: String = "",
     val role: String = "primary",
@@ -136,7 +169,11 @@ data class EventExpectationResult(
     val unit: String? = null,
     val observed: String = "too_few",
     val summary: String = "",
+    val randomised: EventRandomised? = null,
 )
+
+@Serializable
+data class EventDraws(val nDo: Int = 0, val nSkip: Int = 0, val kept: Int = 0, val missed: Int = 0, val broken: Int = 0)
 
 @Serializable
 data class EventFeeling(val n: Int = 0, val mean: Double? = null)
@@ -149,6 +186,7 @@ data class EventEvidencePayload(
     val ladder: String = "anecdote",
     val assignment: String = "self",
     val feeling: EventFeeling = EventFeeling(),
+    val draws: EventDraws? = null,
     val expectations: List<EventExpectationResult> = emptyList(),
     val notes: List<String> = emptyList(),
 )

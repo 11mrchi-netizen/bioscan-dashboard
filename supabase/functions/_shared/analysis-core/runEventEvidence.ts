@@ -33,6 +33,7 @@ interface EventRow {
   id: string; intervention_id: string; local_date: string; local_minute: number; adhered: 'yes' | 'partial' | 'no'; confounders: string[] | null
   feeling: number | null; assigned_by: 'self' | 'drawn'
 }
+interface DrawRow { intervention_id: string; local_date: string; result: 'do' | 'skip' }
 interface TrackedRow { id: string; name: string; unit: string | null }
 interface TrackedValueRow { outcome_id: string; local_date: string; local_minute: number; value: number }
 
@@ -57,14 +58,15 @@ export async function runEventEvidence(admin: Admin, loaded: LoadedFrame, series
   if (interventions.error) return { userId, error: interventions.error }
   if (interventions.rows.length === 0) return { userId, results: [] }
 
-  const [exps, evs, outcomes, values, checkins] = await Promise.all([
+  const [exps, evs, outcomes, values, checkins, drawRows] = await Promise.all([
     fetchAll<ExpectationRow>(own('intervention_expectations', 'id, intervention_id, outcome_kind, outcome_key, role, direction, window_start_h, window_end_h, aggregation, exploratory')),
     fetchAll<EventRow>(own('intervention_events', 'id, intervention_id, local_date, local_minute, adhered, confounders, feeling, assigned_by', 'local_date')),
     fetchAll<TrackedRow>(own('tracked_outcomes', 'id, name, unit')),
     fetchAll<TrackedValueRow>(own('tracked_outcome_values', 'outcome_id, local_date, local_minute, value', 'local_date')),
     fetchAll<{ date: string; drinks: number | null }>(own('evening_checkins', 'date, drinks', 'date')),
+    fetchAll<DrawRow>(own('intervention_draws', 'intervention_id, local_date, result', 'local_date')),
   ])
-  for (const x of [exps, evs, outcomes, values]) if (x.error) return { userId, error: x.error }
+  for (const x of [exps, evs, outcomes, values, drawRows]) if (x.error) return { userId, error: x.error }
 
   const seriesById = new Map(seriesFile.series.map((s) => [s.id, s]))
   const trackedById = new Map(outcomes.rows.map((o) => [o.id, o]))
@@ -127,6 +129,7 @@ export async function runEventEvidence(admin: Admin, loaded: LoadedFrame, series
       interventionId: iv.id, asOf: today, events, expectations, points: pointsByKey,
       otherEventMins: evs.rows.filter((e) => e.intervention_id !== iv.id).map(eventMin),
       confoundedDays: [...alcoholDays],
+      draws: drawRows.rows.filter((d) => d.intervention_id === iv.id).map((d) => ({ localDate: d.local_date, result: d.result })),
     })
     const missing = expectations.filter((e) => notes[e.outcomeKey]).map((e) => `${e.label}: ${notes[e.outcomeKey]}`)
     const primary = result.expectations.find((e) => e.role === 'primary' && !e.exploratory) ?? result.expectations[0]

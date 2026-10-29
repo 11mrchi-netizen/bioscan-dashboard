@@ -83,6 +83,7 @@ fun InterventionSheet(tracked: List<TrackedOutcomeRow>, onDismiss: () -> Unit, o
     var name by remember { mutableStateOf("") }
     var instructions by remember { mutableStateOf("") }
     var domain by remember { mutableStateOf<String?>("lifestyle") }
+    var drawEach by remember { mutableStateOf(false) }
     val drafts = remember { mutableStateListOf<ExpectationDraft>() }
     // the draft being added
     var outcome by remember { mutableStateOf<String?>(null) } // "series:<id>" or "tracked:<id>"
@@ -110,6 +111,12 @@ fun InterventionSheet(tracked: List<TrackedOutcomeRow>, onDismiss: () -> Unit, o
             SheetLabel("KIND")
             TextChipRow(DOMAINS, domain, perRow = 3) { domain = it ?: domain }
 
+            SheetLabel("LET A COIN DECIDE?")
+            TextChipRow(listOf("No, I choose", "Draw each day"), if (drawEach) "Draw each day" else "No, I choose", perRow = 2) { drawEach = it == "Draw each day" }
+            Text(
+                "A draw made before the day settles whether to do it, so the days you pick can't differ from the days you skip. Fairest, but it means sometimes not doing something you'd like to.",
+                style = FTType.Caption, color = FT.TextMuted,
+            )
             SheetLabel("WHAT YOU EXPECT IT TO CHANGE")
             drafts.forEachIndexed { i, d ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -142,7 +149,7 @@ fun InterventionSheet(tracked: List<TrackedOutcomeRow>, onDismiss: () -> Unit, o
                 saving = true
                 scope.launch {
                     try {
-                        repo.createIntervention(name, instructions, domain ?: "other", drafts.toList())
+                        repo.createIntervention(name, instructions, domain ?: "other", drafts.toList(), drawEnabled = drawEach)
                         onCreated()
                     } catch (e: CancellationException) {
                         throw e
@@ -163,7 +170,7 @@ private val WHEN_CHOICES = listOf("Now" to 0L, "1 h ago" to 60L, "2 h ago" to 12
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LogEventSheet(intervention: EpisodicIntervention, expectations: List<ExpectationRow>, onDismiss: () -> Unit, onLogged: () -> Unit) {
+fun LogEventSheet(intervention: EpisodicIntervention, expectations: List<ExpectationRow>, onDismiss: () -> Unit, onLogged: () -> Unit, drawId: String? = null) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val repo = remember { InterventionEventsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
@@ -178,6 +185,7 @@ fun LogEventSheet(intervention: EpisodicIntervention, expectations: List<Expecta
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary) {
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("LOG · ${intervention.name.uppercase()}", style = FTType.SectionTitle, color = FT.DomainLabs)
+            if (drawId != null) Text("The coin said do it today, so this is logged as a drawn event.", style = FTType.Caption, color = FT.TextMuted)
             SheetLabel("WHEN")
             TextChipRow(WHEN_CHOICES.map { it.first }, whenLabel, perRow = 3) { whenLabel = it ?: whenLabel }
             SheetLabel("HOW IT WENT")
@@ -201,7 +209,12 @@ fun LogEventSheet(intervention: EpisodicIntervention, expectations: List<Expecta
                 saving = true
                 scope.launch {
                     try {
-                        repo.logEvent(intervention, expectations, Instant.from(at), localStamp(at), if (partial) "partial" else "yes", flagged.toList(), dose, note)
+                        val eventId = repo.logEvent(
+                            intervention, expectations, Instant.from(at), localStamp(at), if (partial) "partial" else "yes", flagged.toList(), dose, note,
+                            assignedBy = if (drawId != null) "drawn" else "self",
+                        )
+                        // the draw keeps pointing at what it led to; a failed link doesn't undo a logged event
+                        if (drawId != null) runCatching { repo.linkDrawEvent(drawId, eventId) }
                         onLogged()
                     } catch (e: CancellationException) {
                         throw e

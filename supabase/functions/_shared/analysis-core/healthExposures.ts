@@ -56,7 +56,15 @@ export interface ExposureContext {
   stressHigh: Num[]
   /** The phone's time zone per day (daily_context), null where unknown. */
   timeZone: (string | null)[]
+  /**
+   * Optional timing hook (runHealth passes its own): step name, wall ms since the previous step, a few counts. Step names
+   * are catalogue ids and positions, never a concern's title, region or symptom.
+   */
+  trace?: (step: string, ms: number, info?: Record<string, number>) => void
 }
+
+/** Counts of the exercise-name lookups, read as before/after deltas by the timing hook. */
+export const lookupStats = { musclesOf: 0, movementKey: 0 }
 
 export interface ExposureSpec {
   id: string
@@ -142,6 +150,7 @@ const PHRASE_MAP: [string, string][] = [
 ]
 
 export function movementKey(name: string): string {
+  lookupStats.movementKey++
   let s = name.replace(/\([A-Z]{2,5}\)/g, ' ').toLowerCase()
   s = s.replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
   s = s.replaceAll('pullups', 'pull up').replaceAll('pullup', 'pull up').replaceAll('chinups', 'chin up').replaceAll('chinup', 'chin up')
@@ -152,6 +161,7 @@ export function movementKey(name: string): string {
 
 /** Primary muscles of a logged exercise name: exact library name first, then the movement key; null when unknown. */
 export function musclesOf(name: string, library: LibraryRow[]): string[] | null {
+  lookupStats.musclesOf++
   const exact = library.find((l) => l.name.toLowerCase() === name.toLowerCase())
   if (exact) return exact.primary_muscles ?? []
   const key = movementKey(name)
@@ -209,6 +219,16 @@ export function longRunMinutes(durations: number[]): number {
 
 /** Daily 1 / 0 / null for every catalogue exposure; `regional_strength` for the concern's regions. */
 export function buildExposureSeries(ctx: ExposureContext, concern: ConcernRow, regions: VocabRegion[]): Record<string, Num[]> {
+  let t = performance.now()
+  let m0 = lookupStats.musclesOf
+  let k0 = lookupStats.movementKey
+  const mark = (step: string, info?: Record<string, number>) => {
+    if (!ctx.trace) return
+    ctx.trace(step, performance.now() - t, { ...info, musclesOf: lookupStats.musclesOf - m0, movementKey: lookupStats.movementKey - k0 })
+    t = performance.now()
+    m0 = lookupStats.musclesOf
+    k0 = lookupStats.movementKey
+  }
   const n = ctx.dates.length
   const idx = new Map(ctx.dates.map((d, i) => [d, i]))
   const firstSession = ctx.sessions.map((s) => s.date).sort()[0] ?? null
@@ -244,6 +264,7 @@ export function buildExposureSeries(ctx: ExposureContext, concern: ConcernRow, r
     return last7 > (VOLUME_JUMP_RATIO * prev28) / 4 ? 1 : 0
   })
   series.back_to_back = series.any_run.map((v, i) => (v === null || i === 0 || series.any_run[i - 1] === null ? null : v === 1 && series.any_run[i - 1] === 1 ? 1 : 0))
+  mark('exp.runs', { sessions: ctx.sessions.length, runs: runs.length })
 
   const regionMuscles = new Set(concern.regions.flatMap((r) => regions.find((v) => v.code === r.code)?.muscles ?? []))
   series.regional_strength = regionMuscles.size === 0
@@ -254,6 +275,9 @@ export function buildExposureSeries(ctx: ExposureContext, concern: ConcernRow, r
       return ex.some((e) => typeof e.name === 'string' && (musclesOf(e.name, ctx.library) ?? []).some((m) => regionMuscles.has(m)))
     })
 
+  mark('exp.regional_strength', {
+    sessions: ctx.sessions.filter((s) => s.type === 'strength').length, library: ctx.library.length, muscles: regionMuscles.size,
+  })
   const trainingDay = daily((s) => !NON_TRAINING.has(s.type) && (s.duration_min ?? 0) >= 20)
   let streak = 0
   series.no_rest = trainingDay.map((v) => {
@@ -280,6 +304,7 @@ export function buildExposureSeries(ctx: ExposureContext, concern: ConcernRow, r
     return j < 0 ? null : ctx.timeZone[j] !== tz ? 1 : 0
   })
   for (const k of Object.keys(series)) if (series[k].length !== n) throw new Error(`exposure ${k} misaligned`)
+  mark('exp.rest')
   return series
 }
 

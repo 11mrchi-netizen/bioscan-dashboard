@@ -137,6 +137,7 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
     alcohol: frame.series.alcohol_any ?? dates.map(() => null),
     stressHigh: frame.series.stress_high ?? dates.map(() => null),
     timeZone: dates.map((d) => tzByDate.get(d) ?? null),
+    trace,
   }
 
   mark('context', { days: dates.length })
@@ -170,15 +171,23 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
     const specs = analysable ? exposuresFor(concern, vocab.regions) : []
     const ev = evaluateExposures(ctx, cellsWin, summary.episodes, specs, exposureSeries, regionMuscles, summary.quality)
     mark(`c${ci}.evaluate`, { specs: specs.length })
+    let ssMs = 0
+    let ssCalls = 0
     const findings: Finding[] = buildFindings({
       concern, summary, evaluations: ev.evaluations, cases: ev.cases, referenceOk: ev.referenceOk, dates,
       series: exposureSeries, droppedCases: ev.dropped, history,
       sessionsSince: (spec, from) => {
+        const t0 = performance.now()
         const kind = sessionKindFor(spec, ctx, regionMuscles)
-        return kind ? sessionLevel(ctx, cellsWin, summary.episodes, kind, spec.window, from) : null
+        const out = kind ? sessionLevel(ctx, cellsWin, summary.episodes, kind, spec.window, from) : null
+        ssMs += performance.now() - t0
+        ssCalls++
+        return out
       },
     })
     mark(`c${ci}.findings`, { findings: findings.length })
+    // already inside the findings step above; reported separately so the two can be told apart
+    if (ssCalls > 0) trace?.(`c${ci}.sessionsSince`, ssMs, { calls: ssCalls })
     const hash = fnv1a(JSON.stringify([
       versions,
       s.cells.map((c) => [c.observed ? (c.recalled ? 2 : 1) : 0, c.severity, c.impact, c.onset ? 1 : 0]),

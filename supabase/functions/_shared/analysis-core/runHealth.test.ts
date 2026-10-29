@@ -117,6 +117,14 @@ test('the timing hook sees every step in order, by position only, and changes no
     assert.deepEqual(names.filter((n) => n.startsWith(`c${i}.`)), [`c${i}.summary`, `c${i}.exposureSeries`, `c${i}.evaluate`, `c${i}.findings`, `c${i}.rows`])
   }
   assert.deepEqual(names.slice(-4), ['trials', 'overview', 'publish', 'ledger'])
+  // finer steps inside the exposure code: built once per concern, before that concern's evaluate step
+  assert.equal(names.filter((n) => n === 'exp.runs').length, 2)
+  assert.equal(names.filter((n) => n === 'exp.regional_strength').length, 2)
+  assert.equal(names.filter((n) => n === 'exp.rest').length, 2)
+  assert.ok(names.indexOf('exp.regional_strength') < names.indexOf('c0.exposureSeries'))
+  const reg = steps.find((s) => s.step === 'exp.regional_strength')!
+  assert.ok(typeof reg.info?.musclesOf === 'number' && typeof reg.info?.movementKey === 'number' && typeof reg.info?.library === 'number')
+  assert.ok(names.every((n) => !/^ev\.[a-z_]+\./.test(n) || /^ev\.(any_run|long_run|trail_run|quality_run|volume_jump|back_to_back|regional_strength|no_rest|short_sleep|hrv_below|high_load|alcohol|stress_high|travel)\./.test(n)), 'exposure steps are named by catalogue id')
   assert.ok(steps.every((s) => Number.isFinite(s.ms) && s.ms >= 0))
   const text = JSON.stringify(steps)
   assert.ok(!text.includes('knee') && !text.includes('Right'), 'no concern title, region or symptom reaches the log')

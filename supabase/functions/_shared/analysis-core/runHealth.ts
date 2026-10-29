@@ -24,6 +24,7 @@ import { readTrial } from './healthTrials.ts'
 import type { TrialInput, TrialOutcome } from './healthTrials.ts'
 import type { HealthVocab } from './healthVocab.ts'
 import { fetchAll } from './paging.ts'
+import { publishResults } from './publish.ts'
 import { loadConfirmedBreaks } from './runExpectedBands.ts'
 import { localClock } from './runRelationships.ts'
 import type { Admin, LoadedFrame } from './runRelationships.ts'
@@ -275,20 +276,10 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
   })
 
   mark('overview')
-  const published: NonNullable<HealthRun['published']> = []
-  for (const row of rows) {
-    const { error } = await admin.from('analysis_results').upsert(
-      {
-        user_id: userId, kind: row.kind, key: row.key, as_of: today, engine_version: CORE_VERSION, inputs_hash: row.hash,
-        state: row.state, confidence_have: row.have, confidence_need: row.need, payload: row.payload, calculated_at: now.toISOString(),
-      },
-      { onConflict: 'user_id,kind,key,as_of,engine_version' },
-    )
-    if (error) return { userId, error: error.message, published }
-    // Only the newest row per key is kept (the ledger keeps the history), except an evaluated trial read, which stays.
-    await admin.from('analysis_results').delete().eq('user_id', userId).eq('kind', row.kind).eq('key', row.key).eq('engine_version', CORE_VERSION).lt('as_of', today)
-    published.push({ kind: row.kind, key: row.key, state: row.state })
-  }
+  // One upsert per batch of rows and one delete per kind and batch, instead of an upsert and a delete per row.
+  const out = await publishResults(admin, userId, today, rows, now)
+  if (out.error) return { userId, error: out.error, published: out.published }
+  const published = out.published
   mark('publish', { rows: rows.length })
   const { error: ledgerError } = ledgerRows.length > 0
     ? await admin.from('evidence_ledger').upsert(ledgerRows, { onConflict: 'user_id,question_id,as_of,engine_version', ignoreDuplicates: true })

@@ -6,6 +6,10 @@ import { buildFrame } from './runRelationships.ts'
 import { HEALTH_KINDS, runHealth } from './runHealth.ts'
 import { CORE_VERSION } from './version.ts'
 
+// analysis_results rows go up in batches (one upsert call carries several rows); the fake records each call's argument
+const resultRows = (x: { upserts: { table: string; row: unknown }[] }) =>
+  x.upserts.filter((u) => u.table === 'analysis_results').flatMap((u) => (Array.isArray(u.row) ? u.row : [u.row]) as Record<string, unknown>[])
+
 const U = 'u1'
 const TODAY = '2026-10-21'
 
@@ -51,7 +55,7 @@ test('runHealth publishes the overview, each concern, its findings, the trial an
   const admin = fakeAdmin(t)
   const run = await runHealth(admin, loadedFor(t), new Date(`${TODAY}T20:30:00Z`))
   assert.equal(run.error, undefined, run.error)
-  const rows = admin.upserts.filter((u) => u.table === 'analysis_results').map((u) => u.row)
+  const rows = resultRows(admin)
   const kinds = (k: string) => rows.filter((r) => r.kind === k)
   assert.equal(kinds(HEALTH_KINDS.overview).length, 1)
   assert.equal(kinds(HEALTH_KINDS.state).length, 2)
@@ -88,11 +92,11 @@ test('the same inputs give the same hashes; an evaluated trial read is never red
   const b = fakeAdmin(t)
   await runHealth(a, loadedFor(t))
   await runHealth(b, loadedFor(t))
-  const hashes = (x: typeof a) => x.upserts.filter((u) => u.table === 'analysis_results').map((u) => `${u.row.kind}:${u.row.key}:${u.row.inputs_hash}`).sort()
+  const hashes = (x: typeof a) => resultRows(x).map((r) => `${r.kind}:${r.key}:${r.inputs_hash}`).sort()
   assert.deepEqual(hashes(a), hashes(b))
   const frozen = fakeAdmin({ ...t, analysis_results: [{ user_id: U, kind: HEALTH_KINDS.trial, key: 'iv1:knee', as_of: '2026-10-01', payload: { state: 'evaluated' } }] })
   await runHealth(frozen, loadedFor(t))
-  assert.equal(frozen.upserts.filter((u) => u.row.kind === HEALTH_KINDS.trial).length, 0)
+  assert.equal(resultRows(frozen).filter((r) => r.kind === HEALTH_KINDS.trial).length, 0)
 })
 
 test('before the migration the engine skips quietly', async () => {

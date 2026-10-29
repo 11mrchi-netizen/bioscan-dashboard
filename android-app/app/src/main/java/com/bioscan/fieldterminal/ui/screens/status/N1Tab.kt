@@ -158,6 +158,10 @@ fun N1Tab() {
             },
         )
         experimentError?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+        // Interventions repeated now and then (nasal strips, a lactose meal): events, how each felt, and the evidence so far.
+        InterventionEventsSection()
+        // Bundles of those around one objective (docs/intervention-protocol-intelligence).
+        ProtocolsSection()
         N1ScorecardsCard(scorecards, typicality = typicalityView(typicality).scorecard)
         // Health concerns (docs/health-concerns): patterns found in check-ins and the trials testing them.
         com.bioscan.fieldterminal.ui.screens.health.HealthN1Section()

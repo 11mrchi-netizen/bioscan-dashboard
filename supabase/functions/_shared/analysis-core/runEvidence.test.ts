@@ -76,3 +76,27 @@ test('runEvidence publishes event curves, case-crossover tables and lag curves, 
   assert.equal((kinds('event_curve').find((u) => u.key === 'late_meal_sleep') as Row).state, 'not_yet') // never logged
   assert.equal(admin.deletes.filter((d) => d.filters.some(([op, c]) => op === 'lt' && c === 'as_of')).length, admin.upserts.length)
 })
+
+test('the timing hook reports the evidence engine\'s steps and changes nothing', async () => {
+  const ds = plantedDataset(20261010, 300, '2026-01-05', 10_000, 10_000, [])
+  const today = ds.dates[ds.dates.length - 1]
+  const tables = () => ({
+    wearable_daily: ds.dates.map((d, i) => ({ user_id: USER, date: d, hrv: ds.hrv[i], rhr: ds.rhr[i], steps: 8000 })),
+    sleep_daily: ds.dates.map((d, i) => ({ user_id: USER, date: d, hours: ds.sleepH[i] })),
+    meals: [], exercise_sessions: [], recovery_sessions: [], illnesses: [],
+  })
+  const now = new Date(`${today}T20:30:00Z`)
+  const a = fakeAdmin(tables())
+  const b = fakeAdmin(tables())
+  const steps: { step: string; ms: number }[] = []
+  const traced = await runEvidence(a, (await loadFrame(a, USER, now)) as LoadedFrame, now, (step, ms) => steps.push({ step, ms }))
+  const plain = await runEvidence(b, (await loadFrame(b, USER, now)) as LoadedFrame, now)
+  assert.deepEqual(traced, plain)
+  assert.deepEqual(a.upserts, b.upserts)
+  const names = steps.map((s) => s.step)
+  assert.equal(names[0], 'breaks')
+  assert.ok(names.includes('model.hrv') && names.includes('hashes') && names.at(-1) === 'publish')
+  for (const spec of EVENT_CURVES) assert.ok(names.includes(`curve.${spec.id}`), spec.id)
+  for (const spec of LAG_CURVES) assert.ok(names.includes(`lag.${spec.id}`), spec.id)
+  assert.ok(steps.every((s) => Number.isFinite(s.ms) && s.ms >= 0))
+})

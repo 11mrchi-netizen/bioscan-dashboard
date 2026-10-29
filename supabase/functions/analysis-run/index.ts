@@ -44,6 +44,7 @@ import type { SeriesFile } from "../_shared/analysis-core/seriesContract.ts";
 import seriesFile from "../_shared/metric-registry/metric-series.json" with { type: "json" };
 import { runSeriesBreaks } from "../_shared/analysis-core/runSeriesBreaks.ts";
 import { runTypicality } from "../_shared/analysis-core/runTypicality.ts";
+import type { Trace } from "../_shared/analysis-core/trace.ts";
 import { enginesFor, needsFrame, parseGroup, timedEngine } from "../_shared/analysis-core/runGroups.ts";
 import { pearson, pFromR } from "../_shared/analysis-core/stats.ts";
 import { CORE_VERSION } from "../_shared/analysis-core/version.ts";
@@ -52,6 +53,10 @@ import { CORE_VERSION } from "../_shared/analysis-core/version.ts";
 // the Edge runtime kills for CPU time still shows where the time went.
 const healthTrace = (step: string, ms: number, info?: Record<string, number>) =>
   console.log(JSON.stringify({ tag: "health-timing", step, ms: Math.round(ms), ...info }));
+
+// The same for the other engines that report timings: one log line per step, tagged with the engine.
+const engineTrace = (engine: string): Trace => (step, ms, info) =>
+  console.log(JSON.stringify({ tag: "engine-timing", engine, step, ms: Math.round(ms), ...info }));
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -169,7 +174,7 @@ Deno.serve(async (req) => {
             relationships: () => runRelationships(admin, id, new Date(), loaded),
             typicality: () => runTypicality(admin, loaded),
             expectedBands: () => runExpectedBands(admin, loaded),
-            evidence: () => runEvidence(admin, loaded),
+            evidence: () => runEvidence(admin, loaded, new Date(), engineTrace("evidence")),
             experiments: () => runExperiments(admin, loaded),
             interventionResponses: () => runInterventionResponses(admin, loaded),
             interventionIts: () => runInterventionIts(admin, loaded),

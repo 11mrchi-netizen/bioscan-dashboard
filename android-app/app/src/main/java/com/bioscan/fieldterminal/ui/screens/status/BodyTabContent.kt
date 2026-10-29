@@ -13,6 +13,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import com.bioscan.fieldterminal.data.BodyCheckinRepository
+import com.bioscan.fieldterminal.data.ScaleCompositionPoint
+import com.bioscan.fieldterminal.data.ScaleReadingRepository
 import com.bioscan.fieldterminal.data.UserProfileRepository
 import com.bioscan.fieldterminal.data.model.UserProfileRow
 import com.bioscan.fieldterminal.domain.BodyCheckinRecord
@@ -162,6 +164,7 @@ private fun BodyTab(allDays: List<DailyNutrition>, reloadKey: Int, onStartCheckI
     var checkins by remember { mutableStateOf<List<BodyCheckinRecord>>(emptyList()) }
     var heightCm by remember { mutableStateOf<Double?>(null) }
     var profile by remember { mutableStateOf<UserProfileRow?>(null) }
+    var scaleSeries by remember { mutableStateOf<List<ScaleCompositionPoint>>(emptyList()) }
     val bodyGuard = rememberLoadGuard()
 
     LaunchedEffect(bodyGuard.attempt, reloadKey) {
@@ -170,6 +173,7 @@ private fun BodyTab(allDays: List<DailyNutrition>, reloadKey: Int, onStartCheckI
         checkins = runCatching { repo.loadHistory() }.getOrElse { emptyList() }
         heightCm = runCatching { repo.latestHeightCm() }.getOrNull()
         profile = runCatching { UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull()
+        scaleSeries = runCatching { ScaleReadingRepository(SupabaseClientProvider.client).loadCompositionSeries() }.getOrElse { emptyList() }
     }
 
     val b = bodyMetrics
@@ -204,6 +208,8 @@ private fun BodyTab(allDays: List<DailyNutrition>, reloadKey: Int, onStartCheckI
         val folds = checkins.mapNotNull { c -> jacksonPollockBodyFat(c, age, sex)?.let { c.date to it } }
         BodyFatCard(scale, tape, folds)
 
+        BodyCompositionCards(scaleSeries, profile?.heightCm ?: heightCm, profile?.athleteMode ?: false)
+
         // DAV-104: real post-fact TDEE, gated on both this evaluation's own weight-EMA state above and Category 4's
         // nutrition-completeness gate -- reuses both verbatim rather than a third data pipeline.
         EnergyBalanceCard(evaluateTdee(evaluateNutrition(allDays), weightEval), allDays)
@@ -215,7 +221,7 @@ private fun BodyFatCard(scale: List<Pair<LocalDate, Double>>, tape: List<Pair<Lo
     val blended = rollingBodyFat(scale + tape + folds)
     TrendCard(
         "BODY FAT", blended, "%", color = FT.DomainFuel,
-        info = "Scale (impedance), tape (US Navy equation) and skinfold (Jackson-Pollock) estimates, averaged over a rolling 28 days. " +
+        info = "Scale (the weigh-in's impedance estimate, or Health Connect on days without one), tape (US Navy equation) and skinfold (Jackson-Pollock) estimates, averaged over a rolling 28 days. " +
             "Each method is a few points off for one person: follow the trend, not the gap between methods.",
         footer = {
             scale.lastOrNull()?.let { FTMetricRow("Scale", "%.1f%%".format(it.second)) }

@@ -34,6 +34,7 @@ import com.bioscan.fieldterminal.data.ScaleReadingRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.bluetoothReady
 import com.bioscan.fieldterminal.data.scaleReadings
+import com.bioscan.fieldterminal.domain.BodyComposition
 import com.bioscan.fieldterminal.domain.ScaleReading
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
@@ -74,6 +75,8 @@ fun ScaleWeighInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     var btOff by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var preview by remember { mutableStateOf<BodyComposition?>(null) }
+    var previewLoaded by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         asking = false
@@ -99,6 +102,12 @@ fun ScaleWeighInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
         } catch (e: IllegalStateException) {
             error = e.message
         }
+    }
+
+    LaunchedEffect(reading) {
+        preview = null
+        previewLoaded = false
+        reading?.let { preview = runCatching { repo.preview(it) }.getOrNull(); previewLoaded = true }
     }
 
     ModalBottomSheet(
@@ -127,6 +136,21 @@ fun ScaleWeighInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 r != null -> {
                     Text("%.1f KG".format(r.weightKg), style = FTType.SectionTitle, color = FT.TextPrimary)
                     Text("Impedance %.0f Ω".format(r.impedanceOhm), style = FTType.Caption, color = FT.TextSecondary)
+                    val p = preview
+                    val split = p?.split
+                    if (split != null) {
+                        Text(
+                            "Body fat %.1f %%  ·  Fat-free %.1f kg  ·  Water %.1f L".format(split.bodyFatPct, split.fatFreeKg, p.totalBodyWaterL ?: 0.0),
+                            style = FTType.BodySmall, color = FT.TextPrimary,
+                        )
+                        p.skeletalMuscleKg?.let { Text("Skeletal muscle ~%.1f kg".format(it), style = FTType.Caption, color = FT.TextSecondary) }
+                        if (!p.qualityOk) {
+                            Text("This reading looks off (hydration or contact). It will be saved, but not used for body fat.", style = FTType.Caption, color = FT.Warning)
+                        }
+                        Text("Estimates from impedance: trust the trend over a single reading. Weigh at the same time, ideally fasted.", style = FTType.Caption, color = FT.TextSecondary)
+                    } else if (previewLoaded) {
+                        Text("Add height, date of birth and sex in Setup › Profile to see body composition.", style = FTType.Caption, color = FT.TextSecondary)
+                    }
                     Text(
                         "If this is the previous weigh-in left on the scale, discard it and step on again.",
                         style = FTType.Caption, color = FT.TextSecondary,

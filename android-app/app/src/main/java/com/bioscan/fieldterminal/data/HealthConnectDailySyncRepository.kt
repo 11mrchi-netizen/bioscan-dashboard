@@ -60,6 +60,9 @@ import kotlin.reflect.KClass
 // (confirmed live against the Supabase schema, not assumed), so every write
 // here is a plain onConflict="user_id,date" upsert, same pattern already
 // used elsewhere in this app for daily tables.
+@kotlinx.serialization.Serializable
+private data class ScaleDayRow(val date: String)
+
 class HealthConnectDailySyncRepository(
     private val context: Context,
     private val supabase: SupabaseClient,
@@ -148,7 +151,15 @@ class HealthConnectDailySyncRepository(
                 .upsert(weight.map { (date, v) -> WeightUpsertRow(date.toString(), v) }) { onConflict = "user_id,date" }
         }
 
+        // A day with a scale weigh-in keeps the body fat derived from that weigh-in (ScaleReadingRepository, source = scale_bia);
+        // Health Connect's value for the same day would overwrite it. Lookup failure falls back to writing as before.
+        val scaleDays = runCatching {
+            supabase.postgrest.from("body_metrics")
+                .select(io.github.jan.supabase.postgrest.query.Columns.list("date")) { filter { eq("source", SCALE_BIA_SOURCE) } }
+                .decodeList<ScaleDayRow>().map { it.date }.toSet()
+        }.getOrDefault(emptySet())
         val bodyFat = latestByLocalDate(readAll(BodyFatRecord::class, since, until).map { TimedValue(it.time, it.percentage.value) }, zone)
+            .filterKeys { it.toString() !in scaleDays }
         if (bodyFat.isNotEmpty()) {
             supabase.postgrest.from("body_metrics")
                 .upsert(bodyFat.map { (date, v) -> BodyFatUpsertRow(date.toString(), v) }) { onConflict = "user_id,date" }

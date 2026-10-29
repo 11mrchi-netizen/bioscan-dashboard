@@ -116,7 +116,7 @@ class PerfGoldenTest {
     // ---------- buildTrainingSessionLoads ----------
 
     @Test
-    fun trainingLoadUsesRpeThenTrimpAndSkipsWhatItCannotScore() {
+    fun trainingLoadUsesTrimpThenScaledRpeAndSkipsWhatItCannotScore() {
         val rows = listOf(
             TrainingLoadSessionRow("2026-10-09T07:00:00+08:00", durationMin = 50.0, avgHr = 160.0, maxHr = 190.0),
             TrainingLoadSessionRow("2026-10-10T07:00:00+08:00", durationMin = 60.0, rpe = 7),
@@ -128,13 +128,22 @@ class PerfGoldenTest {
         val resting = listOf(LocalDate.of(2026, 10, 1) to 50.0)
         val out = buildTrainingSessionLoads(rows, resting)
         assertEquals(listOf(9, 10, 12, 14), out.map { it.first.dayOfMonth })
-        assertEquals(420.0, out[1].second, 0.0)
+        // The 10th has an RPE and no heart rate: RPE x minutes on the TRIMP scale.
+        assertEquals(420.0 / SRPE_PER_TRIMP, out[1].second, 1e-9)
         // The 12th: the person's maximum on that date is the second-highest session maximum so far (185 of 190, 185),
         // not the session's own.
         assertEquals(trimp(EnduranceSessionInput(45.0, null, 150.0, 185.0, null, null, null), 50.0, 185.0)!!, out[2].second, 1e-9)
         // The 14th: still 185 (190, 185, 150); its own 150 peak no longer makes it look hard.
         assertEquals(trimp(EnduranceSessionInput(30.0, null, 140.0, null, null, null, null), 50.0, 185.0)!!, out[3].second, 1e-9)
         assertEquals(1, buildTrainingSessionLoads(rows, emptyList()).size) // no resting HR: only the RPE row
+        // An RPE does not change a session that has heart-rate inputs: TRIMP first, one scale.
+        val both = listOf(
+            TrainingLoadSessionRow("2026-10-15T07:00:00+08:00", durationMin = 50.0, rpe = 6, avgHr = 150.0, maxHr = 185.0),
+            TrainingLoadSessionRow("2026-10-16T07:00:00+08:00", durationMin = 50.0, avgHr = 150.0, maxHr = 185.0),
+        )
+        val bothOut = buildTrainingSessionLoads(both, resting)
+        assertEquals(bothOut[0].second, bothOut[1].second, 1e-9)
+        assertTrue(Math.abs(bothOut[0].second - 300.0) > 100.0)
     }
 
     // ---------- evaluateSri ----------

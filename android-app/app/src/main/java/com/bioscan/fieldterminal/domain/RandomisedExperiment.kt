@@ -32,6 +32,8 @@ fun zoneSpec(metric: String): ZoneSpec = when (metric) {
     "hrv" -> ZoneSpec(2.0, "%", listOf(1.0, 2.0, 3.0, 5.0))
     "rhr" -> ZoneSpec(1.0, "bpm", listOf(0.5, 1.0, 2.0))
     "sleep_hours", "deep_rem_min" -> ZoneSpec(10.0, "min", listOf(5.0, 10.0, 15.0, 20.0))
+    "screen_bed_min", "screen_pm_social", "outdoor_daylight_min" -> ZoneSpec(10.0, "min", listOf(5.0, 10.0, 20.0))
+    "resp_rate" -> ZoneSpec(0.3, "br/min", listOf(0.15, 0.3, 0.5))
     else -> ZoneSpec(0.5, "points", listOf(0.25, 0.5, 1.0))
 }
 

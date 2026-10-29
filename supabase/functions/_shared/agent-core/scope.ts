@@ -56,7 +56,7 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     // analysis and evidence
     'analysis_results', 'evidence_ledger', 'evidence_records', 'registered_questions', 'experiments',
     'interventions', 'intervention_adherence', 'intervention_state_history', 'protocols', 'protocol_interventions',
-    'protocol_state_history', 'protocol_templates', 'protocol_adjustment_proposals', 'decisions', 'series_break_decisions',
+    'protocol_state_history', 'protocol_templates', 'intervention_events', 'intervention_expectations', 'intervention_draws', 'protocol_adjustment_proposals', 'decisions', 'series_break_decisions',
     'health_vocab', 'grip_strength_norms',
     // the agent's own memory (written only from confirmed proposals)
     'agent_memory',
@@ -66,7 +66,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
   ...optIn('health_concerns', 'health_concerns', 'health_observations', 'health_signals', 'health_episode_marks', 'intervention_concerns'),
   // v_health_events unions injuries, illnesses and health concerns, so it is as private as its most private part.
   ...optIn('health_concerns', 'v_health_events'),
-  ...optIn('digestive', 'stool_log'),
+  // user-defined outcomes are often bodily (a stool score), so they share the digestive opt-in
+  ...optIn('digestive', 'stool_log', 'tracked_outcomes', 'tracked_outcome_values'),
   ...never(
     // routine and location
     'location_fixes', 'place_visits', 'places', 'trips', 'mobility_daily', 'activity_transitions', 'phone_usage_daily',

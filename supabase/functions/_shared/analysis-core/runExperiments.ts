@@ -44,13 +44,20 @@ export async function runExperiments(admin: Admin, loaded: LoadedFrame, now: Dat
     // A daily randomised design has no phases, only its drawn schedule.
     const first = row.protocol?.phases?.[0]?.start ?? row.protocol?.assignments?.[0]?.date
     if (!first) continue
-    // Adherence logging stays domain-owned (08.1): supplement_log is the only wired-in source today, so an
-    // intervention-only experiment (no supplement_id) reports zero logged days rather than guessing at adherence.
+    // Adherence logging stays domain-owned (08.1): a supplement's days come from supplement_log, a repeatable intervention's
+    // (an episodic one, 20261113) from its logged events -- a day with an event done as planned or partly is a with-day.
+    // Any other intervention-only experiment reports zero logged days rather than guessing at adherence.
     let taken = new Set<string>()
     if (row.supplement_id !== null) {
       const log = await admin.from('supplement_log').select('taken_at').eq('user_id', userId).eq('supplement_id', row.supplement_id).gte('taken_at', `${first}T00:00:00Z`)
       if (log.error) return { userId, error: log.error.message, results }
       taken = new Set(((log.data ?? []) as { taken_at: string }[]).map((l) => String(l.taken_at).slice(0, 10)))
+    } else if (row.intervention_id !== null) {
+      const log = await admin.from('intervention_events').select('local_date, adhered').eq('user_id', userId).eq('intervention_id', row.intervention_id).gte('local_date', first)
+      // before the 20261113 migration the table does not exist: that is zero logged days, not a failed run
+      if (!log.error) {
+        taken = new Set(((log.data ?? []) as { local_date: string; adhered: string }[]).filter((e) => e.adhered !== 'no').map((e) => String(e.local_date).slice(0, 10)))
+      }
     }
     const spec: ExperimentSpec = { id: row.id, name: row.name, primary: row.primary_metric, secondary: row.secondary_metrics ?? [], protocol: row.protocol }
     // Analysis review phase F: the days a period leaves out are frozen when it ends, so editing an illness or a drink

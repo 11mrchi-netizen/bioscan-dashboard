@@ -23,9 +23,13 @@ interface LedgerRow {
   information: number | null
 }
 
-const WORD: Record<string, string> = { clear: 'CLEAR', negligible: 'NEGLIGIBLE', unclear: 'UNCLEAR', not_yet: 'NOT YET' }
+const WORD: Record<string, string> = {
+  clear: 'CLEAR', negligible: 'NEGLIGIBLE', unclear: 'UNCLEAR', not_yet: 'NOT YET',
+  // repeatable interventions (source 'event'): the ladder decides the word, not significance
+  insufficient: 'TOO FEW EVENTS', possible: 'POSSIBLE', observed: 'OBSERVED',
+}
 const LABEL = new Map(HYPOTHESES.map((h) => [h.id, h.label]))
-const labelOf = (id: string) => LABEL.get(id) ?? (id.startsWith('reg_') ? `Registered question ${id.slice(4)}` : id)
+const labelOf = (id: string) => LABEL.get(id) ?? (id.startsWith('reg_') ? `Registered question ${id.slice(4)}` : id.startsWith('event_') ? `Repeatable intervention ${id.slice(6, 14)}` : id)
 const fmt = (v: number | null, unit: string | null) =>
   v === null ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(unit === '%' ? 1 : 2)}${unit === '%' ? '%' : unit ? ` ${unit}` : ''}`
 

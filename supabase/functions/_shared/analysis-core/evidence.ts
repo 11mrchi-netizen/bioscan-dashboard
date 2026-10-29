@@ -423,9 +423,15 @@ export interface LagCurveResult {
   exposedDays: number
   need: { rows: number; exposedDays: number }
   /** Effect on the outcome `lag` days after the exposure day, per dose. Lag 0 is the morning of the exposure day. */
-  lags: { lag: number; value: number; lo: number; hi: number }[]
+  /** `lo`/`hi`: the 95% interval of that lag alone (descriptive). `simLo`/`simHi` (lags 1 to 6): the interval widened so that
+   *  all six hold together at 95%; only these decide whether a lag is clear. */
+  lags: { lag: number; value: number; lo: number; hi: number; simLo?: number; simHi?: number }[]
+  /** The prespecified headline: the total over lags 1 to 6, one contrast, so no allowance for several looks is needed. */
   cumulative: { value: number; lo: number; hi: number } | null
-  /** Lags 1 to 6 whose interval excludes zero. */
+  /** How the six-lag family is held together. Absent on a payload from before this correction (engine alpha.12). */
+  simultaneous?: { family: number; individualCritical: number; criticalValue: number }
+  /** Lags 1 to 6 whose simultaneous interval excludes zero (each lag alone would be clear about one run in six under no
+   *  effect, 16% of simulated no-effect histories). */
   clearLags: number[]
   /** End of the first unbroken run of clear lags after the exposure day: how long the effect lasts (null: none). A lone
    *  clear lag later in the week is reported in clearLags but not read as the effect lasting that long. */
@@ -472,17 +478,29 @@ export function analyseLagCurve(spec: LagCurveSpec, frame: Frame, m: BandModel):
   const c = fit.beta.slice(1, 1 + p)
   const tc = fit.critical
   const toDisplay = (b: number) => (m.spec.transform === 'ln' ? (Math.exp(b) - 1) * 100 : m.spec.metric === 'sleep_hours' ? b * 60 : b)
-  const combo = (w: number[]) => {
+  // Six lags (1 to 6) are looked at together, so each is judged at 0.05 / 6 (Bonferroni: simple, and conservative because the
+  // lags are correlated). The critical value is the fit's own (Student t, widened for the HAC bandwidth) scaled by the ratio
+  // of the t quantiles, so the bandwidth correction is kept.
+  const family = maxLag
+  const tcSim = tc * (tCritical(fit.df, 0.05 / family) / tCritical(fit.df, 0.05))
+  const combo = (w: number[], crit = tc) => {
     const est = w.reduce((s, wi, i) => s + wi * c[i], 0)
     let v = 0
     for (let i = 0; i < p; i++) for (let j = 0; j < p; j++) v += w[i] * w[j] * cov[i][j]
     const se = Math.sqrt(Math.max(0, v))
-    return { value: round(toDisplay(est)), lo: round(toDisplay(est - tc * se)), hi: round(toDisplay(est + tc * se)) }
+    return { value: round(toDisplay(est)), lo: round(toDisplay(est - crit * se)), hi: round(toDisplay(est + crit * se)) }
   }
-  const lags = Array.from({ length: p }, (_, l) => ({ lag: l, ...combo(Array.from({ length: p }, (_, i) => (i === l ? 1 : 0))) }))
+  const lags: LagCurveResult['lags'] = Array.from({ length: p }, (_, l) => {
+    const e = Array.from({ length: p }, (_, i) => (i === l ? 1 : 0))
+    const alone = combo(e)
+    if (l < 1) return { lag: l, ...alone }
+    const sim = combo(e, tcSim)
+    return { lag: l, ...alone, simLo: sim.lo, simHi: sim.hi }
+  })
   // Over the week after the exposure day (lags 1 to 6; lag 0 is the morning before an evening exposure).
   const cumulative = combo(Array.from({ length: p }, (_, i) => (i === 0 ? 0 : 1)))
-  const clearLags = lags.filter((l) => l.lag >= 1 && (l.lo > 0 || l.hi < 0)).map((l) => l.lag)
+  const clearLags = lags.filter((l) => l.lag >= 1 && ((l.simLo ?? 0) > 0 || (l.simHi ?? 0) < 0)).map((l) => l.lag)
+  const clearAlone = lags.filter((l) => l.lag >= 1 && (l.lo > 0 || l.hi < 0)).map((l) => l.lag)
   let lastClearLag: number | null = null
   if (clearLags.length > 0) {
     lastClearLag = clearLags[0]
@@ -490,11 +508,20 @@ export function analyseLagCurve(spec: LagCurveSpec, frame: Frame, m: BandModel):
   }
   const fmt = (v: number) => (unit === '%' ? `${v >= 0 ? '+' : '-'}${Math.abs(v).toFixed(1)}%` : `${v >= 0 ? '+' : '-'}${Math.abs(v).toFixed(1)} ${unit}`)
   const onset = clearLags.length > 0 ? lags[clearLags[0]] : null
-  const week = `Over the week after: ${fmt(cumulative.value)} (95% interval ${fmt(cumulative.lo)} to ${fmt(cumulative.hi)}).`
-  const summary = onset === null || lastClearLag === null
-    ? `No day in the week after showed a difference clear of zero ${spec.perText} (${rowsRaw.length} days). ${week}`
-    : `${onset.lag === 1 ? 'The next morning' : `${onset.lag} days later`} ${m.spec.metric === 'hrv' ? 'HRV' : m.spec.metric === 'rhr' ? 'resting heart rate' : 'sleep'} differed by ${fmt(onset.value)} ${spec.perText}, and the difference stayed clear of zero ${lastClearLag === onset.lag ? 'for that day only' : `until day ${lastClearLag}`}. ${week}`
-  return { ...base, state: 'ready', lags, cumulative, clearLags, lastClearLag, dose, summary }
+  const what = m.spec.metric === 'hrv' ? 'HRV' : m.spec.metric === 'rhr' ? 'resting heart rate' : 'sleep'
+  const interval = `95% interval ${fmt(cumulative.lo)} to ${fmt(cumulative.hi)}`
+  // The week total is the one prespecified contrast, so it needs no allowance for several looks. Single days are descriptive:
+  // one is called clear only if it stays clear after allowing for looking at six of them, and a day that was clear only on its
+  // own is said to be that, not read as an effect.
+  const weekClear = cumulative.lo > 0 || cumulative.hi < 0
+  const week = `In total over the week after: ${fmt(cumulative.value)} ${spec.perText} (${interval}), ${weekClear ? 'clear of zero' : 'not clear of zero'}.`
+  const dayPart = onset !== null && lastClearLag !== null
+    ? `${onset.lag === 1 ? 'The next morning' : `${onset.lag} days later`} ${what} differed by ${fmt(onset.value)} ${spec.perText}, and that stayed clear of zero ${lastClearLag === onset.lag ? 'for that day only' : `until day ${lastClearLag}`}, even after allowing for looking at six days.`
+    : clearAlone.length > 0
+      ? 'One day looked clear on its own, but not after allowing for looking at six days, so it is not read as an effect.'
+      : `No single day in the week after was clear of zero (${rowsRaw.length} days).`
+  const summary = `${dayPart} ${week}`
+  return { ...base, state: 'ready', lags, cumulative, simultaneous: { family, individualCritical: round(tc, 3), criticalValue: round(tcSim, 3) }, clearLags, lastClearLag, dose, summary }
 }
 
 // Next-morning distance from expected (one-step forecast) by drinks the evening before: 0, 1-2, 3 or more.

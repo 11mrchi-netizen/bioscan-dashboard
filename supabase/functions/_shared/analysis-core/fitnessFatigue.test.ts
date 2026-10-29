@@ -43,7 +43,9 @@ test('a slow true response (fitness 90 days, fatigue 21) is found and usually be
     if (r.state === 'predictive') {
       predictive++
       assert.equal(r.adopted, true)
-      assert.match(r.summary, /forecast tomorrow's HRV better than the standard 42 and 7/)
+      assert.match(r.summary, /beat the standard 42 and 7 at forecasting/)
+      assert.match(r.summary, /chosen on your whole history/, 'says the pair in use was fitted on all of it, not kept away from it')
+      assert.doesNotMatch(r.summary, /never saw/)
     }
   }
   assert.ok(predictive >= 12, `${predictive} of 20`)

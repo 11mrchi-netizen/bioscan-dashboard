@@ -10,6 +10,9 @@ import com.bioscan.fieldterminal.domain.routine.DayVisit
 import com.bioscan.fieldterminal.domain.routine.Fix
 import com.bioscan.fieldterminal.domain.routine.Place
 import com.bioscan.fieldterminal.domain.routine.PlaceCategory
+import com.bioscan.fieldterminal.domain.routine.PlaceRowLike
+import com.bioscan.fieldterminal.domain.routine.VisitAtPlace
+import com.bioscan.fieldterminal.domain.routine.claimForManualPlace
 import com.bioscan.fieldterminal.domain.routine.PlaceVisitTime
 import com.bioscan.fieldterminal.domain.routine.Stay
 import com.bioscan.fieldterminal.domain.routine.TransitionEvent
@@ -38,17 +41,17 @@ import java.util.UUID
 // (supabase/migrations/20261107_routine_places.sql), built on the phone from what R2 stored.
 @Serializable
 data class PlaceRow(
-    val id: String,
-    val lat: Double,
-    val lon: Double,
+    override val id: String,
+    override val lat: Double,
+    override val lon: Double,
     @SerialName("radius_m") val radiusM: Double = 150.0,
-    val label: String? = null,
+    override val label: String? = null,
     val category: String? = null,
-    val source: String = "learned",
+    override val source: String = "learned",
     @SerialName("osm_name") val osmName: String? = null,
     @SerialName("osm_category") val osmCategory: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
-) {
+) : PlaceRowLike {
     fun toPlace() = Place(id, lat, lon, radiusM, label, PlaceCategory.of(category))
 }
 
@@ -61,6 +64,26 @@ private data class NewPlaceRow(
     val category: String? = null,
     val source: String,
 )
+
+@Serializable
+private data class ManualPlaceRow(
+    val id: String,
+    val lat: Double,
+    val lon: Double,
+    @SerialName("radius_m") val radiusM: Double,
+    val label: String,
+    val category: String?,
+    val source: String,
+)
+
+@Serializable
+private data class VisitPlaceUpdate(@SerialName("place_id") val placeId: String)
+
+@Serializable
+private data class TripFromUpdate(@SerialName("from_place_id") val fromPlaceId: String)
+
+@Serializable
+private data class TripToUpdate(@SerialName("to_place_id") val toPlaceId: String)
 
 @Serializable
 data class TripRow(
@@ -128,6 +151,8 @@ private data class PlaceOsmUpdate(
 )
 
 private fun ms(ts: String): Long? = parseTimestamp(ts)?.toEpochMilli()
+
+private const val VISIT_HISTORY_DAYS = 400L
 
 class PlacesRepository(private val supabase: SupabaseClient) {
 
@@ -275,6 +300,30 @@ class PlacesRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
+    /**
+     * A place added by hand at [lat], [lon]. It takes over the visits inside its circle that it holds better than their
+     * current place, and absorbs the unnamed places the phone had learned there (claimForManualPlace), so the history
+     * moves to it rather than starting from today. Returns the new place's id.
+     */
+    suspend fun addPlace(label: String, category: PlaceCategory?, lat: Double, lon: Double, radiusM: Double, now: Instant = Instant.now()): String {
+        val id = UUID.randomUUID().toString()
+        val row = ManualPlaceRow(id, lat, lon, radiusM.coerceIn(25.0, 2000.0), label.trim(), category?.key, "manual")
+        val known = loadPlaces()
+        supabase.postgrest.from("places").insert(row)
+        val visits = loadVisits(now.minusSeconds(VISIT_HISTORY_DAYS * 86_400)).map { (_, _, v) -> VisitAtPlace(v.startAt, v.lat, v.lon, v.placeId) }
+        val claim = claimForManualPlace(Place(id, lat, lon, row.radiusM), visits, known)
+        claim.visitKeys.chunked(100).forEach { keys ->
+            supabase.postgrest.from("place_visits").update(VisitPlaceUpdate(id)) { filter { isIn("start_at", keys) } }
+        }
+        if (claim.absorbedPlaceIds.isNotEmpty()) {
+            val absorbed = claim.absorbedPlaceIds.toList()
+            supabase.postgrest.from("trips").update(TripFromUpdate(id)) { filter { isIn("from_place_id", absorbed) } }
+            supabase.postgrest.from("trips").update(TripToUpdate(id)) { filter { isIn("to_place_id", absorbed) } }
+            supabase.postgrest.from("places").delete { filter { isIn("id", absorbed) } }
+        }
+        return id
+    }
+
     // Hours and visits per place over the last [days] days, for the PLACES card.
     suspend fun placeTotals(days: Long = 14, now: Instant = Instant.now()): Map<String, Pair<Double, Int>> =
         loadVisits(now.minusSeconds(days * 86_400))
@@ -312,7 +361,7 @@ class PlacesRepository(private val supabase: SupabaseClient) {
             .firstOrNull()
 
     private suspend fun loadVisits(since: Instant): List<Triple<Long, Long, VisitReadRow>> =
-        keysetPagesDescending<VisitReadRow>(1000, 10_000, { it.startAt }) { before ->
+        keysetPagesDescending<VisitReadRow>(1000, 20_000, { it.startAt }) { before ->
             supabase.postgrest.from("place_visits")
                 .select(columns = Columns.list("start_at,end_at,lat,lon,place_id")) {
                     filter {

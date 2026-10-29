@@ -45,6 +45,12 @@ data class EventRow(
 )
 
 @Serializable
+data class TrackedValueTime(
+    @SerialName("outcome_id") val outcomeId: String,
+    @SerialName("observed_at") val observedAt: String = "",
+)
+
+@Serializable
 data class TrackedOutcomeRow(
     val id: String,
     val name: String = "",

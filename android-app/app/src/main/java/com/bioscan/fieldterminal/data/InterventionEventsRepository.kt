@@ -14,6 +14,7 @@ import com.bioscan.fieldterminal.data.model.NewExpectation
 import com.bioscan.fieldterminal.data.model.NewTrackedOutcome
 import com.bioscan.fieldterminal.data.model.NewTrackedValue
 import com.bioscan.fieldterminal.data.model.TrackedOutcomeRow
+import com.bioscan.fieldterminal.data.model.TrackedValueTime
 import com.bioscan.fieldterminal.domain.DrawResult
 import com.bioscan.fieldterminal.domain.ExpectationDraft
 import com.bioscan.fieldterminal.domain.LocalStamp
@@ -151,6 +152,15 @@ class InterventionEventsRepository(private val supabase: SupabaseClient) {
 
     suspend fun linkDrawEvent(drawId: String, eventId: String) {
         supabase.postgrest.from("intervention_draws").update(DrawEventLink(eventId)) { filter { eq("id", drawId) } }
+    }
+
+    /** Recent logged values (outcome id and time), for the follow-up reminder. */
+    suspend fun loadRecentTrackedValueTimes(limit: Long = 200): List<TrackedValueTime> = try {
+        supabase.postgrest.from("tracked_outcome_values")
+            .select(columns = Columns.list("outcome_id,observed_at")) { order("observed_at", Order.DESCENDING); limit(limit) }
+            .decodeList<TrackedValueTime>()
+    } catch (e: Exception) {
+        emptyList()
     }
 
     /** The morning rating, saved before any numbers are shown. */

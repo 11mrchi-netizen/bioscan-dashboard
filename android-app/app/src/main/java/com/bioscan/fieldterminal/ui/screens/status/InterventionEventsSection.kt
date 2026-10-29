@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.bioscan.fieldterminal.data.ExperimentsRepository
 import com.bioscan.fieldterminal.data.InterventionEventsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.EpisodicIntervention
@@ -28,6 +29,7 @@ import com.bioscan.fieldterminal.data.model.TrackedOutcomeRow
 import com.bioscan.fieldterminal.domain.ExpectedDirection
 import com.bioscan.fieldterminal.domain.ladderHint
 import com.bioscan.fieldterminal.domain.ladderLabel
+import com.bioscan.fieldterminal.domain.promotionTarget
 import com.bioscan.fieldterminal.domain.windowText
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTCard
@@ -56,6 +58,9 @@ fun InterventionEventsSection() {
     var events by remember { mutableStateOf<List<EventRow>>(emptyList()) }
     var evidence by remember { mutableStateOf<Map<String, EventEvidenceRow>>(emptyMap()) }
     var tracked by remember { mutableStateOf<List<TrackedOutcomeRow>>(emptyList()) }
+    // intervention ids that already have a registered experiment
+    var tested by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var promoting by remember { mutableStateOf<Pair<EpisodicIntervention, String>?>(null) }
     var creating by remember { mutableStateOf(false) }
     var creatingTracked by remember { mutableStateOf(false) }
     var loggingValue by remember { mutableStateOf(false) }
@@ -70,6 +75,7 @@ fun InterventionEventsSection() {
         events = repo.loadRecentEvents()
         evidence = repo.loadEvidence()
         tracked = repo.loadTrackedOutcomes()
+        tested = runCatching { ExperimentsRepository(SupabaseClientProvider.client).loadExperiments().mapNotNull { it.interventionId }.toSet() }.getOrDefault(emptySet())
     }
 
     val seriesLabels = series.associate { it.id to it.label }
@@ -113,6 +119,15 @@ fun InterventionEventsSection() {
                         Text(ladderHint(result.payload.ladder, primary?.nWithData ?: 0), style = FTType.BodySmall, color = FT.TextSecondary)
                         result.payload.expectations.forEach { Text(it.summary, style = FTType.BodySmall, color = FT.TextPrimary) }
                         result.payload.notes.forEach { Text(it, style = FTType.Caption, color = FT.TextMuted) }
+                        if (result.payload.ladder == "ready") {
+                            val main = expectations.firstOrNull { it.interventionId == iv.id && it.role == "primary" && !it.exploratory }
+                            val target = main?.let { promotionTarget(it.outcomeKind, it.outcomeKey, outcomeName(it)) }
+                            when {
+                                iv.id in tested -> Text("A randomised experiment is registered for this; see Daily tests and Experiments.", style = FTType.BodySmall, color = FT.TextSecondary)
+                                target?.metric != null -> FTButton(label = "TEST PROPERLY") { promoting = iv to target.metric }
+                                target?.reason != null -> Text(target.reason, style = FTType.BodySmall, color = FT.TextSecondary)
+                            }
+                        }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FTButton(label = "LOG IT") { logging = iv }
@@ -145,6 +160,7 @@ fun InterventionEventsSection() {
     if (creatingTracked) TrackedOutcomeSheet(onDismiss = { creatingTracked = false }, onCreated = { creatingTracked = false; key++ })
     if (loggingValue) TrackedValueSheet(tracked, onDismiss = { loggingValue = false }, onLogged = { loggingValue = false; key++ })
     logging?.let { iv -> LogEventSheet(iv, expectations, onDismiss = { logging = null }, onLogged = { logging = null; key++ }) }
+    promoting?.let { (iv, metric) -> EventExperimentSheet(iv.id, iv.name, metric, onDismiss = { promoting = null }, onRegistered = { promoting = null; key++ }) }
     rating?.let { (event, name) -> RateEventSheet(event.id, name, onDismiss = { rating = null }, onRated = { rating = null; key++ }) }
 }
 

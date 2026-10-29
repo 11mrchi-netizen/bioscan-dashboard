@@ -62,4 +62,18 @@ class EventEvidenceTest {
         assertTrue(ids.containsAll(listOf("sleep_respiratory_rate", "spo2", "hrv", "energy")))
         assertFalse("per-event series are not offered", ids.contains("meal_energy"))
     }
+
+    @Test fun `a stored series that is a formal experiment outcome can be promoted`() {
+        assertEquals("hrv", promotionTarget("series", "hrv", "HRV").metric)
+        assertEquals("sleep_hours", promotionTarget("series", "sleep_hours", "Sleep").metric)
+    }
+
+    @Test fun `outcomes the formal experiments cannot compare are explained, not offered`() {
+        val resp = promotionTarget("series", "sleep_respiratory_rate", "Respiratory rate")
+        assertNull(resp.metric)
+        assertTrue(resp.reason!!.contains("Respiratory rate"))
+        val tracked = promotionTarget("tracked", "some-id", "Stool consistency")
+        assertNull(tracked.metric)
+        assertNotNull(tracked.reason)
+    }
 }

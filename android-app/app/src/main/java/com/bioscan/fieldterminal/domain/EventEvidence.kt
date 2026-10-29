@@ -122,3 +122,19 @@ fun observedLabel(observed: String): String = when (observed) {
     "too_few" -> "too few events"
     else -> "unclear"
 }
+
+// ---- from "ready to test properly" to a registered experiment ----
+
+/** Either the formal-experiment outcome the intervention's main expectation maps to, or why it can't be tested formally yet. */
+data class PromotionTarget(val metric: String?, val reason: String?)
+
+/**
+ * The formal randomised experiments compare a fixed set of daily outcomes (EXPERIMENT_METRICS). A stored series with the same
+ * id (hrv, rhr, sleep_hours, energy...) can be promoted as it is; anything else (respiratory rate, SpO2, a tracked outcome)
+ * is explained rather than offered as a dead button.
+ */
+fun promotionTarget(outcomeKind: String, outcomeKey: String, label: String): PromotionTarget = when {
+    outcomeKind == "tracked" -> PromotionTarget(null, "$label is an outcome you record yourself, which the formal experiments can't compare yet.")
+    EXPERIMENT_METRICS.any { it.first == outcomeKey } -> PromotionTarget(outcomeKey, null)
+    else -> PromotionTarget(null, "$label isn't an outcome the formal experiments compare yet; the repeated events stay the evidence for now.")
+}

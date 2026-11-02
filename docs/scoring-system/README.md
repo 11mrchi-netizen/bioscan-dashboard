@@ -225,6 +225,11 @@ Five tabs: **TODAY · PLAN · + LOG · LAB · ME**.
 - **Reading** (scores and analysis) starts on TODAY and opens the five domain pages.
 - **Doing** (planning, logging, testing) lives in PLAN, LOG and LAB.
 - **Slow-moving** things (healthspan, performance levels, body, bloodwork, settings) live in ME.
+- **Display:** every score is a ring. One full lap is 100; 100–150 is a second lap drawn over the first, so 150 is one
+  and a half laps. Each screen shows only the headline (ring or value, plus direction). Explanations, drivers and charts
+  open on a full-screen overlay when you tap. Nothing is a collapsed section.
+- **+ LOG** opens the log page with the logging menu already open. There are no quick-log shortcuts elsewhere, and
+  SAY IT is removed.
 
 The full map, every page and where each current card goes are in [02-page-mockups.md](02-page-mockups.md).
 
@@ -235,7 +240,11 @@ The full map, every page and where each current card goes are in [02-page-mockup
 | 1 | Top band is SUPERCHARGED (125–150); PRIMED is 100–125 |
 | 2 | MIND is renamed BALANCE and includes ANS; digestion lives inside FUEL, not as a sixth domain |
 | 3 | PROVISIONAL at wake, FINAL when yesterday is closed or at 12:00; late logs are ordinary log entries and never move a final score |
-| 4 | Navigation is rebuilt around the scores (pending review of the mockups) |
+| 4 | Navigation is rebuilt around the scores |
+| 5 | Scores are rings (full lap = 100, overlap to 150); first screens show only number and direction |
+| 6 | No collapsed sections: a headline tile opens a full-screen overlay with the whole picture |
+| 7 | Quick-log row and SAY IT removed; + LOG opens the logging menu directly |
+| 8 | Today's plan lists sessions, meals from the food plan, supplements and closing the day, on one timeline |
 
 ## Open
 

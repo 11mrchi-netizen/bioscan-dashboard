@@ -1,18 +1,87 @@
-# Page mockups (ASCII)
+# Page mockups (ASCII), v2
 
 Every page of the rebuilt app, phone width (about 46 characters). The numbers are made up but consistent across pages:
 one morning, Tue 3 Nov, CHARGE 112.
 
-Contents: [0 Conventions](#0-conventions) · [1 TODAY](#1-today) · [2 CHARGE sheet](#2-charge-sheet) ·
-[3 SLEEP](#3-sleep) · [4 RECOVERY](#4-recovery) · [5 LOAD](#5-load) · [6 FUEL](#6-fuel) · [7 BALANCE](#7-balance) ·
-[8 PLAN](#8-plan) · [9 LOG](#9-log) · [10 LAB](#10-lab) · [11 ME](#11-me) ·
-[12 Where every current card goes](#12-where-every-current-card-goes)
+v2 changes from v1:
+- Scores are **rings**, not bars.
+- The first screens show **only the number and its direction**.
+- Everything else opens on a **full-screen overlay** when tapped. There are **no collapsed sections**.
+- **TODAY'S PLAN** includes the food plan.
+- The **quick-log row and SAY IT are gone**. + LOG opens the logging menu directly.
+
+Contents: [0 Conventions](#0-conventions) · [1 TODAY](#1-today) · [2 CHARGE overlay](#2-charge-overlay) ·
+[3 Domain overlays](#3-domain-overlays) · [4 Metric overlay](#4-metric-overlay) · [5 PLAN](#5-plan) ·
+[6 + LOG](#6--log) · [7 LAB](#7-lab) · [8 ME](#8-me) · [9 Where every current card goes](#9-where-every-current-card-goes)
 
 ---
 
 ## 0. Conventions
 
-These apply on every page.
+### Three levels, never more
+
+```
+ LEVEL 1  page        TODAY · PLAN · LOG · LAB · ME
+          shows only headlines: rings, values, direction
+            │ tap
+ LEVEL 2  overlay     full screen, slides up, ✕ or swipe down to close
+          the whole picture of one thing: its drivers and its parts,
+          everything expanded
+            │ tap a part
+ LEVEL 3  overlay     one metric: chart, your normal, what it did to
+          its score, what affects it, what it is ("?" text inline)
+```
+
+- **No collapsed sections (▸) anywhere.** If something has more to show, it is a tile that opens an overlay.
+- **Overlays stack:** level 3 opens over level 2, and ‹ goes back one level.
+
+### The ring
+
+One lap is 0–100. Above 100 a second lap is drawn on top of the first, starting again at 12 o'clock, on the same scale,
+so 150 is one and a half laps.
+
+```
+          112                         71                    138
+     ╭━━━━▓▓▓━━━╮               ╭━━━━━━━━━━╮           ╭━━━━▓▓▓▓▓▓▓╮
+     ┃          ┃               ┃          ·           ┃          ▓
+     ┃   112    ┃               ┃    71    ·           ┃   138    ▓
+     ┃    ▲     ┃               ┃    ▼     ·           ┃    ▲     ▓
+     ╰━━━━━━━━━━╯               ╰━━━━━━━━··╯           ╰━━━━━━━━━━╯
+  full lap + 12 % of a       71 % of the first lap    full lap + 38 % of
+  second lap (▓, brighter)   (· = empty track)        a second lap
+```
+
+- **Track:** faint. Small ticks at 40 and 60 mark where LOW and BELOW NORMAL end.
+- **Colour by band:**
+
+  | Band | Range | Ring |
+  |---|---|---|
+  | LOW | < 40 | Red |
+  | BELOW NORMAL | 40–60 | Amber |
+  | NORMAL | 60–100 | Primary |
+  | PRIMED | 100–125 | Second lap, bright |
+  | SUPERCHARGED | 125–150 | Second lap, glowing; the treatment is for the design contract |
+
+- **FUEL and LOAD stop at one full lap**, because they have no upside.
+- **Direction under the number:** ▲ up, ▼ down or ● about the same, compared with yesterday's score.
+- **States on the ring:**
+  - PROVISIONAL: a dashed ring.
+  - PARTIAL: an empty track with "—".
+  - BUILDING: an empty track with "12/28".
+  - A cap: a small ⚠ on the ring.
+
+### The headline tile
+
+Used on level 1 and level 2 for anything that isn't a score:
+
+```
+│ HRV                      58 ms  ▲          ›
+│ └name                    └value └direction vs YOUR normal
+```
+
+- The direction is ▲ above normal, ● normal or ▼ below normal. Target-type inputs use ✓ on target, ↓ short or ↑ over.
+- No words and no points on the tile. The band words (ABOVE NORMAL…), the points and the explanation appear on the
+  level 3 overlay.
 
 ### Navigation
 
@@ -20,749 +89,750 @@ These apply on every page.
   TODAY     PLAN     + LOG     LAB     ME
 ```
 
-- **Reading** (scores and analysis): TODAY, which opens the five domain pages.
-- **Doing**: PLAN, LOG, LAB.
-- **Slow-moving**: ME.
-- Domain pages are pushed from TODAY's chips, with a back arrow (‹) and the dock lit on TODAY.
-
-### Score band bar
-
-Used for CHARGE and for each domain at the top of its page:
-
-```
- 0      40     60              100     125      150
- ├──────┼──────┼────────────────┼───────┼────────┤
- LOW    BELOW       NORMAL       PRIMED  SUPERCHARGED
-                                    ▲ 112
-```
-
-FUEL and LOAD end at 100, because they have no upside. Their bar is drawn only from 0 to 100.
-
-### Score chip
-
-Used for one domain on TODAY:
-
-```
- SLEEP     124 ▲  8h05, deep above usual       ›
- └name     └score └one reason, from the top driver
-```
-
-The arrow shows the change from yesterday's score: ▲ up, ▼ down, ● about the same.
-
-### Metric row
-
-One format for every metric in the app:
-
-```
- HRV          58 ms   ▲ ABOVE NORMAL    +7
- └name        └value  └vs YOUR normal   └points it moved its score (drivers only)
-                       (44–52 ms)        tap the row: 60-day chart with your normal band
-```
-
-- **Words** against your normal: ▲ ABOVE NORMAL · ● NORMAL · ▼ BELOW NORMAL · ▼▼ UNUSUALLY LOW. Target-type inputs say
-  ON TARGET / SHORT / OVER instead.
-- **Colour** (from the design contract): a faint green tint only for points that help, a faint red tint only for
-  points that hurt. The word is always there too.
-- **Detail cards** below the drivers use the same row format without the points column.
-
-### States
-
-| Mark | Meaning |
-|---|---|
-| `PROVISIONAL` | Published at wake; yesterday not closed yet |
-| `FINAL ✓` | Locked; never changes |
-| `PARTIAL` | Not enough logged to score; left out of CHARGE, never scored low |
-| `BUILDING 12/28` | Not enough history for a baseline yet (days have / days needed) |
-| `⚠` | Typicality flag, or a cap is active |
-| `?` | Opens the explainer: what it is, coverage, weights in use, scorecard verdict |
-
 ---
 
 ## 1. TODAY
 
-### Morning, after the evening check-in (FINAL)
+### Morning (FINAL)
 
 ```
-│ TODAY · TUE 3 NOV                ☁ 24°  ⟳ 07:12
+│ TUE 3 NOV                        ☁ 24°  ⟳ 07:12
 │
-│                 C H A R G E
-│                     112
-│                   ▲ PRIMED
-│  0     40   60           100     125       150
-│  ├─────┼────┼─────────────┼───────┼─────────┤
-│                               ▲
-│  Better than 93 of your last 100 mornings.
-│  Mostly SLEEP (+14) and RECOVERY (+11).
-│  LOAD holds it back (−6).           FINAL ✓  ?
-├──────────────────────────────────────────────
-│ SLEEP      124 ▲  8h05, deep above usual      ›
-│ RECOVERY   108 ▲  HRV 58 ms, RHR 47           ›
-│ LOAD        71 ▼  HIGH · 4th day without rest ›
-│ FUEL        94 ●  on target · gut settled     ›
-│ BALANCE    118 ▲  BALANCED · calm day         ›
+│              ╭━━━━━━━▓▓▓▓━━━━━╮
+│            ╭━╯                 ╰━╮
+│           ┃                       ┃
+│           ┃          112          ┃
+│           ┃           ▲           ┃
+│           ┃                       ┃
+│            ╰━╮                 ╭━╯
+│              ╰━━━━━━━━━━━━━━━━━╯
+│                    CHARGE
+│
+│  ╭━━▓━╮  ╭━━▓━╮  ╭━━━━╮  ╭━━━━╮  ╭━━▓━╮
+│  ┃124 ┃  ┃108 ┃  ┃ 71 ·  ┃ 94 ·  ┃118 ┃
+│  ┃ ▲  ┃  ┃ ▲  ┃  ┃ ▼  ·  ┃ ●  ┃  ┃ ▲  ┃
+│  ╰━━━━╯  ╰━━━━╯  ╰━━··╯  ╰━━━━╯  ╰━━━━╯
+│  SLEEP  RECOVERY  LOAD    FUEL   BALANCE
 ├──────────────────────────────────────────────
 │ TODAY'S PLAN
-│ 18:30  Threshold run · 10 km        READY ✓
-│        demand ●●●○  · charge covers it
-│ 21:00  Mobility · 20 min            READY ✓
-│ Next up in calendar: Team call 10:00
+│ 07:30 ✓ Breakfast · oats, eggs     620 kcal
+│ 08:00 ✓ Morning supplements
+│ 12:30 ✓ Lunch · rice bowl          780 kcal
+│ 16:30 ○ Pre-run snack · banana     150 kcal
+│ 18:30 ○ Threshold run · 10 km      READY ✓
+│ 20:00 ○ Dinner · salmon, potatoes  850 kcal
+│ 21:00 ○ Evening supplements
+│ 21:30 ○ Close the day
 ├──────────────────────────────────────────────
-│ TODAY SO FAR                 progress, no score
-│ kcal    ████████░░░░░  1 420 / 2 650  ON TRACK
-│ protein ██████░░░░░░░    78 / 150 g   SHORT
-│ carbs   ███████░░░░░░   180 / 340 g   ON TRACK
-│ water   █████░░░░░░░░   1.2 / 3.0 L   SHORT
-│ caffeine  last dose by 14:00 · 1 so far
-│ supps   2 of 4 taken · evening bundle due
-├──────────────────────────────────────────────
-│ [+ WATER] [+ FOOD] [+ SUPPS] [SAY IT]
+│ SO FAR   1 420 / 2 650 kcal   ✓            ›
 └──────────────────────────────────────────────
    TODAY     PLAN     + LOG     LAB     ME
 ```
 
+**What each part does when tapped:**
+
+| Tap | Opens |
+|---|---|
+| CHARGE ring | CHARGE overlay (§2) |
+| A domain ring | That domain's overlay (§3) |
+| A meal row | The meal overlay: planned foods and macros, LOG AS PLANNED or LOG SOMETHING ELSE, swap |
+| A session row | The planned session overlay: details, READY FOR against the demand, open in calendar |
+| A supplements row | The bundle overlay: tick what was taken |
+| Close the day | The CLOSE THE DAY check-in (§6) |
+| SO FAR | The SO FAR overlay: kcal, protein, carbs, fat, water and caffeine against today's targets, each a bar with a tick at what the hour expects |
+
+**How the plan rows behave:**
+- They come from PLAN › TRAINING, PLAN › FOOD, LAB › SUPPLEMENTS and the calendar, on one timeline.
+- ✓ means done or logged. ○ means still to do.
+- A row that is late (the time has passed, still ○) dims its time.
+- Calendar events that aren't sessions are not listed. TODAY is about body inputs.
+
 ### Morning, before yesterday is closed (PROVISIONAL)
 
 ```
-│                     104
-│                   ▲ PRIMED        PROVISIONAL ?
-│  Final when you close Monday, or at 12:00.
-│  [ CLOSE MONDAY › ]  1 min
+│              ╭┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅╮      dashed ring
+│              ┇       104       ┇
+│              ┇        ▲        ┇
+│              ╰┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅╯
+│                    CHARGE
+│  …  ╭┄┄┄┄╮  ╭┄┄┄┄╮
+│     ┆ —  ┆  ┆ —  ┆
+│     ╰┄┄┄┄╯  ╰┄┄┄┄╯
+│      FUEL   BALANCE
 ├──────────────────────────────────────────────
-│ SLEEP      124 ▲  8h05, deep above usual      ›
-│ RECOVERY   108 ▲  HRV 58 ms, RHR 47           ›
-│ LOAD        71 ▼  HIGH · 4th day without rest ›
-│ FUEL        —     PARTIAL · 45 % logged       ›
-│ BALANCE     —     PARTIAL · no check-in       ›
+│ TODAY'S PLAN
+│ now   ○ Close Monday                  1 min ›
+│ 07:30 ✓ Breakfast …
 ```
 
-### Evening (after 19:00)
-
-A banner sits above everything else:
-
-```
-│ ┌──────────────────────────────────────────┐
-│ │ CLOSE TODAY            stress · gut · log│
-│ │ Tomorrow's CHARGE is built from it.    › │
-│ └──────────────────────────────────────────┘
-```
+- The closing task moves to the top of the plan, timed "now".
+- Why the ring is dashed, and when it becomes final, is explained on the CHARGE overlay.
 
 ### With a cap active
 
 ```
-│                      38
-│                   ▼ LOW · CAPPED ⚠
-│  Open illness: sore throat, day 2.
-│  CHARGE is capped at 40 until it closes.   ?
+│                       38
+│                       ▼  ⚠
+│                    CHARGE
 ```
 
-### What happens to today's cards
-
-- The Status hero, the body figure and the four tiles are replaced by this page.
-- IS TODAY TYPICAL? becomes the ⚠ on the dial, and its strip moves to RECOVERY.
-- NEXT UP becomes the last line of TODAY'S PLAN.
-- READY FOR becomes the READY mark on each planned session.
+The ⚠ is all level 1 shows. The cause (sore throat, day 2, capped at 40) is on the CHARGE overlay.
 
 ---
 
-## 2. CHARGE sheet
-
-Opens when you tap the dial or its "?".
+## 2. CHARGE overlay
 
 ```
-│ CHARGE 112 · PRIMED · TUE 3 NOV · FINAL ✓
-│ How you should feel after Monday.
-│ Better than 93 of your last 100 mornings.
+│ ✕                                  TUE 3 NOV
+│              ╭━━━━━━━▓▓▓▓━━━━━╮
+│              ┃       112      ┃
+│              ┃        ▲       ┃
+│              ╰━━━━━━━━━━━━━━━━╯
+│              PRIMED · FINAL ✓
+│ How you should feel after Monday. Better than
+│ 93 of your last 100 mornings.
 ├──────────────────────────────────────────────
 │ WHAT MOVED IT          vs your typical day (80)
-│ SLEEP     ██████████████▶  +14
-│ RECOVERY  ███████████▶     +11
-│ BALANCE   ██████████▶      +10
-│ FUEL      ███▶              +3
-│ LOAD    ◀██████             −6
-│                             ───
-│                             +32  → 112
+│ SLEEP     ██████████████▶  +14             ›
+│ RECOVERY  ███████████▶     +11             ›
+│ BALANCE   ██████████▶      +10             ›
+│ FUEL      ███▶              +3             ›
+│ LOAD    ◀██████             −6             ›
 ├──────────────────────────────────────────────
 │ LAST 30 DAYS
 │ 150 ┤
-│ 125 ┤                                 ▄
-│ 100 ┤- - - - - - - - - - - - - - - -█-█- -
+│ 100 ┤- - - - - - - - - - - - - - - -▄█▄█- -
 │  60 ┤ ▅▆▅▃▂▄▆▇▆▅▄▃▅▆▅▄▃▂▁▃▅▆▇▆▅▆▇██▆
-│  40 ┤
 │     └ 5 Oct                        3 Nov ┘
+│ tap a day: that morning's CHARGE overlay
 ├──────────────────────────────────────────────
 │ CAPS          none
 │ TYPICALITY    typical morning
 │ BASED ON      5 of 5 domains
 │ WEIGHTS       default · personal after 120
-│               days (you have 84)
-│ EARNS ITS PLACE?  forecasts today's session
+│               scored days (you have 84)
+│ EARNS ITS PLACE?  ✓ forecasts today's session
 │   and tomorrow's energy better than RECOVERY
-│   alone · 84 days · ✓ yes
+│   alone (84 days)
 ├──────────────────────────────────────────────
-│ [ ASK WHY › ]                 health agent
+│ WHAT IS CHARGE?
+│ How you should feel this morning, given last
+│ night and yesterday. 100 is the top of your
+│ normal; above it you are better than 9 in 10
+│ of your own days.
 ```
+
+- Each WHAT MOVED IT row opens that domain's overlay on top.
+- **When PROVISIONAL:** the status line reads "PROVISIONAL · final when you close Monday, or at 12:00", with a
+  CLOSE MONDAY button.
+- **When capped:** CAPS reads "⚠ sore throat · day 2 · capped at 40", and opens ME › HEALTH's concern overlay.
 
 ---
 
-## Domain page template
+## 3. Domain overlays
 
-Sections 3–7 all follow the same layout:
-
-```
-│ ‹ DOMAIN                                     ?
-│ score · band word · band bar · one sentence
-│ 30-DAY STRIP of the score
-│ DRIVERS: the scored inputs, metric-row format, sorted by |points|
-│ DETAILS: today's existing cards, collapsed by default, same row format
-│ WHAT AFFECTS THIS FOR YOU: from N=1 relationships
-```
-
----
-
-## 3. SLEEP
+All five use the same layout:
 
 ```
-│ ‹ SLEEP · MON NIGHT                          ?
-│ 124  ▲ PRIMED
-│  0     40   60           100     125       150
-│  ├─────┼────┼─────────────┼───────┼─────────┤
-│                                    ▲
+│ ✕  DOMAIN                        DAY / NIGHT
+│ ring · band word · one sentence
+│ WHAT MOVED IT     driver tiles, sorted by points, each with its points
+│ THE FULL PICTURE  tiles for the views that aren't scored (charts, logs)
+│ WHAT AFFECTS IT   personal relationships from LAB › N=1
+│ WHAT IS IT        two or three lines
+```
+
+Every tile opens a level 3 overlay (§4). These overlays replace the domain pages from v1.
+
+### SLEEP
+
+```
+│ ✕  SLEEP                            MON NIGHT
+│              ╭━━━━━━▓▓▓▓▓▓━━━━╮
+│              ┃      124       ┃
+│              ┃       ▲        ┃
+│              ╰━━━━━━━━━━━━━━━━╯
+│                   PRIMED
 │ Long night, more deep sleep than usual.
-│ 30 D ▅▆▅▃▂▄▆▇▆▅▄▃▅▆▅▄▃▂▁▃▅▆▇▆▅▆▇██
 ├──────────────────────────────────────────────
-│ DRIVERS                                   pts
-│ Duration    8h05  ▲ ABOVE NEED (7h10)     +11
-│ Deep + REM  2h41  ▲ ABOVE NORMAL (2h15)    +6
-│ Sleep debt  −0h20 / 7 d  ● NORMAL          +2
-│ Regularity  SRI 86  ● STEADY               +1
-│ Timing      midpoint 03:10  ● USUAL         0
-│ Breathing   14.2 /min  ● STEADY             0
-│ Awake       18 min  ● NORMAL               −1
+│ WHAT MOVED IT                             pts
+│ Duration           8h05   ▲          +11   ›
+│ Deep + REM         2h41   ▲           +6   ›
+│ Sleep debt (7 d)  −0h20   ●           +2   ›
+│ Regularity       SRI 86   ●           +1   ›
+│ Timing      mid 03:10     ●            0   ›
+│ Breathing    14.2 /min    ●            0   ›
+│ Awake            18 min   ●           −1   ›
 ├──────────────────────────────────────────────
-│ ▸ LAST NIGHT        hypnogram 23:05 → 07:10
-│   ▔▔▁▁▂▃▃▂▁▁▂▃▃▂▂▁▂▃▂▁▁▔
-│   awake · REM · light · deep, with minutes
-│ ▸ STAGES · 30 DAYS       stacked bars, normal
-│ ▸ BED AND WAKE TIMES     dots with usual band
-│ ▸ CIRCADIAN TIMING       STEADY / VARIABLE
+│ THE FULL PICTURE
+│ Last night        23:05 → 07:10            ›
+│ Stages · 30 days  deep 1h22 avg            ›
+│ Bed and wake times  steady                 ›
 ├──────────────────────────────────────────────
 │ WHAT AFFECTS YOUR SLEEP
-│ Alcohol > 20 g        −0h35   (12 nights)
-│ Training after 20:00  deep −14 min (9)
-│ Phone after 23:00     onset +22 min (15)
+│ Alcohol > 20 g        −0h35                ›
+│ Training after 20:00  deep −14 min         ›
+│ Phone after 23:00     onset +22 min        ›
 ```
 
----
-
-## 4. RECOVERY
+### RECOVERY
 
 ```
-│ ‹ RECOVERY · TUE MORNING                     ?
-│ 108  ▲ PRIMED
-│  ├─────┼────┼─────────────┼───────┼─────────┤
-│                                 ▲
+│ ✕  RECOVERY                       TUE MORNING
+│              ╭━━━━━━━━▓━━━━━━━╮
+│              ┃      108       ┃
+│              ┃       ▲        ┃
+│              ╰━━━━━━━━━━━━━━━━╯
+│                   PRIMED
 │ Body has absorbed the weekend's long run.
-│ 30 D ▃▄▅▅▄▃▂▂▃▅▆▆▅▄▃▄▅▆▅▃▂▃▄▅▆▇▆▅▆▇
 ├──────────────────────────────────────────────
-│ DRIVERS                                   pts
-│ HRV          58 ms  ▲ ABOVE NORMAL (44–52) +7
-│ Resting HR   47 bpm ▲ BELOW USUAL (49–52)  +4
-│ Night stress 18     ● NORMAL                0
-│ Soreness     2/5    ● NORMAL                0
-│ Morning feel energy 4/5 · ● NORMAL         +1
-│              (energy, erection, arousal)
+│ WHAT MOVED IT                             pts
+│ HRV                 58 ms  ▲          +7   ›
+│ Resting HR         47 bpm  ▲          +4   ›
+│ Morning feel     energy 4  ●          +1   ›
+│ Night stress           18  ●           0   ›
+│ Soreness              2/5  ●           0   ›
 ├──────────────────────────────────────────────
-│ ▸ HRV · 60 DAYS        line inside normal band
-│ ▸ RESTING HR · 60 DAYS line inside normal band
-│ ▸ IS THIS MORNING TYPICAL?  strip: how far
-│   each standing-out signal sits from usual
-│ ▸ SEXUAL HEALTH        frequency, occurrences
-│ ▸ OPEN CONCERNS        none · see ME › HEALTH
+│ THE FULL PICTURE
+│ Is this morning typical?   yes             ›
+│ Sexual health    3 this week               ›
+│ Open concerns    none                      ›
 ├──────────────────────────────────────────────
 │ WHAT AFFECTS YOUR RECOVERY
-│ SLEEP < 70         next-day HRV −6 % (18 d)
-│ LOAD HIGH 3+ days  RHR +2 bpm (11 d)
-│ Alcohol > 20 g     HRV −9 % (12 d)
+│ SLEEP < 70          HRV −6 % next day      ›
+│ LOAD HIGH 3+ days   RHR +2 bpm             ›
+│ Alcohol > 20 g      HRV −9 %               ›
 ```
 
-When an open illness or injury caps the domain, a banner sits at the top:
+### LOAD
 
 ```
-│ ⚠ CAPPED · Sore throat, day 2 · logged 07:40 ›
-```
-
----
-
-## 5. LOAD
-
-```
-│ ‹ LOAD · MONDAY                              ?
-│ 71  ▼ NORMAL · HIGH SIDE
-│  0     40   60           100
-│  ├─────┼────┼─────────────┤
-│              ▲
+│ ✕  LOAD                                MONDAY
+│              ╭━━━━━━━━━━━━━━━╮
+│              ┃       71      ·
+│              ┃       ▼       ·
+│              ╰━━━━━━━━━━━━··╯
+│            NORMAL · HIGH SIDE
 │  LOW ◀────────── IN BAND ──────────▶ HIGH
 │                                    ▲
 │ 4th day without rest; still inside your band.
-│ FITNESS  CTL 54 ▲ +3 in 4 wk · VO2max 53 ●
 ├──────────────────────────────────────────────
-│ DRIVERS                                   pts
-│ Days without rest  4  ▼ HIGH (usual ≤ 3)  −12
-│ Fatigue (TSB)  −18  ● IN BAND (−25…−5)     0
-│ Monotony       1.6  ● NORMAL               0
-│ Plan done      4 of 5 this week  ● OK      −2
-│ Intensity      78 / 22  ● ON PLAN (80/20)  0
-│ Since deload   3 wk  ● OK                  0
+│ WHAT MOVED IT                             pts
+│ Days without rest       4  ▲         −12   ›
+│ Plan done          4 of 5  ●          −2   ›
+│ Fatigue (TSB)         −18  ●           0   ›
+│ Monotony              1.6  ●           0   ›
+│ Intensity split     78/22  ✓           0   ›
+│ Since deload         3 wk  ●           0   ›
 ├──────────────────────────────────────────────
-│ YESTERDAY'S SESSIONS
-│ Easy run · 8.2 km · 46 min      load 62    ›
-│ Strength · lower · 50 min       load 48    ›
-├──────────────────────────────────────────────
-│ ▸ FITNESS AND FATIGUE  CTL and ATL, one chart
-│ ▸ TSB GAUGE            banded, with reference
-│ ▸ INTENSITY · 12 WEEKS stacked by zone
-│ ▸ ACTIVITY HEATMAP     52 weeks
-│ ▸ REGIONAL LOAD        body figure by region
-│ ▸ INJURY               open: none ›
+│ THE FULL PICTURE
+│ Yesterday's sessions  2 · load 110         ›
+│ Fitness and fatigue   CTL 54 ▲             ›
+│ Intensity · 12 weeks  80/20                ›
+│ Activity · 52 weeks   5.1 days/wk          ›
+│ Regional load         legs high            ›
+│ Injury                none open            ›
 ├──────────────────────────────────────────────
 │ WHAT AFFECTS YOUR LOAD RESPONSE
-│ 5+ days without rest   RECOVERY −14 two days on
-│ Long run > 25 km       RECOVERY −9 next day
+│ 5+ days without rest  RECOVERY −14         ›
+│ Long run > 25 km      RECOVERY −9          ›
 ```
 
-- **Score top:** 100 means the dose was right.
-- **Direction bar:** always shown. The headline reads NORMAL · HIGH SIDE, LOW SIDE or IN BAND.
-- **Fitness line:** a trend, not scored. It links to ME › PERFORMANCE.
+LOAD always shows a direction strip (LOW, IN BAND, HIGH), because a lower ring can mean too much or too little. It is
+the only domain whose overlay adds a strip to the ring.
 
----
-
-## 6. FUEL
+### FUEL
 
 ```
-│ ‹ FUEL · MONDAY                              ?
-│ 94  ● NORMAL
-│  0     40   60           100
-│  ├─────┼────┼─────────────┤
-│                         ▲
+│ ✕  FUEL                                MONDAY
+│              ╭━━━━━━━━━━━━━━━╮
+│              ┃       94      ┃
+│              ┃       ●       ·
+│              ╰━━━━━━━━━━━━━━━╯
+│                   NORMAL
 │ Fed for the training; gut settled.
-│ INTAKE 96 ●   GUT 90 ●
+│        INTAKE  96 ●        GUT  90 ●
 ├──────────────────────────────────────────────
-│ INTAKE DRIVERS                            pts
-│ Energy    2 610 / 2 700 kcal  ● ON TARGET   0
-│ Protein   1.9 g/kg  ● ON TARGET (1.8)       0
-│ Carbs     5.1 g/kg  ▼ SHORT for load (6)   −3
-│ Water     2.9 / 3.2 L  ● ON TARGET          0
-│ Alcohol   0 g  · Caffeine last 13:30  ● OK  0
+│ WHAT MOVED IT · INTAKE                    pts
+│ Carbs         5.1 g/kg  ↓             −3   ›
+│ Energy        2 610 kcal ✓             0   ›
+│ Protein       1.9 g/kg  ✓              0   ›
+│ Water           2.9 L   ✓              0   ›
+│ Alcohol, caffeine  0 g · 13:30 ✓       0   ›
 ├──────────────────────────────────────────────
-│ GUT DRIVERS                               pts
-│ Symptoms  comfort 3/4 · bloating  ● NORMAL −1
-│ Timing    08:10  ● IN USUAL WINDOW          0
-│           (usual 07:00–08:40 · steady)
-│ Frequency 1  ● USUAL (1–2)                  0
-│ Form      type 4 (3-day)  ● USUAL           0
-│ In-session  no fuelled session yesterday    —
+│ WHAT MOVED IT · GUT                       pts
+│ Symptoms      comfort 3 ●             −1   ›
+│ Timing        08:10     ●              0   ›
+│ Frequency         1     ●              0   ›
+│ Form      type 4 (3 d)  ●              0   ›
+│ In-session    no fuelled session       —   ›
 ├──────────────────────────────────────────────
-│ ▸ BOWEL TIMING · 14 DAYS   steady ●
-│     00   04   08   12   16   20   24
-│   M  ·    ·   ●▒▒  ·    ·    ·    ·
-│   T  ·    ·  ●▒▒▒  ·    ·    ·    ·
-│   W  ·    ·   ▒●▒  ·    ·  ●  ·    ·
-│   …  ▒ = your usual window
-│ ▸ DIGESTIVE PATTERN   Bristol 14-day: firm /
-│                       typical / loose shares
-│ ▸ CALORIES & MACROS   7 days vs targets
-│ ▸ ENERGY BALANCE      adaptive TDEE, weight
-│                       trend ›  ME › BODY
-│ ▸ PROTEIN PER MEAL    · MACROS PER KG
-│ ▸ MICRONUTRIENTS      vitamins, minerals
-│ ▸ GLUCOSE SPIKING     meal glycaemic load
-│ ▸ HYDRATION           intake vs demand
-│ ▸ CAFFEINE WINDOW
+│ THE FULL PICTURE
+│ Meals yesterday       4 · 2 610 kcal       ›
+│ Calories & macros · 7 days                 ›
+│ Energy balance    TDEE 2 680 · −0.1 kg/wk  ›
+│ Micronutrients    2 short                  ›
+│ Glucose spiking   1 high-GL meal           ›
+│ Hydration         2.9 / 3.2 L              ›
+│ Bowel timing · 14 days   steady            ›
+│ Digestive pattern · 14 days   typical      ›
 ├──────────────────────────────────────────────
 │ WHAT AFFECTS YOUR GUT
-│ Alcohol > 20 g    loose next day 3× (7)
-│ Dinner after 21:30  bloating 2× (9)
-│ Gel brand X in runs gut 6/10 vs 2/10
+│ Alcohol > 20 g        loose next day       ›
+│ Dinner after 21:30    bloating             ›
+│ Gel brand X in runs   gut 6/10             ›
+```
+
+### BALANCE
+
+```
+│ ✕  BALANCE                             MONDAY
+│              ╭━━━━━━━▓▓▓▓▓━━━━╮
+│              ┃      118       ┃
+│              ┃       ▲        ┃
+│              ╰━━━━━━━━━━━━━━━━╯
+│             PRIMED · ◉ BALANCED
+│ Calm day, settled well before bed.
+│     ANS 122 ▲    MIND 110 ▲    RHYTHM 104 ●
+├──────────────────────────────────────────────
+│ WHAT MOVED IT · NERVOUS SYSTEM            pts
+│ Stressed time      14 %  ▲            +8   ›
+│ Relaxed time       38 %  ▲            +5   ›
+│ Wind-down      stress 22 ●             0   ›
+│ Night HR dip      −18 %  ●             0   ›
+│ HRV stability   CV 4.1 % ●             0   ›
+├──────────────────────────────────────────────
+│ WHAT MOVED IT · MIND
+│ Mood                4/5  ▲            +3   ›
+│ Stress (felt)       2/5  ●            +1   ›
+├──────────────────────────────────────────────
+│ WHAT MOVED IT · RHYTHM
+│ Meal timing      steady  ●             0   ›
+│ Phone after 23:00 10 min ●             0   ›
+├──────────────────────────────────────────────
+│ THE FULL PICTURE
+│ Stress through the day    peak 15:40       ›
+│ ANS map · 14 days         balanced 11 of 14›
+│ Phone · 7 days            2h40/day         ›
+├──────────────────────────────────────────────
+│ WHAT AFFECTS YOUR BALANCE
+│ Commute by train      stressed time +9 %   ›
+│ Workday > 10 h        wind-down +11        ›
 ```
 
 ---
 
-## 7. BALANCE
+## 4. Metric overlay
+
+All the explanations and confounding factors live here. Every metric in the app uses this one layout. Example: HRV,
+opened from RECOVERY.
 
 ```
-│ ‹ BALANCE · MONDAY                           ?
-│ 118  ▲ PRIMED            ANS  ◉ BALANCED
-│  ├─────┼────┼─────────────┼───────┼─────────┤
-│                                  ▲
-│ Calm day, settled well before bed.
-│ ANS 122 ▲   MIND 110 ▲   RHYTHM 104 ●
+│ ‹ RECOVERY                                  ✕
+│ HRV · TUE MORNING
+│ 58 ms                         ▲ ABOVE NORMAL
+│ your normal 44–52 ms · moved RECOVERY +7
 ├──────────────────────────────────────────────
-│ ANS DRIVERS                               pts
-│ Stressed time  14 % awake  ▲ LOW (usual 25) +8
-│ Relaxed time   38 %  ▲ ABOVE NORMAL         +5
-│ Wind-down      stress 22 pre-bed ● NORMAL   0
-│ Night HR dip   −18 %  ● NORMAL (−14…−20)    0
-│ HRV stability  CV 4.1 %  ● STEADY           0
+│ 60 DAYS                   [7D 30D 60D 1Y]
+│  60 ┤                                   ●
+│     ┤░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  normal
+│  45 ┤ ●  ● ●●  ●● ● ●●● ● ●  ●●● ●● ●●
+│  30 ┤
+│     └ 4 Sep                         3 Nov ┘
+│ tap a dot: that morning
 ├──────────────────────────────────────────────
-│ MIND DRIVERS
-│ Stress (felt)  2/5  ● NORMAL               +1
-│ Mood           4/5  ▲ ABOVE NORMAL         +3
+│ HOW IT SITS
+│ 7-day level      51 ms  ● NORMAL
+│ Day-to-day CV    4.1 %  ● STEADY
+│ How rare today   1 in 12 mornings
+│ Band held        26 of last 30 inside
 ├──────────────────────────────────────────────
-│ RHYTHM DRIVERS
-│ Meal timing    ● STEADY                     0
-│ Phone after 23:00  10 min  ● NORMAL         0
+│ WHAT WENT WITH IT
+│ Sleep 8h05 (▲) · no alcohol · rest-ish day
 ├──────────────────────────────────────────────
-│ ▸ STRESS THROUGH THE DAY  (yesterday)
-│   100┤      ▃                 exercise
-│      │ ▂▃▅▃▂ ▂▁▁▂▃▂▁▁▁▂▂▁░░░▁▁▁ masked ░
-│     0└ 07    12    17    22
-│ ▸ ANS MAP · 14 DAYS
+│ WHAT AFFECTS YOUR HRV
+│ Alcohol > 20 g        −9 %   (12 nights)
+│ Long run > 25 km      −7 %   (6)
+│ Sleep < 6 h           −6 %   (18)
+├──────────────────────────────────────────────
+│ DATA        Zepp via Health Connect · night
+│             of 2→3 Nov · RMSSD · 1 reading
+├──────────────────────────────────────────────
+│ WHAT IS HRV?
+│ Variation between heartbeats overnight;
+│ higher than your normal usually means your
+│ body is recovered. Compared only with you.
+```
+
+**Layout for every metric:**
+1. Header: value, band word, your normal, and the points it moved.
+2. Chart with the normal band.
+3. HOW IT SITS.
+4. WHAT WENT WITH IT.
+5. WHAT AFFECTS IT.
+6. DATA (source and quality).
+7. WHAT IS IT.
+
+A section with nothing to say is left out.
+
+**Views that aren't scored** use the same overlay with their own chart and no points line. Examples: the hypnogram,
+stress through the day, bowel timing, the ANS map. Two of them:
+
+```
+│ ‹ FUEL                                      ✕
+│ BOWEL TIMING · 14 DAYS              ● STEADY
+│ usual window 07:00–08:40 · yesterday inside
+│     00   04   08   12   16   20   24
+│  M  ·    ·   ●▒▒  ·    ·    ·    ·
+│  T  ·    ·  ●▒▒▒  ·    ·    ·    ·
+│  W  ·    ·   ▒●▒  ·    ·  ●  ·    ·
+│  …                        ▒ = usual window
+│ HOW IT SITS   spread 38 min (usual 45) · 1.1/day
+│ WHAT AFFECTS IT  late dinner → +1h10 next day
+```
+
+```
+│ ‹ BALANCE                                   ✕
+│ ANS MAP · 14 DAYS                ◉ BALANCED
 │              HRV ▲
 │     BALANCED  │  UNUSUAL
 │   RHR ◀───────┼───────▶ RHR
-│     lower     │   higher
+│     lower  ◉  │   higher       ◉ = today
 │   SATURATED   │  SYMPATHETIC
 │              HRV ▼
-│   (dots, today ringed)
-│ ▸ PHONE · LAST 7 DAYS
-│ ▸ CIRCADIAN ALIGNMENT
-├──────────────────────────────────────────────
-│ WHAT AFFECTS YOUR BALANCE
-│ Commute by train  stressed time +9 % (14 d)
-│ Workday > 10 h    wind-down stress +11 (8 d)
+│ 11 of 14 days balanced · 2 sympathetic (Thu,
+│ Fri: workdays > 10 h) · 1 saturated (Sun,
+│ after the 24 km)
 ```
 
 ---
 
-## 8. PLAN
+## 5. PLAN
 
-Sub-tabs: **TRAINING · FOOD · RACE · SESSIONS**.
+Sub-tabs: **TRAINING · FOOD · RACE · SESSIONS**. Level 1 shows headline tiles and lists. Every row opens an overlay.
 
 ### PLAN › TRAINING
 
 ```
 │ PLAN   [TRAINING] FOOD  RACE  SESSIONS
 ├──────────────────────────────────────────────
-│ CURRENT BLOCK · Base 2 · week 3 of 6       ›
-│ ▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░  focus: aerobic + hills
+│ Base 2 · week 3 of 6        ▓▓▓▓▓▓▓░░░░░   ›
 ├──────────────────────────────────────────────
-│ THIS WEEK                        4 of 5 done
-│ MON ✓ Easy run 8 km · Strength lower
-│ TUE ● Threshold 10 km      READY ✓  ●●●○
-│ WED   Rest
-│ THU   Intervals 6×800      CHARGE known Thu
-│ SAT   Long run 24 km
+│ THIS WEEK                          4 of 5 ✓
+│ MON ✓ Easy run 8 km · Strength lower       ›
+│ TUE ○ Threshold 10 km           READY ✓    ›
+│ WED   Rest                                 ›
+│ THU ○ Intervals 6×800                      ›
+│ SAT ○ Long run 24 km                       ›
 ├──────────────────────────────────────────────
-│ NEEDS ATTENTION
-│ 4 days without rest: Wed rest keeps LOAD in
-│ band.                         [ KEEP WED REST ]
-├──────────────────────────────────────────────
-│ UPCOMING · PLANNED BLOCKS · HISTORY        ›
+│ Needs attention   1                        ›
+│ Upcoming blocks   1                        ›
+│ History           14 blocks                ›
 │ [ PLAN A NEW BLOCK ]
 ```
 
-- **READY mark:** CHARGE against the session's demand tier: easy ●○○○, threshold ●●●○, long or strength ●●●●.
-- **Future days:** show "CHARGE known that morning". There is no forecast in v1.
+| Tap | Opens |
+|---|---|
+| Block row | Block overlay: phases, focus, weekly volume against plan, edit |
+| A day | Session overlay: structure, targets, READY FOR against CHARGE, move, swap, delete |
+| Needs attention | The flags, e.g. "4 days without rest: keep Wed rest" with a button |
 
 ### PLAN › FOOD
 
 ```
 │ PLAN   TRAINING [FOOD] RACE  SESSIONS
 ├──────────────────────────────────────────────
-│ TODAY · threshold day        2 650 kcal
-│ carbs 6 g/kg · protein 1.8 g/kg
-│ breakfast · lunch · pre-run · dinner       ›
+│ TODAY · threshold day        2 650 kcal    ›
 │ TOMORROW · rest day          2 250 kcal    ›
 │ THU · intervals              2 700 kcal    ›
 ├──────────────────────────────────────────────
-│ MEAL PREP   1 PICK · 2 RECIPES · 3 WEEK ·
-│             4 SHOP & COOK                  ›
-│ PERIODISATION · LAST 4 WEEKS  carbs vs load ›
+│ Meal prep · this week     4 recipes        ›
+│ Periodisation · 4 weeks   carbs follow load›
 ```
+
+| Tap | Opens |
+|---|---|
+| A day | Day overlay: the same meals TODAY'S PLAN shows, with targets (carbs and protein in g/kg) and per-meal macros; swap or edit a meal |
+| Meal prep | The four steps (PICK · RECIPES · WEEK · SHOP & COOK) in one overlay |
 
 ### PLAN › RACE
 
 ```
 │ PLAN   TRAINING  FOOD [RACE] SESSIONS
 ├──────────────────────────────────────────────
-│ EVENTS   Trail 42K · 30 Nov · 27 days      ›
-│   COURSE · THE DAY · AID STATIONS
-│ RACE FUEL   per hour 75 g carbs · 600 ml
-│   BEFORE · DURING · AFTER · CARRY · WATCH  ›
-│   ASSUMPTIONS · CHANGED SINCE LAST SHOWN
+│ Trail 42K · 30 Nov            27 days      ›
+│ Race fuel · 75 g carbs/h · 600 ml/h        ›
 ```
 
-### PLAN › SESSIONS and the session page
+| Tap | Opens |
+|---|---|
+| Event | Event overlay: course, the day, aid stations |
+| Race fuel | Race-fuel overlay: before, during, after, per hour, carry, watch, assumptions, what changed |
+
+### PLAN › SESSIONS
 
 ```
 │ PLAN   TRAINING  FOOD  RACE [SESSIONS]
 ├──────────────────────────────────────────────
-│ MON 2  Easy run   8.2 km  46:10  load 62   ›
-│        EF ▲ IMPROVED · decoupling ● AS USUAL
-│ MON 2  Strength   lower   50 min load 48   ›
-│ SAT 31 Long run  24.1 km  2:21   load 188  ›
+│ MON 2  Easy run    8.2 km   load 62   ▲    ›
+│ MON 2  Strength    lower    load 48   ●    ›
+│ SAT 31 Long run   24.1 km   load 188  ●    ›
 │ …                              [ LOAD MORE ]
 ```
 
+The direction mark is the session's overall mark against usual. For runs it is the efficiency factor.
+
+Tapping a session opens the session overlay:
+
 ```
-│ ‹ EASY RUN · MON 2 NOV
-│ SUMMARY  8.2 km · 46:10 · 5:38 /km · HR 141
-│ load 62 → fed LOAD for Monday
-│ MARKS vs your usual easy road runs
-│ Efficiency factor  1.62  ▲ IMPROVED
-│ HR decoupling      2.1 %  ● AS USUAL
-│ Pace     5:38  ● AS USUAL for easy
-│ Cadence  172   ● AS USUAL
-│ Stride   1.03 m ● USUAL FOR THIS PACE
-│ Gut      (fuelled sessions only)
-│ ▸ RUN DYNAMICS   heart rate · pace · power ·
-│                  cadence · vertical ratio
-│ ▸ SPLITS  ▸ ROUTE  ▸ TRAIL (trail runs)
+│ ✕  EASY RUN · MON 2 NOV
+│ 8.2 km · 46:10 · 5:38 /km · HR 141
+│ load 62 · fed LOAD for Monday
+├──────────────────────────────────────────────
+│ Efficiency factor   1.62   ▲               ›
+│ HR decoupling       2.1 %  ●               ›
+│ Pace                5:38   ●               ›
+│ Cadence             172    ●               ›
+│ Stride              1.03 m ●               ›
+├──────────────────────────────────────────────
+│ Heart rate · zones               Z2 81 %   ›
+│ Pace · power · vertical ratio              ›
+│ Splits                    8 km             ›
+│ Route                     map              ›
 ```
 
-The session page keeps today's marks against usual. One new line says which day's LOAD the session fed.
+Each row opens a level 3 overlay, with its chart over the run and the mark against usual runs of that kind.
 
 ---
 
-## 9. LOG
+## 6. + LOG
 
-### LOG tab
+Tapping **+ LOG** opens the LOG page **with the logging menu already up**. Close the menu and the log of past entries
+is underneath.
 
 ```
 │ LOG · today 9 entries · 1 gap
-│ [ + LOG ]                  GAPS ONLY · EXPAND
-├──────────────────────────────────────────────
 │ TUE 3 NOV   ■ food ■ water ◧ supps ┈ check-in
 │ MON 2 NOV   ■ ■ ■ ■ ✓ closed 22:14
-│ SUN 1 NOV   ■ ■ ◧ ■ ✓ closed 21:50
+│ ╭────────────────────────────────────────────
+│ │ WHAT ARE YOU LOGGING?                   ✕
+│ │ RECENT   [Water] [Food] [Supplements]
+│ │
+│ │ ● CLOSE THE DAY                (evening)
+│ │
+│ │ INTAKE    Food · Drink · Supplements ·
+│ │           Run fuel
+│ │ BODY      Wellbeing · Stool · Grip strength
+│ │ TRAINING  Session · Injury check-in ·
+│ │           Injury · Illness
+│ │ INTIMACY  Sexual activity · Encounter
+│ │ OTHER     Note
+│ ╰────────────────────────────────────────────
+   TODAY     PLAN     + LOG     LAB     ME
 ```
 
-- A late log shows as an ordinary entry under its day. FINAL scores don't change.
-- `✓ closed` marks a day finished with the evening check-in.
+- SAY IT is gone.
+- CLOSE THE DAY sits at the top of the menu from 19:00 until the day is closed.
+- Tapping a day in the log opens the day overlay with every entry. Tapping an entry opens it: DETAIL, EDIT, DELETE.
+- Late logs are ordinary entries under their day. FINAL scores don't change.
 
 ### CLOSE THE DAY
 
-Opens from TODAY's evening banner, the PROVISIONAL button, or a 21:30 notification.
-
 ```
-│ CLOSE MONDAY                         1 min
+│ ✕  CLOSE MONDAY                       1 min
 ├──────────────────────────────────────────────
 │ HOW WAS THE DAY?
-│ Stress     ○ ○ ● ○ ○      Mood   ○ ○ ○ ● ○
+│ Stress     ○ ○ ● ○ ○      Mood     ○ ○ ○ ● ○
 │ Energy     ○ ○ ○ ● ○      Soreness ○ ● ○ ○ ○
 ├──────────────────────────────────────────────
 │ GUT
 │ Comfort    ○ ○ ○ ● ○
 │ [bloating] [cramps] [reflux] [urgency]
 │ [gas] [nausea]
-│ Bowel movements today   1 at 08:10  [+ ADD]
+│ Bowel movements   1 at 08:10       [+ ADD]
 ├──────────────────────────────────────────────
-│ FOOD LOG
-│ 2 610 kcal logged · 96 % of your usual
-│ ● looks complete      [ ADD MORE ]
-├──────────────────────────────────────────────
-│ ANYTHING ELSE?    [ SAY IT ]  (free text)
+│ FOOD LOG   2 610 kcal · 96 % of usual  ✓
+│            [ ADD MORE ]
 ├──────────────────────────────────────────────
 │ [ CLOSE THE DAY ]
-│ Tomorrow's CHARGE will be final when you wake.
 ```
-
-### + LOG sheet
-
-Unchanged from the UX review: SAY IT first, a RECENT row, and groups INTAKE · BODY · TRAINING · INTIMACY · OTHER.
-The **stool entry** gains the time, so bowel timing works.
 
 ---
 
-## 10. LAB
+## 7. LAB
 
-Sub-tabs: **N=1 · SUPPLEMENTS · TESTS · ROUTINE**.
-
-### LAB › N=1
+Sub-tabs: **N=1 · SUPPLEMENTS · TESTS · ROUTINE**. Level 1 is headline tiles; each opens an overlay.
 
 ```
 │ LAB   [N=1] SUPPLEMENTS  TESTS  ROUTINE
 ├──────────────────────────────────────────────
-│ EXPERIMENTS
-│ Magnesium at night · day 18 / 28
-│ outcome SLEEP   +6 ± 5 so far  ─────●──┤
-│ Late caffeine cut · done · BALANCE +9 ✓   ›
-│ [ START AN EXPERIMENT ]  outcome = a domain
+│ Magnesium at night   day 18/28 · SLEEP +6  ›
+│ Late caffeine cut    done · BALANCE +9 ✓   ›
+│ [ START AN EXPERIMENT ]
 ├──────────────────────────────────────────────
-│ WHAT GOES WITH WHAT          forest rows
-│ Alcohol → SLEEP     ──●──┤          −8
-│ Long run → RECOVERY ───●─┤          −9
-│ Train commute → BALANCE ─●┤         −6
+│ What goes with what      9 found           ›
+│ Before low-CHARGE mornings  3 signals      ›
+│ Interactions · protocols                   ›
+```
+
+| Tile | Overlay |
+|---|---|
+| An experiment | Progress chart with today's draw, outcome = a domain score, the protocol |
+| What goes with what | Forest rows, one per relationship; each opens the metric overlay of its outcome |
+| Before low-CHARGE mornings | Log-odds rows (late dinner, alcohol, < 7 h…) |
+
+```
+│ LAB   N=1 [SUPPLEMENTS] TESTS  ROUTINE
 ├──────────────────────────────────────────────
-│ WHAT CAME BEFORE LOW-CHARGE MORNINGS
-│ log-odds rows: late dinner · alcohol · <7 h
+│ Today          2 of 4 taken                ›
+│ Stack          6 · 1 interaction           ›
+│ Pantry         2 run out within 14 days    ›
+```
+
+```
+│ LAB   N=1  SUPPLEMENTS [TESTS] ROUTINE
 ├──────────────────────────────────────────────
-│ INTERACTIONS · PROTOCOLS                   ›
+│ Grip strength     48 kg  ●                 ›
+│ Body check-in     2 days ago               ›
+│ Sweat test        1.1 L/h · 12 Oct         ›
+│ Running form      last 20 Oct              ›
+│ Movement evaluation                        ›
 ```
 
-The relationships listed here also feed "what affects this for you" on each domain page. The scorecards have moved to
-each score's "?".
-
-### LAB › SUPPLEMENTS
-
 ```
-│ TODAY        2 of 4 · evening bundle due
-│ STACK · EVIDENCE · INTERACTIONS            ›
-│ PANTRY · STOCK · RUN-OUT DATES · REORDER   ›
-```
-
-Adherence is not scored; it appears in N=1 when it relates to an outcome.
-
-### LAB › TESTS
-
-```
-│ DAILY TESTS     grip strength · body check-in
-│ SWEAT TEST      last 12 Oct · 1.1 L/h      ›
-│ RUNNING FORM    analyse a clip · past      ›
-│ MOVEMENT EVALUATION                        ›
-```
-
-### LAB › ROUTINE
-
-```
-│ THE WEEK BY PLACE · COMMUTE · ACTIVE TRAVEL
-│ UNLOGGED VISITS
-│ (phone and timing regularity are scored in
-│  BALANCE; this page is for exploring)
+│ LAB   N=1  SUPPLEMENTS  TESTS [ROUTINE]
+├──────────────────────────────────────────────
+│ The week by place    4 places              ›
+│ Commute              38 min · train        ›
+│ Active travel        4.2 km/day            ›
+│ Unlogged visits      2                     ›
 ```
 
 ---
 
-## 11. ME
+## 8. ME
 
-Sub-tabs: **HEALTHSPAN · PERFORMANCE · BODY · HEALTH · BLOODWORK**, with SETTINGS behind ⚙.
-
-### ME › HEALTHSPAN
+Sub-tabs: **HEALTHSPAN · PERFORMANCE · BODY · HEALTH · BLOODWORK**, plus ⚙.
 
 ```
-│ ME  [HEALTHSPAN] PERFORMANCE BODY HEALTH BLOODWORK  ⚙
+│ ME [HEALTHSPAN] PERFORMANCE BODY HEALTH BLOODWORK ⚙
 ├──────────────────────────────────────────────
-│ HEALTHSPAN · 6 of 8 favourable
 │           VO2max
 │     grip  ╱‾‾‾╲  lipids
 │   BP     ⟨  ◆  ⟩   glucose
 │     body  ╲___╱  sleep
 │           strength
-│ (radar; hollow dashed = not assessed)
+│        6 of 8 favourable                   ›
 ├──────────────────────────────────────────────
-│ BIOLOGICAL AGE   PhenoAge 31.4 · functional ›
-│ DIMENSIONS · HISTORY                       ›
+│ Biological age   31.4                      ›
 ```
 
-### ME › PERFORMANCE
-
-Levels and long-term analysis. This was Training › Running and Strength.
+The radar is the headline. Tapping it opens the overlay with each factor (it opens the metric overlay) and the history.
 
 ```
-│ RUNNING   STRONG ▲            [1M 3M 6M 1Y]
-│ VOLUME  total · per week · TRAIL/EASY/QUALITY
-│ [ROAD | TRAIL]
-│ EFFICIENCY FACTOR · HR DECOUPLING · PACE (GAP)
-│ CADENCE / STRIDE · GROUND CONTACT · VERT RATIO
-│ RECORDS
+│ ME  HEALTHSPAN [PERFORMANCE] BODY …
 ├──────────────────────────────────────────────
-│ STRENGTH  SOLID ●
-│ E1RM EVOLUTION · STANDARDS · PR TIMELINE
-│ PROJECTED MAX INCREASES · CONSISTENCY · MIX
+│ Running    STRONG     ▲                    ›
+│ Strength   SOLID      ●                    ›
+│ Fitness    VO2max 53  ●                    ›
+```
+
+| Tile | Overlay |
+|---|---|
+| Running | Volume, ROAD/TRAIL switch, efficiency factor, decoupling, pace (GAP), cadence/stride, ground contact, vertical ratio, records; each chart opens its metric overlay |
+| Strength | e1RM, standards, PR timeline, projected max, consistency, mix |
+| Fitness | VO2max, LT pace, HR zones |
+
+```
+│ ME  … [BODY] HEALTH BLOODWORK
 ├──────────────────────────────────────────────
-│ FITNESS   VO2max 53 · LT pace 4:32 · HR zones
+│ Weight      72.4 kg   ●                    ›
+│ Body fat    13.8 %    ●                    ›
+│ Measurements  12 Oct                       ›
 ```
 
-The charts keep today's formats: per-run dots with a median line. Each level opens with one row in the metric-row
-format.
-
-### ME › BODY
-
 ```
-│ WEIGHT   72.4 kg (trend)  ● STABLE −0.1/wk
-│ BODY FAT 13.8 %  ● NO CHANGE (> LSC needed)
-│ MEASUREMENTS · SCALE READINGS              ›
+│ ME  … BODY [HEALTH] BLOODWORK
+├──────────────────────────────────────────────
+│ ⚠ Sore throat        day 2 · caps CHARGE   ›
+│ Recurring: L knee    quiet 34 days         ›
+│ New, not yet a concern   1                 ›
 ```
 
-### ME › HEALTH
-
-Health concerns: injuries, recurring pain, symptoms and illness.
+The concern overlay holds: state, episodes, context, patterns, timeline, recurrence, training impact.
 
 ```
-│ NOW        sore throat · day 2 · caps CHARGE ›
-│ NEW, NOT YET A CONCERN · PATTERNS SO FAR
-│ TIMELINE · EPISODES · RECURRENCE
-│ TRAINING IMPACT · TRAINING AND RECOVERY, SAME DAYS
+│ ME  … HEALTH [BLOODWORK]
+├──────────────────────────────────────────────
+│ Last draw 14 Aug   77 markers · 3 flagged  ›
+│ Lipids      ●   Glucose   ●   Iron   ▼     ›
 ```
 
-### ME › BLOODWORK
+Each marker opens the metric overlay: value, range, against the last draw, trend.
 
-```
-│ LAST DRAW 14 Aug · 77 markers · 3 flagged  ›
-│ by theme: lipids · glucose · iron · thyroid …
-│ each marker: value · range · ▲▼ vs last draw
-```
-
-### ⚙ SETTINGS
-
-Unchanged: PROFILE & GOALS · NOTIFICATIONS · CONNECTED SERVICES · TRAINING SETUP.
+⚙ SETTINGS is unchanged: PROFILE & GOALS · NOTIFICATIONS · CONNECTED SERVICES · TRAINING SETUP.
 
 ---
 
-## 12. Where every current card goes
+## 9. Where every current card goes
+
+"Tile → overlay" means a headline on the page that opens the full card as an overlay.
 
 | Current place | Card | New home | Shown as |
 |---|---|---|---|
-| Status | Hero (condition, HRV vs baseline) | Retired → TODAY | CHARGE dial |
-| Status | Body figure + injury flag | TODAY cap banner; ME › HEALTH; LOAD › Regional load | Banner when open |
-| Status | NEXT UP | TODAY › TODAY'S PLAN | Last line |
-| Status | Training / Nutrition / Health / Lab tiles | TODAY | Domain chips |
-| Status | Quick log | TODAY | Same buttons |
-| Today | THIS MORNING (HRV, RHR, sleep bands) | RECOVERY, SLEEP | Driver rows; band charts under ▸ |
-| Today | TODAY'S RECOVERY | RECOVERY | Domain score |
-| Today | READY FOR | TODAY's plan, PLAN › TRAINING | READY mark + demand dots |
-| Today | IS TODAY TYPICAL? | TODAY ⚠; RECOVERY ▸ | Flag + strip |
-| Today | NUTRITION TODAY | TODAY › TODAY SO FAR | Progress bars, no score |
-| Today | DO THE SUMMARIES EARN THEIR PLACE? | Each score's "?" | One line per score |
-| Training › Load | TRAINING LOAD, CTL/ATL, TSB | LOAD | TSB driver; charts under ▸ |
-| Training › Load | INTENSITY & LOAD DISTRIBUTION, INTENSITY 12 WK | LOAD | Intensity driver; chart ▸ |
-| Training › Load | ACTIVITY HEATMAP | LOAD ▸ | Same |
-| Training › Load | FITNESS (VO2max, LT) | LOAD fitness line; ME › PERFORMANCE | Trend line + detail |
-| Training › Running | All running cards | ME › PERFORMANCE | Unchanged charts |
-| Training › Strength | All strength cards | ME › PERFORMANCE | Unchanged charts |
-| Training › Sessions | Sessions list, session page | PLAN › SESSIONS | + "fed LOAD for <day>" |
-| Training › Injury | Injury | ME › HEALTH; LOAD ▸ | Concern timeline |
-| Nutrition › Nutrition | Calories & macros, macros/kg, protein per meal, micronutrients, nutrient breakdown, glucose spiking | FUEL ▸ | Intake drivers + details |
-| Nutrition › Nutrition | Energy balance | FUEL energy driver; ME › BODY | Driver + weight trend |
-| Nutrition › Hydration | Hydration intelligence, accounting, AI summary | FUEL water driver; ▸ | Driver + detail |
-| Nutrition | Caffeine window | FUEL driver (late caffeine); ▸ | Driver |
-| Nutrition › Plan | Next three days | PLAN › FOOD | Day cards |
-| Health › Cardio | HRV, RHR charts, heart-rate | RECOVERY ▸ | 60-day with normal band |
-| Health › Cardio | Physiological stress | BALANCE (day), RECOVERY (night) | Drivers + day chart |
-| Health › Sleep | Sleep phase breakdown, hypnogram | SLEEP ▸ | Same |
-| Health › Sleep | Circadian alignment | SLEEP timing driver; BALANCE rhythm | Drivers |
-| Health › Body | Weight, BF %, measurements | ME › BODY | Rows |
-| Health › Concerns | All | ME › HEALTH | Unchanged |
-| Health › Wellbeing | Energy, stress, mood, soreness | CLOSE THE DAY input → BALANCE, RECOVERY | Drivers |
-| Health › Wellbeing | Digestive pattern (Bristol) | FUEL › gut | Form driver + 14-day ▸ |
-| Health › Sexual health | Frequency, occurrences | RECOVERY ▸ | Detail |
-| Health › Bloodwork | Labs | ME › BLOODWORK | Rows by theme |
-| Lab › N=1 | Correlations, what goes with what, off mornings, experiments, interactions | LAB › N=1 (outcomes are domain scores) | Forest/odds rows |
-| Lab › Supplements | Pantry, stock, today | LAB › SUPPLEMENTS; TODAY progress line | Unchanged |
-| Lab › Planning | Training block, food plan, meal prep, race fuel | PLAN › TRAINING / FOOD / RACE | Unchanged |
-| Lab › Tests | Daily tests, grip, sweat, running form | LAB › TESTS | Unchanged |
-| Lab › Routine | Week by place, commute, active travel, unlogged visits | LAB › ROUTINE | Unchanged |
-| Lab › Routine | Phone · last 7 days | BALANCE rhythm driver; ▸ | Driver |
-| User | Healthspan, aging, levels, block card | ME | Unchanged; block card → PLAN |
+| Status | Hero (condition, HRV vs baseline) | Retired | CHARGE ring |
+| Status | Body figure + injury flag | ⚠ on CHARGE; ME › HEALTH; LOAD › Regional load | Cap mark; tile → overlay |
+| Status | NEXT UP | TODAY'S PLAN | Session row |
+| Status | Training / Nutrition / Health / Lab tiles | TODAY | Domain rings |
+| Status | Quick log | **Removed** | + LOG opens the menu |
+| Today | THIS MORNING (HRV, RHR, sleep bands) | RECOVERY, SLEEP overlays | Driver tiles → metric overlay |
+| Today | TODAY'S RECOVERY | TODAY | RECOVERY ring |
+| Today | READY FOR | TODAY'S PLAN; session overlay | READY mark; demand vs CHARGE in overlay |
+| Today | IS TODAY TYPICAL? | RECOVERY › full picture; ⚠ on CHARGE | Tile → overlay |
+| Today | NUTRITION TODAY | TODAY › SO FAR | One line → overlay |
+| Today | DO THE SUMMARIES EARN THEIR PLACE? | Each score's overlay | One line |
+| Today header | ADD ABOUT LAST EVENING | CLOSE THE DAY | Plan row + top of + LOG menu |
+| Training › Load | Training load, CTL/ATL, TSB | LOAD overlay | TSB driver; "Fitness and fatigue" tile |
+| Training › Load | Intensity & load distribution, intensity 12 wk | LOAD overlay | Driver; tile → overlay |
+| Training › Load | Activity heatmap | LOAD overlay | Tile → overlay |
+| Training › Load | Fitness (VO2max, LT) | ME › PERFORMANCE › Fitness | Tile → overlay |
+| Training › Running | All running cards | ME › PERFORMANCE › Running | Overlay; charts → metric overlays |
+| Training › Strength | All strength cards | ME › PERFORMANCE › Strength | Overlay |
+| Training › Sessions | Sessions list, session page | PLAN › SESSIONS | Row → session overlay |
+| Training › Injury | Injury | ME › HEALTH; LOAD › Injury tile | Concern overlay |
+| Nutrition › Nutrition | Calories & macros, macros/kg, protein per meal, nutrient breakdown | FUEL overlay | Drivers; tile → overlay |
+| Nutrition › Nutrition | Micronutrients, vitamins & minerals | FUEL overlay | Tile → overlay |
+| Nutrition › Nutrition | Glucose spiking | FUEL overlay | Tile → overlay |
+| Nutrition › Nutrition | Energy balance | FUEL energy driver + tile; ME › BODY | Driver; tile → overlay |
+| Nutrition › Hydration | Hydration intelligence, accounting, AI summary | FUEL water driver + tile | Overlay |
+| Nutrition | Caffeine window | FUEL "Alcohol, caffeine" driver | Metric overlay |
+| Nutrition › Plan | Next three days | PLAN › FOOD; TODAY'S PLAN | Day rows → overlay; meal rows |
+| Health › Cardio | HRV, RHR charts | RECOVERY drivers | Metric overlay |
+| Health › Cardio | Physiological stress | BALANCE (day) / RECOVERY (night) | Drivers; "Stress through the day" tile |
+| Health › Sleep | Sleep phase breakdown, hypnogram | SLEEP overlay | "Last night", "Stages" tiles |
+| Health › Sleep | Circadian alignment | SLEEP timing, BALANCE rhythm drivers | Metric overlay |
+| Health › Body | Weight, BF %, measurements | ME › BODY | Tiles → overlay |
+| Health › Concerns | All | ME › HEALTH | Concern overlay |
+| Health › Wellbeing | Energy, stress, mood, soreness | CLOSE THE DAY → BALANCE, RECOVERY | Drivers |
+| Health › Wellbeing | Digestive pattern (Bristol) | FUEL › gut | Form driver; "Digestive pattern" tile |
+| Health › Sexual health | Frequency, occurrences | RECOVERY › full picture | Tile → overlay |
+| Health › Bloodwork | Labs | ME › BLOODWORK | Theme rows → metric overlay |
+| Lab › N=1 | Correlations, what goes with what, off mornings, experiments, interactions | LAB › N=1; "What affects" on each overlay | Tiles → overlay |
+| Lab › Supplements | Today, stack, pantry, stock | LAB › SUPPLEMENTS; TODAY'S PLAN rows | Tiles → overlay |
+| Lab › Planning | Training block, food plan, meal prep, race fuel | PLAN › TRAINING / FOOD / RACE | Rows → overlay |
+| Lab › Tests | Daily tests, grip, sweat, running form, movement | LAB › TESTS | Tiles → overlay |
+| Lab › Routine | Week by place, commute, active travel, unlogged visits | LAB › ROUTINE | Tiles → overlay |
+| Lab › Routine | Phone · last 7 days | BALANCE rhythm driver + tile | Metric overlay |
+| User | Healthspan, aging, levels, block card | ME (block → PLAN) | Radar; tiles → overlay |
 | Setup | All | ME › ⚙ | Unchanged |
-| Today header | ADD ABOUT LAST EVENING | CLOSE THE DAY | Check-in |
+| Add sheet | SAY IT (log agent) | **Removed** | — |
 
 ### New things to build
 
-- The CLOSE THE DAY check-in.
-- Gut comfort and symptom chips.
-- The stool time field.
-- The bowel timing chart.
-- The ANS state and ANS map.
-- The CHARGE sheet.
-- The domain page template.
+- **Ring components:** the big CHARGE ring, the small domain rings, and the second lap.
+- **One full-screen overlay component** used at both levels 2 and 3.
+- **The level 3 metric overlay template.**
+- **The TODAY'S PLAN timeline**, merging sessions, food-plan meals, supplements and closing the day.
+- **The CLOSE THE DAY check-in.**
+- **The gut fields:** comfort and symptom chips, plus a time on stool entries.
+- **New charts:** the bowel timing chart and the ANS map.

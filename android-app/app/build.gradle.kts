@@ -22,6 +22,18 @@ val localProperties = Properties().apply {
 val googleWebClientId: String = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
 
 android {
+    // Screenshot tour (src/test/.../tour, opt-in): Robolectric renders the Compose screens on the JVM. JDK 21 needs these
+    // internals opened for it; ROBOLECTRIC_REPO_URL points its Android runtime download at a mirror when Maven Central
+    // rate-limits the machine.
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            System.getenv("ROBOLECTRIC_REPO_URL")?.let { url -> it.systemProperty("robolectric.dependency.repo.url", url) }
+            System.getenv("FT_SCREENSHOTS_DIR")?.let { dir -> it.environment("FT_SCREENSHOTS_DIR", dir) }
+            it.jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED",
+                "--add-opens=java.base/java.io=ALL-UNNAMED", "--add-opens=java.base/java.lang=ALL-UNNAMED")
+        }
+    }
     namespace = "com.bioscan.fieldterminal"
     // 37, not 36: a real build error said Compose 2026.08.00's own
     // dependencies require compiling against API 37+ -- confirmed via that
@@ -195,5 +207,10 @@ dependencies {
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 
     testImplementation("junit:junit:4.13.2")
+    // Screenshot tour: Robolectric with native graphics and the Compose test rule.
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation(platform("androidx.compose:compose-bom:2026.08.00"))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

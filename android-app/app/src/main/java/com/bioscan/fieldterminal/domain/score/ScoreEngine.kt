@@ -200,7 +200,7 @@ class ScoreEngine(
         key.upside && history(day) { domainRaw(key, it).raw }.size < MIN_RANK_HISTORY
 
     /** What each domain contributes to CHARGE on [day] (LOAD through its fatigue side). */
-    private fun chargeInputs(day: LocalDate): Map<DomainKey, Double> = buildMap {
+    internal fun chargeInputs(day: LocalDate): Map<DomainKey, Double> = buildMap {
         for (key in DomainKey.entries) {
             val value = if (key == DomainKey.LOAD) fatigueRaw(day).raw else domainScoreValue(key, day)
             if (value != null) put(key, value)

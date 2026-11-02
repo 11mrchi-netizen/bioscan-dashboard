@@ -167,8 +167,13 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
         OverlaySection("DETAILS") {
             DetailLine("CAPS", charge.cap?.let { "⚠ ${it.reason} · capped at ${it.ceiling.roundToInt()}" } ?: "none")
             DetailLine("BASED ON", "${charge.domainsUsed.size} of ${DomainKey.entries.size} domains")
-            DetailLine("WEIGHTS", "default · personal after 120 scored days")
+            DetailLine("WEIGHTS", weightsLine(view.weights))
             if (charge.calibrating) DetailLine("CALIBRATING", "fewer than 28 earlier mornings to rank against: shown unranked")
+        }
+        OverlaySection("DOES IT EARN ITS PLACE?") {
+            ScorecardLine(view.quality?.charge)
+            view.quality?.chargePlanDone?.let { ScorecardLine(it) }
+            Text(view.weights.sentence, style = FTType.Caption, color = FT.TextMuted)
         }
         OverlaySection("WHAT IS CHARGE?") { Text(whatIs(null), style = FTType.BodySmall, color = FT.TextSecondary) }
         Spacer(Modifier.height(24.dp))
@@ -287,6 +292,7 @@ fun DomainOverlay(
             }
         }
         OverlaySection("LAST 30 DAYS") { ScoreStrip(view.domainStrips[key].orEmpty(), cap = if (key.upside) ScoreScale.MAX else 100.0) }
+        OverlaySection("DOES IT EARN ITS PLACE?") { ScorecardLine(view.quality?.domains?.get(key)) }
         OverlaySection("WHAT IS ${key.label}?") { Text(whatIs(key), style = FTType.BodySmall, color = FT.TextSecondary) }
         Spacer(Modifier.height(24.dp))
     }
@@ -338,6 +344,32 @@ private fun PictureTile(title: String, headline: String, onClick: () -> Unit) {
         Text(headline, style = FTType.MonoCaption, color = FT.TextSecondary, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
         Text("›", style = FTType.Telemetry, color = FT.TextMuted)
     }
+}
+
+/** The weights in use, one line: "personal (143 mornings): RECOVERY 41 % · SLEEP 22 % · …". */
+private fun weightsLine(w: com.bioscan.fieldterminal.domain.score.ChargeWeights): String {
+    val shares = DomainKey.entries.sortedByDescending { w.weights.getValue(it) }
+        .joinToString(" · ") { "${it.label} ${(w.weights.getValue(it) * 100).roundToInt()} %" }
+    return if (w.personal) "personal (${w.days} mornings): $shares" else "default: $shares · personal after ${w.need} scored mornings (you have ${w.days})"
+}
+
+/** A score's scorecard: its verdict word and sentence, never hiding the score (unlike the old composites). */
+@Composable
+private fun ScorecardLine(result: com.bioscan.fieldterminal.domain.ScorecardResult?) {
+    if (result == null) {
+        Text("Not scored yet.", style = FTType.BodySmall, color = FT.TextMuted)
+        return
+    }
+    Text(
+        "${com.bioscan.fieldterminal.domain.scorecardWord(result.verdict)} · against ${result.targetText}",
+        style = FTType.Label,
+        color = when (result.verdict) {
+            com.bioscan.fieldterminal.domain.ScorecardVerdict.EARNS_ITS_PLACE -> FT.Emerald
+            com.bioscan.fieldterminal.domain.ScorecardVerdict.NO_BETTER -> FT.Warning
+            else -> FT.TextSecondary
+        },
+    )
+    Text(result.sentence, style = FTType.BodySmall, color = FT.TextSecondary)
 }
 
 // ---- level 3: one metric ----

@@ -10,7 +10,16 @@ import com.bioscan.fieldterminal.domain.score.ScoreEngine
 import com.bioscan.fieldterminal.domain.score.ScoreSources
 import com.bioscan.fieldterminal.domain.score.Series
 import com.bioscan.fieldterminal.domain.score.assembleScoreSeries
+import com.bioscan.fieldterminal.domain.plannedDoneByDay
+import com.bioscan.fieldterminal.domain.score.ChargeWeights
+import com.bioscan.fieldterminal.domain.score.QUALITY_HISTORY_DAYS
+import com.bioscan.fieldterminal.domain.score.ScoreKeys
+import com.bioscan.fieldterminal.domain.score.ScoreQuality
 import com.bioscan.fieldterminal.domain.score.acuteGutDays
+import com.bioscan.fieldterminal.domain.score.defaultWeights
+import com.bioscan.fieldterminal.domain.score.fitChargeWeights
+import com.bioscan.fieldterminal.domain.score.history
+import com.bioscan.fieldterminal.domain.score.scoreQuality
 import com.bioscan.fieldterminal.domain.score.capsFrom
 import com.bioscan.fieldterminal.domain.score.ChargeCap
 import com.bioscan.fieldterminal.domain.score.chargeStatus
@@ -45,6 +54,9 @@ data class ScoresView(
     val domainStrips: Map<DomainKey, List<Pair<LocalDate, Double?>>>,
     /** The assembled series, for the metric overlays' charts. */
     val series: Map<String, Series>,
+    /** Each score's scorecard (null if it could not be worked out), and CHARGE's weights in use. */
+    val quality: ScoreQuality? = null,
+    val weights: ChargeWeights = defaultWeights(),
     // The rows the full-picture views draw from (the stool hypnogram and bowel timing, last night's hypnogram, the day's
     // stress curve with exercise masked).
     val stool: List<StoolAnalysisRow> = emptyList(),
@@ -110,7 +122,15 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             val caps: (LocalDate) -> ChargeCap? = { morning ->
                 healthCaps(morning) ?: if (morning.minusDays(1) in gutDays) ChargeCap("Acute gut day") else null
             }
-            val engine = ScoreEngine(series, caps = caps)
+            // Score quality: CHARGE's weights are the person's own once fitted and shown to forecast better (re-fitted
+            // monthly); every score carries its scorecard (domain/score/ScoreQuality.kt).
+            val historyFrom = today.minusDays(QUALITY_HISTORY_DAYS - 1L)
+            val defaultEngine = ScoreEngine(series, caps = caps)
+            val defaultHistory = defaultEngine.history(historyFrom, today)
+            val weights = fitChargeWeights(defaultHistory.chargeInputs, series[ScoreKeys.HRV].orEmpty(), today)
+            val engine = if (weights.personal) ScoreEngine(series, caps = caps, weights = weights.weights) else defaultEngine
+            val history = if (weights.personal) engine.history(historyFrom, today) else defaultHistory
+            val quality = runCatching { scoreQuality(history, series, plannedDoneByDay(sources.planned), weights) }.getOrNull()
             val from = today.minusDays(SCORE_STRIP_DAYS - 1)
             ScoresView(
                 day = today,
@@ -119,6 +139,8 @@ class ScoresRepository(private val supabase: SupabaseClient) {
                 chargeStrip = engine.chargeStrip(from, today),
                 domainStrips = DomainKey.entries.associateWith { engine.domainStrip(it, from, today) },
                 series = series,
+                quality = quality,
+                weights = weights,
                 stool = sources.stool,
                 lastSleep = sources.sleep.maxByOrNull { it.date },
                 stressDays = sources.stressDays,

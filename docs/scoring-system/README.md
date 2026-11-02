@@ -372,10 +372,50 @@ tab:
 The overlays close when a detail page opens, so back from it returns to TODAY. With that, every old card has a home,
 and TODAY's ALL SECTIONS row is gone.
 
+### Phase 3 (built): score quality and personal weights
+
+The code is `domain/score/ScoreQuality.kt`, and it is unit-tested.
+
+**Scorecards.** Every score is checked against an outcome. The test is the app's existing rolling-origin one
+(`domain/Scorecard.kt`): each morning the score becomes a forecast fitted only on earlier days, it is scored once the
+outcome is known, and it is compared with its best single input on the same days.
+
+| Score | Forecasts |
+|---|---|
+| CHARGE | The next morning's HRV against its recent level; with planned days, also whether the day's planned sessions were done |
+| SLEEP | That morning's HRV |
+| RECOVERY, FUEL, BALANCE | The next morning's HRV |
+| LOAD | The HRV two mornings on |
+
+The verdict (EARNS ITS PLACE · NO BETTER THAN ITS INPUTS · UNCLEAR · NOT YET SCORED) and its sentence show in each
+overlay's DOES IT EARN ITS PLACE? section. Unlike the old composites, a NO BETTER score is never hidden; for CHARGE it
+feeds the weight fit.
+
+**Personal CHARGE weights.** The fit is a ridge regression of the next morning's HRV residual on each morning's
+domain scores, exactly what CHARGE combined (LOAD through its fatigue side; missing domains read as a typical day).
+Then:
+1. Negative weights are dropped and the rest normalised.
+2. They are pulled halfway back to the defaults and floored at 5 %.
+3. **Adoption:** they are used only if, on the held-out last third of the mornings, a straight-line forecast from
+   CHARGE with them beats the same forecast from the default CHARGE. This is the rule the personal fitness and fatigue
+   spans already follow.
+4. **Refit:** on all mornings, with a minimum of 120.
+
+The fit uses only mornings before the first of the current month, so the weights change once a month. The CHARGE
+overlay's WEIGHTS line shows them, and a sentence says why they are or aren't personal.
+
+**Your data (checked 2 Nov 2026):** HRV and sleep for every night of the last 240 days. About 200 mornings are
+available to fit and score, so both run on first install.
+
+**Known bias:** the next-morning HRV favours RECOVERY, whose HRV carries over a day. Halfway shrinkage, the 5 % floor
+and the held-out check limit how far it can pull.
+
+**Not yet:** fitting the weights of each domain's own inputs. Those keep their documented starting weights.
+
 ### Verified
 
-- **Unit tests:** the full Android suite passes, 1,089 tests with 0 failures and 4 skipped. That is 1,039 existing
-  tests plus 49 new ones (`test/.../domain/score/`, `MealLoggingTest`) and a navigation test for the new dock.
+- **Unit tests:** the full Android suite passes, 1,094 tests with 0 failures and 4 skipped. That is 1,039 existing
+  tests plus 54 new ones (`test/.../domain/score/`, `MealLoggingTest`) and a navigation test for the new dock.
 - **Build:** `assembleDebug` builds.
 - **Not verified:** the app has not been run on a device or with real data. The TODAY layout, the rings and the
   overlays and the full-picture views have only been compiled, never seen.
@@ -403,4 +443,3 @@ and TODAY's ALL SECTIONS row is gone.
   still come from the morning wellbeing entry.
 - Rebuilding the old detail pages (Training, Nutrition and Health) in the overlay style. They are reached from the
   domains, but still look like the October pages, with their own tab rails.
-- Personal weights (after 120 scored days) and the scorecard for the new scores.

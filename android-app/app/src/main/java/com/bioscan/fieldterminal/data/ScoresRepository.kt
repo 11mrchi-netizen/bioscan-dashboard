@@ -12,12 +12,17 @@ import com.bioscan.fieldterminal.domain.score.Series
 import com.bioscan.fieldterminal.domain.score.assembleScoreSeries
 import com.bioscan.fieldterminal.domain.score.capsFrom
 import com.bioscan.fieldterminal.domain.score.chargeStatus
+import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
+import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
+import com.bioscan.fieldterminal.domain.stress.StressDay
 import io.github.jan.supabase.SupabaseClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -38,6 +43,12 @@ data class ScoresView(
     val domainStrips: Map<DomainKey, List<Pair<LocalDate, Double?>>>,
     /** The assembled series, for the metric overlays' charts. */
     val series: Map<String, Series>,
+    // The rows the full-picture views draw from (the stool hypnogram and bowel timing, last night's hypnogram, the day's
+    // stress curve with exercise masked).
+    val stool: List<StoolAnalysisRow> = emptyList(),
+    val lastSleep: SleepAnalysisRow? = null,
+    val stressDays: List<StressDay> = emptyList(),
+    val exerciseWindows: List<Pair<Instant, Instant>> = emptyList(),
 )
 
 class ScoresRepository(private val supabase: SupabaseClient) {
@@ -64,11 +75,12 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         val goals = NutritionGoalsStore.getGoals(context)
 
         val w = wearable.await()
+        val sessionRows = sessions.await()
         val sources = ScoreSources(
             wearable = w,
             sleep = sleep.await(),
             wellbeing = wellbeing.await(),
-            sessionLoads = buildTrainingSessionLoads(sessions.await(), restingSeries(w)),
+            sessionLoads = buildTrainingSessionLoads(sessionRows, restingSeries(w)),
             loadSpans = spans.await(),
             planned = planned.await(),
             nutrition = nut?.allDays.orEmpty(),
@@ -98,6 +110,14 @@ class ScoresRepository(private val supabase: SupabaseClient) {
                 chargeStrip = engine.chargeStrip(from, today),
                 domainStrips = DomainKey.entries.associateWith { engine.domainStrip(it, from, today) },
                 series = series,
+                stool = sources.stool,
+                lastSleep = sources.sleep.maxByOrNull { it.date },
+                stressDays = sources.stressDays,
+                exerciseWindows = sessionRows.mapNotNull { row ->
+                    val start = runCatching { OffsetDateTime.parse(row.startTime).toInstant() }.getOrNull() ?: return@mapNotNull null
+                    val minutes = row.durationMin ?: return@mapNotNull null
+                    start to start.plusSeconds((minutes * 60).toLong())
+                },
             )
         }
     }

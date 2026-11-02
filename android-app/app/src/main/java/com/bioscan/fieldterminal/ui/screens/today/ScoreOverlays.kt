@@ -69,6 +69,7 @@ sealed interface ScoreOverlay {
     data object Charge : ScoreOverlay
     data class Domain(val key: DomainKey) : ScoreOverlay
     data class Input(val key: DomainKey, val inputKey: String) : ScoreOverlay
+    data class Picture(val picture: FullPicture) : ScoreOverlay
 }
 
 
@@ -267,6 +268,12 @@ fun DomainOverlay(view: ScoresView, key: DomainKey, onOpen: (ScoreOverlay) -> Un
                 if (missing.isNotEmpty()) Text("No data: ${missing.joinToString { it.label.lowercase() }}", style = FTType.Caption, color = FT.TextMuted)
             }
         }
+        val pictures = picturesFor(key)
+        if (pictures.isNotEmpty()) {
+            OverlaySection("THE FULL PICTURE") {
+                for (picture in pictures) PictureTile(picture.title, view.pictureHeadline(picture)) { onOpen(ScoreOverlay.Picture(picture)) }
+            }
+        }
         OverlaySection("LAST 30 DAYS") { ScoreStrip(view.domainStrips[key].orEmpty(), cap = if (key.upside) ScoreScale.MAX else 100.0) }
         OverlaySection("WHAT IS ${key.label}?") { Text(whatIs(key), style = FTType.BodySmall, color = FT.TextSecondary) }
         Spacer(Modifier.height(24.dp))
@@ -303,6 +310,20 @@ fun InputTile(input: InputScore, points: Double?, onClick: () -> Unit) {
                 color = when { points >= 1 -> FT.EmeraldHighlight; points <= -1 -> FT.Critical; else -> FT.TextMuted },
                 modifier = Modifier.width(34.dp), textAlign = TextAlign.End)
         }
+        Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+    }
+}
+
+/** A full-picture tile: what it is and its one-line headline. */
+@Composable
+private fun PictureTile(title: String, headline: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Open $title") { onClick() }.padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(title, style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f))
+        Text(headline, style = FTType.MonoCaption, color = FT.TextSecondary, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
         Text("›", style = FTType.Telemetry, color = FT.TextMuted)
     }
 }
@@ -370,5 +391,6 @@ fun ScoreOverlayHost(view: ScoresView, stack: List<ScoreOverlay>, onStack: (List
         ScoreOverlay.Charge -> ChargeOverlay(view, onOpen = push, onClose = close)
         is ScoreOverlay.Domain -> DomainOverlay(view, top.key, onOpen = push, onClose = close, onBack = back)
         is ScoreOverlay.Input -> InputOverlay(view, top.key, top.inputKey, onBack = back ?: close, onClose = close)
+        is ScoreOverlay.Picture -> PictureOverlay(view, top.picture, onBack = back ?: close, onClose = close)
     }
 }

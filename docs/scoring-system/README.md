@@ -287,13 +287,27 @@ The full map, every page and where each current card goes are in [02-page-mockup
 **Still reachable from TODAY:** the four old sections (Training, Nutrition, Health, Lab), from an ALL SECTIONS row,
 until PLAN, LAB and ME exist. The old Status hub (`StatusScreen`, `BodyConsole`) stays in the code, unreferenced.
 
+### Phase 1b (built): the full picture views
+
+The domain overlays now have a THE FULL PICTURE section. Each tile opens its own overlay:
+
+| Domain | View |
+|---|---|
+| SLEEP | **Last night**: the existing hypnogram card |
+| FUEL | **Digestive pattern · 14 days**: a stool hypnogram, as Throne Health draws it. Lanes from top to bottom are LIQUID (Bristol 7), LOOSE (6), HEALTHY (3–5, the same groups `BristolEvaluation` uses) and HARD (1–2). Each logged movement is a mark at its time, and marks are joined in time order. The healthy lane is shaded. |
+| FUEL | **Bowel timing · 14 days**: one row per day with a dot per movement. The usual window for the first movement is shaded: the median of the 60 days before, ± its robust spread, at least 30 minutes. It reads "steady" when the fortnight moved no more than a quarter over the usual spread. |
+| BALANCE | **Stress through the day**: the existing stress-rhythm card for the day before, with exercise masked |
+
+The pure logic is in `domain/score/GutPattern.kt` and is unit-tested. The stool hypnogram also heads the existing
+Health › Body DIGESTIVE PATTERN (BRISTOL) card.
+
 ### Verified
 
-- **Unit tests:** the full Android suite passes, 1,073 tests with 0 failures and 4 skipped. That is 1,039 existing
-  tests plus 34 new ones in `test/.../domain/score/`.
+- **Unit tests:** the full Android suite passes, 1,079 tests with 0 failures and 4 skipped. That is 1,039 existing
+  tests plus 40 new ones in `test/.../domain/score/`.
 - **Build:** `assembleDebug` builds.
 - **Not verified:** the app has not been run on a device or with real data. The TODAY layout, the rings and the
-  overlays have only been compiled, never seen.
+  overlays and the full-picture views have only been compiled, never seen.
 
 ### Simplifications in v1
 

@@ -103,7 +103,7 @@ fun BodyTabContent(openCheckIn: Boolean = false, onCheckInHandled: () -> Unit = 
     stool?.let { rows ->
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             val stoolEntries = rows.mapNotNull { row -> row.bristolType?.let { OffsetDateTime.parse(row.occurredAt).toLocalDateTime().toLocalDate() to it } }
-            BristolCard(evaluateBristol(stoolEntries), stoolEntries)
+            BristolCard(evaluateBristol(stoolEntries), stoolEntries, rows)
         }
     }
 
@@ -123,8 +123,11 @@ fun BodyTabContent(openCheckIn: Boolean = false, onCheckInHandled: () -> Unit = 
 // a single reading is nearly meaningless per evaluateBristol's own header
 // comment, the shape across days is the signal.
 @Composable
-private fun BristolCard(eval: BristolEvaluation, entries: List<Pair<LocalDate, Int>>) {
+private fun BristolCard(eval: BristolEvaluation, entries: List<Pair<LocalDate, Int>>, rows: List<StoolAnalysisRow>) {
     FTCard(dataQuality = eval.confidence, title = "DIGESTIVE PATTERN (BRISTOL)", info = "Descriptive pattern only — not a diagnostic tool.") {
+        // Scoring system: the same 14-day stool hypnogram as FUEL › Digestive pattern (liquid on top, hard at the bottom).
+        val today = LocalDate.now()
+        com.bioscan.fieldterminal.ui.screens.today.StoolHypnogram(com.bioscan.fieldterminal.domain.score.stoolPattern(rows, today.minusDays(13), today))
         FTMetricRow("Frequency (14d)", "${eval.confidence.have} entries logged")
         eval.pattern?.let { FTMetricRow("Pattern", bristolPatternLabel(it)) }
         // Bristol type is an ordinal category (1-7), so the shape across days is

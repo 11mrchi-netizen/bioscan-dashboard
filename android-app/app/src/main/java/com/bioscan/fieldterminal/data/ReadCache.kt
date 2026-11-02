@@ -54,13 +54,22 @@ object ReadCache {
 
     fun invalidateAll() {
         entries.clear()
+        unattributedWrites.incrementAndGet()
     }
 
     /** A write to [table] (null: a write that names no table) drops every entry that may depend on it. */
     fun invalidateWrite(table: String?) {
         if (table == null) return invalidateAll()
+        writeCounts.computeIfAbsent(table) { java.util.concurrent.atomic.AtomicLong() }.incrementAndGet()
         entries.entries.removeIf { (_, e) -> e.tables == null || table in e.tables }
     }
+
+    // Scoring system rebuild: a screen that keeps its own finished result (TODAY) asks whether anything it reads was
+    // written since. The stamp grows with every write to one of [tables] and with every write that names no table.
+    private val writeCounts = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
+    private val unattributedWrites = java.util.concurrent.atomic.AtomicLong()
+
+    fun writeStamp(tables: Set<String>): Long = unattributedWrites.get() + tables.sumOf { writeCounts[it]?.get() ?: 0L }
 
     fun size(): Int = entries.size
 }

@@ -228,7 +228,8 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         // Logged meals today, placed in their slots.
         val bySlot = mutableMapOf<String, Double>()
         overview?.todaysMeals.orEmpty().forEach { m ->
-            val at = runCatching { OffsetDateTime.parse(m.loggedAt).atZoneSameInstant(zone) }.getOrNull() ?: return@forEach
+            // Meal times are logged times: the local wall clock with a zero offset (domain/WallClock.kt).
+            val at = com.bioscan.fieldterminal.domain.WallClock.zoned(m.loggedAt, zone) ?: return@forEach
             val slot = mealForLog(todayCoded.meals, at) ?: return@forEach
             bySlot[slot.kind.name] = (bySlot[slot.kind.name] ?: 0.0) + (m.carbsG ?: 0.0)
         }
@@ -437,7 +438,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
                 limit(1000)
             }
             .decodeList<MealCarbsRow>()
-            .mapNotNull { r -> runCatching { OffsetDateTime.parse(r.loggedAt).atZoneSameInstant(zone) to (r.carbsG ?: 0.0) }.getOrNull() }
+            .mapNotNull { r -> com.bioscan.fieldterminal.domain.WallClock.zoned(r.loggedAt, zone)?.let { it to (r.carbsG ?: 0.0) } }
 
     /** The person's fuel products with their newest recipe. */
     suspend fun products(): List<FuelProductOption> = ReadCache.get("fuel.products", tables = setOf("fueling_products", "fueling_recipe_versions")) {

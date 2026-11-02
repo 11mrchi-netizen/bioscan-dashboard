@@ -43,13 +43,11 @@ data class StoolPattern(
     val days: Int get() = (to.toEpochDay() - from.toEpochDay() + 1).toInt()
 }
 
-private fun instantOf(text: String): Instant? =
-    runCatching { Instant.parse(text) }.getOrNull() ?: runCatching { OffsetDateTime.parse(text).toInstant() }.getOrNull()
-
+// stool_log.occurred_at is a logged time: the local wall clock with a zero offset (domain/WallClock.kt). Its digits are
+// the local time; the instant is that time in [zone].
 private fun StoolAnalysisRow.mark(zone: ZoneId): StoolMark? {
-    val at = instantOf(occurredAt) ?: return null
-    val local = at.atZone(zone)
-    return StoolMark(at, local.toLocalDate(), local.toLocalTime().toSecondOfDay() / 60, bristolType, bristolType?.let(StoolLane::of))
+    val local = com.bioscan.fieldterminal.domain.WallClock.read(occurredAt) ?: return null
+    return StoolMark(local.atZone(zone).toInstant(), local.toLocalDate(), local.toLocalTime().toSecondOfDay() / 60, bristolType, bristolType?.let(StoolLane::of))
 }
 
 /** The stool log from [from] to [to] (inclusive), as marks oldest first. */

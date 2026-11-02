@@ -71,7 +71,8 @@ class FoodHabitsRepository(private val supabase: SupabaseClient) {
         val descriptions = mutableListOf<Pair<MealSlotKind, String>>()
         val logged = mutableListOf<LoggedFood>()
         for (m in meals) {
-            val at = runCatching { OffsetDateTime.parse(m.loggedAt).atZoneSameInstant(zone) }.getOrNull() ?: continue
+            // Meal times are logged times: the local wall clock with a zero offset (domain/WallClock.kt).
+            val at = com.bioscan.fieldterminal.domain.WallClock.zoned(m.loggedAt, zone) ?: continue
             val slot = slotForTime(at.toLocalTime(), times)
             // One text per meal, so a staple counts once per meal however many items name it.
             descriptions += slot to (listOfNotNull(m.description) + m.items.mapNotNull { it.description }).joinToString(" · ")

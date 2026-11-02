@@ -186,7 +186,7 @@ private fun BowelMovements(date: LocalDate) {
     val zone = ZoneId.systemDefault()
     suspend fun reload() {
         entries = runCatching { AnalysisRepository(SupabaseClientProvider.client).loadStoolLog() }.getOrNull()
-            ?.filter { row -> runCatching { OffsetDateTime.parse(row.occurredAt).atZoneSameInstant(zone).toLocalDate() }.getOrNull() == date }
+            ?.filter { row -> com.bioscan.fieldterminal.domain.WallClock.date(row.occurredAt) == date }
     }
     LaunchedEffect(date) { reload() }
 
@@ -197,7 +197,7 @@ private fun BowelMovements(date: LocalDate) {
             list == null -> "Loading…"
             list.isEmpty() -> "None logged for this day."
             else -> list.joinToString(" · ") { row ->
-                val time = runCatching { OffsetDateTime.parse(row.occurredAt).atZoneSameInstant(zone).format(TIME_OF_DAY) }.getOrDefault("?")
+                val time = com.bioscan.fieldterminal.domain.WallClock.read(row.occurredAt)?.format(TIME_OF_DAY) ?: "?"
                 "$time type ${row.bristolType ?: "?"}"
             }
         },
@@ -213,7 +213,7 @@ private fun BowelMovements(date: LocalDate) {
                 val type = picked?.toInt() ?: return@TextChipRow
                 picking = false
                 scope.launchSafe(onError = { e -> error = describeLoadFailure(e) }) {
-                    AddEntryRepository(SupabaseClientProvider.client).addStool(OffsetDateTime.now(zone).toString(), type, null)
+                    AddEntryRepository(SupabaseClientProvider.client).addStool(com.bioscan.fieldterminal.domain.WallClock.write(java.time.LocalDateTime.now(zone)), type, null)
                     reload()
                 }
             }

@@ -449,6 +449,43 @@ the composables are `ui/screens/today/ScoreGraphs.kt`.
   so a new best no longer jumps to 150.
 - **H:** the bowel-timing headline says "window" rather than repeating "usual".
 
+### Phase 4b (built): time alignment and a kept TODAY
+
+**Timestamps.** The app stores every logged time as the phone's local wall clock labelled with a zero offset. That
+covers meals, stool, grip, body check-ins, scale readings, exercise sessions and athlete events. Several readers
+converted those as if they were real UTC, moving them by the UTC offset (8 h in Taipei).
+
+What the shift broke:
+- Lunch at 13:10 read as 21:10 and was ticked as dinner on TODAY'S PLAN.
+- A session at 08:11 read as 16:11 and never matched its 07:00 plan.
+- Stool times moved 8 hours, so the bowel timing and gut inputs were wrong.
+- LOG THIS and the check-in's + NOW wrote real offsets, breaking the convention.
+
+Checked against the live data, these columns are real instants and are read as such: calendar events, sleep
+bedtime / wake (16:01Z is a 00:01 bedtime), and Zepp stress samples.
+
+The fix is one helper, `domain/WallClock.kt`, used by:
+- the fuel plan's meal-to-slot matching and meal history;
+- food habits;
+- recorded sessions for the plan;
+- hydration accounting;
+- the intensity sessions;
+- event-session matching;
+- the gut code;
+- the stress-curve exercise windows;
+- LOG THIS and the check-in.
+
+"Close the day" now sits at the reminder's own 22:25.
+
+**A kept TODAY.** Building TODAY takes seconds: eight months of rows, the engine twice, and every scorecard. It used
+to be rebuilt each time the tab opened.
+- **Kept in memory:** `ui/screens/today/TodayStore.kt` keeps the finished page for the life of the app process and
+  shows it at once.
+- **Rebuilt in the background** only when it goes stale: a write to a table it reads (ReadCache now keeps a per-table
+  write stamp), a new day, or 15 minutes. It checks once a minute while on screen.
+- **Writes that don't count:** the load's own bookkeeping writes (daily_context, fuel_plans) don't mark it stale.
+- **Not kept across restarts:** if Android reclaims the app, the next open builds it once.
+
 ### Verified
 
 - **Unit tests:** the full Android suite passes, 1,107 tests with 0 failures (plus 13 opt-in tour renders). That is 1,039 existing tests plus

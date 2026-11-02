@@ -237,7 +237,8 @@ class AthleteEventsRepository(private val supabase: SupabaseClient) {
             }
             .decodeList<SessionTimesRow>()
             .mapNotNull { s ->
-                runCatching { OffsetDateTime.parse(s.startTime).atZoneSameInstant(zone) }.getOrNull()
+                // Session starts are logged times (local digits, zero offset): domain/WallClock.kt.
+                com.bioscan.fieldterminal.domain.WallClock.zoned(s.startTime, zone)
                     ?.let { EventSessionCandidate(s.id, s.type, it, s.durationMin ?: 0.0) }
             }
         var linked = 0

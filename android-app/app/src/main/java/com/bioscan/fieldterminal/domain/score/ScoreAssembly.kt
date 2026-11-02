@@ -211,8 +211,9 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
 
     // ---- GUT (the day before) ----
     // Each entry with its local day and instant.
+    // Stool times are logged times: the local wall clock with a zero offset (domain/WallClock.kt), not real instants.
     val stoolByDay: Map<LocalDate, List<Pair<StoolAnalysisRow, Instant>>> = src.stool
-        .mapNotNull { row -> parseInstant(row.occurredAt)?.let { at -> row to at } }
+        .mapNotNull { row -> com.bioscan.fieldterminal.domain.WallClock.instant(row.occurredAt, zone)?.let { at -> row to at } }
         .groupBy { (_, at) -> at.atZone(zone).toLocalDate() }
     val firstTime = stoolByDay.mapValues { (_, entries) -> entries.minOf { it.second }.atZone(zone).toLocalTime().toSecondOfDay() / 60.0 }
     for ((d, entries) in stoolByDay) {
@@ -260,7 +261,7 @@ const val ACUTE_LIQUID_STOOLS = 2
 /** The days with an acute gut episode (the day itself, not the morning after). */
 fun acuteGutDays(checkins: List<EveningCheckin>, stool: List<StoolAnalysisRow>, zone: ZoneId): Set<LocalDate> {
     val nausea = checkins.filter { it.gutSymptoms?.contains("nausea") == true }.map { it.date }
-    val liquid = stool.mapNotNull { row -> parseInstant(row.occurredAt)?.takeIf { row.bristolType == 7 }?.atZone(zone)?.toLocalDate() }
+    val liquid = stool.mapNotNull { row -> com.bioscan.fieldterminal.domain.WallClock.date(row.occurredAt)?.takeIf { row.bristolType == 7 } }
         .groupingBy { it }.eachCount().filterValues { it >= ACUTE_LIQUID_STOOLS }.keys
     return (nausea + liquid).toSet()
 }

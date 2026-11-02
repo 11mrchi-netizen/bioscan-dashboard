@@ -58,7 +58,7 @@ fun MealOverlay(fuel: TodayFuel, kind: MealSlotKind, onClose: () -> Unit, onLogg
             val at = logTimeFor(meal, meals, ZonedDateTime.now())
             scope.launchSafe(onError = { e -> error = describeLoadFailure(e) }, onDone = { saving = false }) {
                 AddEntryRepository(SupabaseClientProvider.client).addFood(
-                    loggedAt = at.toOffsetDateTime().toString(),
+                    loggedAt = com.bioscan.fieldterminal.domain.WallClock.write(at),
                     description = plannedMealDescription(meal, plate),
                     calories = plate.kcal, proteinG = plate.proteinG, carbsG = plate.carbG, fatG = plate.fatG,
                     fiberG = plate.fibreG, sugarG = null, sodiumMg = null,

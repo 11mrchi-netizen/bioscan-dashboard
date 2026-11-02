@@ -310,8 +310,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<IntensitySessionRow>()
             .map { row ->
                 IntensitySession(
-                    // The local day, not the UTC timestamp's own date (a 07:00 session in UTC+8 is the day before in UTC).
-                    OffsetDateTime.parse(row.startTime).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate(),
+                    // Session starts are logged times: the local wall clock with a zero offset, so their own date is the
+                    // local day (domain/WallClock.kt).
+                    com.bioscan.fieldterminal.domain.WallClock.date(row.startTime) ?: OffsetDateTime.parse(row.startTime).toLocalDate(),
                     row.type,
                     row.zepp.firstNotNullOfOrNull { it.histogram }?.mapNotNull { (bpm, secs) -> bpm.toIntOrNull()?.let { it to secs } }?.toMap(),
                 )

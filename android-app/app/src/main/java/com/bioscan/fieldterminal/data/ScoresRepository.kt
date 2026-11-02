@@ -145,7 +145,8 @@ class ScoresRepository(private val supabase: SupabaseClient) {
                 lastSleep = sources.sleep.maxByOrNull { it.date },
                 stressDays = sources.stressDays,
                 exerciseWindows = sessionRows.mapNotNull { row ->
-                    val start = runCatching { OffsetDateTime.parse(row.startTime).toInstant() }.getOrNull() ?: return@mapNotNull null
+                    // Session starts are logged times (local digits); stress samples are real instants.
+                    val start = com.bioscan.fieldterminal.domain.WallClock.instant(row.startTime, zone) ?: return@mapNotNull null
                     val minutes = row.durationMin ?: return@mapNotNull null
                     start to start.plusSeconds((minutes * 60).toLong())
                 },

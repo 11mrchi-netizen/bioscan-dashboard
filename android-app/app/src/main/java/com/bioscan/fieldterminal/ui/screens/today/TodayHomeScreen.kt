@@ -105,7 +105,8 @@ fun readyThreshold(intensity: com.bioscan.fieldterminal.domain.fuel.Intensity): 
 }
 
 private val BUCKET_TIMES = mapOf("morning" to LocalTime.of(8, 0), "afternoon" to LocalTime.of(13, 0), "night" to LocalTime.of(21, 0))
-private val CLOSE_DAY_TIME: LocalTime = LocalTime.of(21, 30)
+// The evening check-in reminder's own time (22:25), so the plan row and the reminder agree.
+private val CLOSE_DAY_TIME: LocalTime = com.bioscan.fieldterminal.domain.EVENING_CHECKIN_TIME
 
 fun planRows(
     now: LocalDateTime,
@@ -161,21 +162,39 @@ fun TodayHomeScreen(
 ) {
     val context = LocalContext.current
     val guard = rememberLoadGuard()
-    var view by remember { mutableStateOf<ScoresView?>(null) }
-    var nut by remember { mutableStateOf<NutritionOverview?>(null) }
-    var fuel by remember { mutableStateOf<TodayFuel?>(null) }
-    var previews by remember { mutableStateOf<TodayPreviews?>(null) }
-    var closed by remember { mutableStateOf<Set<LocalDate>>(emptySet()) }
+    // Shown at once from the kept page (TodayStore), when it is today's; rebuilt below only if it went stale.
+    val kept = remember { TodayStore.forDay(LocalDate.now()) }
+    var view by remember { mutableStateOf(kept?.view) }
+    var nut by remember { mutableStateOf(kept?.nut) }
+    var fuel by remember { mutableStateOf(kept?.fuel) }
+    var previews by remember { mutableStateOf(kept?.previews) }
+    var closed by remember { mutableStateOf(kept?.closed ?: emptySet()) }
     var stack by remember { mutableStateOf<List<ScoreOverlay>>(emptyList()) }
     var soFar by remember { mutableStateOf(false) }
     var mealKind by remember { mutableStateOf<com.bioscan.fieldterminal.domain.fuel.MealSlotKind?>(null) }
     var logFood by remember { mutableStateOf(false) }
     var checkInDate by remember { mutableStateOf<LocalDate?>(null) }
-    var loading by remember { mutableStateOf(true) }
+    var loading by remember { mutableStateOf(kept == null) }
 
     LaunchedEffect(Unit) { runCatching { EveningCheckinRepository(SupabaseClientProvider.client).recordDailyContext() } }
 
+    // While TODAY is on screen: once a minute, rebuild in the background if the kept page went stale (a sync landed, the
+    // day changed, or 15 minutes passed). The page on screen stays until the new one is ready.
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L)
+            if (!loading && !TodayStore.isFresh(TodayStore.snapshot, LocalDate.now())) guard.retry()
+        }
+    }
+
     LaunchedEffect(guard.attempt) {
+        // First open of the tab with a fresh kept page: nothing to load.
+        if (guard.attempt == 0 && TodayStore.isFresh(TodayStore.snapshot, LocalDate.now())) {
+            loading = false
+            return@LaunchedEffect
+        }
+        loading = true
+        val day = LocalDate.now()
         guard.run {
             coroutineScope {
                 val client = SupabaseClientProvider.client
@@ -195,6 +214,8 @@ fun TodayHomeScreen(
                 fuel = fuelD.await()
                 closed = closedD.await()
             }
+            // Keep the finished page, stamped after the load so the load's own bookkeeping writes don't count.
+            TodayStore.snapshot = TodaySnapshot(day, view, nut, fuel, previews, closed, System.currentTimeMillis(), com.bioscan.fieldterminal.data.ReadCache.writeStamp(TodayStore.TABLES))
         }
         loading = false
     }

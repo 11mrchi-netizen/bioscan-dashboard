@@ -135,7 +135,11 @@ fun planRows(
 }
 
 @Composable
-fun TodayHomeScreen(onOpenTile: (TileRoute) -> Unit, onOpenTab: (com.bioscan.fieldterminal.ui.nav.TopLevelTab) -> Unit = {}) {
+fun TodayHomeScreen(
+    onOpenTile: (TileRoute) -> Unit,
+    onOpenTab: (com.bioscan.fieldterminal.ui.nav.TopLevelTab) -> Unit = {},
+    onOpenDetail: (DetailPage) -> Unit = {},
+) {
     val context = LocalContext.current
     val guard = rememberLoadGuard()
     var view by remember { mutableStateOf<ScoresView?>(null) }
@@ -265,21 +269,11 @@ fun TodayHomeScreen(onOpenTile: (TileRoute) -> Unit, onOpenTab: (com.bioscan.fie
                 }
             }
 
-            // Until the domain overlays carry every detail card (docs/scoring-system: build order), the three remaining
-            // sections stay reachable here. Lab, planning, profile and settings are dock tabs now.
-            Section("ALL SECTIONS") {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    for ((label, route) in listOf("TRAINING" to TileRoute.Training, "NUTRITION" to TileRoute.Nutrition, "HEALTH" to TileRoute.Health)) {
-                        Text(label, style = FTType.Label, color = FT.TextSecondary,
-                            modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Open $label") { onOpenTile(route) }.padding(8.dp))
-                    }
-                }
-            }
             Spacer(Modifier.height(24.dp))
         }
     }
 
-    view?.let { ScoreOverlayHost(it, stack) { s -> stack = s } }
+    view?.let { ScoreOverlayHost(it, stack, onStack = { s -> stack = s }, onOpenDetail = onOpenDetail) }
     if (soFar) {
         FullScreenOverlay(title = "SO FAR TODAY", onClose = { soFar = false }) {
             val n = nut

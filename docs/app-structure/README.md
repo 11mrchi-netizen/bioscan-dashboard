@@ -2,7 +2,7 @@
 
 > **Superseded in part (November 2026):** the dock is now **TODAY · PLAN · + LOG · LAB · ME**, rebuilt around the
 > scoring system. See `docs/scoring-system/README.md` (Build status). The Training, Nutrition and Health pages below
-> remain reachable from TODAY's ALL SECTIONS row until the domain overlays carry their cards. The map below is the
+> are detail pages now, opened from the domain overlays' THE FULL PICTURE tiles. The map below is the
 > October structure, kept for history.
 
 The owner's "Field terminal new structure" document, as built, and the six content changes that came with it. The

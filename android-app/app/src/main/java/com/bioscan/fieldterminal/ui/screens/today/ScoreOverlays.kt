@@ -236,7 +236,14 @@ fun ScoreStrip(points: List<Pair<LocalDate, Double?>>, cap: Double = ScoreScale.
 // ---- level 2: a domain ----
 
 @Composable
-fun DomainOverlay(view: ScoresView, key: DomainKey, onOpen: (ScoreOverlay) -> Unit, onClose: () -> Unit, onBack: (() -> Unit)? = null) {
+fun DomainOverlay(
+    view: ScoresView,
+    key: DomainKey,
+    onOpen: (ScoreOverlay) -> Unit,
+    onClose: () -> Unit,
+    onBack: (() -> Unit)? = null,
+    onOpenDetail: (DetailPage) -> Unit = {},
+) {
     val domain = view.scores.domains.getValue(key)
     val about = if (key == DomainKey.SLEEP || key == DomainKey.RECOVERY) "${weekday(view.day.minusDays(1)).uppercase().take(3)} NIGHT"
     else weekday(view.day.minusDays(1)).uppercase()
@@ -271,7 +278,12 @@ fun DomainOverlay(view: ScoresView, key: DomainKey, onOpen: (ScoreOverlay) -> Un
         val pictures = picturesFor(key)
         if (pictures.isNotEmpty()) {
             OverlaySection("THE FULL PICTURE") {
-                for (picture in pictures) PictureTile(picture.title, view.pictureHeadline(picture)) { onOpen(ScoreOverlay.Picture(picture)) }
+                for (picture in pictures) {
+                    PictureTile(picture.title, view.pictureHeadline(picture)) {
+                        val detail = picture.detail
+                        if (detail != null) onOpenDetail(detail) else onOpen(ScoreOverlay.Picture(picture))
+                    }
+                }
             }
         }
         OverlaySection("LAST 30 DAYS") { ScoreStrip(view.domainStrips[key].orEmpty(), cap = if (key.upside) ScoreScale.MAX else 100.0) }
@@ -382,14 +394,15 @@ private fun SeriesChart(series: Series, day: LocalDate, key: String) {
  * them all.
  */
 @Composable
-fun ScoreOverlayHost(view: ScoresView, stack: List<ScoreOverlay>, onStack: (List<ScoreOverlay>) -> Unit) {
+fun ScoreOverlayHost(view: ScoresView, stack: List<ScoreOverlay>, onStack: (List<ScoreOverlay>) -> Unit, onOpenDetail: (DetailPage) -> Unit = {}) {
     val top = stack.lastOrNull() ?: return
     val push: (ScoreOverlay) -> Unit = { onStack(stack + it) }
     val close = { onStack(emptyList()) }
     val back: (() -> Unit)? = if (stack.size > 1) ({ onStack(stack.dropLast(1)) }) else null
     when (top) {
         ScoreOverlay.Charge -> ChargeOverlay(view, onOpen = push, onClose = close)
-        is ScoreOverlay.Domain -> DomainOverlay(view, top.key, onOpen = push, onClose = close, onBack = back)
+        // A detail page is a pushed page: the overlays close so back from it returns to TODAY.
+        is ScoreOverlay.Domain -> DomainOverlay(view, top.key, onOpen = push, onClose = close, onBack = back, onOpenDetail = { d -> close(); onOpenDetail(d) })
         is ScoreOverlay.Input -> InputOverlay(view, top.key, top.inputKey, onBack = back ?: close, onClose = close)
         is ScoreOverlay.Picture -> PictureOverlay(view, top.picture, onBack = back ?: close, onClose = close)
     }

@@ -356,8 +356,21 @@ Top-level pages have no back arrow.
 | A session row on TODAY | PLAN |
 | A supplements row on TODAY | LAB |
 
-**ALL SECTIONS on TODAY** keeps TRAINING, NUTRITION and HEALTH: training load, nutrition charts, cardio, sleep,
-wellbeing and sexual health have not moved into the domain overlays yet.
+### Phase 2b (built): every chart reached from its domain; ALL SECTIONS removed
+
+Each domain overlay's THE FULL PICTURE now also links to the existing detail page, pushed over TODAY on the right
+tab:
+
+| Domain | Links to |
+|---|---|
+| SLEEP | Sleep · every chart (Health › Sleep) |
+| RECOVERY | Heart · every chart (Health › Cardio); Sexual health |
+| LOAD | Training load · every chart (Training › Load); Injury |
+| FUEL | Nutrition · every chart; Hydration |
+| BALANCE | Wellbeing · every chart (Health › Wellbeing) |
+
+The overlays close when a detail page opens, so back from it returns to TODAY. With that, every old card has a home,
+and TODAY's ALL SECTIONS row is gone.
 
 ### Verified
 
@@ -388,5 +401,6 @@ wellbeing and sexual health have not moved into the domain overlays yet.
 
 - CLOSE THE DAY's mood, energy and soreness questions. The evening check-in now carries the gut questions; the others
   still come from the morning wellbeing entry.
-- Moving the remaining Training, Nutrition and Health cards into the domain overlays, then removing ALL SECTIONS.
+- Rebuilding the old detail pages (Training, Nutrition and Health) in the overlay style. They are reached from the
+  domains, but still look like the October pages, with their own tab rails.
 - Personal weights (after 120 scored days) and the scorecard for the new scores.

@@ -41,11 +41,24 @@ import java.time.ZoneId
 
 const val PICTURE_DAYS = 14L
 
-enum class FullPicture(val title: String, val domain: DomainKey) {
+/** An existing detail page a full-picture tile opens (a pushed page with its own tabs), rather than an overlay. */
+enum class DetailPage {
+    HEALTH_SLEEP, HEALTH_CARDIO, HEALTH_SEXUAL, HEALTH_WELLBEING, TRAINING_LOAD, TRAINING_INJURY, NUTRITION_MAIN, NUTRITION_HYDRATION,
+}
+
+enum class FullPicture(val title: String, val domain: DomainKey, val detail: DetailPage? = null) {
     LAST_NIGHT("Last night", DomainKey.SLEEP),
+    SLEEP_CHARTS("Sleep · every chart", DomainKey.SLEEP, DetailPage.HEALTH_SLEEP),
+    CARDIO_CHARTS("Heart · every chart", DomainKey.RECOVERY, DetailPage.HEALTH_CARDIO),
+    SEXUAL_HEALTH("Sexual health", DomainKey.RECOVERY, DetailPage.HEALTH_SEXUAL),
+    LOAD_CHARTS("Training load · every chart", DomainKey.LOAD, DetailPage.TRAINING_LOAD),
+    INJURY("Injury", DomainKey.LOAD, DetailPage.TRAINING_INJURY),
     DIGESTIVE_PATTERN("Digestive pattern · 14 days", DomainKey.FUEL),
     BOWEL_TIMING("Bowel timing · 14 days", DomainKey.FUEL),
+    NUTRITION_CHARTS("Nutrition · every chart", DomainKey.FUEL, DetailPage.NUTRITION_MAIN),
+    HYDRATION_CHARTS("Hydration", DomainKey.FUEL, DetailPage.NUTRITION_HYDRATION),
     STRESS_DAY("Stress through the day", DomainKey.BALANCE),
+    WELLBEING_CHARTS("Wellbeing · every chart", DomainKey.BALANCE, DetailPage.HEALTH_WELLBEING),
 }
 
 fun picturesFor(key: DomainKey): List<FullPicture> = FullPicture.entries.filter { it.domain == key }
@@ -69,6 +82,7 @@ fun ScoresView.pictureHeadline(picture: FullPicture): String = when (picture) {
     FullPicture.DIGESTIVE_PATTERN -> stoolPatternHeadline(stoolWindow())
     FullPicture.BOWEL_TIMING -> bowelTimingHeadline(timingWindow())
     FullPicture.STRESS_DAY -> stressDays.firstOrNull { it.date == aboutDay() }?.summary?.avg?.let { "average $it" } ?: "no readings"
+    else -> "open"
 }
 
 @Composable
@@ -113,6 +127,9 @@ fun PictureOverlay(view: ScoresView, picture: FullPicture, onBack: () -> Unit, o
                     )
                 }
             }
+            // Detail pages are pushed pages, opened from the tile; nothing to draw here.
+            FullPicture.SLEEP_CHARTS, FullPicture.CARDIO_CHARTS, FullPicture.SEXUAL_HEALTH, FullPicture.LOAD_CHARTS,
+            FullPicture.INJURY, FullPicture.NUTRITION_CHARTS, FullPicture.HYDRATION_CHARTS, FullPicture.WELLBEING_CHARTS -> Unit
             FullPicture.STRESS_DAY -> {
                 val day = view.stressDays.firstOrNull { it.date == view.aboutDay() }
                 if (day == null) Text("No stress readings for the day.", style = FTType.Body, color = FT.TextMuted)

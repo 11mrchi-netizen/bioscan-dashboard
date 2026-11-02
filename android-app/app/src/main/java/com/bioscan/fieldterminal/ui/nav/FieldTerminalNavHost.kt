@@ -53,6 +53,7 @@ import com.bioscan.fieldterminal.ui.screens.status.LabTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.NutrientBreakdownScreen
 import com.bioscan.fieldterminal.ui.screens.status.NutritionTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.PantryScreen
+import com.bioscan.fieldterminal.ui.screens.today.DetailPage
 import com.bioscan.fieldterminal.ui.screens.today.TodayHomeScreen
 import com.bioscan.fieldterminal.ui.screens.plan.PlanScreen
 import com.bioscan.fieldterminal.ui.screens.me.MeScreen
@@ -165,6 +166,25 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 TodayHomeScreen(
                     onOpenTile = { tile -> navController.navigate(tile.route) },
                     onOpenTab = { tab -> goToTab(tab) },
+                    // A domain overlay's "every chart" tiles open the detail page on the right tab, pushed over TODAY.
+                    onOpenDetail = { detail ->
+                        when (detail) {
+                            DetailPage.HEALTH_SLEEP -> healthRequestedTab = HealthTab.Sleep
+                            DetailPage.HEALTH_CARDIO -> healthRequestedTab = HealthTab.Cardio
+                            DetailPage.HEALTH_SEXUAL -> healthRequestedTab = HealthTab.SexualHealth
+                            DetailPage.HEALTH_WELLBEING -> healthRequestedTab = HealthTab.Wellbeing
+                            DetailPage.TRAINING_LOAD -> trainingRequestedTab = TrainingTab.Load
+                            DetailPage.TRAINING_INJURY -> trainingRequestedTab = TrainingTab.Injury
+                            DetailPage.NUTRITION_MAIN -> nutritionRequestedTab = NutritionTab.Nutrition
+                            DetailPage.NUTRITION_HYDRATION -> nutritionRequestedTab = NutritionTab.Hydration
+                        }
+                        val route = when (detail) {
+                            DetailPage.HEALTH_SLEEP, DetailPage.HEALTH_CARDIO, DetailPage.HEALTH_SEXUAL, DetailPage.HEALTH_WELLBEING -> TileRoute.Health
+                            DetailPage.TRAINING_LOAD, DetailPage.TRAINING_INJURY -> TileRoute.Training
+                            DetailPage.NUTRITION_MAIN, DetailPage.NUTRITION_HYDRATION -> TileRoute.Nutrition
+                        }
+                        navController.navigate(route.route) { launchSingleTop = true }
+                    },
                 )
             }
             // UX review P6: the Today page (was Daily Readiness) links to the cards it no longer repeats.

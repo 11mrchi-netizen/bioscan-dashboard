@@ -76,6 +76,9 @@ data class ChargeScore(
     val cap: ChargeCap?,
     val calibrating: Boolean,
     val previous: Double?,
+    /** How many earlier mornings it was ranked against, and whether it beat every one of them. */
+    val rankedAgainst: Int? = null,
+    val record: Boolean = false,
 ) {
     val band: ScoreBand? get() = score?.let(ScoreScale::band)
     val change: Double? get() = if (score != null && previous != null) score - previous else null
@@ -158,6 +161,8 @@ class ScoreEngine(
     private val domainCache = HashMap<Pair<DomainKey, LocalDate>, Double?>()
     private val chargeRawCache = HashMap<LocalDate, Double?>()
     private val chargeCache = HashMap<LocalDate, Pair<Double?, Double?>>() // (uncapped ranked, percentile)
+    private val rankedAgainst = HashMap<LocalDate, Int>()
+    private val recordDays = HashSet<LocalDate>()
 
     /** The first morning any series has data for: nothing before it is scored. */
     private val firstDay: LocalDate? = series.values.flatMap { it.keys }.minOrNull()
@@ -193,7 +198,7 @@ class ScoreEngine(
         if (!key.upside) return@getOrPut raw
         val past = history(day) { domainRaw(key, it).raw }
         // A guarded morning (SATURATED) stays at or under the top of normal after ranking too.
-        if (past.size < MIN_RANK_HISTORY) raw else ScoreScale.fromPercentile(ScoreScale.rankPercentile(raw, past), upside = domain.upside)
+        if (past.size < MIN_RANK_HISTORY) raw else ScoreScale.fromHistory(raw, past, upside = domain.upside)
     }
 
     private fun isCalibrating(key: DomainKey, day: LocalDate): Boolean =
@@ -218,7 +223,11 @@ class ScoreEngine(
         val raw = chargeRaw(day) ?: return@getOrPut null to null
         val past = history(day) { chargeRaw(it) }
         if (past.size < MIN_RANK_HISTORY) raw to null
-        else ScoreScale.rankPercentile(raw, past).let { p -> ScoreScale.fromPercentile(p) to p }
+        else {
+            rankedAgainst[day] = past.size
+            if (raw > past.max()) recordDays += day
+            ScoreScale.fromHistory(raw, past) to ScoreScale.rankPercentile(raw, past)
+        }
     }
 
     /** CHARGE for [day] as the person saw it: ranked, then capped. */
@@ -249,6 +258,7 @@ class ScoreEngine(
             day = day, score = final, uncapped = uncapped, raw = raw, percentile = percentile,
             drivers = drivers, domainsUsed = inputs.keys, cap = cap?.takeIf { uncapped != null && uncapped > it.ceiling },
             calibrating = raw != null && percentile == null, previous = chargeValue(day.minusDays(1)),
+            rankedAgainst = rankedAgainst[day], record = day in recordDays,
         )
         return DayScores(day, charge, domains, ansStateOf(series, day), loadDirectionOf(series, day))
     }

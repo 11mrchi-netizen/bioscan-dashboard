@@ -69,8 +69,23 @@ import kotlin.math.roundToInt
 
 private val TIME = DateTimeFormatter.ofPattern("HH:mm")
 
-/** One row of TODAY'S PLAN. */
-data class PlanRow(val time: LocalTime?, val title: String, val detail: String?, val done: Boolean, val action: PlanAction)
+/** What a row of TODAY'S PLAN is, for its marker on the timeline. */
+enum class PlanKind { MEAL, SESSION, SUPPLEMENTS, CLOSE }
+
+/** One row of TODAY'S PLAN; [kcal] sizes a meal's marker and [durationMin] a session's. */
+data class PlanRow(
+    val time: LocalTime?,
+    val title: String,
+    val detail: String?,
+    val done: Boolean,
+    val action: PlanAction,
+    val kind: PlanKind = PlanKind.CLOSE,
+    val kcal: Double? = null,
+    val durationMin: Double? = null,
+)
+
+/** Intake so far today, for the SO FAR bar: kcal against the target, split by where the kcal came from. */
+data class SoFar(val kcal: Double, val target: Double?, val carbsG: Double, val proteinG: Double, val fatG: Double)
 
 sealed interface PlanAction {
     data object SoFar : PlanAction
@@ -104,7 +119,7 @@ fun planRows(
     val rows = mutableListOf<PlanRow>()
     if (!closedYesterday && now.toLocalTime().isBefore(LocalTime.NOON)) {
         val name = today.minusDays(1).dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, Locale.ENGLISH)
-        rows += PlanRow(null, "Close $name", "1 min", false, PlanAction.CloseDay(today.minusDays(1)))
+        rows += PlanRow(null, "Close $name", "1 min", false, PlanAction.CloseDay(today.minusDays(1)), PlanKind.CLOSE)
     }
     fuel?.todayCoded?.meals?.forEach { meal ->
         val kcal = 4 * ((meal.carbLowG + meal.carbHighG) / 2 + meal.proteinG) + 9 * (meal.fatG ?: 0.0)
@@ -115,6 +130,8 @@ fun planRows(
             "${kcal.roundToInt()} kcal",
             logged,
             PlanAction.Meal(meal.kind),
+            PlanKind.MEAL,
+            kcal = kcal,
         )
     }
     fuel?.horizon?.firstOrNull()?.day?.items?.forEach { item ->
@@ -125,12 +142,14 @@ fun planRows(
             listOfNotNull("${item.durationMin.roundToInt()} min", ready).joinToString(" · "),
             item.recorded,
             PlanAction.Tab(com.bioscan.fieldterminal.ui.nav.TopLevelTab.Plan),
+            PlanKind.SESSION,
+            durationMin = item.durationMin,
         )
     }
     previews?.supplements?.dueByBucket?.forEach { (bucket, due) ->
-        rows += PlanRow(BUCKET_TIMES[bucket], "${bucket.replaceFirstChar { it.uppercase() }} supplements", "$due due", false, PlanAction.Tab(com.bioscan.fieldterminal.ui.nav.TopLevelTab.Lab))
+        rows += PlanRow(BUCKET_TIMES[bucket], "${bucket.replaceFirstChar { it.uppercase() }} supplements", "$due due", false, PlanAction.Tab(com.bioscan.fieldterminal.ui.nav.TopLevelTab.Lab), PlanKind.SUPPLEMENTS)
     }
-    rows += PlanRow(CLOSE_DAY_TIME, "Close the day", null, closedToday, PlanAction.CloseDay(today))
+    rows += PlanRow(CLOSE_DAY_TIME, "Close the day", null, closedToday, PlanAction.CloseDay(today), PlanKind.CLOSE)
     return rows.sortedWith(compareBy({ it.time != null }, { it.time }))
 }
 
@@ -189,7 +208,7 @@ fun TodayHomeScreen(
         TodayContent(
             view = view,
             rows = planRows(now, fuel, previews, view?.scores?.charge?.score, now.toLocalDate().minusDays(1) in closed, now.toLocalDate() in closed),
-            soFar = nut?.let { n -> (n.today?.calories ?: 0.0) to fuel?.today?.kcal },
+            soFar = nut?.let { n -> n.today.let { t -> SoFar(t?.calories ?: 0.0, fuel?.today?.kcal, t?.carbsG ?: 0.0, t?.proteinG ?: 0.0, t?.fatG ?: 0.0) } },
             loading = loading,
             today = now.toLocalDate(),
             onOpenOverlay = { stack = listOf(it) },
@@ -244,9 +263,10 @@ fun TodayHomeScreen(
 fun TodayContent(
     view: ScoresView?,
     rows: List<PlanRow>,
-    soFar: Pair<Double, Double?>?,
+    soFar: SoFar?,
     loading: Boolean,
     today: LocalDate,
+    now: LocalTime = LocalTime.now(),
     onOpenOverlay: (ScoreOverlay) -> Unit,
     onRow: (PlanAction) -> Unit,
     onSoFar: () -> Unit,
@@ -304,19 +324,22 @@ fun TodayContent(
         }
 
         Section("TODAY'S PLAN") {
-            for (row in rows) PlanRowView(row) { onRow(row.action) }
+            DayTimeline(rows, now, onRow)
         }
 
-        soFar?.let { (kcal, target) ->
-            Row(
+        soFar?.let { s ->
+            Column(
                 modifier = Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Open intake so far") { onSoFar() }
                     .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule)).padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("SO FAR", style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.width(72.dp))
-                Text(if (target != null) "${kcal.roundToInt()} / ${target.roundToInt()} kcal" else "${kcal.roundToInt()} kcal",
-                    style = FTType.Value, color = FT.TextPrimary, modifier = Modifier.weight(1f))
-                Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("SO FAR", style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.width(72.dp))
+                    Text(if (s.target != null) "${s.kcal.roundToInt()} / ${s.target.roundToInt()} kcal" else "${s.kcal.roundToInt()} kcal",
+                        style = FTType.Value, color = FT.TextPrimary, modifier = Modifier.weight(1f))
+                    Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+                }
+                SoFarBar(s, now)
             }
         }
 
@@ -338,18 +361,119 @@ private fun Section(title: String, content: @Composable androidx.compose.foundat
     }
 }
 
+
+// ---- 1. today's plan as a timeline ----
+
+/**
+ * TODAY'S PLAN on a vertical time rail: meals as dots sized by their kcal, sessions as bars as long as they last,
+ * supplements as small pills, closing the day as a diamond; filled once done. A NOW line sits where the clock is.
+ */
 @Composable
-private fun PlanRowView(row: PlanRow, onClick: () -> Unit) {
-    val late = !row.done && row.time != null && row.time.isBefore(LocalTime.now())
+private fun DayTimeline(rows: List<PlanRow>, now: LocalTime, onRow: (PlanAction) -> Unit) {
+    val nowIndex = rows.indexOfFirst { it.time != null && it.time.isAfter(now) }.let { if (it < 0) rows.size else it }
+    Column {
+        rows.forEachIndexed { i, row ->
+            if (i == nowIndex && rows.any { it.time != null }) NowLine(now)
+            TimelineRow(row, first = i == 0, last = i == rows.lastIndex && nowIndex != rows.size) { onRow(row.action) }
+        }
+        if (nowIndex == rows.size && rows.isNotEmpty()) NowLine(now)
+    }
+}
+
+@Composable
+private fun NowLine(now: LocalTime) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("NOW", style = FTType.Label, color = FT.EmeraldHighlight, modifier = Modifier.width(48.dp))
+        androidx.compose.foundation.Canvas(Modifier.weight(1f).height(10.dp)) {
+            drawLine(FT.EmeraldHighlight, androidx.compose.ui.geometry.Offset(0f, size.height / 2), androidx.compose.ui.geometry.Offset(size.width, size.height / 2), strokeWidth = 2f)
+            drawCircle(FT.EmeraldHighlight, 5f, androidx.compose.ui.geometry.Offset(14.dp.toPx(), size.height / 2))
+        }
+        Text(now.format(TIME), style = FTType.Micro, color = FT.EmeraldHighlight)
+    }
+}
+
+@Composable
+private fun TimelineRow(row: PlanRow, first: Boolean, last: Boolean, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Open ${row.title}") { onClick() }.padding(vertical = 7.dp),
+        modifier = Modifier.fillMaxWidth().height(44.dp).ftClickable(role = Role.Button, onClickLabel = "Open ${row.title}") { onClick() },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(row.time?.format(TIME) ?: "now", style = FTType.Value, color = if (late) FT.TextMuted else FT.TextSecondary, modifier = Modifier.width(48.dp))
-        Text(if (row.done) "✓" else "○", style = FTType.Telemetry, color = if (row.done) FT.Emerald else FT.TextMuted)
-        Text(row.title, style = FTType.BodySmall, color = if (row.done) FT.TextSecondary else FT.TextPrimary, modifier = Modifier.weight(1f))
-        row.detail?.let { Text(it, style = FTType.MonoCaption, color = FT.TextSecondary) }
+        Text(row.time?.format(TIME) ?: "now", style = FTType.Value, color = if (row.done) FT.TextMuted else FT.TextSecondary, modifier = Modifier.width(48.dp))
+        androidx.compose.foundation.Canvas(Modifier.width(28.dp).fillMaxSize()) {
+            val cx = size.width / 2
+            val cy = size.height / 2
+            drawLine(FT.GlassBorder, androidx.compose.ui.geometry.Offset(cx, if (first) cy else 0f), androidx.compose.ui.geometry.Offset(cx, if (last) cy else size.height), strokeWidth = 2f)
+            val color = when (row.kind) {
+                PlanKind.MEAL -> com.bioscan.fieldterminal.ui.components.NutrientColor.Calories
+                PlanKind.SESSION -> FT.Emerald
+                PlanKind.SUPPLEMENTS -> FT.DomainLabs
+                PlanKind.CLOSE -> FT.DomainLog
+            }
+            val style = if (row.done) androidx.compose.ui.graphics.drawscope.Fill else androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f)
+            when (row.kind) {
+                PlanKind.MEAL -> {
+                    val r = (4f + 7f * kotlin.math.sqrt(((row.kcal ?: 400.0) / 900.0).toFloat().coerceIn(0f, 1.4f))).coerceAtMost(12f)
+                    drawCircle(FT.Base, r + 2f, androidx.compose.ui.geometry.Offset(cx, cy))
+                    drawCircle(color, r, androidx.compose.ui.geometry.Offset(cx, cy), style = style)
+                }
+                PlanKind.SESSION -> {
+                    val h = (size.height * ((row.durationMin ?: 45.0) / 120.0).toFloat().coerceIn(0.3f, 1f))
+                    drawRoundRect(color, androidx.compose.ui.geometry.Offset(cx - 5f, cy - h / 2), androidx.compose.ui.geometry.Size(10f, h), androidx.compose.ui.geometry.CornerRadius(5f), style = style)
+                }
+                PlanKind.SUPPLEMENTS -> drawRoundRect(color, androidx.compose.ui.geometry.Offset(cx - 7f, cy - 4f), androidx.compose.ui.geometry.Size(14f, 8f), androidx.compose.ui.geometry.CornerRadius(4f), style = style)
+                PlanKind.CLOSE -> {
+                    val path = androidx.compose.ui.graphics.Path().apply { moveTo(cx, cy - 7f); lineTo(cx + 7f, cy); lineTo(cx, cy + 7f); lineTo(cx - 7f, cy); close() }
+                    drawPath(path, color, style = style)
+                }
+            }
+        }
+        // Title on top, detail under it, so a long session name is never cut by its detail.
+        Column(Modifier.weight(1f)) {
+            Text(row.title, style = FTType.BodySmall, color = if (row.done) FT.TextSecondary else FT.TextPrimary, maxLines = 1)
+            row.detail?.let { Text(it, style = FTType.MonoCaption, color = FT.TextSecondary, maxLines = 1) }
+        }
         Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+    }
+}
+
+// ---- 2. intake so far as one bar, split by macro ----
+
+/**
+ * One bar for today's kcal against the target, its fill split into the kcal from carbs, protein and fat (4, 4 and 9 kcal
+ * a gram), with a tick where the hour expects the day to be.
+ */
+@Composable
+private fun SoFarBar(s: SoFar, now: LocalTime) {
+    val target = s.target ?: return
+    val parts = listOf(
+        "Carbs" to (4 * s.carbsG) to com.bioscan.fieldterminal.ui.components.NutrientColor.Carbs,
+        "Protein" to (4 * s.proteinG) to com.bioscan.fieldterminal.ui.components.NutrientColor.Protein,
+        "Fat" to (9 * s.fatG) to com.bioscan.fieldterminal.ui.components.NutrientColor.Fat,
+    )
+    val expected = com.bioscan.fieldterminal.domain.expectedShareAt(now)
+    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(16.dp)) {
+        val full = target * 1.2
+        fun x(kcal: Double) = (size.width * (kcal / full)).toFloat().coerceAtMost(size.width)
+        drawRoundRect(FT.GlassTrack, size = size, cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f))
+        var at = 0.0
+        for ((part, color) in parts) {
+            val (_, kcal) = part
+            drawRect(color, androidx.compose.ui.geometry.Offset(x(at), 0f), androidx.compose.ui.geometry.Size(x(at + kcal) - x(at), size.height))
+            at += kcal
+        }
+        drawLine(FT.TextPrimary, androidx.compose.ui.geometry.Offset(x(target), -2f), androidx.compose.ui.geometry.Offset(x(target), size.height + 2f), strokeWidth = 2.5f)
+        if (expected > 0) drawLine(FT.TextSecondary, androidx.compose.ui.geometry.Offset(x(target * expected), 0f), androidx.compose.ui.geometry.Offset(x(target * expected), size.height), strokeWidth = 2f,
+            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4f, 4f)))
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        for ((part, color) in parts) {
+            val (label, kcal) = part
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                androidx.compose.foundation.Canvas(Modifier.width(8.dp).height(8.dp)) { drawRect(color) }
+                Text("$label ${kcal.roundToInt()}", style = FTType.Micro, color = FT.TextSecondary)
+            }
+        }
+        Text("┊ by now", style = FTType.Micro, color = FT.TextMuted)
     }
 }

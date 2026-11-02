@@ -9,6 +9,7 @@ import com.bioscan.fieldterminal.domain.nextMorning
 import com.bioscan.fieldterminal.domain.scorecard
 import java.time.LocalDate
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 // Scoring system: does each score earn its place, and should CHARGE's weights be the person's own
 // (docs/scoring-system/README.md, "How the parts connect").
@@ -32,11 +33,18 @@ import kotlin.math.max
 // domains read as a typical day) gives raw weights; negative ones are dropped, the rest normalised, then pulled halfway
 // back to the defaults and floored at [MIN_WEIGHT]. The fit uses only mornings before the first of the current month,
 // so the weights change once a month, not every morning. They are adopted only if, on the last third of those mornings
-// (held out of the fit), a straight-line forecast from CHARGE with them beats the same forecast from the default CHARGE
-// -- the rule the personal fitness and fatigue spans already follow.
+// (held out of the fit), a straight-line forecast from CHARGE with them cuts the error of the same forecast from the
+// default CHARGE by at least [ADOPT_MARGIN] -- the rule the personal fitness and fatigue spans already follow.
 
 const val MIN_FIT_DAYS = 120
 const val MIN_WEIGHT = 0.05
+
+/**
+ * Personal weights must cut the held-out forecast error by at least this share: an improvement any smaller is within
+ * what chance gives on noise (the screenshot tour adopted weights on pure noise before this margin). Matches the
+ * scorecards' "negligible" margin (about a 2 % narrower forecast).
+ */
+const val ADOPT_MARGIN = 0.02
 const val WEIGHT_SHRINK = 0.5
 private const val FIT_RIDGE = 1.0
 const val QUALITY_HISTORY_DAYS = 240
@@ -235,11 +243,12 @@ fun fitChargeWeights(
     fun pairs(on: List<Pair<LocalDate, Map<DomainKey, Double>>>, w: Map<DomainKey, Double>) = on.map { (d, s) -> composite(s, w) to outcome.getValue(d) }
     val personalMse = lineMse(pairs(train, candidate), pairs(test, candidate))
     val defaultMse = lineMse(pairs(train, defaults), pairs(test, defaults))
-    if (personalMse >= defaultMse) {
-        return defaultWeights(days.size, cutoff, "Default weights: personal ones fitted on ${days.size} mornings did not forecast held-out mornings better.")
+    val gain = 1 - personalMse / defaultMse
+    if (gain < ADOPT_MARGIN) {
+        return defaultWeights(days.size, cutoff, "Default weights: personal ones fitted on ${days.size} mornings were not clearly better on held-out mornings.")
     }
     // Adopted: refit on every morning up to the cutoff, so the weights use all the data the check allowed.
     val final = fit(rows) ?: candidate
     return ChargeWeights(final, personal = true, days = days.size, fittedThrough = cutoff,
-        sentence = "Personal weights, fitted on ${days.size} mornings to ${cutoff}; they forecast held-out mornings better than the defaults.")
+        sentence = "Personal weights, fitted on ${days.size} mornings to $cutoff; on held-out mornings they cut the forecast error by ${(gain * 100).roundToInt()} % against the defaults.")
 }

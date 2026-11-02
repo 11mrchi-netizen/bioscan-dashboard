@@ -39,7 +39,9 @@ import com.bioscan.fieldterminal.ui.screens.today.InputOverlay
 import com.bioscan.fieldterminal.ui.screens.today.LocalInlineOverlays
 import com.bioscan.fieldterminal.ui.screens.today.PictureOverlay
 import com.bioscan.fieldterminal.ui.screens.today.PlanAction
+import com.bioscan.fieldterminal.ui.screens.today.PlanKind
 import com.bioscan.fieldterminal.ui.screens.today.PlanRow
+import com.bioscan.fieldterminal.ui.screens.today.SoFar
 import com.bioscan.fieldterminal.ui.screens.today.TodayContent
 import com.bioscan.fieldterminal.ui.theme.FieldTerminalTheme
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -157,16 +159,17 @@ class TourScreenshots {
         TodayContent(
             view = VIEW,
             rows = listOf(
-                PlanRow(t(7, 30), "Breakfast", "620 kcal", true, PlanAction.SoFar),
-                PlanRow(t(8, 0), "Morning supplements", "3 due", true, PlanAction.SoFar),
-                PlanRow(t(12, 30), "Lunch", "780 kcal", true, PlanAction.SoFar),
-                PlanRow(t(16, 0), "Pre-session", "150 kcal", false, PlanAction.SoFar),
-                PlanRow(t(18, 30), "Threshold run 10 km", "55 min · READY ✓", false, PlanAction.SoFar),
-                PlanRow(t(20, 0), "Dinner", "850 kcal", false, PlanAction.SoFar),
-                PlanRow(t(21, 0), "Night supplements", "2 due", false, PlanAction.SoFar),
-                PlanRow(t(21, 30), "Close the day", null, false, PlanAction.SoFar),
+                PlanRow(t(7, 30), "Breakfast", "620 kcal", true, PlanAction.SoFar, PlanKind.MEAL, kcal = 620.0),
+                PlanRow(t(8, 0), "Morning supplements", "3 due", true, PlanAction.SoFar, PlanKind.SUPPLEMENTS),
+                PlanRow(t(12, 30), "Lunch", "780 kcal", true, PlanAction.SoFar, PlanKind.MEAL, kcal = 780.0),
+                PlanRow(t(16, 0), "Pre-session", "150 kcal", false, PlanAction.SoFar, PlanKind.MEAL, kcal = 150.0),
+                PlanRow(t(18, 30), "Threshold run 10 km", "55 min · READY ✓", false, PlanAction.SoFar, PlanKind.SESSION, durationMin = 55.0),
+                PlanRow(t(20, 0), "Dinner", "850 kcal", false, PlanAction.SoFar, PlanKind.MEAL, kcal = 850.0),
+                PlanRow(t(21, 0), "Night supplements", "2 due", false, PlanAction.SoFar, PlanKind.SUPPLEMENTS),
+                PlanRow(t(21, 30), "Close the day", null, false, PlanAction.SoFar, PlanKind.CLOSE),
             ),
-            soFar = 1420.0 to 2650.0, loading = false, today = TODAY, onOpenOverlay = {}, onRow = {}, onSoFar = {},
+            soFar = SoFar(1420.0, 2650.0, carbsG = 180.0, proteinG = 78.0, fatG = 45.0), loading = false, today = TODAY,
+            now = LocalTime.of(14, 5), onOpenOverlay = {}, onRow = {}, onSoFar = {},
         )
     }
 
@@ -181,4 +184,5 @@ class TourScreenshots {
     @Test fun t10_timing() = shot("10_bowel_timing") { PictureOverlay(VIEW, FullPicture.BOWEL_TIMING, onBack = {}, onClose = {}) }
     @Test fun t11_stress() = shot("11_stress_day") { PictureOverlay(VIEW, FullPicture.STRESS_DAY, onBack = {}, onClose = {}) }
     @Test fun t12_metric_sleep() = shot("12_metric_sleep_hours") { InputOverlay(VIEW, DomainKey.SLEEP, ScoreKeys.SLEEP_HOURS, onBack = {}, onClose = {}) }
+    @Test fun t13_metric_protein() = shot("13_metric_protein") { InputOverlay(VIEW, DomainKey.FUEL, ScoreKeys.PROTEIN_RATIO, onBack = {}, onClose = {}) }
 }

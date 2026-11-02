@@ -120,7 +120,7 @@ fun bowelTiming(rows: List<StoolAnalysisRow>, to: LocalDate, days: Int = 14, zon
 /** One line for the tile: "steady · usual 07:00–08:40" or "more variable than usual". */
 fun bowelTimingHeadline(timing: BowelTiming): String {
     fun clock(m: Int) = "%02d:%02d".format(m / 60, m % 60)
-    val window = if (timing.usualStart != null && timing.usualEnd != null) "usual ${clock(timing.usualStart)}–${clock(timing.usualEnd)}" else null
+    val window = if (timing.usualStart != null && timing.usualEnd != null) "window ${clock(timing.usualStart)}–${clock(timing.usualEnd)}" else null
     val state = when (timing.steady) {
         true -> "steady"
         false -> "more variable than usual"

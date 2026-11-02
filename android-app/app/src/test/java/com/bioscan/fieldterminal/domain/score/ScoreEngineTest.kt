@@ -55,6 +55,20 @@ class ScoreScaleTest {
     }
 
     @Test
+    fun aNewRecordIsPlacedByHowFarOutItIs() {
+        val history = (0 until 180).map { 50.0 + (it % 20) } // 50..69, robust spread ~7.4
+        val justAbove = ScoreScale.fromHistory(69.5, history)
+        val farAbove = ScoreScale.fromHistory(120.0, history)
+        val atRecord = ScoreScale.fromHistory(69.0, history)
+        assertTrue("just above $justAbove", justAbove < 150.0 && justAbove >= atRecord)
+        assertEquals(150.0, farAbove, 1e-9)
+        // Inside the range it is the rank.
+        assertEquals(ScoreScale.fromPercentile(ScoreScale.rankPercentile(60.0, history)), ScoreScale.fromHistory(60.0, history), 1e-9)
+        val justBelow = ScoreScale.fromHistory(49.5, history)
+        assertTrue(justBelow > 0.0 && justBelow <= ScoreScale.fromHistory(50.0, history))
+    }
+
+    @Test
     fun rankPercentileCountsTiesHalf() {
         assertEquals(0.5, ScoreScale.rankPercentile(5.0, listOf(5.0)), 1e-9)
         assertEquals((3 + 0.5) / 5.0, ScoreScale.rankPercentile(10.0, listOf(1.0, 2.0, 3.0, 20.0)), 1e-9)

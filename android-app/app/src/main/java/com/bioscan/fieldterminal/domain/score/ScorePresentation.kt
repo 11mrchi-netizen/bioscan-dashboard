@@ -29,14 +29,33 @@ private fun clock(minOfDay: Double): String {
 private fun pct(ratio: Double): String = "${(ratio * 100).roundToInt()} %"
 private fun one(v: Double): String = "%.1f".format(v)
 
+/**
+ * An input's value rounded the way it was judged: a value short of its target never shows as the target itself
+ * (99.6 % of protein reads 99 %, not 100 % with a "short" mark), and one over a limit never shows as the limit.
+ */
+fun formatJudgedValue(input: InputScore): String {
+    val v = input.value
+    val judged = when {
+        input.spec.key !in RATIO_KEYS -> v
+        input.direction == InputDirection.SHORT -> kotlin.math.floor(v * 100) / 100
+        input.direction == InputDirection.OVER -> kotlin.math.ceil(v * 100) / 100
+        else -> v
+    }
+    return formatInputValue(input.spec.key, judged)
+}
+
+private val RATIO_KEYS = setOf(
+    ScoreKeys.FUEL_LOGGED_SHARE, ScoreKeys.ENERGY_RATIO, ScoreKeys.PROTEIN_RATIO, ScoreKeys.CARB_RATIO, ScoreKeys.WATER_RATIO, ScoreKeys.PLAN_DONE,
+)
+
 /** One input's value as the score screens show it ("8h05", "58 ms", "96 %", "03:10"). */
 fun formatInputValue(key: String, value: Double): String = when (key) {
     ScoreKeys.SLEEP_HOURS -> hm(value)
     ScoreKeys.SLEEP_DEBT -> if (value < 0.05) "none" else hm(value)
     ScoreKeys.SLEEP_REGULARITY -> "± ${value.roundToInt()} min"
-    ScoreKeys.SLEEP_MIDPOINT -> "mid ${clockFromNoon(value)}"
+    ScoreKeys.SLEEP_MIDPOINT -> clockFromNoon(value)
     ScoreKeys.SLEEP_DEEP_REM -> minutes(value)
-    ScoreKeys.SLEEP_BREATHING -> "${one(value)} /min"
+    ScoreKeys.SLEEP_BREATHING -> "${one(value)}/min"
     ScoreKeys.HRV -> "${value.roundToInt()} ms"
     ScoreKeys.RHR -> "${value.roundToInt()} bpm"
     ScoreKeys.NIGHT_STRESS, ScoreKeys.WIND_DOWN -> "${value.roundToInt()}"
@@ -49,7 +68,7 @@ fun formatInputValue(key: String, value: Double): String = when (key) {
     ScoreKeys.FUEL_LOGGED_SHARE, ScoreKeys.ENERGY_RATIO, ScoreKeys.PROTEIN_RATIO, ScoreKeys.CARB_RATIO, ScoreKeys.WATER_RATIO -> pct(value)
     ScoreKeys.DRINKS -> "${value.roundToInt()}"
     ScoreKeys.LATE_CAFFEINE, ScoreKeys.LATE_SCREEN -> if (value >= 0.5) "yes" else "no"
-    ScoreKeys.GUT_SYMPTOMS -> one(value)
+    ScoreKeys.GUT_SYMPTOMS -> if (value < 0.05) "none" else one(value)
     ScoreKeys.GUT_TIMING -> clock(value)
     ScoreKeys.GUT_TIMING_SPREAD, ScoreKeys.MEAL_TIMING_SPREAD -> "± ${value.roundToInt()} min"
     ScoreKeys.GUT_FREQUENCY -> "${value.roundToInt()}"
@@ -121,6 +140,20 @@ fun inputPoints(raw: DomainRaw): Map<String, Double> {
 
 fun weekday(day: LocalDate): String = day.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.ENGLISH)
 
+/** A label inside a sentence: lower-cased, except acronyms ("HRV", "TSB") keep their case. */
+fun inSentence(label: String): String =
+    label.split(" ").joinToString(" ") { w ->
+        val letters = w.filter { it.isLetter() }
+        if (letters.length >= 2 && letters.all { it.isUpperCase() }) w else w.lowercase()
+    }
+
+/**
+ * The band word under a score. LOAD and FUEL are judged against targets and bands, so their 100 means "right", not
+ * "primed": they read ON TARGET there.
+ */
+fun bandWord(key: DomainKey?, score: Double): String =
+    if (key != null && !key.upside && score >= ScoreScale.TOP_OF_NORMAL - 1e-9) "ON TARGET" else ScoreScale.band(score).label
+
 /** One sentence under a domain's ring: its biggest lift and its biggest drag. */
 fun domainSentence(score: DomainScore): String {
     if (score.partial) return when (score.key) {
@@ -133,9 +166,9 @@ fun domainSentence(score: DomainScore): String {
     val up = points.filter { it.value >= 2 }.maxByOrNull { it.value }?.key?.let { byKey[it]?.spec?.label }
     val down = points.filter { it.value <= -2 }.minByOrNull { it.value }?.key?.let { byKey[it]?.spec?.label }
     return when {
-        up != null && down != null -> "Lifted by ${up.lowercase()}; held back by ${down.lowercase()}."
-        up != null -> "Lifted mostly by ${up.lowercase()}."
-        down != null -> "Held back mostly by ${down.lowercase()}."
+        up != null && down != null -> "Lifted by ${inSentence(up)}; held back by ${inSentence(down)}."
+        up != null -> "Lifted mostly by ${inSentence(up)}."
+        down != null -> "Held back mostly by ${inSentence(down)}."
         else -> "Everything close to your usual."
     }
 }
@@ -143,7 +176,8 @@ fun domainSentence(score: DomainScore): String {
 /** The CHARGE overlay's sentence: "Better than 93 of your last 100 mornings." */
 fun chargeRankLine(charge: ChargeScore): String? {
     val p = charge.percentile ?: return null
-    return "Better than ${(p * 100).roundToInt().coerceIn(0, 100)} of your last 100 mornings."
+    if (charge.record) return "Your best morning of the last ${charge.rankedAgainst ?: 100}."
+    return "Better than ${(p * 100).roundToInt().coerceIn(0, 99)} of your last 100 mornings."
 }
 
 /** The one-line driver summary under the CHARGE overlay's header. */
@@ -219,4 +253,23 @@ fun whatIsInput(key: String): String = when (key) {
     ScoreKeys.LATE_SCREEN -> "Phone use late in the evening, from the evening check-in."
     ScoreKeys.MEAL_TIMING_SPREAD -> "How much your meal times moved."
     else -> ""
+}
+
+/**
+ * The scorecard sentence for the scoring system's scores. The app's older composites were hidden when they read NO
+ * BETTER ("so it is shown as its inputs"); these never are, so the sentence says what the verdict does instead.
+ */
+fun qualitySentence(result: com.bioscan.fieldterminal.domain.ScorecardResult, isCharge: Boolean): String {
+    val best = result.best?.label?.let(::inSentence) ?: "any single input"
+    return when (result.verdict) {
+        com.bioscan.fieldterminal.domain.ScorecardVerdict.EARNS_ITS_PLACE ->
+            "Forecasts ${result.targetText} better than $best alone (${result.days} days)."
+        com.bioscan.fieldterminal.domain.ScorecardVerdict.NO_BETTER ->
+            "Forecasts ${result.targetText} no better than $best alone (${result.days} days). Still shown; " +
+                (if (isCharge) "its weights are re-fitted monthly." else "read it alongside $best.")
+        com.bioscan.fieldterminal.domain.ScorecardVerdict.UNCLEAR ->
+            "Not yet clearly better than $best alone at forecasting ${result.targetText} (${result.days} days scored)."
+        com.bioscan.fieldterminal.domain.ScorecardVerdict.NOT_YET ->
+            "Scored on ${result.days} of the ${result.need} days needed to compare it with its inputs."
+    }
 }

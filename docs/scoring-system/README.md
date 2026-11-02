@@ -412,10 +412,47 @@ and the held-out check limit how far it can pull.
 
 **Not yet:** fitting the weights of each domain's own inputs. Those keep their documented starting weights.
 
+### Phase 4 (built): graphs instead of text, and the tour's bugs
+
+The screens were rendered with the screenshot tour (`test/.../tour/TourScreenshots.kt`, opt-in) and reviewed. The
+approved changes:
+
+| # | Where | Now |
+|---|---|---|
+| 1 | TODAY'S PLAN | A time rail with a NOW line. Meals are dots sized by kcal, sessions are bars as long as they last, supplements are pills, closing the day is a diamond; each fills in once done. |
+| 2 | SO FAR | One kcal bar against the target, split into carbs, protein and fat kcal, with a tick for "by now" |
+| 3 | CHARGE weights | One stacked bar (yours, and the defaults beneath) |
+| 4 | DOES IT EARN ITS PLACE? | A skill chart (the score and its best input against no predictor, with the interval) above one sentence |
+| 5 | Last 30 days | Bands shaded behind the bars, the axis labelled |
+| 6 | Driver rows | Bullet charts: normal band or target zone shaded, target ticked, today a dot coloured by its sub-score |
+| 7 | Group scores (FUEL, BALANCE) | Small rings |
+| 8 | LOAD | A TSB gauge with the productive band and a 7-day trail; the 30-day strip is a TSB line inside its band |
+| 9 | FUEL intake | Bullet charts against the 100 % target (part of 6) |
+| 10 | BALANCE | The nervous-system map: HRV against resting HR, 14 mornings, today ringed |
+| 11 | THE FULL PICTURE | A thumbnail per tile (sparklines, a mini stool chart, mini bowel timing) |
+| 12 | Metric chart | A line through the days, a 7-day mean, the band labelled on the axis (HRV on the log scale, matching its header), date ticks |
+| 13 | Metric overlay | Adds HOW IT SITS (7-day level, day-to-day variation, how rare, mornings in your normal or on target), WHAT WENT WITH IT (the morning's other off-normal inputs) and WHAT GOES WITH IT (120-day correlations, labelled as not causes) |
+| 14 | Stress through the day | The intraday curve: exercise shaded and left out, the baseline dashed, the peak marked, the evening wind-down shaded |
+
+The pure parts are `domain/score/ScoreCharts.kt` (bullet geometry, ANS points, metric stats, relations, sparklines);
+the composables are `ui/screens/today/ScoreGraphs.kt`.
+
+**Bugs fixed:**
+- **A:** LOAD and FUEL at 100 read ON TARGET, not PRIMED.
+- **B:** scorecard sentences no longer say the score "is shown as its inputs".
+- **C:** acronyms keep their case in sentences.
+- **D:** a record morning reads "Your best morning of the last 180".
+- **E:** values round the way they were judged; 99.6 % of a target reads 99 %.
+- **F:** personal weights are adopted only if they cut held-out forecast error by at least 2 %. Before this, they were
+  adopted on pure noise.
+- **G:** a value beyond the whole history is placed by its robust z, between the old record's score and the rank score,
+  so a new best no longer jumps to 150.
+- **H:** the bowel-timing headline says "window" rather than repeating "usual".
+
 ### Verified
 
-- **Unit tests:** the full Android suite passes, 1,094 tests with 0 failures and 4 skipped. That is 1,039 existing
-  tests plus 54 new ones (`test/.../domain/score/`, `MealLoggingTest`) and a navigation test for the new dock.
+- **Unit tests:** the full Android suite passes, 1,107 tests with 0 failures (plus 13 opt-in tour renders). That is 1,039 existing tests plus
+  67 new ones (`test/.../domain/score/`, `MealLoggingTest`) and a navigation test for the new dock.
 - **Build:** `assembleDebug` builds.
 - **Not verified:** the app has not been run on a device or with real data. The TODAY layout, the rings and the
   overlays and the full-picture views have only been compiled, never seen.

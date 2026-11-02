@@ -87,6 +87,28 @@ object ScoreScale {
         return (below + 0.5 * equal + 0.5) / (history.size + 1.0)
     }
 
+    /**
+     * The score of [value] among the person's own [history]. Inside the history's range it is the rank. Beyond it (a new
+     * best or worst) the rank alone would jump straight to the end of the scale (any new six-month best read 150), so
+     * the value is placed by how far out it really is (robust z against the history), kept between the score the old
+     * record had and the rank score.
+     */
+    fun fromHistory(value: Double, history: List<Double>, upside: Boolean = true): Double {
+        val rank = fromPercentile(rankPercentile(value, history), upside)
+        if (history.isEmpty()) return rank
+        val hi = history.max()
+        val lo = history.min()
+        if (value in lo..hi) return rank
+        val sorted = history.sorted()
+        val med = if (sorted.size % 2 == 1) sorted[sorted.size / 2] else (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2
+        val dev = sorted.map { kotlin.math.abs(it - med) }.sorted()
+        val mad = if (dev.size % 2 == 1) dev[dev.size / 2] else (dev[dev.size / 2 - 1] + dev[dev.size / 2]) / 2
+        val sd = kotlin.math.max(1.4826 * mad, 1e-6)
+        val parametric = fromZ((value - med) / sd, upside)
+        val record = fromPercentile(rankPercentile(if (value > hi) hi else lo, history), upside)
+        return parametric.coerceIn(minOf(record, rank), maxOf(record, rank))
+    }
+
     /** Percentile of a z value, for "better than N of your last 100 days". */
     fun percentileOfZ(z: Double): Double = normalCdf(z)
 }

@@ -64,7 +64,7 @@ class GutPatternTest {
         assertEquals(true, t.steady)
         assertEquals(true, t.inWindow(7 * 60 + 50))
         assertEquals(false, t.inWindow(13 * 60))
-        assertTrue(bowelTimingHeadline(t).startsWith("steady · usual "))
+        assertTrue(bowelTimingHeadline(t).startsWith("steady · window "))
     }
 
     @Test

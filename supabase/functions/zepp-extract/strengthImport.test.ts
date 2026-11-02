@@ -22,6 +22,11 @@ const before = exercisesFrom([lap(0, 3, 5, 60), lap(1, 3, 5, 60), lap(2, 3, 5, 8
 // The same workout after correcting the exercises in the Zepp app.
 const after = exercisesFrom([lap(0, 3, 5, 60), lap(1, 3, 5, 60), lap(2, 6, 5, 80), lap(3, 6, 5, 80)]);
 
+test("rest laps (exercise code 0) from a template are not exercises", () => {
+  const ex = exercisesFrom([lap(0, 3, 5, 60), lap(1, 0, 0, 0), lap(2, 3, 5, 60), lap(3, 0, 0, 0)]);
+  assert.deepEqual(ex.map((e) => [e.name, e.sets.length]), [["Barbell Squats", 2]]);
+});
+
 test("laps become exercises in order, skipped planned sets dropped", () => {
   const ex = exercisesFrom([lap(0, 3, 5, 60), lap(1, 3, 5, 60), lap(2, 6, 8, 40, 2), lap(3, 6, 8, 40), lap(4, 3, 3, 100)]);
   assert.deepEqual(ex.map((e) => [e.name, e.exercise_code, e.sets.length]), [["Barbell Squats", 3, 2], ["Bench Press", 6, 1], ["Barbell Squats", 3, 1]]);

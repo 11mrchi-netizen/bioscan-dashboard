@@ -42,7 +42,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 val toLog = idsStillToLog(ids, takenToday)
                 val addRepo = AddEntryRepository(supabase)
                 val takenAt = LocalDateTime.now().toAppIso()
-                for (id in toLog) addRepo.addSupplementTakenById(takenAt, id, 1)
+                for (id in toLog) addRepo.addSupplementTakenById(takenAt, id, 1.0)
                 runCatching { NotificationRulesRepository(supabase).appendLog(kind, NotificationOutcome.ACTIONED, action = "log_all") }
             } catch (e: Exception) {
                 val retry = NotificationCompat.Builder(app, kind)

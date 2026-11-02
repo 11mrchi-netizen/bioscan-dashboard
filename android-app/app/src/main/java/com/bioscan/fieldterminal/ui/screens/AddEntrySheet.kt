@@ -89,6 +89,8 @@ import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
+import com.bioscan.fieldterminal.domain.SUPPLEMENT_QTY_STEP
+import com.bioscan.fieldterminal.domain.formatSupplementQty
 import com.bioscan.fieldterminal.domain.AddEntryChoice
 import com.bioscan.fieldterminal.domain.editedDetails
 import com.bioscan.fieldterminal.domain.AddEntryGroup
@@ -706,14 +708,14 @@ private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun QtyRow(qty: Int, onChange: (Int) -> Unit) {
+private fun QtyRow(qty: Double, onChange: (Double) -> Unit) {
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusSmall)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("QTY", style = FTType.LabelCaps, color = FT.TextMuted)
-        for (delta in listOf(-1, 1)) {
+        Text("QTY", style = FTType.LabelCaps, color = if (qty > 0.0) FT.TextMuted else FT.Warning)
+        for (delta in listOf(-SUPPLEMENT_QTY_STEP, SUPPLEMENT_QTY_STEP)) {
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -721,14 +723,15 @@ private fun QtyRow(qty: Int, onChange: (Int) -> Unit) {
                     .background(FT.GlassFill, shape)
                     .border(FT.BorderWidth, FT.GlassBorder, shape)
                     .ftClickable(shape = shape) {
+                        // 0 is allowed: the item is not taken this time and is left out of the save.
                         val next = qty + delta
-                        if (next >= 1) onChange(next)
+                        if (next >= 0.0) onChange(next)
                     },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(if (delta < 0) "−" else "+", style = FTType.Telemetry, color = FT.TextSecondary)
             }
-            if (delta < 0) Text("$qty", style = FTType.Telemetry, color = FT.TextPrimary)
+            if (delta < 0) Text(if (qty > 0.0) formatSupplementQty(qty) else "NOT TAKEN", style = FTType.Telemetry, color = if (qty > 0.0) FT.TextPrimary else FT.Warning)
         }
     }
 }
@@ -1413,7 +1416,7 @@ private fun SupplementsForm(
     initialDateTime: LocalDateTime = LocalDateTime.now(),
     // The bundle the Status hub's + SUPPS found still due now; ticked on open, untick to change.
     preselectBundle: String? = null,
-    onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String, quantities: Map<Long, Int>) -> Unit,
+    onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String, quantities: Map<Long, Double>) -> Unit,
 ) {
     var dateTime by remember { mutableStateOf(initialDateTime) }
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
@@ -1423,7 +1426,7 @@ private fun SupplementsForm(
     var scanned by remember { mutableStateOf<List<SupplementRow>>(emptyList()) }
     var scannedChecked by remember { mutableStateOf(setOf<Long>()) }
     var recentLastTaken by remember { mutableStateOf<Map<Long, LocalDate>>(emptyMap()) }
-    var quantities by remember { mutableStateOf<Map<Long, Int>>(emptyMap()) }
+    var quantities by remember { mutableStateOf<Map<Long, Double>>(emptyMap()) }
 
     LaunchedEffect(Unit) {
         try {
@@ -1493,7 +1496,7 @@ private fun SupplementsForm(
                                 onToggle = { scannedChecked = if (checked) scannedChecked - supp.id else scannedChecked + supp.id },
                             )
                             if (checked) {
-                                QtyRow(quantities[supp.id] ?: 1) { quantities = quantities + (supp.id to it) }
+                                QtyRow(quantities[supp.id] ?: 1.0) { quantities = quantities + (supp.id to it) }
                             }
                         }
                     }
@@ -1521,7 +1524,7 @@ private fun SupplementsForm(
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         Text(supp.name, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.weight(1f))
-                                        QtyRow(quantities[supp.id] ?: 1) { quantities = quantities + (supp.id to it) }
+                                        QtyRow(quantities[supp.id] ?: 1.0) { quantities = quantities + (supp.id to it) }
                                     }
                                 }
                             }
@@ -1541,7 +1544,7 @@ private fun SupplementsForm(
                                 },
                             )
                             if (checked) {
-                                QtyRow(quantities[supp.id] ?: 1) { quantities = quantities + (supp.id to it) }
+                                QtyRow(quantities[supp.id] ?: 1.0) { quantities = quantities + (supp.id to it) }
                             }
                         }
                     }
@@ -1571,8 +1574,8 @@ private fun SupplementsForm(
                 }
             }
         }
-        SaveButton(saving, selectedItems.isNotEmpty()) {
-            onSave(dateTime.toIsoWithOffset(), selectedItems, source, quantities)
+        SaveButton(saving, selectedItems.any { (quantities[it.first] ?: 1.0) > 0.0 }) {
+            onSave(dateTime.toIsoWithOffset(), selectedItems.filter { (quantities[it.first] ?: 1.0) > 0.0 }, source, quantities)
         }
     }
 }

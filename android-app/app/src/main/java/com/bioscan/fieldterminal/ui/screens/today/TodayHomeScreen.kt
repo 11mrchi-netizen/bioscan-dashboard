@@ -74,6 +74,7 @@ data class PlanRow(val time: LocalTime?, val title: String, val detail: String?,
 
 sealed interface PlanAction {
     data object SoFar : PlanAction
+    data class Meal(val kind: com.bioscan.fieldterminal.domain.fuel.MealSlotKind) : PlanAction
     data class CloseDay(val date: LocalDate) : PlanAction
     data class Tile(val route: TileRoute) : PlanAction
 }
@@ -112,7 +113,7 @@ fun planRows(
             meal.kind.label.lowercase().replaceFirstChar { it.uppercase() },
             "${kcal.roundToInt()} kcal",
             logged,
-            PlanAction.SoFar,
+            PlanAction.Meal(meal.kind),
         )
     }
     fuel?.horizon?.firstOrNull()?.day?.items?.forEach { item ->
@@ -143,6 +144,8 @@ fun TodayHomeScreen(onOpenTile: (TileRoute) -> Unit) {
     var closed by remember { mutableStateOf<Set<LocalDate>>(emptySet()) }
     var stack by remember { mutableStateOf<List<ScoreOverlay>>(emptyList()) }
     var soFar by remember { mutableStateOf(false) }
+    var mealKind by remember { mutableStateOf<com.bioscan.fieldterminal.domain.fuel.MealSlotKind?>(null) }
+    var logFood by remember { mutableStateOf(false) }
     var checkInDate by remember { mutableStateOf<LocalDate?>(null) }
     var loading by remember { mutableStateOf(true) }
 
@@ -237,6 +240,7 @@ fun TodayHomeScreen(onOpenTile: (TileRoute) -> Unit) {
                     PlanRowView(row) {
                         when (val a = row.action) {
                             PlanAction.SoFar -> soFar = true
+                            is PlanAction.Meal -> mealKind = a.kind
                             is PlanAction.CloseDay -> checkInDate = a.date
                             is PlanAction.Tile -> onOpenTile(a.route)
                         }
@@ -279,6 +283,23 @@ fun TodayHomeScreen(onOpenTile: (TileRoute) -> Unit) {
             if (n != null) NutritionTodayCard(n, fuel, onOpenPlan = { soFar = false; onOpenTile(TileRoute.Nutrition) })
             else Text("Nothing logged yet today.", style = FTType.Body, color = FT.TextMuted)
         }
+    }
+    val f = fuel
+    val kind = mealKind
+    if (f != null && kind != null) {
+        MealOverlay(
+            fuel = f, kind = kind,
+            onClose = { mealKind = null },
+            onLogged = { mealKind = null; guard.retry() },
+            onLogOther = { mealKind = null; logFood = true },
+        )
+    }
+    if (logFood) {
+        com.bioscan.fieldterminal.ui.screens.AddEntrySheet(
+            onDismiss = { logFood = false },
+            onSaved = { logFood = false; guard.retry() },
+            start = com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Food),
+        )
     }
     checkInDate?.let { date ->
         EveningCheckInSheet(date = date, onDismiss = { checkInDate = null }, onSaved = { checkInDate = null; guard.retry() })

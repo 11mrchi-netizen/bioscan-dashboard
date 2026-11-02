@@ -318,10 +318,24 @@ Health › Body DIGESTIVE PATTERN (BRISTOL) card.
 - **The gut cap:** an acute gut day caps the next morning's CHARGE at 40 ("Acute gut day"). That means nausea ticked,
   or two or more Bristol 7 stools that day.
 
+### Phase 1d (built): meal pages from TODAY'S PLAN
+
+Tapping a meal row opens its overlay (`ui/screens/today/MealOverlay.kt`). It shows:
+- the meal's targets (carbs, protein, fat, kcal) and why it is planned that way;
+- what is already logged against it;
+- the plan's plate: the prepped breakfast or container when a prep week is set up, otherwise the example plates. Each
+  has **LOG THIS**.
+
+**LOG THIS** writes the plate's macros as one meal. Its time is now when now falls in that meal's slot, otherwise the
+planned time, so a lunch logged at 16:00 still counts as lunch and not the snack (`domain/fuel/MealLogging.kt`,
+unit-tested).
+
+**LOG SOMETHING ELSE** opens the food form.
+
 ### Verified
 
-- **Unit tests:** the full Android suite passes, 1,083 tests with 0 failures and 4 skipped. That is 1,039 existing
-  tests plus 44 new ones in `test/.../domain/score/`.
+- **Unit tests:** the full Android suite passes, 1,088 tests with 0 failures and 4 skipped. That is 1,039 existing
+  tests plus 49 new ones (`test/.../domain/score/`, `MealLoggingTest`).
 - **Build:** `assembleDebug` builds.
 - **Not verified:** the app has not been run on a device or with real data. The TODAY layout, the rings and the
   overlays and the full-picture views have only been compiled, never seen.
@@ -348,5 +362,4 @@ Health › Body DIGESTIVE PATTERN (BRISTOL) card.
 - CLOSE THE DAY's mood, energy and soreness questions. The evening check-in now carries the gut questions; the others
   still come from the morning wellbeing entry.
 - PLAN, LAB and ME, and moving the old sections' content into them.
-- The meal overlay (log as planned). A meal row opens SO FAR for now.
 - Personal weights (after 120 scored days) and the scorecard for the new scores.

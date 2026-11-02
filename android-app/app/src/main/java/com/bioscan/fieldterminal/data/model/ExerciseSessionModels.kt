@@ -2,6 +2,13 @@ package com.bioscan.fieldterminal.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.intOrNull
 
 // Phase G3. Unlike HealthConnectSyncModels.kt's daily upserts, one combined
 // row is safe here: the conflict key (user_id, health_connect_record_id) is
@@ -53,11 +60,24 @@ data class ExerciseDetailsUpdateRow(
 // exercises only meaningful when type='strength'. All nullable: a session
 // of one type simply carries null for the other type's fields, which is
 // harmless to write back untouched.
+// Zepp records the rest periods of a template workout as laps with exercise code 0. They are not exercises ("Exercise 0"),
+// so they are dropped when the stored list is read -- this also cleans up workouts imported before the import skipped them.
+private const val REST_EXERCISE_CODE = 0
+
+object RestFilteredExercisesSerializer : JsonTransformingSerializer<List<StrengthExerciseDto>>(ListSerializer(StrengthExerciseDto.serializer())) {
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        if (element !is JsonArray) return element
+        return JsonArray(element.filterNot { e ->
+            ((e as? JsonObject)?.get("exercise_code") as? JsonPrimitive)?.intOrNull == REST_EXERCISE_CODE
+        })
+    }
+}
+
 @Serializable
 data class ExerciseSessionDetails(
     @SerialName("route_type") val routeType: String? = null,
     @SerialName("run_type") val runType: String? = null,
-    val exercises: List<StrengthExerciseDto>? = null,
+    @Serializable(with = RestFilteredExercisesSerializer::class) val exercises: List<StrengthExerciseDto>? = null,
     // Where `exercises` came from: "zepp" (written by the Zepp import, follows later corrections made in Zepp) or "app"
     // (changed in the edit form, never overwritten by a sync). Null on rows from before the marker; see
     // domain/StrengthImport.kt and supabase/functions/zepp-extract/strengthImport.ts.

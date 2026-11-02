@@ -189,7 +189,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     }
 
     // Same write as the Supplements form for one roster item (dose string, product link, nutrient intake), by roster id.
-    suspend fun addSupplementTakenById(takenAt: String, supplementId: Long, quantity: Int) {
+    suspend fun addSupplementTakenById(takenAt: String, supplementId: Long, quantity: Double) {
         val row = supabase.postgrest.from("supplements")
             .select(columns = Columns.list("id,name,dose")) { filter { eq("id", supplementId) } }
             .decodeList<SupplementDoseRow>()
@@ -212,7 +212,9 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // other source already uses. `items` is (supplement id, name, roster
     // dose string) triples from whichever bundle(s)/individual as-needed
     // toggles were checked -- each gets its own parsed dose default (DAV-156).
-    suspend fun addSupplementsTaken(takenAt: String, items: List<Triple<Long, String, String>>, source: String = "manual", quantities: Map<Long, Int> = emptyMap()) {
+    suspend fun addSupplementsTaken(takenAt: String, items: List<Triple<Long, String, String>>, source: String = "manual", quantities: Map<Long, Double> = emptyMap()) {
+        // A quantity of 0 means "not taken": nothing is logged for it.
+        val items = items.filter { (quantities[it.first] ?: 1.0) > 0.0 }
         if (items.isEmpty()) return
         // product_id is optional provenance: a failed roster lookup must never
         // block recording that the supplement was taken.
@@ -222,7 +224,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         // scales the ingredient contribution. Missing link row = the default of 1.
         val servingsBySupp = links.mapValues { it.value.servingsPerDose }
         val rows = items.map { (id, name, dose) ->
-            val qty = quantities[id] ?: 1
+            val qty = quantities[id] ?: 1.0
             val (value, unit) = parseDose(dose)
             NewSupplementLogRow(
                 supplementId = id, supplementName = name, takenAt = takenAt,
@@ -263,7 +265,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         items: List<Triple<Long, String, String>>,
         productIdBySupp: Map<Long, Long>,
         servingsBySupp: Map<Long, Double>,
-        quantities: Map<Long, Int> = emptyMap(),
+        quantities: Map<Long, Double> = emptyMap(),
     ) {
         if (logRows.isEmpty()) return
         val supplementIds = logRows.map { it.supplementId }
@@ -276,7 +278,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         val suppRepo = SupplementsRepository(supabase)
         val nutrientRows = mutableListOf<NutrientIntakeRow>()
         for (logRow in logRows) {
-            val qty = quantities[logRow.supplementId] ?: 1
+            val qty = quantities[logRow.supplementId] ?: 1.0
             val productId = productIdBySupp[logRow.supplementId]
             val suppProfile = profilesBySupp[logRow.supplementId]
             if (productId != null) {

@@ -61,10 +61,14 @@ export interface ZeppExercise {
 
 const finite = (v: number): number => (Number.isFinite(v) ? v : 0);
 
-/** Consecutive sets of the same exercise code become one exercise, in workout order. */
+/** Zepp records the rest periods of a template workout as laps with exercise code 0; they are not exercises. */
+export const REST_EXERCISE_CODE = 0;
+
+/** Consecutive sets of the same exercise code become one exercise, in workout order; rest laps are left out. */
 export function buildZeppExercises(laps: LapSet[], nameOf: (code: number) => string | undefined): ZeppExercise[] {
   const out: ZeppExercise[] = [];
   for (const lap of laps) {
+    if (lap.exerciseCode === REST_EXERCISE_CODE) continue;
     const set: ZeppSet = {
       reps: Math.round(finite(lap.targetReps)),
       weight_kg: finite(lap.weightKg),

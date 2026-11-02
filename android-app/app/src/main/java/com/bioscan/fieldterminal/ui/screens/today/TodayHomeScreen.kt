@@ -185,92 +185,25 @@ fun TodayHomeScreen(
             LoadErrorCard(guard)
             return@Column
         }
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            val today = LocalDate.now()
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Text(today.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)).uppercase(), style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.weight(1f))
-                if (loading) Text("LOADING…", style = FTType.Micro, color = FT.TextMuted)
-            }
-
-            val v = view
-            val charge = v?.scores?.charge
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                ScoreRing(
-                    score = charge?.score,
-                    trend = trendOf(charge?.change),
-                    size = 200.dp,
-                    state = when {
-                        v == null -> RingState.BUILDING
-                        charge?.score == null -> RingState.PARTIAL
-                        v.status == ChargeStatus.PROVISIONAL -> RingState.PROVISIONAL
-                        else -> RingState.SCORED
-                    },
-                    capped = charge?.cap != null,
-                    emptyText = if (v == null) "…" else "—",
-                    description = "Charge",
-                    modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Open Charge", enabled = v != null) { stack = listOf(ScoreOverlay.Charge) },
-                )
-                Text("CHARGE", style = FTType.LabelCaps, color = FT.TextMuted)
-            }
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                for (key in DomainKey.entries) {
-                    val d = v?.scores?.domains?.get(key)
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Open ${key.label}", enabled = v != null) { stack = listOf(ScoreOverlay.Domain(key)) },
-                    ) {
-                        ScoreRing(
-                            score = d?.score,
-                            trend = trendOf(d?.change),
-                            size = 58.dp,
-                            state = if (d == null || d.partial) RingState.PARTIAL else RingState.SCORED,
-                            emptyText = if (v == null) "…" else "—",
-                            description = key.label,
-                        )
-                        Text(key.label, style = FTType.Micro, color = FT.TextSecondary, textAlign = TextAlign.Center)
-                    }
+        val now = LocalDateTime.now()
+        TodayContent(
+            view = view,
+            rows = planRows(now, fuel, previews, view?.scores?.charge?.score, now.toLocalDate().minusDays(1) in closed, now.toLocalDate() in closed),
+            soFar = nut?.let { n -> (n.today?.calories ?: 0.0) to fuel?.today?.kcal },
+            loading = loading,
+            today = now.toLocalDate(),
+            onOpenOverlay = { stack = listOf(it) },
+            onRow = { action ->
+                when (action) {
+                    PlanAction.SoFar -> soFar = true
+                    is PlanAction.Meal -> mealKind = action.kind
+                    is PlanAction.CloseDay -> checkInDate = action.date
+                    is PlanAction.Tile -> onOpenTile(action.route)
+                    is PlanAction.Tab -> onOpenTab(action.tab)
                 }
-            }
-
-            val now = LocalDateTime.now()
-            val rows = planRows(now, fuel, previews, charge?.score, today.minusDays(1) in closed, today in closed)
-            Section("TODAY'S PLAN") {
-                for (row in rows) {
-                    PlanRowView(row) {
-                        when (val a = row.action) {
-                            PlanAction.SoFar -> soFar = true
-                            is PlanAction.Meal -> mealKind = a.kind
-                            is PlanAction.CloseDay -> checkInDate = a.date
-                            is PlanAction.Tile -> onOpenTile(a.route)
-                            is PlanAction.Tab -> onOpenTab(a.tab)
-                        }
-                    }
-                }
-            }
-
-            nut?.let { n ->
-                val kcal = n.today?.calories ?: 0.0
-                val target = fuel?.today?.kcal
-                Row(
-                    modifier = Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Open intake so far") { soFar = true }
-                        .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule)).padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("SO FAR", style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.width(72.dp))
-                    Text(if (target != null) "${kcal.roundToInt()} / ${target.roundToInt()} kcal" else "${kcal.roundToInt()} kcal",
-                        style = FTType.Value, color = FT.TextPrimary, modifier = Modifier.weight(1f))
-                    Text("›", style = FTType.Telemetry, color = FT.TextMuted)
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-        }
+            },
+            onSoFar = { soFar = true },
+        )
     }
 
     view?.let { ScoreOverlayHost(it, stack, onStack = { s -> stack = s }, onOpenDetail = onOpenDetail) }
@@ -300,6 +233,94 @@ fun TodayHomeScreen(
     }
     checkInDate?.let { date ->
         EveningCheckInSheet(date = date, onDismiss = { checkInDate = null }, onSaved = { checkInDate = null; guard.retry() })
+    }
+}
+
+/**
+ * TODAY's layout from plain data: the CHARGE ring, the five domain rings, today's plan and the SO FAR line. Kept apart
+ * from the loading so it can be drawn on its own (and is in the screenshot tour).
+ */
+@Composable
+fun TodayContent(
+    view: ScoresView?,
+    rows: List<PlanRow>,
+    soFar: Pair<Double, Double?>?,
+    loading: Boolean,
+    today: LocalDate,
+    onOpenOverlay: (ScoreOverlay) -> Unit,
+    onRow: (PlanAction) -> Unit,
+    onSoFar: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(today.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)).uppercase(), style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.weight(1f))
+            if (loading) Text("LOADING…", style = FTType.Micro, color = FT.TextMuted)
+        }
+
+        val v = view
+        val charge = v?.scores?.charge
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            ScoreRing(
+                score = charge?.score,
+                trend = trendOf(charge?.change),
+                size = 200.dp,
+                state = when {
+                    v == null -> RingState.BUILDING
+                    charge?.score == null -> RingState.PARTIAL
+                    v.status == ChargeStatus.PROVISIONAL -> RingState.PROVISIONAL
+                    else -> RingState.SCORED
+                },
+                capped = charge?.cap != null,
+                emptyText = if (v == null) "…" else "—",
+                description = "Charge",
+                modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Open Charge", enabled = v != null) { onOpenOverlay(ScoreOverlay.Charge) },
+            )
+            Text("CHARGE", style = FTType.LabelCaps, color = FT.TextMuted)
+        }
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            for (key in DomainKey.entries) {
+                val d = v?.scores?.domains?.get(key)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Open ${key.label}", enabled = v != null) { onOpenOverlay(ScoreOverlay.Domain(key)) },
+                ) {
+                    ScoreRing(
+                        score = d?.score,
+                        trend = trendOf(d?.change),
+                        size = 58.dp,
+                        state = if (d == null || d.partial) RingState.PARTIAL else RingState.SCORED,
+                        emptyText = if (v == null) "…" else "—",
+                        description = key.label,
+                    )
+                    Text(key.label, style = FTType.Micro, color = FT.TextSecondary, textAlign = TextAlign.Center)
+                }
+            }
+        }
+
+        Section("TODAY'S PLAN") {
+            for (row in rows) PlanRowView(row) { onRow(row.action) }
+        }
+
+        soFar?.let { (kcal, target) ->
+            Row(
+                modifier = Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Open intake so far") { onSoFar() }
+                    .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule)).padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("SO FAR", style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.width(72.dp))
+                Text(if (target != null) "${kcal.roundToInt()} / ${target.roundToInt()} kcal" else "${kcal.roundToInt()} kcal",
+                    style = FTType.Value, color = FT.TextPrimary, modifier = Modifier.weight(1f))
+                Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
     }
 }
 

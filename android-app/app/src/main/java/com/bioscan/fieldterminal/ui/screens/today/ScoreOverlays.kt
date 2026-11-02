@@ -65,6 +65,9 @@ import kotlin.math.roundToInt
 // Scoring system (docs/scoring-system/02-page-mockups.md §0, §2-§4): the full-screen overlays a tap opens. Level 2 is
 // CHARGE or a domain, everything expanded; level 3 is one metric. ‹ goes back a level, ✕ closes them all.
 
+/** True to draw overlays in place instead of in a dialog (the screenshot tour). */
+val LocalInlineOverlays = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 sealed interface ScoreOverlay {
     data object Charge : ScoreOverlay
     data class Domain(val key: DomainKey) : ScoreOverlay
@@ -81,7 +84,7 @@ fun FullScreenOverlay(
     trailing: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Dialog(onDismissRequest = onBack ?: onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    val page: @Composable () -> Unit = {
         Column(modifier = Modifier.fillMaxSize().background(FT.Base).statusBarsPadding().navigationBarsPadding()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -102,6 +105,10 @@ fun FullScreenOverlay(
                 content = content,
             )
         }
+    }
+    // The screenshot tour draws an overlay in place; the app shows it as a full-screen dialog.
+    if (LocalInlineOverlays.current) page() else {
+        Dialog(onDismissRequest = onBack ?: onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { page() }
     }
 }
 

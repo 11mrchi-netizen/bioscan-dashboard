@@ -47,15 +47,15 @@ import com.bioscan.fieldterminal.ui.screens.settings.ConnectedServicesScreen
 import com.bioscan.fieldterminal.ui.screens.settings.NotificationsSettingsScreen
 import com.bioscan.fieldterminal.ui.screens.settings.UserSettingsScreen
 import com.bioscan.fieldterminal.ui.screens.TrainingBlocksScreen
-import com.bioscan.fieldterminal.ui.screens.UserProfileScreen
 import com.bioscan.fieldterminal.ui.screens.user.ConditioningSkillScreen
-import com.bioscan.fieldterminal.ui.screens.user.Skill
 import com.bioscan.fieldterminal.ui.screens.status.HealthTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.LabTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.NutrientBreakdownScreen
 import com.bioscan.fieldterminal.ui.screens.status.NutritionTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.PantryScreen
 import com.bioscan.fieldterminal.ui.screens.today.TodayHomeScreen
+import com.bioscan.fieldterminal.ui.screens.plan.PlanScreen
+import com.bioscan.fieldterminal.ui.screens.me.MeScreen
 import com.bioscan.fieldterminal.ui.screens.status.TodayScreen
 import com.bioscan.fieldterminal.ui.screens.status.TrainingTileScreen
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -69,7 +69,9 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     // supplement reminder -> SUPPLEMENTS, the fuel reminder and the User block card -> PLANNING), Training's (the injury
     // flag -> INJURY, the User level buttons -> RUNNING / STRENGTH), Nutrition's (Today's fuel line -> PLAN) and Health's.
     var labsRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<LabTab?>(null) }
-    var planningRequestedSection by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<PlanningSection?>(null) }
+    // Scoring system rebuild: PLAN's and ME's sub-tab, for a link that should land on one (the fuel reminder -> FOOD).
+    var planRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<PlanTab?>(null) }
+    var meRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<MeTab?>(null) }
     var trainingRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<TrainingTab?>(null) }
     var nutritionRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<NutritionTab?>(null) }
     var healthRequestedTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<HealthTab?>(null) }
@@ -85,12 +87,22 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     // the Log screen opens its add sheet when it changes.
     var logMenuRequest by rememberSaveable { mutableStateOf(0) }
 
+    // Switch to a dock tab the way tapping it does (one stack per tab, state kept).
+    fun goToTab(tab: TopLevelTab) {
+        dockTab = tab
+        navController.navigate(tab.route) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
     LaunchedEffect(pendingNotificationKind) {
         val kind = pendingNotificationKind ?: return@LaunchedEffect
         when (notificationDestination(kind)) {
             NotificationDestination.SUPPLEMENTS -> {
                 labsRequestedTab = LabTab.Supplements
-                navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
+                goToTab(TopLevelTab.Lab)
             }
             NotificationDestination.LOG -> navController.navigate(TopLevelTab.Log.route) {
                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -103,15 +115,15 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             }
             NotificationDestination.BODY_CHECKIN -> {
                 bodyCheckInRequested = true
-                navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
+                goToTab(TopLevelTab.Lab)
             }
             NotificationDestination.HEALTH -> {
-                healthRequestedTab = HealthTab.Concerns
-                navController.navigate(TileRoute.Health.route) { launchSingleTop = true }
+                meRequestedTab = MeTab.Health
+                goToTab(TopLevelTab.User)
             }
             NotificationDestination.FUEL -> {
-                planningRequestedSection = PlanningSection.Food
-                navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
+                planRequestedTab = PlanTab.Food
+                goToTab(TopLevelTab.Plan)
             }
             NotificationDestination.NONE -> Unit
         }
@@ -150,7 +162,10 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             // Scoring system rebuild (docs/scoring-system): the opening page is TODAY -- CHARGE, the five domain rings and
             // today's plan. The old Status hub (StatusScreen / BodyConsole) stays in the codebase, unreferenced.
             composable(TopLevelTab.Status.route) {
-                TodayHomeScreen(onOpenTile = { tile -> navController.navigate(tile.route) })
+                TodayHomeScreen(
+                    onOpenTile = { tile -> navController.navigate(tile.route) },
+                    onOpenTab = { tab -> goToTab(tab) },
+                )
             }
             // UX review P6: the Today page (was Daily Readiness) links to the cards it no longer repeats.
             composable("today") {
@@ -194,8 +209,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     onBack = { navController.popBackStack() },
                     onOpenNutrientBreakdown = { navController.navigate("nutrient_breakdown") },
                     onOpenFullPlan = {
-                        planningRequestedSection = PlanningSection.Food
-                        navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
+                        planRequestedTab = PlanTab.Food
+                        goToTab(TopLevelTab.Plan)
                     },
                     requestedTab = nutritionRequestedTab,
                     onRequestedTabConsumed = { nutritionRequestedTab = null },
@@ -210,39 +225,42 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     onOpenConcern = { id -> navController.navigate("concern/$id") },
                 )
             }
-            composable(TileRoute.Lab.route) {
-                LabTileScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenPantry = { navController.navigate("pantry") },
+            // Scoring system rebuild: LAB is a dock tab; the old pushed route still resolves to the same page.
+            for (route in listOf(TopLevelTab.Lab.route, TileRoute.Lab.route)) {
+                composable(route) {
+                    LabTileScreen(
+                        onBack = if (route == TileRoute.Lab.route) ({ navController.popBackStack() }) else null,
+                        onOpenPantry = { navController.navigate("pantry") },
+                        requestedTab = labsRequestedTab,
+                        onRequestedTabConsumed = { labsRequestedTab = null },
+                        openBodyCheckIn = bodyCheckInRequested,
+                        onBodyCheckInHandled = { bodyCheckInRequested = false },
+                    )
+                }
+            }
+            composable(TopLevelTab.Plan.route) {
+                PlanScreen(
                     onOpenPlanner = { navController.navigate("training_planner") },
                     onOpenAllBlocks = { navController.navigate("training_blocks") },
                     onOpenEvent = { id -> navController.navigate("event/$id") },
-                    requestedTab = labsRequestedTab,
-                    requestedSection = planningRequestedSection,
-                    onRequestedTabConsumed = { labsRequestedTab = null; planningRequestedSection = null },
-                    openBodyCheckIn = bodyCheckInRequested,
-                    onBodyCheckInHandled = { bodyCheckInRequested = false },
+                    onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") },
+                    requestedTab = planRequestedTab,
+                    onRequestedTabConsumed = { planRequestedTab = null },
                 )
             }
             composable("pantry") { PantryScreen(onBack = { navController.popBackStack() }) }
             composable(TopLevelTab.User.route) {
-                UserProfileScreen(
+                MeScreen(
+                    onOpenSettings = { navController.navigate(SETUP_ROUTE) },
                     onOpenAging = { navController.navigate("aging_profile") },
-                    // UX review P5: the User tab's block card opens the block's one home, now Lab › Planning › Training.
                     onOpenTrainingPlan = {
-                        planningRequestedSection = PlanningSection.Training
-                        navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
+                        planRequestedTab = PlanTab.Training
+                        goToTab(TopLevelTab.Plan)
                     },
-                    // App restructure: Running and Strength are Training's tabs; Conditioning keeps its own page.
-                    onOpenSkill = { skill ->
-                        when (skill) {
-                            Skill.RUNNING, Skill.STRENGTH -> {
-                                trainingRequestedTab = if (skill == Skill.RUNNING) TrainingTab.Running else TrainingTab.Strength
-                                navController.navigate(TileRoute.Training.route) { launchSingleTop = true }
-                            }
-                            Skill.CONDITIONING -> navController.navigate("skill_conditioning")
-                        }
-                    },
+                    onOpenConditioning = { navController.navigate("skill_conditioning") },
+                    onOpenConcern = { id -> navController.navigate("concern/$id") },
+                    requestedTab = meRequestedTab,
+                    onRequestedTabConsumed = { meRequestedTab = null },
                 )
             }
             composable("aging_profile") { AgingProfileScreen(onBack = { navController.popBackStack() }) }
@@ -253,7 +271,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             composable(TopLevelTab.Log.route) {
                 LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") }, openMenuRequest = logMenuRequest)
             }
-            composable(TopLevelTab.Setup.route) {
+            composable(SETUP_ROUTE) {
                 SettingsScreen(
                     scope = scope,
                     onOpenUser = { navController.navigate(SettingsRoute.User.route) },
@@ -379,9 +397,10 @@ private fun FieldBottomBar(selectedTab: TopLevelTab, onTabSelected: (TopLevelTab
 private val TopLevelTab.iconRes
     get() = when (this) {
         TopLevelTab.Status -> R.drawable.ic_tab_status
-        TopLevelTab.User -> R.drawable.ic_tab_user
+        TopLevelTab.Plan -> R.drawable.ic_tab_plan
         TopLevelTab.Log -> R.drawable.ic_tab_log
-        TopLevelTab.Setup -> R.drawable.ic_tab_setup
+        TopLevelTab.Lab -> R.drawable.ic_tab_lab
+        TopLevelTab.User -> R.drawable.ic_tab_user
     }
 
 // User and Log have documented domain accents (contract section 4); Status
@@ -390,7 +409,8 @@ private val TopLevelTab.iconRes
 private val TopLevelTab.domainAccent
     get() = when (this) {
         TopLevelTab.Status -> FT.Emerald
-        TopLevelTab.User -> FT.DomainUser
+        TopLevelTab.Plan -> FT.DomainTraining
         TopLevelTab.Log -> FT.DomainLog
-        TopLevelTab.Setup -> FT.Emerald
+        TopLevelTab.Lab -> FT.DomainLabs
+        TopLevelTab.User -> FT.DomainUser
     }

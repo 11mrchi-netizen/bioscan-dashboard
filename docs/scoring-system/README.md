@@ -332,10 +332,37 @@ unit-tested).
 
 **LOG SOMETHING ELSE** opens the food form.
 
+### Phase 2a (built): the five-tab dock
+
+The dock is **TODAY · PLAN · + LOG · LAB · ME**. The old Status and User routes keep their route strings, so a saved
+back stack still resolves.
+
+| Tab | What it holds | Where it came from |
+|---|---|---|
+| PLAN (`ui/screens/plan/PlanScreen.kt`) | TRAINING (current block, this week, blocks), FOOD (next 10 days, meal prep), RACE (events and their race fuel), SESSIONS (every recorded session) | Lab › Planning and Training › Sessions |
+| LAB | N=1, SUPPLEMENTS, TESTS, ROUTINE | The old Lab page, without PLANNING (now in PLAN) |
+| ME (`ui/screens/me/MeScreen.kt`) | HEALTHSPAN (the old User page), PERFORMANCE (Running and Strength), BODY, HEALTH (concerns), BLOODWORK; ⚙ opens Setup | The old User page, Training's Running and Strength tabs, and Health's Body, Concerns and Bloodwork tabs |
+
+Top-level pages have no back arrow.
+
+**Where links now land:**
+
+| Link | Lands on |
+|---|---|
+| Fuel reminder | PLAN › FOOD |
+| Supplement and body check-in reminders | LAB |
+| Health reminder | ME › HEALTH |
+| ME's block card | PLAN › TRAINING |
+| A session row on TODAY | PLAN |
+| A supplements row on TODAY | LAB |
+
+**ALL SECTIONS on TODAY** keeps TRAINING, NUTRITION and HEALTH: training load, nutrition charts, cardio, sleep,
+wellbeing and sexual health have not moved into the domain overlays yet.
+
 ### Verified
 
-- **Unit tests:** the full Android suite passes, 1,088 tests with 0 failures and 4 skipped. That is 1,039 existing
-  tests plus 49 new ones (`test/.../domain/score/`, `MealLoggingTest`).
+- **Unit tests:** the full Android suite passes, 1,089 tests with 0 failures and 4 skipped. That is 1,039 existing
+  tests plus 49 new ones (`test/.../domain/score/`, `MealLoggingTest`) and a navigation test for the new dock.
 - **Build:** `assembleDebug` builds.
 - **Not verified:** the app has not been run on a device or with real data. The TODAY layout, the rings and the
   overlays and the full-picture views have only been compiled, never seen.
@@ -361,5 +388,5 @@ unit-tested).
 
 - CLOSE THE DAY's mood, energy and soreness questions. The evening check-in now carries the gut questions; the others
   still come from the morning wellbeing entry.
-- PLAN, LAB and ME, and moving the old sections' content into them.
+- Moving the remaining Training, Nutrition and Health cards into the domain overlays, then removing ALL SECTIONS.
 - Personal weights (after 120 scored days) and the scorecard for the new scores.

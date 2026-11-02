@@ -15,12 +15,35 @@ package com.bioscan.fieldterminal.ui.nav
 // FieldTerminalNavHost's routing -- see
 // docs/user-profile-milestone/01-canonical-contracts-audit.md section 10.
 enum class TopLevelTab(val route: String, val label: String) {
-    // Scoring system rebuild: the opening tab is TODAY (route kept so a saved back stack still resolves).
+    // Scoring system rebuild (docs/scoring-system/02-page-mockups.md): TODAY · PLAN · + LOG · LAB · ME. Reading starts on
+    // TODAY; doing lives in PLAN, LOG and LAB; slow-moving things and settings in ME. The status and user routes are kept
+    // so a saved back stack still resolves; Setup is a pushed page from ME's gear now (SETUP_ROUTE).
     Status("status", "TODAY"),
-    User("user", "USER"),
+    Plan("plan", "PLAN"),
     // Tapping it opens the logging menu directly (FieldTerminalNavHost's logMenuRequest).
     Log("log", "+ LOG"),
-    Setup("setup", "SETUP"),
+    Lab("lab", "LAB"),
+    User("user", "ME"),
+}
+
+/** Setup's hub, pushed from ME's gear (it was a dock tab). */
+const val SETUP_ROUTE = "setup"
+
+// PLAN's sub-tabs: what is planned and what was done.
+enum class PlanTab(val label: String) {
+    Training("TRAINING"),
+    Food("FOOD"),
+    Race("RACE"),
+    Sessions("SESSIONS"),
+}
+
+// ME's sub-tabs: the slow-moving picture.
+enum class MeTab(val label: String) {
+    Healthspan("HEALTHSPAN"),
+    Performance("PERFORMANCE"),
+    Body("BODY"),
+    Health("HEALTH"),
+    Bloodwork("BLOODWORK"),
 }
 
 // First feedback fixes (DAV-70): Status's old single sub-tab rail is replaced by 4 tiles, each its own pushed route with
@@ -61,17 +84,10 @@ enum class HealthTab(val label: String) {
 enum class LabTab(val label: String) {
     N1("N=1"),
     Supplements("SUPPLEMENTS"),
-    Planning("PLANNING"),
+    // Scoring system rebuild: PLANNING moved to the PLAN tab.
     Tests("TESTS"),
     // Routine intelligence R5: the week by place, the commute and the phone (docs/routine-intelligence).
     Routine("ROUTINE"),
-}
-
-// The three parts of Lab › Planning; a deep link (the fuel reminder, the User tab's block card) can ask for one.
-enum class PlanningSection(val label: String) {
-    Training("TRAINING"),
-    Food("FOOD PLAN"),
-    RaceFuel("RACE FUEL"),
 }
 
 // App restructure: Running and Strength moved in from the User tab's skill pages, and the sessions list has its own tab.

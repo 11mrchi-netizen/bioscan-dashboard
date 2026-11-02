@@ -77,6 +77,7 @@ sealed interface PlanAction {
     data class Meal(val kind: com.bioscan.fieldterminal.domain.fuel.MealSlotKind) : PlanAction
     data class CloseDay(val date: LocalDate) : PlanAction
     data class Tile(val route: TileRoute) : PlanAction
+    data class Tab(val tab: com.bioscan.fieldterminal.ui.nav.TopLevelTab) : PlanAction
 }
 
 /** The demand a planned session's intensity puts on CHARGE: READY when CHARGE reaches it. A documented opinion. */
@@ -123,18 +124,18 @@ fun planRows(
             item.title,
             listOfNotNull("${item.durationMin.roundToInt()} min", ready).joinToString(" · "),
             item.recorded,
-            PlanAction.Tile(TileRoute.Training),
+            PlanAction.Tab(com.bioscan.fieldterminal.ui.nav.TopLevelTab.Plan),
         )
     }
     previews?.supplements?.dueByBucket?.forEach { (bucket, due) ->
-        rows += PlanRow(BUCKET_TIMES[bucket], "${bucket.replaceFirstChar { it.uppercase() }} supplements", "$due due", false, PlanAction.Tile(TileRoute.Lab))
+        rows += PlanRow(BUCKET_TIMES[bucket], "${bucket.replaceFirstChar { it.uppercase() }} supplements", "$due due", false, PlanAction.Tab(com.bioscan.fieldterminal.ui.nav.TopLevelTab.Lab))
     }
     rows += PlanRow(CLOSE_DAY_TIME, "Close the day", null, closedToday, PlanAction.CloseDay(today))
     return rows.sortedWith(compareBy({ it.time != null }, { it.time }))
 }
 
 @Composable
-fun TodayHomeScreen(onOpenTile: (TileRoute) -> Unit) {
+fun TodayHomeScreen(onOpenTile: (TileRoute) -> Unit, onOpenTab: (com.bioscan.fieldterminal.ui.nav.TopLevelTab) -> Unit = {}) {
     val context = LocalContext.current
     val guard = rememberLoadGuard()
     var view by remember { mutableStateOf<ScoresView?>(null) }
@@ -243,6 +244,7 @@ fun TodayHomeScreen(onOpenTile: (TileRoute) -> Unit) {
                             is PlanAction.Meal -> mealKind = a.kind
                             is PlanAction.CloseDay -> checkInDate = a.date
                             is PlanAction.Tile -> onOpenTile(a.route)
+                            is PlanAction.Tab -> onOpenTab(a.tab)
                         }
                     }
                 }
@@ -263,10 +265,11 @@ fun TodayHomeScreen(onOpenTile: (TileRoute) -> Unit) {
                 }
             }
 
-            // Until PLAN, LAB and ME exist (docs/scoring-system: build order), the four sections stay reachable here.
+            // Until the domain overlays carry every detail card (docs/scoring-system: build order), the three remaining
+            // sections stay reachable here. Lab, planning, profile and settings are dock tabs now.
             Section("ALL SECTIONS") {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    for ((label, route) in listOf("TRAINING" to TileRoute.Training, "NUTRITION" to TileRoute.Nutrition, "HEALTH" to TileRoute.Health, "LAB" to TileRoute.Lab)) {
+                    for ((label, route) in listOf("TRAINING" to TileRoute.Training, "NUTRITION" to TileRoute.Nutrition, "HEALTH" to TileRoute.Health)) {
                         Text(label, style = FTType.Label, color = FT.TextSecondary,
                             modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Open $label") { onOpenTile(route) }.padding(8.dp))
                     }

@@ -1,6 +1,20 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
+import com.bioscan.fieldterminal.data.AddEntryRepository
+import com.bioscan.fieldterminal.data.AnalysisRepository
+import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
+import com.bioscan.fieldterminal.domain.GUT_SYMPTOMS
+import com.bioscan.fieldterminal.ui.components.ftClickable
+import java.time.LocalTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -41,6 +55,8 @@ import java.util.Locale
 private val DRINK_OPTIONS = listOf("0", "1", "2", "3", "4+")
 private val YES_NO = listOf("NO", "YES")
 private val STRESS_OPTIONS = listOf("1", "2", "3", "4", "5")
+private val GUT_COMFORT_OPTIONS = listOf("0", "1", "2", "3", "4")
+private val TIME_OF_DAY = DateTimeFormatter.ofPattern("HH:mm")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,6 +112,18 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
                 draft = draft.copy(stress = picked?.toInt())
             }
 
+            // Scoring system (FUEL › gut): how the gut was, what happened, and the day's logged movements with their times.
+            CheckInLabel("GUT, 0 ROUGH TO 4 COMFORTABLE")
+            TextChipRow(GUT_COMFORT_OPTIONS, draft.gutComfort?.toString(), perRow = 5) { picked ->
+                draft = draft.copy(gutComfort = picked?.toInt())
+            }
+            CheckInLabel("ANY OF THESE? (TICK ALL THAT HAPPENED)")
+            SymptomChips(draft.gutSymptoms.orEmpty()) { symptom ->
+                val now = draft.gutSymptoms.orEmpty()
+                draft = draft.copy(gutSymptoms = if (symptom in now) now - symptom else now + symptom)
+            }
+            BowelMovements(date)
+
             error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FTButton(
@@ -118,4 +146,80 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
 @Composable
 private fun CheckInLabel(text: String) {
     Text(text, style = FTType.LabelCaps, color = FT.TextSecondary)
+}
+
+/** Multi-select chips for the gut symptoms, three to a row. */
+@Composable
+private fun SymptomChips(selected: List<String>, onToggle: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        GUT_SYMPTOMS.chunked(3).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { symptom ->
+                    val on = symptom in selected
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(FT.BorderWidth, if (on) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                            .background(if (on) FT.DomainLog.copy(alpha = 0.18f) else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
+                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall), role = Role.Checkbox) { onToggle(symptom) }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(symptom.uppercase(), style = FTType.MonoCaption, color = if (on) FT.DomainLog else FT.TextSecondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The day's bowel movements from the stool log, each at the time it was logged. On the day itself, + NOW logs one more at
+ * this minute once its Bristol type is picked; for an earlier day they are added in + LOG with their own time.
+ */
+@Composable
+private fun BowelMovements(date: LocalDate) {
+    val scope = rememberCoroutineScope()
+    var entries by remember(date) { mutableStateOf<List<StoolAnalysisRow>?>(null) }
+    var picking by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val zone = ZoneId.systemDefault()
+    suspend fun reload() {
+        entries = runCatching { AnalysisRepository(SupabaseClientProvider.client).loadStoolLog() }.getOrNull()
+            ?.filter { row -> runCatching { OffsetDateTime.parse(row.occurredAt).atZoneSameInstant(zone).toLocalDate() }.getOrNull() == date }
+    }
+    LaunchedEffect(date) { reload() }
+
+    CheckInLabel("BOWEL MOVEMENTS")
+    val list = entries
+    Text(
+        when {
+            list == null -> "Loading…"
+            list.isEmpty() -> "None logged for this day."
+            else -> list.joinToString(" · ") { row ->
+                val time = runCatching { OffsetDateTime.parse(row.occurredAt).atZoneSameInstant(zone).format(TIME_OF_DAY) }.getOrDefault("?")
+                "$time type ${row.bristolType ?: "?"}"
+            }
+        },
+        style = FTType.BodySmall,
+        color = FT.TextPrimary,
+    )
+    if (date == LocalDate.now()) {
+        if (!picking) {
+            FTButton(label = "+ NOW", emphasis = FTButtonEmphasis.Tertiary) { picking = true }
+        } else {
+            Text("Bristol type (1 hard … 7 liquid), logged at ${LocalTime.now().format(TIME_OF_DAY)}", style = FTType.Caption, color = FT.TextSecondary)
+            TextChipRow((1..7).map { it.toString() }, null, perRow = 7) { picked ->
+                val type = picked?.toInt() ?: return@TextChipRow
+                picking = false
+                scope.launchSafe(onError = { e -> error = describeLoadFailure(e) }) {
+                    AddEntryRepository(SupabaseClientProvider.client).addStool(OffsetDateTime.now(zone).toString(), type, null)
+                    reload()
+                }
+            }
+        }
+    } else {
+        Text("Missed one? Add it in + LOG with its time.", style = FTType.Caption, color = FT.TextMuted)
+    }
+    error?.let { Text("Couldn't log: $it", style = FTType.Caption, color = FT.Critical) }
 }

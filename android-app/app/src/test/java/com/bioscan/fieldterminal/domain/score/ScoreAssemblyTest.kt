@@ -6,6 +6,7 @@ import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
 import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.EveningCheckin
+import com.bioscan.fieldterminal.domain.withNothingElse
 import com.bioscan.fieldterminal.domain.stress.StressDailySummary
 import com.bioscan.fieldterminal.domain.stress.StressDay
 import org.junit.Assert.assertEquals
@@ -95,5 +96,51 @@ class ScoreAssemblyTest {
         assertEquals("Sore throat · day 2", caps(tuesday)!!.reason)
         val injury = capsFrom(listOf(Triple("Knee", monday, monday.plusDays(6))))
         assertFalse(injury(monday.plusDays(7)) != null)
+    }
+
+    @Test
+    fun gutBurdenFromTheCheckInOrTheStoolEntries() {
+        assertNull(gutBurden(null, null))
+        assertNull(gutBurden(EveningCheckin(monday), null))
+        assertEquals(0.0, gutBurden(EveningCheckin(monday, gutComfort = 4, gutSymptoms = emptyList()), null)!!, 1e-9)
+        assertEquals(2.0, gutBurden(EveningCheckin(monday, gutComfort = 3, gutSymptoms = listOf("bloating", "gas")), null)!!, 1e-9)
+        assertEquals(2.4, gutBurden(null, 6)!!, 1e-9)
+        // The larger of the two when both exist.
+        assertEquals(2.4, gutBurden(EveningCheckin(monday, gutComfort = 4), 6)!!, 1e-9)
+    }
+
+    @Test
+    fun gutSymptomsFeedTheNextMorning() {
+        val series = assembleScoreSeries(
+            ScoreSources(
+                checkins = listOf(EveningCheckin(monday, gutComfort = 2, gutSymptoms = listOf("cramps"))),
+                stool = listOf(StoolAnalysisRow("${monday}T08:00:00Z", 4, discomfort = 1)),
+                zone = zone,
+            ),
+            today = tuesday,
+        )
+        assertEquals(2.5, series.getValue(ScoreKeys.GUT_SYMPTOMS)[tuesday]!!, 1e-9)
+        assertNull(series.getValue(ScoreKeys.GUT_SYMPTOMS)[monday])
+    }
+
+    @Test
+    fun acuteGutDaysFromNauseaOrRepeatedLiquidStools() {
+        val sunday = monday.minusDays(1)
+        val days = acuteGutDays(
+            checkins = listOf(EveningCheckin(sunday, gutSymptoms = listOf("nausea")), EveningCheckin(monday, gutSymptoms = listOf("gas"))),
+            stool = listOf(
+                StoolAnalysisRow("${monday}T08:00:00Z", 7), StoolAnalysisRow("${monday}T11:00:00Z", 7),
+                StoolAnalysisRow("${tuesday}T09:00:00Z", 7),
+            ),
+            zone = zone,
+        )
+        assertEquals(setOf(sunday, monday), days)
+    }
+
+    @Test
+    fun nothingElseMarksNoSymptomsButNeverInventsComfort() {
+        val done = EveningCheckin(monday).withNothingElse()
+        assertEquals(emptyList<String>(), done.gutSymptoms)
+        assertNull(done.gutComfort)
     }
 }

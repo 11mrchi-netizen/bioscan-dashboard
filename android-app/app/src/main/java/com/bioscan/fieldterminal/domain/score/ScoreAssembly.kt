@@ -29,9 +29,8 @@ import kotlin.math.sqrt
 //     day BEFORE the morning, so it is shifted forward one day here.
 // Nothing in the engine shifts dates again.
 //
-// Not assembled yet (the inputs exist in ScoreSpecs and read as missing until they are): gut symptoms and the
-// in-session gut score (the CLOSE THE DAY check-in will collect symptoms), the night-time HR dip, and meal-timing
-// regularity.
+// Not assembled yet (the inputs exist in ScoreSpecs and read as missing until they are): the in-session gut score, the
+// night-time HR dip, and meal-timing regularity.
 
 /** The day's targets FUEL compares intake with. */
 data class FuelTargets(val kcal: Double?, val proteinG: Double?, val carbsG: Double?, val waterMl: Double?)
@@ -225,6 +224,12 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
         val forms = (0..2).flatMap { i -> stoolByDay[d.minusDays(i.toLong())].orEmpty().mapNotNull { it.first.bristolType?.toDouble() } }
         if (forms.isNotEmpty()) b.put(ScoreKeys.GUT_FORM, morning, forms.average())
     }
+    // Symptom burden: the evening check-in's answers, else the stool entries' own discomfort, whichever says more.
+    val checkinByDay = src.checkins.associateBy { it.date }
+    for (d in checkinByDay.keys + stoolByDay.keys) {
+        val discomfort = stoolByDay[d].orEmpty().mapNotNull { it.first.discomfort }.maxOrNull()
+        b.put(ScoreKeys.GUT_SYMPTOMS, d.plusDays(1), gutBurden(checkinByDay[d], discomfort))
+    }
 
     // ---- BALANCE: daytime stress (the day before) ----
     for (day in src.stressDays) {
@@ -235,6 +240,29 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
     }
 
     return b.build()
+}
+
+/**
+ * Gut symptom burden for one day, 0 = none: (4 - comfort) from the check-in plus half a point per symptom ticked, or the
+ * worst stool entry's discomfort (0-10) scaled to the same 0-4 range. The larger of the two when both exist; null when
+ * neither was answered.
+ */
+fun gutBurden(checkin: EveningCheckin?, maxStoolDiscomfort: Int?): Double? {
+    val fromCheckin = checkin?.takeIf { it.gutComfort != null || it.gutSymptoms != null }
+        ?.let { c -> (c.gutComfort?.let { 4.0 - it } ?: 0.0) + 0.5 * (c.gutSymptoms?.size ?: 0) }
+    val fromStool = maxStoolDiscomfort?.let { it.coerceIn(0, 10) * 0.4 }
+    return listOfNotNull(fromCheckin, fromStool).maxOrNull()
+}
+
+/** Two or more liquid stools (Bristol 7), or nausea, make an acute gut day: it caps the next morning's CHARGE. */
+const val ACUTE_LIQUID_STOOLS = 2
+
+/** The days with an acute gut episode (the day itself, not the morning after). */
+fun acuteGutDays(checkins: List<EveningCheckin>, stool: List<StoolAnalysisRow>, zone: ZoneId): Set<LocalDate> {
+    val nausea = checkins.filter { it.gutSymptoms?.contains("nausea") == true }.map { it.date }
+    val liquid = stool.mapNotNull { row -> parseInstant(row.occurredAt)?.takeIf { row.bristolType == 7 }?.atZone(zone)?.toLocalDate() }
+        .groupingBy { it }.eachCount().filterValues { it >= ACUTE_LIQUID_STOOLS }.keys
+    return (nausea + liquid).toSet()
 }
 
 /** Days a morning's caps apply on, from open-ended episodes (start, end or null if still open). */

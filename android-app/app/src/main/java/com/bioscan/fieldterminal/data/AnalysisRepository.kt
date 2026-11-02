@@ -376,7 +376,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     private suspend fun fetchStoolLog(): List<StoolAnalysisRow> =
         supabase.postgrest.from("stool_log")
-            .select(columns = Columns.list("occurred_at,bristol_type")) {
+            .select(columns = Columns.list("occurred_at,bristol_type,discomfort")) {
                 order("occurred_at", Order.DESCENDING)
                 limit(200)
             }

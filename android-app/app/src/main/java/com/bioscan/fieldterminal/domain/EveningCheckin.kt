@@ -16,7 +16,14 @@ data class EveningCheckin(
     val lateMeal: Boolean? = null,
     val stress: Int? = null,
     val lateScreen: Boolean? = null,
+    // Scoring system (FUEL › gut): 0 (rough) to 4 (comfortable), and the symptoms ticked that day. An empty list is an
+    // explicit none; null is not answered. Bowel movement times come from stool_log, not from here.
+    val gutComfort: Int? = null,
+    val gutSymptoms: List<String>? = null,
 )
+
+/** The gut symptoms the check-in offers, in the order shown (the database checks the same list). */
+val GUT_SYMPTOMS = listOf("bloating", "cramps", "reflux", "urgency", "gas", "nausea")
 
 // The reminder fires at 22:25 (the owner's choice); the sheet is also reachable from Today the next morning.
 val EVENING_CHECKIN_TIME: LocalTime = LocalTime.of(22, 25)
@@ -31,6 +38,8 @@ fun EveningCheckin.withNothingElse(): EveningCheckin = copy(
     drinks = drinks ?: 0,
     caffeineAfter14 = caffeineAfter14 ?: false,
     lateMeal = lateMeal ?: false,
+    // Symptoms are an exposure-like "anything happen?" list: unticked means none. Comfort is a rating and is never invented.
+    gutSymptoms = gutSymptoms ?: emptyList(),
 )
 
 // Complete when the three evening exposures have an answer (stress and late screen are optional).
@@ -49,4 +58,6 @@ fun EveningCheckin.summary(): String = listOfNotNull(
     caffeineAfter14?.let { if (it) "caffeine after 14:00" else "no caffeine after 14:00" },
     lateMeal?.let { if (it) "ate after 21:00" else "no late meal" },
     stress?.let { "stress $it" },
+    gutComfort?.let { "gut $it/4" },
+    gutSymptoms?.takeIf { it.isNotEmpty() }?.joinToString(", "),
 ).joinToString(" · ").ifEmpty { "nothing answered yet" }

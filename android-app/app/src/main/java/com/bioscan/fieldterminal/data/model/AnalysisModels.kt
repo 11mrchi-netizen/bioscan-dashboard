@@ -94,6 +94,8 @@ data class PlannedOutcomeRow(
 data class StoolAnalysisRow(
     @SerialName("occurred_at") val occurredAt: String,
     @SerialName("bristol_type") val bristolType: Int? = null,
+    // 0-10 from the stool form, optional. Scoring system: feeds FUEL's gut symptoms when the check-in has none.
+    val discomfort: Int? = null,
 )
 
 // Phase A4 (Category 8). OSTRC-H2 half.

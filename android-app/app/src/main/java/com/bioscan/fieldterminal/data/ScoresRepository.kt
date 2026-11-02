@@ -10,7 +10,9 @@ import com.bioscan.fieldterminal.domain.score.ScoreEngine
 import com.bioscan.fieldterminal.domain.score.ScoreSources
 import com.bioscan.fieldterminal.domain.score.Series
 import com.bioscan.fieldterminal.domain.score.assembleScoreSeries
+import com.bioscan.fieldterminal.domain.score.acuteGutDays
 import com.bioscan.fieldterminal.domain.score.capsFrom
+import com.bioscan.fieldterminal.domain.score.ChargeCap
 import com.bioscan.fieldterminal.domain.score.chargeStatus
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
@@ -101,7 +103,14 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             val episodes = listOfNotNull(healthFlag?.since?.let { since ->
                 if (healthFlag.isInjury) Triple(healthFlag.label, since, since.plusDays(ACUTE_INJURY_DAYS - 1)) else Triple(healthFlag.label, since, null)
             })
-            val engine = ScoreEngine(series, caps = capsFrom(episodes))
+            // An open illness or acute injury first; else an acute gut day (two or more liquid stools, or nausea) caps the
+            // morning after it.
+            val healthCaps = capsFrom(episodes)
+            val gutDays = acuteGutDays(sources.checkins, sources.stool, zone)
+            val caps: (LocalDate) -> ChargeCap? = { morning ->
+                healthCaps(morning) ?: if (morning.minusDays(1) in gutDays) ChargeCap("Acute gut day") else null
+            }
+            val engine = ScoreEngine(series, caps = caps)
             val from = today.minusDays(SCORE_STRIP_DAYS - 1)
             ScoresView(
                 day = today,

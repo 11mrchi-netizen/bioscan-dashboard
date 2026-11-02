@@ -301,10 +301,27 @@ The domain overlays now have a THE FULL PICTURE section. Each tile opens its own
 The pure logic is in `domain/score/GutPattern.kt` and is unit-tested. The stool hypnogram also heads the existing
 Health › Body DIGESTIVE PATTERN (BRISTOL) card.
 
+### Phase 1c (built): gut questions in the evening check-in
+
+- **Database:** `evening_checkins` gains `gut_comfort` (0 rough to 4 comfortable) and `gut_symptoms` (bloating,
+  cramps, reflux, urgency, gas, nausea; an empty array means none). The migration is
+  `supabase/migrations/20261113_evening_checkin_gut.sql`, applied to the live project on 2 Nov 2026. It is additive and
+  nullable.
+- **Movement times:** they are not asked. Each stool entry keeps the time it was logged (the stool form's WHEN defaults
+  to now).
+- **The check-in sheet's GUT section** has the comfort rating, the symptom chips, and the day's logged movements with
+  their times and Bristol types. On the day itself, **+ NOW** logs one more at this minute once a Bristol type is
+  picked. For an earlier day the sheet points to + LOG.
+- **NOTHING ELSE** marks no symptoms, but never invents a comfort rating.
+- **FUEL's symptoms input** reads (4 − comfort) + ½ per symptom, or the worst stool entry's discomfort (0–10 scaled to
+  0–4), whichever is larger.
+- **The gut cap:** an acute gut day caps the next morning's CHARGE at 40 ("Acute gut day"). That means nausea ticked,
+  or two or more Bristol 7 stools that day.
+
 ### Verified
 
-- **Unit tests:** the full Android suite passes, 1,079 tests with 0 failures and 4 skipped. That is 1,039 existing
-  tests plus 40 new ones in `test/.../domain/score/`.
+- **Unit tests:** the full Android suite passes, 1,083 tests with 0 failures and 4 skipped. That is 1,039 existing
+  tests plus 44 new ones in `test/.../domain/score/`.
 - **Build:** `assembleDebug` builds.
 - **Not verified:** the app has not been run on a device or with real data. The TODAY layout, the rings and the
   overlays and the full-picture views have only been compiled, never seen.
@@ -312,7 +329,7 @@ Health › Body DIGESTIVE PATTERN (BRISTOL) card.
 ### Simplifications in v1
 
 - **Inputs not assembled yet** (they read as missing, and their weight goes to the others):
-  - gut symptoms and in-session gut (they need the CLOSE THE DAY gut questions);
+  - in-session gut (it needs the fuelled-session debrief wired in);
   - the night-time HR dip;
   - meal-timing regularity.
 - **Sleep regularity** is the 7-night spread of bed and wake times. The SRI was too slow to recompute for every
@@ -328,7 +345,8 @@ Health › Body DIGESTIVE PATTERN (BRISTOL) card.
 
 ### Not built yet
 
-- The CLOSE THE DAY check-in with the gut questions. Today's evening check-in sheet is reused.
+- CLOSE THE DAY's mood, energy and soreness questions. The evening check-in now carries the gut questions; the others
+  still come from the morning wellbeing entry.
 - PLAN, LAB and ME, and moving the old sections' content into them.
 - The meal overlay (log as planned). A meal row opens SO FAR for now.
 - Personal weights (after 120 scored days) and the scorecard for the new scores.

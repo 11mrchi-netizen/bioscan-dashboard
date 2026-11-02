@@ -220,18 +220,8 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                     )
                 } else if (type == null) {
                     Text("LOG NEW ENTRY", style = sheetHeaderTitleStyle, color = FT.DomainLog)
+                    // Scoring system rebuild: SAY IT is no longer offered here (the menu goes straight to the types).
                     Spacer(Modifier.height(16.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(FT.BorderWidth, FT.DomainLog, RoundedCornerShape(FT.RadiusModule))
-                            .ftClickable(shape = RoundedCornerShape(FT.RadiusModule)) { sayIt = true }
-                            .padding(vertical = 18.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("SAY IT", style = sheetActionLabelStyle, color = FT.DomainLog)
-                    }
-                    Spacer(Modifier.height(18.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         if (recent.isNotEmpty()) ChoiceSection("RECENT", recent, pick)
                         AddEntryGroup.entries.forEach { group -> ChoiceSection(group.label, AddEntryChoice.entries.filter { it.group == group }, pick) }

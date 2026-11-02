@@ -70,7 +70,7 @@ import java.time.format.DateTimeFormatter
 // ui/screens/AddEntrySheet.kt). Any successful save or delete bumps
 // `reloadKey` so the feed re-fetches immediately.
 @Composable
-fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
+fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     var feed by remember { mutableStateOf<LogFeed?>(null) }
     var visibleDays by remember { mutableIntStateOf(LOG_PAGE_DAYS) }
     // How many days back the feed is loaded; LOAD OLDER widens it once the loaded days are all shown, until a widening
@@ -80,6 +80,15 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     var loadingOlder by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
+    // Scoring system rebuild: + LOG in the dock opens the menu straight away. The request is remembered across a restore,
+    // so the sheet is not opened again for a tap that was already handled.
+    var handledMenuRequest by rememberSaveable { mutableStateOf(0) }
+    LaunchedEffect(openMenuRequest) {
+        if (openMenuRequest > handledMenuRequest) {
+            handledMenuRequest = openMenuRequest
+            showAddSheet = true
+        }
+    }
     var actionEntry by remember { mutableStateOf<LogEntry?>(null) }
     var editingEntry by remember { mutableStateOf<LogEntry?>(null) }
     var sleepDetailEntryId by remember { mutableStateOf<Long?>(null) }

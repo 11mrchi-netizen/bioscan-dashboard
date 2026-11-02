@@ -55,7 +55,7 @@ import com.bioscan.fieldterminal.ui.screens.status.LabTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.NutrientBreakdownScreen
 import com.bioscan.fieldterminal.ui.screens.status.NutritionTileScreen
 import com.bioscan.fieldterminal.ui.screens.status.PantryScreen
-import com.bioscan.fieldterminal.ui.screens.status.StatusScreen
+import com.bioscan.fieldterminal.ui.screens.today.TodayHomeScreen
 import com.bioscan.fieldterminal.ui.screens.status.TodayScreen
 import com.bioscan.fieldterminal.ui.screens.status.TrainingTileScreen
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -81,6 +81,9 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     // pages), which used to light nothing. Set whenever a top-level destination is shown and when a dock tab is tapped,
     // so a deep link pushed onto the current stack keeps that stack's tab.
     var dockTab by rememberSaveable { mutableStateOf(TopLevelTab.Status) }
+    // Scoring system rebuild: tapping + LOG in the dock opens the logging menu straight away. Each tap bumps this, and
+    // the Log screen opens its add sheet when it changes.
+    var logMenuRequest by rememberSaveable { mutableStateOf(0) }
 
     LaunchedEffect(pendingNotificationKind) {
         val kind = pendingNotificationKind ?: return@LaunchedEffect
@@ -130,6 +133,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
         bottomBar = {
             FieldBottomBar(selectedTab = dockTab) { tab ->
                 dockTab = tab
+                if (tab == TopLevelTab.Log) logMenuRequest++
                 navController.navigate(tab.route) {
                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                     launchSingleTop = true
@@ -143,16 +147,10 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             startDestination = TopLevelTab.Status.route,
             modifier = Modifier.padding(innerPadding),
         ) {
+            // Scoring system rebuild (docs/scoring-system): the opening page is TODAY -- CHARGE, the five domain rings and
+            // today's plan. The old Status hub (StatusScreen / BodyConsole) stays in the codebase, unreferenced.
             composable(TopLevelTab.Status.route) {
-                StatusScreen(
-                    onOpenTile = { tile -> navController.navigate(tile.route) },
-                    onOpenToday = { navController.navigate("today") },
-                    onOpenInjury = {
-                        trainingRequestedTab = TrainingTab.Injury
-                        navController.navigate(TileRoute.Training.route) { launchSingleTop = true }
-                    },
-                    onOpenEvent = { id -> navController.navigate("event/$id") },
-                )
+                TodayHomeScreen(onOpenTile = { tile -> navController.navigate(tile.route) })
             }
             // UX review P6: the Today page (was Daily Readiness) links to the cards it no longer repeats.
             composable("today") {
@@ -253,7 +251,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 TrainingBlocksScreen(onBack = { navController.popBackStack() })
             }
             composable(TopLevelTab.Log.route) {
-                LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") })
+                LogScreen(onOpenSessionDetail = { id -> navController.navigate("session_detail/$id") }, openMenuRequest = logMenuRequest)
             }
             composable(TopLevelTab.Setup.route) {
                 SettingsScreen(

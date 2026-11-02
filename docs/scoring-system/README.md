@@ -252,3 +252,69 @@ The full map, every page and where each current card goes are in [02-page-mockup
 - What the top-band treatment looks like on screen (colour and motion), for the design contract.
 - Phased build order: score engine and history, then CLOSE THE DAY, then TODAY, then the domain pages, then moving
   content into PLAN, LAB and ME.
+
+## Build status
+
+### Phase 1 (built): score engine, TODAY, overlays
+
+**Engine** (`android-app/.../domain/score/`, pure Kotlin, unit-tested):
+
+| File | What it does |
+|---|---|
+| `ScoreScale.kt` | The 0–150 scale: percentile anchors, bands, ranking |
+| `ScoreInputs.kt` | One input to a sub-score: baseline, stability, at least, at most, band |
+| `ScoreDomains.kt` | The five domains, their inputs and weights, and how they combine (coverage, critical cap, upside) |
+| `ScoreEngine.kt` | Ranking against your own last 180 mornings, CHARGE, caps, drivers, ANS state, LOAD direction, PROVISIONAL/FINAL |
+| `ScoreAssembly.kt` | Builds the engine's series from rows the app already loads, keyed by the morning they feed |
+| `ScorePresentation.kt` | Number formats, sentences and "what is it" text for the screens |
+
+**Screens:**
+- **TODAY** (`ui/screens/today/TodayHomeScreen.kt`) is the opening tab, now labelled TODAY. It shows:
+  - the CHARGE ring and the five domain rings, number and direction only;
+  - TODAY'S PLAN as one timeline: food-plan meals, planned sessions with a READY mark, supplements still due, and
+    closing the day;
+  - the SO FAR line.
+- **Overlays** (`ui/screens/today/ScoreOverlays.kt`):
+  - the CHARGE overlay: drivers, 30-day strip, caps, coverage;
+  - one overlay per domain: drivers per group, LOAD direction, ANS state;
+  - one overlay per metric: value, your normal or target, points, 60-day chart with your normal band;
+  - they stack: ‹ goes back a level, ✕ closes them all.
+- **Ring** (`ui/components/ScoreRing.kt`): one lap is 100, the second lap overlaps to 150 and glows from 125. Dashed
+  when PROVISIONAL, empty when PARTIAL.
+
+**Logging:** tapping **+ LOG** in the dock opens the logging menu directly, and SAY IT is gone from the menu.
+
+**Still reachable from TODAY:** the four old sections (Training, Nutrition, Health, Lab), from an ALL SECTIONS row,
+until PLAN, LAB and ME exist. The old Status hub (`StatusScreen`, `BodyConsole`) stays in the code, unreferenced.
+
+### Verified
+
+- **Unit tests:** the full Android suite passes, 1,073 tests with 0 failures and 4 skipped. That is 1,039 existing
+  tests plus 34 new ones in `test/.../domain/score/`.
+- **Build:** `assembleDebug` builds.
+- **Not verified:** the app has not been run on a device or with real data. The TODAY layout, the rings and the
+  overlays have only been compiled, never seen.
+
+### Simplifications in v1
+
+- **Inputs not assembled yet** (they read as missing, and their weight goes to the others):
+  - gut symptoms and in-session gut (they need the CLOSE THE DAY gut questions);
+  - the night-time HR dip;
+  - meal-timing regularity.
+- **Sleep regularity** is the 7-night spread of bed and wake times. The SRI was too slow to recompute for every
+  morning of history.
+- **FUEL targets:** past days use the saved nutrition goal. The fuel plan's day-by-day targets are not stored for past
+  days.
+- **Caps:** only the currently open illness (whole episode) or injury (first 7 days) caps CHARGE. Closed past episodes
+  are not reconstructed for the history.
+- **The READY mark:** CHARGE against a fixed threshold per session intensity (easy 40, moderate 55, hard/long/race 70),
+  a documented opinion.
+- **Ranking:** SLEEP, RECOVERY, BALANCE and CHARGE are ranked against their own history. LOAD and FUEL are not, because
+  "on target" is their top and ranking would turn a perfect day into a middling number.
+
+### Not built yet
+
+- The CLOSE THE DAY check-in with the gut questions. Today's evening check-in sheet is reused.
+- PLAN, LAB and ME, and moving the old sections' content into them.
+- The meal overlay (log as planned). A meal row opens SO FAR for now.
+- Personal weights (after 120 scored days) and the scorecard for the new scores.

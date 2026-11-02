@@ -15,9 +15,11 @@ package com.bioscan.fieldterminal.ui.nav
 // FieldTerminalNavHost's routing -- see
 // docs/user-profile-milestone/01-canonical-contracts-audit.md section 10.
 enum class TopLevelTab(val route: String, val label: String) {
-    Status("status", "STATUS"),
+    // Scoring system rebuild: the opening tab is TODAY (route kept so a saved back stack still resolves).
+    Status("status", "TODAY"),
     User("user", "USER"),
-    Log("log", "LOG"),
+    // Tapping it opens the logging menu directly (FieldTerminalNavHost's logMenuRequest).
+    Log("log", "+ LOG"),
     Setup("setup", "SETUP"),
 }
 

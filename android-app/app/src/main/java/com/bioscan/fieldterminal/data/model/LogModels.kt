@@ -173,4 +173,7 @@ data class SupplementScheduleRow(
     @SerialName("start_date") val startDate: String? = null,
     @SerialName("end_date") val endDate: String? = null,
     @SerialName("every_n_days") val everyNDays: Int? = null,
+    @SerialName("time_of_day") val timeOfDay: String? = null,
+    val slots: List<String> = emptyList(),
+    val schedule: com.bioscan.fieldterminal.domain.ScheduleJson? = null,
 )

@@ -233,7 +233,8 @@ class StatusRepository(private val supabase: io.github.jan.supabase.SupabaseClie
             softly {
                 val repo = SupplementsRepository(supabase)
                 val active = repo.loadOverview().active
-                supplementsToday(active, repo.loadRecentTakenDates(active.map { it.id }), today, LocalTime.now())
+                val takes = repo.loadRecentTakes(active.map { it.id }, today)
+                supplementsToday(active, takes.lastTaken, today, LocalTime.now(), takes.takesToday)
             }
         }
         val drawsD = async(Dispatchers.Default) { softly { analysis.loadLabDraws() } }

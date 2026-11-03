@@ -79,7 +79,8 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                     val suppRepo = SupplementsRepository(supabase)
                     val overview = runCatching { suppRepo.loadOverview() }.getOrElse { continue }
                     val activeIds = overview.active.mapNotNull { it.id }.toList()
-                    val lastTaken = runCatching { suppRepo.loadRecentTakenDates(activeIds) }.getOrElse { emptyMap() }
+                    val takes = runCatching { suppRepo.loadRecentTakes(activeIds, today) }.getOrElse { com.bioscan.fieldterminal.data.RecentTakes(emptyMap(), emptyMap()) }
+                    val lastTaken = takes.lastTaken
                     val takenToday = lastTaken.entries
                         .filter { (_, d) -> d == today }
                         .map { it.key }
@@ -92,6 +93,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                         takenToday,
                         today,
                         rule.conditions.skipIfLogged,
+                        takes.takesToday,
                     )
                     if (due.isEmpty()) continue
                     logAllIds = due.map { it.id }

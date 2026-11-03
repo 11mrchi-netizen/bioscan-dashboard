@@ -99,7 +99,13 @@ import com.bioscan.fieldterminal.domain.AddEntryTarget
 
 import com.bioscan.fieldterminal.domain.AddEntryType
 import com.bioscan.fieldterminal.domain.ethanolGrams
-import com.bioscan.fieldterminal.domain.isSupplementDueToday
+import com.bioscan.fieldterminal.domain.isDueOn
+import com.bioscan.fieldterminal.domain.REGIMEN_SLOTS
+import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.nextDueAfter
+import com.bioscan.fieldterminal.domain.scheduleWords
+import com.bioscan.fieldterminal.domain.stateWords
+import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.domain.supplementNextDueDate
 import com.bioscan.fieldterminal.domain.FuelSubType
 import com.bioscan.fieldterminal.domain.formatRecentChoices
@@ -1452,6 +1458,7 @@ private fun SupplementsForm(
     var scanned by remember { mutableStateOf<List<SupplementRow>>(emptyList()) }
     var scannedChecked by remember { mutableStateOf(setOf<Long>()) }
     var recentLastTaken by remember { mutableStateOf<Map<Long, LocalDate>>(emptyMap()) }
+    var takesToday by remember { mutableStateOf<Map<Long, Int>>(emptyMap()) }
     var quantities by remember { mutableStateOf<Map<Long, Double>>(emptyMap()) }
 
     LaunchedEffect(Unit) {
@@ -1459,9 +1466,9 @@ private fun SupplementsForm(
             val repo = SupplementsRepository(SupabaseClientProvider.client)
             val active = repo.loadOverview().active
             supplements = active
-            if (active.any { it.everyNDays != null }) {
-                recentLastTaken = repo.loadRecentTakenDates(active.map { it.id })
-            }
+            val takes = repo.loadRecentTakes(active.map { it.id })
+            recentLastTaken = takes.lastTaken
+            takesToday = takes.takesToday
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -1477,20 +1484,24 @@ private fun SupplementsForm(
     // Supplements with an interval that haven't reached their next due date
     // are removed from the pickable groups so the bundle toggle doesn't log
     // them too early. They appear in a "NOT DUE TODAY" section instead.
-    val dueList = list.filter { isSupplementDueToday(it.everyNDays, recentLastTaken[it.id], today) }
-    val notDueList = list.filter { !isSupplementDueToday(it.everyNDays, recentLastTaken[it.id], today) }
+    // Regimen model (domain/Regimen.kt): due by each item's own schedule (every N days, weekdays, on-cycle). An item taken
+    // twice a day sits in both its bundles; the dose is today's (a planned dose step moves it on).
+    val specs = list.associate { it.id to it.spec() }
+    val asNeeded = list.filter { specs.getValue(it.id).asNeeded }
+    val dueList = list.filter { !specs.getValue(it.id).asNeeded && specs.getValue(it.id).isDueOn(today, recentLastTaken[it.id]) }
+    val notDueList = list.filter { !specs.getValue(it.id).asNeeded && it !in dueList }
 
-    val groups = dueList.filter { it.timeOfDay != "as-needed" }.groupBy { it.timeOfDay }
-    val asNeeded = dueList.filter { it.timeOfDay == "as-needed" }
+    val groups = REGIMEN_SLOTS.associateWith { slot -> dueList.filter { slot in specs.getValue(it.id).slots } }.filterValues { it.isNotEmpty() }
+    fun doseOf(s: SupplementRow) = specs[s.id]?.doseTextOn(today) ?: s.dose
 
     // DAV-156: each selected item carries its roster dose string along so
     // addSupplementsTaken can parse a real per-supplement dose default --
     // Creatine's "5 g" and Boron's "10 mg" are different doses, so this has
     // to travel per-item, not as one shared field for the whole save.
-    val selectedItems = buildList {
-        checkedBundles.forEach { tod -> groups[tod]?.forEach { add(Triple(it.id, it.name, it.dose)) } }
-        asNeeded.filter { it.id in checkedAsNeeded }.forEach { add(Triple(it.id, it.name, it.dose)) }
-        scanned.filter { it.id in scannedChecked }.forEach { s -> if (none { it.first == s.id }) add(Triple(s.id, s.name, s.dose)) }
+    val selectedItems = buildList<Triple<Long, String, String>> {
+        checkedBundles.forEach { tod -> groups[tod]?.forEach { s -> if (none { it.first == s.id }) add(Triple(s.id, s.name, doseOf(s))) } }
+        asNeeded.filter { it.id in checkedAsNeeded }.forEach { add(Triple(it.id, it.name, doseOf(it))) }
+        scanned.filter { it.id in scannedChecked }.forEach { s -> if (none { it.first == s.id }) add(Triple(s.id, s.name, doseOf(s))) }
     }
     // "scan" only when everything being saved was picked by barcode.
     val source = if (scannedChecked.isNotEmpty() && checkedBundles.isEmpty() && checkedAsNeeded.isEmpty()) "scan" else "manual"
@@ -1579,9 +1590,7 @@ private fun SupplementsForm(
                     FormLabel("NOT DUE TODAY")
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         notDueList.forEach { supp ->
-                            val nextDate = supp.everyNDays?.let { n ->
-                                recentLastTaken[supp.id]?.let { supplementNextDueDate(n, it) }
-                            }
+                            val nextDate = specs.getValue(supp.id).nextDueAfter(today, recentLastTaken[supp.id])
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 Text(
                                     supp.name,
@@ -1590,7 +1599,7 @@ private fun SupplementsForm(
                                     modifier = Modifier.weight(1f),
                                 )
                                 Text(
-                                    if (nextDate != null) "Next: $nextDate" else "every ${supp.everyNDays}d",
+                                    specs.getValue(supp.id).stateWords(today) ?: (if (nextDate != null) "Next: $nextDate" else specs.getValue(supp.id).scheduleWords()),
                                     style = FTType.MonoCaption,
                                     color = FT.TextMuted,
                                 )

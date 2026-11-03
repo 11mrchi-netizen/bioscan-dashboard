@@ -53,6 +53,7 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.bioscan.fieldterminal.domain.formatAmount
 
 // DAV-81. The roster (`supplements`) itself had no UI to create or edit --
 // only ever read, by SupplementsScreen.kt's display and AddEntrySheet.kt's
@@ -60,16 +61,6 @@ import java.time.LocalDate
 // share this one sheet since they're the same 3 fields either way; ending a
 // supplement is a separate, single-tap action here rather than a 4th field,
 // since it's a status transition, not part of "what/how much/when."
-private val TIME_OF_DAY_OPTIONS = listOf("morning", "afternoon", "night", "as-needed")
-
-// null = daily (no restriction). Values match the every_n_days column.
-private val EVERY_N_DAYS_OPTIONS: List<Pair<Int?, String>> = listOf(
-    null to "DAILY",
-    2 to "2 DAYS",
-    3 to "3 DAYS",
-    4 to "4 DAYS",
-    7 to "WEEKLY",
-)
 private val sheetHeaderTitleStyle = FTType.SectionTitle
 private val sheetActionLabelStyle = FTType.LabelCaps
 
@@ -89,9 +80,8 @@ fun SupplementFormSheet(
     val context = LocalContext.current
 
     var name by remember { mutableStateOf(existing?.name ?: "") }
-    var dose by remember { mutableStateOf(existing?.dose ?: "") }
-    var timeOfDay by remember { mutableStateOf(existing?.timeOfDay ?: "morning") }
-    var everyNDays by remember { mutableStateOf(existing?.everyNDays) }
+    // Regimen model: kind, dose, form and route, times of day, schedule, cycle and dose steps (RegimenFields.kt).
+    val regimen = remember(existing?.id) { RegimenEditorState(existing) }
     var saving by remember { mutableStateOf(false) }
     var ending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -134,61 +124,13 @@ fun SupplementFormSheet(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(
-                if (existing == null) "ADD SUPPLEMENT" else "EDIT SUPPLEMENT",
+                if (existing == null) "ADD TO YOUR REGIMEN" else "EDIT ${regimen.kind.label.uppercase()}",
                 style = sheetHeaderTitleStyle,
                 color = FT.Emerald,
             )
 
             Column { FormFieldLabel("NAME"); FieldTextField(name, { name = it }, "e.g. Vitamin D3 (NOW Foods)") }
-            Column { FormFieldLabel("DOSE"); FieldTextField(dose, { dose = it }, "e.g. 5000 IU") }
-
-            Column {
-                FormFieldLabel("TIME OF DAY")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TIME_OF_DAY_OPTIONS.forEach { option ->
-                        val selected = option == timeOfDay
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                                .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-                                .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { timeOfDay = option }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                option.uppercase(),
-                                style = FTType.MonoCaption,
-                                color = if (selected) FT.Emerald else FT.TextSecondary,
-                            )
-                        }
-                    }
-                }
-            }
-
-            Column {
-                FormFieldLabel("FREQUENCY")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    EVERY_N_DAYS_OPTIONS.forEach { (days, label) ->
-                        val selected = days == everyNDays
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                                .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-                                .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { everyNDays = days }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                label,
-                                style = FTType.Micro,
-                                color = if (selected) FT.Emerald else FT.TextSecondary,
-                            )
-                        }
-                    }
-                }
-            }
+            RegimenFields(regimen)
 
             IngredientsSection(ingredients)
 
@@ -198,8 +140,8 @@ fun SupplementFormSheet(
                 roster.filter { it.id != draftId } + RosterItem(
                     id = draftId,
                     name = name,
-                    timeOfDay = timeOfDay,
-                    everyNDays = everyNDays,
+                    timeOfDay = regimen.firstSlot,
+                    everyNDays = regimen.everyNDaysOrNull,
                     ingredientKeys = roster.firstOrNull { it.id == draftId }?.ingredientKeys.orEmpty(),
                     ingredientNames = ingredients.map { it.name },
                 ),
@@ -300,9 +242,10 @@ fun SupplementFormSheet(
                 Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical)
             }
 
-            val valid = name.isNotBlank() && dose.isNotBlank()
+            val (draft, missing) = regimen.draft(name)
+            if (missing != null && name.isNotBlank()) Text(missing, style = FTType.Caption, color = FT.TextMuted)
             FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
-                if (valid && !saving) {
+                if (draft != null && !saving) {
                     saving = true
                     error = null
                     scope.launch {
@@ -330,14 +273,14 @@ fun SupplementFormSheet(
                                 // failures elsewhere in this app.
                                 val aiNote = GeminiApiKeyStore.get(context)?.let { key ->
                                     try {
-                                        SupplementImpactRepository(key).describeImpact(name.trim(), dose.trim())
+                                        SupplementImpactRepository(key).describeImpact(name.trim(), "${formatAmount(draft.amount)} ${draft.unit}")
                                     } catch (e: Exception) {
                                         null
                                     }
                                 }
-                                repo.addSupplement(name.trim(), dose.trim(), timeOfDay, LocalDate.now(), aiNote, everyNDays, productId)
+                                repo.saveRegimen(null, draft, productId, aiNote)
                             } else {
-                                repo.updateSupplement(existing.id, name.trim(), dose.trim(), timeOfDay, everyNDays, productId)
+                                repo.saveRegimen(existing.id, draft, productId)
                             }
                             onSaved()
                         } catch (e: Exception) {
@@ -352,7 +295,7 @@ fun SupplementFormSheet(
             if (existing != null && existing.status == "active") {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    if (ending) "ENDING..." else "END THIS SUPPLEMENT",
+                    if (ending) "ENDING..." else "STOP TAKING IT",
                     style = FTType.BodySmall,
                     color = FT.Critical,
                     modifier = Modifier
@@ -373,6 +316,31 @@ fun SupplementFormSheet(
                         },
                 )
             }
+            if (existing != null && existing.status == "ended") {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (ending) "RESTARTING..." else "START TAKING IT AGAIN",
+                    style = FTType.LabelCaps,
+                    color = FT.Emerald,
+                    modifier = Modifier.fillMaxWidth().ftClickable {
+                        if (!ending) {
+                            ending = true
+                            scope.launch {
+                                try {
+                                    // Saves any edits first, so a restart can come back at a new dose or schedule.
+                                    draft?.let { repo.saveRegimen(existing.id, it, existing.productId) }
+                                    repo.restartSupplement(existing.id)
+                                    onSaved()
+                                } catch (e: Exception) {
+                                    error = e.message ?: "Unknown error"
+                                    ending = false
+                                }
+                            }
+                        }
+                    },
+                )
+            }
+            if (existing != null) RegimenHistory(existing.id)
             Spacer(Modifier.height(8.dp))
         }
     }

@@ -37,6 +37,12 @@ import com.bioscan.fieldterminal.domain.DetectedInteraction
 import com.bioscan.fieldterminal.domain.InteractionRecord
 import com.bioscan.fieldterminal.domain.RosterItem
 import com.bioscan.fieldterminal.domain.detectInteractions
+import com.bioscan.fieldterminal.domain.RegimenKind
+import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.scheduleWords
+import com.bioscan.fieldterminal.domain.spec
+import com.bioscan.fieldterminal.domain.stateWords
+import com.bioscan.fieldterminal.domain.stepsWords
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -204,7 +210,10 @@ private fun SupplementsContent(
             // taken" bundles -- this roster view and that logging view now
             // read as the same mental model instead of a flat list here vs.
             // grouped there.
-            val grouped = overview.active.groupBy { it.timeOfDay }
+            // Regimen model: an item taken twice a day is listed under both its times; as-needed items have their own group.
+            val grouped = TIME_OF_DAY_ORDER.associateWith { slot ->
+                overview.active.filter { s -> val sp = s.spec(); if (slot == "as-needed") sp.asNeeded else slot in sp.slots }
+            }.filterValues { it.isNotEmpty() }
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 TIME_OF_DAY_ORDER.forEach { timeOfDay ->
                     val items = grouped[timeOfDay] ?: return@forEach
@@ -230,7 +239,7 @@ private fun SupplementsContent(
             SectionLabel("ENDED", FT.TextSecondary)
             Column(modifier = Modifier.fillMaxWidth()) {
                 overview.ended.forEachIndexed { i, s ->
-                    EndedRow(s, showDivider = i < overview.ended.lastIndex)
+                    EndedRow(s, showDivider = i < overview.ended.lastIndex, onClick = { onSupplementClick(s) })
                 }
             }
         }
@@ -279,14 +288,22 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
                         .ftClickable(onClick = onExperiment),
                 )
             }
+            val spec = s.spec()
+            val today = java.time.LocalDate.now()
             Column(horizontalAlignment = Alignment.End) {
-                Text(s.dose, style = FTType.Telemetry, color = FT.TextPrimary)
+                Text(spec.doseTextOn(today), style = FTType.Telemetry, color = FT.TextPrimary)
+                if (spec.kind != RegimenKind.SUPPLEMENT) {
+                    Text(spec.kind.label.uppercase(), style = FTType.MonoCaption, color = FT.DomainLog, modifier = Modifier.padding(top = 3.dp))
+                }
                 Text(
-                    s.timeOfDay.uppercase(),
+                    spec.scheduleWords().uppercase(),
                     style = FTType.MonoCaption,
                     color = FT.TextSecondary,
                     modifier = Modifier.padding(top = 3.dp),
                 )
+                (spec.stateWords(today) ?: spec.stepsWords()?.takeIf { spec.steps != null })?.let {
+                    Text(it, style = FTType.Caption, color = FT.Warning, modifier = Modifier.padding(top = 3.dp))
+                }
             }
         }
         if (showDivider) {
@@ -296,9 +313,9 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
 }
 
 @Composable
-private fun EndedRow(s: SupplementRow, showDivider: Boolean) {
+private fun EndedRow(s: SupplementRow, showDivider: Boolean, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().ftClickable(onClick = onClick).padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(s.name, style = FTType.RowTitle, color = FT.TextSecondary)

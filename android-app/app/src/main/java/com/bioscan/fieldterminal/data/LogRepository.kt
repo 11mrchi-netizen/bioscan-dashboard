@@ -162,7 +162,7 @@ class LogRepository(private val supabase: SupabaseClient) {
         val schedule = async {
             try {
                 supabase.postgrest.from("supplements")
-                    .select(columns = Columns.list("id,status,start_date,end_date,every_n_days"))
+                    .select(columns = Columns.list("id,status,start_date,end_date,every_n_days,time_of_day,slots,schedule"))
                     .decodeList<SupplementScheduleRow>()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e

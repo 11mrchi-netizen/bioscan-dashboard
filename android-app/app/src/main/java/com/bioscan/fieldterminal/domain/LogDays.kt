@@ -80,11 +80,14 @@ fun logCoverage(
     )
 }
 
-// A supplement counts as expected on a day only when it is a daily one (no interval) whose known date range covers the day.
-// Interval and as-needed supplements are never expected on a given day: whether one was due depends on the last take.
+// A supplement counts as expected on a day only when its calendar makes the day a dosing day (daily, or one of its weekdays,
+// and not an off-cycle day) and its known date range covers it. Interval and as-needed supplements are never expected on
+// a given day: whether one was due depends on the last take.
 fun supplementExpectedOn(schedule: List<SupplementScheduleRow>, date: LocalDate): Boolean = schedule.any { s ->
     val interval = s.everyNDays
     if (interval != null && interval > 1) return@any false
+    val spec = regimenSpec(s.timeOfDay ?: "morning", interval, "", slots = s.slots, schedule = s.schedule)
+    if (spec.type == ScheduleType.EVERY_N_DAYS || !spec.calendarDay(date)) return@any false
     val start = s.startDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@any false
     val end = s.endDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
     val open = end == null && s.status.equals("active", ignoreCase = true)

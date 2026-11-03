@@ -13,6 +13,9 @@ import com.bioscan.fieldterminal.data.model.SupplementProductIngredientFull
 import com.bioscan.fieldterminal.data.model.SupplementProductIngredientWithKey
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.isSupplementActive
+import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.legacyColumns
+import com.bioscan.fieldterminal.domain.spec
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -47,18 +50,45 @@ data class IngredientInput(
 @Serializable
 private data class IdRow(val id: Long)
 
+/** What the regimen form saves. [kind], [form], [route] and [unit] are the stored keys (domain/Regimen.kt). */
+data class RegimenDraft(
+    val name: String,
+    val kind: String,
+    val form: String?,
+    val route: String?,
+    val amount: Double,
+    val unit: String,
+    val slots: List<String>,
+    val schedule: com.bioscan.fieldterminal.domain.ScheduleJson,
+    val steps: com.bioscan.fieldterminal.domain.DoseStepsJson?,
+)
+
+@Serializable
+data class SupplementChangeRow(
+    val id: Long,
+    @SerialName("supplement_id") val supplementId: Long,
+    @SerialName("changed_at") val changedAt: String,
+    val changes: List<String>,
+    val before: kotlinx.serialization.json.JsonObject? = null,
+    val after: kotlinx.serialization.json.JsonObject,
+)
+
+/** [lastTaken]: the newest local day each item was taken; [takesToday]: doses logged today per item. */
+data class RecentTakes(val lastTaken: Map<Long, LocalDate>, val takesToday: Map<Long, Int>)
+
 class SupplementsRepository(private val supabase: SupabaseClient) {
 
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadOverview(): SupplementsOverview =
-        ReadCache.get("supplements.overview.${java.time.LocalDate.now()}", tables = null, serializer = SupplementsOverview.serializer()) { fetchLoadOverview() }
+        ReadCache.get("supplements.overview.v2.${java.time.LocalDate.now()}", tables = null, serializer = SupplementsOverview.serializer()) { fetchLoadOverview() }
 
     private suspend fun fetchLoadOverview(): SupplementsOverview {
         val rows = supabase.postgrest.from("supplements")
-            .select(columns = Columns.list("id,name,dose,time_of_day,status,end_date,ai_note,every_n_days,product_id"))
+            .select(columns = Columns.raw(com.bioscan.fieldterminal.data.model.SUPPLEMENT_ROW_COLUMNS))
             .decodeList<SupplementRow>()
 
         val today = LocalDate.now()
+        advanceDoseSteps(rows.filter { it.status == "active" }, today)
         val (active, ended) = rows.partition { row ->
             isSupplementActive(row.status, row.endDate?.let(LocalDate::parse), today)
         }
@@ -69,25 +99,79 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
         )
     }
 
-    // DAV-81: the roster itself, previously only ever readable (loadOverview()
-    // above) -- AddEntrySheet.kt's logging flow already assumed this roster
-    // existed, with no UI anywhere to actually build or edit it.
-    suspend fun addSupplement(name: String, dose: String, timeOfDay: String, startDate: LocalDate, aiNote: String? = null, everyNDays: Int? = null, productId: Long? = null) {
-        supabase.postgrest.from("supplements").insert(
-            NewSupplementRosterRow(name = name, dose = dose, timeOfDay = timeOfDay, status = "active", startDate = startDate.toString(), aiNote = aiNote, everyNDays = everyNDays, productId = productId)
+    // DAV-81 / regimen model: one save for add and edit. The structured columns are the truth; the old ones (dose text,
+    // time_of_day, every_n_days) are written from them so the web dashboard, the log agent and the analysis functions,
+    // which read only those, keep working. The history trigger records what changed.
+    suspend fun saveRegimen(id: Long?, draft: RegimenDraft, productId: Long? = null, aiNote: String? = null) {
+        val today = LocalDate.now()
+        val spec = com.bioscan.fieldterminal.domain.regimenSpec(
+            timeOfDay = draft.slots.firstOrNull() ?: "as-needed", everyNDays = draft.schedule.n, dose = "",
+            kind = draft.kind, doseAmount = draft.amount, doseUnit = draft.unit, slots = draft.slots,
+            schedule = draft.schedule, doseSteps = draft.steps,
         )
+        val legacy = spec.legacyColumns(today)
+        val json = kotlinx.serialization.json.Json { encodeDefaults = false; explicitNulls = true }
+        val body = buildJsonObject {
+            put("name", draft.name)
+            put("kind", draft.kind)
+            put("form", draft.form)
+            put("route", draft.route)
+            put("dose_amount", draft.amount)
+            put("dose_unit", draft.unit)
+            put("slots", kotlinx.serialization.json.JsonArray(draft.slots.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+            put("schedule", json.encodeToJsonElement(com.bioscan.fieldterminal.domain.ScheduleJson.serializer(), draft.schedule))
+            put("dose_steps", draft.steps?.let { json.encodeToJsonElement(com.bioscan.fieldterminal.domain.DoseStepsJson.serializer(), it) } ?: kotlinx.serialization.json.JsonNull)
+            put("dose", legacy.dose)
+            put("time_of_day", legacy.timeOfDay)
+            put("every_n_days", legacy.everyNDays)
+            if (productId != null) put("product_id", productId)
+            if (id == null) {
+                put("status", "active")
+                put("start_date", today.toString())
+                if (aiNote != null) put("ai_note", aiNote)
+            }
+        }
+        if (id == null) supabase.postgrest.from("supplements").insert(body)
+        else supabase.postgrest.from("supplements").update(body) { filter { eq("id", id) } }
     }
 
-    suspend fun updateSupplement(id: Long, name: String, dose: String, timeOfDay: String, everyNDays: Int? = null, productId: Long? = null) {
+    /** Takes an ended item up again from today; the history trigger records the restart. */
+    suspend fun restartSupplement(id: Long, today: LocalDate = LocalDate.now()) {
         supabase.postgrest.from("supplements").update(
             buildJsonObject {
-                put("name", name)
-                put("dose", dose)
-                put("time_of_day", timeOfDay)
-                put("every_n_days", everyNDays)
-                if (productId != null) put("product_id", productId)
+                put("status", "active")
+                put("start_date", today.toString())
+                put("end_date", kotlinx.serialization.json.JsonNull)
             }
         ) { filter { eq("id", id) } }
+    }
+
+    /** Every recorded start, stop, restart and dose or schedule change, newest first (all items, or one). */
+    suspend fun loadChanges(supplementId: Long? = null): List<SupplementChangeRow> =
+        ReadCache.get("supplements.changes.${supplementId ?: "all"}", tables = setOf("supplements", "supplement_changes")) {
+            supabase.postgrest.from("supplement_changes")
+                .select(columns = Columns.list("id,supplement_id,changed_at,changes,before,after")) {
+                    if (supplementId != null) filter { eq("supplement_id", supplementId) }
+                    order("changed_at", Order.DESCENDING)
+                    limit(500)
+                }
+                .decodeList<SupplementChangeRow>()
+        }
+
+    /**
+     * Items on planned dose steps whose stored dose text is behind today's step: the text is moved on (the old-column
+     * readers see the dose actually taken), which the trigger records as the day the dose changed.
+     */
+    private suspend fun advanceDoseSteps(rows: List<SupplementRow>, today: LocalDate) {
+        for (row in rows) {
+            val spec = row.spec()
+            if (spec.steps == null) continue
+            val now = spec.doseTextOn(today)
+            if (now == row.dose) continue
+            runCatching {
+                supabase.postgrest.from("supplements").update(buildJsonObject { put("dose", now) }) { filter { eq("id", row.id) } }
+            }
+        }
     }
 
     // Supplement Intelligence Phase 1: get-or-create each named ingredient
@@ -222,25 +306,35 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
         }
     }
 
-    // Returns the most recent taken date per supplement id for the given ids,
-    // looking back up to 30 days -- enough for any interval supplement.
-    suspend fun loadRecentTakenDates(supplementIds: List<Long>): Map<Long, LocalDate> {
-        if (supplementIds.isEmpty()) return emptyMap()
-        val since = LocalDate.now().minusDays(30).toString()
-        return supabase.postgrest.from("supplement_log")
+    // The most recent taken day per supplement id, looking back 30 days (enough for any interval item). Days are the phone's
+    // local days: the stored timestamp comes back in UTC, so its first ten characters would put a dose taken before 08:00
+    // in Taipei on the day before.
+    suspend fun loadRecentTakenDates(supplementIds: List<Long>): Map<Long, LocalDate> = loadRecentTakes(supplementIds).lastTaken
+
+    /** The last taken day per item and how many doses each has logged today (a twice-a-day item's slots). */
+    suspend fun loadRecentTakes(supplementIds: List<Long>, today: LocalDate = LocalDate.now()): RecentTakes {
+        if (supplementIds.isEmpty()) return RecentTakes(emptyMap(), emptyMap())
+        val since = today.minusDays(31).atStartOfDay(java.time.ZoneId.systemDefault()).toOffsetDateTime().toString()
+        val rows = supabase.postgrest.from("supplement_log")
             .select(columns = Columns.list("supplement_id,taken_at")) {
                 filter {
                     isIn("supplement_id", supplementIds)
                     gte("taken_at", since)
                 }
                 order("taken_at", Order.DESCENDING)
-                limit(500)
+                limit(1000)
             }
             .decodeList<SupplementLogDateRow>()
-            .filter { it.supplementId != null }
-            .groupBy { it.supplementId!! }
-            .mapValues { (_, rows) -> LocalDate.parse(rows.first().takenAt.take(10)) }
+            .mapNotNull { r -> r.supplementId?.let { id -> localDay(r.takenAt)?.let { id to it } } }
+        return RecentTakes(
+            lastTaken = rows.groupBy({ it.first }, { it.second }).mapValues { (_, days) -> days.max() },
+            takesToday = rows.filter { it.second == today }.groupingBy { it.first }.eachCount(),
+        )
     }
+
+    private fun localDay(ts: String): LocalDate? = runCatching {
+        java.time.OffsetDateTime.parse(ts).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate()
+    }.getOrElse { runCatching { LocalDate.parse(ts.take(10)) }.getOrNull() }
 
     // DAV-362. Active roster items whose product carries this (normalized) barcode.
     suspend fun activeSupplementsForBarcode(barcode: String): List<SupplementRow> {

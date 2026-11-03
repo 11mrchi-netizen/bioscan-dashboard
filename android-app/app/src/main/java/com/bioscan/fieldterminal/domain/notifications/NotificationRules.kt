@@ -4,7 +4,9 @@ import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.model.NotificationPrefsRow
 import com.bioscan.fieldterminal.data.model.NotificationRuleRow
 import com.bioscan.fieldterminal.data.model.SupplementRow
-import com.bioscan.fieldterminal.domain.isSupplementDueToday
+import com.bioscan.fieldterminal.domain.isDueOn
+import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.spec
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -94,10 +96,11 @@ fun withinLimits(
 
 data class SupplementDueItem(val id: Long, val name: String, val dose: String)
 
-// Items that belong in the `bucket` reminder: active (NOT the 7-day
-// recently-ended grace isSupplementActive allows -- never remind for an ended
-// supplement), in this time_of_day bucket, due today per every_n_days, and
-// (when skipIfLogged) not already taken today.
+// Items that belong in the `bucket` reminder: active (NOT the 7-day recently-ended grace isSupplementActive allows --
+// never remind for an ended supplement), with `bucket` among its times of day, due today by its schedule
+// (domain/Regimen.kt: every N days, weekdays, on-cycle), and (when skipIfLogged) this slot not yet taken: an item taken
+// twice a day has its morning slot done after one logged dose and its night slot after two. [takesToday] is the number of
+// doses logged today per item; without it, a take dated today counts as one.
 fun supplementsDueForBucket(
     supplements: List<SupplementRow>,
     bucket: String,
@@ -105,14 +108,19 @@ fun supplementsDueForBucket(
     takenToday: Set<Long>,
     today: LocalDate,
     skipIfLogged: Boolean,
+    takesToday: Map<Long, Int> = emptyMap(),
 ): List<SupplementDueItem> =
     supplements
         .filter { it.status.equals("active", ignoreCase = true) }
         .filter { it.endDate == null || LocalDate.parse(it.endDate) >= today }
-        .filter { it.timeOfDay.equals(bucket, ignoreCase = true) }
-        .filter { isSupplementDueToday(it.everyNDays, lastTaken[it.id], today) }
-        .filter { !skipIfLogged || it.id !in takenToday }
-        .map { SupplementDueItem(it.id, it.name, it.dose) }
+        .mapNotNull { row ->
+            val spec = row.spec()
+            val slot = spec.slots.indexOfFirst { it.equals(bucket, ignoreCase = true) }
+            if (slot < 0 || !spec.isDueOn(today, lastTaken[row.id])) return@mapNotNull null
+            val takes = takesToday[row.id] ?: if (row.id in takenToday) 1 else 0
+            if (skipIfLogged && takes > slot) return@mapNotNull null
+            SupplementDueItem(row.id, row.name, spec.doseTextOn(today))
+        }
 
 // True when the check-in still has something to ask. Mirrors the web cron's
 // "skip if today's row is already filled" test: morning asks about morning

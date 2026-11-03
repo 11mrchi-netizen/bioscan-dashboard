@@ -37,15 +37,17 @@ fun supplementsToday(
     lastTaken: Map<Long, LocalDate>,
     today: LocalDate,
     now: LocalTime,
+    takesToday: Map<Long, Int> = emptyMap(),
 ): SupplementsToday {
     val takenToday = lastTaken.filterValues { it == today }.keys
     val due = SUPPLEMENT_BUCKETS
-        .associateWith { supplementsDueForBucket(supplements, it, lastTaken, takenToday, today, skipIfLogged = true).size }
+        .associateWith { supplementsDueForBucket(supplements, it, lastTaken, takenToday, today, skipIfLogged = true, takesToday).size }
         .filterValues { it > 0 }
+    // Scheduled today: active, inside its dates and a dosing day by its calendar (not an off-cycle or off-weekday day).
     val scheduled = supplements.count { s ->
         s.status.equals("active", ignoreCase = true) &&
             (s.endDate == null || LocalDate.parse(s.endDate) >= today) &&
-            SUPPLEMENT_BUCKETS.any { it.equals(s.timeOfDay, ignoreCase = true) }
+            s.spec().calendarDay(today)
     }
     val current = supplementBucketAt(now)?.let { SUPPLEMENT_BUCKETS.indexOf(it) } ?: -1
     val nowAndEarlier = SUPPLEMENT_BUCKETS.take(current + 1).reversed()

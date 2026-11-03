@@ -86,7 +86,7 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
 
     // ---- raw tables ----
 
-    suspend fun loadConcerns(): List<HealthConcernRow> = ReadCache.get("health.concerns", tables = setOf("health_concerns")) {
+    suspend fun loadConcerns(): List<HealthConcernRow> = ReadCache.get("health.concerns", tables = setOf("health_concerns"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.HealthConcernRow.serializer())) {
         supabase.postgrest.from("health_concerns")
             .select(columns = Columns.list("id,title,kind,onset_type,regions,symptoms,excludes_from_baselines,archived_at,legacy_source,created_at")) {
                 order("created_at", Order.DESCENDING)

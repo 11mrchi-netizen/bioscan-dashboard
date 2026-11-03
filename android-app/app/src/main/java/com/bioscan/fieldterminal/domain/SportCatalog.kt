@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -9,9 +12,11 @@ import java.time.temporal.ChronoUnit
 
 enum class SportKind { RUNNING, STRENGTH, CONDITIONING, OTHER }
 
+@Serializable
 data class Sport(val key: String, val label: String, val kind: SportKind)
 
 /** One recorded session, as the sport pages read it ([startTime] is a logged wall-clock time; see WallClock). */
+@Serializable
 data class SportSession(
     val id: Long,
     val type: String?,

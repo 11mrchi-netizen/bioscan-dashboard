@@ -183,7 +183,8 @@ fun TodayHomeScreen(
     onSupplementsHandled: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    val guard = rememberLoadGuard()
+    // TODAY keeps its own page and decides when to rebuild it (TodayStore): no reload on every cache refresh.
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
     // Shown at once from the kept page (TodayStore), when it is today's; rebuilt below only if it went stale.
     val kept = remember { TodayStore.forDay(LocalDate.now()) }
     var view by remember { mutableStateOf(kept?.view) }
@@ -246,7 +247,8 @@ fun TodayHomeScreen(
         }
         loading = true
         guard.run {
-            coroutineScope {
+            // Its rebuild must see what was just written (a sync, a log): reads wait for the network, never an old copy.
+            kotlinx.coroutines.withContext(com.bioscan.fieldterminal.data.ReadCache.RequireFresh) { coroutineScope {
                 val client = SupabaseClientProvider.client
                 val status = StatusRepository(client)
                 // The overview only supplies the open illness / injury that caps CHARGE: without it the scores still load.
@@ -266,7 +268,7 @@ fun TodayHomeScreen(
                 previews = previewsD.await()
                 fuel = fuelD.await()
                 closed = closedD.await()
-            }
+            } }
             // Keep the finished page, stamped after the load so the load's own bookkeeping writes don't count: in memory,
             // and on disk for the next time the app is opened today.
             val drawnAt = LocalDateTime.now()

@@ -1,5 +1,7 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.UseSerializers
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
 import com.bioscan.fieldterminal.data.model.Vo2MaxRow
@@ -38,6 +40,7 @@ import kotlinx.serialization.json.longOrNull
 
 // ---- Running ---------------------------------------------------------------------------------
 
+@Serializable
 data class RunPoint(
     val id: Long,
     val date: LocalDate,
@@ -57,6 +60,7 @@ data class RunPoint(
 }
 
 // One point per run with a synced Zepp workout; any field the watch did not report is null, never filled in.
+@Serializable
 data class RunFormPoint(
     val id: Long,
     val date: LocalDate,
@@ -70,6 +74,7 @@ data class RunFormPoint(
     val efficiencyFactor: Double?,
 )
 
+@Serializable
 data class RunningHistory(
     val runs: List<RunPoint>,
     val vo2MaxSeries: List<Pair<LocalDate, Double>>,
@@ -99,6 +104,7 @@ data class RunningHistory(
 
 // ---- Strength --------------------------------------------------------------------------------
 
+@Serializable
 data class StrengthHistory(
     val sets: List<LoggedSet>,
     val bodyWeightKg: Double?,
@@ -106,6 +112,7 @@ data class StrengthHistory(
 
 // ---- Conditioning ----------------------------------------------------------------------------
 
+@Serializable
 data class ConditioningEntry(
     val id: Long,
     val date: LocalDate,
@@ -118,6 +125,7 @@ data class ConditioningEntry(
     val maxHr: Double?,
 )
 
+@Serializable
 data class ConditioningHistory(
     val entries: List<ConditioningEntry>,
     val blocks: List<TrainingBlockSummaryRow>,

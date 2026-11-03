@@ -26,9 +26,6 @@ object UserDataCache {
     private val skills by lazy { SkillHistoryRepository(client) }
 
     private var aging: Entry<AgingProfileOverview>? = null
-    private var running: Entry<RunningHistory>? = null
-    private var strength: Entry<StrengthHistory>? = null
-    private var conditioning: Entry<ConditioningHistory>? = null
     private var vo2: Entry<Double?>? = null
 
     private suspend fun <T> cached(read: () -> Entry<T>?, write: (Entry<T>) -> Unit, force: Boolean, load: suspend () -> T): T =
@@ -41,14 +38,24 @@ object UserDataCache {
     suspend fun aging(force: Boolean = false): AgingProfileOverview =
         cached({ aging }, { aging = it }, force) { AgingProfileRepository(client).loadOverview() }
 
+    // The sport histories go through the read cache, kept on disk, so the sport pages open at once from the last data.
     suspend fun running(force: Boolean = false): RunningHistory =
-        cached({ running }, { running = it }, force) { skills.loadRunning() }
+        if (force) skills.loadRunning() else com.bioscan.fieldterminal.data.ReadCache.get(
+            "skills.running", tables = setOf("exercise_sessions", "wearable_daily", "zepp_workout_detail"),
+            serializer = RunningHistory.serializer(),
+        ) { skills.loadRunning() }
 
     suspend fun strength(force: Boolean = false): StrengthHistory =
-        cached({ strength }, { strength = it }, force) { skills.loadStrength() }
+        if (force) skills.loadStrength() else com.bioscan.fieldterminal.data.ReadCache.get(
+            "skills.strength", tables = setOf("exercise_sessions", "body_metrics"),
+            serializer = StrengthHistory.serializer(),
+        ) { skills.loadStrength() }
 
     suspend fun conditioning(force: Boolean = false): ConditioningHistory =
-        cached({ conditioning }, { conditioning = it }, force) { skills.loadConditioning() }
+        if (force) skills.loadConditioning() else com.bioscan.fieldterminal.data.ReadCache.get(
+            "skills.conditioning", tables = null,
+            serializer = ConditioningHistory.serializer(),
+        ) { skills.loadConditioning() }
 
     // VO2max percentile against the age- and sex-matched table (null when no table fits); the Running level's population basis.
     suspend fun vo2Percentile(force: Boolean = false): Double? {

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.builtins.nullable
 import com.bioscan.fieldterminal.data.model.HrPoint
 import com.bioscan.fieldterminal.domain.LoadSpans
 import com.bioscan.fieldterminal.domain.HeartRateDay
@@ -68,7 +69,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // or if the read fails, every baseline behaves exactly as before (NONE), never blocks a screen.
     suspend fun loadSeriesBreakStarts(): SeriesBreakStarts =
         try {
-            ReadCache.get("analysis.series_break", tables = setOf("analysis_results")) {
+            ReadCache.get("analysis.series_break", tables = setOf("analysis_results"), serializer = com.bioscan.fieldterminal.domain.SeriesBreakStarts.serializer()) {
                 val rows = supabase.postgrest.from("analysis_results")
                     .select(columns = Columns.list("key,payload")) { filter { eq("kind", "series_break") }; newestFirst() }
                     .decodeList<SeriesBreakResultRow>()
@@ -206,7 +207,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
                 .decodeList<T>()
         }.reversed()
 
-    suspend fun loadWearableDaily(): List<WearableAnalysisRow> = ReadCache.get("analysis.WearableDaily", tables = setOf("wearable_daily")) { fetchWearableDaily() }
+    suspend fun loadWearableDaily(): List<WearableAnalysisRow> = ReadCache.get("analysis.WearableDaily", tables = setOf("wearable_daily"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.WearableAnalysisRow.serializer())) { fetchWearableDaily() }
 
     private suspend fun fetchWearableDaily(): List<WearableAnalysisRow> =
         pagedByDate<WearableAnalysisRow>("wearable_daily", "date,hrv,rhr,steps,spo2_avg") { it.date }
@@ -234,7 +235,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // (migration 20261104). Empty until that view exists, so the card says "no readings" instead of failing the page.
     suspend fun loadHeartRateRanges(): List<Pair<LocalDate, com.bioscan.fieldterminal.domain.DayRange>> =
         orNullUnlessCancelled {
-            ReadCache.get("analysis.hr_ranges", tables = setOf("wearable_daily")) {
+            ReadCache.get("analysis.hr_ranges", tables = setOf("wearable_daily"), serializer = kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.PairSerializer(com.bioscan.fieldterminal.domain.LocalDateSerializer, com.bioscan.fieldterminal.domain.DayRange.serializer()))) {
                 pagedByDate<HrRangeRow>("wearable_hr_daily_range", "date,hr_min,hr_max") { it.date }
                     .map { LocalDate.parse(it.date) to com.bioscan.fieldterminal.domain.DayRange(it.low, it.high) }
             }
@@ -267,12 +268,12 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         return com.bioscan.fieldterminal.domain.HypnogramNight(date, bedtime, tz, blocks, com.bioscan.fieldterminal.domain.estimateCycles(blocks), hr)
     }
 
-    suspend fun loadSleepDaily(): List<SleepAnalysisRow> = ReadCache.get("analysis.SleepDaily", tables = setOf("sleep_daily")) { fetchSleepDaily() }
+    suspend fun loadSleepDaily(): List<SleepAnalysisRow> = ReadCache.get("analysis.SleepDaily", tables = setOf("sleep_daily"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.SleepAnalysisRow.serializer())) { fetchSleepDaily() }
 
     private suspend fun fetchSleepDaily(): List<SleepAnalysisRow> =
         pagedByDate<SleepAnalysisRow>("sleep_daily", "date,hours,bedtime,wake_time,respiratory_rate,deep_min,rem_min,light_min") { it.date }
 
-    suspend fun loadBodyMetrics(): List<BodyMetricsAnalysisRow> = ReadCache.get("analysis.BodyMetrics", tables = setOf("body_metrics")) { fetchBodyMetrics() }
+    suspend fun loadBodyMetrics(): List<BodyMetricsAnalysisRow> = ReadCache.get("analysis.BodyMetrics", tables = setOf("body_metrics"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.BodyMetricsAnalysisRow.serializer())) { fetchBodyMetrics() }
 
     private suspend fun fetchBodyMetrics(): List<BodyMetricsAnalysisRow> =
         pagedByDate<BodyMetricsAnalysisRow>("body_metrics", "date,weight_kg,body_fat_pct") { it.date }
@@ -283,7 +284,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // this repository's own "don't special-case the query, let the domain
     // layer's date filtering decide" convention.
     // ME › PERFORMANCE: every recorded session of every type, a few columns each, for the sport tiles and sport pages.
-    suspend fun loadSportSessions(): List<com.bioscan.fieldterminal.domain.SportSession> = ReadCache.get("analysis.SportSessions", tables = setOf("exercise_sessions")) {
+    suspend fun loadSportSessions(): List<com.bioscan.fieldterminal.domain.SportSession> = ReadCache.get("analysis.SportSessions", tables = setOf("exercise_sessions"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.domain.SportSession.serializer())) {
         supabase.postgrest.from("exercise_sessions")
             .select(columns = Columns.list("id,type,source,start_time,duration_min,distance_km,avg_hr,max_hr,elevation_gain_m")) {
                 order("start_time", Order.DESCENDING)
@@ -297,7 +298,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             }
     }
 
-    suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> = ReadCache.get("analysis.ExerciseSessionsForTrainingLoad", tables = setOf("exercise_sessions")) { fetchExerciseSessionsForTrainingLoad() }
+    suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> = ReadCache.get("analysis.ExerciseSessionsForTrainingLoad", tables = setOf("exercise_sessions"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow.serializer())) { fetchExerciseSessionsForTrainingLoad() }
 
     private suspend fun fetchExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> =
         supabase.postgrest.from("exercise_sessions")
@@ -336,7 +337,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Analysis review phase G: the personal fitness-fatigue result, and the spans every load chart uses (the standard 42 and
     // 7 unless the personal pair was adopted; standard too when nothing is published or the read fails).
-    suspend fun loadFitnessFatigue(): FitnessFatigueRow? = ReadCache.get("analysis.FitnessFatigue", tables = setOf("analysis_results")) {
+    suspend fun loadFitnessFatigue(): FitnessFatigueRow? = ReadCache.get("analysis.FitnessFatigue", tables = setOf("analysis_results"), serializer = (com.bioscan.fieldterminal.data.model.FitnessFatigueRow.serializer().nullable)) {
         orNullUnlessCancelled {
             supabase.postgrest.from("analysis_results")
                 .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "fitness_fatigue"); eq("key", "hrv") }; newestFirst() }
@@ -351,7 +352,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     } ?: LoadSpans.STANDARD
 
     // Analysis review phase G: planned sessions of the scorecard's window that are already in the past, for READY FOR.
-    suspend fun loadPlannedOutcomes(): List<PlannedOutcomeRow> = ReadCache.get("analysis.PlannedOutcomes", tables = setOf("planned_sessions")) {
+    suspend fun loadPlannedOutcomes(): List<PlannedOutcomeRow> = ReadCache.get("analysis.PlannedOutcomes", tables = setOf("planned_sessions"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.PlannedOutcomeRow.serializer())) {
         val today = java.time.LocalDate.now()
         supabase.postgrest.from("planned_sessions")
             .select(columns = Columns.list("scheduled_date,status,exercise_session_id")) {
@@ -367,7 +368,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Phase A4 (Category 3). 30-day baseline gate, same margin reasoning as
     // everything else here.
-    suspend fun loadWellbeingDaily(): List<WellbeingAnalysisRow> = ReadCache.get("analysis.WellbeingDaily", tables = setOf("wellbeing_daily")) { fetchWellbeingDaily() }
+    suspend fun loadWellbeingDaily(): List<WellbeingAnalysisRow> = ReadCache.get("analysis.WellbeingDaily", tables = setOf("wellbeing_daily"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow.serializer())) { fetchWellbeingDaily() }
 
     private suspend fun fetchWellbeingDaily(): List<WellbeingAnalysisRow> =
         pagedByDate<WellbeingAnalysisRow>("wellbeing_daily", "date,energy,mood,stress,soreness,morning_erection_quality,arousal_level") { it.date }
@@ -388,7 +389,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Phase A4 (Category 8, Bristol half). Same generous margin as every
     // other read here.
-    suspend fun loadStoolLog(): List<StoolAnalysisRow> = ReadCache.get("analysis.StoolLog", tables = setOf("stool_log")) { fetchStoolLog() }
+    suspend fun loadStoolLog(): List<StoolAnalysisRow> = ReadCache.get("analysis.StoolLog", tables = setOf("stool_log"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.StoolAnalysisRow.serializer())) { fetchStoolLog() }
 
     private suspend fun fetchStoolLog(): List<StoolAnalysisRow> =
         supabase.postgrest.from("stool_log")
@@ -401,7 +402,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Arousal folded into wellbeing_daily -- see loadWellbeingDaily() above;
     // morning-wood/arousal history now reads from the same wellbeing rows.
-    suspend fun loadSexualActivityDaily(): List<LogSexualActivityRow> = ReadCache.get("analysis.SexualActivityDaily", tables = setOf("sexual_activity_daily")) { fetchSexualActivityDaily() }
+    suspend fun loadSexualActivityDaily(): List<LogSexualActivityRow> = ReadCache.get("analysis.SexualActivityDaily", tables = setOf("sexual_activity_daily"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.LogSexualActivityRow.serializer())) { fetchSexualActivityDaily() }
 
     private suspend fun fetchSexualActivityDaily(): List<LogSexualActivityRow> =
         supabase.postgrest.from("sexual_activity_daily")
@@ -413,7 +414,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .reversed()
 
     // Phase A4 (Category 8, OSTRC-H2 half).
-    suspend fun loadOstrcCheckins(): List<OstrcAnalysisRow> = ReadCache.get("analysis.OstrcCheckins", tables = setOf("ostrc_checkins")) { fetchOstrcCheckins() }
+    suspend fun loadOstrcCheckins(): List<OstrcAnalysisRow> = ReadCache.get("analysis.OstrcCheckins", tables = setOf("ostrc_checkins"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.OstrcAnalysisRow.serializer())) { fetchOstrcCheckins() }
 
     private suspend fun fetchOstrcCheckins(): List<OstrcAnalysisRow> =
         supabase.postgrest.from("ostrc_checkins")
@@ -427,7 +428,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Phase A4 (Category 9). Two small real tables (2 draws, 77 results
     // today) -- no server-side date filtering needed at this account's real
     // volume, same "generous margin" reasoning as everywhere else here.
-    suspend fun loadLabDraws(): List<LabDrawAnalysisRow> = ReadCache.get("analysis.LabDraws", tables = setOf("lab_draws")) { fetchLabDraws() }
+    suspend fun loadLabDraws(): List<LabDrawAnalysisRow> = ReadCache.get("analysis.LabDraws", tables = setOf("lab_draws"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.LabDrawAnalysisRow.serializer())) { fetchLabDraws() }
 
     private suspend fun fetchLabDraws(): List<LabDrawAnalysisRow> =
         supabase.postgrest.from("lab_draws")
@@ -438,7 +439,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<LabDrawAnalysisRow>()
             .reversed()
 
-    suspend fun loadLabResults(): List<LabResultAnalysisRow> = ReadCache.get("analysis.LabResults", tables = setOf("lab_results")) { fetchLabResults() }
+    suspend fun loadLabResults(): List<LabResultAnalysisRow> = ReadCache.get("analysis.LabResults", tables = setOf("lab_results"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.LabResultAnalysisRow.serializer())) { fetchLabResults() }
 
     private suspend fun fetchLabResults(): List<LabResultAnalysisRow> =
         supabase.postgrest.from("lab_results")

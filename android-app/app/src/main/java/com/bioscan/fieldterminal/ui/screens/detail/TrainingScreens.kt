@@ -67,7 +67,7 @@ fun LoadScreen(onBack: () -> Unit, onOpenSessions: () -> Unit) {
             )
         }
     }
-    val running by produceState<RunningHistory?>(null) { value = softLoad { UserDataCache.running() } }
+    val running by produceState<RunningHistory?>(null, guard.attempt) { value = softLoad { UserDataCache.running() } ?: value }
     DetailScreen("TRAINING LOAD", onBack, eyebrow = "LOAD") {
         val s = sessions
         val w = wearable

@@ -55,7 +55,12 @@ fun SkillPage(title: String, subtitle: String, onBack: () -> Unit, content: @Com
 // Runs `load` once; shows a spinner, the content, or an honest failure -- never a blank page.
 @Composable
 fun <T : Any> LoadedContent(load: suspend () -> T, content: @Composable (T) -> Unit) {
-    val state: State<Result<T>?> = produceState<Result<T>?>(initialValue = null) { value = runCatching { load() } }
+    // Keyed on the cache version: when a background refresh brings newer data, the content loads again (from memory).
+    val version = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val state: State<Result<T>?> = produceState<Result<T>?>(initialValue = null, version) {
+        val result = runCatching { load() }
+        if (result.isSuccess || value == null) value = result
+    }
     val result = state.value
     if (result == null) {
         Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.Emerald) }

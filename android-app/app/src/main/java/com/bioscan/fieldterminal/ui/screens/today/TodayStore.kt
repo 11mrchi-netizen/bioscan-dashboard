@@ -88,6 +88,12 @@ object TodayStore {
         snapshot = null
     }
 
+    /** Sign-out: forget the kept page, in memory and on disk. */
+    fun clearEverything(context: Context) {
+        snapshot = null
+        runCatching { File(context.filesDir, FILE).delete() }
+    }
+
     fun encode(kept: KeptToday): String = json.encodeToString(KeptToday.serializer(), kept)
 
     /** The kept page for [today], or null if there is none, it is another day's, or it was written by an older version. */

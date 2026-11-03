@@ -173,7 +173,8 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
             GateView.SIGN_IN -> {
                 androidx.compose.runtime.LaunchedEffect(Unit) {
                     appShown = false
-                    com.bioscan.fieldterminal.data.ReadCache.invalidateAll() // nothing of the last user survives sign-out
+                    com.bioscan.fieldterminal.data.ReadCache.clearEverything() // nothing of the last user survives sign-out, in memory or on disk
+                    com.bioscan.fieldterminal.ui.screens.today.TodayStore.clearEverything(context)
                 }
                 SignInPrompt("SIGN IN WITH GOOGLE", FTButtonEmphasis.Primary, signInError) {
                     scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }

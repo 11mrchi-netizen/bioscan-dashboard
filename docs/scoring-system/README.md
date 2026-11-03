@@ -524,6 +524,17 @@ eight months). Now:
   same rows gives the same key and the kept scores stand; only the rows the views draw from are refreshed.
 - The plan rows and SO FAR line come back from disk too, until the fuel plan has loaded again.
 
+### Phase 5c (built): every page opens from the last data it showed
+
+The read cache (`data/ReadCache.kt`) keeps a disk copy of each read that passes a serializer. When the memory copy is
+missing or stale (a new run of the app, a write, 90 seconds), the read is answered at once with the last value, and the
+fresh one loads in the background; if it differs, `ReadCache.updates` names the key and the pages on screen load again
+from memory (`rememberLoadGuard`, `rememberCacheVersion`). Kept on disk: wearable, sleep, wellbeing, sessions (training
+load and every sport), planned sessions, stool, sexual activity, OSTRC, body metrics, lab draws and results, heart-rate
+ranges, fitness-fatigue, series breaks, band stress, health concerns, the nutrition overview (keyed on the day) and the
+running, strength and conditioning histories. TODAY's own rebuild reads inside `ReadCache.RequireFresh`, so it never
+scores from an old copy. Sign-out deletes the disk copies and TODAY's kept page.
+
 ### Verified
 
 - **Unit tests:** the full Android suite passes, 1,107 tests with 0 failures (plus 13 opt-in tour renders). That is 1,039 existing tests plus

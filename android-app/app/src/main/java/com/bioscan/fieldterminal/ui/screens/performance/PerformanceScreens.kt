@@ -56,8 +56,9 @@ private fun hours(h: Double): String = if (h < 1) "${(h * 60).roundToInt()} min"
 
 @Composable
 private fun rememberSportSessions(): List<SportSession>? {
-    val state by produceState<List<SportSession>?>(null) {
-        value = runCatching { AnalysisRepository(SupabaseClientProvider.client).loadSportSessions() }.getOrDefault(emptyList())
+    val version = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val state by produceState<List<SportSession>?>(null, version) {
+        value = runCatching { AnalysisRepository(SupabaseClientProvider.client).loadSportSessions() }.getOrNull() ?: value ?: emptyList()
     }
     return state
 }

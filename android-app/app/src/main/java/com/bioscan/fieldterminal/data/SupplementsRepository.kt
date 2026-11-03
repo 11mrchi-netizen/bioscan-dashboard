@@ -158,6 +158,19 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
                 .decodeList<SupplementChangeRow>()
         }
 
+    /** The history as dated changes with item names and doses (for the charts and the before/after readings). */
+    suspend fun loadRegimenChanges(): List<com.bioscan.fieldterminal.domain.RegimenChange> {
+        val overview = loadOverview()
+        val names = (overview.active + overview.ended).associate { it.id to it.name }
+        fun str(o: kotlinx.serialization.json.JsonObject?, k: String) = (o?.get(k) as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
+        return loadChanges().mapNotNull { c ->
+            val name = names[c.supplementId] ?: str(c.after, "name") ?: return@mapNotNull null
+            val day = runCatching { java.time.OffsetDateTime.parse(c.changedAt).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() }.getOrNull()
+                ?: return@mapNotNull null
+            com.bioscan.fieldterminal.domain.RegimenChange(day, name, c.changes, str(c.before, "dose"), str(c.after, "dose"), c.supplementId)
+        }
+    }
+
     /**
      * Items on planned dose steps whose stored dose text is behind today's step: the text is moved on (the old-column
      * readers see the dose actually taken), which the trigger records as the day the dose changed.

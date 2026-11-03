@@ -142,6 +142,7 @@ fun SupplementFormSheet(
                     name = name,
                     timeOfDay = regimen.firstSlot,
                     everyNDays = regimen.everyNDaysOrNull,
+                    slots = if (regimen.asNeeded) emptyList() else com.bioscan.fieldterminal.domain.REGIMEN_SLOTS.filter { it in regimen.slots },
                     ingredientKeys = roster.firstOrNull { it.id == draftId }?.ingredientKeys.orEmpty(),
                     ingredientNames = ingredients.map { it.name },
                 ),
@@ -353,6 +354,7 @@ fun SupplementFormSheet(
                         .getOrDefault(emptyList()).filter { it.itemId == existing.id }
                 }
                 LabWatchSection(itemWatches, title = "LABS TO WATCH", showItem = false)
+                RegimenEffectsSection(existing.id)
                 RegimenHistory(existing.id)
             }
             Spacer(Modifier.height(8.dp))

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.InteractionRecord
 import com.bioscan.fieldterminal.domain.RosterItem
@@ -65,7 +66,8 @@ class InteractionRepository(private val supabase: SupabaseClient) {
         val keysByProduct = EvidenceRepository(supabase)
             .ingredientKeysByProduct(active.mapNotNull { it.productId }.distinct())
         return active.map { s ->
-            RosterItem(s.id, s.name, s.timeOfDay, s.everyNDays, s.productId?.let { keysByProduct[it] }.orEmpty())
+            val spec = s.spec()
+            RosterItem(s.id, s.name, s.timeOfDay, spec.everyNDays, s.productId?.let { keysByProduct[it] }.orEmpty(), slots = if (spec.asNeeded) emptyList() else spec.slots)
         }
     }
 }

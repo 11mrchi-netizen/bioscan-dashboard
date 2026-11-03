@@ -492,19 +492,10 @@ fun TrendChart(
 }
 
 /** All regimen changes as chart markers, from the roster history (cached). */
-internal suspend fun loadRegimenMarkers(): List<com.bioscan.fieldterminal.domain.RegimenMarker> {
-    val repo = com.bioscan.fieldterminal.data.SupplementsRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client)
-    val overview = repo.loadOverview()
-    val names = (overview.active + overview.ended).associate { it.id to it.name }
-    val changes = repo.loadChanges().mapNotNull { c ->
-        val name = names[c.supplementId] ?: (c.after["name"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return@mapNotNull null
-        val day = runCatching { java.time.OffsetDateTime.parse(c.changedAt).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() }.getOrNull()
-            ?: return@mapNotNull null
-        fun dose(o: kotlinx.serialization.json.JsonObject?) = (o?.get("dose") as? kotlinx.serialization.json.JsonPrimitive)?.content
-        com.bioscan.fieldterminal.domain.RegimenChange(day, name, c.changes, dose(c.before), dose(c.after))
-    }
-    return com.bioscan.fieldterminal.domain.regimenMarkers(changes)
-}
+internal suspend fun loadRegimenMarkers(): List<com.bioscan.fieldterminal.domain.RegimenMarker> =
+    com.bioscan.fieldterminal.domain.regimenMarkers(
+        com.bioscan.fieldterminal.data.SupplementsRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).loadRegimenChanges(),
+    )
 
 /** Several lines on one axis (fitness and fatigue), told apart by colour and dash, labelled in a legend. */
 data class ChartLine(val label: String, val series: Series, val color: Color, val dashed: Boolean = false)

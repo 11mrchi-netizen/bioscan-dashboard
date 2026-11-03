@@ -325,3 +325,30 @@ fun com.bioscan.fieldterminal.data.model.SupplementRow.spec(): RegimenSpec = reg
     doseAmount = doseAmount, doseUnit = doseUnit, slots = slots, schedule = schedule, doseSteps = doseSteps,
     startDate = startDate, endDate = endDate,
 )
+
+// ---- Timeline markers ------------------------------------------------------------------------------------------------
+
+/** One day's regimen changes, for the charts: "Creatine started · Zinc 50 mg → 25 mg". */
+data class RegimenMarker(val date: LocalDate, val label: String, val count: Int)
+
+/** A change as the charts need it: when, whose, what kinds, and the dose before and after when the dose changed. */
+data class RegimenChange(val date: LocalDate, val itemName: String, val changes: List<String>, val doseBefore: String?, val doseAfter: String?)
+
+/** The item's name without the brand in brackets: "Zinc Picolinate (Swanson)" -> "Zinc Picolinate". */
+fun shortItemName(name: String): String = name.replace(Regex("""\s*\([^)]*\)"""), "").trim().ifEmpty { name }
+
+fun regimenMarkers(changes: List<RegimenChange>): List<RegimenMarker> =
+    changes.groupBy { it.date }.toSortedMap().map { (day, list) ->
+        val words = list.map { c ->
+            val n = shortItemName(c.itemName)
+            when {
+                "started" in c.changes -> "$n started"
+                "restarted" in c.changes -> "$n restarted"
+                "stopped" in c.changes -> "$n stopped"
+                "dose" in c.changes && c.doseBefore != null && c.doseAfter != null -> "$n ${c.doseBefore} → ${c.doseAfter}"
+                "dose" in c.changes -> "$n dose changed"
+                else -> "$n schedule changed"
+            }
+        }.distinct()
+        RegimenMarker(day, words.joinToString(" · "), words.size)
+    }

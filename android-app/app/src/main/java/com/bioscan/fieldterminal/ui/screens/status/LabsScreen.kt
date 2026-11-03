@@ -64,6 +64,8 @@ fun LabsScreen() {
     var showUploadSheet by remember { mutableStateOf(false) }
 
     var error by remember { mutableStateOf<String?>(null) }
+    // Lab watch: markers worth watching for what the regimen holds. Enrichment: a failed read hides it.
+    var watches by remember { mutableStateOf<List<com.bioscan.fieldterminal.domain.LabWatch>>(emptyList()) }
 
     val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
     LaunchedEffect(reloadKey, cacheVersion) {
@@ -72,12 +74,16 @@ fun LabsScreen() {
         try {
             overview = LabsRepository(SupabaseClientProvider.client).loadOverview()
             rcv = runCatching { loadRcv() }.getOrDefault(emptyMap())
+            watches = runCatching { com.bioscan.fieldterminal.data.LabWatchRepository(SupabaseClientProvider.client).watches() }.getOrDefault(watches)
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
         }
         isLoading = false
     }
 
+    if (watches.isNotEmpty()) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(top = 16.dp)) { LabWatchSection(watches) }
+    }
     when {
         isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = FT.DomainLabs)

@@ -346,7 +346,15 @@ fun SupplementFormSheet(
                     },
                 )
             }
-            if (existing != null) RegimenHistory(existing.id)
+            if (existing != null) {
+                var itemWatches by remember(existing.id) { mutableStateOf<List<com.bioscan.fieldterminal.domain.LabWatch>>(emptyList()) }
+                LaunchedEffect(existing.id) {
+                    itemWatches = runCatching { com.bioscan.fieldterminal.data.LabWatchRepository(SupabaseClientProvider.client).watches() }
+                        .getOrDefault(emptyList()).filter { it.itemId == existing.id }
+                }
+                LabWatchSection(itemWatches, title = "LABS TO WATCH", showItem = false)
+                RegimenHistory(existing.id)
+            }
             Spacer(Modifier.height(8.dp))
         }
     }

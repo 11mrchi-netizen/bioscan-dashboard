@@ -114,16 +114,21 @@ fun BodyTabContent() {
     }
 
     var range by rememberSaveable { mutableStateOf(ChartRange.M3) }
+    var showRegimen by rememberSaveable { mutableStateOf(true) }
+    var markers by remember { mutableStateOf(emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>()) }
+    LaunchedEffect(Unit) { markers = runCatching { com.bioscan.fieldterminal.ui.screens.detail.loadRegimenMarkers() }.getOrDefault(emptyList()) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for (r in ChartRange.entries) Chip(r.label, r == range) { range = r }
+            if (markers.isNotEmpty()) Chip("REGIMEN", showRegimen) { showRegimen = !showRegimen }
         }
         val b = bodyMetrics
         if (b == null) {
             Loading(guard)
             return@Column
         }
-        CompositionLocalProvider(LocalRangeDays provides range.days) {
+        CompositionLocalProvider(LocalRangeDays provides range.days,
+            com.bioscan.fieldterminal.ui.screens.detail.LocalRegimenMarkers provides if (showRegimen) markers else emptyList()) {
             BodyPage(b, checkins, profile?.heightCm ?: heightCm, profile, scaleSeries)
         }
     }

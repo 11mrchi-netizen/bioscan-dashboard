@@ -86,6 +86,16 @@ private fun InteractionReviewItem.entry() = Entry(
     url = citationUrl(pmidDoi, sourceUrl),
 )
 
+private fun com.bioscan.fieldterminal.data.LabWatchReviewItem.entry() = Entry(
+    "lab_watch", id, version, reviewStatus,
+    title = "${substanceAliases.firstOrNull()?.replaceFirstChar { it.uppercase() } ?: "?"} → $markerLabel" +
+        (minDailyAmount?.let { " (from ${com.bioscan.fieldterminal.domain.formatAmount(it)} ${amountUnit.orEmpty()} a day)" } ?: ""),
+    body = reason,
+    details = listOfNotNull("Advice: $advice", caveats?.let { "Caveats: $it" }),
+    citation = listOfNotNull(source, pmidDoi).joinToString(" · ").ifBlank { null },
+    url = sourceUrl ?: citationUrl(pmidDoi, null),
+)
+
 @Composable
 fun RegistryReviewScreen(onClose: () -> Unit) {
     val repo = remember { RegistryReviewRepository(SupabaseClientProvider.client) }
@@ -98,7 +108,7 @@ fun RegistryReviewScreen(onClose: () -> Unit) {
     LaunchedEffect(reload) {
         try {
             reviews = repo.loadReviews()
-            entries = repo.loadInteractions().map { it.entry() } + repo.loadEvidence().map { it.entry() }
+            entries = repo.loadInteractions().map { it.entry() } + repo.loadLabWatch().map { it.entry() } + repo.loadEvidence().map { it.entry() }
         } catch (e: Exception) {
             error = e.message ?: "Couldn't load"
         }
@@ -116,7 +126,7 @@ fun RegistryReviewScreen(onClose: () -> Unit) {
         error?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
         if (list == null) return@FullScreenOverlay
         val sorted = list.sortedBy { stateOf(it) != ReviewState.UNREVIEWED }
-        for ((title, reg) in listOf("INTERACTIONS" to "interaction", "EXPECTED EFFECTS" to "evidence")) {
+        for ((title, reg) in listOf("INTERACTIONS" to "interaction", "LABS TO WATCH" to "lab_watch", "EXPECTED EFFECTS" to "evidence")) {
             val rows = sorted.filter { it.registry == reg }
             if (rows.isEmpty()) continue
             Text(title, style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(top = 6.dp))

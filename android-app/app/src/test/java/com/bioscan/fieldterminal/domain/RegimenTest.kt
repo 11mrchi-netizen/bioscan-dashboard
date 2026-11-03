@@ -92,4 +92,17 @@ class RegimenTest {
         assertEquals(LegacyColumns("36 mg", "morning", 3), legacy)
         assertEquals("as-needed", regimenSpec("as-needed", null, "150 ml").legacyColumns(d).timeOfDay)
     }
+
+    @Test
+    fun changesOnOneDayBecomeOneMarker() {
+        val d1 = LocalDate.of(2026, 10, 12)
+        val m = regimenMarkers(listOf(
+            RegimenChange(d1, "Creatine", listOf("started"), null, "5 g"),
+            RegimenChange(d1, "Zinc Picolinate (Swanson)", listOf("dose"), "50 mg", "25 mg"),
+            RegimenChange(d1.plusDays(3), "DIM Complex (Swanson)", listOf("stopped"), null, "100 mg"),
+        ))
+        assertEquals(2, m.size)
+        assertEquals("Creatine started · Zinc Picolinate 50 mg → 25 mg", m[0].label)
+        assertEquals("DIM Complex stopped", m[1].label)
+    }
 }

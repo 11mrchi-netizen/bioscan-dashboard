@@ -68,6 +68,9 @@ enum class ChartRange(val days: Int, val label: String) { M1(30, "30 D"), M3(90,
 /** The chart window the page's range chips picked. */
 val LocalRangeDays = compositionLocalOf { ChartRange.M3.days }
 
+/** Regimen changes (domain/Regimen.kt) every TrendChart on the page draws as dashed lines; empty to hide them. */
+val LocalRegimenMarkers = compositionLocalOf { emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>() }
+
 @Composable
 fun DetailScreen(
     title: String,
@@ -78,6 +81,12 @@ fun DetailScreen(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var range by rememberSaveable { mutableStateOf(defaultRange) }
+    // Regimen changes on the charts: loaded once per page (the roster history is cached), shown unless switched off.
+    var showRegimen by rememberSaveable { mutableStateOf(true) }
+    var markers by remember { mutableStateOf(emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>()) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        markers = runCatching { loadRegimenMarkers() }.getOrDefault(emptyList())
+    }
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("‹", style = FTType.SectionTitle, color = FT.TextSecondary,
@@ -88,9 +97,10 @@ fun DetailScreen(
         if (ranged) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (r in ChartRange.entries) Chip(r.label, r == range) { range = r }
+                if (markers.isNotEmpty()) Chip("REGIMEN", showRegimen) { showRegimen = !showRegimen }
             }
         }
-        CompositionLocalProvider(LocalRangeDays provides range.days) {
+        CompositionLocalProvider(LocalRangeDays provides range.days, LocalRegimenMarkers provides if (showRegimen) markers else emptyList()) {
             Column(
                 modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -414,6 +424,8 @@ fun TrendChart(
             if (w.size >= span / 2) i to w.average() else null
         }
     }
+    val markers = LocalRegimenMarkers.current
+    val inWindow = remember(markers, from, day) { markers.filter { !it.date.isBefore(from) && !it.date.isAfter(day) } }
     val values = points.map { it.second } + listOfNotNull(band?.first, band?.second, target?.first, target?.second)
     val lo = values.min()
     val hi = values.max().let { if (it - lo < 1e-9) lo + 1 else it }
@@ -450,6 +462,12 @@ fun TrendChart(
             drawPath(m, color, style = Stroke(width = 3f))
             if (days <= 90) points.forEach { (i, v) -> drawCircle(FT.TextSecondary, radius = 2.5f, center = Offset(x(i), y(v))) }
             points.last().let { (i, v) -> drawCircle(FT.EmeraldHighlight, radius = 6f, center = Offset(x(i), y(v))) }
+            val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
+            for (mk in inWindow) {
+                val i = java.time.temporal.ChronoUnit.DAYS.between(from, mk.date).toInt()
+                drawLine(FT.Warning.copy(alpha = 0.8f), Offset(x(i), 0f), Offset(x(i), size.height), strokeWidth = 1.5f, pathEffect = dash)
+                drawCircle(FT.Warning, radius = 4f, center = Offset(x(i), 4f))
+            }
         }
     }
     Row(Modifier.fillMaxWidth().padding(start = 48.dp)) {
@@ -462,6 +480,30 @@ fun TrendChart(
         Text(key, style = FTType.Micro, color = color, modifier = Modifier.weight(3f), textAlign = TextAlign.Center)
         Text(shortDate(day), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
+    if (inWindow.isNotEmpty()) {
+        // The newest changes in words; the dashed lines mark when, not that they caused anything.
+        Column(Modifier.fillMaxWidth().padding(start = 48.dp, top = 2.dp)) {
+            inWindow.takeLast(3).reversed().forEach { mk ->
+                Text("┆ ${shortDate(mk.date)} ${mk.label}", style = FTType.Micro, color = FT.Warning, maxLines = 2)
+            }
+            if (inWindow.size > 3) Text("+${inWindow.size - 3} earlier regimen changes in this range", style = FTType.Micro, color = FT.TextMuted)
+        }
+    }
+}
+
+/** All regimen changes as chart markers, from the roster history (cached). */
+internal suspend fun loadRegimenMarkers(): List<com.bioscan.fieldterminal.domain.RegimenMarker> {
+    val repo = com.bioscan.fieldterminal.data.SupplementsRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client)
+    val overview = repo.loadOverview()
+    val names = (overview.active + overview.ended).associate { it.id to it.name }
+    val changes = repo.loadChanges().mapNotNull { c ->
+        val name = names[c.supplementId] ?: (c.after["name"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return@mapNotNull null
+        val day = runCatching { java.time.OffsetDateTime.parse(c.changedAt).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() }.getOrNull()
+            ?: return@mapNotNull null
+        fun dose(o: kotlinx.serialization.json.JsonObject?) = (o?.get("dose") as? kotlinx.serialization.json.JsonPrimitive)?.content
+        com.bioscan.fieldterminal.domain.RegimenChange(day, name, c.changes, dose(c.before), dose(c.after))
+    }
+    return com.bioscan.fieldterminal.domain.regimenMarkers(changes)
 }
 
 /** Several lines on one axis (fitness and fatigue), told apart by colour and dash, labelled in a legend. */

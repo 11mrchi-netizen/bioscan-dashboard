@@ -73,6 +73,23 @@ data class InteractionReviewItem(
     val version: Int? = null,
 )
 
+@Serializable
+data class LabWatchReviewItem(
+    val id: Long,
+    @SerialName("substance_aliases") val substanceAliases: List<String> = emptyList(),
+    @SerialName("marker_label") val markerLabel: String,
+    @SerialName("min_daily_amount") val minDailyAmount: Double? = null,
+    @SerialName("amount_unit") val amountUnit: String? = null,
+    val reason: String,
+    val advice: String,
+    val source: String,
+    @SerialName("pmid_doi") val pmidDoi: String? = null,
+    @SerialName("source_url") val sourceUrl: String? = null,
+    val caveats: String? = null,
+    @SerialName("review_status") val reviewStatus: String = "unreviewed",
+    val version: Int? = null,
+)
+
 class RegistryReviewRepository(private val supabase: SupabaseClient) {
 
     /** (registry, record id) -> the owner's verdict. */
@@ -91,6 +108,11 @@ class RegistryReviewRepository(private val supabase: SupabaseClient) {
     suspend fun loadInteractions(): List<InteractionReviewItem> =
         supabase.postgrest.from("interaction_records").select(
             Columns.list("id,a_aliases,b_aliases,a_keys,b_keys,mechanism,effect,advice,severity,study_design,evidence_tier,pmid_doi,source,source_url,caveats,review_status,version"),
+        ) { order("id", Order.ASCENDING) }.decodeList()
+
+    suspend fun loadLabWatch(): List<LabWatchReviewItem> =
+        supabase.postgrest.from("lab_watch_rules").select(
+            Columns.list("id,substance_aliases,marker_label,min_daily_amount,amount_unit,reason,advice,source,pmid_doi,source_url,caveats,review_status,version"),
         ) { order("id", Order.ASCENDING) }.decodeList()
 
     suspend fun setVerdict(registry: String, recordId: Long, version: Int?, verdict: String, note: String?) {

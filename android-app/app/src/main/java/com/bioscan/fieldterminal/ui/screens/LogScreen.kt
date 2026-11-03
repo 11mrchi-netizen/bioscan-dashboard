@@ -97,7 +97,8 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     var expandedKeys by rememberSaveable { mutableStateOf("") }
     var gapsOnly by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(reloadKey, windowDays) {
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(reloadKey, windowDays, cacheVersion) {
         error = null
         try {
             val since = LocalDate.now().minusDays(windowDays - 1L)

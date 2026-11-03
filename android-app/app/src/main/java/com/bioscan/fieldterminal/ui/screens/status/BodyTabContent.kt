@@ -94,9 +94,10 @@ fun BodyTabContent(openCheckIn: Boolean = false, onCheckInHandled: () -> Unit = 
         }
     }
     // A failed read leaves energy balance on its building state and digestion out, rather than failing the tab.
-    LaunchedEffect(Unit) {
-        overview = runCatching { NutritionRepository(SupabaseClientProvider.client).loadOverview() }.getOrNull()
-        stool = runCatching { AnalysisRepository(SupabaseClientProvider.client).loadStoolLog() }.getOrNull()
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(cacheVersion) {
+        overview = runCatching { NutritionRepository(SupabaseClientProvider.client).loadOverview() }.getOrNull() ?: overview
+        stool = runCatching { AnalysisRepository(SupabaseClientProvider.client).loadStoolLog() }.getOrNull() ?: stool
     }
 
     BodyTab(allDays = overview?.allDays ?: emptyList(), reloadKey = reload, onStartCheckIn = { checkInOpen = true })

@@ -85,7 +85,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Analysis Layer 3 / Phase 3. The latest published relationship results; empty before the first run or if the read fails.
     suspend fun loadRelationships(): List<RelationshipResultRow> =
         try {
-            ReadCache.get("analysis.relationships", tables = setOf("analysis_results")) {
+            ReadCache.get("analysis.relationships", tables = setOf("analysis_results"), serializer = kotlinx.serialization.builtins.ListSerializer(RelationshipResultRow.serializer())) {
                 supabase.postgrest.from("analysis_results")
                     .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "relationship") }; newestFirst() }
                     .decodeList<RelationshipResultRow>()
@@ -100,7 +100,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Analysis Layer 3 / Phase 4. The latest "is today typical for you" result, or null before the first run / on failure.
     suspend fun loadTypicality(): TypicalityResultRow? =
         try {
-            ReadCache.get("analysis.typicality", tables = setOf("analysis_results")) {
+            ReadCache.get("analysis.typicality", tables = setOf("analysis_results"), serializer = TypicalityResultRow.serializer().nullable) {
                 supabase.postgrest.from("analysis_results")
                     .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "typicality") }; newestFirst() }
                     .decodeList<TypicalityResultRow>()
@@ -115,9 +115,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Analysis review phase D. The evidence board's other views: event curves, case-crossover tables, lag curves. Each
     // list is empty before the first run or if its read fails.
     suspend fun loadEvidence(): EvidenceRows = kotlinx.coroutines.coroutineScope {
-        val events = async { softList("analysis.event_curve") { latestOf<EventCurveRow>("event_curve") } }
-        val crossover = async { softList("analysis.case_crossover") { latestOf<CaseCrossoverResultRow>("case_crossover") } }
-        val lags = async { softList("analysis.lag_curve") { latestOf<LagCurveRow>("lag_curve") } }
+        val events = async { softList("analysis.event_curve", EventCurveRow.serializer()) { latestOf<EventCurveRow>("event_curve") } }
+        val crossover = async { softList("analysis.case_crossover", CaseCrossoverResultRow.serializer()) { latestOf<CaseCrossoverResultRow>("case_crossover") } }
+        val lags = async { softList("analysis.lag_curve", LagCurveRow.serializer()) { latestOf<LagCurveRow>("lag_curve") } }
         EvidenceRows(events.await(), crossover.await(), lags.await())
     }
 
@@ -126,9 +126,9 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", kind) }; newestFirst() }
             .decodeList<T>()
 
-    private suspend fun <T> softList(cacheKey: String, block: suspend () -> List<T>): List<T> =
+    private suspend fun <T> softList(cacheKey: String, serializer: kotlinx.serialization.KSerializer<T>, block: suspend () -> List<T>): List<T> =
         try {
-            ReadCache.get(cacheKey, tables = setOf("analysis_results")) { block() }
+            ReadCache.get(cacheKey, tables = setOf("analysis_results", "registered_questions"), serializer = kotlinx.serialization.builtins.ListSerializer(serializer)) { block() }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -138,11 +138,11 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Analysis review phase E. Registered questions' results (kind registered_question), newest per key; empty before
     // the first one is registered or if the read fails.
     suspend fun loadRegisteredResults(): List<RelationshipResultRow> =
-        softList("analysis.registered_question") { latestOf<RelationshipResultRow>("registered_question").distinctBy { it.key } }
+        softList("analysis.registered_question", RelationshipResultRow.serializer()) { latestOf<RelationshipResultRow>("registered_question").distinctBy { it.key } }
 
     // The live registrations themselves (the result appears after the next nightly run).
     suspend fun loadRegisteredQuestions(): List<RegisteredQuestion> =
-        softList("analysis.registered_questions") {
+        softList("analysis.registered_questions", RegisteredQuestion.serializer()) {
             supabase.postgrest.from("registered_questions")
                 .select(columns = Columns.list("id,exposure,outcome,lag,registered_on,withdrawn_at"))
                 .decodeList<RegisteredQuestion>()

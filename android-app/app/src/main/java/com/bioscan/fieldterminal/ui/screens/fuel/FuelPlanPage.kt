@@ -74,7 +74,8 @@ fun FuelPlanPage(
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     var settingsOpen by remember { mutableStateOf(false) }
-    LaunchedEffect(attempt, overview) {
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(attempt, overview, cacheVersion) {
         error = null
         try {
             result = FuelPlanRepository(SupabaseClientProvider.client).loadToday(context, overview)

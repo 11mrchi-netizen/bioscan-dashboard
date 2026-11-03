@@ -28,3 +28,39 @@ object LocalTimeSerializer : KSerializer<LocalTime> {
     override fun serialize(encoder: Encoder, value: LocalTime) = encoder.encodeString(value.toString())
     override fun deserialize(decoder: Decoder): LocalTime = LocalTime.parse(decoder.decodeString())
 }
+
+object LocalDateTimeSerializer : KSerializer<java.time.LocalDateTime> {
+    override val descriptor = PrimitiveSerialDescriptor("LocalDateTime", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: java.time.LocalDateTime) = encoder.encodeString(value.toString())
+    override fun deserialize(decoder: Decoder): java.time.LocalDateTime = java.time.LocalDateTime.parse(decoder.decodeString())
+}
+
+object ZonedDateTimeSerializer : KSerializer<java.time.ZonedDateTime> {
+    override val descriptor = PrimitiveSerialDescriptor("ZonedDateTime", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: java.time.ZonedDateTime) = encoder.encodeString(value.toString())
+    override fun deserialize(decoder: Decoder): java.time.ZonedDateTime = java.time.ZonedDateTime.parse(decoder.decodeString())
+}
+
+object OffsetDateTimeSerializer : KSerializer<java.time.OffsetDateTime> {
+    override val descriptor = PrimitiveSerialDescriptor("OffsetDateTime", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: java.time.OffsetDateTime) = encoder.encodeString(value.toString())
+    override fun deserialize(decoder: Decoder): java.time.OffsetDateTime = java.time.OffsetDateTime.parse(decoder.decodeString())
+}
+
+object DurationSerializer : KSerializer<java.time.Duration> {
+    override val descriptor = PrimitiveSerialDescriptor("Duration", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: java.time.Duration) = encoder.encodeString(value.toString())
+    override fun deserialize(decoder: Decoder): java.time.Duration = java.time.Duration.parse(decoder.decodeString())
+}
+
+object YearMonthSerializer : KSerializer<java.time.YearMonth> {
+    override val descriptor = PrimitiveSerialDescriptor("YearMonth", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: java.time.YearMonth) = encoder.encodeString(value.toString())
+    override fun deserialize(decoder: Decoder): java.time.YearMonth = java.time.YearMonth.parse(decoder.decodeString())
+}
+
+object ZoneIdSerializer : KSerializer<java.time.ZoneId> {
+    override val descriptor = PrimitiveSerialDescriptor("ZoneId", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: java.time.ZoneId) = encoder.encodeString(value.id)
+    override fun deserialize(decoder: Decoder): java.time.ZoneId = java.time.ZoneId.of(decoder.decodeString())
+}

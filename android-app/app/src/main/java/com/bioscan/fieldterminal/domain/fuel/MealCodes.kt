@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
@@ -45,6 +48,7 @@ data class MealTimes(
     val dinner: LocalTime = LocalTime.of(19, 30),
 )
 
+@Serializable
 data class CodedMeal(
     val kind: MealSlotKind,
     val time: ZonedDateTime,
@@ -91,8 +95,10 @@ fun splitWithCaps(total: Double, weights: List<Double>, caps: List<Double?>): Li
     return out
 }
 
+@Serializable
 data class SessionWindow(val item: PlannedItem, val fuel: SessionFuel)
 
+@Serializable
 data class CodedDay(val date: LocalDate, val meals: List<CodedMeal>, val sessions: List<SessionWindow>)
 
 private fun hoursBetween(a: ZonedDateTime, b: ZonedDateTime): Double = Duration.between(a, b).toMinutes() / 60.0

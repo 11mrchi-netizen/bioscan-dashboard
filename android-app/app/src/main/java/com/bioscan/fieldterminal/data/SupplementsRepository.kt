@@ -1,5 +1,7 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.UseSerializers
 import com.bioscan.fieldterminal.data.model.NewSupplementIngredientRow
 import com.bioscan.fieldterminal.data.model.NewSupplementProductIngredientRow
 import com.bioscan.fieldterminal.data.model.NewSupplementProductRow
@@ -21,6 +23,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.time.LocalDate
 
+@Serializable
 data class SupplementsOverview(
     val active: List<SupplementRow>,
     val ended: List<SupplementRow>, // recently-ended only (within the 7-day cutoff) never appears
@@ -46,7 +49,11 @@ private data class IdRow(val id: Long)
 
 class SupplementsRepository(private val supabase: SupabaseClient) {
 
-    suspend fun loadOverview(): SupplementsOverview {
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadOverview(): SupplementsOverview =
+        ReadCache.get("supplements.overview.${java.time.LocalDate.now()}", tables = null, serializer = SupplementsOverview.serializer()) { fetchLoadOverview() }
+
+    private suspend fun fetchLoadOverview(): SupplementsOverview {
         val rows = supabase.postgrest.from("supplements")
             .select(columns = Columns.list("id,name,dose,time_of_day,status,end_date,ai_note,every_n_days,product_id"))
             .decodeList<SupplementRow>()

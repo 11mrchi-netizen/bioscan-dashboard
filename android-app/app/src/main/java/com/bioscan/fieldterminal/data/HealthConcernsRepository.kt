@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.builtins.nullable
 import android.content.Context
 import com.bioscan.fieldterminal.data.model.AdherenceUpsert
 import com.bioscan.fieldterminal.data.model.ConcernStateDto
@@ -71,7 +72,11 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
     private inline fun <reified T> PublishedRow.decode(): T? =
         payload?.let { runCatching { lenient.decodeFromJsonElement<T>(it) }.getOrNull() }
 
-    suspend fun loadOverview(): HealthOverviewDto? = published("health_overview").firstOrNull()?.decode<HealthOverviewDto>()
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadOverview(): HealthOverviewDto? =
+        ReadCache.get("health.overview", tables = null, serializer = HealthOverviewDto.serializer().nullable) { fetchLoadOverview() }
+
+    private suspend fun fetchLoadOverview(): HealthOverviewDto? = published("health_overview").firstOrNull()?.decode<HealthOverviewDto>()
 
     suspend fun loadConcernState(concernId: String): ConcernStateDto? =
         published("health_concern_state", concernId).firstOrNull { it.key == concernId }?.decode<ConcernStateDto>()
@@ -80,7 +85,11 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
     suspend fun loadFindings(concernId: String): List<FindingDto> =
         published("health_finding", "$concernId:").mapNotNull { it.decode<FindingDto>() }
 
-    suspend fun loadAllFindings(): List<FindingDto> = published("health_finding").mapNotNull { it.decode<FindingDto>() }
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadAllFindings(): List<FindingDto> =
+        ReadCache.get("health.findings", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(FindingDto.serializer())) { fetchLoadAllFindings() }
+
+    private suspend fun fetchLoadAllFindings(): List<FindingDto> = published("health_finding").mapNotNull { it.decode<FindingDto>() }
 
     suspend fun loadTrialReads(): List<TrialReadDto> = published("health_trial_read").mapNotNull { it.decode<TrialReadDto>() }
 

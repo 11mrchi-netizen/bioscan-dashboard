@@ -63,7 +63,8 @@ private fun TrainingOverviewLoaded(content: @Composable (TrainingOverview) -> Un
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) {
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(cacheVersion) {
         try {
             overview = TrainingRepository(SupabaseClientProvider.client).loadOverview()
         } catch (e: kotlinx.coroutines.CancellationException) {

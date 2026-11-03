@@ -112,14 +112,22 @@ class TrainingProgramRepository(private val supabase: SupabaseClient) {
         return ImportReport(ok.size, rejected, report.errors, report.warnings)
     }
 
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadGeneratedBlocks(): List<GeneratedBlockRow> =
+        ReadCache.get("program.blocks", tables = setOf("training_blocks", "planned_sessions"), serializer = kotlinx.serialization.builtins.ListSerializer(GeneratedBlockRow.serializer())) { fetchLoadGeneratedBlocks() }
+
+    private suspend fun fetchLoadGeneratedBlocks(): List<GeneratedBlockRow> =
         supabase.postgrest.from("training_blocks")
             .select(columns = Columns.list("id,name,start_date,end_date,status")) {
                 filter { eq("origin", "generated"); neq("status", "abandoned") }
                 order("start_date", Order.DESCENDING)
             }.decodeList<GeneratedBlockRow>()
 
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadUpcoming(from: LocalDate, limit: Int = 14): List<UpcomingSessionRow> =
+        ReadCache.get("program.upcoming.$from.$limit", tables = setOf("planned_sessions", "training_blocks"), serializer = kotlinx.serialization.builtins.ListSerializer(UpcomingSessionRow.serializer())) { fetchLoadUpcoming(from, limit) }
+
+    private suspend fun fetchLoadUpcoming(from: LocalDate, limit: Int = 14): List<UpcomingSessionRow> =
         supabase.postgrest.from("planned_sessions")
             .select(columns = Columns.list("id,block_id,scheduled_date,week_index,title,domain,status")) {
                 filter { gte("scheduled_date", from.toString()); eq("status", "planned") }

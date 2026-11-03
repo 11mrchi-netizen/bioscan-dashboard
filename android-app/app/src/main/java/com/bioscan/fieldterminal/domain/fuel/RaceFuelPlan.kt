@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.domain.events.AidStation
 import com.bioscan.fieldterminal.domain.trail.CoursePoint
 import java.time.ZonedDateTime
@@ -31,6 +34,7 @@ import kotlin.math.roundToInt
 // Every number carries the assumption it rests on; a TYPICAL rather than FORECAST climate and an estimated rather than
 // tested sweat rate are said so.
 
+@Serializable
 data class FuelProductOption(
     val id: Long?,
     val name: String,
@@ -76,8 +80,10 @@ data class RaceFuelInput(
 )
 
 /** How many servings of a product a step takes (the structured form of the step's "2 × name" item). */
+@Serializable
 data class StepPart(val product: FuelProductOption, val count: Int)
 
+@Serializable
 data class FuelStep(
     val elapsedMin: Double,
     val km: Double?,
@@ -91,6 +97,7 @@ data class FuelStep(
     val parts: List<StepPart> = emptyList(),
 )
 
+@Serializable
 data class CarryLeg(
     val from: String,
     val to: String,
@@ -102,8 +109,10 @@ data class CarryLeg(
     val note: String? = null,
 )
 
+@Serializable
 data class PrepItem(val minutesFromStart: Double, val whenLabel: String, val text: String)
 
+@Serializable
 data class RaceFuelPlan(
     val title: String,
     val durationMin: Double,

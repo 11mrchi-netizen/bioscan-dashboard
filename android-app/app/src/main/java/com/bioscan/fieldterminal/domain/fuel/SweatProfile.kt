@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.max
@@ -58,6 +61,7 @@ data class SweatProfile(val tests: List<SweatTest>, val ratio: Double, val testC
     }
 }
 
+@Serializable
 data class SweatEstimate(val mlPerHour: Double, val lowMlPerHour: Double, val highMlPerHour: Double, val basis: String)
 
 const val DEFAULT_TEST_TEMP_C = 18.0

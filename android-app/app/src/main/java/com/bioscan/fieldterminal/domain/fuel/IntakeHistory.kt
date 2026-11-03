@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.domain.LOG_COMPLETE_MEALS
 import java.time.LocalDate
 import kotlin.math.max
@@ -18,8 +21,10 @@ data class LoggedDay(val date: LocalDate, val mealsLogged: Int, val carbG: Doubl
 
 enum class IntakeStatus(val label: String) { MET("ON PLAN"), UNDER("UNDER"), OVER("OVER"), NOT_LOGGED("NOT LOGGED") }
 
+@Serializable
 data class DayIntakeCheck(val date: LocalDate, val plannedCarbG: Double, val loggedCarbG: Double?, val status: IntakeStatus, val loading: Boolean)
 
+@Serializable
 data class IntakeHistoryResult(
     val days: List<DayIntakeCheck>,
     /** Planned minus logged carbohydrate on logged loading days, g (0 when on plan or nothing was logged). */

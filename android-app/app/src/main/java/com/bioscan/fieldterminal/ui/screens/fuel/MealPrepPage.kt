@@ -98,9 +98,10 @@ fun MealPrepPage(overview: NutritionOverview?, modifier: Modifier = Modifier) {
     var loaded by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(weekStart, attempt, overview) {
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(weekStart, attempt, overview, cacheVersion) {
         error = null
-        loaded = false
+        if (plan == null) loaded = false
         try {
             plan = FuelPlanRepository(SupabaseClientProvider.client).loadWeekPlan(context, overview, weekStart)
             week = runCatching { repo.loadWeek(weekStart) }.getOrNull()

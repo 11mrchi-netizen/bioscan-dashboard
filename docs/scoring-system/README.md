@@ -535,6 +535,18 @@ ranges, fitness-fatigue, series breaks, band stress, health concerns, the nutrit
 running, strength and conditioning histories. TODAY's own rebuild reads inside `ReadCache.RequireFresh`, so it never
 scores from an old copy. Sign-out deletes the disk copies and TODAY's kept page.
 
+### Phase 5d (built): the remaining pages kept on disk too
+
+The rest of the app reads through the same disk-backed cache: PLAN (training plan, blocks and cycles, upcoming sessions,
+the food plan's days and meal prep, events and suggestions, every session), LAB (N=1's results and experiments,
+supplements, routine), ME (aging, healthspan, profile, body, health concerns, overview and findings, bloodwork) and the
+LOG feed. Pages loading outside a LoadGuard redraw on `rememberCacheVersion()`, and keep what is on screen while a
+fresher copy loads.
+
+One rule keeps edits honest: a write of the person's own (anything but the watch syncs' tables, `ReadCache.SYNC_TABLES`)
+marks the reads it touches dirty, and their next read waits for the network, so a page reloaded after an edit shows the
+edit. Sync writes on every open do not: those pages show the last copy and redraw when the synced data lands.
+
 ### Verified
 
 - **Unit tests:** the full Android suite passes, 1,107 tests with 0 failures (plus 13 opt-in tour renders). That is 1,039 existing tests plus

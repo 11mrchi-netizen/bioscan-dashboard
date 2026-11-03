@@ -79,8 +79,10 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(reloadKey) {
-        isLoading = true
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(reloadKey, cacheVersion) {
+        // The kept roster stays on screen while a fresher one loads.
+        isLoading = overview == null
         error = null
         try {
             val loaded = SupplementsRepository(SupabaseClientProvider.client).loadOverview()

@@ -58,6 +58,19 @@ object ReadCache {
 
     // The last value of each key, kept after it went stale or a write dropped it, to answer with while the fresh one loads.
     private val lastKnown = ConcurrentHashMap<String, Hit<Any?>>()
+    private val keyTables = ConcurrentHashMap<String, Set<String>>()
+    private const val ANY_TABLE = "*"
+
+    // Keys a write of the person's own (an edit, a log) made stale in this run: their next read waits for the network, so
+    // a page reloaded after an edit shows the edit, never the copy from before it. Writes by the watch syncs (on every
+    // open) do not count: those pages show the last copy and redraw when the synced data lands.
+    private val dirty: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /** Tables only the Health Connect and Zepp syncs write. */
+    val SYNC_TABLES = setOf(
+        "wearable_daily", "sleep_daily", "zepp_raw_extracts", "zepp_history_pull", "zepp_sync_state", "zepp_workout_detail",
+        "sync_log", "daily_field_provenance", "exercise_sessions", "body_metrics",
+    )
     private val lastHash = ConcurrentHashMap<String, Int>()
     private val refreshing: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -84,7 +97,7 @@ object ReadCache {
         load: suspend () -> T,
     ): T {
         fresh<T>(key, ttlMs)?.let { return it.value }
-        if (serializer != null && coroutineContext[RequireFresh.Key] == null) {
+        if (serializer != null && coroutineContext[RequireFresh.Key] == null && key !in dirty) {
             val stale = lastKnown[key] ?: readDisk(key, serializer)
             if (stale != null) {
                 refreshInBackground(key, tables, serializer, load)
@@ -104,6 +117,8 @@ object ReadCache {
     private fun <T> store(key: String, value: T, tables: Set<String>?, serializer: KSerializer<T>?): Boolean {
         entries[key] = Entry(clock(), value, tables)
         lastKnown[key] = Hit(value)
+        keyTables[key] = tables ?: setOf(ANY_TABLE)
+        dirty.remove(key)
         if (serializer == null) return false
         val text = runCatching { json.encodeToString(serializer, value) }.getOrNull() ?: return false
         val hash = text.hashCode()
@@ -152,6 +167,7 @@ object ReadCache {
     /** Tests: forget everything in memory, as a new run of the app would, keeping the disk copies. */
     internal fun forgetMemoryForTest() {
         entries.clear()
+        dirty.clear()
         lastKnown.clear()
         lastHash.clear()
     }
@@ -159,6 +175,8 @@ object ReadCache {
     /** Sign-out: nothing of the last user survives, in memory or on disk. */
     fun clearEverything() {
         invalidateAll()
+        dirty.clear()
+        keyTables.clear()
         lastKnown.clear()
         lastHash.clear()
         runCatching { dir?.listFiles()?.forEach { it.delete() } }
@@ -175,6 +193,7 @@ object ReadCache {
 
     fun invalidateAll() {
         entries.clear()
+        dirty.addAll(keyTables.keys)
         unattributedWrites.incrementAndGet()
     }
 
@@ -183,6 +202,7 @@ object ReadCache {
         if (table == null) return invalidateAll()
         writeCounts.computeIfAbsent(table) { java.util.concurrent.atomic.AtomicLong() }.incrementAndGet()
         entries.entries.removeIf { (_, e) -> e.tables == null || table in e.tables }
+        if (table !in SYNC_TABLES) keyTables.forEach { (k, t) -> if (ANY_TABLE in t || table in t) dirty.add(k) }
     }
 
     // Scoring system rebuild: a screen that keeps its own finished result (TODAY) asks whether anything it reads was

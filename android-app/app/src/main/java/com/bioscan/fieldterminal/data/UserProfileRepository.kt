@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.builtins.nullable
 import com.bioscan.fieldterminal.data.model.UserProfileRow
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -12,7 +13,11 @@ import java.time.LocalDate
 // profile per user.
 class UserProfileRepository(private val supabase: SupabaseClient) {
 
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadProfile(): UserProfileRow? =
+        ReadCache.get("user.profile", tables = setOf("user_profile"), serializer = UserProfileRow.serializer().nullable) { fetchLoadProfile() }
+
+    private suspend fun fetchLoadProfile(): UserProfileRow? =
         supabase.postgrest.from("user_profile")
             .select(columns = Columns.list("date_of_birth,sex"))
             .decodeSingleOrNull<UserProfileRow>()

@@ -65,7 +65,8 @@ fun RoutineTab() {
     var apps by remember { mutableStateOf<List<AppWeekTotal>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) {
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(cacheVersion) {
         scope.launchSafe(onError = { error = describeLoadFailure(it) }) {
             val yesterday = LocalDate.now().minusDays(1)
             val week = yesterday.minusDays(6)

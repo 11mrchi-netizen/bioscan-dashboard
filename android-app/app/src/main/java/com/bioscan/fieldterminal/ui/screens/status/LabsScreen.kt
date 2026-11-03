@@ -65,8 +65,9 @@ fun LabsScreen() {
 
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(reloadKey) {
-        isLoading = true
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(reloadKey, cacheVersion) {
+        isLoading = overview == null
         error = null
         try {
             overview = LabsRepository(SupabaseClientProvider.client).loadOverview()

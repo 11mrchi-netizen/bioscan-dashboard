@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.domain.TRAINING_COLOR_ID
 import com.bioscan.fieldterminal.domain.events.AthleteEvent
 import com.bioscan.fieldterminal.domain.events.EventKind
@@ -22,6 +25,7 @@ import kotlin.math.abs
 
 enum class PlanSource { EVENT, PLANNED_SESSION, CALENDAR, RECORDED }
 
+@Serializable
 data class PlannedItem(
     val source: PlanSource,
     val sourceId: String,
@@ -46,6 +50,7 @@ data class PlannedItem(
  * A training-colour calendar entry the rules cannot read that runs over [REVIEW_OVER_MIN] minutes ("Resurrected",
  * 13:00-06:00): left out of the day's training until the person says what it is.
  */
+@Serializable
 data class CalendarReview(val eventId: String, val title: String, val description: String?, val start: ZonedDateTime, val end: ZonedDateTime?, val clockMin: Double)
 
 enum class OverrideKind(val key: String) {
@@ -61,6 +66,7 @@ data class CalendarOverride(val eventId: String, val kind: OverrideKind, val dur
 
 const val REVIEW_OVER_MIN = 240.0
 
+@Serializable
 data class PlannedDay(val date: LocalDate, val items: List<PlannedItem>, val reviews: List<CalendarReview> = emptyList()) {
     val trainingMin: Double get() = items.sumOf { it.durationMin }
     val sessionKcal: Double get() = items.sumOf { it.kcal ?: 0.0 }

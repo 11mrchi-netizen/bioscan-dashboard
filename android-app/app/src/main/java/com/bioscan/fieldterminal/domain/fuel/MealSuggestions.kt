@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -25,8 +28,10 @@ enum class FoodRole { CARB, PROTEIN, FAT, MIXED, VEG }
 enum class Taste { SAVOURY, SWEET, NEUTRAL }
 
 /** A named portion: "1 banana" = 118 g, counted in steps of [step] (0.5 = halves). */
+@Serializable
 data class Serving(val singular: String, val plural: String, val grams: Double, val step: Double)
 
+@Serializable
 data class FoodOption(
     val id: String,
     val name: String,
@@ -72,6 +77,7 @@ fun roleFor(carbPerG: Double, proteinPerG: Double, fatPerG: Double): FoodRole {
     }
 }
 
+@Serializable
 data class Portion(val food: FoodOption, val grams: Double) {
     val carbG: Double get() = food.carbPerG * grams
     val proteinG: Double get() = food.proteinPerG * grams
@@ -105,6 +111,7 @@ private fun formatCount(n: Double): String {
     return if (whole == 0 && f.isNotEmpty()) f else "$whole$f"
 }
 
+@Serializable
 data class Plate(val portions: List<Portion>, val gaps: List<String>) {
     val carbG: Double get() = portions.sumOf { it.carbG }
     val proteinG: Double get() = portions.sumOf { it.proteinG }
@@ -117,9 +124,11 @@ data class Plate(val portions: List<Portion>, val gaps: List<String>) {
     val label: String get() = portions.joinToString(" · ") { it.label }
 }
 
+@Serializable
 data class MealSuggestion(val plates: List<Plate>, val note: String?)
 
 /** The targets a plate is built for: a coded meal's carbohydrate range, protein and fat. */
+@Serializable
 data class PlateTarget(
     val kind: MealSlotKind,
     val carbLowG: Double,

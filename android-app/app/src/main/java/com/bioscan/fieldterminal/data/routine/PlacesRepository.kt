@@ -131,7 +131,11 @@ private fun ms(ts: String): Long? = parseTimestamp(ts)?.toEpochMilli()
 
 class PlacesRepository(private val supabase: SupabaseClient) {
 
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadPlaces(): List<PlaceRow> =
+        com.bioscan.fieldterminal.data.ReadCache.get("routine.places", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(PlaceRow.serializer())) { fetchLoadPlaces() }
+
+    private suspend fun fetchLoadPlaces(): List<PlaceRow> =
         supabase.postgrest.from("places")
             .select(columns = Columns.list("id,lat,lon,radius_m,label,category,source,osm_name,osm_category,created_at"))
             .decodeList<PlaceRow>()

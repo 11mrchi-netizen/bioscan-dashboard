@@ -86,4 +86,26 @@ class ReadCacheDiskTest {
         assertTrue(File(dir, "read_cache").listFiles()!!.isEmpty())
         assertEquals(listOf(5), ReadCache.get("test.signout", tables = setOf("t"), serializer = ser) { listOf(5) })
     }
+
+    // After an edit of the person's own, the page reloads with the edit: never the copy from before it.
+    @Test
+    fun anOwnEditForcesAFreshRead() = runBlocking {
+        val key = "test.edit.${System.nanoTime()}"
+        ReadCache.get(key, tables = setOf("supplements"), serializer = ser) { listOf(1) }
+        ReadCache.invalidateWrite("supplements")
+        assertEquals(listOf(2), ReadCache.get(key, tables = setOf("supplements"), serializer = ser) { listOf(2) })
+    }
+
+    // A watch sync (on every open) writes its tables: the page shows the last copy at once and redraws when it lands.
+    @Test
+    fun aSyncWriteKeepsTheLastCopyOnScreen() = runBlocking {
+        val key = "test.sync.${System.nanoTime()}"
+        ReadCache.get(key, tables = setOf("wearable_daily"), serializer = ser) { listOf(1) }
+        ReadCache.invalidateWrite("wearable_daily")
+        val updated = async(kotlinx.coroutines.Dispatchers.Default) { withTimeout(5_000) { ReadCache.updates.first { it == key } } }
+        kotlinx.coroutines.yield()
+        assertEquals(listOf(1), ReadCache.get(key, tables = setOf("wearable_daily"), serializer = ser) { listOf(1, 2) })
+        updated.await()
+        assertEquals(listOf(1, 2), ReadCache.get(key, tables = setOf("wearable_daily"), serializer = ser) { error("fresh in memory") })
+    }
 }

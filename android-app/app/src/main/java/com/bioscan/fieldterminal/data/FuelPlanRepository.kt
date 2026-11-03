@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.builtins.nullable
 import android.content.Context
 import com.bioscan.fieldterminal.domain.ActivityLevel
 import com.bioscan.fieldterminal.domain.EnergyBalanceKind
@@ -70,6 +73,7 @@ const val FUEL_ENGINE_VERSION = "1"
 const val FUEL_HORIZON_DAYS = 11
 
 /** One day of the plan page: the plan, its coded meals, two example plates per meal and the day in everyday terms. */
+@Serializable
 data class HorizonDay(
     val day: PlannedDay,
     val plan: DayFuelPlan,
@@ -81,8 +85,10 @@ data class HorizonDay(
 )
 
 /** A prep week's days (Monday to Sunday) with their coded meals, and the foods to portion from. */
+@Serializable
 data class WeekPlan(val days: List<CodedDay>, val foods: List<com.bioscan.fieldterminal.domain.fuel.FoodOption>, val weightKg: Double)
 
+@Serializable
 data class TodayFuel(
     val today: DayFuelPlan,
     val todayCoded: CodedDay,
@@ -101,8 +107,11 @@ data class TodayFuel(
     val horizon: List<HorizonDay> = emptyList(),
 )
 
+@Serializable
 sealed interface TodayFuelResult {
+    @Serializable
     data class Ready(val fuel: TodayFuel) : TodayFuelResult
+    @Serializable
     data object NeedsWeight : TodayFuelResult
 }
 
@@ -182,7 +191,11 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
      * Today's plan and the next ten days. Shared for a minute by the plan page and Today's line (the settings and the
      * goal are local, so they are part of the key); a write to any table the plan reads drops it.
      */
-    suspend fun loadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult {
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult =
+        com.bioscan.fieldterminal.data.ReadCache.get("fuel.today.${now.toLocalDate()}", tables = null, serializer = TodayFuelResult.serializer()) { fetchLoadToday(context, overview, now) }
+
+    private suspend fun fetchLoadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult {
         val key = "fuel.today.${now.toLocalDate()}.${FuelSettingsStore.get(context).hashCode()}.${NutritionGoalsStore.getGoals(context).hashCode()}.${overview?.todaysMeals?.size}"
         return ReadCache.get(key, ttlMs = 60_000L, tables = FUEL_TABLES) { computeToday(context, overview, now) }
     }
@@ -322,7 +335,11 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
      * A prep week's days, Monday to Sunday, coded with the goal holding over that week, and the foods to portion from:
      * what the PREP page portions its containers and breakfasts for.
      */
-    suspend fun loadWeekPlan(context: Context, overview: NutritionOverview?, weekStart: LocalDate, now: ZonedDateTime = ZonedDateTime.now()): WeekPlan? = coroutineScope {
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadWeekPlan(context: Context, overview: NutritionOverview?, weekStart: LocalDate, now: ZonedDateTime = ZonedDateTime.now()): WeekPlan? =
+        ReadCache.get("fuel.week.$weekStart.${now.toLocalDate()}", tables = null, serializer = WeekPlan.serializer().nullable) { fetchLoadWeekPlan(context, overview, weekStart, now) }
+
+    private suspend fun fetchLoadWeekPlan(context: Context, overview: NutritionOverview?, weekStart: LocalDate, now: ZonedDateTime = ZonedDateTime.now()): WeekPlan? = coroutineScope {
         val zone = now.zone
         val settings = FuelSettingsStore.get(context)
         val daysD = async { PlannedDayRepository(supabase).load(weekStart, days = 7 + 3, now = now) }

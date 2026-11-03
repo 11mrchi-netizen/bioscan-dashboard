@@ -1,4 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.trail
+
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 
 // The compact course an event keeps (athlete_events.course_profile): the smoothed elevation every [COURSE_PROFILE_STEP_M]
 // metres along the route. Enough to cut the course into climbs and descents again and to time it, without keeping the
@@ -7,6 +11,7 @@ package com.bioscan.fieldterminal.domain.trail
 const val COURSE_PROFILE_STEP_M = 100.0
 const val COURSE_PROFILE_MODEL_VERSION = "1"
 
+@Serializable
 data class CoursePoint(val distanceM: Double, val elevationM: Double?)
 
 data class CourseProfile(

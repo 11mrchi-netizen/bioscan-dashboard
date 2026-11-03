@@ -331,6 +331,7 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
             val today = java.time.LocalDate.now()
             Column(horizontalAlignment = Alignment.End) {
                 Text(spec.doseTextOn(today), style = FTType.Telemetry, color = FT.TextPrimary)
+                s.syringeUnits?.let { Text("${com.bioscan.fieldterminal.domain.formatAmount(it)} UNITS", style = FTType.MonoCaption, color = FT.TextSecondary) }
                 if (spec.kind != RegimenKind.SUPPLEMENT) {
                     Text(spec.kind.label.uppercase(), style = FTType.MonoCaption, color = FT.DomainLog, modifier = Modifier.padding(top = 3.dp))
                 }

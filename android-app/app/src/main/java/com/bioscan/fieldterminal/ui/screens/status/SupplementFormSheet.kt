@@ -54,6 +54,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import com.bioscan.fieldterminal.domain.formatAmount
+import com.bioscan.fieldterminal.domain.spec
 
 // DAV-81. The roster (`supplements`) itself had no UI to create or edit --
 // only ever read, by SupplementsScreen.kt's display and AddEntrySheet.kt's
@@ -356,6 +357,9 @@ fun SupplementFormSheet(
                 }
                 LabWatchSection(itemWatches, title = "LABS TO WATCH", showItem = false)
                 RegimenEffectsSection(existing.id)
+                if (regimen.injectable) {
+                    InjectableSection(existing.id, existing.spec(), regimen.syringeUnits.replace(',', '.').toDoubleOrNull() ?: existing.syringeUnits)
+                }
                 RegimenHistory(existing.id)
             }
             Spacer(Modifier.height(8.dp))

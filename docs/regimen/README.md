@@ -34,12 +34,26 @@ changes, and a history of every change that the rest of the app can draw on.
   cited source. Confirmed rows show as reviewed; a disputed interaction keeps its flag with the note; a disputed
   expected-effect claim is no longer shown. A review holds for the row version it was given on.
 
-## Next
+## Phases 2–6 (built)
 
-2. Changes drawn as bands on metric and lab charts; lab watch rules per substance (copper with zinc, ferritin with iron,
-   25-OH-D with vitamin D, hematocrit with testosterone).
-3. "Since you changed X" readings from the baseline engine, worded as observations, with a self-experiment offered.
-4. Medication pairs in the interaction registry; interaction timing for items taken at several times of day.
-5. Estimated level curves from half-lives, for medications and peptides only, labelled as estimates.
-6. Injectables: injection site rotation, vials with concentration, stock counted in syringe units as prescribed. The app
-   never suggests doses.
+- **Changes on the charts**: every detail-page chart and ME › BODY draws starts, stops and dose changes as dashed lines
+  with the newest in words; a REGIMEN chip hides them.
+- **Lab watch** (`lab_watch_rules`, five rules each checked against its PubMed record, seeded unreviewed): zinc above
+  25 mg a day → copper; testosterone → hematocrit and testosterone; creatine → creatinine/eGFR read with care; vitamin D
+  above 600 IU → no routine test, discuss the dose; iron → ferritin and iron status. ME › BLOODWORK opens with what
+  applies, the latest result or "never measured", and the source; the rules join the source review.
+- **Since you changed it** (`domain/RegimenEffects.kt`): three weeks before against the weeks after an item's latest
+  start or dose change, for seven metrics, shown only beyond the metric's own noise, worded as what happened alongside,
+  with other changes made within two weeks listed and a self-experiment pointed to.
+- **Interaction timing** uses every time of day an item is taken.
+- **Amount in the body** (`domain/AmountInBody.kt`): logged doses decaying by the label's half-life, over about five
+  half-lives, labelled as an outline, not a blood level.
+- **Injectables** (`supplement_log.injection_site`, `supplements.syringe_units`, `regimen_vials`): the site of each
+  dose with the one rested longest suggested; the open vial's concentration, doses left, discard date and spares; the
+  prescriber's syringe units shown as given and cross-checked against the mix, with a warning when they disagree. The
+  app never works out or suggests a dose.
+
+## Not built
+
+- PSA (the testosterone guideline's prostate check) is not read from lab results yet.
+- Lab watch has five rules; more are added by migration, each checked against its source first.

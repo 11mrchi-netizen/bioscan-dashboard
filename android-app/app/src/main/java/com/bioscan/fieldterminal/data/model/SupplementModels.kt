@@ -29,11 +29,13 @@ data class SupplementRow(
     val slots: List<String> = emptyList(),
     val schedule: com.bioscan.fieldterminal.domain.ScheduleJson? = null,
     @SerialName("dose_steps") val doseSteps: com.bioscan.fieldterminal.domain.DoseStepsJson? = null,
+    /** The prescriber's syringe units (U-100) for one dose, for injectables. */
+    @SerialName("syringe_units") val syringeUnits: Double? = null,
 )
 
 /** Every column [SupplementRow] reads, for selects. */
 const val SUPPLEMENT_ROW_COLUMNS =
-    "id,name,dose,time_of_day,status,start_date,end_date,ai_note,every_n_days,product_id,kind,form,route,dose_amount,dose_unit,slots,schedule,dose_steps"
+    "id,name,dose,time_of_day,status,start_date,end_date,ai_note,every_n_days,product_id,kind,form,route,dose_amount,dose_unit,slots,schedule,dose_steps,syringe_units"
 
 // DAV-81
 @Serializable

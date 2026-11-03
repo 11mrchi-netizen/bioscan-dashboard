@@ -92,6 +92,10 @@ class RegimenEditorState(existing: SupplementRow?, today: LocalDate = LocalDate.
         spec?.steps?.steps?.forEach { add(EditableStep(formatAmount(it.amount), it.weeks?.toString() ?: "")) }
     }
     val stepsStart: LocalDate = spec?.steps?.start?.let(LocalDate::parse) ?: today
+    var syringeUnits by mutableStateOf(existing?.syringeUnits?.let(::formatAmount) ?: "")
+
+    /** Injected (under the skin, into muscle, or an injection form): sites, vial and syringe units apply. */
+    val injectable: Boolean get() = route == "subcutaneous" || route == "intramuscular" || form == "injection"
 
     /** Kind-led defaults: a new peptide is an injection under the skin in mcg; a hormone or medication keeps what is set. */
     fun chooseKind(k: RegimenKind) {
@@ -106,6 +110,9 @@ class RegimenEditorState(existing: SupplementRow?, today: LocalDate = LocalDate.
         if (name.isBlank()) return null to "Add a name."
         val a = amount.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 } ?: return null to "Add the dose as a number."
         if (!asNeeded && slots.isEmpty()) return null to "Pick at least one time of day, or As needed."
+        val units = syringeUnits.replace(',', '.').trim().takeIf { injectable && it.isNotEmpty() }?.let {
+            it.toDoubleOrNull()?.takeIf { u -> u > 0 && u <= 100 } ?: return null to "Syringe units are a number from 1 to 100 (U-100 syringe)."
+        }
         val n = everyN.toIntOrNull()
         if (!asNeeded && type == ScheduleType.EVERY_N_DAYS && (n == null || n < 2)) return null to "Every N days needs N of 2 or more."
         if (!asNeeded && type == ScheduleType.WEEKDAYS && weekdays.isEmpty()) return null to "Pick the days of the week."
@@ -133,6 +140,7 @@ class RegimenEditorState(existing: SupplementRow?, today: LocalDate = LocalDate.
         return RegimenDraft(
             name = name.trim(), kind = kind.key, form = form, route = route, amount = a, unit = unit,
             slots = if (asNeeded) emptyList() else REGIMEN_SLOTS.filter { it in slots }, schedule = schedule, steps = stepJson,
+            syringeUnits = units,
         ) to null
     }
 
@@ -173,6 +181,14 @@ fun RegimenFields(state: RegimenEditorState) {
                 Chips(REGIMEN_ROUTES.map { it.second }, listOfNotNull(REGIMEN_ROUTES.firstOrNull { it.first == state.route }?.second), perRow = 4) { picked ->
                     state.route = REGIMEN_ROUTES.first { it.second == picked }.first
                 }
+            }
+        }
+
+        if (state.injectable) {
+            Column {
+                Label("SYRINGE UNITS YOUR PRESCRIBER GAVE (U-100, OPTIONAL)")
+                FieldTextField(state.syringeUnits, { state.syringeUnits = it }, "e.g. 10", keyboardType = KeyboardType.Decimal)
+                Hint("Shown on each dose as given. The app never works out a dose; it only checks these units against the vial's mix below.")
             }
         }
 

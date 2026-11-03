@@ -212,7 +212,13 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // other source already uses. `items` is (supplement id, name, roster
     // dose string) triples from whichever bundle(s)/individual as-needed
     // toggles were checked -- each gets its own parsed dose default (DAV-156).
-    suspend fun addSupplementsTaken(takenAt: String, items: List<Triple<Long, String, String>>, source: String = "manual", quantities: Map<Long, Double> = emptyMap()) {
+    suspend fun addSupplementsTaken(
+        takenAt: String,
+        items: List<Triple<Long, String, String>>,
+        source: String = "manual",
+        quantities: Map<Long, Double> = emptyMap(),
+        sites: Map<Long, String> = emptyMap(),
+    ) {
         // A quantity of 0 means "not taken": nothing is logged for it.
         val items = items.filter { (quantities[it.first] ?: 1.0) > 0.0 }
         if (items.isEmpty()) return
@@ -231,6 +237,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
                 doseValue = value?.let { it * qty }, doseUnit = unit,
                 productId = productIdBySupp[id], source = source,
                 servingCount = (servingsBySupp[id] ?: 1.0) * qty,
+                injectionSite = sites[id],
             )
         }
         val insertedRows = supabase.postgrest.from("supplement_log")

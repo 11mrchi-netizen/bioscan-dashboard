@@ -61,6 +61,7 @@ data class RegimenDraft(
     val slots: List<String>,
     val schedule: com.bioscan.fieldterminal.domain.ScheduleJson,
     val steps: com.bioscan.fieldterminal.domain.DoseStepsJson?,
+    val syringeUnits: Double? = null,
 )
 
 @Serializable
@@ -129,6 +130,7 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
             put("slots", kotlinx.serialization.json.JsonArray(draft.slots.map { kotlinx.serialization.json.JsonPrimitive(it) }))
             put("schedule", json.encodeToJsonElement(com.bioscan.fieldterminal.domain.ScheduleJson.serializer(), draft.schedule))
             put("dose_steps", draft.steps?.let { json.encodeToJsonElement(com.bioscan.fieldterminal.domain.DoseStepsJson.serializer(), it) } ?: kotlinx.serialization.json.JsonNull)
+            put("syringe_units", draft.syringeUnits)
             put("dose", legacy.dose)
             put("time_of_day", legacy.timeOfDay)
             put("every_n_days", legacy.everyNDays)

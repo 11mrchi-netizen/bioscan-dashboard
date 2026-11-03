@@ -106,6 +106,7 @@ import com.bioscan.fieldterminal.domain.nextDueAfter
 import com.bioscan.fieldterminal.domain.scheduleWords
 import com.bioscan.fieldterminal.domain.stateWords
 import com.bioscan.fieldterminal.domain.spec
+import com.bioscan.fieldterminal.domain.injectable
 import com.bioscan.fieldterminal.domain.supplementNextDueDate
 import com.bioscan.fieldterminal.domain.FuelSubType
 import com.bioscan.fieldterminal.domain.formatRecentChoices
@@ -775,7 +776,7 @@ private fun FuelForm(
                 externalActivityActive = externalActivityActive,
             )
             FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
-            FuelSubType.Supplements -> SupplementsForm(saving, preselectBundle = supplementBundle, onSave = { takenAt, items, source, quantities -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities) } })
+            FuelSubType.Supplements -> SupplementsForm(saving, preselectBundle = supplementBundle, onSave = { takenAt, items, source, quantities, sites -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities, sites) } })
             FuelSubType.Endurance -> com.bioscan.fieldterminal.ui.screens.fuel.RunFuelEntry(onSaved = onCanonicalSaved)
         }
     }
@@ -1448,10 +1449,13 @@ private fun SupplementsForm(
     initialDateTime: LocalDateTime = LocalDateTime.now(),
     // The bundle the Status hub's + SUPPS found still due now; ticked on open, untick to change.
     preselectBundle: String? = null,
-    onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String, quantities: Map<Long, Double>) -> Unit,
+    onSave: (takenAt: String, items: List<Triple<Long, String, String>>, source: String, quantities: Map<Long, Double>, sites: Map<Long, String>) -> Unit,
 ) {
     var dateTime by remember { mutableStateOf(initialDateTime) }
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
+    // Injectables: each injected dose's site, defaulting to the one rested longest (domain/Injectables.kt).
+    var siteHistory by remember { mutableStateOf<Map<Long, List<Pair<String, java.time.Instant>>>>(emptyMap()) }
+    var sites by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
     var checkedBundles by remember { mutableStateOf(setOfNotNull(preselectBundle)) }
     var checkedAsNeeded by remember { mutableStateOf(setOf<Long>()) }
     // DAV-362: items picked by barcode are selected one by one, never as a time-of-day bundle.
@@ -1469,6 +1473,11 @@ private fun SupplementsForm(
             val takes = repo.loadRecentTakes(active.map { it.id })
             recentLastTaken = takes.lastTaken
             takesToday = takes.takesToday
+            val injectableIds = active.filter { it.spec().injectable }.map { it.id }
+            if (injectableIds.isNotEmpty()) {
+                siteHistory = runCatching { com.bioscan.fieldterminal.data.InjectablesRepository(SupabaseClientProvider.client).siteHistory(injectableIds) }
+                    .getOrDefault(emptyMap())
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -1609,8 +1618,26 @@ private fun SupplementsForm(
                 }
             }
         }
+        val injected = selectedItems.filter { (quantities[it.first] ?: 1.0) > 0.0 }.mapNotNull { (id, name, _) ->
+            specs[id]?.takeIf { it.injectable }?.let { Triple(id, name, it) }
+        }
+        val chosenSites = injected.associate { (id, _, spec) ->
+            id to (sites[id] ?: com.bioscan.fieldterminal.domain.nextSite(com.bioscan.fieldterminal.domain.sitesFor(spec), siteHistory[id].orEmpty())?.key)
+        }.filterValues { it != null }.mapValues { it.value!! }
+        if (injected.isNotEmpty()) {
+            FormLabel("INJECTION SITE")
+            injected.forEach { (id, name, spec) ->
+                val options = com.bioscan.fieldterminal.domain.sitesFor(spec)
+                val suggested = com.bioscan.fieldterminal.domain.nextSite(options, siteHistory[id].orEmpty())
+                val units = list.firstOrNull { it.id == id }?.syringeUnits?.let { " · ${com.bioscan.fieldterminal.domain.formatAmount(it)} units as prescribed" } ?: ""
+                Text("$name$units · suggested: ${suggested?.label ?: "—"} (rested longest)", style = FTType.Caption, color = FT.TextSecondary)
+                TextChipRow(options.map { it.label }, options.firstOrNull { it.key == chosenSites[id] }?.label, perRow = 2) { picked ->
+                    options.firstOrNull { it.label == picked }?.let { sites = sites + (id to it.key) }
+                }
+            }
+        }
         SaveButton(saving, selectedItems.any { (quantities[it.first] ?: 1.0) > 0.0 }) {
-            onSave(dateTime.toIsoWithOffset(), selectedItems.filter { (quantities[it.first] ?: 1.0) > 0.0 }, source, quantities)
+            onSave(dateTime.toIsoWithOffset(), selectedItems.filter { (quantities[it.first] ?: 1.0) > 0.0 }, source, quantities, chosenSites)
         }
     }
 }

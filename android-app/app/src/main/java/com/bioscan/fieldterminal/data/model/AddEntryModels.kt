@@ -128,6 +128,8 @@ data class NewSupplementLogRow(
     val source: String? = null,
     // Label servings consumed (supplements.servings_per_dose); pantry consumption.
     @SerialName("serving_count") val servingCount: Double? = null,
+    // Injectables: where this dose went (domain/Injectables.kt site keys).
+    @SerialName("injection_site") val injectionSite: String? = null,
 )
 
 // Update-only counterpart -- a taken supplement's name/supplement_id are

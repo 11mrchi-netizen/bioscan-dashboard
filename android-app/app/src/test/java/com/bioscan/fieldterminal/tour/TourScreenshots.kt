@@ -68,7 +68,8 @@ private val ZONE = ZoneOffset.UTC
 private val TODAY = LocalDate.of(2026, 11, 3)
 private val OUT: String? = System.getenv("FT_SCREENSHOTS_DIR")
 
-private fun person(): ScoresView {
+/** The tour's person, scored through the real pipeline; also the fixture for TODAY's save-and-reload test. */
+internal fun tourPerson(): ScoresView {
     val r = Random(42)
     val days = 240
     val first = TODAY.minusDays(days - 1L)
@@ -130,7 +131,7 @@ private fun person(): ScoresView {
     )
 }
 
-private val VIEW by lazy { person() }
+private val VIEW by lazy { tourPerson() }
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36], qualifiers = "w400dp-h2400dp-xhdpi", application = android.app.Application::class)

@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain.score
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 
 // Scoring system: the five domains, what each reads and how much each input weighs.
@@ -70,6 +73,7 @@ object ScoreKeys {
 }
 
 /** A group of inputs inside a domain (FUEL's intake and gut, BALANCE's nervous system, mind and rhythm). */
+@Serializable
 data class DomainGroup(
     val key: String,
     val label: String,
@@ -190,9 +194,11 @@ object ScoreSpecs {
     val ALL: Map<DomainKey, DomainSpec> = listOf(SLEEP, RECOVERY, LOAD, FUEL, BALANCE).associateBy { it.key }
 }
 
+@Serializable
 data class GroupScore(val group: DomainGroup, val score: Double?, val inputs: List<InputScore>, val coverage: Double)
 
 /** A domain's combination of its inputs for one morning, before it is ranked against its own history. */
+@Serializable
 data class DomainRaw(
     val key: DomainKey,
     /** Null when PARTIAL (coverage under [ScoreSpecs.MIN_COVERAGE]). */

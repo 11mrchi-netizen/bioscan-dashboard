@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain.score
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -43,8 +46,10 @@ enum class LoadDirection(val label: String) { HIGH("HIGH SIDE"), IN_BAND("IN BAN
 enum class ChargeStatus { PROVISIONAL, FINAL }
 
 /** Something that holds CHARGE down regardless of the domains: an open illness, an acute injury, an acute gut episode. */
+@Serializable
 data class ChargeCap(val reason: String, val ceiling: Double = CAP_CEILING)
 
+@Serializable
 data class DomainScore(
     val key: DomainKey,
     /** Null when PARTIAL. */
@@ -60,8 +65,10 @@ data class DomainScore(
     val change: Double? get() = if (score != null && previous != null) score - previous else null
 }
 
+@Serializable
 data class Driver(val key: DomainKey, val points: Double)
 
+@Serializable
 data class ChargeScore(
     val day: LocalDate,
     /** Null when neither SLEEP nor RECOVERY could be scored. */
@@ -84,6 +91,7 @@ data class ChargeScore(
     val change: Double? get() = if (score != null && previous != null) score - previous else null
 }
 
+@Serializable
 data class DayScores(
     val day: LocalDate,
     val charge: ChargeScore,

@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain.score
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.ln
@@ -15,11 +18,13 @@ import kotlin.math.sign
 typealias Series = Map<LocalDate, Double>
 
 /** How an input is judged. */
+@Serializable
 sealed interface InputKind {
     /**
      * Against the person's own recent days: robust z of the value against the median and spread of the [window] days
      * before it. [betterHigher] sets the direction. Changes inside [deadZone] standard deviations count as none.
      */
+    @Serializable
     data class Baseline(
         val betterHigher: Boolean,
         val log: Boolean = false,
@@ -34,6 +39,7 @@ sealed interface InputKind {
      * Against the person's own recent days, where any change from usual is worse (breathing rate, sleep timing):
      * a day at the usual value scores the top of normal, and each standard deviation away costs one.
      */
+    @Serializable
     data class Stability(
         val log: Boolean = false,
         val minSd: Double = 0.0,
@@ -43,15 +49,19 @@ sealed interface InputKind {
     ) : InputKind
 
     /** At least [target]: on or above scores the top of normal; each [scale] short costs one standard deviation. */
+    @Serializable
     data class AtLeast(val target: Double, val scale: Double) : InputKind
 
     /** At most [limit]: on or below scores the top of normal; each [scale] over costs one standard deviation. */
+    @Serializable
     data class AtMost(val limit: Double, val scale: Double) : InputKind
 
     /** Inside [lo]..[hi]: inside scores the top of normal; each [scale] outside (either side) costs one. */
+    @Serializable
     data class Band(val lo: Double, val hi: Double, val scale: Double) : InputKind
 }
 
+@Serializable
 data class InputSpec(
     val key: String,
     val label: String,
@@ -64,6 +74,7 @@ data class InputSpec(
 /** Where an input's value sits against its reference: shown as ▲ / ● / ▼ (or ✓ / ↓ / ↑ for targets). */
 enum class InputDirection { ABOVE, NORMAL, BELOW, ON_TARGET, SHORT, OVER }
 
+@Serializable
 data class InputScore(
     val spec: InputSpec,
     val value: Double,

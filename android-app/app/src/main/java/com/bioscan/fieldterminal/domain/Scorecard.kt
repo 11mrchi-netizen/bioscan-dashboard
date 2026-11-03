@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import kotlin.math.PI
 import kotlin.math.abs
@@ -44,8 +47,10 @@ data class ScorecardSpec(
 
 enum class ScorecardVerdict { EARNS_ITS_PLACE, NO_BETTER, UNCLEAR, NOT_YET }
 
+@Serializable
 data class PredictorScore(val key: String, val label: String, val days: Int, val meanScore: Double)
 
+@Serializable
 data class ScorecardResult(
     val key: String,
     val label: String,

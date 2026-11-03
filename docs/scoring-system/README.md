@@ -510,6 +510,20 @@ Requested on the editable app map (claude.ai artifact "Field Terminal Map"):
 - **Removed**: the Training, Nutrition and Health tabbed pages, the old Today page (the 22:25 reminder opens TODAY with
   the check-in up) and the unreferenced Status hub.
 
+### Phase 5b (built): TODAY built once a day and kept on disk
+
+Opening the app rebuilt TODAY every time: nothing outlived the app process, and the Health Connect and Zepp syncs that
+start on every open wrote rows, which marked the page stale and rebuilt it again (network plus the score engine over
+eight months). Now:
+
+- The finished page is kept on disk (`TodayStore`, `today_page.json`: the scores, strips, scorecards, series and the last
+  plan), as well as in memory, so a cold open shows it at once.
+- It is still checked in the background when it may be stale (a write, a new day, 15 minutes), but silently, and the
+  engine only runs again when what it reads changed: `scoreInputsKey` (domain/score/ScoreKey.kt) digests the assembled
+  series, planned sessions done, caps, whether yesterday is closed and whether it is past noon. A sync that rewrites the
+  same rows gives the same key and the kept scores stand; only the rows the views draw from are refreshed.
+- The plan rows and SO FAR line come back from disk too, until the fuel plan has loaded again.
+
 ### Verified
 
 - **Unit tests:** the full Android suite passes, 1,107 tests with 0 failures (plus 13 opt-in tour renders). That is 1,039 existing tests plus

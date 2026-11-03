@@ -1,5 +1,9 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.score.scoreInputsKey
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import android.content.Context
 import com.bioscan.fieldterminal.domain.HealthFlag
 import com.bioscan.fieldterminal.domain.score.ChargeStatus
@@ -45,6 +49,7 @@ const val SCORE_STRIP_DAYS = 30L
 /** How long an injury counts as acute and caps CHARGE. An illness caps for as long as it is open. */
 const val ACUTE_INJURY_DAYS = 7L
 
+@Serializable
 data class ScoresView(
     val day: LocalDate,
     val scores: DayScores,
@@ -65,6 +70,9 @@ data class ScoresView(
     val exerciseWindows: List<Pair<Instant, Instant>> = emptyList(),
 )
 
+/** A scored morning and the key of what it was scored from (domain/score/ScoreKey.kt). */
+data class KeyedScores(val view: ScoresView, val key: String)
+
 class ScoresRepository(private val supabase: SupabaseClient) {
 
     suspend fun load(
@@ -73,7 +81,22 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         healthFlag: HealthFlag?,
         now: LocalDateTime = LocalDateTime.now(),
         zone: ZoneId = ZoneId.systemDefault(),
-    ): ScoresView = coroutineScope {
+    ): ScoresView = loadKeyed(context, nutrition, healthFlag, now, zone).view
+
+    /**
+     * Scores this morning. When [previous] was scored from the same inputs ([previousKey] matches), its scores, strips,
+     * quality and weights are kept as they are and only the rows the views draw from are refreshed: the engine (the slow
+     * part) runs once per change of data, not once per open.
+     */
+    suspend fun loadKeyed(
+        context: Context,
+        nutrition: NutritionOverview?,
+        healthFlag: HealthFlag?,
+        now: LocalDateTime = LocalDateTime.now(),
+        zone: ZoneId = ZoneId.systemDefault(),
+        previous: ScoresView? = null,
+        previousKey: String? = null,
+    ): KeyedScores = coroutineScope {
         val today = now.toLocalDate()
         val analysis = AnalysisRepository(supabase)
         val wearable = async { analysis.loadWearableDaily() }
@@ -119,6 +142,28 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             // morning after it.
             val healthCaps = capsFrom(episodes)
             val gutDays = acuteGutDays(sources.checkins, sources.stool, zone)
+            val plannedDone = plannedDoneByDay(sources.planned)
+            val key = scoreInputsKey(
+                today, series, plannedDone,
+                caps = episodes.map { it.toString() } + gutDays.map { "gut $it" },
+                closedYesterday = closedYesterday,
+                afterNoon = now.toLocalTime() >= java.time.LocalTime.NOON,
+            )
+            val lastSleep = sources.sleep.maxByOrNull { it.date }
+            val exerciseWindows = sessionRows.mapNotNull { row ->
+                // Session starts are logged times (local digits); stress samples are real instants.
+                val start = com.bioscan.fieldterminal.domain.WallClock.instant(row.startTime, zone) ?: return@mapNotNull null
+                val minutes = row.durationMin ?: return@mapNotNull null
+                start to start.plusSeconds((minutes * 60).toLong())
+            }
+            // The views draw the last week by zone and the day's curve against the weeks before it; older days are not kept.
+            val stressShown = sources.stressDays.filter { !it.date.isBefore(today.minusDays(30)) }
+            if (previous != null && previousKey == key && previous.day == today) {
+                return@withContext KeyedScores(
+                    previous.copy(series = series, stool = sources.stool, lastSleep = lastSleep, stressDays = stressShown, exerciseWindows = exerciseWindows),
+                    key,
+                )
+            }
             val caps: (LocalDate) -> ChargeCap? = { morning ->
                 healthCaps(morning) ?: if (morning.minusDays(1) in gutDays) ChargeCap("Acute gut day") else null
             }
@@ -130,26 +175,24 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             val weights = fitChargeWeights(defaultHistory.chargeInputs, series[ScoreKeys.HRV].orEmpty(), today)
             val engine = if (weights.personal) ScoreEngine(series, caps = caps, weights = weights.weights) else defaultEngine
             val history = if (weights.personal) engine.history(historyFrom, today) else defaultHistory
-            val quality = runCatching { scoreQuality(history, series, plannedDoneByDay(sources.planned), weights) }.getOrNull()
+            val quality = runCatching { scoreQuality(history, series, plannedDone, weights) }.getOrNull()
             val from = today.minusDays(SCORE_STRIP_DAYS - 1)
-            ScoresView(
-                day = today,
-                scores = engine.score(today),
-                status = chargeStatus(today, closedYesterday, now),
-                chargeStrip = engine.chargeStrip(from, today),
-                domainStrips = DomainKey.entries.associateWith { engine.domainStrip(it, from, today) },
-                series = series,
-                quality = quality,
-                weights = weights,
-                stool = sources.stool,
-                lastSleep = sources.sleep.maxByOrNull { it.date },
-                stressDays = sources.stressDays,
-                exerciseWindows = sessionRows.mapNotNull { row ->
-                    // Session starts are logged times (local digits); stress samples are real instants.
-                    val start = com.bioscan.fieldterminal.domain.WallClock.instant(row.startTime, zone) ?: return@mapNotNull null
-                    val minutes = row.durationMin ?: return@mapNotNull null
-                    start to start.plusSeconds((minutes * 60).toLong())
-                },
+            KeyedScores(
+                ScoresView(
+                    day = today,
+                    scores = engine.score(today),
+                    status = chargeStatus(today, closedYesterday, now),
+                    chargeStrip = engine.chargeStrip(from, today),
+                    domainStrips = DomainKey.entries.associateWith { engine.domainStrip(it, from, today) },
+                    series = series,
+                    quality = quality,
+                    weights = weights,
+                    stool = sources.stool,
+                    lastSleep = lastSleep,
+                    stressDays = stressShown,
+                    exerciseWindows = exerciseWindows,
+                ),
+                key,
             )
         }
     }

@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain.score
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import com.bioscan.fieldterminal.domain.ScorePredictor
 import com.bioscan.fieldterminal.domain.ScoreRule
 import com.bioscan.fieldterminal.domain.ScorecardResult
@@ -100,6 +103,7 @@ private fun shifted(outcome: Map<LocalDate, Double>, lag: Int): Map<LocalDate, D
     return out
 }
 
+@Serializable
 data class ScoreQuality(
     val charge: ScorecardResult?,
     /** CHARGE against the day's planned sessions done (null without planned days). */
@@ -143,6 +147,7 @@ fun scoreQuality(
 
 // ---- personal weights ----
 
+@Serializable
 data class ChargeWeights(
     val weights: Map<DomainKey, Double>,
     val personal: Boolean,

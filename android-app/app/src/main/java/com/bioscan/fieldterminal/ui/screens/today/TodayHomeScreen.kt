@@ -1,6 +1,10 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
+
 package com.bioscan.fieldterminal.ui.screens.today
 
 import androidx.compose.foundation.background
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -72,6 +76,7 @@ private val TIME = DateTimeFormatter.ofPattern("HH:mm")
 enum class PlanKind { MEAL, SESSION, SUPPLEMENTS, CLOSE }
 
 /** One row of TODAY'S PLAN; [kcal] sizes a meal's marker and [durationMin] a session's. */
+@Serializable
 data class PlanRow(
     val time: LocalTime?,
     val title: String,
@@ -84,16 +89,27 @@ data class PlanRow(
 )
 
 /** Intake so far today, for the SO FAR bar: kcal against the target, split by where the kcal came from. */
+@Serializable
 data class SoFar(val kcal: Double, val target: Double?, val carbsG: Double, val proteinG: Double, val fatG: Double)
 
+@Serializable
 sealed interface PlanAction {
+    @Serializable
     data object SoFar : PlanAction
+    @Serializable
     data class Meal(val kind: com.bioscan.fieldterminal.domain.fuel.MealSlotKind) : PlanAction
+    @Serializable
     data class CloseDay(val date: LocalDate) : PlanAction
     /** A supplement block (morning, afternoon, night): the supplement form opens with that block ticked, ready to log. */
+    @Serializable
     data class Supplements(val bucket: String) : PlanAction
+    @Serializable
     data class Tab(val tab: com.bioscan.fieldterminal.ui.nav.TopLevelTab) : PlanAction
 }
+
+/** Intake so far today for the SO FAR line, or null before the nutrition overview has loaded. */
+fun soFarOf(nut: NutritionOverview?, fuel: TodayFuel?): SoFar? =
+    nut?.let { n -> n.today.let { t -> SoFar(t?.calories ?: 0.0, fuel?.today?.kcal, t?.carbsG ?: 0.0, t?.proteinG ?: 0.0, t?.fatG ?: 0.0) } }
 
 /** The demand a planned session's intensity puts on CHARGE: READY when CHARGE reaches it. A documented opinion. */
 fun readyThreshold(intensity: com.bioscan.fieldterminal.domain.fuel.Intensity): Double = when (intensity) {
@@ -175,6 +191,10 @@ fun TodayHomeScreen(
     var fuel by remember { mutableStateOf(kept?.fuel) }
     var previews by remember { mutableStateOf(kept?.previews) }
     var closed by remember { mutableStateOf(kept?.closed ?: emptySet()) }
+    var scoresKey by remember { mutableStateOf(kept?.key) }
+    // The plan and SO FAR as last drawn: shown (from disk, after Android closed the app) until the fuel plan has loaded.
+    var keptRows by remember { mutableStateOf(kept?.rows) }
+    var keptSoFar by remember { mutableStateOf(kept?.soFar) }
     var stack by remember { mutableStateOf<List<ScoreOverlay>>(emptyList()) }
     var soFar by remember { mutableStateOf(false) }
     var mealKind by remember { mutableStateOf<com.bioscan.fieldterminal.domain.fuel.MealSlotKind?>(null) }
@@ -213,8 +233,18 @@ fun TodayHomeScreen(
             loading = false
             return@LaunchedEffect
         }
-        loading = true
         val day = LocalDate.now()
+        // After Android closed the app: the page kept on disk for today goes on screen at once.
+        if (view == null) {
+            TodayStore.readDisk(context, day)?.let { k ->
+                view = k.view
+                scoresKey = k.key
+                keptRows = k.rows
+                keptSoFar = k.soFar
+                closed = k.closed
+            }
+        }
+        loading = true
         guard.run {
             coroutineScope {
                 val client = SupabaseClientProvider.client
@@ -229,13 +259,25 @@ fun TodayHomeScreen(
                     runCatching { EveningCheckinRepository(client).loadSince(LocalDate.now().minusDays(1)).map(EveningCheckin::date).toSet() }.getOrDefault(emptySet())
                 }
                 val o = overviewD.await()
-                view = ScoresRepository(client).load(context, n, o?.healthFlag)
+                // The score engine only runs again when what it reads changed (equal key: the kept scores stand).
+                val keyed = ScoresRepository(client).loadKeyed(context, n, o?.healthFlag, previous = view, previousKey = scoresKey)
+                view = keyed.view
+                scoresKey = keyed.key
                 previews = previewsD.await()
                 fuel = fuelD.await()
                 closed = closedD.await()
             }
-            // Keep the finished page, stamped after the load so the load's own bookkeeping writes don't count.
-            TodayStore.snapshot = TodaySnapshot(day, view, nut, fuel, previews, closed, System.currentTimeMillis(), com.bioscan.fieldterminal.data.ReadCache.writeStamp(TodayStore.TABLES))
+            // Keep the finished page, stamped after the load so the load's own bookkeeping writes don't count: in memory,
+            // and on disk for the next time the app is opened today.
+            val drawnAt = LocalDateTime.now()
+            val rows = planRows(drawnAt, fuel, previews, view?.scores?.charge?.score, day.minusDays(1) in closed, day in closed)
+            val sf = soFarOf(nut, fuel)
+            keptRows = rows
+            keptSoFar = sf
+            TodayStore.snapshot = TodaySnapshot(day, view, nut, fuel, previews, closed, System.currentTimeMillis(), com.bioscan.fieldterminal.data.ReadCache.writeStamp(TodayStore.TABLES), scoresKey, rows, sf)
+            val v = view
+            val k = scoresKey
+            if (v != null && k != null) TodayStore.writeDisk(context, KeptToday(TodayStore.FORMAT, day, System.currentTimeMillis(), k, v, rows, sf, closed))
         }
         loading = false
     }
@@ -248,9 +290,11 @@ fun TodayHomeScreen(
         val now = LocalDateTime.now()
         TodayContent(
             view = view,
-            rows = planRows(now, fuel, previews, view?.scores?.charge?.score, now.toLocalDate().minusDays(1) in closed, now.toLocalDate() in closed),
-            soFar = nut?.let { n -> n.today.let { t -> SoFar(t?.calories ?: 0.0, fuel?.today?.kcal, t?.carbsG ?: 0.0, t?.proteinG ?: 0.0, t?.fatG ?: 0.0) } },
-            loading = loading,
+            rows = if (fuel == null && previews == null && keptRows != null) keptRows!!
+            else planRows(now, fuel, previews, view?.scores?.charge?.score, now.toLocalDate().minusDays(1) in closed, now.toLocalDate() in closed),
+            soFar = soFarOf(nut, fuel) ?: keptSoFar,
+            // A kept page is refreshed silently: LOADING shows only while there is nothing to show yet.
+            loading = loading && view == null,
             today = now.toLocalDate(),
             onOpenOverlay = { stack = listOf(it) },
             onRow = { action ->

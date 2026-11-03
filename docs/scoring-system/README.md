@@ -486,6 +486,30 @@ to be rebuilt each time the tab opened.
 - **Writes that don't count:** the load's own bookkeeping writes (daily_context, fuel_plans) don't mark it stale.
 - **Not kept across restarts:** if Android reclaims the app, the next open builds it once.
 
+### Phase 5 (built): the app map's change requests, and the old tabbed pages restyled
+
+Requested on the editable app map (claude.ai artifact "Field Terminal Map"):
+
+- **Each ring's tiles open pages of their own** (`ui/screens/detail`), replacing the Health, Training and Nutrition
+  tabbed pages: Sleep, Heart, Sexual health (RECOVERY), Training load (with ALL SESSIONS at the bottom) and Injury (LOAD),
+  Nutrition, Hydration and Digestion (FUEL), Wellbeing (BALANCE). Digestion joins the stool hypnogram and bowel timing on
+  one page; FUEL's tile keeps the small stool hypnogram as its thumbnail.
+- **Restyled** in the overlays' look (`DetailKit.kt`): back arrow, one 30 D · 90 D · 1 Y range per page, glass sections,
+  the number first with where it sits against your normal (`domain/MetricReading.kt`, the score engine's robust band),
+  then its chart; explanations behind each section's ⓘ. New charts: trend with normal band and target lines, stacked
+  columns (stages, macros, weekly load with deloads), day-range bars, multi-line (fitness and fatigue), share bars,
+  stat tiles. Metric rows open their own full-screen chart.
+- **Last night** adds resting HR and breathing tiles under the hypnogram.
+- **Stress through the day** adds the last 7 days as small hypnograms across Zepp's four zones (`domain/stress/StressZones.kt`).
+- **ME › PERFORMANCE is a hub of sports** (`domain/SportCatalog.kt`, `ui/screens/performance`): Running, Strength and
+  Conditioning first, then every other recorded type (cycling, hiking, walking, yoga...) by recency, each a tile with
+  four weeks and twelve weeks of hours. Running, Strength and Conditioning keep their pages (restyled); any other sport
+  gets a generic page (volume, effort, records, latest sessions).
+- **The supplement reminder opens that block ready to log** (TODAY with the supplement form, the block ticked); TODAY's
+  supplement rows do the same.
+- **Removed**: the Training, Nutrition and Health tabbed pages, the old Today page (the 22:25 reminder opens TODAY with
+  the check-in up) and the unreferenced Status hub.
+
 ### Verified
 
 - **Unit tests:** the full Android suite passes, 1,107 tests with 0 failures (plus 13 opt-in tour renders). That is 1,039 existing tests plus

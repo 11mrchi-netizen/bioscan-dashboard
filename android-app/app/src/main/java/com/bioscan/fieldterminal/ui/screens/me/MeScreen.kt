@@ -40,6 +40,7 @@ fun MeScreen(
     onOpenTrainingPlan: () -> Unit,
     onOpenConditioning: () -> Unit,
     onOpenConcern: (String) -> Unit,
+    onOpenSport: (com.bioscan.fieldterminal.domain.Sport) -> Unit = {},
     requestedTab: MeTab? = null,
     onRequestedTabConsumed: () -> Unit = {},
 ) {
@@ -56,7 +57,7 @@ fun MeScreen(
             title = "ME",
             subtitle = when (tab) {
                 MeTab.Healthspan -> "HEALTHSPAN · AGING · LEVELS · BLOCK"
-                MeTab.Performance -> "RUNNING · STRENGTH"
+                MeTab.Performance -> "EVERY SPORT YOU RECORD"
                 MeTab.Body -> "WEIGHT · BODY FAT · MEASUREMENTS"
                 MeTab.Health -> "INJURIES · PAIN · SYMPTOMS · ILLNESS"
                 MeTab.Bloodwork -> "LAB DRAWS · MARKERS"
@@ -77,7 +78,8 @@ fun MeScreen(
                     onOpenTrainingPlan = onOpenTrainingPlan,
                     onOpenSkill = { skill ->
                         when (skill) {
-                            Skill.RUNNING, Skill.STRENGTH -> tab = MeTab.Performance
+                            Skill.RUNNING -> onOpenSport(com.bioscan.fieldterminal.domain.sportOf("run", null))
+                            Skill.STRENGTH -> onOpenSport(com.bioscan.fieldterminal.domain.sportOf("strength", null))
                             Skill.CONDITIONING -> onOpenConditioning()
                         }
                     },
@@ -85,9 +87,8 @@ fun MeScreen(
                 )
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     when (tab) {
-                        MeTab.Performance -> {
-                            com.bioscan.fieldterminal.ui.screens.user.RunningTab()
-                            com.bioscan.fieldterminal.ui.screens.user.StrengthTab()
+                        MeTab.Performance -> Column(Modifier.padding(16.dp)) {
+                            com.bioscan.fieldterminal.ui.screens.performance.PerformanceHub(onOpenSport)
                         }
                         MeTab.Body -> com.bioscan.fieldterminal.ui.screens.status.BodyTabContent()
                         MeTab.Health -> com.bioscan.fieldterminal.ui.screens.health.ConcernsTab(onOpenConcern = onOpenConcern)

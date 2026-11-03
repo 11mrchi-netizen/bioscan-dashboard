@@ -68,10 +68,10 @@ fun <T : Any> LoadedContent(load: suspend () -> T, content: @Composable (T) -> U
 
 @Composable
 fun SkillHeroCard(skill: Skill, level: SkillLevel, info: String, extra: @Composable ColumnScope.() -> Unit = {}) {
-    FTCard(dataQuality = level.confidence, title = "${skill.title} LEVEL", info = info) {
+    com.bioscan.fieldterminal.ui.screens.detail.Section("${skill.title} LEVEL", info = info) {
         val position = level.position
         if (position == null) {
-            FTDataState(DataAvailability.Building, level.reason)
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine(level.reason ?: "Not enough data yet.")
         } else {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(level.label, style = FTType.MetricMedium, color = FT.TextPrimary)

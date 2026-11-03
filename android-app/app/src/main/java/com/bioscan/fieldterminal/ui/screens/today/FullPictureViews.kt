@@ -1,6 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.today
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,24 +48,24 @@ import java.time.ZoneId
 
 const val PICTURE_DAYS = 14L
 
-/** An existing detail page a full-picture tile opens (a pushed page with its own tabs), rather than an overlay. */
-enum class DetailPage {
-    HEALTH_SLEEP, HEALTH_CARDIO, HEALTH_SEXUAL, HEALTH_WELLBEING, TRAINING_LOAD, TRAINING_INJURY, NUTRITION_MAIN, NUTRITION_HYDRATION,
+/** A detail page a full-picture tile opens (a pushed page of its own, ui/screens/detail), rather than an overlay. */
+enum class DetailPage(val route: String) {
+    SLEEP("detail_sleep"), CARDIO("detail_cardio"), SEXUAL("detail_sexual"), WELLBEING("detail_wellbeing"),
+    LOAD("detail_load"), INJURY("detail_injury"), NUTRITION("detail_nutrition"), HYDRATION("detail_hydration"), DIGESTION("detail_digestion"),
 }
 
 enum class FullPicture(val title: String, val domain: DomainKey, val detail: DetailPage? = null) {
     LAST_NIGHT("Last night", DomainKey.SLEEP),
-    SLEEP_CHARTS("Sleep · every chart", DomainKey.SLEEP, DetailPage.HEALTH_SLEEP),
-    CARDIO_CHARTS("Heart · every chart", DomainKey.RECOVERY, DetailPage.HEALTH_CARDIO),
-    SEXUAL_HEALTH("Sexual health", DomainKey.RECOVERY, DetailPage.HEALTH_SEXUAL),
-    LOAD_CHARTS("Training load · every chart", DomainKey.LOAD, DetailPage.TRAINING_LOAD),
-    INJURY("Injury", DomainKey.LOAD, DetailPage.TRAINING_INJURY),
-    DIGESTIVE_PATTERN("Digestive pattern · 14 days", DomainKey.FUEL),
-    BOWEL_TIMING("Bowel timing · 14 days", DomainKey.FUEL),
-    NUTRITION_CHARTS("Nutrition · every chart", DomainKey.FUEL, DetailPage.NUTRITION_MAIN),
-    HYDRATION_CHARTS("Hydration", DomainKey.FUEL, DetailPage.NUTRITION_HYDRATION),
+    SLEEP_CHARTS("Sleep", DomainKey.SLEEP, DetailPage.SLEEP),
+    CARDIO_CHARTS("Heart", DomainKey.RECOVERY, DetailPage.CARDIO),
+    SEXUAL_HEALTH("Sexual health", DomainKey.RECOVERY, DetailPage.SEXUAL),
+    LOAD_CHARTS("Training load", DomainKey.LOAD, DetailPage.LOAD),
+    INJURY("Injury", DomainKey.LOAD, DetailPage.INJURY),
+    NUTRITION_CHARTS("Nutrition", DomainKey.FUEL, DetailPage.NUTRITION),
+    HYDRATION_CHARTS("Hydration", DomainKey.FUEL, DetailPage.HYDRATION),
+    DIGESTION("Digestion", DomainKey.FUEL, DetailPage.DIGESTION),
     STRESS_DAY("Stress through the day", DomainKey.BALANCE),
-    WELLBEING_CHARTS("Wellbeing · every chart", DomainKey.BALANCE, DetailPage.HEALTH_WELLBEING),
+    WELLBEING_CHARTS("Wellbeing", DomainKey.BALANCE, DetailPage.WELLBEING),
 }
 
 fun picturesFor(key: DomainKey): List<FullPicture> = FullPicture.entries.filter { it.domain == key }
@@ -85,8 +86,7 @@ fun ScoresView.pictureHeadline(picture: FullPicture): String = when (picture) {
         val total = (h * 60).toInt()
         "${total / 60}h${(total % 60).toString().padStart(2, '0')}" + (row.deepMin?.let { " · deep ${it.toInt()} min" } ?: "")
     } ?: "no sleep recorded"
-    FullPicture.DIGESTIVE_PATTERN -> stoolPatternHeadline(stoolWindow())
-    FullPicture.BOWEL_TIMING -> bowelTimingHeadline(timingWindow())
+    FullPicture.DIGESTION -> stoolPatternHeadline(stoolWindow()) + " · " + bowelTimingHeadline(timingWindow())
     FullPicture.STRESS_DAY -> stressDays.firstOrNull { it.date == aboutDay() }?.summary?.avg?.let { "average $it" } ?: "no readings"
     // The "every chart" tiles open a whole page: their thumbnail says enough.
     else -> ""
@@ -96,47 +96,13 @@ fun ScoresView.pictureHeadline(picture: FullPicture): String = when (picture) {
 fun PictureOverlay(view: ScoresView, picture: FullPicture, onBack: () -> Unit, onClose: () -> Unit) {
     FullScreenOverlay(title = picture.title.uppercase(), trailing = picture.domain.label, onClose = onClose, onBack = onBack) {
         when (picture) {
-            FullPicture.LAST_NIGHT -> HypnogramCard(view.lastSleep)
-            FullPicture.DIGESTIVE_PATTERN -> {
-                val pattern = view.stoolWindow()
-                Text(stoolPatternHeadline(pattern), style = FTType.RowTitle, color = FT.TextPrimary)
-                OverlaySection("BY FORM, OVER TIME") { StoolHypnogram(pattern) }
-                OverlaySection("HOW IT SITS") {
-                    for (lane in StoolLane.DRAWN) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text(lane.label, style = FTType.Label, color = laneColor(lane), modifier = Modifier.width(72.dp))
-                            Text("Bristol ${if (lane.types.first == lane.types.last) "${lane.types.first}" else "${lane.types.first}–${lane.types.last}"}",
-                                style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.weight(1f))
-                            Text("${pattern.counts[lane] ?: 0}", style = FTType.Value, color = FT.TextPrimary)
-                        }
-                    }
-                    val untyped = pattern.marks.size - pattern.typed
-                    if (untyped > 0) Text("$untyped logged without a type (shown on the timing view only).", style = FTType.Caption, color = FT.TextMuted)
-                }
-                OverlaySection("WHAT IS IT?") {
-                    Text(
-                        "Every logged bowel movement over 14 days, placed by its form: liquid on top, then loose, healthy and " +
-                            "hard at the bottom, joined in time like a hypnogram. One reading means little; the pattern is " +
-                            "the signal. Descriptive only, not a diagnosis.",
-                        style = FTType.BodySmall, color = FT.TextSecondary,
-                    )
-                }
-            }
-            FullPicture.BOWEL_TIMING -> {
-                val timing = view.timingWindow()
-                Text(bowelTimingHeadline(timing), style = FTType.RowTitle, color = FT.TextPrimary)
-                OverlaySection("BY TIME OF DAY") { BowelTimingChart(timing) }
-                OverlaySection("WHAT IS IT?") {
-                    Text(
-                        "Each day's bowel movements by time of day. The shaded band is your usual window for the first one, " +
-                            "learned from the 60 days before. Steady means this fortnight moved no more than usual.",
-                        style = FTType.BodySmall, color = FT.TextSecondary,
-                    )
-                }
+            FullPicture.LAST_NIGHT -> {
+                HypnogramCard(view.lastSleep)
+                NightTiles(view)
             }
             // Detail pages are pushed pages, opened from the tile; nothing to draw here.
             FullPicture.SLEEP_CHARTS, FullPicture.CARDIO_CHARTS, FullPicture.SEXUAL_HEALTH, FullPicture.LOAD_CHARTS,
-            FullPicture.INJURY, FullPicture.NUTRITION_CHARTS, FullPicture.HYDRATION_CHARTS, FullPicture.WELLBEING_CHARTS -> Unit
+            FullPicture.INJURY, FullPicture.NUTRITION_CHARTS, FullPicture.HYDRATION_CHARTS, FullPicture.DIGESTION, FullPicture.WELLBEING_CHARTS -> Unit
             FullPicture.STRESS_DAY -> {
                 val day = view.stressDays.firstOrNull { it.date == view.aboutDay() }
                 if (day == null) Text("No stress readings for the day.", style = FTType.Body, color = FT.TextMuted)
@@ -146,6 +112,7 @@ fun PictureOverlay(view: ScoresView, picture: FullPicture, onBack: () -> Unit, o
                     OverlaySection("THROUGH THE DAY") { StressCurve(day, result, view.exerciseWindows) }
                     PhysiologicalStressCard(result, day)
                 }
+                OverlaySection("LAST 7 DAYS · BY ZONE") { StressWeek(view) }
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -323,8 +290,7 @@ fun PictureThumb(view: ScoresView, picture: FullPicture) {
         FullPicture.SEXUAL_HEALTH -> Sparkline(sparkline(view.series[ScoreKeys.MORNING_ERECTION], view.day, 30).map { it.second }, color = FT.Category.Arousal.c300)
         FullPicture.LOAD_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.TSB], view.day, 30).map { it.second }, color = FT.Category.Activity.c300)
         FullPicture.INJURY -> Unit
-        FullPicture.DIGESTIVE_PATTERN -> MiniStool(view.stoolWindow())
-        FullPicture.BOWEL_TIMING -> MiniTiming(view.timingWindow())
+        FullPicture.DIGESTION -> MiniStool(view.stoolWindow())
         FullPicture.NUTRITION_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.ENERGY_RATIO], view.day, 30).map { it.second }, color = FT.DomainFuel)
         FullPicture.HYDRATION_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.WATER_RATIO], view.day, 30).map { it.second }, color = FT.DomainFuel)
         FullPicture.STRESS_DAY -> Sparkline(view.stressDays.firstOrNull { it.date == about }?.samples?.sortedBy { it.timestamp }?.map { it.value.toDouble() }.orEmpty(), color = FT.Info)
@@ -348,19 +314,117 @@ private fun MiniStool(pattern: StoolPattern, zone: ZoneId = ZoneId.systemDefault
     }
 }
 
-/** Bowel timing in miniature: each day's first movement as a dot across the day, the usual window shaded. */
+// ---- Last night: resting heart rate and breathing under the hypnogram ----
+
+/** Two tiles under the hypnogram: last night's resting heart rate and breathing rate against your normal, 14 nights' line. */
 @Composable
-private fun MiniTiming(timing: BowelTiming) {
-    Canvas(Modifier.width(84.dp).height(24.dp)) {
-        fun x(m: Int) = size.width * m / (24f * 60f)
-        if (timing.usualStart != null && timing.usualEnd != null) {
-            drawRect(FT.Emerald.copy(alpha = 0.18f), Offset(x(timing.usualStart), 0f), Size(x(timing.usualEnd) - x(timing.usualStart), size.height))
+private fun NightTiles(view: ScoresView) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        NightTile("RESTING HR", view.series[ScoreKeys.RHR].orEmpty(), view.day, "bpm", { it.toInt().toString() }, 1.0, FT.DomainHeart, Modifier.weight(1f))
+        NightTile("BREATHING", view.series[ScoreKeys.SLEEP_BREATHING].orEmpty(), view.day, "/min", { "%.1f".format(it) }, 0.3, FT.Category.Sleep.c300, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun NightTile(
+    label: String,
+    series: Map<LocalDate, Double>,
+    day: LocalDate,
+    unit: String,
+    format: (Double) -> String,
+    minSd: Double,
+    color: Color,
+    modifier: Modifier,
+) {
+    val reading = com.bioscan.fieldterminal.domain.readMetric(series, day, minSd = minSd, maxAgeDays = 0)
+    Column(
+        modifier.background(FT.GlassFill, androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusModule)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(label, style = FTType.LabelCaps, color = FT.TextMuted)
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(reading.latest?.let(format) ?: "—", style = FTType.MetricMedium, color = FT.TextPrimary)
+            Text(unit, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
         }
-        val n = timing.days.size.coerceAtLeast(1)
-        timing.days.forEachIndexed { i, (_, minutes) ->
-            minutes.firstOrNull()?.let { m ->
-                drawCircle(if (timing.inWindow(m) == false) FT.Warning else FT.Emerald, 2.2f, Offset(x(m), size.height * (i + 0.5f) / n))
+        Text(
+            com.bioscan.fieldterminal.ui.screens.detail.positionGlyph(reading.position) + " " +
+                com.bioscan.fieldterminal.ui.screens.detail.positionWords(reading.position) +
+                (reading.normal?.let { " (${format(it.first)}–${format(it.second)})" } ?: ""),
+            style = FTType.Caption, color = FT.TextSecondary,
+        )
+        Sparkline(sparkline(series, day, 14).map { it.second }, color = color)
+    }
+}
+
+// ---- Stress through the day: the last seven days by zone ----
+
+private fun stressZoneColor(z: com.bioscan.fieldterminal.domain.stress.StressZone): Color = when (z) {
+    com.bioscan.fieldterminal.domain.stress.StressZone.HIGH -> FT.Critical
+    com.bioscan.fieldterminal.domain.stress.StressZone.MEDIUM -> FT.Warning
+    com.bioscan.fieldterminal.domain.stress.StressZone.NORMAL -> FT.Info
+    com.bioscan.fieldterminal.domain.stress.StressZone.RELAXED -> FT.Emerald
+}
+
+/**
+ * Seven small hypnograms, one per day (newest at the bottom), each running 06:00 to midnight across Zepp's four stress
+ * zones, high on top and relaxed at the bottom, 30-minute averages joined in time. Exercise is not removed here: a
+ * session shows as the high stretch it is.
+ */
+@Composable
+private fun StressWeek(view: ScoresView, zone: ZoneId = ZoneId.systemDefault()) {
+    val about = view.day.minusDays(1)
+    val lanes = com.bioscan.fieldterminal.domain.stress.StressZone.DRAWN
+    val days = (6 downTo 0).map { about.minusDays(it.toLong()) }
+    val slotsByDay = days.associateWith { d ->
+        view.stressDays.firstOrNull { it.date == d }?.let { com.bioscan.fieldterminal.domain.stress.stressSlots(it, zone) }.orEmpty()
+    }
+    if (slotsByDay.values.all { it.isEmpty() }) {
+        Text("No stress readings in the last seven days.", style = FTType.BodySmall, color = FT.TextMuted)
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (d in days) {
+            val slots = slotsByDay.getValue(d)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(d.dayOfWeek.name.take(3), style = FTType.Micro, color = if (d == about) FT.TextPrimary else FT.TextMuted, modifier = Modifier.width(32.dp))
+                Canvas(Modifier.weight(1f).height(34.dp)) {
+                    val laneH = size.height / lanes.size
+                    fun x(m: Int) = size.width * (m - 360) / (18f * 60f)
+                    lanes.forEachIndexed { i, z -> drawRect(stressZoneColor(z).copy(alpha = 0.07f), Offset(0f, i * laneH), Size(size.width, laneH - 1f)) }
+                    if (slots.isEmpty()) return@Canvas
+                    val path = Path()
+                    slots.forEachIndexed { k, s ->
+                        val y = lanes.indexOf(s.zone) * laneH + laneH / 2
+                        val x0 = x(s.minuteOfDay)
+                        val x1 = x(s.minuteOfDay + 30)
+                        if (k == 0) path.moveTo(x0, y) else path.lineTo(x0, y)
+                        path.lineTo(x1, y)
+                    }
+                    drawPath(path, FT.TextSecondary.copy(alpha = 0.5f), style = Stroke(width = 1.5f))
+                    for (s in slots) {
+                        val y = lanes.indexOf(s.zone) * laneH + laneH / 2
+                        drawLine(stressZoneColor(s.zone), Offset(x(s.minuteOfDay), y), Offset(x(s.minuteOfDay + 30), y), strokeWidth = laneH * 0.6f)
+                    }
+                }
             }
         }
+        Row(Modifier.fillMaxWidth().padding(start = 32.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            for (h in listOf("06", "09", "12", "15", "18", "21", "24")) Text(h, style = FTType.Micro, color = FT.TextMuted)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            for (z in lanes) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    androidx.compose.foundation.layout.Box(Modifier.width(10.dp).height(4.dp).background(stressZoneColor(z)))
+                    Text(z.label.lowercase(), style = FTType.Micro, color = FT.TextSecondary)
+                }
+            }
+        }
+        val week = slotsByDay.values.flatten()
+        val mins = com.bioscan.fieldterminal.domain.stress.minutesByZone(week)
+        val total = mins.values.sum().coerceAtLeast(1)
+        Text(
+            "Across the week: " + lanes.joinToString(" · ") { "${(mins.getValue(it) * 100 / total)} % ${it.label.lowercase()}" },
+            style = FTType.Caption, color = FT.TextSecondary,
+        )
     }
 }

@@ -180,8 +180,27 @@ class TourScreenshots {
     @Test fun t06_fuel() = shot("06_fuel") { DomainOverlay(VIEW, DomainKey.FUEL, onOpen = {}, onClose = {}) }
     @Test fun t07_balance() = shot("07_balance") { DomainOverlay(VIEW, DomainKey.BALANCE, onOpen = {}, onClose = {}) }
     @Test fun t08_metric_hrv() = shot("08_metric_hrv") { InputOverlay(VIEW, DomainKey.RECOVERY, ScoreKeys.HRV, onBack = {}, onClose = {}) }
-    @Test fun t09_stool() = shot("09_stool_pattern") { PictureOverlay(VIEW, FullPicture.DIGESTIVE_PATTERN, onBack = {}, onClose = {}) }
-    @Test fun t10_timing() = shot("10_bowel_timing") { PictureOverlay(VIEW, FullPicture.BOWEL_TIMING, onBack = {}, onClose = {}) }
+    @Test fun t09_last_night() = shot("09_last_night") { PictureOverlay(VIEW, FullPicture.LAST_NIGHT, onBack = {}, onClose = {}) }
+    // The detail pages' kit, drawn with the tour person's series (the pages themselves load their own rows).
+    @Test fun t10_detail_kit() = shot("10_detail_kit") {
+        com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("SLEEP", onBack = {}, eyebrow = "SLEEP") {
+            com.bioscan.fieldterminal.ui.screens.detail.MetricPanel(
+                "DURATION", VIEW.series.getValue(ScoreKeys.SLEEP_HOURS), "", com.bioscan.fieldterminal.ui.screens.detail.Fmt.hm,
+                info = "x", minSd = 0.25, betterHigher = true, target = 7.0 to 9.0, targetLabel = "7–9 h", today = TODAY,
+            )
+            com.bioscan.fieldterminal.ui.screens.detail.Section("STAGES", info = "x") {
+                com.bioscan.fieldterminal.ui.screens.detail.StackedBars(
+                    (13 downTo 0).map { i -> TODAY.minusDays(i.toLong()).dayOfMonth.toString() to listOf(60.0 + i % 3 * 10, 230.0, 85.0 + i % 4 * 5) },
+                    listOf(com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens.Category.Sleep.c700, com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens.Category.Sleep.c300, com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens.Category.Sleep.c500),
+                    listOf("Deep", "Light", "REM"), com.bioscan.fieldterminal.ui.screens.detail.Fmt.int, "min",
+                )
+            }
+            com.bioscan.fieldterminal.ui.screens.detail.Section("EACH STAGE") {
+                com.bioscan.fieldterminal.ui.screens.detail.MetricRow("HRV", VIEW.series.getValue(ScoreKeys.HRV), "ms", com.bioscan.fieldterminal.ui.screens.detail.Fmt.int, log = true, minSd = 0.03, today = TODAY)
+                com.bioscan.fieldterminal.ui.screens.detail.MetricRow("Resting HR", VIEW.series.getValue(ScoreKeys.RHR), "bpm", com.bioscan.fieldterminal.ui.screens.detail.Fmt.int, minSd = 1.0, today = TODAY)
+            }
+        }
+    }
     @Test fun t11_stress() = shot("11_stress_day") { PictureOverlay(VIEW, FullPicture.STRESS_DAY, onBack = {}, onClose = {}) }
     @Test fun t12_metric_sleep() = shot("12_metric_sleep_hours") { InputOverlay(VIEW, DomainKey.SLEEP, ScoreKeys.SLEEP_HOURS, onBack = {}, onClose = {}) }
     @Test fun t13_metric_protein() = shot("13_metric_protein") { InputOverlay(VIEW, DomainKey.FUEL, ScoreKeys.PROTEIN_RATIO, onBack = {}, onClose = {}) }

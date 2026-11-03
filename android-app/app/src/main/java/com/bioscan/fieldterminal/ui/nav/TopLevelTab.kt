@@ -46,37 +46,10 @@ enum class MeTab(val label: String) {
     Bloodwork("BLOODWORK"),
 }
 
-// First feedback fixes (DAV-70): Status's old single sub-tab rail is replaced by 4 tiles, each its own pushed route with
-// its own internal tab strip.
-// App restructure (the owner's "Field terminal new structure"): the tiles are Training, Nutrition (was Fuel), Health (was
-// Heart) and Lab (was Labs). The route strings are kept, so a restored back stack still resolves.
+// LAB's old pushed route (it was a Status tile before it became a dock tab); kept so a saved back stack still resolves.
+// The Training, Nutrition and Health tiles are gone: their tabs became the pages in ui/screens/detail.
 enum class TileRoute(val route: String) {
-    Training("tile_training"),
-    Nutrition("tile_fuel"),
-    Health("tile_heart"),
     Lab("tile_labs"),
-}
-
-// App restructure: Nutrition shows trends over spot metrics. NUTRITION is what was logged (with protein on target, moved
-// from Body), HYDRATION its own tab again, PLAN the next three days of the fuel plan (the full plan and meal prep live
-// in Lab › Planning). BODY moved to Health.
-enum class NutritionTab(val label: String) {
-    Nutrition("NUTRITION"),
-    Hydration("HYDRATION"),
-    Plan("PLAN"),
-}
-
-// DAV-97 collapsed seven tabs to four; the restructure adds BODY (from Fuel) and BLOODWORK (from Labs), and renames
-// RECOVERY to SLEEP (today's recovery now lives only on Today).
-enum class HealthTab(val label: String) {
-    Cardio("CARDIO"),
-    Sleep("SLEEP"),
-    Body("BODY"),
-    // Health concerns (docs/health-concerns): injuries, recurring pain, symptoms and illness, tracked over time.
-    Concerns("CONCERNS"),
-    Wellbeing("WELLBEING"),
-    SexualHealth("SEXUAL HEALTH"),
-    Bloodwork("BLOODWORK"),
 }
 
 // App restructure: Lab holds what is tried, planned and tested. N=1 has the analysis cards that were on Today; PLANNING
@@ -88,16 +61,6 @@ enum class LabTab(val label: String) {
     Tests("TESTS"),
     // Routine intelligence R5: the week by place, the commute and the phone (docs/routine-intelligence).
     Routine("ROUTINE"),
-}
-
-// App restructure: Running and Strength moved in from the User tab's skill pages, and the sessions list has its own tab.
-// The block planner (was PLAN) moved to Lab › Planning; Injury moved in from Heart (DAV-216).
-enum class TrainingTab(val label: String) {
-    Load("LOAD"),
-    Running("RUNNING"),
-    Strength("STRENGTH"),
-    Sessions("SESSIONS"),
-    Injury("INJURY"),
 }
 
 // Setup's own pushed routes -- Setup is now a 4-button hub rather than one

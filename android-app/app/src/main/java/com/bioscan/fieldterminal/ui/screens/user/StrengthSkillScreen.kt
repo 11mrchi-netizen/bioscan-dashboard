@@ -50,23 +50,20 @@ import java.time.format.DateTimeFormatter
 private val DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy")
 private val TIER_LABELS = listOf("Novice", "Interm.", "Advanced", "Elite")
 
-// App restructure: the Strength page is Training's STRENGTH tab (was pushed from the User tab's level buttons).
+/** The Strength page (ME › PERFORMANCE › Strength). */
 @Composable
-fun StrengthTab() {
-    androidx.compose.foundation.layout.Column(
-        modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(18.dp),
-    ) {
+fun StrengthScreen(onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
+    com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("STRENGTH", onBack, eyebrow = "PERFORMANCE") {
         LoadedContent(load = { UserDataCache.strength() }) { StrengthContent(it) }
         GripStrengthCard()
+        com.bioscan.fieldterminal.ui.screens.performance.RecentSessions("strength", onOpenSession)
     }
 }
 
 @Composable
 private fun StrengthContent(history: StrengthHistory) {
-    val timeframe = com.bioscan.fieldterminal.ui.components.GlobalTimeRange.selected.toPerformanceTimeframe()
     val today = remember { LocalDate.now() }
-    val from = today.minusMonths(timeframe.months)
+    val from = today.minusDays(com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays.current - 1L)
     val series = remember(history) { liftE1rmSeries(history.sets) }
     val rated = remember(series, history.bodyWeightKg) { ratedLifts(series, history.bodyWeightKg, today) }
     val level = remember(rated, history.bodyWeightKg) { strengthSkillLevel(rated, history.bodyWeightKg == null) }
@@ -81,7 +78,7 @@ private fun StrengthContent(history: StrengthHistory) {
     }
 
     if (history.sets.isEmpty()) {
-        FTDataState(DataAvailability.Building, "No logged sets yet. Log structured strength sessions to see standards, e1RM trends and PRs.")
+        com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No logged sets yet. Log structured strength sessions to see standards, e1RM trends and PRs.")
         return
     }
 
@@ -107,10 +104,10 @@ private fun ratioRows(rated: List<LiftTierResult>, bodyWeightKg: Double?): List<
 
 @Composable
 private fun StandardsCard(rated: List<LiftTierResult>, bodyWeightKg: Double?) {
-    FTCard(title = "STANDARDS", info = "Each lift's best estimated 1RM over the last 6 months against the lifter-standards ladder (Novice, Intermediate, Advanced, Elite). Bodyweight-multiple lifts need a body weight; weighted pull-ups use added load.") {
+    com.bioscan.fieldterminal.ui.screens.detail.Section(title = "STANDARDS", info = "Each lift's best estimated 1RM over the last 6 months against the lifter-standards ladder (Novice, Intermediate, Advanced, Elite). Bodyweight-multiple lifts need a body weight; weighted pull-ups use added load.") {
         if (rated.isEmpty()) {
-            FTDataState(DataAvailability.Building, if (bodyWeightKg == null) "Add a body weight to rate lifts against bodyweight standards." else "No logged lift has a standard yet.")
-            return@FTCard
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine(if (bodyWeightKg == null) "Add a body weight to rate lifts against bodyweight standards." else "No logged lift has a standard yet.")
+            return@Section
         }
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             rated.sortedByDescending { it.ladderFraction }.forEach { r ->
@@ -147,11 +144,11 @@ private fun nextText(r: LiftTierResult, bodyWeightKg: Double?): String {
 
 @Composable
 private fun E1rmCard(series: List<LiftSeries>, from: LocalDate) {
-    FTCard(title = "E1RM EVOLUTION", info = "Best estimated one-rep max per training day (Epley, sets of 1-12 reps), one line per lift. Spellings of the same lift are merged.") {
+    com.bioscan.fieldterminal.ui.screens.detail.Section(title = "E1RM EVOLUTION", info = "Best estimated one-rep max per training day (Epley, sets of 1-12 reps), one line per lift. Spellings of the same lift are merged.") {
         val candidates = series.filter { it.points.size >= 2 }.take(8)
         if (candidates.isEmpty()) {
-            FTDataState(DataAvailability.Building, "A lift needs at least 2 logged training days to draw a trend.")
-            return@FTCard
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("A lift needs at least 2 logged training days to draw a trend.")
+            return@Section
         }
         var selected by remember(candidates) { mutableStateOf(candidates.first()) }
         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -170,11 +167,11 @@ private fun E1rmCard(series: List<LiftSeries>, from: LocalDate) {
 
 @Composable
 private fun VolumeCard(history: StrengthHistory, from: LocalDate, today: LocalDate) {
-    FTCard(title = "VOLUME", info = "Tonnage = reps × load summed per week, and training days per week. Sets without a load (bodyweight) add no tonnage.") {
+    com.bioscan.fieldterminal.ui.screens.detail.Section(title = "VOLUME", info = "Tonnage = reps × load summed per week, and training days per week. Sets without a load (bodyweight) add no tonnage.") {
         val sets = history.sets.filter { !it.date.isBefore(from) }
         if (sets.isEmpty()) {
-            FTDataState(DataAvailability.Building, "No logged sets in this window.")
-            return@FTCard
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No logged sets in this window.")
+            return@Section
         }
         val tonnage = weeklyTonnageKg(history.sets, from, today)
         FTWeeklyBars(tonnage, skillColor(Skill.STRENGTH), "kg", average = trailingWeeklyAverage(tonnage), valueFormat = { "%.0f".format(it) })
@@ -185,11 +182,11 @@ private fun VolumeCard(history: StrengthHistory, from: LocalDate, today: LocalDa
 
 @Composable
 private fun PrCard(series: List<LiftSeries>, from: LocalDate) {
-    FTCard(title = "PR TIMELINE", info = "Every time a lift's estimated 1RM beat its previous best, newest first. The first logged day of a lift counts as its first PR.") {
+    com.bioscan.fieldterminal.ui.screens.detail.Section(title = "PR TIMELINE", info = "Every time a lift's estimated 1RM beat its previous best, newest first. The first logged day of a lift counts as its first PR.") {
         val prs = e1rmPrTimeline(series).filter { !it.date.isBefore(from) }.sortedByDescending { it.date }.take(12)
         if (prs.isEmpty()) {
-            FTDataState(DataAvailability.Building, "No new e1RM PRs in this window.")
-            return@FTCard
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No new e1RM PRs in this window.")
+            return@Section
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             prs.forEach { pr ->
@@ -211,11 +208,11 @@ private fun PrCard(series: List<LiftSeries>, from: LocalDate) {
 
 @Composable
 private fun IntensityCard(history: StrengthHistory, from: LocalDate, today: LocalDate) {
-    FTCard(title = "INTENSITY", info = "Average logged RPE per week, from sets where you recorded one. Hidden until enough RPE has been logged; missing RPE is never filled in.") {
+    com.bioscan.fieldterminal.ui.screens.detail.Section(title = "INTENSITY", info = "Average logged RPE per week, from sets where you recorded one. Hidden until enough RPE has been logged; missing RPE is never filled in.") {
         val withRpe = history.sets.filter { it.rpe != null && !it.date.isBefore(from) }
         if (withRpe.size < 10) {
-            FTDataState(DataAvailability.Building, "Needs RPE on at least 10 sets in this window (${withRpe.size} so far).")
-            return@FTCard
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("Needs RPE on at least 10 sets in this window (${withRpe.size} so far).")
+            return@Section
         }
         FTWeeklyBars(
             bucketWeekly(withRpe, { it.date }, { it.rpe!!.toDouble() }, from, today, WeekAggregate.MEAN),

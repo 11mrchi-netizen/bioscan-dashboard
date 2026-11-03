@@ -48,7 +48,6 @@ import com.bioscan.fieldterminal.ui.components.RingState
 import com.bioscan.fieldterminal.ui.components.ScoreRing
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.nav.TileRoute
 import com.bioscan.fieldterminal.ui.screens.status.EveningCheckInSheet
 import com.bioscan.fieldterminal.ui.screens.status.NutritionTodayCard
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -91,7 +90,8 @@ sealed interface PlanAction {
     data object SoFar : PlanAction
     data class Meal(val kind: com.bioscan.fieldterminal.domain.fuel.MealSlotKind) : PlanAction
     data class CloseDay(val date: LocalDate) : PlanAction
-    data class Tile(val route: TileRoute) : PlanAction
+    /** A supplement block (morning, afternoon, night): the supplement form opens with that block ticked, ready to log. */
+    data class Supplements(val bucket: String) : PlanAction
     data class Tab(val tab: com.bioscan.fieldterminal.ui.nav.TopLevelTab) : PlanAction
 }
 
@@ -148,7 +148,7 @@ fun planRows(
         )
     }
     previews?.supplements?.dueByBucket?.forEach { (bucket, due) ->
-        rows += PlanRow(BUCKET_TIMES[bucket], "${bucket.replaceFirstChar { it.uppercase() }} supplements", "$due due", false, PlanAction.Tab(com.bioscan.fieldterminal.ui.nav.TopLevelTab.Lab), PlanKind.SUPPLEMENTS)
+        rows += PlanRow(BUCKET_TIMES[bucket], "${bucket.replaceFirstChar { it.uppercase() }} supplements", "$due due", false, PlanAction.Supplements(bucket), PlanKind.SUPPLEMENTS)
     }
     rows += PlanRow(CLOSE_DAY_TIME, "Close the day", null, closedToday, PlanAction.CloseDay(today), PlanKind.CLOSE)
     return rows.sortedWith(compareBy({ it.time != null }, { it.time }))
@@ -156,9 +156,15 @@ fun planRows(
 
 @Composable
 fun TodayHomeScreen(
-    onOpenTile: (TileRoute) -> Unit,
     onOpenTab: (com.bioscan.fieldterminal.ui.nav.TopLevelTab) -> Unit = {},
     onOpenDetail: (DetailPage) -> Unit = {},
+    onOpenFoodPlan: () -> Unit = {},
+    // The 22:25 reminder: open with the evening check-in up.
+    openCheckIn: Boolean = false,
+    onCheckInHandled: () -> Unit = {},
+    // A supplement reminder: open with that block's supplements ready to log.
+    requestedSupplements: String? = null,
+    onSupplementsHandled: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val guard = rememberLoadGuard()
@@ -174,7 +180,21 @@ fun TodayHomeScreen(
     var mealKind by remember { mutableStateOf<com.bioscan.fieldterminal.domain.fuel.MealSlotKind?>(null) }
     var logFood by remember { mutableStateOf(false) }
     var checkInDate by remember { mutableStateOf<LocalDate?>(null) }
+    var supplementBucket by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(kept == null) }
+
+    LaunchedEffect(openCheckIn) {
+        if (openCheckIn) {
+            checkInDate = com.bioscan.fieldterminal.domain.checkinDateFor(LocalDateTime.now())
+            onCheckInHandled()
+        }
+    }
+    LaunchedEffect(requestedSupplements) {
+        if (requestedSupplements != null) {
+            supplementBucket = requestedSupplements.ifBlank { previews?.supplements?.suggestedBucket ?: "" }
+            onSupplementsHandled()
+        }
+    }
 
     LaunchedEffect(Unit) { runCatching { EveningCheckinRepository(SupabaseClientProvider.client).recordDailyContext() } }
 
@@ -238,7 +258,7 @@ fun TodayHomeScreen(
                     PlanAction.SoFar -> soFar = true
                     is PlanAction.Meal -> mealKind = action.kind
                     is PlanAction.CloseDay -> checkInDate = action.date
-                    is PlanAction.Tile -> onOpenTile(action.route)
+                    is PlanAction.Supplements -> supplementBucket = action.bucket
                     is PlanAction.Tab -> onOpenTab(action.tab)
                 }
             },
@@ -250,7 +270,7 @@ fun TodayHomeScreen(
     if (soFar) {
         FullScreenOverlay(title = "SO FAR TODAY", onClose = { soFar = false }) {
             val n = nut
-            if (n != null) NutritionTodayCard(n, fuel, onOpenPlan = { soFar = false; onOpenTile(TileRoute.Nutrition) })
+            if (n != null) NutritionTodayCard(n, fuel, onOpenPlan = { soFar = false; onOpenFoodPlan() })
             else Text("Nothing logged yet today.", style = FTType.Body, color = FT.TextMuted)
         }
     }
@@ -269,6 +289,13 @@ fun TodayHomeScreen(
             onDismiss = { logFood = false },
             onSaved = { logFood = false; guard.retry() },
             start = com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Food),
+        )
+    }
+    supplementBucket?.let { bucket ->
+        com.bioscan.fieldterminal.ui.screens.AddEntrySheet(
+            onDismiss = { supplementBucket = null },
+            onSaved = { supplementBucket = null; guard.retry() },
+            start = com.bioscan.fieldterminal.domain.AddEntryStart.Fuel(com.bioscan.fieldterminal.domain.FuelSubType.Supplements, supplementBundle = bucket.ifBlank { null }),
         )
     }
     checkInDate?.let { date ->

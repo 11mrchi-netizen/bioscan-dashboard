@@ -62,6 +62,12 @@ import kotlinx.coroutines.launch
 // applied here to the sign-in/loading states -- the 4-tab UI itself is
 // styled in FieldTerminalNavHost.kt and its screens). Real per-screen
 // content is Phase C onward, per mobile-app-implementation-roadmap.md.
+// The notification tapped, as "kind" or "kind:bucket" (a supplement reminder names its block).
+private fun notificationTarget(intent: Intent): String? {
+    val kind = intent.getStringExtra(NotificationActionReceiver.EXTRA_KIND) ?: return null
+    return intent.getStringExtra(NotificationActionReceiver.EXTRA_BUCKET)?.let { "$kind:$it" } ?: kind
+}
+
 class MainActivity : ComponentActivity() {
     // The notification kind the user tapped, held until FieldTerminalNavHost (only shown once signed in) has navigated
     // to its destination and cleared it. Compose state, so a tap while the app is already open (onNewIntent) re-triggers it.
@@ -70,7 +76,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        pendingNotificationKind = intent.getStringExtra(NotificationActionReceiver.EXTRA_KIND)
+        pendingNotificationKind = notificationTarget(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,7 +85,7 @@ class MainActivity : ComponentActivity() {
         // Notification channels, the Supabase client and the metric registry are warmed on a background thread by FieldTerminalApp.
         // Only on a fresh launch: after process restore the same intent is redelivered and would re-navigate.
         if (savedInstanceState == null) {
-            pendingNotificationKind = intent?.getStringExtra(NotificationActionReceiver.EXTRA_KIND)
+            pendingNotificationKind = intent?.let(::notificationTarget)
         }
         setContent {
             FieldTerminalTheme {

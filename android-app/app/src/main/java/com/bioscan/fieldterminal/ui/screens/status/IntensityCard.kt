@@ -35,7 +35,6 @@ import com.bioscan.fieldterminal.domain.IntensityBand
 import com.bioscan.fieldterminal.domain.WeekIntensity
 import com.bioscan.fieldterminal.domain.ZoneMethod
 import com.bioscan.fieldterminal.domain.weeklyIntensity
-import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
 import com.bioscan.fieldterminal.ui.components.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -81,7 +80,7 @@ fun IntensityCard(modifier: Modifier = Modifier) {
     val w = weeks ?: return
     if (w.none { it.totalSeconds > 0 }) return
 
-    FTCard(title = "INTENSITY, LAST 12 WEEKS", info = INFO, infoDetails = INFO_DETAILS, methodology = "intensity_distribution", modifier = modifier) {
+    com.bioscan.fieldterminal.ui.screens.detail.Section("INTENSITY · 12 WEEKS", info = INFO + "\n\n" + INFO_DETAILS) {
         var selected by remember(w) { mutableStateOf<Int?>(null) }
         val shown = selected ?: w.lastIndex
         val week = w[shown]

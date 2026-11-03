@@ -282,6 +282,21 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // (19 real rows) than the other tables, but this stays consistent with
     // this repository's own "don't special-case the query, let the domain
     // layer's date filtering decide" convention.
+    // ME › PERFORMANCE: every recorded session of every type, a few columns each, for the sport tiles and sport pages.
+    suspend fun loadSportSessions(): List<com.bioscan.fieldterminal.domain.SportSession> = ReadCache.get("analysis.SportSessions", tables = setOf("exercise_sessions")) {
+        supabase.postgrest.from("exercise_sessions")
+            .select(columns = Columns.list("id,type,source,start_time,duration_min,distance_km,avg_hr,max_hr,elevation_gain_m")) {
+                order("start_time", Order.DESCENDING)
+                limit(20000)
+            }
+            .decodeList<com.bioscan.fieldterminal.data.model.SportSessionRow>()
+            .mapNotNull { r ->
+                com.bioscan.fieldterminal.domain.WallClock.date(r.startTime)?.let { d ->
+                    com.bioscan.fieldterminal.domain.SportSession(r.id, r.type, r.source, d, r.durationMin, r.distanceKm, r.avgHr, r.maxHr, r.elevationGainM)
+                }
+            }
+    }
+
     suspend fun loadExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> = ReadCache.get("analysis.ExerciseSessionsForTrainingLoad", tables = setOf("exercise_sessions")) { fetchExerciseSessionsForTrainingLoad() }
 
     private suspend fun fetchExerciseSessionsForTrainingLoad(): List<TrainingLoadSessionRow> =

@@ -457,3 +457,16 @@ data class ExpectedBandPayload(
     val next: BandPoint? = null,
     val ewma: BandEwma = BandEwma(),
 )
+
+@Serializable
+data class SportSessionRow(
+    val id: Long,
+    val type: String? = null,
+    val source: String? = null,
+    @SerialName("start_time") val startTime: String,
+    @SerialName("duration_min") val durationMin: Double? = null,
+    @SerialName("distance_km") val distanceKm: Double? = null,
+    @SerialName("avg_hr") val avgHr: Double? = null,
+    @SerialName("max_hr") val maxHr: Double? = null,
+    @SerialName("elevation_gain_m") val elevationGainM: Double? = null,
+)

@@ -37,6 +37,9 @@ jobs:
       - name: Agent core tests and golden set
         run: node --test "supabase/functions/_shared/agent-core/*.test.ts"
 
+      - name: Regimen reference parsing tests
+        run: node --test "supabase/functions/regimen-reference-lookup/*.test.ts"
+
       - name: Zepp extraction decoder tests
         run: node --test "supabase/functions/zepp-extract/*.test.ts"
 

@@ -72,6 +72,7 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     var reloadKey by remember { mutableIntStateOf(0) }
     var editing by remember { mutableStateOf<SupplementRow?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
+    var reviewing by remember { mutableStateOf(false) }
     // Analysis Layer 3 / Phase 5: supplement N-of-1 experiments.
     var experimenting by remember { mutableStateOf<SupplementRow?>(null) }
     var experiments by remember { mutableStateOf<List<ExperimentRow>>(emptyList()) }
@@ -81,6 +82,9 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     var interactionRecords by remember { mutableStateOf<List<InteractionRecord>>(emptyList()) }
     var rosterItems by remember { mutableStateOf<List<RosterItem>>(emptyList()) }
     val detections = remember(interactionRecords, rosterItems) { detectInteractions(rosterItems, interactionRecords) }
+
+    // Reference cards: the other active items each FDA label names (owner's name, mention).
+    var labelNotes by remember { mutableStateOf<List<Pair<String, com.bioscan.fieldterminal.domain.LabelMention>>>(emptyList()) }
 
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -102,6 +106,16 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
                 interactionRecords = interactionRepo.loadRecords()
                 rosterItems = interactionRepo.rosterItems(loaded.active)
             }.onFailure { interactionRecords = emptyList(); rosterItems = emptyList() }
+            labelNotes = runCatching {
+                val refs = com.bioscan.fieldterminal.data.RegimenReferenceRepository(SupabaseClientProvider.client).loadAll()
+                val active = loaded.active.associateBy { it.id }
+                refs.flatMap { ref ->
+                    val owner = active[ref.supplementId] ?: return@flatMap emptyList()
+                    val label = ref.label ?: return@flatMap emptyList()
+                    com.bioscan.fieldterminal.domain.labelMentions(label.sections, loaded.active.filter { it.id != owner.id }.map { it.id to it.name })
+                        .map { owner.name to it }
+                }
+            }.getOrDefault(emptyList())
             val expRepo = ExperimentsRepository(SupabaseClientProvider.client)
             // Daily tests of a behaviour live on the Today page; supplements and fueling products here.
             experiments = expRepo.loadExperiments().filter { it.protocol?.behaviour == null }
@@ -136,8 +150,11 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
                 }
             },
             detections = detections,
+            labelNotes = labelNotes,
+            onOpenReview = { reviewing = true },
         )
     }
+    if (reviewing) RegistryReviewScreen(onClose = { reviewing = false; reloadKey++ })
 
     if (showAddSheet) {
         SupplementFormSheet(
@@ -181,6 +198,8 @@ private fun SupplementsContent(
     experimentResults: Map<String, ExperimentResultRow>,
     onDeleteExperiment: (ExperimentRow) -> Unit,
     detections: List<DetectedInteraction>,
+    labelNotes: List<Pair<String, com.bioscan.fieldterminal.domain.LabelMention>> = emptyList(),
+    onOpenReview: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
@@ -232,6 +251,26 @@ private fun SupplementsContent(
         }
 
         InteractionsSection(detections)
+        Text(
+            "REVIEW THE SOURCES BEHIND THESE ›",
+            style = FTType.MonoCaption,
+            color = FT.Emerald,
+            modifier = Modifier.ftClickable(onClick = onOpenReview).padding(vertical = 4.dp),
+        )
+
+        if (labelNotes.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionLabel("FROM THE LABELS", FT.Warning)
+                Text("What an FDA label says about something else you take, in its own words. Read it; it is not a verdict.",
+                    style = FTType.Caption, color = FT.TextMuted)
+                labelNotes.forEach { (owner, m) ->
+                    Column {
+                        Text("$owner's label names ${m.itemName} · ${m.section}", style = FTType.BodySmall, color = FT.TextPrimary)
+                        Text("\u201C${m.excerpt}\u201D", style = FTType.Caption, color = FT.TextSecondary)
+                    }
+                }
+            }
+        }
 
         ExperimentsSection(experiments, experimentResults, onDelete = onDeleteExperiment)
 

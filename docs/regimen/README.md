@@ -19,6 +19,21 @@ changes, and a history of every change that the rest of the app can draw on.
 - **UI**: the regimen form (`ui/screens/status/RegimenFields.kt`) inside the existing sheet; the list shows kind, today's
   dose, the schedule and the cycle or step state; ended items can be restarted; each item shows its history.
 
+## Phase 1b (built): reference cards and source review
+
+- **Reference cards** (`regimen_references`, `supabase/functions/regimen-reference-lookup`): looked up only when the
+  person asks, kept only for items in their roster (no catalogue). Medications, hormones and approved peptides: RxNorm
+  (standard id, ingredient) then the FDA label (openFDA: boxed warning, contraindications, drug interactions, warnings,
+  how the body handles it, forms), prescription labels first; the half-life is read from the label with the label's own
+  words kept beside it. Research peptides have no label: the card keeps the most relevant PubMed studies and says they
+  are research, not dosing guidance. Supplements keep their DSLD / SuppCo snapshots. NIH retired RxNav's interaction
+  API in 2024; the label's interaction section replaces it.
+- **Label mentions**: the other roster items a label names, with the sentence, in the item sheet and as "From the
+  labels" on the list. Reported as what the label says, never as a verdict.
+- **Source review** (`registry_reviews`): the owner confirms or disputes each evidence and interaction record with its
+  cited source. Confirmed rows show as reviewed; a disputed interaction keeps its flag with the note; a disputed
+  expected-effect claim is no longer shown. A review holds for the row version it was given on.
+
 ## Next
 
 2. Changes drawn as bands on metric and lab charts; lab watch rules per substance (copper with zinc, ferritin with iron,

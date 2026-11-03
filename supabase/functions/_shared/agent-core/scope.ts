@@ -48,13 +48,13 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     // nutrition, supplements, fuel
     'meals', 'meal_items', 'nutrient_intake', 'foods', 'food_nutrients', 'food_servings', 'food_sources',
     'breakfast_templates', 'meal_prep_weeks', 'fuel_plans', 'fuel_plan_reviews', 'fuel_schedules', 'fueling_intake_log',
-    'fueling_products', 'fueling_recipe_ingredients', 'fueling_recipe_versions', 'supplements', 'supplement_changes', 'supplement_log',
+    'fueling_products', 'fueling_recipe_ingredients', 'fueling_recipe_versions', 'supplements', 'supplement_changes', 'regimen_references', 'supplement_log',
     'supplement_products', 'supplement_ingredients', 'supplement_product_ingredients', 'supplement_nutrients',
     'supplement_sources', 'supplement_source_snapshots', 'supplement_stock_events', 'interaction_records',
     // labs
     'lab_draws', 'lab_results',
     // analysis and evidence
-    'analysis_results', 'evidence_ledger', 'evidence_records', 'registered_questions', 'experiments',
+    'analysis_results', 'evidence_ledger', 'evidence_records', 'registry_reviews', 'registered_questions', 'experiments',
     'interventions', 'intervention_adherence', 'intervention_state_history', 'protocols', 'protocol_interventions',
     'protocol_state_history', 'protocol_templates', 'protocol_adjustment_proposals', 'decisions', 'series_break_decisions',
     'health_vocab', 'grip_strength_norms',

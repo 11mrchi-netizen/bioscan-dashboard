@@ -33,6 +33,8 @@ import com.bioscan.fieldterminal.data.model.UserProfileRow
 import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import com.bioscan.fieldterminal.domain.BodyComposition
 import com.bioscan.fieldterminal.domain.MusclePotential
+import com.bioscan.fieldterminal.domain.PotentialMethod
+import com.bioscan.fieldterminal.domain.latestFrame
 import com.bioscan.fieldterminal.domain.evaluateWeightTrend
 import com.bioscan.fieldterminal.domain.jacksonPollockBodyFat
 import com.bioscan.fieldterminal.domain.musclePotential
@@ -80,10 +82,17 @@ private const val SCALE_INFO =
         "impedance. Weigh-ins that fail the quality check are left out. Tap a tile for its trend."
 
 private const val POTENTIAL_INFO =
-    "Your fat-free mass against the most a drug-free lifter of your height usually reaches: a normalised fat-free mass index " +
-        "of 25 for men and about 22 for women (Kouri 1995; normalised to 1.80 m). A population ceiling, not a personal " +
-        "prediction: some people pass it, most never reach it. Fat-free mass includes water, organs and bone, not only muscle, " +
-        "and comes from the scale's estimate (or your body-fat trend), so read the ring as a direction, not a precise score."
+    "Your fat-free mass against the most a drug-free man of your build usually reaches.\n\n" +
+        "With your wrist and ankle girths (asked at the body check-in) the ceiling comes from your frame: Casey Butt's " +
+        "formula (2009), fitted on drug-free bodybuilding champions from before steroids. Maximum lean mass (lb) = height^1.5 × " +
+        "(√wrist ÷ 22.667 + √ankle ÷ 17.0104) × (body fat % ÷ 224 + 1), in inches. It is worked out at your current body fat, " +
+        "held between 5 and 25 %. It is one author's formula, not peer-reviewed, and for men only.\n\n" +
+        "Without them it uses a normalised fat-free mass index of 25 (Kouri 1995, 157 men: almost none of the drug-free " +
+        "lifters were above it), the same ceiling for everyone your height. For women the app uses 22, its own adjustment: " +
+        "the study was of men.\n\n" +
+        "Either way it is a population ceiling, not a prediction: some people pass it, most never reach it. Fat-free mass " +
+        "includes water, organs and bone, not only muscle, and comes from the scale's estimate (or your body-fat trend), so " +
+        "read the ring as a direction, not a precise score."
 
 @Composable
 fun BodyTabContent() {
@@ -173,8 +182,10 @@ private fun BodyPage(
     val latestWeight = weightPoints.lastOrNull()?.second
     val fatFree = latestSplit?.fatFreeKg
         ?: latestWeight?.let { w -> blended.maxByOrNull { it.key }?.value?.let { bf -> w * (1 - bf / 100.0) } }
-    val potential = if (fatFree != null && heightCm != null && sex != null) musclePotential(fatFree, heightCm, sex == "male") else null
-    MusclePotentialSection(potential, missing = when {
+    val bodyFatNow = latestSplit?.bodyFatPct ?: blended.maxByOrNull { it.key }?.value
+    val frame = remember(checkins) { latestFrame(checkins) }
+    val potential = if (fatFree != null && heightCm != null && sex != null) musclePotential(fatFree, heightCm, sex == "male", frame, bodyFatNow) else null
+    MusclePotentialSection(potential, askFrame = sex == "male" && frame == null, missing = when {
         heightCm == null -> "Needs your height: add it in Setup › Profile or at the next body check-in."
         sex == null -> "Needs your sex in Setup › Profile: the ceiling differs for men and women."
         fatFree == null -> "Needs a body-fat reading: a weigh-in on the scale, or a body check-in."
@@ -219,7 +230,7 @@ private fun ScaleTiles(lastPerDay: Map<LocalDate, ScaleCompositionPoint>, athlet
 }
 
 @Composable
-private fun MusclePotentialSection(p: MusclePotential?, missing: String?) {
+private fun MusclePotentialSection(p: MusclePotential?, askFrame: Boolean, missing: String?) {
     Section("MUSCLE POTENTIAL", info = POTENTIAL_INFO) {
         if (p == null) {
             EmptyLine(missing ?: "Not enough data yet.")
@@ -241,13 +252,25 @@ private fun MusclePotentialSection(p: MusclePotential?, missing: String?) {
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("%.1f of ~%.0f kg".format(p.currentFatFreeKg, p.ceilingFatFreeKg), style = FTType.Telemetry, color = FT.TextPrimary)
-                Text("fat-free mass, now against the usual ceiling for your height", style = FTType.Caption, color = FT.TextMuted)
-                Text("Normalised FFMI %.1f of %.0f".format(p.normalizedFfmi, p.ceilingFfmi), style = FTType.Caption, color = FT.TextSecondary)
+                if (p.method == PotentialMethod.FRAME) {
+                    Text("fat-free mass, now against the ceiling for your frame", style = FTType.Caption, color = FT.TextMuted)
+                    Text("Wrist %.1f · ankle %.1f cm · at %.0f %% body fat".format(p.wristCm, p.ankleCm, p.atBodyFatPct), style = FTType.Caption, color = FT.TextSecondary)
+                } else {
+                    Text("fat-free mass, now against the usual ceiling for your height", style = FTType.Caption, color = FT.TextMuted)
+                    Text("Normalised FFMI %.1f of %.0f".format(p.normalizedFfmi, p.ceilingFfmi), style = FTType.Caption, color = FT.TextSecondary)
+                }
                 val room = p.ceilingFatFreeKg - p.currentFatFreeKg
                 if (room > 0) Text("About %.0f kg of room left".format(room), style = FTType.Caption, color = FT.TextSecondary)
             }
         }
-        Text("An estimate from population data, not a prediction for you.", style = FTType.Caption, color = FT.TextMuted)
+        Text(
+            when {
+                p.method == PotentialMethod.FRAME -> "Casey Butt's frame formula. An estimate, not a prediction for you."
+                askFrame -> "Ceiling from height alone (FFMI 25). Measure wrist and ankle at the next body check-in for one from your frame."
+                else -> "Ceiling from height alone. An estimate from population data, not a prediction for you."
+            },
+            style = FTType.Caption, color = FT.TextMuted,
+        )
     }
 }
 

@@ -33,8 +33,10 @@ oneself:
 | Upper arm, relaxed | halfway between shoulder tip and elbow, arm hanging | right, left |
 | Upper arm, flexed (optional) | around the peak, arm raised to the side, biceps tensed | right, left |
 | Forearm | widest part below the elbow, palm up | right, left |
+| Wrist | smallest point between the hand and the wrist bone, snug (frame size; asked until recorded once) | right only |
 | Thigh | standing, halfway between hip crease and top of kneecap | right, left |
 | Calf | standing, widest part | right, left |
+| Ankle | standing, smallest point just above the ankle bones, snug (frame size; asked until recorded once) | right only |
 
 Two readings per site; a third when they differ by more than 0.5 cm. The value is the median.
 

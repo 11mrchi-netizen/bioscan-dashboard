@@ -127,25 +127,64 @@ fun weightChangeSplit(
     )
 }
 
-// ME › BODY's muscle potential: today's fat-free mass against a natural ceiling for this height. The ceiling is a
-// normalised fat-free mass index (FFMI) of 25 for men, the top of drug-free athletes in Kouri et al. 1995 (Clin J Sport
-// Med 5:223-228), where normalised FFMI = FFMI + 6.1 × (1.8 − height in m). For women 22, a looser convention: the study
-// was of men. It is an outline of what is possible, not a target, and a scale's fat-free mass is itself an estimate.
+// Muscle potential: current fat-free mass against a ceiling. With wrist and ankle girths (men), Casey Butt's frame-size
+// formula (2009, fitted on drug-free bodybuilding champions from before steroids): max lean mass (lb) = H^1.5 ×
+// (√wrist / 22.6670 + √ankle / 17.0104) × (body fat % / 224 + 1), inches. Without them, Kouri 1995's normalised FFMI of 25
+// (157 men; almost none of the drug-free lifters were above it). Kouri studied men only: the 22 used for women is this
+// app's adjustment for women's lower lean mass, not a published cutoff, and Butt's formula is for men only.
+
+enum class PotentialMethod { FRAME, FFMI }
+
 data class MusclePotential(
     val currentFatFreeKg: Double,
     val ceilingFatFreeKg: Double,
-    /** current / ceiling, 0..1 (capped). */
     val fraction: Double,
     val normalizedFfmi: Double,
+    val method: PotentialMethod,
+    /** FFMI method: the normalised FFMI used as the ceiling. */
     val ceilingFfmi: Double,
+    /** Frame method: the body fat % the ceiling was worked out at (clamped to 5–25 %), and the girths used. */
+    val atBodyFatPct: Double? = null,
+    val wristCm: Double? = null,
+    val ankleCm: Double? = null,
 )
 
-fun musclePotential(fatFreeKg: Double, heightCm: Double, isMale: Boolean): MusclePotential? {
+private const val CM_PER_IN = 2.54
+private const val KG_PER_LB = 0.45359237
+
+/** Butt's maximum lean (fat-free) mass in kg, or null outside plausible inputs. Body fat is clamped to 5–25 %. */
+fun buttMaxLeanKg(heightCm: Double, wristCm: Double, ankleCm: Double, bodyFatPct: Double): Double? {
+    if (heightCm !in 100.0..230.0 || wristCm !in 10.0..30.0 || ankleCm !in 12.0..40.0) return null
+    val h = heightCm / CM_PER_IN
+    val bf = bodyFatPct.coerceIn(5.0, 25.0)
+    val lb = Math.pow(h, 1.5) * (Math.sqrt(wristCm / CM_PER_IN) / 22.6670 + Math.sqrt(ankleCm / CM_PER_IN) / 17.0104) * (bf / 224.0 + 1.0)
+    return lb * KG_PER_LB
+}
+
+/**
+ * [frame] is (wrist, ankle) in cm; with it, a man's ceiling comes from his frame at [bodyFatPct] (10 % when unknown),
+ * otherwise from the FFMI cutoff.
+ */
+fun musclePotential(
+    fatFreeKg: Double,
+    heightCm: Double,
+    isMale: Boolean,
+    frame: Pair<Double, Double>? = null,
+    bodyFatPct: Double? = null,
+): MusclePotential? {
     if (heightCm !in 100.0..230.0 || fatFreeKg <= 0.0) return null
     val h = heightCm / 100.0
-    val ceiling = if (isMale) 25.0 else 22.0
-    val ceilingKg = (ceiling - 6.1 * (1.8 - h)) * h * h
-    if (ceilingKg <= 0.0) return null
     val normalized = fatFreeKg / (h * h) + 6.1 * (1.8 - h)
-    return MusclePotential(fatFreeKg, ceilingKg, (fatFreeKg / ceilingKg).coerceIn(0.0, 1.0), normalized, ceiling)
+    val ceilingFfmi = if (isMale) 25.0 else 22.0
+    if (isMale && frame != null) {
+        val bf = (bodyFatPct ?: 10.0).coerceIn(5.0, 25.0)
+        val ceiling = buttMaxLeanKg(heightCm, frame.first, frame.second, bf)
+        if (ceiling != null) {
+            return MusclePotential(fatFreeKg, ceiling, (fatFreeKg / ceiling).coerceIn(0.0, 1.0), normalized, PotentialMethod.FRAME,
+                ceilingFfmi, bf, frame.first, frame.second)
+        }
+    }
+    val ceilingKg = (ceilingFfmi - 6.1 * (1.8 - h)) * h * h
+    if (ceilingKg <= 0.0) return null
+    return MusclePotential(fatFreeKg, ceilingKg, (fatFreeKg / ceilingKg).coerceIn(0.0, 1.0), normalized, PotentialMethod.FFMI, ceilingFfmi)
 }

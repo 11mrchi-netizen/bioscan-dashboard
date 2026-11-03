@@ -34,8 +34,6 @@ import com.bioscan.fieldterminal.ui.components.DateTrendLine
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
-import com.bioscan.fieldterminal.ui.components.MetricCardHeader
-import com.bioscan.fieldterminal.ui.components.RedesignCard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.format.DateTimeFormatter
@@ -87,21 +85,20 @@ private fun verdictColor(v: ChangeVerdict?): Color = when (v) {
 fun BodyMeasurementsCard(
     history: List<BodyCheckinRecord>,
     heightCm: Double?,
-    onStart: () -> Unit,
+    onStart: (() -> Unit)? = null,
 ) {
     var open by remember { mutableStateOf<List<BodySlot>?>(null) }
     val latest = history.maxByOrNull { it.occurredAt }
     val changes = remember(history) { siteChanges(history) }
-    RedesignCard {
-        MetricCardHeader(title = "BODY MEASUREMENTS", latest = null, helpBody = INFO, helpDetails = INFO_DETAILS)
+    com.bioscan.fieldterminal.ui.screens.detail.Section("BODY MEASUREMENTS", info = INFO + "\n\n" + INFO_DETAILS) {
         Text(
             latest?.let { "Last check-in ${it.date.format(DAY)} · next due ${bodyCheckinDueOn(it.date)!!.format(DAY)}" }
-                ?: "No check-in yet. Tape and skinfolds, once a month before breakfast: about 15 minutes.",
+                ?: "No check-in yet. Tape and skinfolds, once a month before breakfast: about 15 minutes. Start one from LAB › Body check-in or the + button.",
             style = FTType.BodySmall,
             color = FT.TextSecondary,
         )
-        FTButton("START BODY CHECK-IN", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth(), onClick = onStart)
-        if (latest == null) return@RedesignCard
+        if (onStart != null) FTButton("START BODY CHECK-IN", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth(), onClick = onStart)
+        if (latest == null) return@Section
 
         val marks = changes.mapNotNull { c ->
             regionOf(c.slot.site)?.let { BodyMark(it, sideKey(c.slot.side), verdictColor(c.verdict)) }

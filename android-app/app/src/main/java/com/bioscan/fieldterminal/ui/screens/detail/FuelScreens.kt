@@ -1,7 +1,11 @@
 package com.bioscan.fieldterminal.ui.screens.detail
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.Modifier
@@ -86,6 +90,10 @@ private fun moveWords(m: MacroMove?) = when (m) {
     null -> ""
 }
 
+private const val BALANCE_INFO =
+    "Each logged day's intake minus your estimated expenditure (TDEE, worked out after the fact from your intake and weight " +
+        "trend). Not a predictive formula and not a target to hit. The headline is the last 7 logged days' average."
+
 private const val CAL_INFO =
     "Calories logged each day. The shaded band is your calorie target ± 10 % (Setup); the dashed lines are your estimated " +
         "expenditure (TDEE), once your logging and weight trend are enough to work it out. Days you did not log are left empty."
@@ -122,6 +130,24 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
             val tdeeBand = tdee?.takeIf { it.state == EvalState.Stable && it.rangeLowKcal != null && it.rangeHighKcal != null }?.let { it.rangeLowKcal!! to it.rangeHighKcal!! }
             TrendChart(calories, today, days, goals.caloriesKcal?.let { it * 0.9 to it * 1.1 }, Fmt.int, NutrientColor.Calories,
                 target = tdeeBand, targetLabel = "your TDEE", bandLabel = "target ± 10 %")
+        }
+
+        // Moved here from ME › BODY: each logged day's intake against the post-fact TDEE. Building until both gates are met
+        // (10+ complete-logged days in 14 and an established weight trend), never a made-up number.
+        Section("ENERGY BALANCE", info = BALANCE_INFO) {
+            val expenditure = tdee?.takeIf { it.state == EvalState.Stable }?.tdeeKcal
+            if (expenditure == null) {
+                EmptyLine("Building: needs 10+ complete-logged days in the last 14 and an established weight trend (10+ weigh-ins across 14+ days).")
+            } else {
+                val balance = remember(daily, expenditure) { daily.filter { it.second.calories > 0 }.associate { it.first to it.second.calories - expenditure } }
+                val week = balance.filterKeys { it > today.minusDays(7) }.values
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(if (week.isEmpty()) "—" else Fmt.signed(week.average()), style = FTType.MetricMedium, color = FT.TextPrimary)
+                    Text("kcal / day · last 7 days", style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
+                }
+                Text("Expenditure about ${expenditure.roundToInt()} kcal / day", style = FTType.Caption, color = FT.TextMuted)
+                TrendChart(balance, today, days, null, Fmt.signed, NutrientColor.Calories)
+            }
         }
 
         Section("MACROS", info = "Grams of protein, carbs and fat each day (weekly averages beyond two months). Tap a column to read it.") {

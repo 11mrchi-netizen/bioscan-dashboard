@@ -126,3 +126,26 @@ fun weightChangeSplit(
         spanDays = span,
     )
 }
+
+// ME › BODY's muscle potential: today's fat-free mass against a natural ceiling for this height. The ceiling is a
+// normalised fat-free mass index (FFMI) of 25 for men, the top of drug-free athletes in Kouri et al. 1995 (Clin J Sport
+// Med 5:223-228), where normalised FFMI = FFMI + 6.1 × (1.8 − height in m). For women 22, a looser convention: the study
+// was of men. It is an outline of what is possible, not a target, and a scale's fat-free mass is itself an estimate.
+data class MusclePotential(
+    val currentFatFreeKg: Double,
+    val ceilingFatFreeKg: Double,
+    /** current / ceiling, 0..1 (capped). */
+    val fraction: Double,
+    val normalizedFfmi: Double,
+    val ceilingFfmi: Double,
+)
+
+fun musclePotential(fatFreeKg: Double, heightCm: Double, isMale: Boolean): MusclePotential? {
+    if (heightCm !in 100.0..230.0 || fatFreeKg <= 0.0) return null
+    val h = heightCm / 100.0
+    val ceiling = if (isMale) 25.0 else 22.0
+    val ceilingKg = (ceiling - 6.1 * (1.8 - h)) * h * h
+    if (ceilingKg <= 0.0) return null
+    val normalized = fatFreeKg / (h * h) + 6.1 * (1.8 - h)
+    return MusclePotential(fatFreeKg, ceilingKg, (fatFreeKg / ceilingKg).coerceIn(0.0, 1.0), normalized, ceiling)
+}

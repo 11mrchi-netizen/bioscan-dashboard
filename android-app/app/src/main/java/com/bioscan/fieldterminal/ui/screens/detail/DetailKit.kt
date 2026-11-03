@@ -293,6 +293,58 @@ fun MetricRow(
     }
 }
 
+/** A metric as a tile: [MetricTiles] draws them two to a row, each opening its own trend full screen. */
+data class TileSpec(
+    val label: String,
+    val series: Series,
+    val unit: String,
+    val format: (Double) -> String,
+    val info: String? = null,
+    val minSd: Double = 0.0,
+    val color: Color = FT.Emerald,
+    val betterHigher: Boolean? = null,
+)
+
+@Composable
+fun MetricTiles(tiles: List<TileSpec>, today: LocalDate = LocalDate.now()) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (row in tiles.chunked(2)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (t in row) MetricTile(t, today, Modifier.weight(1f))
+                if (row.size == 1) Box(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricTile(t: TileSpec, today: LocalDate, modifier: Modifier) {
+    var open by remember { mutableStateOf(false) }
+    val reading = remember(t.series, today) { readMetric(t.series, today, minSd = t.minSd, maxAgeDays = 60) }
+    val spark = remember(t.series) { t.series.entries.sortedBy { it.key }.takeLast(30).map { it.value } }
+    val shape = RoundedCornerShape(FT.RadiusModule)
+    Column(
+        modifier.background(FT.GlassFill, shape).ftClickable(shape = shape, role = Role.Button, onClickLabel = "Open ${t.label}") { open = true }.padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(t.label.uppercase(), style = FTType.Micro, color = FT.TextMuted)
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(reading.latest?.let(t.format) ?: "—", style = FTType.MetricMedium, color = FT.TextPrimary)
+            Text(t.unit, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
+        }
+        Text("${positionGlyph(reading.position)} ${positionWords(reading.position)}", style = FTType.Caption, color = FT.TextMuted)
+        Sparkline(spark, color = t.color)
+    }
+    if (open) {
+        val days = LocalRangeDays.current
+        FullScreenOverlay(title = t.label.uppercase(), onClose = { open = false }) {
+            Headline(reading, t.format, t.unit, today, t.betterHigher)
+            Section("$days DAYS") { TrendChart(t.series, today, days, reading.normal, t.format, t.color) }
+            if (t.info != null) Section("WHAT IS IT?") { Text(t.info, style = FTType.BodySmall, color = FT.TextSecondary) }
+        }
+    }
+}
+
 /** Small number tiles, two to a row. */
 @Composable
 fun StatTiles(tiles: List<Triple<String, String, String?>>) {

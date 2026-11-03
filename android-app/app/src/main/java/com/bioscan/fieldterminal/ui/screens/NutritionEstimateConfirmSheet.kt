@@ -72,6 +72,10 @@ fun NutritionEstimateConfirmSheet(
     enrichment: CronometerEnrichment? = null,
     enriching: Boolean = false,
     source: MealItemSource = MealItemSource.AiImage,
+    // Photo logging v3: rerun the estimate on the same photos with a tapped answer, or with what the meal really is.
+    rerunning: Boolean = false,
+    onAnswer: ((com.bioscan.fieldterminal.data.PhotoAnswer) -> Unit)? = null,
+    onCorrect: ((String) -> Unit)? = null,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
 ) {
@@ -173,6 +177,7 @@ fun NutritionEstimateConfirmSheet(
                 else -> "MEAL ESTIMATE"
             }
             Text(headerTitle, style = sheetHeaderTitleStyle, color = FT.Emerald)
+            if (source == MealItemSource.AiImage) PhotoEstimatePanel(estimate, rerunning, onAnswer, onCorrect)
             val e = current
             if (e != null) {
                 Text("FOODS", style = FTType.LabelCaps, color = FT.Emerald)
@@ -206,6 +211,8 @@ fun NutritionEstimateConfirmSheet(
                             onUseDatabase = { replaceItem(index, item.usingDatabaseMatch()) },
                             onRemove = if (e.items.size > 1) ({ replaceItem(index, null) }) else null,
                         )
+                        // Photo logging v3: what the photo saw for this food and what it assumed.
+                        if (!item.userEdited) photoFoodFor(estimate, item.query)?.let { PhotoFoodNote(it) }
                     }
                 }
             } else if (enriching) {
@@ -489,3 +496,86 @@ private fun FormFieldLabel(text: String) {
 }
 
 private fun LocalDateTime.toIsoWithOffset(): String = this.atOffset(java.time.ZoneOffset.UTC).toString()
+
+// ---- Photo logging v3 ----
+
+/** The photo's own record of a food the lookup matched (looked up by its generic name). */
+private fun photoFoodFor(estimate: NutritionMealEstimate, query: String): com.bioscan.fieldterminal.data.PhotoFood? =
+    estimate.items.firstOrNull { it.canonicalName.equals(query, ignoreCase = true) || it.name.equals(query, ignoreCase = true) }
+
+private fun levelColor(level: String) = when (level) {
+    "high" -> FT.Emerald
+    "low" -> FT.Warning
+    else -> FT.TextSecondary
+}
+
+/** Under a food: what the photo saw (name, portion, preparation), its confidence, and what it assumed. */
+@Composable
+private fun PhotoFoodNote(food: com.bioscan.fieldterminal.data.PhotoFood) {
+    Column(Modifier.padding(start = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        val seen = listOf(food.name, food.portion, food.preparation).filter { it.isNotBlank() }.distinct().joinToString(" · ")
+        Text(
+            "PHOTO: $seen · ${food.grams.roundToInt()} g · ${food.confidence.uppercase()}",
+            style = FTType.Micro, color = levelColor(food.confidence),
+        )
+        if (food.assumptions.isNotEmpty()) {
+            Text("Assumed: " + food.assumptions.joinToString("; "), style = FTType.Caption, color = FT.TextMuted)
+        }
+    }
+}
+
+/**
+ * The photo estimate's own say: its confidence and what limits it, up to three questions with answers to tap (each
+ * reruns the estimate with the answer), and a box to say what the meal really is (it reruns with that as the truth).
+ */
+@Composable
+private fun PhotoEstimatePanel(
+    estimate: NutritionMealEstimate,
+    rerunning: Boolean,
+    onAnswer: ((com.bioscan.fieldterminal.data.PhotoAnswer) -> Unit)?,
+    onCorrect: ((String) -> Unit)?,
+) {
+    var correction by remember(estimate) { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        estimate.confidenceLevel?.let { level ->
+            Text(
+                "PHOTO CONFIDENCE · ${level.uppercase()}" + (estimate.confidenceReason?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
+                style = FTType.Caption, color = levelColor(level),
+            )
+        }
+        if (rerunning) {
+            Text("UPDATING THE ESTIMATE…", style = FTType.LabelCaps, color = FT.TextSecondary)
+        } else if (onAnswer != null && estimate.questions.isNotEmpty()) {
+            Text("A QUICK ANSWER MAKES IT MORE ACCURATE", style = FTType.LabelCaps, color = FT.TextSecondary)
+            estimate.questions.forEach { q ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(q.question, style = FTType.BodySmall, color = FT.TextPrimary)
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        q.options.forEach { option ->
+                            Text(
+                                option,
+                                style = FTType.Label,
+                                color = FT.Emerald,
+                                modifier = Modifier
+                                    .border(FT.BorderWidth, FT.Emerald.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(50))
+                                    .ftClickable(shape = androidx.compose.foundation.shape.RoundedCornerShape(50)) {
+                                        onAnswer(com.bioscan.fieldterminal.data.PhotoAnswer(q.question, option))
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (onCorrect != null && !rerunning) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FieldTextField(correction, { correction = it }, "Not right? Say what it is", modifier = Modifier.weight(1f))
+                if (correction.isNotBlank()) ActionLink("REDO") { onCorrect(correction.trim()) }
+            }
+        }
+    }
+}

@@ -834,6 +834,12 @@ private fun FoodForm(
         val stranded = com.bioscan.fieldterminal.util.PendingCameraCapture.stranded(context)
         if (stranded != null && stranded !in pendingPhotos) strandedPhoto = stranded
     }
+    // Photo logging v3: what the person says the meal is (it wins over the photo), the weighed food, and the photos and
+    // answers of the last estimate, so a tapped answer or a correction reruns it on the same photos.
+    var photoNote by rememberSaveable { mutableStateOf("") }
+    var photoWeight by rememberSaveable { mutableStateOf("") }
+    var estimatedPhotos by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.UriListSaver) { mutableStateOf<List<Uri>>(emptyList()) }
+    var photoAnswers by remember { mutableStateOf<List<com.bioscan.fieldterminal.data.PhotoAnswer>>(emptyList()) }
     var mealEstimate by remember { mutableStateOf<NutritionMealEstimate?>(null) }
     var mealEstimateId by remember { mutableStateOf<Long?>(null) }
     var cronometerEnrichment by remember { mutableStateOf<CronometerEnrichment?>(null) }
@@ -854,16 +860,25 @@ private fun FoodForm(
     var recentMeals by remember { mutableStateOf<List<MealRow>?>(null) }
     var cloning by remember { mutableStateOf(false) }
 
-    fun runImageEstimate(uris: List<Uri>) {
+    // [answers] and a corrected [note] rerun the estimate on the same photos (from the confirm sheet); the photo's own
+    // foods then go to the database lookup as they are, at the grams the photo showed.
+    fun runImageEstimate(uris: List<Uri>, answers: List<com.bioscan.fieldterminal.data.PhotoAnswer> = emptyList()) {
         if (uris.isEmpty()) return
         estimating = true
         estimationError = null
-        cronometerEnrichment = null
         mealEstimateSource = MealItemSource.AiImage
         scope.launch {
             try {
                 val images = uris.map { readAndCompressImage(context, it) }
-                val result = NutritionImageEstimateRepository(SupabaseClientProvider.client).estimate(images)
+                val result = NutritionImageEstimateRepository(SupabaseClientProvider.client).estimate(
+                    images,
+                    note = photoNote,
+                    totalWeightG = photoWeight.replace(',', '.').toDoubleOrNull(),
+                    answers = answers,
+                )
+                estimatedPhotos = uris
+                photoAnswers = answers
+                cronometerEnrichment = null
                 mealEstimateId = result.estimateId
                 mealEstimate = result.estimate
                 pendingPhotos = emptyList()
@@ -872,8 +887,12 @@ private fun FoodForm(
 
                 enriching = true
                 try {
-                    cronometerEnrichment = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
-                        .enrich(result.estimate.description)
+                    val lookup = NutritionCronometerLookupRepository(SupabaseClientProvider.client)
+                    cronometerEnrichment = if (result.estimate.items.isNotEmpty()) {
+                        lookup.enrichPhoto(result.estimate.items, result.estimate.description)
+                    } else {
+                        lookup.enrich(result.estimate.description)
+                    }
                 } catch (_: Exception) {
                     // Enrichment is best-effort; Gemini estimate stands if Cronometer fails
                 } finally {
@@ -1103,6 +1122,11 @@ private fun FoodForm(
                         },
                     )
                 }
+                // Photo logging v3: optional, and both make the estimate better than the photo alone.
+                Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FieldTextField(photoNote, { photoNote = it }, "What is it? (optional, e.g. beef noodle soup, no oil)", singleLine = false)
+                    FieldTextField(photoWeight, { photoWeight = it.filter { c -> c.isDigit() || c == '.' || c == ',' } }, "Weighed? total grams (optional)", keyboardType = KeyboardType.Number)
+                }
                 PhotoActionButton(
                     label = if (estimating) "ESTIMATING..." else "ESTIMATE MEAL",
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
@@ -1277,11 +1301,23 @@ private fun FoodForm(
             enrichment = cronometerEnrichment,
             enriching = enriching,
             source = mealEstimateSource,
+            // Photo logging v3: a tapped answer, or a correction of what the meal is, reruns the estimate on the same photos.
+            rerunning = estimating,
+            onAnswer = if (mealEstimateSource == MealItemSource.AiImage && estimatedPhotos.isNotEmpty()) ({ answer ->
+                runImageEstimate(estimatedPhotos, photoAnswers.filter { it.question != answer.question } + answer)
+            }) else null,
+            onCorrect = if (mealEstimateSource == MealItemSource.AiImage && estimatedPhotos.isNotEmpty()) ({ note ->
+                photoNote = note
+                runImageEstimate(estimatedPhotos, photoAnswers)
+            }) else null,
             onDismiss = { mealEstimate = null; mealEstimateId = null; cronometerEnrichment = null },
             onSaved = {
                 mealEstimate = null
                 mealEstimateId = null
                 cronometerEnrichment = null
+                photoNote = ""
+                photoWeight = ""
+                photoAnswers = emptyList()
                 onCanonicalSaved()
             },
         )

@@ -554,7 +554,16 @@ export interface MacroEstimate {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  // Photo v3: the photo's own estimate of further nutrients for this food, in NUTRIENT_MAP's names and units (fiber,
+  // sodium, potassium, iron...). Used only when the estimate stands in for the food, so an item with no database match
+  // still adds its micronutrients instead of zeros.
+  extra?: Record<string, number>;
 }
+
+// The nutrients a photo estimate may carry beyond the macros, in NUTRIENT_MAP's names and units.
+export const ESTIMATE_EXTRA_NUTRIENTS = [
+  "fiber", "sugar", "sodium", "saturated_fat", "cholesterol", "potassium", "calcium", "iron", "magnesium", "zinc", "vitamin_c",
+];
 
 export interface Alternative {
   food_id: number;
@@ -684,6 +693,9 @@ export function sumNutrients(results: ResolvedItem[]): {
     if (r.used_estimate && r.ai_estimate) {
       included++;
       for (const [from, to] of ESTIMATE_KEYS) totals[to] = (totals[to] ?? 0) + r.ai_estimate[from];
+      for (const [key, val] of Object.entries(r.ai_estimate.extra ?? {})) {
+        if (ESTIMATE_EXTRA_NUTRIENTS.includes(key) && Number.isFinite(val) && val >= 0) totals[key] = (totals[key] ?? 0) + val;
+      }
       continue;
     }
     if (r.match_quality === "none" || r.match_quality === "weak") {

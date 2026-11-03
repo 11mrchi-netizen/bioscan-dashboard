@@ -67,7 +67,7 @@ import java.time.ZonedDateTime
 // maintenance, body weight and composition, the days before, the weather, the sweat profile, the person's products and
 // settings; and keeps a copy of each plan when it changes (fuel_plans) so the screens can say what changed.
 
-const val FUEL_ENGINE_VERSION = "1"
+const val FUEL_ENGINE_VERSION = "2" // 2: breakfast at 09:00 by default; no meal moved before 06:00
 
 /** Days shown on the fuel plan page: today and the ten after it. */
 const val FUEL_HORIZON_DAYS = 11
@@ -193,7 +193,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
      */
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult =
-        com.bioscan.fieldterminal.data.ReadCache.get("fuel.today.${now.toLocalDate()}", tables = null, serializer = TodayFuelResult.serializer()) { fetchLoadToday(context, overview, now) }
+        com.bioscan.fieldterminal.data.ReadCache.get("fuel.today.v$FUEL_ENGINE_VERSION.${now.toLocalDate()}", tables = null, serializer = TodayFuelResult.serializer()) { fetchLoadToday(context, overview, now) }
 
     private suspend fun fetchLoadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult {
         val key = "fuel.today.${now.toLocalDate()}.${FuelSettingsStore.get(context).hashCode()}.${NutritionGoalsStore.getGoals(context).hashCode()}.${overview?.todaysMeals?.size}"
@@ -337,7 +337,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
      */
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadWeekPlan(context: Context, overview: NutritionOverview?, weekStart: LocalDate, now: ZonedDateTime = ZonedDateTime.now()): WeekPlan? =
-        ReadCache.get("fuel.week.$weekStart.${now.toLocalDate()}", tables = null, serializer = WeekPlan.serializer().nullable) { fetchLoadWeekPlan(context, overview, weekStart, now) }
+        ReadCache.get("fuel.week.v$FUEL_ENGINE_VERSION.$weekStart.${now.toLocalDate()}", tables = null, serializer = WeekPlan.serializer().nullable) { fetchLoadWeekPlan(context, overview, weekStart, now) }
 
     private suspend fun fetchLoadWeekPlan(context: Context, overview: NutritionOverview?, weekStart: LocalDate, now: ZonedDateTime = ZonedDateTime.now()): WeekPlan? = coroutineScope {
         val zone = now.zone

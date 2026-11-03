@@ -41,8 +41,11 @@ enum class MealSlotKind(val label: String, val main: Boolean) {
     RECOVERY("RECOVERY", false),
 }
 
+/** No meal is planned before this time of day: a meal that would be moves after the session instead. */
+val EARLIEST_MEAL: LocalTime = LocalTime.of(6, 0)
+
 data class MealTimes(
-    val breakfast: LocalTime = LocalTime.of(7, 30),
+    val breakfast: LocalTime = LocalTime.of(9, 0),
     val lunch: LocalTime = LocalTime.of(12, 30),
     val snack: LocalTime? = LocalTime.of(16, 0),
     val dinner: LocalTime = LocalTime.of(19, 30),
@@ -129,15 +132,23 @@ fun codeMeals(
         MealSlotKind.DINNER to at(times.dinner),
     )
     times.snack?.let { slots += MealSlotKind.SNACK to at(it) }
-    // A meal that would fall during a session moves to just before it (breakfast before a 07:00 race, say).
+    // A meal that would fall during a session moves to just before it (lunch before a 12:00 long run, say), unless that
+    // would be earlier than [EARLIEST_MEAL]: then it moves to just after (breakfast after a 07:00 run, not at 04:30).
+    val earliest = at(EARLIEST_MEAL)
     for (i in slots.indices) {
         val (kind, t) = slots[i]
         val clash = sessions.firstOrNull { s -> !t.isBefore(s.start!!) && t.isBefore(s.end!!) }
-        if (clash != null) slots[i] = kind to clash.start!!.minusMinutes(if (kind.main) 150 else 60)
+        if (clash != null) {
+            val before = clash.start!!.minusMinutes(if (kind.main) 150 else 60)
+            slots[i] = kind to if (before.isBefore(earliest)) clash.end!!.plusMinutes(30) else before
+        }
     }
     for (s in sessions.filter { it.intensity.isKey && it.durationMin >= 60 }) {
         val start = s.start!!
-        if (slots.none { (_, t) -> hoursBetween(t, start) in 1.0..4.0 }) slots += MealSlotKind.PRE_SESSION to start.minusMinutes(90)
+        // No pre-session snack before [EARLIEST_MEAL]: an early session's fuel is taken during it.
+        if (slots.none { (_, t) -> hoursBetween(t, start) in 1.0..4.0 } && !start.minusMinutes(90).isBefore(earliest)) {
+            slots += MealSlotKind.PRE_SESSION to start.minusMinutes(90)
+        }
         val end = s.end!!
         if (slots.none { (_, t) -> hoursBetween(end, t) in 0.0..2.0 }) slots += MealSlotKind.RECOVERY to end.plusMinutes(30)
     }

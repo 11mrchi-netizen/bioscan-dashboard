@@ -240,7 +240,8 @@ fun SupplementFormSheet(
             // Medications, hormones, peptides: a reference card from RxNorm and the FDA label (or PubMed); supplements keep
             // their label-database check below.
             if (regimen.kind != com.bioscan.fieldterminal.domain.RegimenKind.SUPPLEMENT) {
-                RegimenReferenceSection(existing?.id, name.trim(), roster.filter { it.id != existing?.id }.map { it.id to it.name })
+                RegimenReferenceSection(existing?.id, name.trim(), roster.filter { it.id != existing?.id }.map { it.id to it.name },
+                    unit = regimen.unit, dose = regimen.amount.replace(',', '.').toDoubleOrNull())
             }
 
             existing?.productId?.let { ProductVerifySection(it) }

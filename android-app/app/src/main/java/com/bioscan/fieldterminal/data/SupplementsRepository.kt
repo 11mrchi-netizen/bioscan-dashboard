@@ -73,6 +73,14 @@ data class SupplementChangeRow(
     val after: kotlinx.serialization.json.JsonObject,
 )
 
+@Serializable
+data class DoseLogRow(
+    @SerialName("taken_at") val takenAt: String,
+    @SerialName("dose_value") val doseValue: Double? = null,
+    @SerialName("dose_unit") val doseUnit: String? = null,
+    @SerialName("serving_count") val servingCount: Double? = null,
+)
+
 /** [lastTaken]: the newest local day each item was taken; [takesToday]: doses logged today per item. */
 data class RecentTakes(val lastTaken: Map<Long, LocalDate>, val takesToday: Map<Long, Int>)
 
@@ -157,6 +165,15 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
                 }
                 .decodeList<SupplementChangeRow>()
         }
+
+    /** [supplementId]'s logged doses since [since], oldest first: the amount-in-body estimate's input. */
+    suspend fun loadDoses(supplementId: Long, since: java.time.Instant): List<DoseLogRow> =
+        supabase.postgrest.from("supplement_log")
+            .select(columns = Columns.list("taken_at,dose_value,dose_unit,serving_count")) {
+                filter { eq("supplement_id", supplementId); gte("taken_at", since.toString()) }
+                order("taken_at", Order.ASCENDING)
+                limit(2000)
+            }.decodeList<DoseLogRow>()
 
     /** The history as dated changes with item names and doses (for the charts and the before/after readings). */
     suspend fun loadRegimenChanges(): List<com.bioscan.fieldterminal.domain.RegimenChange> {

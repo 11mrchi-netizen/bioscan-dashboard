@@ -37,7 +37,7 @@ import java.time.ZoneId
 // sections, each opened with a tap. Nothing here suggests a dose.
 
 @Composable
-fun RegimenReferenceSection(supplementId: Long?, name: String, others: List<Pair<Long, String>>) {
+fun RegimenReferenceSection(supplementId: Long?, name: String, others: List<Pair<Long, String>>, unit: String? = null, dose: Double? = null) {
     val repo = remember { RegimenReferenceRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var card by remember(supplementId) { mutableStateOf<RegimenReferenceRow?>(null) }
@@ -72,7 +72,7 @@ fun RegimenReferenceSection(supplementId: Long?, name: String, others: List<Pair
                 onSaveStudies = { run { card = repo.saveStudies(supplementId, s); search = null } },
                 onCancel = { search = null },
             )
-            c != null -> CardView(c, others,
+            c != null -> CardView(c, others, unit, dose,
                 onRefresh = { run { search = repo.search(name) } },
                 onRemove = { run { repo.remove(supplementId); card = null } })
             else -> {
@@ -116,7 +116,7 @@ private fun Candidates(s: ReferenceSearchDto, busy: Boolean, onPickLabel: (Strin
 }
 
 @Composable
-private fun CardView(c: RegimenReferenceRow, others: List<Pair<Long, String>>, onRefresh: () -> Unit, onRemove: () -> Unit) {
+private fun CardView(c: RegimenReferenceRow, others: List<Pair<Long, String>>, unit: String?, dose: Double?, onRefresh: () -> Unit, onRemove: () -> Unit) {
     val uri = LocalUriHandler.current
     Text(c.title, style = FTType.RowTitle, color = FT.TextPrimary)
     val sourceName = if (c.source == "fda_label") "FDA label (openFDA)" else "PubMed"
@@ -126,6 +126,7 @@ private fun CardView(c: RegimenReferenceRow, others: List<Pair<Long, String>>, o
     c.halfLifeHours?.let { h ->
         Text("Half-life about ${halfLifeWords(h)}", style = FTType.Telemetry, color = FT.TextPrimary, modifier = Modifier.padding(top = 4.dp))
         c.halfLifeText?.let { Caption("The label: $it") }
+        AmountInBodySection(c.supplementId, h, unit, dose)
     }
 
     c.label?.let { label ->

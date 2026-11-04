@@ -130,6 +130,8 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
             // Play services' registrations alive.
             RoutineCaptureWorker.schedule(context)
             LocationCollector.registerAll(context)
+            // Daily targets live with the account too (FUEL scores intake against them).
+            runCatching { com.bioscan.fieldterminal.data.NutritionGoalsStore.sync(context, SupabaseClientProvider.client) }
         }
     }
 

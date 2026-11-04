@@ -139,6 +139,9 @@ fun OverlaySection(title: String, content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
+/** FUEL inputs scored against the saved daily targets (water falls back to a generic range, so it is never missing for this). */
+private val TARGET_INPUTS = setOf(ScoreKeys.ENERGY_RATIO, ScoreKeys.PROTEIN_RATIO, ScoreKeys.CARB_RATIO)
+
 private fun dayLabel(day: LocalDate): String = "${weekday(day).take(3).uppercase()} ${day.dayOfMonth} ${day.month.name.take(3)}"
 
 @Composable
@@ -266,7 +269,11 @@ fun DomainOverlay(
                 val scored = g.inputs.sortedByDescending { abs(points[it.spec.key] ?: 0.0) }
                 for (input in scored) BulletRow(input, points[input.spec.key]) { onOpen(ScoreOverlay.Input(key, input.spec.key)) }
                 val missing = g.group.inputs.filter { spec -> scored.none { it.spec.key == spec.key } }
-                if (missing.isNotEmpty()) Text("No data: ${missing.joinToString { inSentence(it.label) }}", style = FTType.Caption, color = FT.TextMuted)
+                // Intake is scored against the daily targets: without them those inputs are missing although meals are logged.
+                val goalsSet = com.bioscan.fieldterminal.data.NutritionGoalsStore.getGoals(androidx.compose.ui.platform.LocalContext.current).isSet
+                val (noTarget, noData) = missing.partition { !goalsSet && it.key in TARGET_INPUTS }
+                if (noTarget.isNotEmpty()) Text("No target set: ${noTarget.joinToString { inSentence(it.label) }}. Set daily targets in ME › ⚙ › NUTRITION GOALS.", style = FTType.Caption, color = FT.Warning)
+                if (noData.isNotEmpty()) Text("No data: ${noData.joinToString { inSentence(it.label) }}", style = FTType.Caption, color = FT.TextMuted)
             }
         }
         if (key == DomainKey.BALANCE) {

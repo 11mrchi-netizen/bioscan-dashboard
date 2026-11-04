@@ -112,8 +112,13 @@ CHARGE(D+1) = rank_in_own_history( 0.35·RECOVERY + 0.20·SLEEP + 0.15·LOAD_fat
 - **Locking:**
   - **PROVISIONAL** from wake;
   - **FINAL** once day D is closed with the evening check-in, or at 12:00;
-  - after that it never changes.
-- **Late logs** appear in LOG like any other entry. They never move a final score, and no extra note is shown.
+  - after that it is kept (`score_snapshots`, `domain/score/ScoreSnapshots.kt`) and stands. It is rebuilt only when
+    the morning gains an input or a cap it did not have (stress that synced late, an illness logged for that day). A
+    rewritten value, the monthly re-fit of the CHARGE weights or newer mornings in the ranking history do not move it.
+  - **Changing the engine:** a kept morning shows a change to the score code only if `SCORE_MODEL_VERSION` is bumped;
+    bump it whenever a change should reach past mornings.
+- **Late logs** appear in LOG like any other entry. A late log of a value the morning already had never moves a final
+  score; one that fills a missing input does, and no extra note is shown.
 - **PARTIAL.** A domain is PARTIAL when the day's food log covers less than about 60 % of your usual intake, or the
   check-in is missing. A PARTIAL domain is left out of CHARGE, never scored low.
 - **No score for today during the day.** Today shows progress and what's left to do; scores only describe completed

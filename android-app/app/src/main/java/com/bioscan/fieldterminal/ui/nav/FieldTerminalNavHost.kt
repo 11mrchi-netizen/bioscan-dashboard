@@ -1,5 +1,11 @@
 package com.bioscan.fieldterminal.ui.nav
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -158,6 +164,12 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             navController = navController,
             startDestination = TopLevelTab.Status.route,
             modifier = Modifier.padding(innerPadding),
+            // Between dock tabs: a quick crossfade. A pushed page slides in from the right over a short fade and slides
+            // back out on back; with predictive back (manifest) the swipe previews the page behind.
+            enterTransition = { if (isTabSwitch()) fadeIn(tween(TAB_FADE_MS)) else slideInHorizontally(tween(PUSH_MS)) { it / 4 } + fadeIn(tween(PUSH_MS)) },
+            exitTransition = { if (isTabSwitch()) fadeOut(tween(TAB_FADE_MS)) else fadeOut(tween(PUSH_MS)) },
+            popEnterTransition = { if (isTabSwitch()) fadeIn(tween(TAB_FADE_MS)) else fadeIn(tween(PUSH_MS)) },
+            popExitTransition = { if (isTabSwitch()) fadeOut(tween(TAB_FADE_MS)) else slideOutHorizontally(tween(PUSH_MS)) { it / 4 } + fadeOut(tween(PUSH_MS)) },
         ) {
             // Scoring system rebuild (docs/scoring-system): the opening page is TODAY -- CHARGE, the five domain rings and
             // today's plan.
@@ -405,3 +417,11 @@ private val TopLevelTab.domainAccent
         TopLevelTab.Lab -> FT.DomainLabs
         TopLevelTab.User -> FT.DomainUser
     }
+
+private const val TAB_FADE_MS = 150
+private const val PUSH_MS = 220
+private val TAB_ROUTES = TopLevelTab.entries.map { it.route }.toSet()
+
+/** Both ends are dock tabs. */
+private fun androidx.compose.animation.AnimatedContentTransitionScope<androidx.navigation.NavBackStackEntry>.isTabSwitch(): Boolean =
+    initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES

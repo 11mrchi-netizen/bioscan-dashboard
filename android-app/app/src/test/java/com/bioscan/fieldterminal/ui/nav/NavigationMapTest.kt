@@ -12,7 +12,7 @@ class NavigationMapTest {
     @Test
     fun onlyLabKeepsItsOldTileRoute() {
         assertEquals(listOf("tile_labs"), TileRoute.entries.map { it.route })
-        assertEquals(listOf("N=1", "SUPPLEMENTS", "TESTS", "ROUTINE"), LabTab.entries.map { it.label })
+        assertEquals(listOf("N=1", "SUPPLEMENTS", "TESTS", "ROUTINE", "EXPLORE"), LabTab.entries.map { it.label })
     }
 
     // Scoring system rebuild: the dock is TODAY · PLAN · + LOG · LAB · ME; the status and user routes keep their strings.

@@ -61,6 +61,8 @@ enum class LabTab(val label: String) {
     Tests("TESTS"),
     // Routine intelligence R5: the week by place, the commute and the phone (docs/routine-intelligence).
     Routine("ROUTINE"),
+    // Any two daily measures against each other, with a lag (domain/Correlation.kt).
+    Explore("EXPLORE"),
 }
 
 // Setup's own pushed routes -- Setup is now a 4-button hub rather than one

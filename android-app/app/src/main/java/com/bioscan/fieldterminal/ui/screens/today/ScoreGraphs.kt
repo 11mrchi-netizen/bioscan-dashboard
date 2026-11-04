@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.today
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -74,7 +76,14 @@ fun BandedStrip(points: List<Pair<LocalDate, Double?>>, cap: Double = ScoreScale
             Text(cap.roundToInt().toString(), style = FTType.Micro, color = FT.TextMuted)
             Text("0", style = FTType.Micro, color = FT.TextMuted)
         }
-        Canvas(Modifier.weight(1f).height(110.dp)) {
+        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        var pick by androidx.compose.runtime.remember(points) { androidx.compose.runtime.mutableStateOf<Int?>(null) }
+        Canvas(Modifier.weight(1f).height(110.dp).then(
+            with(com.bioscan.fieldterminal.ui.components.Inspect) { Modifier.inspect(points) { px, w, isTap ->
+                val i = (px / w * points.size).toInt().coerceIn(0, (points.size - 1).coerceAtLeast(0))
+                pick = if (points.getOrNull(i)?.second == null) pick else if (isTap && i == pick) null else i
+            } },
+        )) {
             fun y(v: Double) = size.height * (1f - (v / cap).toFloat())
             // Bands: low, below normal, normal, primed and above (only up to the cap).
             val bands = listOf(0.0 to 40.0 to FT.Critical, 40.0 to 60.0 to FT.Warning, 60.0 to 100.0 to FT.Emerald, 100.0 to 150.0 to FT.EmeraldHighlight)
@@ -92,7 +101,15 @@ fun BandedStrip(points: List<Pair<LocalDate, Double?>>, cap: Double = ScoreScale
             points.forEachIndexed { i, (_, v) ->
                 if (v == null) return@forEachIndexed
                 val top = y(min(v, cap))
-                drawRect(scoreColor(v).copy(alpha = if (i == points.lastIndex) 1f else 0.7f), Offset(i * slot + slot * 0.18f, top), Size(slot * 0.64f, size.height - top))
+                drawRect(scoreColor(v).copy(alpha = if (i == points.lastIndex || i == pick) 1f else 0.7f), Offset(i * slot + slot * 0.18f, top), Size(slot * 0.64f, size.height - top))
+            }
+            pick?.let { i ->
+                val (d, v) = points[i]
+                if (v == null) return@let
+                val cx = i * slot + slot / 2
+                com.bioscan.fieldterminal.ui.components.Inspect.run {
+                    drawOverlay(measurer, cx, listOf(Offset(cx, y(min(v, cap)))), dayLabel(d), listOf(com.bioscan.fieldterminal.ui.components.InspectRow(null, v.roundToInt().toString(), scoreColor(v))))
+                }
             }
         }
     }

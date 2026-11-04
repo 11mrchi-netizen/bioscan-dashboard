@@ -39,6 +39,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import com.bioscan.fieldterminal.ui.components.InspectRow
+import com.bioscan.fieldterminal.ui.components.chartInspect
+import com.bioscan.fieldterminal.ui.components.drawInspectOverlay
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -443,7 +446,14 @@ fun TrendChart(
                     modifier = Modifier.align(Alignment.TopStart).padding(top = top.dp.coerceAtLeast(0.dp)))
             }
         }
-        Canvas(Modifier.weight(1f).height(height.dp)) {
+        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        var pick by rememberPick(Triple(series, day, days))
+        val byIndex = remember(points) { points.toMap() }
+        val meanByIndex = remember(mean) { mean.toMap() }
+        Canvas(Modifier.weight(1f).height(height.dp).chartInspect(Triple(points, days, lo)) { px, w, isTap ->
+            val i = nearestIndex(px, w, days, points.map { it.first })
+            pick = if (isTap && i == pick) null else i
+        }) {
             fun x(i: Int) = size.width * i / (days - 1).coerceAtLeast(1).toFloat()
             fun y(v: Double) = (size.height * (1 - (v - lo) / (hi - lo))).toFloat().coerceIn(3f, size.height - 3f)
             band?.let { (a, b) -> drawRect(color.copy(alpha = 0.14f), Offset(0f, y(b)), Size(size.width, y(a) - y(b))) }
@@ -468,6 +478,15 @@ fun TrendChart(
                 drawLine(FT.Warning.copy(alpha = 0.8f), Offset(x(i), 0f), Offset(x(i), size.height), strokeWidth = 1.5f, pathEffect = dash)
                 drawCircle(FT.Warning, radius = 4f, center = Offset(x(i), 4f))
             }
+            pick?.let { i ->
+                val v = byIndex[i] ?: return@let
+                val rows = listOfNotNull(
+                    InspectRow(null, format(v), FT.TextPrimary),
+                    meanByIndex[i]?.let { InspectRow("$span-day", format(it), color) },
+                    band?.let { (a, b) -> InspectRow(bandLabel, "${format(a)}–${format(b)}", color) },
+                )
+                drawInspectOverlay(measurer, x(i), listOf(Offset(x(i), y(v))), shortDate(from.plusDays(i.toLong())), rows)
+            }
         }
     }
     Row(Modifier.fillMaxWidth().padding(start = 48.dp)) {
@@ -490,6 +509,17 @@ fun TrendChart(
         }
     }
 }
+
+/** The day index (0 until [days]) under a touch at [x] of [width], snapped to the nearest index that has a value. */
+internal fun nearestIndex(x: Float, width: Float, days: Int, has: List<Int>): Int? {
+    if (has.isEmpty()) return null
+    val raw = (x / width.coerceAtLeast(1f) * (days - 1).coerceAtLeast(1)).roundToInt()
+    return has.minByOrNull { kotlin.math.abs(it - raw) }
+}
+
+/** Touch handling shared by the kit's charts: a drag moves the cursor, releasing keeps it, a tap on it clears it. */
+@Composable
+internal fun rememberPick(key: Any?): androidx.compose.runtime.MutableState<Int?> = remember(key) { mutableStateOf<Int?>(null) }
 
 /** All regimen changes as chart markers, from the roster history (cached). */
 internal suspend fun loadRegimenMarkers(): List<com.bioscan.fieldterminal.domain.RegimenMarker> =
@@ -515,7 +545,13 @@ fun MultiLineChart(lines: List<ChartLine>, day: LocalDate, days: Int, format: (D
             Text(format(hi), style = FTType.Micro, color = FT.TextMuted)
             Text(format(lo), style = FTType.Micro, color = FT.TextMuted)
         }
-        Canvas(Modifier.weight(1f).height(height.dp)) {
+        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        var pick by rememberPick(Triple(lines, day, days))
+        val withValue = remember(lines, day, days) { (0 until days).filter { i -> lines.any { it.series[from.plusDays(i.toLong())] != null } } }
+        Canvas(Modifier.weight(1f).height(height.dp).chartInspect(Triple(lines, day, days)) { px, w, isTap ->
+            val i = nearestIndex(px, w, days, withValue)
+            pick = if (isTap && i == pick) null else i
+        }) {
             fun x(i: Int) = size.width * i / (days - 1).coerceAtLeast(1).toFloat()
             fun y(v: Double) = (size.height * (1 - (v - lo) / (hi - lo))).toFloat()
             if (zeroLine) drawLine(FT.TextMuted, Offset(0f, y(0.0)), Offset(size.width, y(0.0)), strokeWidth = 1f)
@@ -527,6 +563,12 @@ fun MultiLineChart(lines: List<ChartLine>, day: LocalDate, days: Int, format: (D
                     if (!started) { p.moveTo(x(i), y(v)); started = true } else p.lineTo(x(i), y(v))
                 }
                 drawPath(p, l.color, style = Stroke(width = 2.5f, pathEffect = if (l.dashed) PathEffect.dashPathEffect(floatArrayOf(10f, 8f)) else null))
+            }
+            pick?.let { i ->
+                val d = from.plusDays(i.toLong())
+                val here = lines.mapNotNull { l -> l.series[d]?.let { l to it } }
+                drawInspectOverlay(measurer, x(i), here.map { (_, v) -> Offset(x(i), y(v)) }, shortDate(d),
+                    here.map { (l, v) -> InspectRow(l.label, format(v), l.color) })
             }
         }
     }
@@ -562,8 +604,8 @@ fun StackedBars(
     )
     val top = columns.maxOf { it.second.sum() }.coerceAtLeast(1e-9)
     Canvas(
-        Modifier.fillMaxWidth().height(height.dp).pointerInput(columns) {
-            detectTapGestures { o -> selected = ((o.x / size.width) * columns.size).toInt().coerceIn(0, columns.lastIndex) }
+        Modifier.fillMaxWidth().height(height.dp).chartInspect(columns) { px, w, _ ->
+            selected = ((px / w) * columns.size).toInt().coerceIn(0, columns.lastIndex)
         },
     ) {
         val slot = size.width / columns.size
@@ -604,11 +646,22 @@ fun RangeBars(ranges: List<Pair<LocalDate, DayRange>>, day: LocalDate, days: Int
             Text(hi.roundToInt().toString(), style = FTType.Micro, color = FT.TextMuted)
             Text(lo.roundToInt().toString(), style = FTType.Micro, color = FT.TextMuted)
         }
-        Canvas(Modifier.weight(1f).height(120.dp)) {
+        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        var pick by rememberPick(Triple(shown, day, days))
+        val byIndex = remember(shown) { shown.associate { java.time.temporal.ChronoUnit.DAYS.between(from, it.first).toInt() to it } }
+        Canvas(Modifier.weight(1f).height(120.dp).chartInspect(Triple(shown, day, days)) { px, w, isTap ->
+            val i = nearestIndex(px, w, days, byIndex.keys.sorted())
+            pick = if (isTap && i == pick) null else i
+        }) {
             fun x(d: LocalDate) = size.width * java.time.temporal.ChronoUnit.DAYS.between(from, d) / (days - 1).coerceAtLeast(1).toFloat()
             fun y(v: Double) = (size.height * (1 - (v - lo) / (hi - lo))).toFloat()
             val w = (size.width / days * 0.6f).coerceIn(1.5f, 10f)
             for ((d, r) in shown) drawRoundRect(color.copy(alpha = if (d == day) 1f else 0.6f), Offset(x(d) - w / 2, y(r.high)), Size(w, max(2f, y(r.low) - y(r.high))), CornerRadius(w / 2))
+            pick?.let { i ->
+                val (d, r) = byIndex[i] ?: return@let
+                drawInspectOverlay(measurer, x(d), listOf(Offset(x(d), y(r.high)), Offset(x(d), y(r.low))), shortDate(d),
+                    listOf(InspectRow("high", "${r.high.roundToInt()} $unit", color), InspectRow("low", "${r.low.roundToInt()} $unit", color)))
+            }
         }
     }
     Row(Modifier.fillMaxWidth().padding(start = 36.dp)) {

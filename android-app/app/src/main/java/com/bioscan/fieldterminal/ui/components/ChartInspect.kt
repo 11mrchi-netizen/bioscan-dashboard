@@ -77,3 +77,10 @@ internal fun DrawScope.drawInspectOverlay(
     drawRoundRect(FT.GlassBorder, Offset(left, top), androidx.compose.ui.geometry.Size(w, h), CornerRadius(8f), style = Stroke(1f))
     drawText(layout, topLeft = Offset(left + padPx, top + padPx))
 }
+
+/** The same touch handling and overlay, for charts outside this package. */
+internal object Inspect {
+    fun Modifier.inspect(key: Any?, onPick: (x: Float, width: Float, isTap: Boolean) -> Unit): Modifier = chartInspect(key, onPick)
+    fun DrawScope.drawOverlay(measurer: TextMeasurer, x: Float, dots: List<Offset>, header: String, rows: List<InspectRow>) =
+        drawInspectOverlay(measurer, x, dots, header, rows)
+}

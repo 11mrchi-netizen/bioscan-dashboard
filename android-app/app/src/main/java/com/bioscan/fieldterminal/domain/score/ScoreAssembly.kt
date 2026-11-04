@@ -52,12 +52,11 @@ data class ScoreSources(
     val stressDays: List<StressDay> = emptyList(),
     /** When each meal was logged: BALANCE's meal-timing rhythm. */
     val mealTimes: List<Instant> = emptyList(),
+    /** Each night's heart-rate dip from the waking day, in percent (v_hr_dip), keyed by the wake date. */
+    val hrDip: Map<LocalDate, Double> = emptyMap(),
     val zone: ZoneId = ZoneId.systemDefault(),
 )
 
-/** The night HR dip needs this many minutes of heart rate asleep and awake. */
-const val HR_DIP_MIN_SLEEP_MINUTES = 60
-const val HR_DIP_MIN_DAY_MINUTES = 240
 
 /** A training day for "days without rest": a daily load at or above this (a 30-40 minute easy session). */
 const val TRAINING_DAY_LOAD = 40.0
@@ -149,32 +148,9 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
         // Wind-down: the two hours before bed. Bedtime belongs to the morning's night, and so does this.
         b.put(ScoreKeys.WIND_DOWN, d, meanBetween(bt.minus(Duration.ofHours(2)), bt))
     }
-    // Night HR dip: how far the heart rate fell from the waking day before to the night, in percent of the daytime mean.
-    // Daytime = from the previous wake (or 14 h before bed) to half an hour before bed; night = bed to wake. Minute heart
-    // rate comes from the wearable's local-day series (offset minutes from local midnight).
-    val hrByDay = src.wearable.mapNotNull { row ->
-        val d = runCatching { LocalDate.parse(row.date) }.getOrNull() ?: return@mapNotNull null
-        row.hrTimeseries?.takeIf { it.isNotEmpty() }?.let { pts -> d to pts.associate { it.offsetMinutes to it.bpm } }
-    }.toMap()
-    fun hrBetween(from: Instant, to: Instant): List<Int> {
-        val out = mutableListOf<Int>()
-        var t = from
-        while (t.isBefore(to)) {
-            val local = t.atZone(zone)
-            hrByDay[local.toLocalDate()]?.get(local.hour * 60 + local.minute)?.let { out += it }
-            t = t.plusSeconds(60)
-        }
-        return out
-    }
-    for ((d, bt) in bed) {
-        val night = hrBetween(bt, wake.getValue(d))
-        val dayStart = wake[d.minusDays(1)]?.takeIf { it.isBefore(bt) } ?: bt.minus(Duration.ofHours(14))
-        val day = hrBetween(dayStart, bt.minus(Duration.ofMinutes(30)))
-        if (night.size >= HR_DIP_MIN_SLEEP_MINUTES && day.size >= HR_DIP_MIN_DAY_MINUTES) {
-            val dayMean = day.average()
-            if (dayMean > 0) b.put(ScoreKeys.HR_DIP, d, 100 * (dayMean - night.average()) / dayMean)
-        }
-    }
+    // Night HR dip: worked out in the database (view v_hr_dip, migration 20261119), where the minute heart rate lives;
+    // the phone reads one number per night instead of ~50 kB of minutes per day.
+    for ((d, dip) in src.hrDip) b.put(ScoreKeys.HR_DIP, d, dip)
 
     // HRV stability: the week's coefficient of variation of ln RMSSD, in percent (Plews et al.).
     for (d in hrvByDay.keys) {

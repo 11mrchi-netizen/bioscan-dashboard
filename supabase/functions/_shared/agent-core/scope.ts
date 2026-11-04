@@ -38,7 +38,7 @@ const internal = (...tables: string[]) => Object.fromEntries(tables.map((t) => [
 export const TABLE_SCOPE: Record<string, TableScope> = {
   ...shared(
     // physiology, sleep, body, wellbeing ratings
-    'wearable_daily', 'wearable_hr_daily', 'wearable_hr_daily_range', 'sleep_daily', 'wellbeing_daily', 'evening_checkins', 'hydration_daily',
+    'wearable_daily', 'wearable_hr_daily', 'wearable_hr_daily_range', 'v_hr_dip', 'sleep_daily', 'wellbeing_daily', 'evening_checkins', 'hydration_daily',
     'hydration_factor_models', 'body_metrics', 'body_measurements', 'body_checkins', 'scale_readings', 'grip_strength_log',
     'illnesses', 'injuries', 'ostrc_checkins', 'rest_days', 'recovery_sessions', 'sweat_tests',
     // training

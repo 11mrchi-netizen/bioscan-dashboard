@@ -107,6 +107,8 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         val planned = async { runCatching { analysis.loadPlannedOutcomes() }.getOrDefault(emptyList()) }
         val stool = async { runCatching { analysis.loadStoolLog() }.getOrDefault(emptyList()) }
         val stress = async { runCatching { ZeppStressRepository(supabase).loadStressDays(limit = 240) }.getOrDefault(emptyList()) }
+        // The night HR dip is enrichment: a failed or slow read leaves that one input out, never the scores.
+        val hrDip = async { runCatching { analysis.loadHrDip() }.getOrDefault(emptyMap()) }
         val checkins = async { runCatching { EveningCheckinRepository(supabase).loadSince(today.minusDays(400)) }.getOrDefault(emptyList()) }
         val nut = nutrition ?: runCatching { NutritionRepository(supabase).loadOverview() }.getOrNull()
         val goals = NutritionGoalsStore.getGoals(context)
@@ -129,6 +131,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             checkins = checkins.await(),
             stool = stool.await(),
             stressDays = stress.await(),
+            hrDip = hrDip.await(),
             mealTimes = nut?.meals.orEmpty().mapNotNull { m -> runCatching { java.time.OffsetDateTime.parse(m.loggedAt).toInstant() }.getOrNull() },
             zone = zone,
         )

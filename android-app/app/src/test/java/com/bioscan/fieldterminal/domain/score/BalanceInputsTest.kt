@@ -24,13 +24,14 @@ class BalanceInputsTest {
         wakeTime = ZonedDateTime.of(morning.atTime(7, 0), zone).toInstant().toString())
 
     @Test
-    fun theNightHeartRateDipAndMealTimingAreBuilt() {
+    fun theNightHeartRateDipPassesThroughAndMealTimingIsBuilt() {
         val days = (0..30).map { today.minusDays(it.toLong()) }
         val meals = days.drop(1).flatMap { d ->
             listOf(8, 13, 19).map { h -> ZonedDateTime.of(d.atTime(h, (d.dayOfMonth * 7) % 40), zone).toInstant() }
         }
-        val series = assembleScoreSeries(ScoreSources(wearable = days.map(::hr), sleep = days.map(::night), mealTimes = meals, zone = zone), today)
-        assertEquals(20.0, series[ScoreKeys.HR_DIP]!![today]!!, 0.01)
+        val dips = days.associateWith { 20.0 + it.dayOfMonth % 3 }
+        val series = assembleScoreSeries(ScoreSources(wearable = days.map(::hr), sleep = days.map(::night), mealTimes = meals, hrDip = dips, zone = zone), today)
+        assertEquals(dips.getValue(today), series[ScoreKeys.HR_DIP]!![today]!!, 0.01)
         val spread = series[ScoreKeys.MEAL_TIMING_SPREAD]!![today]
         assertNotNull(spread)
         assertTrue(spread!! in 1.0..20.0)
@@ -42,7 +43,8 @@ class BalanceInputsTest {
         val meals = days.drop(1).flatMap { d -> listOf(8, 19).map { h -> ZonedDateTime.of(d.atTime(h, (d.dayOfMonth * 7) % 40), zone).toInstant() } }
         val wellbeing = days.map { WellbeingAnalysisRow(it.toString(), mood = 5 + it.dayOfMonth % 3, stress = 2 + it.dayOfMonth % 2) }
         // No stress days at all: stressed/relaxed time and wind-down are missing.
-        val series = assembleScoreSeries(ScoreSources(wearable = days.map(::hr), sleep = days.map(::night), wellbeing = wellbeing, mealTimes = meals, zone = zone), today)
+        val dips = days.associateWith { 20.0 + it.dayOfMonth % 3 }
+        val series = assembleScoreSeries(ScoreSources(wearable = days.map(::hr), sleep = days.map(::night), wellbeing = wellbeing, mealTimes = meals, hrDip = dips, zone = zone), today)
         val balance = combineDomain(ScoreSpecs.BALANCE, series, today)
         assertTrue("coverage ${balance.coverage}", balance.coverage >= ScoreSpecs.MIN_COVERAGE)
         assertNotNull(balance.raw)

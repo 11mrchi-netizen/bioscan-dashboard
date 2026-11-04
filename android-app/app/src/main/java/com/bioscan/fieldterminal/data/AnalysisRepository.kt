@@ -209,6 +209,12 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadWearableDaily(): List<WearableAnalysisRow> = ReadCache.get("analysis.WearableDaily", tables = setOf("wearable_daily"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.WearableAnalysisRow.serializer())) { fetchWearableDaily() }
 
+    /** Each night's heart-rate dip from the waking day before, in percent (view v_hr_dip, last 120 nights). */
+    suspend fun loadHrDip(): Map<LocalDate, Double> =
+        ReadCache.get("analysis.hr_dip", tables = setOf("wearable_daily", "sleep_daily"), serializer = kotlinx.serialization.builtins.ListSerializer(HrDipRow.serializer())) {
+            supabase.postgrest.from("v_hr_dip").select(Columns.list("date,dip_pct")).decodeList<HrDipRow>()
+        }.mapNotNull { r -> runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { it to r.dipPct } }.toMap()
+
     private suspend fun fetchWearableDaily(): List<WearableAnalysisRow> =
         pagedByDate<WearableAnalysisRow>("wearable_daily", "date,hrv,rhr,steps,spo2_avg") { it.date }
 
@@ -518,3 +524,6 @@ data class EvidenceRows(
     val crossover: List<CaseCrossoverResultRow> = emptyList(),
     val lags: List<LagCurveRow> = emptyList(),
 )
+
+@kotlinx.serialization.Serializable
+data class HrDipRow(val date: String, @kotlinx.serialization.SerialName("dip_pct") val dipPct: Double)

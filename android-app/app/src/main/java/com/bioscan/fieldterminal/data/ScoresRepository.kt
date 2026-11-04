@@ -117,6 +117,8 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         val stress = async { runCatching { ZeppStressRepository(supabase).loadStressDays(limit = 240) }.getOrDefault(emptyList()) }
         // The night HR dip is enrichment: a failed or slow read leaves that one input out, never the scores.
         val hrDip = async { runCatching { analysis.loadHrDip() }.getOrDefault(emptyMap()) }
+        // Phone before sleep (Rhythm): read softly, like the HR dip; without it Rhythm is meal timing alone.
+        val phoneBed = async { runCatching { loadPhoneBedMinutes() }.getOrDefault(emptyMap()) }
         val checkins = async { runCatching { EveningCheckinRepository(supabase).loadSince(today.minusDays(400)) }.getOrDefault(emptyList()) }
         // The open illness and its check-ins: the ceiling follows how much it limits the person, not a flat 40.
         val illnessEpisode = async { runCatching { loadIllnessEpisode(healthFlag) }.getOrNull() }
@@ -144,6 +146,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             stool = stool.await(),
             stressDays = stress.await(),
             hrDip = hrDip.await(),
+            phoneBedMin = phoneBed.await(),
             // Meal times are logged times: the local wall clock with a zero offset (domain/WallClock.kt), not real instants.
             mealTimes = nut?.meals.orEmpty().mapNotNull { m -> com.bioscan.fieldterminal.domain.WallClock.instant(m.loggedAt, zone) },
             zone = zone,
@@ -275,6 +278,13 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         prefs.edit().putString("uploaded", stamp).apply()
     }
 
+    private suspend fun loadPhoneBedMinutes(): Map<LocalDate, Double> =
+        ReadCache.kept("scores.phone_bed", tables = setOf("phone_usage_daily")) {
+            supabase.postgrest.from("phone_usage_daily").select(io.github.jan.supabase.postgrest.query.Columns.list("date,bed_window_min")) {
+                filter { gte("date", LocalDate.now().minusDays(400).toString()) }
+            }.decodeList<PhoneBedRow>().mapNotNull { r -> r.bedWindowMin?.let { m -> runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { it.toString() to m } } }.toMap()
+        }.mapKeys { LocalDate.parse(it.key) }
+
     /** The open illness: the newest open systemic concern and its check-ins, else a legacy open illness without them. */
     private suspend fun loadIllnessEpisode(flag: HealthFlag?): com.bioscan.fieldterminal.domain.score.IllnessEpisode? {
         val health = HealthConcernsRepository(supabase)
@@ -326,3 +336,6 @@ private data class ScoreHistoryRow(
     val fuel: Double?,
     val balance: Double?,
 )
+
+@Serializable
+private data class PhoneBedRow(val date: String, @kotlinx.serialization.SerialName("bed_window_min") val bedWindowMin: Double? = null)

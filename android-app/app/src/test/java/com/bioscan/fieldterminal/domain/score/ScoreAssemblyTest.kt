@@ -49,7 +49,7 @@ class ScoreAssemblyTest {
         assertEquals(1.0, series.getValue(ScoreKeys.WATER_RATIO)[tuesday]!!, 1e-9)
         assertNull(series.getValue(ScoreKeys.ENERGY_RATIO)[monday])
         assertEquals(2.0, series.getValue(ScoreKeys.DRINKS)[tuesday]!!, 1e-9)
-        assertEquals(1.0, series.getValue(ScoreKeys.LATE_SCREEN)[tuesday]!!, 1e-9)
+        assertEquals(LATE_SCREEN_YES_MIN, series.getValue(ScoreKeys.LATE_SCREEN)[tuesday]!!, 1e-9) // a check-in "yes" without a measurement
         assertEquals(2.0, series.getValue(ScoreKeys.FELT_STRESS)[tuesday]!!, 1e-9) // the evening answer wins
         assertEquals(30.0, series.getValue(ScoreKeys.STRESSED_SHARE)[tuesday]!!, 1e-9)
         assertEquals(40.0, series.getValue(ScoreKeys.RELAXED_SHARE)[tuesday]!!, 1e-9)
@@ -145,5 +145,21 @@ class ScoreAssemblyTest {
         val done = EveningCheckin(monday).withNothingElse()
         assertEquals(emptyList<String>(), done.gutSymptoms)
         assertNull(done.gutComfort)
+    }
+
+    @Test
+    fun phoneBeforeSleepIsMeasuredMinutesOnTheNextMorning() {
+        val sunday = monday.minusDays(1)
+        val checkins = listOf(
+            com.bioscan.fieldterminal.domain.EveningCheckin(date = sunday, lateScreen = false),
+            com.bioscan.fieldterminal.domain.EveningCheckin(date = monday, lateScreen = true),
+        )
+        val series = assembleScoreSeries(ScoreSources(checkins = checkins, phoneBedMin = mapOf(sunday to 38.0), zone = zone), today = monday.plusDays(1))
+        // Sunday's measured 38 minutes win over the check-in's "no"; Monday has only the check-in, counted as 30.
+        assertEquals(38.0, series.getValue(ScoreKeys.LATE_SCREEN)[monday]!!, 1e-9)
+        assertEquals(LATE_SCREEN_YES_MIN, series.getValue(ScoreKeys.LATE_SCREEN)[monday.plusDays(1)]!!, 1e-9)
+        val spec = ScoreSpecs.BALANCE.groups.first { it.key == "rhythm" }.inputs.first { it.key == ScoreKeys.LATE_SCREEN }
+        assertEquals(100.0, scoreInput(spec, mapOf(monday to 8.0), monday)!!.score, 1e-9)
+        assertEquals(76.3, scoreInput(spec, mapOf(monday to 38.0), monday)!!.score, 0.5)
     }
 }

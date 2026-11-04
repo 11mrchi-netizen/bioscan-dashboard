@@ -67,7 +67,8 @@ fun formatInputValue(key: String, value: Double): String = when (key) {
     ScoreKeys.PLAN_DONE -> pct(value)
     ScoreKeys.FUEL_LOGGED_SHARE, ScoreKeys.ENERGY_RATIO, ScoreKeys.PROTEIN_RATIO, ScoreKeys.CARB_RATIO, ScoreKeys.WATER_RATIO -> pct(value)
     ScoreKeys.DRINKS -> "${value.roundToInt()}"
-    ScoreKeys.LATE_CAFFEINE, ScoreKeys.LATE_SCREEN -> if (value >= 0.5) "yes" else "no"
+    ScoreKeys.LATE_CAFFEINE -> if (value >= 0.5) "yes" else "no"
+    ScoreKeys.LATE_SCREEN -> "${value.roundToInt()} min"
     ScoreKeys.GUT_SYMPTOMS -> if (value < 0.05) "none" else one(value)
     ScoreKeys.GUT_TIMING -> clock(value)
     ScoreKeys.GUT_TIMING_SPREAD, ScoreKeys.MEAL_TIMING_SPREAD -> "± ${value.roundToInt()} min"
@@ -250,7 +251,7 @@ fun whatIsInput(key: String): String = when (key) {
     ScoreKeys.HRV_CV -> "How much HRV varied over the last 7 nights. A jump means a disturbed nervous system even if the average looks fine."
     ScoreKeys.FELT_STRESS -> "How stressed you felt (the evening check-in, else the morning answer)."
     ScoreKeys.MOOD -> "Your mood rating."
-    ScoreKeys.LATE_SCREEN -> "Phone use late in the evening, from the evening check-in."
+    ScoreKeys.LATE_SCREEN -> "Minutes on the phone in the hour before you fell asleep, measured by the phone (Usage access) against that night's sleep onset. Up to 10 minutes counts as none; each 20 minutes more lowers Rhythm. Without a measurement, a \"yes\" in the evening check-in counts as 30 minutes."
     ScoreKeys.MEAL_TIMING_SPREAD -> "How much your meal times moved."
     else -> ""
 }

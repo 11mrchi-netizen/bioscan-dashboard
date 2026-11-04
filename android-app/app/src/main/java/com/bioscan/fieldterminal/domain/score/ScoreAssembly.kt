@@ -54,6 +54,8 @@ data class ScoreSources(
     val mealTimes: List<Instant> = emptyList(),
     /** Each night's heart-rate dip from the waking day, in percent (v_hr_dip), keyed by the wake date. */
     val hrDip: Map<LocalDate, Double> = emptyMap(),
+    /** Minutes on the phone in the hour before that night's sleep, by phone day (04:00 to 04:00; phone_usage_daily). */
+    val phoneBedMin: Map<LocalDate, Double> = emptyMap(),
     val zone: ZoneId = ZoneId.systemDefault(),
 )
 
@@ -61,6 +63,8 @@ data class ScoreSources(
 /** A training day for "days without rest": a daily load at or above this (a 30-40 minute easy session). */
 const val TRAINING_DAY_LOAD = 40.0
 const val MIN_SLEEP_NEED_H = 7.0
+/** A check-in "yes, the phone late" without a measurement counts as this many minutes in the hour before sleep. */
+const val LATE_SCREEN_YES_MIN = 30.0
 
 /** Your sleep need on [d]: the median of the 60 nights before (from 14 of them), never under [MIN_SLEEP_NEED_H]. */
 fun sleepNeed(hours: Map<LocalDate, Double>, d: LocalDate): Double =
@@ -154,6 +158,8 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
     // Night HR dip: worked out in the database (view v_hr_dip, migration 20261119), where the minute heart rate lives;
     // the phone reads one number per night instead of ~50 kB of minutes per day.
     for ((d, dip) in src.hrDip) b.put(ScoreKeys.HR_DIP, d, dip)
+    // A phone day's evening ends in the next morning's sleep: its minutes before sleep belong to that morning's Rhythm.
+    for ((d, min) in src.phoneBedMin) b.put(ScoreKeys.LATE_SCREEN, d.plusDays(1), min)
 
     // HRV stability: the week's coefficient of variation of ln RMSSD, in percent (Plews et al.).
     for (d in hrvByDay.keys) {
@@ -227,7 +233,8 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
         val morning = c.date.plusDays(1)
         b.put(ScoreKeys.DRINKS, morning, c.drinks?.toDouble())
         b.put(ScoreKeys.LATE_CAFFEINE, morning, c.caffeineAfter14?.let { if (it) 1.0 else 0.0 })
-        b.put(ScoreKeys.LATE_SCREEN, morning, c.lateScreen?.let { if (it) 1.0 else 0.0 })
+        // Phone before sleep: measured minutes win (below); a check-in answer stands in only without a measurement.
+        if (c.date !in src.phoneBedMin) b.put(ScoreKeys.LATE_SCREEN, morning, c.lateScreen?.let { if (it) LATE_SCREEN_YES_MIN else 0.0 })
         // The evening's own stress answer is about the day just lived; it replaces the morning answer when both exist.
         b.put(ScoreKeys.FELT_STRESS, morning, c.stress?.toDouble())
     }

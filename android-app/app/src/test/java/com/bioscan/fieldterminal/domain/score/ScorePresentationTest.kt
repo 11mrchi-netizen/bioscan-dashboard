@@ -17,7 +17,7 @@ class ScorePresentationTest {
         assertEquals("58 ms", formatInputValue(ScoreKeys.HRV, 58.2))
         assertEquals("96 %", formatInputValue(ScoreKeys.ENERGY_RATIO, 0.96))
         assertEquals("08:10", formatInputValue(ScoreKeys.GUT_TIMING, 490.0))
-        assertEquals("yes", formatInputValue(ScoreKeys.LATE_SCREEN, 1.0))
+        assertEquals("38 min", formatInputValue(ScoreKeys.LATE_SCREEN, 38.0))
         assertEquals("none", formatInputValue(ScoreKeys.SLEEP_DEBT, 0.0))
     }
 

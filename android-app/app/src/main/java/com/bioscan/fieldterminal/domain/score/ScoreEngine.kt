@@ -21,7 +21,8 @@ import kotlin.math.abs
 
 // 2: the illness ceiling is graded by the check-in (IllnessRead.kt); kept mornings capped at a flat 40 are rebuilt.
 // 3: sleep debt is carried night to night (SleepDebt.kt) instead of a 7-night sum.
-const val SCORE_MODEL_VERSION = "3"
+// 4: Rhythm's phone input is the measured minutes on the phone before sleep.
+const val SCORE_MODEL_VERSION = "4"
 const val RANK_WINDOW_DAYS = 180
 const val MIN_RANK_HISTORY = 28
 const val CAP_CEILING = 40.0

@@ -209,7 +209,10 @@ The **ANS state pill** comes from HRV and resting HR against their baselines:
 
 Mind: subjective stress and mood.
 
-Rhythm: meal and sleep timing regularity, and late phone use.
+Rhythm (50/50): meal timing regularity (the spread of the first and last meal times over the week before, against
+your own usual), and phone before sleep: minutes on the phone in the hour before that night's sleep onset, measured
+by the phone (`phone_usage_daily.bed_window_min`; up to 10 min scores the top of normal, each 20 min more costs one
+standard deviation). Without a measurement, an evening check-in "yes" counts as 30 min.
 
 **Open data question.** Zepp stress history has to reach about 4 weeks back for the ANS baselines. Check whether
 `zepp_history_pull` can backfill it; otherwise BALANCE shows BUILDING for its first month.

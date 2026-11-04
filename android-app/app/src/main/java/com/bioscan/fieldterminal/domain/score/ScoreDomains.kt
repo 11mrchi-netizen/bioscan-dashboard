@@ -186,7 +186,11 @@ object ScoreSpecs {
             "rhythm", "Rhythm", 0.2,
             listOf(
                 InputSpec(ScoreKeys.MEAL_TIMING_SPREAD, "Meal timing", 50.0, InputKind.Baseline(betterHigher = false, upside = false, minSd = 10.0)),
-                InputSpec(ScoreKeys.LATE_SCREEN, "Late phone", 50.0, InputKind.AtMost(0.0, scale = 1.0)),
+                // Minutes on the phone in the hour before sleep, measured by the phone (phone_usage_daily). Up to 10 minutes
+                // scores the top of normal; each 20 minutes more costs one standard deviation (about 76 at 38 minutes, 42
+                // at a full hour). A documented opinion, after the evening-light and pre-sleep screen studies
+                // (Chang 2015; Hale 2015): less is better, there is no personal "usual" to aim at.
+                InputSpec(ScoreKeys.LATE_SCREEN, "Phone before sleep", 50.0, InputKind.AtMost(10.0, scale = 20.0)),
             ),
         ),
     ))

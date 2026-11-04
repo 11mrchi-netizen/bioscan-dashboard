@@ -113,6 +113,31 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
             }
             .decodeList<HealthObservationRow>()
 
+    /**
+     * The check-ins about one concern since [since], one per day: the highest TRAINING answer and the highest temperature
+     * logged that day (scoring: the illness ceiling, domain/score/IllnessRead.kt). Retracted and superseded rows are left out.
+     */
+    suspend fun loadIllnessCheckIns(concernId: String, since: LocalDate): List<com.bioscan.fieldterminal.domain.score.IllnessCheckIn> =
+        ReadCache.get("health.illness_checkins.$concernId.$since", tables = setOf("health_observations", "health_signals"),
+            serializer = kotlinx.serialization.builtins.ListSerializer(IllnessDayRow.serializer())) {
+            val obs = supabase.postgrest.from("health_observations")
+                .select(columns = Columns.list("id,local_date,function_impact")) {
+                    filter { eq("concern_id", concernId); gte("local_date", since.toString()); exact("superseded_at", null); eq("retracted", false) }
+                }
+                .decodeList<IllnessObsRow>()
+            val temps = if (obs.isEmpty()) emptyList() else supabase.postgrest.from("health_signals")
+                .select(columns = Columns.list("observation_id,temperature_c")) {
+                    filter { eq("concern_id", concernId); isIn("observation_id", obs.map { it.id }) }
+                }
+                .decodeList<IllnessTempRow>()
+            val tempByObs = temps.groupBy { it.observationId }.mapValues { (_, t) -> t.mapNotNull { it.temperatureC }.maxOrNull() }
+            obs.groupBy { it.localDate }.map { (day, rows) ->
+                IllnessDayRow(day, rows.mapNotNull { it.functionImpact }.maxOrNull(), rows.mapNotNull { tempByObs[it.id] }.maxOrNull())
+            }
+        }.mapNotNull { r ->
+            runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { com.bioscan.fieldterminal.domain.score.IllnessCheckIn(it, r.impact, r.temperatureC) }
+        }
+
     suspend fun lastCheckinDate(): LocalDate? = loadLatestObservations(1).firstOrNull()?.localDate?.let(LocalDate::parse)
 
     /** Sessions of the last three days, for "during or after this session". */
@@ -201,3 +226,19 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
             }
     }
 }
+
+@Serializable
+private data class IllnessObsRow(
+    val id: String,
+    @kotlinx.serialization.SerialName("local_date") val localDate: String,
+    @kotlinx.serialization.SerialName("function_impact") val functionImpact: Int? = null,
+)
+
+@Serializable
+private data class IllnessTempRow(
+    @kotlinx.serialization.SerialName("observation_id") val observationId: String,
+    @kotlinx.serialization.SerialName("temperature_c") val temperatureC: Double? = null,
+)
+
+@Serializable
+internal data class IllnessDayRow(val date: String, val impact: Int?, val temperatureC: Double?)

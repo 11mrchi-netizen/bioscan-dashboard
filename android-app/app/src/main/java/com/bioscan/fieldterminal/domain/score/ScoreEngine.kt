@@ -19,7 +19,8 @@ import kotlin.math.abs
 //
 // Every score here describes a morning: the night before and the day before it. Nothing is scored while a day is live.
 
-const val SCORE_MODEL_VERSION = "1"
+// 2: the illness ceiling is graded by the check-in (IllnessRead.kt); kept mornings capped at a flat 40 are rebuilt.
+const val SCORE_MODEL_VERSION = "2"
 const val RANK_WINDOW_DAYS = 180
 const val MIN_RANK_HISTORY = 28
 const val CAP_CEILING = 40.0

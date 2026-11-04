@@ -388,12 +388,18 @@ fun TodayContent(
                     v.status == ChargeStatus.PROVISIONAL -> RingState.PROVISIONAL
                     else -> RingState.SCORED
                 },
-                capped = charge?.cap != null,
+                capped = charge?.cap != null || v?.illness != null,
                 emptyText = if (v == null) "…" else "—",
                 description = "Charge",
                 modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Open Charge", enabled = v != null) { onOpenOverlay(ScoreOverlay.Charge) },
             )
             Text("CHARGE", style = FTType.LabelCaps, color = FT.TextMuted)
+            // The open illness and what the body's signals say, or an early heads-up (domain/score/IllnessRead.kt).
+            v?.illness?.let { Text("⚠ ${it.reason}", style = FTType.Caption, color = FT.Warning, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+            v?.signals?.takeIf { it.verdict == com.bioscan.fieldterminal.domain.score.SignalsVerdict.HEADS_UP || v.illness != null }?.let {
+                Text(it.line, style = FTType.Caption, color = FT.TextSecondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp))
+            }
         }
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

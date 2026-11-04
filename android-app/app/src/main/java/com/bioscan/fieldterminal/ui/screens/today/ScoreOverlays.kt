@@ -168,10 +168,31 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
         RingHeader(
             charge.score, charge.change,
             if (view.status == ChargeStatus.PROVISIONAL) RingState.PROVISIONAL else if (charge.score == null) RingState.PARTIAL else RingState.SCORED,
-            charge.cap != null, words, sentence, "Charge",
+            charge.cap != null || view.illness != null, words, sentence, "Charge",
         )
         if (view.status == ChargeStatus.PROVISIONAL) {
             Text("Final when you close ${weekday(view.day.minusDays(1))}, or at 12:00.", style = FTType.BodySmall, color = FT.TextSecondary)
+        }
+
+        view.illness?.let { ill ->
+            OverlaySection("ILLNESS") {
+                Text("⚠ ${ill.reason}", style = FTType.BodySmall, color = FT.Warning)
+                Text(
+                    ill.ceiling?.let { c ->
+                        "CHARGE goes no higher than ${c.roundToInt()} today" + (charge.uncapped?.takeIf { it > c }?.let { " (it would be ${it.roundToInt()})" } ?: "") + "."
+                    } ?: "No ceiling: you logged full training. The ⚠ stays until the illness is closed.",
+                    style = FTType.Caption, color = FT.TextSecondary,
+                )
+                view.signals?.let { Text(it.line, style = FTType.Caption, color = FT.TextSecondary) }
+                Text(ILLNESS_INFO, style = FTType.Caption, color = FT.TextMuted)
+            }
+        }
+        view.signals?.takeIf { view.illness == null }?.let { s ->
+            OverlaySection(if (s.verdict == com.bioscan.fieldterminal.domain.score.SignalsVerdict.HEADS_UP) "HEADS-UP" else "BODY SIGNALS") {
+                Text(s.line, style = FTType.BodySmall, color = if (s.verdict == com.bioscan.fieldterminal.domain.score.SignalsVerdict.HEADS_UP) FT.Warning else FT.TextSecondary)
+                Text("Resting HR, HRV and breathing against your own last 60 mornings; two or more far from usual together is the pattern that often comes before feeling ill. It does not change CHARGE.",
+                    style = FTType.Caption, color = FT.TextMuted)
+            }
         }
 
         OverlaySection("WHAT MOVED IT · vs your typical day (80)") {
@@ -195,7 +216,9 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
             view.quality?.chargePlanDone?.let { ScorecardBlock(it, "CHARGE", isCharge = true) }
         }
         OverlaySection("DETAILS") {
-            DetailLine("CAPS", charge.cap?.let { "⚠ ${it.reason} · capped at ${it.ceiling.roundToInt()}" } ?: "none")
+            DetailLine("CAPS", charge.cap?.let { "⚠ ${it.reason} · capped at ${it.ceiling.roundToInt()}" }
+                ?: view.illness?.let { if (it.ceiling == null) "⚠ ${it.reason} · no ceiling" else "⚠ ${it.reason} · ceiling ${it.ceiling.roundToInt()}, not reached" }
+                ?: "none")
             DetailLine("BASED ON", "${charge.domainsUsed.size} of ${DomainKey.entries.size} domains")
             if (charge.calibrating) DetailLine("CALIBRATING", "fewer than 28 earlier mornings to rank against: shown unranked")
         }
@@ -445,3 +468,8 @@ fun ScoreOverlayHost(view: ScoresView, stack: List<ScoreOverlay>, onStack: (List
         is ScoreOverlay.Picture -> PictureOverlay(view, top.picture, onBack = back ?: close, onClose = close)
     }
 }
+
+private const val ILLNESS_INFO =
+    "The ceiling follows the TRAINING answer of your health check-ins: full training sets none, reduced 70, training " +
+        "modified 55, daily life affected (or a temperature of 38 °C or more) 40. With no check-in yet it is 55. An answer " +
+        "holds for two days, then eases one step every two days without a new one."

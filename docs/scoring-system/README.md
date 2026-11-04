@@ -88,7 +88,15 @@ CHARGE(D+1) = rank_in_own_history( 0.35·RECOVERY + 0.20·SLEEP + 0.15·LOAD_fat
 
 - `LOAD_fatigue` is LOAD's fatigue side only. Too little training makes you fresher, so it doesn't lower CHARGE.
 - **Caps:**
-  - an open illness, an acute injury, or an acute gut episode (diarrhoea or nausea) caps CHARGE at 40;
+  - an acute injury (first 7 days) or an acute gut episode (diarrhoea or nausea) caps CHARGE at 40;
+  - an open illness caps it by how much it limits you (`domain/score/IllnessRead.kt`), from the TRAINING answer of the
+    latest health check-in: full training no ceiling (the ⚠ stays), reduced 70, training modified 55, daily life
+    affected or a temperature of 38 °C or more 40; no check-in yet 55. An answer holds two days, then eases one step
+    every two days. With several caps the lowest wins;
+  - the body's signals (resting HR up, HRV down, breathing up, z ≥ 2 against your own 60 mornings) are read each
+    morning: while ill, a line says whether they agree with the check-in; otherwise two or more together raise a
+    heads-up, explained away instead when the evening before logged drinks, a stress of 4-5, or a session ended
+    after 20:00 or lasted 90 minutes or more. Neither changes CHARGE;
   - when the typicality engine flags the day as atypical, a ⚠ is added.
 - CHARGE needs RECOVERY or SLEEP. FUEL and BALANCE depend on what you log, and are left out when PARTIAL.
 - **Drivers.** Each domain's contribution is its weighted distance from your typical day. The contributions are then

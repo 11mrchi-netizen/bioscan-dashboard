@@ -71,6 +71,9 @@ data class ScoresView(
     val lastSleep: SleepAnalysisRow? = null,
     val stressDays: List<StressDay> = emptyList(),
     val exerciseWindows: List<Pair<Instant, Instant>> = emptyList(),
+    /** The open illness on the scored morning, and the morning's read of the body's signals (domain/score/IllnessRead.kt). */
+    val illness: com.bioscan.fieldterminal.domain.score.IllnessState? = null,
+    val signals: com.bioscan.fieldterminal.domain.score.SignalsRead? = null,
 )
 
 /** A scored morning and the key of what it was scored from (domain/score/ScoreKey.kt). */
@@ -113,6 +116,8 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         // The night HR dip is enrichment: a failed or slow read leaves that one input out, never the scores.
         val hrDip = async { runCatching { analysis.loadHrDip() }.getOrDefault(emptyMap()) }
         val checkins = async { runCatching { EveningCheckinRepository(supabase).loadSince(today.minusDays(400)) }.getOrDefault(emptyList()) }
+        // The open illness and its check-ins: the ceiling follows how much it limits the person, not a flat 40.
+        val illnessEpisode = async { runCatching { loadIllnessEpisode(healthFlag) }.getOrNull() }
         val nut = nutrition ?: runCatching { NutritionRepository(supabase).loadOverview() }.getOrNull()
         val goals = NutritionGoalsStore.getGoals(context)
         // FINAL mornings already kept stand unless rebuilt with something new (domain/score/ScoreSnapshots.kt).
@@ -145,9 +150,11 @@ class ScoresRepository(private val supabase: SupabaseClient) {
 
         withContext(Dispatchers.Default) {
             val series = assembleScoreSeries(sources, today)
-            val episodes = listOfNotNull(healthFlag?.since?.let { since ->
-                if (healthFlag.isInjury) Triple(healthFlag.label, since, since.plusDays(ACUTE_INJURY_DAYS - 1)) else Triple(healthFlag.label, since, null)
+            // An acute injury keeps the flat ceiling for its first week; an illness is graded (domain/score/IllnessRead.kt).
+            val episodes = listOfNotNull(healthFlag?.takeIf { it.isInjury }?.since?.let { since ->
+                Triple(healthFlag.label, since, since.plusDays(ACUTE_INJURY_DAYS - 1))
             })
+            val illness = illnessEpisode.await()
             // An open illness or acute injury first; else an acute gut day (two or more liquid stools, or nausea) caps the
             // morning after it.
             val healthCaps = capsFrom(episodes)
@@ -155,7 +162,8 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             val plannedDone = plannedDoneByDay(sources.planned)
             val key = scoreInputsKey(
                 today, series, plannedDone,
-                caps = episodes.map { it.toString() } + gutDays.map { "gut $it" },
+                caps = episodes.map { it.toString() } + gutDays.map { "gut $it" } +
+                    listOfNotNull(illness?.let { "illness-v2 ${it.label} ${it.start} ${it.checkIns}" }),
                 closedYesterday = closedYesterday,
                 afterNoon = now.toLocalTime() >= java.time.LocalTime.NOON,
             )
@@ -174,8 +182,13 @@ class ScoresRepository(private val supabase: SupabaseClient) {
                     key,
                 )
             }
+            // The lowest of the morning's ceilings: an acute injury, the open illness (graded), an acute gut day.
             val caps: (LocalDate) -> ChargeCap? = { morning ->
-                healthCaps(morning) ?: if (morning.minusDays(1) in gutDays) ChargeCap("Acute gut day") else null
+                listOfNotNull(
+                    healthCaps(morning),
+                    illness?.let { com.bioscan.fieldterminal.domain.score.illnessState(it, morning)?.cap },
+                    if (morning.minusDays(1) in gutDays) ChargeCap("Acute gut day") else null,
+                ).minByOrNull { it.ceiling }
             }
             // Score quality: CHARGE's weights are the person's own once fitted and shown to forecast better (re-fitted
             // monthly); every score carries its scorecard (domain/score/ScoreQuality.kt).
@@ -202,6 +215,11 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             )
             if (toKeep.isNotEmpty()) runCatching { supabase.postgrest.from("score_snapshots").upsert(toKeep) { onConflict = "user_id,day" } }
             val shown = past + (today to scores)
+            val todayIllness = illness?.let { com.bioscan.fieldterminal.domain.score.illnessState(it, today) }
+            val signalsRead = com.bioscan.fieldterminal.domain.score.readSignals(
+                com.bioscan.fieldterminal.domain.score.bodySignals(series, today), todayIllness,
+                confoundersFor(today.minusDays(1), sources.checkins, sessionRows, zone),
+            )
             KeyedScores(
                 ScoresView(
                     day = today,
@@ -216,6 +234,8 @@ class ScoresRepository(private val supabase: SupabaseClient) {
                     lastSleep = lastSleep,
                     stressDays = stressShown,
                     exerciseWindows = exerciseWindows,
+                    illness = todayIllness,
+                    signals = signalsRead,
                 ),
                 key,
             )
@@ -226,4 +246,42 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("score_snapshots").select(columns = io.github.jan.supabase.postgrest.query.Columns.list("day,model_version,inputs,scores")) { filter { gte("day", since.toString()) } }
             .decodeList<KeptMorning>().associateBy { it.day }
 
+    /** The open illness: the newest open systemic concern and its check-ins, else a legacy open illness without them. */
+    private suspend fun loadIllnessEpisode(flag: HealthFlag?): com.bioscan.fieldterminal.domain.score.IllnessEpisode? {
+        val health = HealthConcernsRepository(supabase)
+        val overview = runCatching { health.loadOverview() }.getOrNull()
+        if (overview == null) {
+            val since = flag?.takeIf { !it.isInjury }?.since ?: return null
+            return com.bioscan.fieldterminal.domain.score.IllnessEpisode(flag.label, since, emptyList())
+        }
+        val open = overview.concerns
+            .filter { it.kind == "systemic" && !it.archived && com.bioscan.fieldterminal.domain.health.isConcernOpen(it.state) }
+            .mapNotNull { c -> c.currentEpisode?.start?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.let { c to it } }
+            .maxByOrNull { it.second } ?: return null
+        val (concern, start) = open
+        return com.bioscan.fieldterminal.domain.score.IllnessEpisode(concern.title, start, health.loadIllnessCheckIns(concern.concernId, start))
+    }
+}
+
+/** What the day before offers as a plainer explanation of the body's signals: drinks, a late or long session, felt stress. */
+internal fun confoundersFor(
+    day: LocalDate,
+    checkins: List<com.bioscan.fieldterminal.domain.EveningCheckin>,
+    sessions: List<com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow>,
+    zone: ZoneId,
+): com.bioscan.fieldterminal.domain.score.Confounders {
+    val evening = checkins.firstOrNull { it.date == day }
+    val lateOrLong = sessions.any { row ->
+        // Session starts are logged times (local digits with a zero offset, domain/WallClock.kt).
+        val start = com.bioscan.fieldterminal.domain.WallClock.zoned(row.startTime, zone) ?: return@any false
+        val minutes = row.durationMin ?: 0.0
+        val end = start.plusSeconds((minutes * 60).toLong())
+        (start.toLocalDate() == day || end.toLocalDate() == day) &&
+            (minutes >= com.bioscan.fieldterminal.domain.score.LONG_SESSION_MIN || (end.toLocalDate() == day && end.hour >= com.bioscan.fieldterminal.domain.score.LATE_SESSION_HOUR))
+    }
+    return com.bioscan.fieldterminal.domain.score.Confounders(
+        drinks = evening?.drinks,
+        lateOrLongSession = lateOrLong,
+        stressfulDay = (evening?.stress ?: 0) >= com.bioscan.fieldterminal.domain.score.STRESSFUL_DAY,
+    )
 }

@@ -129,6 +129,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             checkins = checkins.await(),
             stool = stool.await(),
             stressDays = stress.await(),
+            mealTimes = nut?.meals.orEmpty().mapNotNull { m -> runCatching { java.time.OffsetDateTime.parse(m.loggedAt).toInstant() }.getOrNull() },
             zone = zone,
         )
         val closedYesterday = sources.checkins.any { it.date == today.minusDays(1) }

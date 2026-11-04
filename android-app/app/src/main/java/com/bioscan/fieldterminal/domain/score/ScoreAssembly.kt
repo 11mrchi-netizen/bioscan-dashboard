@@ -50,8 +50,14 @@ data class ScoreSources(
     val checkins: List<EveningCheckin> = emptyList(),
     val stool: List<StoolAnalysisRow> = emptyList(),
     val stressDays: List<StressDay> = emptyList(),
+    /** When each meal was logged: BALANCE's meal-timing rhythm. */
+    val mealTimes: List<Instant> = emptyList(),
     val zone: ZoneId = ZoneId.systemDefault(),
 )
+
+/** The night HR dip needs this many minutes of heart rate asleep and awake. */
+const val HR_DIP_MIN_SLEEP_MINUTES = 60
+const val HR_DIP_MIN_DAY_MINUTES = 240
 
 /** A training day for "days without rest": a daily load at or above this (a 30-40 minute easy session). */
 const val TRAINING_DAY_LOAD = 40.0
@@ -143,6 +149,33 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
         // Wind-down: the two hours before bed. Bedtime belongs to the morning's night, and so does this.
         b.put(ScoreKeys.WIND_DOWN, d, meanBetween(bt.minus(Duration.ofHours(2)), bt))
     }
+    // Night HR dip: how far the heart rate fell from the waking day before to the night, in percent of the daytime mean.
+    // Daytime = from the previous wake (or 14 h before bed) to half an hour before bed; night = bed to wake. Minute heart
+    // rate comes from the wearable's local-day series (offset minutes from local midnight).
+    val hrByDay = src.wearable.mapNotNull { row ->
+        val d = runCatching { LocalDate.parse(row.date) }.getOrNull() ?: return@mapNotNull null
+        row.hrTimeseries?.takeIf { it.isNotEmpty() }?.let { pts -> d to pts.associate { it.offsetMinutes to it.bpm } }
+    }.toMap()
+    fun hrBetween(from: Instant, to: Instant): List<Int> {
+        val out = mutableListOf<Int>()
+        var t = from
+        while (t.isBefore(to)) {
+            val local = t.atZone(zone)
+            hrByDay[local.toLocalDate()]?.get(local.hour * 60 + local.minute)?.let { out += it }
+            t = t.plusSeconds(60)
+        }
+        return out
+    }
+    for ((d, bt) in bed) {
+        val night = hrBetween(bt, wake.getValue(d))
+        val dayStart = wake[d.minusDays(1)]?.takeIf { it.isBefore(bt) } ?: bt.minus(Duration.ofHours(14))
+        val day = hrBetween(dayStart, bt.minus(Duration.ofMinutes(30)))
+        if (night.size >= HR_DIP_MIN_SLEEP_MINUTES && day.size >= HR_DIP_MIN_DAY_MINUTES) {
+            val dayMean = day.average()
+            if (dayMean > 0) b.put(ScoreKeys.HR_DIP, d, 100 * (dayMean - night.average()) / dayMean)
+        }
+    }
+
     // HRV stability: the week's coefficient of variation of ln RMSSD, in percent (Plews et al.).
     for (d in hrvByDay.keys) {
         val logs = (0..6).mapNotNull { hrvByDay[d.minusDays(it.toLong())]?.let(::ln) }
@@ -199,6 +232,17 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
     for ((d, ml) in src.hydrationMl) {
         val target = src.targets(d)?.waterMl?.takeIf { it > 0 } ?: continue
         b.put(ScoreKeys.WATER_RATIO, d.plusDays(1), ml / target)
+    }
+    // Meal timing: how much the day's first and last meal times moved over the week before the morning (the mean of their
+    // standard deviations, in minutes), like sleep regularity. Needs four days with meals.
+    val mealsByDay = src.mealTimes.groupBy { it.atZone(zone).toLocalDate() }
+        .mapValues { (_, t) -> t.map { val l = it.atZone(zone); l.hour * 60.0 + l.minute } }
+    for (d in mealsByDay.keys.map { it.plusDays(1) }) {
+        val week = (1..7).mapNotNull { mealsByDay[d.minusDays(it.toLong())] }
+        if (week.size < 4) continue
+        val firstSd = sd(week.map { it.min() })
+        val lastSd = sd(week.map { it.max() })
+        if (firstSd != null && lastSd != null) b.put(ScoreKeys.MEAL_TIMING_SPREAD, d, (firstSd + lastSd) / 2)
     }
     for (c in src.checkins) {
         val morning = c.date.plusDays(1)

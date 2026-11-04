@@ -62,4 +62,13 @@ class MealGlycaemicLoadTest {
     fun noMealsNoEstimates() {
         assertEquals(emptyList<MealGlycaemicEstimate>(), estimateMealResponses(emptyList()))
     }
+
+    @Test
+    fun aSlotTakesItsHighestBand() {
+        val bare = meal("08:00", 80.0, fibre = 2.0, sugar = 50.0, protein = 5.0, fat = 2.0)
+        val small = meal("12:00", 10.0)
+        assertEquals(GlycaemicBand.High, slotBand(listOf(small, bare)))
+        assertEquals(GlycaemicBand.Low, slotBand(listOf(small)))
+        assertNull(slotBand(listOf(meal("12:00", null))))
+    }
 }

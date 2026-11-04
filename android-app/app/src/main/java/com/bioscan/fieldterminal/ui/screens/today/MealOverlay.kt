@@ -2,6 +2,7 @@ package com.bioscan.fieldterminal.ui.screens.today
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -12,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AddEntryRepository
@@ -26,6 +28,8 @@ import com.bioscan.fieldterminal.domain.fuel.plannedMealDescription
 import com.bioscan.fieldterminal.domain.fuel.plateChoices
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.screens.status.glycaemicWord
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -73,6 +77,14 @@ fun MealOverlay(fuel: TodayFuel, kind: MealSlotKind, onClose: () -> Unit, onLogg
         Text(meal.reason, style = FTType.BodySmall, color = FT.TextSecondary)
         fuel.adherence[meal.kind.name]?.let { (g, a) ->
             if (a != MealAdherence.NOT_LOGGED) Text("Logged ${g.roundToInt()} g carbs · ${a.label}", style = FTType.LabelCaps, color = FT.Emerald)
+        }
+        // The glucose-spiking band of what was logged for this meal (FUEL › Nutrition has the detail).
+        fuel.glycaemic[meal.kind.name]?.let { band ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("GLUCOSE SPIKING", style = FTType.Micro, color = FT.TextMuted)
+                FTStatePill(glycaemicWord(band))
+                Text("estimate", style = FTType.Micro, color = FT.TextMuted)
+            }
         }
 
         val index = meals.indexOf(meal)

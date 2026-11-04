@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.domain
 import com.bioscan.fieldterminal.data.model.MealRow
 import java.time.OffsetDateTime
 
-// Glucose-spiking estimate (Today › Glucose spiking): a coarse, per-meal relative glycaemic load from what is logged
+// Glucose-spiking estimate (FUEL › Nutrition › Glucose spiking; a band chip on each TODAY meal page): a coarse, per-meal relative glycaemic load from what is logged
 // (carbohydrate, fibre, sugar, protein, fat). It is NOT a glucose prediction: there is no glucose or glycaemic-index data
 // here, individual responses to the same meal differ widely (Zeevi 2015; Berry 2020), and the modifier sizes below are
 // heuristics, so the output is an ordinal band, never mg/dL. docs/ft-redesign/model-plans.md, section 2.
@@ -104,3 +104,7 @@ fun estimateMealResponses(meals: List<MealRow>): List<MealGlycaemicEstimate> = g
         drivers, missing,
     )
 }
+
+/** The highest band among one meal slot's logged meals (each rise estimated as above); null when none had carbs logged. */
+fun slotBand(meals: List<MealRow>): GlycaemicBand? =
+    estimateMealResponses(meals).mapNotNull { it.band }.maxByOrNull { it.ordinal }

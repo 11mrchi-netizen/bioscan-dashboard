@@ -184,6 +184,10 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
             )
         }
 
+        Section("GLUCOSE SPIKING · ESTIMATE", info = com.bioscan.fieldterminal.ui.screens.status.GLUCOSE_INFO, trailing = "TODAY") {
+            com.bioscan.fieldterminal.ui.screens.status.GlucoseSpikingRows(o.todaysMeals)
+        }
+
         val lowest by produceState<List<Pair<String, Double>>?>(null, days) {
             value = softLoad {
                 val data = NutrientBreakdownRepository(SupabaseClientProvider.client).loadNutrients(days.coerceAtMost(365))

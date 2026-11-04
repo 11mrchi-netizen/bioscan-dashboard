@@ -179,7 +179,7 @@ private fun HypnogramChart(night: HypnogramNight, showHeartRate: Boolean) {
     )
 }
 
-private const val GLUCOSE_INFO =
+internal const val GLUCOSE_INFO =
     "An estimate, meal by meal, of how large a glucose rise today's food is likely to bring, worked from its carbohydrate, fibre, sugar, " +
         "protein and fat. It is a relative load (LOW, MODERATE or HIGH), not measured glucose and not a number in mg/dL: how one person " +
         "responds to the same meal varies widely, and the effect of protein, fat and fibre is a rough allowance. Meals within 90 minutes " +
@@ -187,32 +187,30 @@ private const val GLUCOSE_INFO =
 
 /** Glucose spiking: one row per meal (meals within 90 minutes grouped), each a relative load band with what drove it. */
 @Composable
-internal fun GlucoseSpikingCard(meals: List<MealRow>) {
+internal fun GlucoseSpikingRows(meals: List<MealRow>) {
     val rows = remember(meals) { estimateMealResponses(meals) }
-    RedesignCard {
-        MetricCardHeader(title = "GLUCOSE SPIKING", latest = null, helpBody = GLUCOSE_INFO)
-        if (rows.isEmpty()) {
-            Text("No meals logged yet today.", style = FTType.Caption, color = FT.TextMuted)
-        }
-        rows.forEach { e ->
-            val time = runCatching { OffsetDateTime.parse(e.startedAt).format(DateTimeFormatter.ofPattern("HH:mm")) }.getOrDefault("—")
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(time, style = FTType.Value, color = FT.TextPrimary)
-                    Text(e.description, style = FTType.BodySmall, color = FT.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    FTStatePill(
-                        e.band?.let { b ->
-                            StateWord(MetricState.Neutral, when (b) { GlycaemicBand.Low -> "▽ LOW"; GlycaemicBand.Moderate -> "◇ MODERATE"; GlycaemicBand.High -> "△ HIGH" })
-                        } ?: StateWord(MetricState.Unavailable, "NO CARBS LOGGED"),
-                    )
-                }
-                if (e.drivers.isNotEmpty()) Text(e.drivers.joinToString(" · "), style = FTType.Caption, color = FT.TextSecondary)
-                Text(
-                    "ESTIMATE · ${e.confidence.name.uppercase()} CONFIDENCE" + if (e.missing.isNotEmpty()) " · NOT LOGGED: ${e.missing.joinToString(", ")}" else "",
-                    style = FTType.Micro, color = FT.TextMuted,
-                )
-            }
-        }
-        Text("Estimate from carbs, fibre, protein and fat. Not measured glucose.", style = FTType.Caption, color = FT.TextMuted)
+    if (rows.isEmpty()) {
+        Text("No meals logged yet today.", style = FTType.Caption, color = FT.TextMuted)
     }
+    rows.forEach { e ->
+        // Logged times are the local wall clock with a zero offset (domain/WallClock.kt): the digits are the time.
+        val time = runCatching { OffsetDateTime.parse(e.startedAt).format(DateTimeFormatter.ofPattern("HH:mm")) }.getOrDefault("—")
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(time, style = FTType.Value, color = FT.TextPrimary)
+                Text(e.description, style = FTType.BodySmall, color = FT.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                FTStatePill(e.band?.let { glycaemicWord(it) } ?: StateWord(MetricState.Unavailable, "NO CARBS LOGGED"))
+            }
+            if (e.drivers.isNotEmpty()) Text(e.drivers.joinToString(" · "), style = FTType.Caption, color = FT.TextSecondary)
+            Text(
+                "ESTIMATE · ${e.confidence.name.uppercase()} CONFIDENCE" + if (e.missing.isNotEmpty()) " · NOT LOGGED: ${e.missing.joinToString(", ")}" else "",
+                style = FTType.Micro, color = FT.TextMuted,
+            )
+        }
+    }
+    Text("Estimate from carbs, fibre, protein and fat. Not measured glucose.", style = FTType.Caption, color = FT.TextMuted)
 }
+
+/** The band as a pill word: ▽ LOW, ◇ MODERATE, △ HIGH. */
+internal fun glycaemicWord(b: GlycaemicBand): StateWord =
+    StateWord(MetricState.Neutral, when (b) { GlycaemicBand.Low -> "▽ LOW"; GlycaemicBand.Moderate -> "◇ MODERATE"; GlycaemicBand.High -> "△ HIGH" })

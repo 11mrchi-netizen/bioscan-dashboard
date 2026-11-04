@@ -105,6 +105,8 @@ data class TodayFuel(
     val weightKg: Double,
     /** Today and the next ten days ([FUEL_HORIZON_DAYS]), today first (with the same plan as [today]). */
     val horizon: List<HorizonDay> = emptyList(),
+    /** The glucose-spiking band of the meals logged in each slot today (domain/MealGlycaemicLoad.kt), by slot name. */
+    val glycaemic: Map<String, com.bioscan.fieldterminal.domain.GlycaemicBand> = emptyMap(),
 )
 
 @Serializable
@@ -193,7 +195,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
      */
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult =
-        com.bioscan.fieldterminal.data.ReadCache.get("fuel.today.v$FUEL_ENGINE_VERSION.${now.toLocalDate()}", tables = null, serializer = TodayFuelResult.serializer()) { fetchLoadToday(context, overview, now) }
+        com.bioscan.fieldterminal.data.ReadCache.get("fuel.today.v$FUEL_ENGINE_VERSION.g.${now.toLocalDate()}", tables = null, serializer = TodayFuelResult.serializer()) { fetchLoadToday(context, overview, now) }
 
     private suspend fun fetchLoadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult {
         val key = "fuel.today.${now.toLocalDate()}.${FuelSettingsStore.get(context).hashCode()}.${NutritionGoalsStore.getGoals(context).hashCode()}.${overview?.todaysMeals?.size}"
@@ -240,6 +242,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
 
         // Logged meals today, placed in their slots.
         val bySlot = mutableMapOf<String, Double>()
+        val mealsBySlot = mutableMapOf<String, MutableList<com.bioscan.fieldterminal.data.model.MealRow>>()
         overview?.todaysMeals.orEmpty().forEach { m ->
             // Meal times are logged times: the local wall clock with a zero offset (domain/WallClock.kt).
             // The meal's own label first (meals.meal_slot); meals logged without one are placed by time.
@@ -249,7 +252,9 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
                 mealForLog(todayCoded.meals, at)?.kind?.name
             } ?: return@forEach
             bySlot[kind] = (bySlot[kind] ?: 0.0) + (m.carbsG ?: 0.0)
+            mealsBySlot.getOrPut(kind) { mutableListOf() } += m
         }
+        val glycaemic = mealsBySlot.mapNotNull { (k, ms) -> com.bioscan.fieldterminal.domain.slotBand(ms)?.let { k to it } }.toMap()
         val adherenceMap = todayCoded.meals.associate { meal -> meal.kind.name to ((bySlot[meal.kind.name] ?: 0.0) to adherence(meal, bySlot[meal.kind.name])) }
 
         // Long sessions in the next three days (events have their own page).
@@ -303,7 +308,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         }
 
         TodayFuelResult.Ready(
-            TodayFuel(todayPlan, todayCoded, tomorrowPlan, tomorrowCoded, history, changes, energy.fromGoal, energy.observedMaintenance, adherenceMap, longSessions, countdown, kg, horizon),
+            TodayFuel(todayPlan, todayCoded, tomorrowPlan, tomorrowCoded, history, changes, energy.fromGoal, energy.observedMaintenance, adherenceMap, longSessions, countdown, kg, horizon, glycaemic),
         )
     }
 

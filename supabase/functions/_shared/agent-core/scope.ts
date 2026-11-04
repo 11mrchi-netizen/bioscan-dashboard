@@ -38,7 +38,7 @@ const internal = (...tables: string[]) => Object.fromEntries(tables.map((t) => [
 export const TABLE_SCOPE: Record<string, TableScope> = {
   ...shared(
     // physiology, sleep, body, wellbeing ratings
-    'wearable_daily', 'wearable_hr_daily', 'wearable_hr_daily_range', 'v_hr_dip', 'sleep_daily', 'wellbeing_daily', 'evening_checkins', 'hydration_daily',
+    'wearable_daily', 'wearable_hr_daily', 'wearable_hr_daily_range', 'v_hr_dip', 'hr_dip_nightly', 'sleep_daily', 'wellbeing_daily', 'evening_checkins', 'hydration_daily',
     'hydration_factor_models', 'body_metrics', 'body_measurements', 'body_checkins', 'scale_readings', 'grip_strength_log',
     'illnesses', 'injuries', 'ostrc_checkins', 'rest_days', 'recovery_sessions', 'sweat_tests',
     // training
@@ -54,7 +54,7 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     // labs
     'lab_draws', 'lab_results',
     // analysis and evidence
-    'analysis_results', 'evidence_ledger', 'evidence_records', 'lab_watch_rules', 'registry_reviews', 'registered_questions', 'experiments',
+    'analysis_results', 'score_snapshots', 'evidence_ledger', 'evidence_records', 'lab_watch_rules', 'registry_reviews', 'registered_questions', 'experiments',
     'interventions', 'intervention_adherence', 'intervention_state_history', 'protocols', 'protocol_interventions',
     'protocol_state_history', 'protocol_templates', 'protocol_adjustment_proposals', 'decisions', 'series_break_decisions',
     'health_vocab', 'grip_strength_norms',

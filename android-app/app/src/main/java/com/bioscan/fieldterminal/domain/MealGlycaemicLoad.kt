@@ -50,13 +50,19 @@ data class MealGlycaemicEstimate(
 
 /** Meals in time order, a new group wherever the gap to the previous meal exceeds [gapMin]. */
 fun groupMeals(meals: List<MealRow>, gapMin: Int = MEAL_GROUP_GAP_MIN): List<List<MealRow>> {
-    val sorted = meals.mapNotNull { m -> runCatching { OffsetDateTime.parse(m.loggedAt) }.getOrNull()?.let { it to m } }.sortedBy { it.first }
-    val groups = mutableListOf<MutableList<Pair<OffsetDateTime, MealRow>>>()
-    for (p in sorted) {
-        val last = groups.lastOrNull()?.last()
-        if (last != null && java.time.Duration.between(last.first, p.first).toMinutes() <= gapMin) groups.last() += p else groups += mutableListOf(p)
+    // A drink with nothing logged (black coffee, water, electrolytes) adds nothing to a rise and must not make the meal's
+    // carbs unknown: it is left out.
+    val timed = meals.filterNot { it.calories == null && it.carbsG == null && it.proteinG == null && it.fatG == null }
+        .mapNotNull { m -> runCatching { OffsetDateTime.parse(m.loggedAt) }.getOrNull()?.let { it to m } }.sortedBy { it.first }
+    // Meals labelled with the same planned meal (meals.meal_slot) are one meal, however far apart they were logged.
+    val labelled = timed.filter { it.second.mealSlot != null }.groupBy { it.second.mealSlot }.values.map { it.toMutableList() }
+    // The rest share a rise when logged within [gapMin] of the first of them, so a long grazing run is not chained into one.
+    val unlabelled = mutableListOf<MutableList<Pair<OffsetDateTime, MealRow>>>()
+    for (p in timed.filter { it.second.mealSlot == null }) {
+        val first = unlabelled.lastOrNull()?.first()
+        if (first != null && java.time.Duration.between(first.first, p.first).toMinutes() <= gapMin) unlabelled.last() += p else unlabelled += mutableListOf(p)
     }
-    return groups.map { g -> g.map { it.second } }
+    return (labelled + unlabelled).sortedBy { it.first().first }.map { g -> g.map { it.second } }
 }
 
 private fun List<Double?>.sumKnown(): Double? = if (any { it == null }) null else sumOf { it!! }

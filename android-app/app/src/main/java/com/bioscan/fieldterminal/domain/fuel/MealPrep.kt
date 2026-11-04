@@ -149,6 +149,7 @@ fun containerFromStored(s: StoredContainer, foods: Map<String, FoodOption>, targ
 // ---- Breakfast ------------------------------------------------------------------------------------------------------
 
 /** One food of the person's fixed breakfast and its usual amount. */
+@kotlinx.serialization.Serializable
 data class BreakfastItem(val foodId: String, val grams: Double)
 
 const val BREAKFAST_MIN_SCALE = 0.5

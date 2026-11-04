@@ -124,7 +124,7 @@ data class ZeppWorkoutDetailSummaryRow(
 // Postgres unpack every workout's per-second series and took about 3 s for ~400 workouts.
 // ponytail: one request caps at 1,000 rows; page it (as ZoneAnchorsRepository does) once the history passes that.
 suspend fun loadZeppWorkoutSummaries(supabase: SupabaseClient): List<ZeppWorkoutDetailSummaryRow> =
-    ReadCache.get("zepp.summaries", tables = setOf("zepp_workout_detail")) {
+    ReadCache.kept("zepp.summaries", tables = setOf("zepp_workout_detail")) {
         supabase.postgrest.from("zepp_workout_detail")
             .select(columns = Columns.list("start_time,summary")) {
                 order("start_time", io.github.jan.supabase.postgrest.query.Order.ASCENDING)

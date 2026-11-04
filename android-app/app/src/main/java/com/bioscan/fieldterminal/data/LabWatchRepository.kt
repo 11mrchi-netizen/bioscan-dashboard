@@ -53,7 +53,7 @@ class LabWatchRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadRules(): List<LabWatchRule> {
         val reviews = runCatching { RegistryReviewRepository(supabase).loadReviews() }.getOrDefault(emptyMap())
-        return ReadCache.get("labwatch.rules", tables = setOf("registry_reviews")) {
+        return ReadCache.kept("labwatch.rules", tables = setOf("registry_reviews")) {
             supabase.postgrest.from("lab_watch_rules").select(
                 Columns.list("id,version,substance_keys,substance_aliases,min_daily_amount,amount_unit,marker_label,marker_aliases,reason,advice,source,pmid_doi,source_url,caveats,review_status"),
             ) { order("id", Order.ASCENDING) }.decodeList<LabWatchRuleRow>()
@@ -70,7 +70,7 @@ class LabWatchRepository(private val supabase: SupabaseClient) {
     }
 
     suspend fun loadReadings(): List<LabReading> =
-        ReadCache.get("labwatch.readings", tables = setOf("lab_draws", "lab_results")) {
+        ReadCache.kept("labwatch.readings", tables = setOf("lab_draws", "lab_results")) {
             val draws = supabase.postgrest.from("lab_draws").select(Columns.list("id,draw_date")).decodeList<WatchDrawRow>()
                 .associate { it.id to it.drawDate }
             supabase.postgrest.from("lab_results").select(Columns.list("draw_id,marker_name,value,value_text,unit,flag"))

@@ -180,7 +180,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // or if the read fails, and every screen then falls back to what it showed before.
     suspend fun loadExpectedBands(): Map<String, ExpectedBandRow> =
         try {
-            ReadCache.get("analysis.expected_band", tables = setOf("analysis_results")) {
+            ReadCache.kept("analysis.expected_band", tables = setOf("analysis_results")) {
                 supabase.postgrest.from("analysis_results")
                     .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "expected_band") }; newestFirst() }
                     .decodeList<ExpectedBandRow>()
@@ -222,7 +222,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // oldest day of the 200-row window (an ascending list's first row), so the card showed a day from months ago
     // without saying which. Only plausible minutes are kept (MinuteHeartRate.kt). Fetched on its own because the column
     // is ~50 kB of JSON per day and the other screens never read it.
-    suspend fun loadHeartRateDay(): HeartRateDay? = ReadCache.get("analysis.hr_day", tables = setOf("wearable_daily")) {
+    suspend fun loadHeartRateDay(): HeartRateDay? = ReadCache.kept("analysis.hr_day", tables = setOf("wearable_daily")) {
         supabase.postgrest.from("wearable_daily")
             .select(columns = Columns.list("date,hr_timeseries")) {
                 filter {
@@ -322,7 +322,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 
     // Weekly intensity (domain/IntensityDistribution.kt): the endurance sessions of the last [weeks] weeks, each with its
     // Zepp heart-rate histogram when it has one (zepp_workout_detail.hr_histogram, migration 20261022).
-    suspend fun loadIntensitySessions(weeks: Int = 12): List<IntensitySession> = ReadCache.get("analysis.intensity.$weeks", tables = setOf("exercise_sessions")) {
+    suspend fun loadIntensitySessions(weeks: Int = 12): List<IntensitySession> = ReadCache.kept("analysis.intensity.$weeks", tables = setOf("exercise_sessions")) {
         val from = mondayOf(LocalDate.now()).minusWeeks(weeks - 1L)
         supabase.postgrest.from("exercise_sessions")
             .select(columns = Columns.raw("start_time,type,zepp_workout_detail(hr_histogram)")) {

@@ -1,3 +1,4 @@
+@file:kotlinx.serialization.UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
 import java.time.LocalDate
@@ -6,6 +7,8 @@ import java.time.LocalDate
 // while taking what. A rule applies to a roster item by name (whole words) or ingredient key, and, when the rule has a
 // threshold, only when the item's planned daily amount reaches it. Each applied rule carries the person's latest result
 // for its markers, or says it has never been measured. The rule's words come from its cited source.
+
+@kotlinx.serialization.Serializable
 
 data class LabWatchRule(
     val id: Long,
@@ -25,6 +28,8 @@ data class LabWatchRule(
     val reviewed: Boolean,
     val disputedNote: String? = null,
 )
+
+@kotlinx.serialization.Serializable
 
 data class LabReading(val marker: String, val value: Double?, val valueText: String?, val unit: String?, val flag: String?, val date: LocalDate)
 

@@ -50,7 +50,7 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
     // ---- published rows ----
 
     private suspend fun published(kind: String, keyPrefix: String? = null): List<PublishedRow> = try {
-        ReadCache.get("health.$kind.${keyPrefix ?: "*"}", tables = setOf("analysis_results")) {
+        ReadCache.kept("health.$kind.${keyPrefix ?: "*"}", tables = setOf("analysis_results")) {
             supabase.postgrest.from("analysis_results")
                 .select(columns = Columns.list("key,state,payload")) {
                     filter {

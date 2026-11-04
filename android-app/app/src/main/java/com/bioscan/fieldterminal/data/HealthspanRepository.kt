@@ -130,7 +130,7 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
 
         // Strength: best estimated 1RM per lift over about six months, the latest body weight, the latest logged grip.
         // Cached: the User tab reloads this card on every visit (back from a skill page included).
-        val liftSets = ReadCache.get("healthspan.strength.$asOf", tables = setOf("exercise_sessions")) {
+        val liftSets = ReadCache.kept("healthspan.strength.$asOf", tables = setOf("exercise_sessions")) {
             supabase.postgrest.from("exercise_sessions")
                 .select(columns = Columns.list("id,type,start_time,source,details")) {
                     filter {

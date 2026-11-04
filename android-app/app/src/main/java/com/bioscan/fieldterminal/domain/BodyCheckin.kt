@@ -1,3 +1,4 @@
+@file:kotlinx.serialization.UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
 import java.time.LocalDate
@@ -111,7 +112,11 @@ fun needsAnotherReading(method: MeasureMethod, readings: List<Double>): Boolean 
 fun parseReading(site: BodySite, text: String): Double? =
     text.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in site.range }
 
+@kotlinx.serialization.Serializable
+
 data class BodyMeasurement(val site: BodySite, val side: BodySide, val readings: List<Double>, val value: Double = median(readings))
+
+@kotlinx.serialization.Serializable
 
 data class BodyCheckinRecord(
     val id: Long,

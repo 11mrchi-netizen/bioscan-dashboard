@@ -1,3 +1,4 @@
+@file:kotlinx.serialization.UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.domain.ZoneAnchors
@@ -16,6 +17,7 @@ import java.time.OffsetDateTime
 // taken as they were on any session's date: each session's maximum heart rate, the daily resting heart rate, and Zepp's
 // lactate-threshold heart rate per run. Three years back covers the 24-month maximum window of any session the app
 // shows. The series are a few thousand numbers, cached like every other read.
+@kotlinx.serialization.Serializable
 data class ZoneAnchorSeries(
     val sessionMaxima: List<Pair<LocalDate, Double>>,
     val restingDaily: List<Pair<LocalDate, Double>>,
@@ -38,7 +40,7 @@ private const val PAGE = 1000L
 
 class ZoneAnchorsRepository(private val supabase: SupabaseClient) {
 
-    suspend fun load(): ZoneAnchorSeries = ReadCache.get("zones.anchors", tables = setOf("exercise_sessions", "wearable_daily", "zepp_workout_detail")) {
+    suspend fun load(): ZoneAnchorSeries = ReadCache.kept("zones.anchors", tables = setOf("exercise_sessions", "wearable_daily", "zepp_workout_detail")) {
         val from = LocalDate.now().minusYears(YEARS_BACK).toString()
         val maxima = paged<SessionMaxRow>("exercise_sessions", "start_time,max_hr", "start_time") {
             filter { gte("start_time", from); gt("max_hr", 0) }
@@ -50,7 +52,7 @@ class ZoneAnchorsRepository(private val supabase: SupabaseClient) {
     }
 
     /** Zepp's lactate-threshold heart rate per qualifying run, oldest first: only that one number of each summary. */
-    suspend fun loadLthrSeries(): List<Pair<LocalDate, Double>> = ReadCache.get("zones.lthr", tables = setOf("zepp_workout_detail")) {
+    suspend fun loadLthrSeries(): List<Pair<LocalDate, Double>> = ReadCache.kept("zones.lthr", tables = setOf("zepp_workout_detail")) {
         // the stored summary column (migration 20261024), not decoded->summary: no per-second series unpacked
         paged<LthrRow>("zepp_workout_detail", "start_time,lthr:summary->lactateThresholdHrBpm", "start_time") {
             filter { gte("start_time", LocalDate.now().minusYears(YEARS_BACK).toString()) }

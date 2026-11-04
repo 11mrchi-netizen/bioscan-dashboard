@@ -75,7 +75,7 @@ class HydrationAccountingRepository(private val supabase: SupabaseClient) {
                     day to home?.let { (lat, lon) ->
                         val at = list.first().start.atZoneSameInstant(zone)
                         orNullUnlessCancelled {
-                            ReadCache.get("hydration.temp.$day.$lat,$lon", tables = setOf("exercise_sessions")) {
+                            ReadCache.kept("hydration.temp.$day.$lat,$lon", tables = setOf("exercise_sessions")) {
                                 // The archive first; the forecast endpoint for days the archive has not caught up with.
                                 orNullUnlessCancelled { weather.fetchHistoricalAt(lat, lon, at).temperatureC }
                                     ?: weather.fetchAt(lat, lon, at).temperatureC

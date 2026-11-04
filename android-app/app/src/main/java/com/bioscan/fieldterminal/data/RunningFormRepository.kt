@@ -1,3 +1,4 @@
+@file:kotlinx.serialization.UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
 import com.bioscan.fieldterminal.domain.form.FormMetrics
@@ -31,6 +32,7 @@ import kotlin.math.roundToInt
 // comparisons, and find the run a clip was filmed during with the watch's values for it.
 
 /** A saved analysis, as the history and the "last time" lines read it. */
+@kotlinx.serialization.Serializable
 data class SavedFormAnalysis(
     val id: Long,
     val date: LocalDate,
@@ -141,7 +143,7 @@ class RunningFormRepository(private val supabase: SupabaseClient) {
     }
 
     /** Saved analyses, newest first. */
-    suspend fun loadAll(): List<SavedFormAnalysis> = ReadCache.get("form.analyses", tables = setOf("running_form_analyses")) {
+    suspend fun loadAll(): List<SavedFormAnalysis> = ReadCache.kept("form.analyses", tables = setOf("running_form_analyses")) {
         supabase.postgrest.from("running_form_analyses")
             .select(columns = Columns.list("id,recorded_on,exercise_session_id,surface,fps,steps_measured,quality,metrics")) {
                 order("recorded_on", Order.DESCENDING)

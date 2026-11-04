@@ -162,7 +162,7 @@ private val FUEL_TABLES = setOf(
 
 class FuelPlanRepository(private val supabase: SupabaseClient) {
 
-    private suspend fun bodyComposition(): List<BodyCompRow> = ReadCache.get("fuel.body_comp", tables = setOf("body_metrics")) {
+    private suspend fun bodyComposition(): List<BodyCompRow> = ReadCache.kept("fuel.body_comp", tables = setOf("body_metrics")) {
         supabase.postgrest.from("body_metrics")
             .select(Columns.list("date,weight_kg,lean_mass_kg,body_fat_pct")) { order("date", Order.DESCENDING); limit(30) }
             .decodeList<BodyCompRow>()
@@ -199,7 +199,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
 
     private suspend fun fetchLoadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult {
         val key = "fuel.today.${now.toLocalDate()}.${FuelSettingsStore.get(context).hashCode()}.${NutritionGoalsStore.getGoals(context).hashCode()}.${overview?.todaysMeals?.size}"
-        return ReadCache.get(key, ttlMs = 60_000L, tables = FUEL_TABLES) { computeToday(context, overview, now) }
+        return ReadCache.kept(key, ttlMs = 60_000L, tables = FUEL_TABLES) { computeToday(context, overview, now) }
     }
 
     private suspend fun computeToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime): TodayFuelResult = coroutineScope {
@@ -471,7 +471,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
             .mapNotNull { r -> com.bioscan.fieldterminal.domain.WallClock.zoned(r.loggedAt, zone)?.let { PastMeal(it, r.carbsG ?: 0.0, com.bioscan.fieldterminal.domain.fuel.mealSlotOf(r.mealSlot)) } }
 
     /** The person's fuel products with their newest recipe. */
-    suspend fun products(): List<FuelProductOption> = ReadCache.get("fuel.products", tables = setOf("fueling_products", "fueling_recipe_versions")) {
+    suspend fun products(): List<FuelProductOption> = ReadCache.kept("fuel.products", tables = setOf("fueling_products", "fueling_recipe_versions")) {
         FuelingRepository(supabase).loadProducts().mapNotNull { p ->
             val v = p.latest ?: return@mapNotNull null
             val carbs = v.carbsG ?: return@mapNotNull null

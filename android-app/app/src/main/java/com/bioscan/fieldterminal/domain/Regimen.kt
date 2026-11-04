@@ -1,3 +1,4 @@
+@file:kotlinx.serialization.UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
 import kotlinx.serialization.SerialName
@@ -332,6 +333,7 @@ fun com.bioscan.fieldterminal.data.model.SupplementRow.spec(): RegimenSpec = reg
 data class RegimenMarker(val date: LocalDate, val label: String, val count: Int)
 
 /** A change as the charts need it: when, whose, what kinds, and the dose before and after when the dose changed. */
+@kotlinx.serialization.Serializable
 data class RegimenChange(val date: LocalDate, val itemName: String, val changes: List<String>, val doseBefore: String?, val doseAfter: String?, val itemId: Long? = null)
 
 /** The item's name without the brand in brackets: "Zinc Picolinate (Swanson)" -> "Zinc Picolinate". */

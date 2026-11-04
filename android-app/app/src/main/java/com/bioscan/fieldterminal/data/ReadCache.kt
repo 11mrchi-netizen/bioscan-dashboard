@@ -89,6 +89,17 @@ object ReadCache {
         dir = File(filesDir, "read_cache").apply { mkdirs() }
     }
 
+    /**
+     * [get] with a disk copy whenever [T] can be serialised: the page then opens from the last copy and refreshes in the
+     * background (stale-while-revalidate). A type that cannot be serialised is kept in memory only, as [get] does.
+     */
+    suspend inline fun <reified T> kept(
+        key: String,
+        ttlMs: Long = DEFAULT_TTL_MS,
+        tables: Set<String>? = null,
+        noinline load: suspend () -> T,
+    ): T = get(key, ttlMs, tables, runCatching { kotlinx.serialization.serializer<T>() }.getOrNull(), load)
+
     @Suppress("UNCHECKED_CAST")
     suspend fun <T> get(
         key: String,

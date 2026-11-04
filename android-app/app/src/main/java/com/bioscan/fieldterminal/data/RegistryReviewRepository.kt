@@ -94,7 +94,7 @@ class RegistryReviewRepository(private val supabase: SupabaseClient) {
 
     /** (registry, record id) -> the owner's verdict. */
     suspend fun loadReviews(): Map<Pair<String, Long>, RegistryReviewRow> =
-        ReadCache.get("registry.reviews", tables = setOf("registry_reviews")) {
+        ReadCache.kept("registry.reviews", tables = setOf("registry_reviews")) {
             supabase.postgrest.from("registry_reviews")
                 .select(Columns.list("registry,record_id,record_version,verdict,note,reviewed_at"))
                 .decodeList<RegistryReviewRow>()

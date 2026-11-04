@@ -163,7 +163,7 @@ class RegimenReferenceRepository(private val supabase: SupabaseClient) {
 
     /** Every card, for the list's label mentions. Kept with the read cache like the roster. */
     suspend fun loadAll(): List<RegimenReferenceRow> =
-        ReadCache.get("regimen.references", tables = setOf("regimen_references")) {
+        ReadCache.kept("regimen.references", tables = setOf("regimen_references")) {
             supabase.postgrest.from("regimen_references").select(Columns.raw(REFERENCE_COLUMNS)).decodeList<RegimenReferenceRow>()
         }
 

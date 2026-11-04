@@ -19,6 +19,8 @@ import kotlin.math.roundToInt
 // ratio of what was measured to what the prior predicted for those conditions (the median ratio), and narrow the range:
 // ±40 % with no test, ±25 % with one or two, ±15 % with three or more.
 
+@kotlinx.serialization.Serializable
+
 data class SweatTest(
     val date: LocalDate,
     val sessionType: String,

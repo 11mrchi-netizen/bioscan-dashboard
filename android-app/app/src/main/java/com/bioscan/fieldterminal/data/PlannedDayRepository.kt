@@ -125,7 +125,7 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
 
     // Paged: 180 days of sessions without walks can pass the API's 1,000-row cap.
     private suspend fun recorded(since: LocalDate, zone: ZoneId): List<RecordedSessionInput> =
-        ReadCache.get("fuel.recorded.$since", tables = setOf("exercise_sessions")) {
+        ReadCache.kept("fuel.recorded.$since", tables = setOf("exercise_sessions")) {
             val out = mutableListOf<RecordedRow>()
             var start = 0L
             while (true) {

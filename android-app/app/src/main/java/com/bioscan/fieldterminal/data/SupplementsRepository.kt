@@ -188,7 +188,7 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
 
     /** Every recorded start, stop, restart and dose or schedule change, newest first (all items, or one). */
     suspend fun loadChanges(supplementId: Long? = null): List<SupplementChangeRow> =
-        ReadCache.get("supplements.changes.${supplementId ?: "all"}", tables = setOf("supplements", "supplement_changes")) {
+        ReadCache.kept("supplements.changes.${supplementId ?: "all"}", tables = setOf("supplements", "supplement_changes")) {
             supabase.postgrest.from("supplement_changes")
                 .select(columns = Columns.list("id,supplement_id,changed_at,changes,before,after")) {
                     if (supplementId != null) filter { eq("supplement_id", supplementId) }

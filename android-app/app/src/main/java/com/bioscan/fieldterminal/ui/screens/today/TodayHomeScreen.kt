@@ -193,6 +193,19 @@ fun TodayHomeScreen(
     // Shown at once from the kept page (TodayStore), when it is today's; rebuilt below only if it went stale.
     val kept = remember { TodayStore.forDay(LocalDate.now()) }
     var view by remember { mutableStateOf(kept?.view) }
+    // Once TODAY has its scores, the reads behind the pages most opened from it (Sleep, Cardio, Load, Body) are warmed
+    // in the background, so those pages open from memory. Each read is cached (data/ReadCache.kt); a failure is ignored.
+    androidx.compose.runtime.LaunchedEffect(view?.day) {
+        if (view == null) return@LaunchedEffect
+        kotlinx.coroutines.delay(1_500)
+        val repo = com.bioscan.fieldterminal.data.AnalysisRepository(SupabaseClientProvider.client)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            listOf<suspend () -> Unit>(
+                { repo.loadExpectedBands() }, { repo.loadHeartRateDay() }, { repo.loadHeartRateRanges() },
+                { repo.loadBodyMetrics() }, { repo.loadFitnessFatigue() },
+            ).forEach { runCatching { it() } }
+        }
+    }
     var nut by remember { mutableStateOf(kept?.nut) }
     var fuel by remember { mutableStateOf(kept?.fuel) }
     var previews by remember { mutableStateOf(kept?.previews) }

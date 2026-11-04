@@ -62,6 +62,7 @@ enum class OverrideKind(val key: String) {
 }
 
 /** The person's answer for one calendar entry: leave it out, or count it as a session of this length and class. */
+@kotlinx.serialization.Serializable
 data class CalendarOverride(val eventId: String, val kind: OverrideKind, val durationMin: Double? = null, val intensity: Intensity? = null)
 
 const val REVIEW_OVER_MIN = 240.0

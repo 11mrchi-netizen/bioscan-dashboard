@@ -196,6 +196,7 @@ private fun BodyPage(
         fatFree == null -> "Needs a body-fat reading: a weigh-in on the scale, or a body check-in."
         else -> null
     })
+    FitnessAgeSection(sex, profile?.dateOfBirth?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, checkins)
 }
 
 @Composable

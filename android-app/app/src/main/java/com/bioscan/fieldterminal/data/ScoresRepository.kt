@@ -132,7 +132,8 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             stool = stool.await(),
             stressDays = stress.await(),
             hrDip = hrDip.await(),
-            mealTimes = nut?.meals.orEmpty().mapNotNull { m -> runCatching { java.time.OffsetDateTime.parse(m.loggedAt).toInstant() }.getOrNull() },
+            // Meal times are logged times: the local wall clock with a zero offset (domain/WallClock.kt), not real instants.
+            mealTimes = nut?.meals.orEmpty().mapNotNull { m -> com.bioscan.fieldterminal.domain.WallClock.instant(m.loggedAt, zone) },
             zone = zone,
         )
         val closedYesterday = sources.checkins.any { it.date == today.minusDays(1) }

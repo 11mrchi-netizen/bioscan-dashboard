@@ -319,16 +319,18 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
 private fun FieldBottomBar(selectedTab: TopLevelTab, onTabSelected: (TopLevelTab) -> Unit) {
     val dockShape = RoundedCornerShape(FT.RadiusCard)
     val pillShape = RoundedCornerShape(FT.RadiusModule)
+    // Landscape on a phone leaves ~360 dp of height: the dock drops its icons (the labels name the tabs) to keep the page.
+    val compact = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .background(FT.Base)
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 14.dp),
+            .padding(start = 16.dp, end = 16.dp, top = if (compact) 4.dp else 8.dp, bottom = if (compact) 4.dp else 14.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
+                .height(if (compact) 40.dp else 64.dp)
                 .clip(dockShape)
                 .background(FT.Surface)
                 .border(FT.BorderWidth, FT.GlassBorder, dockShape)
@@ -363,7 +365,7 @@ private fun FieldBottomBar(selectedTab: TopLevelTab, onTabSelected: (TopLevelTab
                 ) {
                     val tint = if (isSelected) accent else FT.TextSecondary
                     // The label below already names the tab; describing the icon too made screen readers say it twice.
-                    Icon(
+                    if (!compact) Icon(
                         painter = painterResource(tab.iconRes),
                         contentDescription = null,
                         tint = tint,
@@ -373,7 +375,7 @@ private fun FieldBottomBar(selectedTab: TopLevelTab, onTabSelected: (TopLevelTab
                         text = tab.label,
                         style = FTType.LabelCaps,
                         color = tint,
-                        modifier = Modifier.padding(top = 4.dp),
+                        modifier = Modifier.padding(top = if (compact) 0.dp else 4.dp),
                     )
                 }
             }

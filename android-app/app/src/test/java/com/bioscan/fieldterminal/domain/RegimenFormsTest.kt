@@ -23,6 +23,7 @@ class RegimenFormsTest {
         assertEquals(SUPPLEMENT_QTY_STEP, doseStep("powder", false, 5.0), 1e-9)
         assertEquals("3 softgels", unitsWords(1.0, 3.0, "softgel"))
         assertEquals("½ tablet", unitsWords(1.0, 0.5, "tablet"))
+        assertEquals("6.25 g", unitsWords(1.25, 5.0, "g")) // measured units read as decimals
     }
 
     @Test

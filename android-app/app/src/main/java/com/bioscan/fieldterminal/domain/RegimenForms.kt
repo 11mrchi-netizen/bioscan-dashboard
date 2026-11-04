@@ -63,8 +63,10 @@ fun unitsWords(qty: Double, doseAmount: Double?, unit: String?): String? {
     val count = doseAmount ?: return null
     val u = unit ?: return null
     val n = Math.round(qty * count * 1000) / 1000.0
-    val plural = n > 1 && u in setOf("capsule", "softgel", "tablet", "gummy", "patch", "spray", "scoop", "drop", "pill")
-    return "${formatSupplementQty(n)} $u${if (plural) "s" else ""}"
+    val counted = u in setOf("capsule", "softgel", "tablet", "gummy", "patch", "spray", "scoop", "drop", "pill")
+    // Counted units read as fractions (½ tablet); measured ones as decimals (6.25 g), as on a scale or a syringe.
+    val number = if (counted) formatSupplementQty(n) else String.format(java.util.Locale.US, "%.2f", n).trimEnd('0').trimEnd('.')
+    return "$number $u${if (counted && n > 1) "s" else ""}"
 }
 
 /** One ingredient of one dose. */

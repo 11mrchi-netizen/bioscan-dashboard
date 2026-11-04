@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -217,6 +218,11 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                     .verticalScroll(rememberScrollState()),
             ) {
                 val type = selectedType
+                // System back inside a form goes back to the picker, as BACK does, instead of closing the sheet and
+                // dropping what was typed.
+                androidx.activity.compose.BackHandler(enabled = sayIt || type != null) {
+                    if (sayIt) sayIt = false else { selectedType = null; foodPrefill = null; fuelStart = null }
+                }
                 if (sayIt) {
                     SheetBackHeader(label = "SAY IT", onBack = { sayIt = false })
                     Spacer(Modifier.height(16.dp))
@@ -673,7 +679,8 @@ private fun ChoiceTile(choice: AddEntryChoice, modifier: Modifier = Modifier, on
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(choiceColor(choice)))
-        Text(choice.label, style = FTType.ButtonLabel, color = FT.TextPrimary, maxLines = 2)
+        // Hyphenated, so a long word at a large font size breaks as "Encoun-ter", not "Encounte / r".
+        Text(choice.label, style = FTType.ButtonLabel.copy(hyphens = androidx.compose.ui.text.style.Hyphens.Auto), color = FT.TextPrimary, maxLines = 2)
     }
 }
 
@@ -732,7 +739,12 @@ private fun QtyRow(qty: Double, step: Double = SUPPLEMENT_QTY_STEP, words: ((Dou
             ) {
                 Text(if (delta < 0) "−" else "+", style = FTType.Telemetry, color = FT.TextSecondary)
             }
-            if (delta < 0) Text(if (qty > 0.0) (words?.invoke(qty) ?: formatSupplementQty(qty)) else "NOT TAKEN", style = FTType.Telemetry, color = if (qty > 0.0) FT.TextPrimary else FT.Warning)
+            // A fixed width, so the steppers of every row line up whatever the amount reads.
+            if (delta < 0) Text(
+                if (qty > 0.0) (words?.invoke(qty) ?: formatSupplementQty(qty)) else "NOT TAKEN",
+                style = FTType.Telemetry, color = if (qty > 0.0) FT.TextPrimary else FT.Warning,
+                maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.width(112.dp),
+            )
         }
     }
 }
@@ -1624,7 +1636,7 @@ private fun SupplementsForm(
                                     modifier = Modifier.weight(1f),
                                 )
                                 Text(
-                                    specs.getValue(supp.id).stateWords(today) ?: (if (nextDate != null) "Next: $nextDate" else specs.getValue(supp.id).scheduleWords()),
+                                    specs.getValue(supp.id).stateWords(today) ?: (if (nextDate != null) "Next: ${if (nextDate == today.plusDays(1)) "tomorrow" else nextDate.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH))}" else specs.getValue(supp.id).scheduleWords()),
                                     style = FTType.MonoCaption,
                                     color = FT.TextMuted,
                                 )
@@ -1749,10 +1761,10 @@ private fun PhotoActionButton(label: String, modifier: Modifier = Modifier, enab
         modifier = modifier
             .border(FT.BorderWidth, color, RoundedCornerShape(FT.RadiusSmall))
             .ftClickable(enabled = enabled, onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
-            .padding(vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = sheetActionLabelStyle, color = color)
+        Text(label, style = sheetActionLabelStyle, color = color, maxLines = 1, softWrap = false)
     }
 }
 

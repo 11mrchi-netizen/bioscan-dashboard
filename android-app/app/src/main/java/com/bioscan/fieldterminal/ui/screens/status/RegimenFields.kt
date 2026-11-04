@@ -117,16 +117,20 @@ class RegimenEditorState(existing: SupplementRow?, today: LocalDate = LocalDate.
         if (k == RegimenKind.PEPTIDE && form == "capsule") chooseForm("injection")
     }
 
+    /** True when [a] splits a form that is taken whole (or in halves, a scored tablet). */
+    fun splitsWrong(a: Double): Boolean {
+        val rule = formRule(form) ?: return false
+        if (rule.splitting == Splitting.MEASURED) return false
+        val step = if (form == "tablet" && scored) 0.5 else 1.0
+        return Math.abs(a / step - Math.round(a / step)) > 1e-9
+    }
+
     /** The draft to save, or the first thing that is missing. */
     fun draft(name: String): Pair<RegimenDraft?, String?> {
         if (name.isBlank()) return null to "Add a name."
         val a = amount.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 } ?: return null to "Add how much one dose is."
-        val rule = formRule(form)
-        if (rule != null && rule.splitting != Splitting.MEASURED) {
-            val step = if (form == "tablet" && scored) 0.5 else 1.0
-            if (Math.abs(a / step - Math.round(a / step)) > 1e-9) {
-                return null to (if (form == "tablet") "A tablet is taken whole${if (scored) " or in halves" else " (switch on Scored to allow halves)"}." else "One dose is a whole number of ${unit}s.")
-            }
+        if (splitsWrong(a)) {
+            return null to (if (form == "tablet") "A tablet is taken whole${if (scored) " or in halves" else " (switch on Scored to allow halves)"}." else "One dose is a whole number of ${unit}s.")
         }
         if (!asNeeded && slots.isEmpty()) return null to "Pick at least one time of day, or As needed."
         val units = syringeUnits.replace(',', '.').trim().takeIf { injectable && it.isNotEmpty() }?.let {
@@ -397,7 +401,8 @@ private fun Chips(options: List<String>, selected: List<String>, perRow: Int, on
                             .padding(vertical = 9.dp, horizontal = 2.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(option.uppercase(), style = FTType.Micro, color = if (on) FT.Emerald else FT.TextSecondary, maxLines = 1)
+                        // A chip shows the name only ("Injection (vial / pen)" reads INJECTION): the note in brackets did not fit.
+                        Text(option.substringBefore(" (").uppercase(), style = FTType.Micro, color = if (on) FT.Emerald else FT.TextSecondary, maxLines = 1)
                     }
                 }
                 repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
@@ -427,6 +432,8 @@ fun DoseCountField(state: RegimenEditorState) {
             state.form == "injection" -> "The vial below turns it into a volume and syringe units."
             else -> null
         }
-        hint?.let { Hint(it) }
+        // Said as it is typed, not only on SAVE.
+        val wrong = state.amount.replace(',', '.').toDoubleOrNull()?.let(state::splitsWrong) == true
+        hint?.let { if (wrong) Text(it, style = FTType.Caption, color = FT.Warning) else Hint(it) }
     }
 }

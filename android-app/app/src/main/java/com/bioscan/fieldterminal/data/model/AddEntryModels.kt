@@ -14,6 +14,8 @@ data class NewMealRow(
     @SerialName("fiber_g") val fiberG: Double? = null,
     @SerialName("sugar_g") val sugarG: Double? = null,
     @SerialName("sodium_mg") val sodiumMg: Double? = null,
+    // Which planned meal it was (breakfast, lunch, snack, dinner, pre_session, recovery); null = placed by time.
+    @SerialName("meal_slot") val mealSlot: String? = null,
 )
 
 @Serializable

@@ -56,6 +56,15 @@ import kotlinx.serialization.json.put
 // someone logs on the same day, so those three go through upsert() instead.
 class AddEntryRepository(private val supabase: SupabaseClient) {
 
+    /** The meal labels already used on [date] (logged times are local digits with a zero offset), except [exceptId]. */
+    suspend fun mealSlotsOn(date: java.time.LocalDate, exceptId: Long? = null): Set<com.bioscan.fieldterminal.domain.fuel.MealSlotKind> =
+        supabase.postgrest.from("meals").select(Columns.list("id,meal_slot")) {
+            filter {
+                gte("logged_at", date.atStartOfDay().atOffset(java.time.ZoneOffset.UTC).toString())
+                lt("logged_at", date.plusDays(1).atStartOfDay().atOffset(java.time.ZoneOffset.UTC).toString())
+            }
+        }.decodeList<MealSlotRow>().filter { it.id != exceptId }.mapNotNull { com.bioscan.fieldterminal.domain.fuel.mealSlotOf(it.mealSlot) }.toSet()
+
     suspend fun addFood(
         loggedAt: String,
         description: String,
@@ -66,6 +75,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         fiberG: Double?,
         sugarG: Double?,
         sodiumMg: Double?,
+        mealSlot: String? = null,
     ) {
         supabase.postgrest.from("meals").insert(
             NewMealRow(
@@ -78,6 +88,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
                 fiberG = fiberG,
                 sugarG = sugarG,
                 sodiumMg = sodiumMg,
+                mealSlot = mealSlot,
             )
         )
     }
@@ -367,6 +378,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         fiberG: Double?,
         sugarG: Double?,
         sodiumMg: Double?,
+        mealSlot: String? = null,
     ) {
         supabase.postgrest.from("meals").update(
             NewMealRow(
@@ -379,6 +391,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
                 fiberG = fiberG,
                 sugarG = sugarG,
                 sodiumMg = sodiumMg,
+                mealSlot = mealSlot,
             )
         ) { filter { eq("id", id) } }
     }
@@ -500,7 +513,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // doc comment). fetchExerciseSession only selects the editable fields
     // (id, type, rpe, notes) -- everything else is Health-Connect-sourced
     // and read-only in this app.
-    suspend fun fetchMeal(id: Long) = fetchById<LogMealRow>("meals", "id,logged_at,description,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg", id)
+    suspend fun fetchMeal(id: Long) = fetchById<LogMealRow>("meals", "id,logged_at,description,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meal_slot", id)
     suspend fun fetchHydration(id: Long) = fetchById<LogHydrationRow>("hydration_daily", "id,date,ml", id)
     suspend fun fetchEncounter(id: Long) = fetchById<LogEncounterRow>(
         "encounters",
@@ -610,3 +623,6 @@ private fun inferNutrientFromName(name: String): String? {
         else -> null
     }
 }
+
+@kotlinx.serialization.Serializable
+private data class MealSlotRow(val id: Long, @SerialName("meal_slot") val mealSlot: String? = null)

@@ -110,6 +110,7 @@ data class ReviewSeedItem(
 fun NutritionCandidateReviewSheet(
     seedItems: List<ReviewSeedItem>,
     mealDateTime: LocalDateTime,
+    mealSlot: String? = null,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
 ) {
@@ -179,7 +180,7 @@ fun NutritionCandidateReviewSheet(
                 saveError = null
                 scope.launch {
                     try {
-                        saveRepo.saveMeal(mealDateTime.toIsoWithOffset(), description.trim(), rows.mapNotNull { confirmed[it.first] })
+                        saveRepo.saveMeal(mealDateTime.toIsoWithOffset(), description.trim(), rows.mapNotNull { confirmed[it.first] }, mealSlot)
                         saving = false
                         onSaved()
                     } catch (e: Exception) {

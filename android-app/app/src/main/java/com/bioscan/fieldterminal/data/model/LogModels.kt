@@ -15,6 +15,7 @@ data class LogMealRow(
     @SerialName("fiber_g") val fiberG: Double? = null,
     @SerialName("sugar_g") val sugarG: Double? = null,
     @SerialName("sodium_mg") val sodiumMg: Double? = null,
+    @SerialName("meal_slot") val mealSlot: String? = null,
 )
 
 // Phase G3: replaces LogRunRow -- `exercise_sessions` covers any activity

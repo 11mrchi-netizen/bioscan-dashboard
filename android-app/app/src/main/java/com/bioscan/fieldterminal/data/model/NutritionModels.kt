@@ -17,6 +17,7 @@ data class MealRow(
     @SerialName("sugar_g") val sugarG: Double? = null,
     @SerialName("sodium_mg") val sodiumMg: Double? = null,
     val source: String? = null,
+    @SerialName("meal_slot") val mealSlot: String? = null,
 )
 
 @Serializable

@@ -87,7 +87,7 @@ class HealthConnectWriteBackRepository(
             val endIso = endDate.atStartOfDay().atOffset(ZoneOffset.UTC).toString()
 
             val meals = supabase.postgrest.from("meals")
-                .select(columns = Columns.list("id,logged_at,description,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg")) {
+                .select(columns = Columns.list("id,logged_at,description,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meal_slot")) {
                     filter {
                         gte("logged_at", startIso)
                         lt("logged_at", endIso)
@@ -124,7 +124,7 @@ class HealthConnectWriteBackRepository(
                     endTime = instant.plusSeconds(60),
                     endZoneOffset = offset,
                     name = meal.description,
-                    mealType = mealTypeFrom(meal.description),
+                    mealType = mealTypeFrom(meal.mealSlot, meal.description),
                     energy = meal.calories?.let { Energy.kilocalories(it) },
                     protein = meal.proteinG?.let { Mass.grams(it) },
                     totalCarbohydrate = meal.carbsG?.let { Mass.grams(it) },
@@ -242,8 +242,11 @@ class HealthConnectWriteBackRepository(
         }
     }
 
-    private fun mealTypeFrom(description: String?): Int {
-        val prefix = description?.substringBefore(':')?.trim()?.lowercase()
+    // The meal's label first (meals.meal_slot); older meals by a "Breakfast:" style prefix. Pre-session and recovery
+    // meals have no Health Connect type: they go as snacks.
+    private fun mealTypeFrom(slot: String?, description: String?): Int {
+        val prefix = slot?.lowercase()?.let { if (it == "pre_session" || it == "recovery") "snack" else it }
+            ?: description?.substringBefore(':')?.trim()?.lowercase()
         return when (prefix) {
             "breakfast" -> MealType.MEAL_TYPE_BREAKFAST
             "lunch" -> MealType.MEAL_TYPE_LUNCH
@@ -266,6 +269,7 @@ private data class WriteBackMealRow(
     @SerialName("fiber_g") val fiberG: Double? = null,
     @SerialName("sugar_g") val sugarG: Double? = null,
     @SerialName("sodium_mg") val sodiumMg: Double? = null,
+    @SerialName("meal_slot") val mealSlot: String? = null,
 )
 
 @Serializable

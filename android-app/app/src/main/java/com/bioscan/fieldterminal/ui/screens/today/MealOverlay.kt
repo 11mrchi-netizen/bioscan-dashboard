@@ -62,6 +62,8 @@ fun MealOverlay(fuel: TodayFuel, kind: MealSlotKind, onClose: () -> Unit, onLogg
                     description = plannedMealDescription(meal, plate),
                     calories = plate.kcal, proteinG = plate.proteinG, carbsG = plate.carbG, fatG = plate.fatG,
                     fiberG = plate.fibreG, sugarG = null, sodiumMg = null,
+                    // Logged from the plan's own meal: that is its label.
+                    mealSlot = meal.kind.name.lowercase(),
                 )
                 onLogged()
             }

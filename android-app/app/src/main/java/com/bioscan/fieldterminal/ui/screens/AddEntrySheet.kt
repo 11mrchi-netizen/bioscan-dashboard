@@ -438,7 +438,9 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialFiber = row.fiberG,
                     initialSugar = row.sugarG,
                     initialSodium = row.sodiumMg,
-                    onSave = { dt, desc, cal, p, c, f, fi, su, so -> onSubmit { it.updateFood(row.id, dt, desc, cal, p, c, f, fi, su, so) } },
+                    initialMealSlot = row.mealSlot,
+                    editingMealId = row.id,
+                    onSave = { dt, desc, cal, p, c, f, fi, su, so, slot -> onSubmit { it.updateFood(row.id, dt, desc, cal, p, c, f, fi, su, so, slot) } },
                 )
                 is LogHydrationRow -> DrinkForm(
                     saving,
@@ -773,7 +775,7 @@ private fun FuelForm(
                 saving,
                 initialDateTime = foodPrefill?.second ?: LocalDateTime.now(),
                 initialDescription = foodPrefill?.first ?: "",
-                onSave = { dt, desc, cal, p, c, f, fi, su, so -> onSubmit { it.addFood(dt, desc, cal, p, c, f, fi, su, so) } },
+                onSave = { dt, desc, cal, p, c, f, fi, su, so, slot -> onSubmit { it.addFood(dt, desc, cal, p, c, f, fi, su, so, slot) } },
                 onCanonicalSaved = onCanonicalSaved,
                 externalActivityActive = externalActivityActive,
             )
@@ -796,6 +798,9 @@ private fun FoodForm(
     initialFiber: Double? = null,
     initialSugar: Double? = null,
     initialSodium: Double? = null,
+    // Which planned meal it was; null pre-selects one (MealSlotChips). [editingMealId] leaves its own label out of the day's.
+    initialMealSlot: String? = null,
+    editingMealId: Long? = null,
     onSave: (
         loggedAt: String,
         description: String,
@@ -806,6 +811,7 @@ private fun FoodForm(
         fiberG: Double?,
         sugarG: Double?,
         sodiumMg: Double?,
+        mealSlot: String?,
     ) -> Unit,
     // DAV-168: the canonical (foods/meal_items) save path doesn't go through
     // AddEntryRepository at all -- NutritionMealSaveRepository writes
@@ -819,6 +825,7 @@ private fun FoodForm(
     val scope = rememberCoroutineScope()
     // Saveable: TAKE PHOTO hands the screen to the camera app, which can get this app killed and restored.
     var dateTime by rememberSaveable { mutableStateOf(initialDateTime) }
+    var mealSlot by rememberSaveable { mutableStateOf(initialMealSlot) }
     var description by rememberSaveable { mutableStateOf(initialDescription) }
     var calories by rememberSaveable { mutableStateOf(initialCalories?.toString() ?: "") }
     var protein by rememberSaveable { mutableStateOf(initialProtein?.toString() ?: "") }
@@ -1078,6 +1085,7 @@ private fun FoodForm(
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateTimeField("WHEN", dateTime, { dateTime = it })
+        MealSlotChips(dateTime, com.bioscan.fieldterminal.domain.fuel.mealSlotOf(mealSlot), { mealSlot = it.name.lowercase() }, editingMealId)
         Column { FormLabel("DESCRIPTION"); FieldTextField(description, { description = it }, "e.g. Chicken rice bowl") }
 
         // DAV-168: this section now talks to the server-side Gemini/barcode
@@ -1217,7 +1225,7 @@ private fun FoodForm(
                                         cloning = true
                                         scope.launch {
                                             try {
-                                                NutritionMealSaveRepository(SupabaseClientProvider.client).cloneMeal(id, dateTime.toIsoWithOffset())
+                                                NutritionMealSaveRepository(SupabaseClientProvider.client).cloneMeal(id, dateTime.toIsoWithOffset(), mealSlot)
                                                 onCanonicalSaved()
                                             } catch (e: Exception) {
                                                 barcodeError = e.message ?: "Could not repeat this meal"
@@ -1259,6 +1267,7 @@ private fun FoodForm(
                 fiber.toDoubleOrNull(),
                 sugar.toDoubleOrNull(),
                 sodium.toDoubleOrNull(),
+                mealSlot,
             )
         }
     }
@@ -1267,6 +1276,7 @@ private fun FoodForm(
         NutritionCandidateReviewSheet(
             seedItems = seeds,
             mealDateTime = dateTime,
+            mealSlot = mealSlot,
             onDismiss = { reviewSeedItems = null },
             onSaved = {
                 reviewSeedItems = null
@@ -1306,6 +1316,7 @@ private fun FoodForm(
         NutritionEstimateConfirmSheet(
             estimate = estimate,
             mealDateTime = dateTime,
+            mealSlot = mealSlot,
             aiEstimateId = mealEstimateId,
             enrichment = cronometerEnrichment,
             enriching = enriching,

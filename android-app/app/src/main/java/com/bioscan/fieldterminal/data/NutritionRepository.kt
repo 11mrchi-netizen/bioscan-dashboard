@@ -52,7 +52,7 @@ class NutritionRepository(private val supabase: SupabaseClient) {
         // Redesign: the range selector reaches ALL, so this margin is 5000 meals (years of logging), not 500.
         // Still a row-count margin rather than a date filter, the "bounded, not unbounded" tradeoff LogRepository makes.
         val meals = supabase.postgrest.from("meals")
-            .select(columns = Columns.list("id,logged_at,description,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg")) {
+            .select(columns = Columns.list("id,logged_at,description,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg,meal_slot")) {
                 order("logged_at", Order.DESCENDING)
                 limit(5000)
             }
@@ -114,7 +114,7 @@ class NutritionRepository(private val supabase: SupabaseClient) {
     // the actual duplication).
     suspend fun loadRecentMeals(limit: Int = 10): List<MealRow> =
         supabase.postgrest.from("meals")
-            .select(columns = Columns.list("id,logged_at,description,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg")) {
+            .select(columns = Columns.list("id,logged_at,description,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg,meal_slot")) {
                 order("logged_at", Order.DESCENDING)
                 limit(limit.toLong())
             }

@@ -68,6 +68,8 @@ private const val ADDING = -1
 fun NutritionEstimateConfirmSheet(
     estimate: NutritionMealEstimate,
     mealDateTime: LocalDateTime,
+    // Which planned meal it was (meals.meal_slot), chosen on the food form.
+    mealSlot: String? = null,
     aiEstimateId: Long?,
     enrichment: CronometerEnrichment? = null,
     enriching: Boolean = false,
@@ -318,7 +320,7 @@ fun NutritionEstimateConfirmSheet(
                                 } else e
                             }
                             NutritionMealSaveRepository(SupabaseClientProvider.client)
-                                .saveEstimatedMeal(mealDateTime.toIsoWithOffset(), finalEstimate, aiEstimateId, scaledEnrichment, source)
+                                .saveEstimatedMeal(mealDateTime.toIsoWithOffset(), finalEstimate, aiEstimateId, scaledEnrichment, source, mealSlot)
                             onSaved()
                         } catch (e: Exception) {
                             error = e.message ?: "Unknown error"

@@ -122,7 +122,7 @@ data class PeriodizationView(
 )
 
 @Serializable
-private data class MealCarbsRow(@SerialName("logged_at") val loggedAt: String, @SerialName("carbs_g") val carbsG: Double? = null)
+private data class MealCarbsRow(@SerialName("logged_at") val loggedAt: String, @SerialName("carbs_g") val carbsG: Double? = null, @SerialName("meal_slot") val mealSlot: String? = null)
 
 data class EventFuel(val event: AthleteEvent, val plan: RaceFuelPlan, val changes: List<String>, val loadedAt: ZonedDateTime)
 
@@ -242,9 +242,13 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         val bySlot = mutableMapOf<String, Double>()
         overview?.todaysMeals.orEmpty().forEach { m ->
             // Meal times are logged times: the local wall clock with a zero offset (domain/WallClock.kt).
-            val at = com.bioscan.fieldterminal.domain.WallClock.zoned(m.loggedAt, zone) ?: return@forEach
-            val slot = mealForLog(todayCoded.meals, at) ?: return@forEach
-            bySlot[slot.kind.name] = (bySlot[slot.kind.name] ?: 0.0) + (m.carbsG ?: 0.0)
+            // The meal's own label first (meals.meal_slot); meals logged without one are placed by time.
+            val labelled = com.bioscan.fieldterminal.domain.fuel.mealSlotOf(m.mealSlot)
+            val kind = labelled?.name ?: run {
+                val at = com.bioscan.fieldterminal.domain.WallClock.zoned(m.loggedAt, zone) ?: return@forEach
+                mealForLog(todayCoded.meals, at)?.kind?.name
+            } ?: return@forEach
+            bySlot[kind] = (bySlot[kind] ?: 0.0) + (m.carbsG ?: 0.0)
         }
         val adherenceMap = todayCoded.meals.associate { meal -> meal.kind.name to ((bySlot[meal.kind.name] ?: 0.0) to adherence(meal, bySlot[meal.kind.name])) }
 
@@ -439,8 +443,10 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
                 if (day.date !in fullDates) return@forEachIndexed
                 val coded = codeMeals(plans[i], day, past.getOrNull(i + 1), kg, zone, settings.meals, settings.trainLow, energy.deficit, settings.toleratedGPerHour)
                 val bySlot = mutableMapOf<String, Double>()
-                meals.filter { it.first.toLocalDate() == day.date }.forEach { (at, carbs) ->
-                    mealForLog(coded.meals, at)?.let { bySlot[it.kind.name] = (bySlot[it.kind.name] ?: 0.0) + carbs }
+                meals.filter { it.at.toLocalDate() == day.date }.forEach { m ->
+                    // The meal's own label first; unlabelled meals are placed by time.
+                    val kind = m.slot?.name ?: mealForLog(coded.meals, m.at)?.kind?.name ?: return@forEach
+                    bySlot[kind] = (bySlot[kind] ?: 0.0) + m.carbs
                 }
                 coded.meals.forEach { m -> outcomes += com.bioscan.fieldterminal.domain.fuel.CodedMealOutcome(m.code, adherence(m, bySlot[m.kind.name])) }
             }
@@ -448,14 +454,16 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         PeriodizationView(index, full.size, com.bioscan.fieldterminal.domain.fuel.codeAdherence(outcomes))
     }
 
-    private suspend fun mealsSince(since: LocalDate, zone: java.time.ZoneId): List<Pair<ZonedDateTime, Double>> =
+    private data class PastMeal(val at: ZonedDateTime, val carbs: Double, val slot: com.bioscan.fieldterminal.domain.fuel.MealSlotKind?)
+
+    private suspend fun mealsSince(since: LocalDate, zone: java.time.ZoneId): List<PastMeal> =
         supabase.postgrest.from("meals")
-            .select(Columns.list("logged_at,carbs_g")) {
+            .select(Columns.list("logged_at,carbs_g,meal_slot")) {
                 filter { gte("logged_at", since.atStartOfDay(zone).toInstant().toString()) }
                 limit(1000)
             }
             .decodeList<MealCarbsRow>()
-            .mapNotNull { r -> com.bioscan.fieldterminal.domain.WallClock.zoned(r.loggedAt, zone)?.let { it to (r.carbsG ?: 0.0) } }
+            .mapNotNull { r -> com.bioscan.fieldterminal.domain.WallClock.zoned(r.loggedAt, zone)?.let { PastMeal(it, r.carbsG ?: 0.0, com.bioscan.fieldterminal.domain.fuel.mealSlotOf(r.mealSlot)) } }
 
     /** The person's fuel products with their newest recipe. */
     suspend fun products(): List<FuelProductOption> = ReadCache.get("fuel.products", tables = setOf("fueling_products", "fueling_recipe_versions")) {

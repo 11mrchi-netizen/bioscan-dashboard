@@ -459,3 +459,30 @@ fun ownFoods(logged: List<LoggedFood>, catalogue: Map<Long, CatalogueFood>): Lis
             stepG = step, unit = f.unit, yours = true, uses = uses,
         )
     }.sortedBy { it.id }
+
+/**
+ * The meal a log at [time] is pre-labelled as: the planned meal it comes after when that one has not been logged yet (a
+ * 10:46 breakfast after a 09:00 plan is still breakfast, not an early lunch), else the next planned meal within two hours
+ * when that one is open, else the first meal of the day before it starts, else a snack. [logged] are the labels already
+ * used that day. The person can change it; the label is stored on the meal (meals.meal_slot).
+ */
+fun suggestMealSlot(time: java.time.LocalTime, times: MealTimes, logged: Set<MealSlotKind>): MealSlotKind {
+    val slots = listOfNotNull(
+        MealSlotKind.BREAKFAST to times.breakfast, MealSlotKind.LUNCH to times.lunch,
+        times.snack?.let { MealSlotKind.SNACK to it }, MealSlotKind.DINNER to times.dinner,
+    ).sortedBy { it.second }
+    val prev = slots.lastOrNull { !it.second.isAfter(time) }
+    val next = slots.firstOrNull { it.second.isAfter(time) }
+    if (prev != null && prev.first !in logged) return prev.first
+    if (next != null && next.first !in logged) {
+        val minutes = (next.second.toSecondOfDay() - time.toSecondOfDay()) / 60
+        if (minutes <= 120 || prev == null) return next.first
+    }
+    return MealSlotKind.SNACK
+}
+
+/** A stored label (meals.meal_slot) as a slot kind; null for none or an unknown value. */
+fun mealSlotOf(stored: String?): MealSlotKind? = stored?.let { s -> MealSlotKind.entries.firstOrNull { it.name.equals(s, ignoreCase = true) } }
+
+/** The label as stored. */
+fun MealSlotKind.storedName(): String = name.lowercase()

@@ -50,6 +50,31 @@ data class IngredientInput(
 @Serializable
 private data class IdRow(val id: Long)
 
+@Serializable
+private data class DoseLinkRow(
+    @SerialName("supplement_product_id") val productId: Long,
+    @SerialName("supplement_ingredient_id") val ingredientId: Long,
+    @SerialName("compound_amount") val compoundAmount: Double,
+    @SerialName("compound_unit") val compoundUnit: String,
+    @SerialName("elemental_amount") val elementalAmount: Double? = null,
+    @SerialName("elemental_unit") val elementalUnit: String? = null,
+)
+
+@Serializable
+private data class DoseIngredientRow(
+    val id: Long,
+    val name: String,
+    @SerialName("nutrient_key") val nutrientKey: String? = null,
+    @SerialName("canonical_key") val canonicalKey: String? = null,
+)
+
+@Serializable
+private data class ProductServingRow(
+    val id: Long,
+    @SerialName("serving_size") val servingSize: Double? = null,
+    @SerialName("serving_unit") val servingUnit: String? = null,
+)
+
 /** What the regimen form saves. [kind], [form], [route] and [unit] are the stored keys (domain/Regimen.kt). */
 data class RegimenDraft(
     val name: String,
@@ -62,6 +87,9 @@ data class RegimenDraft(
     val schedule: com.bioscan.fieldterminal.domain.ScheduleJson,
     val steps: com.bioscan.fieldterminal.domain.DoseStepsJson?,
     val syringeUnits: Double? = null,
+    val scored: Boolean = false,
+    /** Label servings in one dose; set when the dose's ingredients were edited or the label can be compared. */
+    val servingsPerDose: Double? = null,
 )
 
 @Serializable
@@ -131,6 +159,8 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
             put("schedule", json.encodeToJsonElement(com.bioscan.fieldterminal.domain.ScheduleJson.serializer(), draft.schedule))
             put("dose_steps", draft.steps?.let { json.encodeToJsonElement(com.bioscan.fieldterminal.domain.DoseStepsJson.serializer(), it) } ?: kotlinx.serialization.json.JsonNull)
             put("syringe_units", draft.syringeUnits)
+            put("scored", draft.scored)
+            draft.servingsPerDose?.let { put("servings_per_dose", it) }
             put("dose", legacy.dose)
             put("time_of_day", legacy.timeOfDay)
             put("every_n_days", legacy.everyNDays)
@@ -205,6 +235,45 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
             }
         }
     }
+
+    /**
+     * Each item's ingredients for one dose (label rows x servings per dose; elemental amounts where the label states them),
+     * with the nutrient and canonical keys the lab rules and interactions match on.
+     */
+    suspend fun loadDoseIngredients(rows: List<SupplementRow>): Map<Long, List<com.bioscan.fieldterminal.domain.DoseIngredient>> {
+        val withProduct = rows.filter { it.productId != null }
+        if (withProduct.isEmpty()) return emptyMap()
+        val links = supabase.postgrest.from("supplement_product_ingredients")
+            .select(Columns.list("supplement_product_id,supplement_ingredient_id,compound_amount,compound_unit,elemental_amount,elemental_unit")) {
+                filter { isIn("supplement_product_id", withProduct.mapNotNull { it.productId }.distinct()) }
+            }.decodeList<DoseLinkRow>()
+        if (links.isEmpty()) return emptyMap()
+        val ingredients = supabase.postgrest.from("supplement_ingredients")
+            .select(Columns.list("id,name,nutrient_key,canonical_key")) { filter { isIn("id", links.map { it.ingredientId }.distinct()) } }
+            .decodeList<DoseIngredientRow>().associateBy { it.id }
+        val byProduct = links.groupBy { it.productId }
+        return withProduct.associate { r ->
+            r.id to byProduct[r.productId].orEmpty().mapNotNull { l ->
+                val ing = ingredients[l.ingredientId] ?: return@mapNotNull null
+                val amount = l.elementalAmount ?: l.compoundAmount
+                val unit = (if (l.elementalAmount != null) l.elementalUnit else null) ?: l.compoundUnit
+                com.bioscan.fieldterminal.domain.DoseIngredient(ing.name, setOfNotNull(ing.nutrientKey, ing.canonicalKey), amount * r.servingsPerDose, unit)
+            }
+        }
+    }
+
+    /** The product's label serving (what one serving of its ingredient rows is). */
+    suspend fun setProductServing(productId: Long, size: Double, unit: String) {
+        supabase.postgrest.from("supplement_products").update(buildJsonObject {
+            put("serving_size", size)
+            put("serving_unit", unit)
+        }) { filter { eq("id", productId) } }
+    }
+
+    /** A product's label serving size and unit, for converting its ingredient rows to one dose. */
+    suspend fun loadProductServing(productId: Long): Pair<Double?, String?> =
+        supabase.postgrest.from("supplement_products").select(Columns.list("id,serving_size,serving_unit")) { filter { eq("id", productId) } }
+            .decodeList<ProductServingRow>().firstOrNull()?.let { it.servingSize to it.servingUnit } ?: (null to null)
 
     // Supplement Intelligence Phase 1: get-or-create each named ingredient
     // (unique per user_id,name -- see migration), then one supplement_products

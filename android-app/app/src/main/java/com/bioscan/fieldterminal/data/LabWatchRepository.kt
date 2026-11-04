@@ -85,7 +85,8 @@ class LabWatchRepository(private val supabase: SupabaseClient) {
     suspend fun watches(today: LocalDate = LocalDate.now()): List<LabWatch> {
         val active = SupplementsRepository(supabase).loadOverview().active.filter { it.status == "active" }
         val roster = runCatching { InteractionRepository(supabase).rosterItems(active) }.getOrDefault(emptyList()).associateBy { it.id }
-        val items = active.map { WatchItem(it.id, it.name, roster[it.id]?.ingredientKeys.orEmpty(), it.spec()) }
+        val doses = runCatching { SupplementsRepository(supabase).loadDoseIngredients(active) }.getOrDefault(emptyMap())
+        val items = active.map { WatchItem(it.id, it.name, roster[it.id]?.ingredientKeys.orEmpty(), it.spec(), doses[it.id].orEmpty()) }
         return matchLabWatch(loadRules(), items, loadReadings(), today)
     }
 }

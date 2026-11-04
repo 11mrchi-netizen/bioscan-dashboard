@@ -39,6 +39,7 @@ import com.bioscan.fieldterminal.domain.RosterItem
 import com.bioscan.fieldterminal.domain.detectInteractions
 import com.bioscan.fieldterminal.domain.RegimenKind
 import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.amountOn
 import com.bioscan.fieldterminal.domain.scheduleWords
 import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.domain.stateWords
@@ -330,7 +331,7 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
             val spec = s.spec()
             val today = java.time.LocalDate.now()
             Column(horizontalAlignment = Alignment.End) {
-                Text(spec.doseTextOn(today), style = FTType.Telemetry, color = FT.TextPrimary)
+                Text(com.bioscan.fieldterminal.domain.unitsWords(1.0, spec.amountOn(today), spec.unit) ?: spec.doseTextOn(today), style = FTType.Telemetry, color = FT.TextPrimary)
                 s.syringeUnits?.let { Text("${com.bioscan.fieldterminal.domain.formatAmount(it)} UNITS", style = FTType.MonoCaption, color = FT.TextSecondary) }
                 if (spec.kind != RegimenKind.SUPPLEMENT) {
                     Text(spec.kind.label.uppercase(), style = FTType.MonoCaption, color = FT.DomainLog, modifier = Modifier.padding(top = 3.dp))

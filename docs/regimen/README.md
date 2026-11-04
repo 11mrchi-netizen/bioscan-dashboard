@@ -53,6 +53,20 @@ changes, and a history of every change that the rest of the app can draw on.
   prescriber's syringe units shown as given and cross-checked against the mix, with a warning when they disagree. The
   app never works out or suggests a dose.
 
+## Streamlining (built, 4 Nov)
+
+- **The form decides how an item is handled** (`domain/RegimenForms.kt`): the unit one dose is counted in, whether it can
+  be split (capsules, softgels, gummies, patches, sprays whole; tablets in halves when marked scored; powders, liquids,
+  creams measured), and the route, asked only where the form leaves it open (a liquid: swallowed, under the tongue, on
+  the skin; an injection, its own form: under the skin or into muscle).
+- **One dose is a count of the form's unit** (3 softgels, ½ tablet, 5 g), and the ingredients describe that dose. They
+  are kept per label serving with `servings_per_dose`, so the pantry and nutrient totals count every unit; lab rules,
+  the amount-in-body estimate and the stack totals read amounts from the ingredients. An injection's dose stays its
+  active amount, the vial turning it into a volume.
+- Sheet order: name, what it is, form (scored, route), when, how often, cycle, planned changes, one dose with its
+  ingredients. The 20 existing items were converted with the owner's answers and duplicate ingredients merged
+  (migration `20261120_regimen_form_dose.sql`).
+
 ## Not built
 
 - PSA (the testosterone guideline's prostate check) is not read from lab results yet.

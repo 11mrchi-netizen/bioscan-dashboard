@@ -83,7 +83,8 @@ class SupplementStackRepository(private val supabase: SupabaseClient) {
                     StackIngredient(
                         canonicalKey = ing.canonicalKey,
                         nutrientKey = ing.nutrientKey,
-                        amount = link.elementalAmount ?: link.compoundAmount,
+                        // Label rows are per serving; one dose is servings_per_dose of them (3 softgels, 4 capsules).
+                        amount = (link.elementalAmount ?: link.compoundAmount) * s.servingsPerDose,
                         unit = link.elementalUnit ?: link.compoundUnit,
                         hasElemental = link.elementalAmount != null,
                     )

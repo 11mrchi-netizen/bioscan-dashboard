@@ -96,6 +96,9 @@ fun SupplementFormSheet(
         val pid = existing?.productId ?: return@LaunchedEffect
         try {
             val full = repo.loadProductIngredientsFull(pid)
+            // The rows are per label serving; the sheet shows one dose (label x servings per dose).
+            val spd = existing.servingsPerDose
+            fun perDose(v: Double) = com.bioscan.fieldterminal.domain.formatAmount(Math.round(v * spd * 1000) / 1000.0)
             ingredients.clear()
             full.forEach { ing ->
                 ingredients.add(EditableIngredient().apply {
@@ -104,9 +107,9 @@ fun SupplementFormSheet(
                     // overwrote the supplement NAME field with the ingredient name.
                     this.name = ing.name
                     nutrientKey = ing.nutrientKey ?: ""
-                    compoundAmount = ing.compoundAmount.toString()
+                    compoundAmount = perDose(ing.compoundAmount)
                     compoundUnit = ing.compoundUnit
-                    elementalAmount = ing.elementalAmount?.toString() ?: ""
+                    elementalAmount = ing.elementalAmount?.let(::perDose) ?: ""
                     elementalUnit = ing.elementalUnit ?: ""
                 })
             }
@@ -132,6 +135,9 @@ fun SupplementFormSheet(
 
             Column { FormFieldLabel("NAME"); FieldTextField(name, { name = it }, "e.g. Vitamin D3 (NOW Foods)") }
             RegimenFields(regimen)
+
+            // One dose: how much of the form, then what that dose contains.
+            DoseCountField(regimen)
 
             IngredientsSection(ingredients)
 
@@ -263,15 +269,32 @@ fun SupplementFormSheet(
                             // rows with a real name count -- a blank row left
                             // over from "+ ADD INGREDIENT" is silently dropped
                             // rather than saved as an empty ingredient.
-                            val filledIngredients = ingredients.mapNotNull { it.toInputOrNull() }
+                            val perDose = ingredients.mapNotNull { it.toInputOrNull() }
+                            // The ingredients are entered per dose; the product keeps them per label serving, so the
+                            // pantry (which counts servings) and the nutrient totals stay right. A label serving that can
+                            // be compared with the dose sets servings per dose; otherwise the serving becomes one unit
+                            // (capsules, tablets...) or the dose itself (measured forms).
+                            val wholeUnits = com.bioscan.fieldterminal.domain.formRule(draft.form)?.splitting != com.bioscan.fieldterminal.domain.Splitting.MEASURED
+                            val pid = existing?.productId
+                            val (labelSize, labelUnit) = pid?.let { runCatching { repo.loadProductServing(it) }.getOrDefault(null to null) } ?: (null to null)
+                            val known = com.bioscan.fieldterminal.domain.servingsPerDose(draft.amount, draft.unit, labelSize, labelUnit)
+                            val spd = known ?: if (wholeUnits) draft.amount else 1.0
+                            val servingSize = if (known != null) labelSize!! else if (wholeUnits) 1.0 else draft.amount
+                            fun perServing(list: List<IngredientInput>) = list.map { i ->
+                                i.copy(compoundAmount = i.compoundAmount / spd, elementalAmount = i.elementalAmount?.let { it / spd })
+                            }
                             val productId = when {
-                                filledIngredients.isNotEmpty() && existing?.productId != null -> {
-                                    repo.replaceProductIngredients(existing.productId, filledIngredients)
-                                    existing.productId
+                                perDose.isNotEmpty() && pid != null -> {
+                                    repo.replaceProductIngredients(pid, perServing(perDose))
+                                    if (known == null) repo.setProductServing(pid, servingSize, draft.unit)
+                                    pid
                                 }
-                                filledIngredients.isNotEmpty() -> repo.createProductWithIngredients(name.trim(), null, null, filledIngredients)
+                                perDose.isNotEmpty() -> repo.createProductWithIngredients(name.trim(), servingSize, draft.unit, perServing(perDose))
+                                pid != null && known == null && labelSize == null -> { repo.setProductServing(pid, servingSize, draft.unit); pid }
                                 else -> null
                             }
+                            // Servings per dose change only with a label they were worked out from (compared, or just set).
+                            val draft = draft.copy(servingsPerDose = if (known != null || productId != null) spd else null)
 
                             if (existing == null) {
                                 // DAV-83: best-effort only -- a failed or
@@ -404,7 +427,8 @@ private class EditableIngredient {
 @Composable
 private fun IngredientsSection(ingredients: androidx.compose.runtime.snapshots.SnapshotStateList<EditableIngredient>) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        FormFieldLabel("INGREDIENTS (OPTIONAL)")
+        FormFieldLabel("INGREDIENTS IN ONE DOSE (OPTIONAL)")
+        Text("Amounts for the dose above. Scanned labels list one serving: check they match your dose.", style = FTType.Caption, color = FT.TextMuted)
         ingredients.forEachIndexed { i, ingredient -> IngredientEditor(ingredient) { ingredients.removeAt(i) } }
         Text(
             "+ ADD INGREDIENT",

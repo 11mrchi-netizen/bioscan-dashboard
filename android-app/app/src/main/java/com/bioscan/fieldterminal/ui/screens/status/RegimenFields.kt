@@ -31,7 +31,10 @@ import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.CycleJson
 import com.bioscan.fieldterminal.domain.DoseStepJson
 import com.bioscan.fieldterminal.domain.DoseStepsJson
-import com.bioscan.fieldterminal.domain.REGIMEN_FORMS
+import com.bioscan.fieldterminal.domain.FORM_RULES
+import com.bioscan.fieldterminal.domain.Splitting
+import com.bioscan.fieldterminal.domain.formRule
+import com.bioscan.fieldterminal.domain.routeFor
 import com.bioscan.fieldterminal.domain.REGIMEN_ROUTES
 import com.bioscan.fieldterminal.domain.REGIMEN_SLOTS
 import com.bioscan.fieldterminal.domain.REGIMEN_UNITS
@@ -73,10 +76,12 @@ class EditableStep(amount: String = "", weeks: String = "") {
 class RegimenEditorState(existing: SupplementRow?, today: LocalDate = LocalDate.now()) {
     private val spec: RegimenSpec? = existing?.spec()
     var kind by mutableStateOf(spec?.kind ?: RegimenKind.SUPPLEMENT)
-    var form by mutableStateOf(spec?.form)
-    var route by mutableStateOf(spec?.route ?: "oral")
-    var amount by mutableStateOf(spec?.amount?.let(::formatAmount) ?: "")
-    var unit by mutableStateOf(spec?.unit ?: "mg")
+    var form by mutableStateOf(spec?.form ?: "capsule")
+    var route by mutableStateOf(routeFor(spec?.form ?: "capsule", spec?.route) ?: "oral")
+    var amount by mutableStateOf(spec?.amount?.let(::formatAmount) ?: "1")
+    var unit by mutableStateOf(spec?.unit?.takeIf { u -> formRule(spec.form)?.units?.contains(u) != false } ?: formRule(spec?.form ?: "capsule")!!.units.first())
+    /** A tablet that can be split in half. */
+    var scored by mutableStateOf(existing?.scored ?: false)
     var asNeeded by mutableStateOf(spec?.asNeeded ?: false)
     val slots = mutableStateListOf<String>().apply { addAll(spec?.slots?.takeIf { it.isNotEmpty() } ?: listOf("morning")) }
     var type by mutableStateOf(spec?.type?.takeIf { it != ScheduleType.AS_NEEDED } ?: ScheduleType.DAILY)
@@ -97,18 +102,32 @@ class RegimenEditorState(existing: SupplementRow?, today: LocalDate = LocalDate.
     /** Injected (under the skin, into muscle, or an injection form): sites, vial and syringe units apply. */
     val injectable: Boolean get() = route == "subcutaneous" || route == "intramuscular" || form == "injection"
 
-    /** Kind-led defaults: a new peptide is an injection under the skin in mcg; a hormone or medication keeps what is set. */
+    /** The form sets the dose's unit and the route (domain/RegimenForms.kt); a unit or route it does not allow is replaced. */
+    fun chooseForm(key: String) {
+        val rule = formRule(key) ?: return
+        form = key
+        if (unit !in rule.units) unit = rule.units.first()
+        route = routeFor(key, route) ?: route
+        if (key != "tablet") scored = false
+    }
+
+    /** Kind-led defaults: a new peptide is an injection under the skin, in mcg. */
     fun chooseKind(k: RegimenKind) {
         kind = k
-        if (k == RegimenKind.PEPTIDE && form == null) {
-            form = "injection"; route = "subcutaneous"; if (amount.isBlank()) unit = "mcg"
-        }
+        if (k == RegimenKind.PEPTIDE && form == "capsule") chooseForm("injection")
     }
 
     /** The draft to save, or the first thing that is missing. */
     fun draft(name: String): Pair<RegimenDraft?, String?> {
         if (name.isBlank()) return null to "Add a name."
-        val a = amount.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 } ?: return null to "Add the dose as a number."
+        val a = amount.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 } ?: return null to "Add how much one dose is."
+        val rule = formRule(form)
+        if (rule != null && rule.splitting != Splitting.MEASURED) {
+            val step = if (form == "tablet" && scored) 0.5 else 1.0
+            if (Math.abs(a / step - Math.round(a / step)) > 1e-9) {
+                return null to (if (form == "tablet") "A tablet is taken whole${if (scored) " or in halves" else " (switch on Scored to allow halves)"}." else "One dose is a whole number of ${unit}s.")
+            }
+        }
         if (!asNeeded && slots.isEmpty()) return null to "Pick at least one time of day, or As needed."
         val units = syringeUnits.replace(',', '.').trim().takeIf { injectable && it.isNotEmpty() }?.let {
             it.toDoubleOrNull()?.takeIf { u -> u > 0 && u <= 100 } ?: return null to "Syringe units are a number from 1 to 100 (U-100 syringe)."
@@ -138,7 +157,7 @@ class RegimenEditorState(existing: SupplementRow?, today: LocalDate = LocalDate.
             else -> ScheduleJson("daily", cycle = cycle)
         }
         return RegimenDraft(
-            name = name.trim(), kind = kind.key, form = form, route = route, amount = a, unit = unit,
+            name = name.trim(), kind = kind.key, form = form, route = routeFor(form, route), amount = a, unit = unit, scored = form == "tablet" && scored,
             slots = if (asNeeded) emptyList() else REGIMEN_SLOTS.filter { it in slots }, schedule = schedule, steps = stepJson,
             syringeUnits = units,
         ) to null
@@ -160,26 +179,23 @@ fun RegimenFields(state: RegimenEditorState) {
         }
 
         Column {
-            Label("ONE DOSE")
-            FieldTextField(state.amount, { state.amount = it }, "e.g. 5000", keyboardType = KeyboardType.Decimal)
-            Spacer(Modifier.width(4.dp))
-            Box(Modifier.padding(top = 8.dp)) {
-                Chips(REGIMEN_UNITS, listOf(state.unit), perRow = 5) { state.unit = it }
+            Label("FORM")
+            Chips(FORM_RULES.map { it.label }, listOfNotNull(formRule(state.form)?.label), perRow = 4) { picked ->
+                FORM_RULES.firstOrNull { it.label == picked }?.let { state.chooseForm(it.key) }
             }
-        }
-
-        Column {
-            Label("FORM · HOW IT IS TAKEN")
-            Chips(REGIMEN_FORMS.map { it.second }, listOfNotNull(REGIMEN_FORMS.firstOrNull { it.first == state.form }?.second), perRow = 4) { picked ->
-                val key = REGIMEN_FORMS.first { it.second == picked }.first
-                state.form = if (state.form == key) null else key
-                if (key == "injection" && state.route == "oral") state.route = "subcutaneous"
-                if (key == "nasal_spray") state.route = "nasal"
-                if (key == "cream" || key == "patch") state.route = "topical"
+            if (state.form == "tablet") {
+                Switch("Scored: can be split in half", state.scored) { state.scored = it }
             }
-            Box(Modifier.padding(top = 8.dp)) {
-                Chips(REGIMEN_ROUTES.map { it.second }, listOfNotNull(REGIMEN_ROUTES.firstOrNull { it.first == state.route }?.second), perRow = 4) { picked ->
-                    state.route = REGIMEN_ROUTES.first { it.second == picked }.first
+            val rule = formRule(state.form)
+            if (rule != null && rule.fixedRoute == null) {
+                Box(Modifier.padding(top = 8.dp)) {
+                    Column {
+                        Label("HOW IT IS TAKEN")
+                        val options = REGIMEN_ROUTES.filter { it.first in rule.routes }
+                        Chips(options.map { it.second }, listOfNotNull(options.firstOrNull { it.first == state.route }?.second), perRow = 3) { picked ->
+                            state.route = options.first { it.second == picked }.first
+                        }
+                    }
                 }
             }
         }
@@ -387,5 +403,30 @@ private fun Chips(options: List<String>, selected: List<String>, perRow: Int, on
                 repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
+    }
+}
+
+/** One dose as a count of the form's unit (an injection: its active amount), shown above the dose's ingredients. */
+@Composable
+fun DoseCountField(state: RegimenEditorState) {
+    val rule = formRule(state.form)
+    val units = rule?.units ?: REGIMEN_UNITS
+    Column {
+        Label(if (state.form == "injection") "ONE DOSE (THE ACTIVE AMOUNT)" else "ONE DOSE")
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FieldTextField(state.amount, { state.amount = it }, "e.g. 2", keyboardType = KeyboardType.Decimal, modifier = Modifier.width(90.dp))
+            if (units.size == 1) Text(units.first() + "s".takeIf { (state.amount.replace(',', '.').toDoubleOrNull() ?: 1.0) > 1 }.orEmpty(),
+                style = FTType.BodySmall, color = FT.TextSecondary)
+        }
+        if (units.size > 1) {
+            Box(Modifier.padding(top = 8.dp)) { Chips(units, listOf(state.unit), perRow = 5) { state.unit = it } }
+        }
+        val hint = when {
+            rule?.splitting == Splitting.WHOLE && state.form == "tablet" && state.scored -> "Whole or half tablets."
+            rule?.splitting == Splitting.WHOLE -> "Whole ${rule.units.first()}s only."
+            state.form == "injection" -> "The vial below turns it into a volume and syringe units."
+            else -> null
+        }
+        hint?.let { Hint(it) }
     }
 }

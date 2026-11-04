@@ -126,7 +126,7 @@ private fun CardView(c: RegimenReferenceRow, others: List<Pair<Long, String>>, u
     c.halfLifeHours?.let { h ->
         Text("Half-life about ${halfLifeWords(h)}", style = FTType.Telemetry, color = FT.TextPrimary, modifier = Modifier.padding(top = 4.dp))
         c.halfLifeText?.let { Caption("The label: $it") }
-        AmountInBodySection(c.supplementId, h, unit, dose)
+        AmountInBodySection(c.supplementId, h, c.ingredient)
     }
 
     c.label?.let { label ->

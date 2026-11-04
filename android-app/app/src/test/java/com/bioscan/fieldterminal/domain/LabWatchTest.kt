@@ -46,4 +46,16 @@ class LabWatchTest {
         assertEquals(5000.0, dailyAmountIn(spec, "mg", today)!!, 0.0)
         assertEquals(null, dailyAmountIn(spec, "IU", today))
     }
+
+    @Test
+    fun aCapsuleDoseReadsTheRuleSubstanceFromItsIngredients() {
+        val zinc = rule(1, listOf("zinc"), listOf("copper"), 25.0, "mg")
+        val capsule = WatchItem(1, "Zinc Picolinate (Swanson)", emptySet(),
+            regimenSpec("night", null, "", form = "capsule", doseAmount = 1.0, doseUnit = "capsule", slots = listOf("night"), schedule = ScheduleJson("daily")),
+            listOf(DoseIngredient("Zinc", setOf("zinc"), 50.0, "mg")))
+        assertEquals(50.0, matchLabWatch(listOf(zinc), listOf(capsule), emptyList(), today).single().dailyAmount!!, 1e-9)
+        // 20 mg a day is under the rule's 25 mg threshold: the rule does not apply.
+        val small = capsule.copy(ingredients = listOf(DoseIngredient("Zinc", setOf("zinc"), 20.0, "mg")))
+        assertTrue(matchLabWatch(listOf(zinc), listOf(small), emptyList(), today).isEmpty())
+    }
 }

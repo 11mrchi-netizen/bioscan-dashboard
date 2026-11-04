@@ -26,6 +26,8 @@ import com.bioscan.fieldterminal.domain.amountCurve
 import com.bioscan.fieldterminal.domain.curveWindowDays
 import com.bioscan.fieldterminal.domain.formatAmount
 import com.bioscan.fieldterminal.domain.halfLifeWords
+import com.bioscan.fieldterminal.domain.activeIngredient
+import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Duration
@@ -36,20 +38,34 @@ import java.time.OffsetDateTime
 // five half-lives, with the amount now and the range over the last week. Labelled as an outline, never as a blood level.
 
 @Composable
-fun AmountInBodySection(supplementId: Long, halfLifeHours: Double, unit: String?, fallbackDose: Double?) {
+fun AmountInBodySection(supplementId: Long, halfLifeHours: Double, ingredientName: String?) {
     var curve by remember(supplementId, halfLifeHours) { mutableStateOf<List<Pair<Instant, Double>>?>(null) }
+    var unit by remember { mutableStateOf<String?>(null) }
     val days = curveWindowDays(halfLifeHours)
-    LaunchedEffect(supplementId, halfLifeHours, unit, fallbackDose) {
+    LaunchedEffect(supplementId, halfLifeHours, ingredientName) {
         curve = runCatching {
+            // The active amount per dose: an injection's dose is its active amount; anything else reads it from the dose's
+            // ingredients (the one the reference names, else the only or first one).
+            val repo = SupplementsRepository(SupabaseClientProvider.client)
+            val overview = repo.loadOverview()
+            val row = (overview.active + overview.ended).firstOrNull { it.id == supplementId } ?: return@runCatching emptyList()
+            val spec = row.spec()
+            val active = if (spec.form == "injection") spec.amount?.let { a -> spec.unit?.let { u -> a to u } }
+            else activeIngredient(repo.loadDoseIngredients(listOf(row))[row.id].orEmpty(), ingredientName, row.name)?.let { it.amount to it.unit }
+            val (perDose, activeUnit) = active ?: return@runCatching emptyList()
+            unit = activeUnit
             val now = Instant.now()
             val from = now.minus(Duration.ofDays(days))
             // Doses up to ten half-lives before the window still count at its start.
             val since = from.minus(Duration.ofMinutes((halfLifeHours * 600).toLong()))
-            val doses = SupplementsRepository(SupabaseClientProvider.client).loadDoses(supplementId, since).mapNotNull { r ->
+            val doses = repo.loadDoses(supplementId, since).mapNotNull { r ->
                 val at = runCatching { OffsetDateTime.parse(r.takenAt).toInstant() }.getOrNull() ?: return@mapNotNull null
-                val amount = r.doseValue?.takeIf { r.doseUnit == null || unit == null || r.doseUnit.equals(unit, ignoreCase = true) }
-                    ?: fallbackDose?.let { it * (r.servingCount ?: 1.0) } ?: return@mapNotNull null
-                LoggedDose(at, amount)
+                // How many doses this log was: from the servings it used, else from its count in the dose's unit.
+                val doseCount = spec.amount
+                val qty = r.servingCount?.let { it / row.servingsPerDose }
+                    ?: r.doseValue?.takeIf { doseCount != null && doseCount > 0 && r.doseUnit.equals(spec.unit, ignoreCase = true) }?.let { it / doseCount!! }
+                    ?: 1.0
+                LoggedDose(at, perDose * qty)
             }
             if (doses.isEmpty()) emptyList() else amountCurve(doses, halfLifeHours, from, now)
         }.getOrNull()

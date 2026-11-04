@@ -28,7 +28,26 @@ data class LabWatchRule(
 
 data class LabReading(val marker: String, val value: Double?, val valueText: String?, val unit: String?, val flag: String?, val date: LocalDate)
 
-data class WatchItem(val id: Long, val name: String, val ingredientKeys: Set<String>, val spec: RegimenSpec)
+data class WatchItem(
+    val id: Long,
+    val name: String,
+    val ingredientKeys: Set<String>,
+    val spec: RegimenSpec,
+    /** One dose's ingredients: a rule's threshold is read from the ingredient it is about (zinc in a zinc capsule). */
+    val ingredients: List<DoseIngredient> = emptyList(),
+)
+
+/** The daily amount of the rule's substance: from the matching ingredient, else from the dose itself when its unit fits. */
+fun ruleDailyAmount(rule: LabWatchRule, item: WatchItem, today: LocalDate): Double? {
+    val unit = rule.amountUnit ?: return null
+    val ing = item.ingredients.firstOrNull { i -> i.keys.any { it in rule.substanceKeys } || rule.substanceAliases.any { containsWord(i.name.lowercase(), it) } }
+    if (ing != null) {
+        val perDose = convertAmount(ing.amount, ing.unit, unit) ?: return null
+        val dayFactor = item.spec.dosesPerDay() * ((item.spec.amountOn(today) ?: 1.0) / (item.spec.amount ?: 1.0))
+        return perDose * dayFactor
+    }
+    return dailyAmountIn(item.spec, unit, today)
+}
 
 data class LabWatch(
     val rule: LabWatchRule,
@@ -69,7 +88,7 @@ fun matchLabWatch(rules: List<LabWatchRule>, items: List<WatchItem>, results: Li
             if (!byName && !byKey) continue
             var daily: Double? = null
             if (rule.minDailyAmount != null && rule.amountUnit != null) {
-                daily = dailyAmountIn(item.spec, rule.amountUnit, today)
+                daily = ruleDailyAmount(rule, item, today)
                 // A known daily amount under the threshold: the rule does not apply. Unknown: shown, the threshold stated.
                 if (daily != null && daily < rule.minDailyAmount) continue
             }

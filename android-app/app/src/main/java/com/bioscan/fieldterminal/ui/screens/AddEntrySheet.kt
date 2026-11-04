@@ -102,6 +102,7 @@ import com.bioscan.fieldterminal.domain.ethanolGrams
 import com.bioscan.fieldterminal.domain.isDueOn
 import com.bioscan.fieldterminal.domain.REGIMEN_SLOTS
 import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.amountOn
 import com.bioscan.fieldterminal.domain.nextDueAfter
 import com.bioscan.fieldterminal.domain.scheduleWords
 import com.bioscan.fieldterminal.domain.stateWords
@@ -705,14 +706,14 @@ private fun SaveButton(saving: Boolean, enabled: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun QtyRow(qty: Double, onChange: (Double) -> Unit) {
+private fun QtyRow(qty: Double, step: Double = SUPPLEMENT_QTY_STEP, words: ((Double) -> String?)? = null, onChange: (Double) -> Unit) {
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusSmall)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("QTY", style = FTType.LabelCaps, color = if (qty > 0.0) FT.TextMuted else FT.Warning)
-        for (delta in listOf(-SUPPLEMENT_QTY_STEP, SUPPLEMENT_QTY_STEP)) {
+        for (delta in listOf(-step, step)) {
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -721,14 +722,15 @@ private fun QtyRow(qty: Double, onChange: (Double) -> Unit) {
                     .border(FT.BorderWidth, FT.GlassBorder, shape)
                     .ftClickable(shape = shape) {
                         // 0 is allowed: the item is not taken this time and is left out of the save.
-                        val next = qty + delta
+                        // Rounded so a third of a dose (one of three softgels) adds back up to exactly one dose.
+                        val next = Math.round((qty + delta) * 1e6) / 1e6
                         if (next >= 0.0) onChange(next)
                     },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(if (delta < 0) "−" else "+", style = FTType.Telemetry, color = FT.TextSecondary)
             }
-            if (delta < 0) Text(if (qty > 0.0) formatSupplementQty(qty) else "NOT TAKEN", style = FTType.Telemetry, color = if (qty > 0.0) FT.TextPrimary else FT.Warning)
+            if (delta < 0) Text(if (qty > 0.0) (words?.invoke(qty) ?: formatSupplementQty(qty)) else "NOT TAKEN", style = FTType.Telemetry, color = if (qty > 0.0) FT.TextPrimary else FT.Warning)
         }
     }
 }
@@ -1502,6 +1504,9 @@ private fun SupplementsForm(
 
     val groups = REGIMEN_SLOTS.associateWith { slot -> dueList.filter { slot in specs.getValue(it.id).slots } }.filterValues { it.isNotEmpty() }
     fun doseOf(s: SupplementRow) = specs[s.id]?.doseTextOn(today) ?: s.dose
+    // The form decides the step: a whole capsule, half a scored tablet, a quarter of a measured dose (domain/RegimenForms.kt).
+    fun stepOf(s: SupplementRow) = com.bioscan.fieldterminal.domain.doseStep(s.form, s.scored, specs[s.id]?.amountOn(today))
+    fun wordsOf(s: SupplementRow, q: Double) = specs[s.id]?.let { com.bioscan.fieldterminal.domain.unitsWords(q, it.amountOn(today), it.unit) }
 
     // DAV-156: each selected item carries its roster dose string along so
     // addSupplementsTaken can parse a real per-supplement dose default --
@@ -1542,7 +1547,7 @@ private fun SupplementsForm(
                                 onToggle = { scannedChecked = if (checked) scannedChecked - supp.id else scannedChecked + supp.id },
                             )
                             if (checked) {
-                                QtyRow(quantities[supp.id] ?: 1.0) { quantities = quantities + (supp.id to it) }
+                                QtyRow(quantities[supp.id] ?: 1.0, stepOf(supp), { q -> wordsOf(supp, q) }) { quantities = quantities + (supp.id to it) }
                             }
                         }
                     }
@@ -1570,7 +1575,7 @@ private fun SupplementsForm(
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         Text(supp.name, style = FTType.BodySmall, color = FT.TextSecondary, modifier = Modifier.weight(1f))
-                                        QtyRow(quantities[supp.id] ?: 1.0) { quantities = quantities + (supp.id to it) }
+                                        QtyRow(quantities[supp.id] ?: 1.0, stepOf(supp), { q -> wordsOf(supp, q) }) { quantities = quantities + (supp.id to it) }
                                     }
                                 }
                             }
@@ -1590,7 +1595,7 @@ private fun SupplementsForm(
                                 },
                             )
                             if (checked) {
-                                QtyRow(quantities[supp.id] ?: 1.0) { quantities = quantities + (supp.id to it) }
+                                QtyRow(quantities[supp.id] ?: 1.0, stepOf(supp), { q -> wordsOf(supp, q) }) { quantities = quantities + (supp.id to it) }
                             }
                         }
                     }

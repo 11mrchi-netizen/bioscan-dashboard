@@ -221,6 +221,33 @@ class ScoreEngineTest {
     private val lastDay get() = start.plusDays(days - 1L)
 
     @Test
+    fun aKeptMorningStandsWhenAValueItHadIsRewritten() {
+        val (_, kept) = settle(ScoreEngine(person()).score(lastDay), null)
+        val rewritten = ScoreEngine(person(last = mapOf(ScoreKeys.HRV to 80.0))).score(lastDay)
+        val (shown, save) = settle(rewritten, kept)
+        assertEquals(kept!!.scores, shown)
+        assertNull(save)
+    }
+
+    @Test
+    fun aKeptMorningMovesWhenAMissingInputArrives() {
+        val withoutStress = person().mapValues { (k, v) -> if (k == ScoreKeys.STRESSED_SHARE || k == ScoreKeys.RELAXED_SHARE) v - lastDay else v }
+        val (_, kept) = settle(ScoreEngine(withoutStress).score(lastDay), null)
+        assertFalse(ScoreKeys.STRESSED_SHARE in kept!!.inputs)
+        val late = ScoreEngine(person()).score(lastDay)
+        val (shown, save) = settle(late, kept)
+        assertEquals(late, shown)
+        assertTrue(ScoreKeys.STRESSED_SHARE in save!!.inputs)
+    }
+
+    @Test
+    fun aNewModelVersionReplacesAKeptMorning() {
+        val (_, kept) = settle(ScoreEngine(person()).score(lastDay), null)
+        val (_, save) = settle(ScoreEngine(person(last = mapOf(ScoreKeys.HRV to 80.0))).score(lastDay), kept!!.copy(modelVersion = "0"))
+        assertNotNull(save)
+    }
+
+    @Test
     fun aTypicalHistoryCentresOnEighty() {
         val engine = ScoreEngine(person())
         val strip = engine.chargeStrip(lastDay.minusDays(59), lastDay).mapNotNull { it.second }

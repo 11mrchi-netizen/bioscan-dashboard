@@ -27,6 +27,9 @@ import com.bioscan.fieldterminal.domain.score.scoreQuality
 import com.bioscan.fieldterminal.domain.score.capsFrom
 import com.bioscan.fieldterminal.domain.score.ChargeCap
 import com.bioscan.fieldterminal.domain.score.chargeStatus
+import com.bioscan.fieldterminal.domain.score.KeptMorning
+import com.bioscan.fieldterminal.domain.score.settle
+import io.github.jan.supabase.postgrest.postgrest
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
 import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
 import com.bioscan.fieldterminal.domain.stress.StressDay
@@ -112,6 +115,8 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         val checkins = async { runCatching { EveningCheckinRepository(supabase).loadSince(today.minusDays(400)) }.getOrDefault(emptyList()) }
         val nut = nutrition ?: runCatching { NutritionRepository(supabase).loadOverview() }.getOrNull()
         val goals = NutritionGoalsStore.getGoals(context)
+        // FINAL mornings already kept stand unless rebuilt with something new (domain/score/ScoreSnapshots.kt).
+        val keptD = async { runCatching { loadKept(today.minusDays(SCORE_STRIP_DAYS)) }.getOrDefault(emptyMap()) }
 
         val w = wearable.await()
         val sessionRows = sessions.await()
@@ -182,13 +187,28 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             val history = if (weights.personal) engine.history(historyFrom, today) else defaultHistory
             val quality = runCatching { scoreQuality(history, series, plannedDone, weights) }.getOrNull()
             val from = today.minusDays(SCORE_STRIP_DAYS - 1)
+            val status = chargeStatus(today, closedYesterday, now)
+            val kept = keptD.await()
+            val toKeep = mutableListOf<KeptMorning>()
+            fun settled(d: LocalDate): DayScores = settle(engine.score(d), kept[d]).let { (s, keep) -> keep?.let(toKeep::add); s }
+            // Past mornings are always FINAL; this morning once it is.
+            val past = generateSequence(from) { it.plusDays(1) }.takeWhile { it.isBefore(today) }.associateWith(::settled)
+            val fresh = if (status == ChargeStatus.FINAL) settled(today) else engine.score(today)
+            // The arrows compare with yesterday as it is shown.
+            val yesterday = past[today.minusDays(1)]
+            val scores = if (yesterday == null) fresh else fresh.copy(
+                charge = fresh.charge.copy(previous = yesterday.charge.score),
+                domains = fresh.domains.mapValues { (k, d) -> d.copy(previous = yesterday.domains[k]?.score) },
+            )
+            if (toKeep.isNotEmpty()) runCatching { supabase.postgrest.from("score_snapshots").upsert(toKeep) { onConflict = "user_id,day" } }
+            val shown = past + (today to scores)
             KeyedScores(
                 ScoresView(
                     day = today,
-                    scores = engine.score(today),
-                    status = chargeStatus(today, closedYesterday, now),
-                    chargeStrip = engine.chargeStrip(from, today),
-                    domainStrips = DomainKey.entries.associateWith { engine.domainStrip(it, from, today) },
+                    scores = scores,
+                    status = status,
+                    chargeStrip = shown.map { (d, s) -> d to s.charge.score },
+                    domainStrips = DomainKey.entries.associateWith { k -> shown.map { (d, s) -> d to s.domains[k]?.score } },
                     series = series,
                     quality = quality,
                     weights = weights,
@@ -201,4 +221,9 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             )
         }
     }
+
+    private suspend fun loadKept(since: LocalDate): Map<LocalDate, KeptMorning> =
+        supabase.postgrest.from("score_snapshots").select { filter { gte("day", since.toString()) } }
+            .decodeList<KeptMorning>().associateBy { it.day }
+
 }

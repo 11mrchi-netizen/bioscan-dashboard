@@ -241,6 +241,18 @@ class ScoreEngineTest {
     }
 
     @Test
+    fun keptMorningsRoundTripAsStrictJson() {
+        // jsonb rejects NaN and Infinity: what is upserted must be plain JSON, and it must read back the same.
+        val strict = kotlinx.serialization.json.Json
+        val engine = ScoreEngine(person())
+        for (d in (0L..29L).map { lastDay.minusDays(it) }) {
+            val kept = settle(engine.score(d), null).second!!
+            val text = strict.encodeToString(KeptMorning.serializer(), kept)
+            assertEquals(kept, strict.decodeFromString(KeptMorning.serializer(), text))
+        }
+    }
+
+    @Test
     fun aNewModelVersionReplacesAKeptMorning() {
         val (_, kept) = settle(ScoreEngine(person()).score(lastDay), null)
         val (_, save) = settle(ScoreEngine(person(last = mapOf(ScoreKeys.HRV to 80.0))).score(lastDay), kept!!.copy(modelVersion = "0"))

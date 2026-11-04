@@ -223,7 +223,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
     }
 
     private suspend fun loadKept(since: LocalDate): Map<LocalDate, KeptMorning> =
-        supabase.postgrest.from("score_snapshots").select { filter { gte("day", since.toString()) } }
+        supabase.postgrest.from("score_snapshots").select(columns = io.github.jan.supabase.postgrest.query.Columns.list("day,model_version,inputs,scores")) { filter { gte("day", since.toString()) } }
             .decodeList<KeptMorning>().associateBy { it.day }
 
 }

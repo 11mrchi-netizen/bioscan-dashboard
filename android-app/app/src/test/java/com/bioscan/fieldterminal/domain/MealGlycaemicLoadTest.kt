@@ -20,6 +20,11 @@ class MealGlycaemicLoadTest {
     }
 
     @Test
+    fun twoSnacksHoursApartAreTwoRises() {
+        assertEquals(listOf(1, 1), groupMeals(listOf(meal("10:00", 20.0, slot = "snack"), meal("16:00", 20.0, slot = "snack"))).map { it.size })
+    }
+
+    @Test
     fun unlabelledMealsAreNotChainedPastNinetyMinutesFromTheFirst() {
         assertEquals(listOf(2, 1), groupMeals(listOf(meal("10:00", 10.0), meal("11:00", 10.0), meal("12:00", 10.0))).map { it.size })
     }

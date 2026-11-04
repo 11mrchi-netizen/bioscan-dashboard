@@ -77,7 +77,8 @@ begin
   for r in
     select user_id, array_agg(distinct d) as ds
     from (select user_id, date as d from changed union select user_id, date + 1 from changed) x
-    where d >= current_date - 120 and d <= current_date
+    -- No upper bound: current_date is UTC and sleep dates are local, so this morning can be "tomorrow" here.
+    where d >= current_date - 120
     group by user_id
   loop
     perform public.refresh_hr_dip(r.user_id, r.ds);

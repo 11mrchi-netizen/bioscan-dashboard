@@ -180,11 +180,8 @@ fun LinkRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
 
 @Composable
 fun Loading(guard: LoadGuard) {
-    if (guard.error != null) LoadErrorCard(guard) else {
-        Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.Emerald)
-        }
-    }
+    // A page-shaped placeholder instead of a spinner (ui/components/Skeleton.kt).
+    if (guard.error != null) LoadErrorCard(guard) else com.bioscan.fieldterminal.ui.components.SkeletonSections()
 }
 
 @Composable

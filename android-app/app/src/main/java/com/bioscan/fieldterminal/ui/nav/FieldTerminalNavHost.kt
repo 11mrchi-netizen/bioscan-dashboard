@@ -1,6 +1,8 @@
 package com.bioscan.fieldterminal.ui.nav
 
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -163,7 +165,9 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
         NavHost(
             navController = navController,
             startDestination = TopLevelTab.Status.route,
-            modifier = Modifier.padding(innerPadding),
+            // The keyboard pushes the page up instead of covering the field being typed in (the dock's share of the
+            // bottom inset is not counted twice).
+            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding).imePadding(),
             // Between dock tabs: a quick crossfade. A pushed page slides in from the right over a short fade and slides
             // back out on back; with predictive back (manifest) the swipe previews the page behind.
             enterTransition = { if (isTabSwitch()) fadeIn(tween(TAB_FADE_MS)) else slideInHorizontally(tween(PUSH_MS)) { it / 4 } + fadeIn(tween(PUSH_MS)) },

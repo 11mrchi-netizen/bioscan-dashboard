@@ -116,9 +116,7 @@ fun N1Tab() {
         if (guard.error != null) {
             LoadErrorCard(guard)
         } else {
-            Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FT.DomainLabs)
-            }
+            com.bioscan.fieldterminal.ui.components.SkeletonSections()
         }
         return
     }

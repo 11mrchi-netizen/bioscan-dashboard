@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -99,7 +100,7 @@ fun FullScreenOverlay(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val page: @Composable () -> Unit = {
-        Column(modifier = Modifier.fillMaxSize().background(FT.Base).statusBarsPadding().navigationBarsPadding()) {
+        Column(modifier = Modifier.fillMaxSize().background(FT.Base).statusBarsPadding().navigationBarsPadding().imePadding()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,

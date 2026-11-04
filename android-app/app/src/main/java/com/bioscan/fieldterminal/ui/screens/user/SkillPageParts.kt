@@ -63,7 +63,7 @@ fun <T : Any> LoadedContent(load: suspend () -> T, content: @Composable (T) -> U
     }
     val result = state.value
     if (result == null) {
-        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.Emerald) }
+        com.bioscan.fieldterminal.ui.components.SkeletonSections()
         return
     }
     val value = result.getOrNull()

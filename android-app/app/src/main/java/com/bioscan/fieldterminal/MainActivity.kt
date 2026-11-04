@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -81,6 +82,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Edge to edge on every Android version (15+ enforces it already), with light icons on the dark base: the
+        // Scaffold and the overlays pad for the status bar, the navigation bar and the keyboard themselves.
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         Perf.enabled = BuildConfig.DEBUG // logcat tag "perf"; see util/Perf.kt
         // Notification channels, the Supabase client and the metric registry are warmed on a background thread by FieldTerminalApp.
         // Only on a fresh launch: after process restore the same intent is redelivered and would re-navigate.

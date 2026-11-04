@@ -128,9 +128,7 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     }
 
     when {
-        isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.Emerald)
-        }
+        isLoading -> com.bioscan.fieldterminal.ui.components.SkeletonSections()
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
         }

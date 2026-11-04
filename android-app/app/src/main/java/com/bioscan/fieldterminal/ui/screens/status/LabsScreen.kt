@@ -85,9 +85,7 @@ fun LabsScreen() {
         Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(top = 16.dp)) { LabWatchSection(watches) }
     }
     when {
-        isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.DomainLabs)
-        }
+        isLoading -> com.bioscan.fieldterminal.ui.components.SkeletonSections()
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
         }

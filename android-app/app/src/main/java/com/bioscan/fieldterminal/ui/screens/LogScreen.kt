@@ -72,6 +72,8 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     var feed by remember { mutableStateOf<LogFeed?>(null) }
+    // Entries deleted but still inside their undo window: hidden at once, shown again on UNDO or a failed delete.
+    var hidden by remember { mutableStateOf(emptySet<Pair<LogSource, Long>>()) }
     var visibleDays by remember { mutableIntStateOf(LOG_PAGE_DAYS) }
     // How many days back the feed is loaded; LOAD OLDER widens it once the loaded days are all shown, until a widening
     // finds nothing older.
@@ -124,9 +126,9 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     }
 
     // Everything about days (grouping, marks, gaps, summaries) is computed in the domain; the screen only draws it.
-    val days = remember(feed) {
+    val days = remember(feed, hidden) {
         feed?.let { f ->
-            buildLogDays(f.entries, LocalDate.now(), f.coverage, { date -> supplementExpectedOn(f.supplementSchedule, date) }, from = f.since)
+            buildLogDays(f.entries.filter { (it.source to it.id) !in hidden }, LocalDate.now(), f.coverage, { date -> supplementExpectedOn(f.supplementSchedule, date) }, from = f.since)
         }.orEmpty()
     }
     val expanded = expandedKeys.split(',').filter { it.isNotEmpty() }.toSet()
@@ -232,7 +234,16 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
             },
             onDeleted = {
                 actionEntry = null
-                refresh()
+                val key = entry.source to entry.id
+                hidden = hidden + key
+                com.bioscan.fieldterminal.ui.components.Toasts.undoable(
+                    "Deleted: ${entry.headline}",
+                    commit = {
+                        com.bioscan.fieldterminal.data.AddEntryRepository(SupabaseClientProvider.client).deleteEntry(entry.source, entry.id)
+                        refresh()
+                    },
+                    onUndo = { hidden = hidden - key },
+                )
             },
             onViewDetail = when (entry.source) {
                 LogSource.Exercise -> {

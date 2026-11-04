@@ -57,10 +57,9 @@ fun MealOverlay(fuel: TodayFuel, kind: MealSlotKind, onClose: () -> Unit, onLogg
         var saving by remember { mutableStateOf(false) }
         var error by remember { mutableStateOf<String?>(null) }
         fun log(plate: Plate) {
-            saving = true
-            error = null
             val at = logTimeFor(meal, meals, ZonedDateTime.now())
-            scope.launchSafe(onError = { e -> error = describeLoadFailure(e) }, onDone = { saving = false }) {
+            // Optimistic: the overlay closes at once; TODAY refreshes when the meal lands, or RETRY says it did not.
+            com.bioscan.fieldterminal.ui.components.Toasts.optimistic(apply = onClose, revert = {}, what = "Couldn't log ${kind.label.lowercase()}", save = {
                 AddEntryRepository(SupabaseClientProvider.client).addFood(
                     loggedAt = com.bioscan.fieldterminal.domain.WallClock.write(at),
                     description = plannedMealDescription(meal, plate),
@@ -70,7 +69,7 @@ fun MealOverlay(fuel: TodayFuel, kind: MealSlotKind, onClose: () -> Unit, onLogg
                     mealSlot = meal.kind.name.lowercase(),
                 )
                 onLogged()
-            }
+            })
         }
 
         Text(mealTargetLine(meal), style = FTType.RowTitle, color = FT.TextPrimary)

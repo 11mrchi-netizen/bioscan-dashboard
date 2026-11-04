@@ -140,6 +140,8 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
 
     Scaffold(
         containerColor = FT.Base,
+        // Undo and retry toasts (ui/components/UndoToast.kt), above the dock.
+        snackbarHost = { com.bioscan.fieldterminal.ui.components.ToastHost() },
         bottomBar = {
             FieldBottomBar(selectedTab = dockTab) { tab ->
                 dockTab = tab

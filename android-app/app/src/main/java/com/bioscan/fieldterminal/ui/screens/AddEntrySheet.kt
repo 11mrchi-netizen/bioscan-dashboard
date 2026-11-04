@@ -245,22 +245,19 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                 } else {
                     SheetBackHeader(label = type.label, onBack = { selectedType = null; foodPrefill = null; fuelStart = null })
                     Spacer(Modifier.height(16.dp))
+                    // Optimistic (ui/components/UndoToast.kt): the sheet closes at once and the write runs in the app's
+                    // scope; the page refreshes when it lands. A rejected write says so with RETRY, which runs the same
+                    // write again (the values are already in it), so nothing typed is lost.
                     val onSubmit: ((suspend (AddEntryRepository) -> Unit)) -> Unit = { write ->
-                        saving = true
-                        saveError = null
-                        scope.launch {
-                            // A rejected write must surface here, not crash the app.
-                            try {
+                        com.bioscan.fieldterminal.ui.components.Toasts.optimistic(
+                            apply = onDismiss,
+                            save = {
                                 write(repo)
-                                saving = false
                                 onSaved()
-                            } catch (e: kotlinx.coroutines.CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                saving = false
-                                saveError = e.message ?: "Save failed"
-                            }
-                        }
+                            },
+                            revert = {},
+                            what = "Couldn't save the entry",
+                        )
                     }
                     saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
                     when (type) {
@@ -306,10 +303,6 @@ fun EntrySheet(
     onViewDetail: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
-    val scope = rememberCoroutineScope()
-    var confirmingDelete by remember { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf(false) }
     var deleteError by remember { mutableStateOf<String?>(null) }
     val editable = entry.source != LogSource.Sleep
 
@@ -327,29 +320,11 @@ fun EntrySheet(
                 entry.detail?.takeIf { it.isNotBlank() }?.let { Text(it, style = FTType.Body, color = FT.TextSecondary) }
             }
 
-            if (!confirmingDelete) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    onViewDetail?.let { FTButton(label = "DETAIL", modifier = Modifier.weight(1f), onClick = it) }
-                    if (editable) FTButton(label = "EDIT", modifier = Modifier.weight(1f), onClick = onEdit)
-                    FTButton(label = "DELETE", emphasis = FTButtonEmphasis.Destructive, modifier = Modifier.weight(1f)) {
-                        confirmingDelete = true
-                        deleteError = null
-                    }
-                }
-            } else {
-                FTConfirmDestructive(
-                    message = "Delete this entry? This can't be undone.",
-                    confirmLabel = "DELETE ENTRY",
-                    busy = deleting,
-                    onCancel = { confirmingDelete = false },
-                    onConfirm = {
-                        deleting = true
-                        scope.launchSafe(onError = { deleteError = describeLoadFailure(it) }, onDone = { deleting = false }) {
-                            repo.deleteEntry(entry.source, entry.id)
-                            onDeleted()
-                        }
-                    },
-                )
+            // Deleting hides the entry at once and holds the delete for a few seconds with UNDO (ui/components/UndoToast.kt).
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                onViewDetail?.let { FTButton(label = "DETAIL", modifier = Modifier.weight(1f), onClick = it) }
+                if (editable) FTButton(label = "EDIT", modifier = Modifier.weight(1f), onClick = onEdit)
+                FTButton(label = "DELETE", emphasis = FTButtonEmphasis.Destructive, modifier = Modifier.weight(1f)) { onDeleted() }
             }
             deleteError?.let { Text("Couldn't delete: $it", style = FTType.BodySmall, color = FT.Critical) }
             Spacer(Modifier.height(4.dp))

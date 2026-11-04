@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.data
 import com.bioscan.fieldterminal.domain.CaffeineWindowResult
 import com.bioscan.fieldterminal.domain.HydrationIntelligenceResult
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
@@ -21,7 +21,7 @@ private val json = Json { ignoreUnknownKeys = true }
 class HydrationExplanationException(message: String) : Exception(message)
 
 class HydrationExplanationRepository(private val apiKey: String) {
-    companion object { private val client = HttpClient(Android) }
+    companion object { private val client = HttpClient(OkHttp) }
 
     suspend fun explain(
         hydration: HydrationIntelligenceResult,

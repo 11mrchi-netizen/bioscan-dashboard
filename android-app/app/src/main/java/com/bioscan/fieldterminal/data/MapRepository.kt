@@ -5,7 +5,7 @@ import com.bioscan.fieldterminal.domain.MapEvent
 import com.bioscan.fieldterminal.domain.parseGpxLink
 import com.bioscan.fieldterminal.domain.parseGpxPoints
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
@@ -23,7 +23,7 @@ private val json = Json { ignoreUnknownKeys = true }
 // fresh per screen load -- see that file for why this app needs no stored
 // refresh token the way the web dashboard does).
 class MapRepository(private val accessToken: String) {
-    companion object { private val client = HttpClient(Android) }
+    companion object { private val client = HttpClient(OkHttp) }
 
     // Phase M1: every event in a rolling 24h window, not just the first
     // training-colored one -- replaces the old fetchNextSession(), which is

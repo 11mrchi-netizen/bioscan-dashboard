@@ -158,7 +158,9 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:auth-kt")
     // Zepp integration plan: first client-side Edge Function call site (zepp-extract).
     implementation("io.github.jan-tennert.supabase:functions-kt")
-    implementation("io.ktor:ktor-client-android:3.5.1")
+    // OkHttp, not the Android (HttpURLConnection) engine: cancelling a read mid-body (leaving a page while it loads) made the
+    // Android engine drain the socket on the main thread, a NetworkOnMainThreadException crash. Keep it at the Ktor version above.
+    implementation("io.ktor:ktor-client-okhttp:3.5.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     // Native Google sign-in via Android's Credential Manager (confirmed current

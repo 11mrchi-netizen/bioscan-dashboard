@@ -7,7 +7,7 @@ import com.bioscan.fieldterminal.domain.fuel.WeatherSeries
 import com.bioscan.fieldterminal.domain.fuel.WeatherSource
 import com.bioscan.fieldterminal.domain.fuel.climatology
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -27,7 +27,7 @@ class WeatherFetchException(message: String) : Exception(message)
 // entry closest to the session's own start time, rather than only "now",
 // since this is a forecast for a session that may be up to a week out.
 class WeatherRepository {
-    companion object { private val client = HttpClient(Android) }
+    companion object { private val client = HttpClient(OkHttp) }
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun fetchAt(lat: Double, lon: Double, at: ZonedDateTime): SessionWeather {

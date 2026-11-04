@@ -9,7 +9,7 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -91,7 +91,7 @@ data class ExperimentPayload(val stage: String = "before", val adherence: Experi
 data class ExperimentResultRow(val key: String, val state: String = "before", val payload: ExperimentPayload = ExperimentPayload())
 
 class ExperimentsRepository(private val supabase: SupabaseClient) {
-    companion object { private val client = HttpClient(Android) }
+    companion object { private val client = HttpClient(OkHttp) }
     private val json = Json { ignoreUnknownKeys = true }
 
     // The smallest difference a design with these phase lengths could detect on this person's own data, per outcome.

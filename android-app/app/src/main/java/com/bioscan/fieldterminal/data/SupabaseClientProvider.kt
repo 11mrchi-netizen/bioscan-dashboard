@@ -26,6 +26,7 @@ object SupabaseClientProvider {
             // The default 10 s covers the whole request, which is too short for a 1,000-row read on a slow link and for the
             // zepp-extract edge function. A genuinely dead connection still fails (and now shows a RETRY card) within this.
             requestTimeout = 45.seconds
+            httpEngine = io.ktor.client.engine.okhttp.OkHttp.create()
             install(Auth)
             install(Postgrest)
             install(Functions)

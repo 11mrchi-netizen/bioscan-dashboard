@@ -5,7 +5,7 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -172,6 +172,6 @@ class RegimenReferenceRepository(private val supabase: SupabaseClient) {
     }
 
     private companion object {
-        val client = HttpClient(Android)
+        val client = HttpClient(OkHttp)
     }
 }

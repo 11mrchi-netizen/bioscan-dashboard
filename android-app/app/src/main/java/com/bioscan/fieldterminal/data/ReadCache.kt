@@ -11,6 +11,7 @@ import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -97,6 +98,13 @@ object ReadCache {
         load: suspend () -> T,
     ): T {
         fresh<T>(key, ttlMs)?.let { return it.value }
+        // The load (the request and its JSON decode), the encode and the disk copy run off the main thread: callers are
+        // mostly LaunchedEffects on Main, and decoding thousands of rows there froze the first seconds after launch.
+        return withContext(Dispatchers.IO) { getSlow(key, ttlMs, tables, serializer, load) }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private suspend fun <T> getSlow(key: String, ttlMs: Long, tables: Set<String>?, serializer: KSerializer<T>?, load: suspend () -> T): T {
         if (serializer != null && coroutineContext[RequireFresh.Key] == null && key !in dirty) {
             val stale = lastKnown[key] ?: readDisk(key, serializer)
             if (stale != null) {

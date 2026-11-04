@@ -215,7 +215,7 @@ fun whatIs(key: DomainKey?): String = when (key) {
 /** What one input is, for a metric overlay. */
 fun whatIsInput(key: String): String = when (key) {
     ScoreKeys.SLEEP_HOURS -> "Time asleep last night, compared only with your own recent nights."
-    ScoreKeys.SLEEP_DEBT -> "Hours short of your need over the last 7 nights. Your need is your usual sleep, never under 7 h."
+    ScoreKeys.SLEEP_DEBT -> "What you still owe going into tonight: each night carries 55 % of the shortfall into the next night's target, so older short nights fade and a full night clears it. Extra sleep builds no credit. Your need is your usual sleep, never under 7 h."
     ScoreKeys.SLEEP_REGULARITY -> "How much your bed and wake times moved over the last 7 nights. Smaller is steadier."
     ScoreKeys.SLEEP_MIDPOINT -> "The middle of last night's sleep. Far from your usual midpoint means shifted timing."
     ScoreKeys.SLEEP_DEEP_REM -> "Deep plus REM sleep last night, against your usual."

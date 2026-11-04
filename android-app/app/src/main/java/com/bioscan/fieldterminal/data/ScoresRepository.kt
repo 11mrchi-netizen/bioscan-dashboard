@@ -74,6 +74,8 @@ data class ScoresView(
     /** The open illness on the scored morning, and the morning's read of the body's signals (domain/score/IllnessRead.kt). */
     val illness: com.bioscan.fieldterminal.domain.score.IllnessState? = null,
     val signals: com.bioscan.fieldterminal.domain.score.SignalsRead? = null,
+    /** Tonight's sleep target and when to be in bed for it (domain/score/SleepDebt.kt). */
+    val sleepTarget: com.bioscan.fieldterminal.domain.score.SleepTarget? = null,
 )
 
 /** A scored morning and the key of what it was scored from (domain/score/ScoreKey.kt). */
@@ -217,6 +219,13 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             )
             if (toKeep.isNotEmpty()) runCatching { supabase.postgrest.from("score_snapshots").upsert(toKeep) { onConflict = "user_id,day" } }
             val shown = past + (today to scores)
+            val tonight = series[ScoreKeys.SLEEP_DEBT]?.get(today)?.let { debt ->
+                val hours = sources.sleep.mapNotNull { r -> r.hours?.let { h -> runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { it to h } } }.toMap()
+                val wakes = sources.sleep.filter { runCatching { LocalDate.parse(it.date) }.getOrNull()?.let { d -> d.isAfter(today.minusDays(15)) } == true }
+                    .mapNotNull { r -> r.wakeTime?.let { runCatching { Instant.parse(it) }.getOrNull() ?: runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() } }
+                    .map { it.atZone(zone).let { z -> z.hour * 60 + z.minute } }
+                com.bioscan.fieldterminal.domain.score.sleepTarget(com.bioscan.fieldterminal.domain.score.sleepNeed(hours, today.plusDays(1)), debt, wakes)
+            }
             val todayIllness = illness?.let { com.bioscan.fieldterminal.domain.score.illnessState(it, today) }
             val signalsRead = com.bioscan.fieldterminal.domain.score.readSignals(
                 com.bioscan.fieldterminal.domain.score.bodySignals(series, today), todayIllness,
@@ -238,6 +247,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
                     exerciseWindows = exerciseWindows,
                     illness = todayIllness,
                     signals = signalsRead,
+                    sleepTarget = tonight,
                 ),
                 key,
             )

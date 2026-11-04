@@ -61,7 +61,10 @@ class ScoreAssemblyTest {
             SleepAnalysisRow(date = monday.minusDays(i.toLong()).toString(), hours = 6.0)
         }
         val series = assembleScoreSeries(ScoreSources(sleep = nights, zone = zone), today = monday)
-        assertEquals(7.0, series.getValue(ScoreKeys.SLEEP_DEBT)[monday]!!, 1e-9) // one hour short, seven nights
+        // One hour short for seven nights: each carries 55 % of what is owed, so it levels off near 1.2 h, not 7 h.
+        var expected = 0.0
+        repeat(7) { expected = 0.55 * (7.0 + expected - 6.0) }
+        assertEquals(expected, series.getValue(ScoreKeys.SLEEP_DEBT)[monday]!!, 1e-9)
     }
 
     @Test

@@ -62,6 +62,10 @@ data class ScoreSources(
 const val TRAINING_DAY_LOAD = 40.0
 const val MIN_SLEEP_NEED_H = 7.0
 
+/** Your sleep need on [d]: the median of the 60 nights before (from 14 of them), never under [MIN_SLEEP_NEED_H]. */
+fun sleepNeed(hours: Map<LocalDate, Double>, d: LocalDate): Double =
+    maxOf(MIN_SLEEP_NEED_H, median((1..60).mapNotNull { hours[d.minusDays(it.toLong())] }.takeIf { it.size >= 14 }.orEmpty()) ?: MIN_SLEEP_NEED_H)
+
 private class SeriesBuilder {
     val out = HashMap<String, HashMap<LocalDate, Double>>()
     fun put(key: String, day: LocalDate, value: Double?) {
@@ -112,9 +116,8 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
         }
     }
     for (d in sleepByDay.keys) {
-        val need = maxOf(MIN_SLEEP_NEED_H, median((1..60).mapNotNull { hours[d.minusDays(it.toLong())] }.takeIf { it.size >= 14 }.orEmpty()) ?: MIN_SLEEP_NEED_H)
-        val week = (0..6).mapNotNull { hours[d.minusDays(it.toLong())] }
-        if (week.size >= 4) b.put(ScoreKeys.SLEEP_DEBT, d, week.sumOf { maxOf(0.0, need - it) })
+        // Carried debt (domain/score/SleepDebt.kt): 55 % of what is still owed rolls into the next night.
+        sleepDebtAfter(d, hours, sleepNeed(hours, d))?.let { b.put(ScoreKeys.SLEEP_DEBT, d, it) }
         val beds = (0..6).mapNotNull { i -> d.minusDays(i.toLong()).let { n -> bed[n]?.let { minutesFromNoonBefore(it, n, zone) } } }
         val wakes = (0..6).mapNotNull { i -> d.minusDays(i.toLong()).let { n -> wake[n]?.let { minutesFromNoonBefore(it, n, zone) } } }
         val bedSd = sd(beds.takeIf { it.size >= 4 }.orEmpty())

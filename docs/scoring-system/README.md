@@ -30,7 +30,7 @@ own history.
 ```
 
 - **CHARGE**: how you should feel after yesterday. Published once each morning.
-- **SLEEP**: did I get the sleep I need? Last night, plus 7-day sleep debt.
+- **SLEEP**: did I get the sleep I need? Last night, plus the sleep debt carried into tonight.
 - **RECOVERY**: has my body absorbed what I've done? Night-time physiology and how I feel in the morning.
 - **LOAD**: was yesterday's training dose right? Always shown with a direction: HIGH, IN BAND or LOW.
 - **FUEL**: was I fuelled, and did my gut cope? Yesterday's intake and digestion.
@@ -136,7 +136,10 @@ CHARGE(D+1) = rank_in_own_history( 0.35·RECOVERY + 0.20·SLEEP + 0.15·LOAD_fat
 
 ### SLEEP
 - Last night's duration vs your need: 30
-- 7-day sleep debt: 20
+- carried sleep debt: 20 (`domain/score/SleepDebt.kt`: each night carries 55 % of the shortfall into the next
+  night's target, over the last 14 nights; under 10 min is none, extra sleep builds no credit. Tonight's target and
+  a "Bed by" time, from the usual wake of the last 14 mornings less the target and 15 min to fall asleep, are a row
+  in TODAY's plan)
 - Regularity (SRI): 15
 - Timing vs your usual midpoint: 10
 - Deep + REM vs baseline: 15

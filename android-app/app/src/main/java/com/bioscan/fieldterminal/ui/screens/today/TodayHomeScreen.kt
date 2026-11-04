@@ -105,6 +105,9 @@ sealed interface PlanAction {
     data class Supplements(val bucket: String) : PlanAction
     @Serializable
     data class Tab(val tab: com.bioscan.fieldterminal.ui.nav.TopLevelTab) : PlanAction
+    /** Tonight's sleep target: opens the SLEEP overlay. */
+    @Serializable
+    data object Bedtime : PlanAction
 }
 
 /** Intake so far today for the SO FAR line, or null before the nutrition overview has loaded. */
@@ -131,6 +134,7 @@ fun planRows(
     charge: Double?,
     closedYesterday: Boolean,
     closedToday: Boolean,
+    sleep: com.bioscan.fieldterminal.domain.score.SleepTarget? = null,
 ): List<PlanRow> {
     val today = now.toLocalDate()
     val rows = mutableListOf<PlanRow>()
@@ -167,6 +171,7 @@ fun planRows(
         rows += PlanRow(BUCKET_TIMES[bucket], "${bucket.replaceFirstChar { it.uppercase() }} supplements", "$due due", false, PlanAction.Supplements(bucket), PlanKind.SUPPLEMENTS)
     }
     rows += PlanRow(CLOSE_DAY_TIME, "Close the day", null, closedToday, PlanAction.CloseDay(today), PlanKind.CLOSE)
+    sleep?.bedBy?.let { rows += PlanRow(it, "Bed by", sleep.words, false, PlanAction.Bedtime, PlanKind.CLOSE) }
     return rows.sortedWith(compareBy({ it.time != null }, { it.time }))
 }
 
@@ -272,7 +277,7 @@ fun TodayHomeScreen(
             // Keep the finished page, stamped after the load so the load's own bookkeeping writes don't count: in memory,
             // and on disk for the next time the app is opened today.
             val drawnAt = LocalDateTime.now()
-            val rows = planRows(drawnAt, fuel, previews, view?.scores?.charge?.score, day.minusDays(1) in closed, day in closed)
+            val rows = planRows(drawnAt, fuel, previews, view?.scores?.charge?.score, day.minusDays(1) in closed, day in closed, view?.sleepTarget)
             val sf = soFarOf(nut, fuel)
             keptRows = rows
             keptSoFar = sf
@@ -293,7 +298,7 @@ fun TodayHomeScreen(
         TodayContent(
             view = view,
             rows = if (fuel == null && previews == null && keptRows != null) keptRows!!
-            else planRows(now, fuel, previews, view?.scores?.charge?.score, now.toLocalDate().minusDays(1) in closed, now.toLocalDate() in closed),
+            else planRows(now, fuel, previews, view?.scores?.charge?.score, now.toLocalDate().minusDays(1) in closed, now.toLocalDate() in closed, view?.sleepTarget),
             soFar = soFarOf(nut, fuel) ?: keptSoFar,
             // A kept page is refreshed silently: LOADING shows only while there is nothing to show yet.
             loading = loading && view == null,
@@ -306,6 +311,7 @@ fun TodayHomeScreen(
                     is PlanAction.CloseDay -> checkInDate = action.date
                     is PlanAction.Supplements -> supplementBucket = action.bucket
                     is PlanAction.Tab -> onOpenTab(action.tab)
+                    PlanAction.Bedtime -> stack = listOf(ScoreOverlay.Domain(com.bioscan.fieldterminal.domain.score.DomainKey.SLEEP))
                 }
             },
             onSoFar = { soFar = true },

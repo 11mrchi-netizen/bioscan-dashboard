@@ -98,7 +98,7 @@ object ScoreSpecs {
     val SLEEP = DomainSpec(DomainKey.SLEEP, single(
         "Sleep",
         InputSpec(ScoreKeys.SLEEP_HOURS, "Duration", 30.0, InputKind.Baseline(betterHigher = true, minSd = 0.25), critical = true),
-        InputSpec(ScoreKeys.SLEEP_DEBT, "Sleep debt (7 d)", 20.0, InputKind.AtMost(limit = 0.5, scale = 1.5)),
+        InputSpec(ScoreKeys.SLEEP_DEBT, "Sleep debt (carried)", 20.0, InputKind.AtMost(limit = 0.5, scale = 1.5)),
         InputSpec(ScoreKeys.SLEEP_DEEP_REM, "Deep + REM", 15.0, InputKind.Baseline(betterHigher = true, minSd = 10.0)),
         InputSpec(ScoreKeys.SLEEP_REGULARITY, "Regularity", 15.0, InputKind.Baseline(betterHigher = false, upside = false, minSd = 8.0)),
         InputSpec(ScoreKeys.SLEEP_MIDPOINT, "Timing", 10.0, InputKind.Stability(minSd = 20.0)),

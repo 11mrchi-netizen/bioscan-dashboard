@@ -43,6 +43,8 @@ export interface RawInputs {
   context?: { date: string; utc_offset_min: number }[]
   /** Routine intelligence R4: phone use and mobility published by the phone (routineExposures.ts). */
   routine?: RoutineInputs
+  /** The app's scored mornings (score_history): next-morning RECOVERY and SLEEP as outcomes (catalogue 2.2.0). */
+  scores?: { day: string; recovery: number | null; sleep: number | null; charge?: number | null }[]
 }
 
 // Until 04:00 the small hours belong to the evening before: a drink or a late meal logged at 00:40 is part of that night.
@@ -214,6 +216,11 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
   const firstRecovery = [...recoveryDays].sort()[0]
   series.recovery_any = axis.map((d) => (recoveryDays.has(d) ? 1 : firstRecovery !== undefined && d >= firstRecovery ? 0 : null))
 
+  // The app's own morning scores (score_history), dated by the morning they describe, as HRV is.
+  const scores = raw.scores ?? []
+  series.recovery_score = alignToAxis(axis, scores.map((r) => ({ date: day(r.day), value: num(r.recovery) })))
+  series.sleep_score = alignToAxis(axis, scores.map((r) => ({ date: day(r.day), value: num(r.sleep) })))
+
   // Routine intelligence R4: phone use, places and commutes, each known only on days its source covers.
   Object.assign(series, routineSeries(axis, raw.routine ?? {}, clock))
 
@@ -264,7 +271,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
   const q = (table: string, cols: string, col: string, from: string) => (a: number, b: number) =>
     admin.from(table).select(cols).eq('user_id', userId).gte(col, from).order(col).range(a, b)
 
-  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes] = await Promise.all([
+  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes, scoreRows] = await Promise.all([
     fetchAll<RawInputs['wearable'][number]>(q('wearable_daily', 'date, hrv, rhr, steps', 'date', since)),
     fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min', 'date', since)),
     fetchAll<RawInputs['wellbeing'][number]>(q('wellbeing_daily', 'date, energy, mood, stress, soreness', 'date', since)),
@@ -285,6 +292,8 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
     fetchAll<NonNullable<RoutineInputs['mobility']>[number]>(q('mobility_daily', 'date, coverage_pct, day_type, outdoor_daylight_min', 'date', since)),
     fetchAll<NonNullable<RoutineInputs['commutes']>[number]>((a: number, b: number) =>
       admin.from('trips').select('start_at, end_at, active_min').eq('user_id', userId).eq('is_commute', true).gte('start_at', sinceStamp).order('start_at').range(a, b)),
+    // The app's scored mornings: read softly (the table may not exist yet, or the app may not have written it).
+    fetchAll<NonNullable<RawInputs['scores']>[number]>(q('score_history', 'day, recovery, sleep, charge', 'day', since)),
   ])
   const failed = [wearable, sleep, wellbeing, meals, sessions, recovery].find((r) => r.error)
   if (failed) return { userId, error: failed.error as string }
@@ -303,6 +312,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
         mobility: mobility.error ? [] : mobility.rows,
         commutes: commutes.error ? [] : commutes.rows,
       },
+      scores: scoreRows.error ? [] : scoreRows.rows,
     },
     today,
   )

@@ -107,7 +107,7 @@ test('runRelationships publishes one row per hypothesis from raw tables and repl
   assert.equal(row('steps_hrv').state, 'not_yet') // no steps recorded
   assert.equal(row('caffeine_pm_sleep').state, 'not_yet') // no caffeine logged
   const payload = row('alcohol_hrv').payload as Row
-  assert.equal(payload.catalogueVersion, '2.1.0')
+  assert.equal(payload.catalogueVersion, '2.2.0')
   assert.equal(payload.rung, 'associated')
   assert.equal(payload.noEffect, 2)
   assert.ok('capture' in payload)
@@ -193,4 +193,22 @@ test('buildFrame phase B: local caffeine hours, late-night drinks on the evening
   assert.equal(f.capture!.firstCheckin, '2026-03-04')
   assert.equal(f.capture!.localTime, true)
   assert.equal(f.capture!.knownShare28.alcohol, 0.83) // 5 of the 6 days
+})
+
+test('morning scores from score_history become next-morning RECOVERY and SLEEP outcomes', () => {
+  const today = '2026-11-04'
+  const frame = buildFrame(
+    {
+      wearable: [], sleep: [], wellbeing: [], meals: [], sessions: [], recovery: [], illnesses: [],
+      scores: [{ day: '2026-11-03', recovery: 92, sleep: 70 }, { day: '2026-11-04', recovery: null, sleep: 81 }],
+    },
+    today,
+    3,
+  )
+  assert.deepEqual(frame.dates, ['2026-11-02', '2026-11-03', '2026-11-04'])
+  assert.deepEqual(frame.series.recovery_score, [null, 92, null])
+  assert.deepEqual(frame.series.sleep_score, [null, 70, 81])
+  const ids = HYPOTHESES.filter((h) => h.outcome === 'recovery_score' || h.outcome === 'sleep_score').map((h) => h.id)
+  assert.ok(ids.includes('alcohol_recovery_score') && ids.includes('caffeine_pm_sleep_score'))
+  assert.ok(!ids.includes('caffeine_pm_recovery_score'))
 })

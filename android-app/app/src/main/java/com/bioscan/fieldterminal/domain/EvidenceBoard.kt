@@ -66,9 +66,15 @@ val CATALOGUE_ORDER = listOf(
     // Routine intelligence R4 (catalogue 2.1.0): phone use, places and commutes.
     "screen_bed_sleep", "screen_bed_hrv", "night_phone_energy", "screen_pm_social_sleep", "outdoor_daylight_sleep",
     "home_day_energy", "travel_day_hrv", "travel_day_rhr", "active_commute_hrv", "commute_long_sleep",
+    // Morning scores (catalogue 2.2.0): the evening exposures against next-morning RECOVERY and that night's SLEEP score.
+    "alcohol_recovery_score", "alcohol_sleep_score", "caffeine_pm_sleep_score", "late_meal_recovery_score", "late_meal_sleep_score",
+    "stress_recovery_score", "stress_sleep_score", "evening_training_recovery_score", "evening_training_sleep_score", "training_recovery_score",
 )
 
-private val GROUPS = listOf("hrv" to "HRV", "rhr" to "RESTING HEART RATE", "sleep" to "SLEEP", "energy" to "ENERGY")
+private val GROUPS = listOf(
+    "hrv" to "HRV", "rhr" to "RESTING HEART RATE", "sleep" to "SLEEP", "energy" to "ENERGY",
+    "recovery_score" to "RECOVERY SCORE", "sleep_score" to "SLEEP SCORE",
+)
 
 private fun signed(v: Double, unit: String): String {
     val sign = if (v >= 0) "+" else "-"

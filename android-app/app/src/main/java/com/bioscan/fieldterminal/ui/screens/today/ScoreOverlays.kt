@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -206,6 +207,34 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
         }
 
         OverlaySection("LAST 30 DAYS") { BandedStrip(view.chargeStrip) }
+
+        // What the nightly relationship engine found about evenings and the next morning's RECOVERY and SLEEP scores
+        // (supabase/functions/_shared/analysis-core/hypotheses.ts, catalogue 2.2.0). Settled answers only.
+        val effects by androidx.compose.runtime.produceState<List<com.bioscan.fieldterminal.data.model.RelationshipResultRow>?>(null) {
+            value = runCatching { com.bioscan.fieldterminal.data.AnalysisRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).loadRelationships() }
+                .getOrDefault(emptyList())
+                .filter { it.payload.outcome == "recovery_score" || it.payload.outcome == "sleep_score" }
+        }
+        OverlaySection("WHAT GOES WITH YOUR MORNINGS") {
+            val rows = effects
+            val settled = rows.orEmpty().filter { it.state == "clear" || it.state == "negligible" }
+                .sortedWith(compareBy({ if (it.state == "clear") 0 else 1 }, { -(kotlin.math.abs(it.payload.effect?.value ?: 0.0)) }))
+            when {
+                rows == null -> Text("Loading…", style = FTType.Caption, color = FT.TextMuted)
+                settled.isEmpty() -> Text(
+                    "Nothing settled yet. Each night the analysis compares evenings with alcohol, late caffeine, a meal after 21:00, " +
+                        "a high-stress day or training (late or not) against the next morning's RECOVERY and SLEEP scores; " +
+                        "${rows.count { it.state == "unclear" }} of ${rows.size} questions have data but no clear answer yet.",
+                    style = FTType.Caption, color = FT.TextMuted,
+                )
+                else -> settled.forEach { r ->
+                    Text("${com.bioscan.fieldterminal.domain.verdictOf(r.state).word} · ${r.payload.summary}", style = FTType.BodySmall,
+                        color = if (r.state == "clear") FT.TextPrimary else FT.TextSecondary)
+                }
+            }
+            Text("Associations from your own days, adjusted for weekday, trend and the morning before; not proof of cause. CHARGE itself is not tested: alcohol, caffeine and stress are already among its inputs.",
+                style = FTType.Caption, color = FT.TextMuted)
+        }
 
         OverlaySection("WEIGHTS") {
             WeightsBars(view.weights.weights, com.bioscan.fieldterminal.domain.score.CHARGE_WEIGHTS, view.weights.personal)

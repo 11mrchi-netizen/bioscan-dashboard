@@ -199,6 +199,8 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             val engine = if (weights.personal) ScoreEngine(series, caps = caps, weights = weights.weights) else defaultEngine
             val history = if (weights.personal) engine.history(historyFrom, today) else defaultHistory
             val quality = runCatching { scoreQuality(history, series, plannedDone, weights) }.getOrNull()
+            // The scoring history for the nightly relationship engine (score_history): once a day per model version.
+            runCatching { uploadHistory(context, history, today) }
             val from = today.minusDays(SCORE_STRIP_DAYS - 1)
             val status = chargeStatus(today, closedYesterday, now)
             val kept = keptD.await()
@@ -246,6 +248,23 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("score_snapshots").select(columns = io.github.jan.supabase.postgrest.query.Columns.list("day,model_version,inputs,scores")) { filter { gte("day", since.toString()) } }
             .decodeList<KeptMorning>().associateBy { it.day }
 
+    private suspend fun uploadHistory(context: Context, history: com.bioscan.fieldterminal.domain.score.ScoreHistory, today: LocalDate) {
+        val prefs = context.getSharedPreferences("score_history", Context.MODE_PRIVATE)
+        val stamp = "$today:${com.bioscan.fieldterminal.domain.score.SCORE_MODEL_VERSION}"
+        if (prefs.getString("uploaded", null) == stamp) return
+        val days = (history.charge.keys + history.domains.values.flatMap { it.keys }).toSortedSet()
+        val rows = days.map { d ->
+            fun dom(k: DomainKey) = history.domains[k]?.get(d)
+            ScoreHistoryRow(
+                d.toString(), com.bioscan.fieldterminal.domain.score.SCORE_MODEL_VERSION, history.charge[d],
+                dom(DomainKey.SLEEP), dom(DomainKey.RECOVERY), dom(DomainKey.LOAD), dom(DomainKey.FUEL), dom(DomainKey.BALANCE),
+            )
+        }
+        if (rows.isEmpty()) return
+        rows.chunked(200).forEach { chunk -> supabase.postgrest.from("score_history").upsert(chunk) { onConflict = "user_id,day" } }
+        prefs.edit().putString("uploaded", stamp).apply()
+    }
+
     /** The open illness: the newest open systemic concern and its check-ins, else a legacy open illness without them. */
     private suspend fun loadIllnessEpisode(flag: HealthFlag?): com.bioscan.fieldterminal.domain.score.IllnessEpisode? {
         val health = HealthConcernsRepository(supabase)
@@ -285,3 +304,15 @@ internal fun confoundersFor(
         stressfulDay = (evening?.stress ?: 0) >= com.bioscan.fieldterminal.domain.score.STRESSFUL_DAY,
     )
 }
+
+@Serializable
+private data class ScoreHistoryRow(
+    val day: String,
+    @kotlinx.serialization.SerialName("model_version") val modelVersion: String,
+    val charge: Double?,
+    val sleep: Double?,
+    val recovery: Double?,
+    val load: Double?,
+    val fuel: Double?,
+    val balance: Double?,
+)

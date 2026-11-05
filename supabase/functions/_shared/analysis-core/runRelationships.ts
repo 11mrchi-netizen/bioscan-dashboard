@@ -259,7 +259,14 @@ export interface RelationshipRun {
 
 export interface LoadedFrame {
   userId: string
+  /** The UTC date of the run: the frame's last day. */
   today: string
+  /**
+   * The person's own calendar date at the run, from their latest UTC offset in daily_context (else the UTC date). Check-ins
+   * and episode marks carry the person's local date, so the health engine reads up to this day: east of UTC the nightly
+   * run (20:42 UTC) and morning check-ins otherwise fall a day "in the future" and are left out.
+   */
+  localToday?: string
   frame: Frame
 }
 
@@ -316,7 +323,15 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
     },
     today,
   )
-  return { userId, today, frame }
+  return { userId, today, localToday: localDateAt(now, context.error ? [] : context.rows), frame }
+}
+
+/** The person's calendar date at [now] from the newest UTC offset logged (dates up to the day after the UTC date). */
+export function localDateAt(now: Date, context: { date: string; utc_offset_min: number | null }[]): string {
+  const utc = now.toISOString().slice(0, 10)
+  const latest = context.filter((c) => c.utc_offset_min !== null && c.date <= shift(utc, 1)).sort((a, b) => a.date.localeCompare(b.date)).at(-1)
+  if (!latest) return utc
+  return new Date(now.getTime() + Number(latest.utc_offset_min) * 60_000).toISOString().slice(0, 10)
 }
 
 export async function runRelationships(admin: Admin, userId: string, now: Date = new Date(), loaded?: LoadedFrame): Promise<RelationshipRun> {

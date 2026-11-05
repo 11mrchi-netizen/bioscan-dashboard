@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { fakeAdmin } from './healthTestKit.ts'
 import { shiftDate } from './healthSeries.ts'
-import { buildFrame } from './runRelationships.ts'
+import { buildFrame, localDateAt } from './runRelationships.ts'
 import { HEALTH_KINDS, runHealth } from './runHealth.ts'
 import { CORE_VERSION } from './version.ts'
 
@@ -100,4 +100,28 @@ test('before the migration the engine skips quietly', async () => {
   const run = await runHealth(fakeAdmin(t, ['health_concerns']), loadedFor(t))
   assert.ok(run.skipped)
   assert.equal(run.error, undefined)
+})
+
+test('a check-in and end mark dated in the person\'s own calendar count before the UTC date catches up', async () => {
+  const { t } = tables()
+  const tomorrow = shiftDate(TODAY, 1)
+  // East of UTC, the morning of `tomorrow` is still `TODAY` in UTC: the person says it is over.
+  t.health_observations.push({ user_id: U, id: 'gone', observed_at: `${TODAY}T23:18:00Z`, local_date: tomorrow, concern_id: 'knee', scope: 'concern', symptom_free: true, recall: 'now', recall_from: null, function_impact: 0, change_vs_last: null, onset: false, session_id: null, timing: null, supersedes: null, superseded_at: null, retracted: false, source: 'app', created_at: `${TODAY}T23:18:00Z` })
+  t.health_episode_marks = [{ user_id: U, id: 1, concern_id: 'knee', kind: 'end', date: tomorrow, note: null, source: 'app', retracted_at: null, created_at: `${TODAY}T23:55:00Z` }]
+  const state = async (loaded: ReturnType<typeof loadedFor>) => {
+    const admin = fakeAdmin(t)
+    await runHealth(admin, loaded)
+    const row = admin.upserts.filter((u) => u.table === 'analysis_results').map((u) => u.row).find((r) => r.kind === HEALTH_KINDS.state && r.key === 'knee')!
+    return (row.payload as { state: string }).state
+  }
+  assert.equal(await state(loadedFor(t)), 'active')
+  assert.equal(await state({ ...loadedFor(t), localToday: tomorrow }), 'resolved')
+})
+
+test('localDateAt reads the newest UTC offset', () => {
+  const now = new Date('2026-11-04T23:18:00Z')
+  assert.equal(localDateAt(now, [{ date: '2026-11-04', utc_offset_min: 480 }]), '2026-11-05')
+  assert.equal(localDateAt(now, [{ date: '2026-11-04', utc_offset_min: -300 }]), '2026-11-04')
+  assert.equal(localDateAt(new Date('2026-11-05T02:00:00Z'), [{ date: '2026-11-04', utc_offset_min: -300 }]), '2026-11-04')
+  assert.equal(localDateAt(now, []), '2026-11-04')
 })

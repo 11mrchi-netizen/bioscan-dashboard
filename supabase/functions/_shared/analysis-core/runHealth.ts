@@ -54,7 +54,9 @@ const DAY_SERIES_DAYS = 365
 interface PublishRow { kind: string; key: string; state: string; have: number | null; need: number | null; payload: unknown; hash: string; keep?: boolean }
 
 export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = new Date()): Promise<HealthRun> {
-  const { userId, frame, today } = loaded
+  const { userId, frame } = loaded
+  // Check-ins and marks are dated in the person's own calendar, so the health engine runs to their local date.
+  const today = loaded.localToday ?? loaded.today
   const inputs = await loadHealthInputs(admin, userId)
   if (inputs.error) return { userId, skipped: `health tables not readable: ${inputs.error}` }
 
@@ -140,7 +142,7 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
     if (!s) continue
     const marks = inputs.marks.filter((mk) => mk.concern_id === concern.id)
     const summary = summariseConcern(concern, s.cells, marks, today)
-    const cellsWin = winStart >= 0 ? s.cells.slice(winStart) : s.cells.filter((c) => dateSet.has(c.date))
+    const cellsWin = winStart >= 0 ? s.cells.slice(winStart, winStart + dates.length) : s.cells.filter((c) => dateSet.has(c.date))
     concernData.set(concern.id, { cells: s.cells, episodes: summary.episodes })
     const exposureSeries = buildExposureSeries(ctx, concern, vocab.regions)
     const regionMuscles = new Set(concern.regions.flatMap((r) => vocab.regions.find((v) => v.code === r.code)?.muscles ?? []))

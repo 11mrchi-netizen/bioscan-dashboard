@@ -19,7 +19,8 @@ import kotlin.math.abs
 //   1. events (races, long days: domain/events), which win over anything else at the same time;
 //   2. planned sessions of a training block;
 //   3. calendar training events (colour 8) that neither of those already covers;
-//   4. recorded sessions, which replace what was planned once they exist, and are the only source for a past day.
+//   4. recorded sessions, which replace the planned item they are (same type family, any hour of the day: closest first)
+//      once they exist, are an extra session only when nothing planned is left for them, and are all a past day keeps.
 // Each item gets an intensity class and an energy estimate (SessionDemand.kt). Walks are left out: they are part of the
 // everyday baseline the activity factor already counts.
 
@@ -122,6 +123,10 @@ fun isTrainingSession(type: String, durationMin: Double): Boolean = type != "wal
 
 private const val DEFAULT_PLANNED_MIN = 60.0
 private const val SAME_SESSION_MIN = 120L
+/** Matching a recording to a plan: a planned item with no time counts as this far away, and a compatible but different
+ *  type (a planned run recorded as a hike) as this much further than the same type. */
+private const val UNTIMED_GAP_MIN = 12 * 60L
+private const val TYPE_MISMATCH_MIN = 24 * 60L
 
 /** The session type a calendar title implies (the app's own emoji convention, domain/NextSession.kt), "run" by default. */
 fun typeFromCalendarTitle(title: String): String = when {
@@ -241,12 +246,28 @@ private fun resolveDay(
     if (!date.isAfter(today)) {
         val done = recorded.filter { it.start.withZoneSameInstant(zone).toLocalDate() == date && isTrainingSession(it.type, it.durationMin) }
             .sortedBy { it.start }
-        val replaced = mutableSetOf<PlannedItem>()
+        // Which planned item each recording is. A session done later than planned (a morning run done at lunch, or in
+        // the evening) is still that session: any compatible planned item of the day can be matched, whatever the hour.
+        // Pairs are taken closest first across the whole day (exact type before a compatible one, then the nearer start),
+        // so two recordings never swap plans; a recording becomes an extra session only when no planned item is left for it.
+        val open = items.filter { !it.recorded }
+        val pairs = done.flatMap { r ->
+            val start = r.start.withZoneSameInstant(zone)
+            open.filter { compatible(it.type, r.type) }.map { p ->
+                val gap = p.start?.let { abs(Duration.between(it, start).toMinutes()) } ?: UNTIMED_GAP_MIN
+                Triple(r, p, (if (p.type == r.type) 0L else TYPE_MISMATCH_MIN) + gap)
+            }
+        }.sortedBy { it.third }
+        val matchOf = mutableMapOf<Long, PlannedItem>()
+        val taken = mutableSetOf<PlannedItem>()
+        for ((r, p, _) in pairs) {
+            if (r.id in matchOf || p in taken) continue
+            matchOf[r.id] = p
+            taken += p
+        }
         done.forEach { r ->
             val start = r.start.withZoneSameInstant(zone)
-            // The planned item this recording is: same type family, starting within two hours (or no planned time).
-            val match = items.filter { it !in replaced && !it.recorded && compatible(it.type, r.type) && startsClose(it.start, start) }
-                .minByOrNull { it.start?.let { s -> abs(Duration.between(s, start).toMinutes()) } ?: Long.MAX_VALUE }
+            val match = matchOf[r.id]
             val own = intensityForRecorded(r.rpe, r.avgHr, history.restingHr, history.maxHr)
             val base = match?.let {
                 // An event keeps its class (a race is still a race); otherwise the recording's own evidence wins.
@@ -259,12 +280,7 @@ private fun resolveDay(
                 c.intensity, c.reason, kcal, recorded = true,
                 eventId = match?.eventId, eventKind = match?.eventKind, eventPriority = match?.eventPriority,
             )
-            if (match != null) {
-                replaced += match
-                items[items.indexOf(match)] = item
-            } else {
-                items += item
-            }
+            if (match != null) items[items.indexOf(match)] = item else items += item
         }
         // A past day is what happened: planned items that were never recorded drop out.
         if (date.isBefore(today)) items.removeAll { !it.recorded }

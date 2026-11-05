@@ -433,9 +433,9 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
         )
     }
 
-    private fun localDay(ts: String): LocalDate? = runCatching {
-        java.time.OffsetDateTime.parse(ts).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate()
-    }.getOrElse { runCatching { LocalDate.parse(ts.take(10)) }.getOrNull() }
+    // taken_at is a logged wall-clock time (domain/WallClock.kt): its digits are the local date. Converting it as a real
+    // instant moved every dose after 16:00 (UTC+8) onto the next day, so "taken today" missed evening doses.
+    private fun localDay(ts: String): LocalDate? = com.bioscan.fieldterminal.domain.WallClock.date(ts)
 
     // DAV-362. Active roster items whose product carries this (normalized) barcode.
     suspend fun activeSupplementsForBarcode(barcode: String): List<SupplementRow> {

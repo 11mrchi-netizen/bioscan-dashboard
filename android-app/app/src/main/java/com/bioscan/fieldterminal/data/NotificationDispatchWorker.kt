@@ -22,12 +22,12 @@ import com.bioscan.fieldterminal.domain.notifications.wellbeingCheckinNeeded
 import com.bioscan.fieldterminal.domain.notifications.nextFireTime
 import com.bioscan.fieldterminal.domain.notifications.supplementsDueForBucket
 import com.bioscan.fieldterminal.domain.notifications.withinLimits
+import com.bioscan.fieldterminal.domain.notifications.firedAtLocal
 import com.bioscan.fieldterminal.domain.notifications.FUEL_PROMPT_WINDOW_MIN
 import com.bioscan.fieldterminal.domain.notifications.dueFuelPrompts
 import com.bioscan.fieldterminal.domain.notifications.fuelPrompts
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneOffset
 import java.util.concurrent.TimeUnit
 
 // Runs every 15 minutes (WorkManager minimum). For each enabled rule, checks
@@ -51,11 +51,14 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
         val now = LocalDateTime.now()
         val windowStart = now.minusMinutes(15)
         val today = LocalDate.now()
-        val dayStart = today.atStartOfDay().toInstant(ZoneOffset.UTC)
+        // notification_log.fired_at is a real instant (now() on insert), not a logged wall-clock time: today starts at local
+        // midnight, and each firing is read in this zone (its digits were 8 h early in UTC+8, so the min gap never held).
+        val zone = java.time.ZoneId.systemDefault()
+        val dayStart = today.atStartOfDay(zone).toInstant()
 
         val shownToday = runCatching { repo.loadShownSince(dayStart) }
             .getOrElse { emptyList() }
-            .map { ShownEntry(it.ruleKind, LocalDateTime.parse(it.firedAt.take(19))) }
+            .mapNotNull { e -> firedAtLocal(e.firedAt, zone)?.let { ShownEntry(e.ruleKind, it) } }
 
         val nm = NotificationManagerCompat.from(applicationContext)
 

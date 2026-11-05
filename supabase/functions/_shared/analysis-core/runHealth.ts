@@ -25,7 +25,7 @@ import type { TrialInput, TrialOutcome } from './healthTrials.ts'
 import type { HealthVocab } from './healthVocab.ts'
 import { fetchAll } from './paging.ts'
 import { loadConfirmedBreaks } from './runExpectedBands.ts'
-import { localClock } from './runRelationships.ts'
+import { wallClock } from './runRelationships.ts'
 import type { Admin, LoadedFrame } from './runRelationships.ts'
 import { weekdayOf } from './stats.ts'
 import type { Num } from './stats.ts'
@@ -83,10 +83,9 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
   if (failed) return { userId, error: failed.error }
 
   // ---- the exposure context, on the frame's day axis ----
-  const clock = localClock((context.error ? [] : context.rows).filter((r) => r.utc_offset_min !== null))
   const dates = frame.dates
   const dateSet = new Set(dates)
-  const sess = sessions.rows.map((s) => ({ ...s, date: clock(s.start_time).date })).filter((s) => dateSet.has(s.date))
+  const sess = sessions.rows.map((s) => ({ ...s, date: wallClock(s.start_time).date })).filter((s) => dateSet.has(s.date))
   const histograms = new Map<number, Record<string, number>>()
   const zeppSport = new Map<number, string>()
   for (const d of details.rows) {

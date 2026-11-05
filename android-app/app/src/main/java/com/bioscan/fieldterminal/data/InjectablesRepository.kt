@@ -11,7 +11,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.time.Instant
 import java.time.LocalDate
-import java.time.OffsetDateTime
 import java.time.ZoneId
 
 // Injectables (domain/Injectables.kt; migration 20261118_injectables.sql): where recent doses went, and the open vial.
@@ -55,7 +54,7 @@ class InjectablesRepository(private val supabase: SupabaseClient) {
             .mapNotNull { r ->
                 val id = r.supplementId ?: return@mapNotNull null
                 val site = r.injectionSite ?: return@mapNotNull null
-                val at = runCatching { OffsetDateTime.parse(r.takenAt).toInstant() }.getOrNull() ?: return@mapNotNull null
+                val at = com.bioscan.fieldterminal.domain.WallClock.instant(r.takenAt, java.time.ZoneId.systemDefault()) ?: return@mapNotNull null
                 id to (site to at)
             }
             .groupBy({ it.first }, { it.second })

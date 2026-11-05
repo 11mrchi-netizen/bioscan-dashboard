@@ -139,3 +139,11 @@ fun checkinNeeded(kind: String, morningWood: Int?, arousal: Int?): Boolean =
         NotificationKind.CHECKIN_EVENING -> arousal == null
         else -> false
     }
+
+/** A notification_log.fired_at (a real instant, set by the database) as the local time in [zone]. */
+fun firedAtLocal(firedAt: String, zone: java.time.ZoneId): LocalDateTime? {
+    val text = firedAt.trim().replace(' ', 'T')
+    return runCatching { java.time.OffsetDateTime.parse(text).atZoneSameInstant(zone).toLocalDateTime() }.getOrNull()
+        ?: runCatching { java.time.OffsetDateTime.parse(text.replace(Regex("([+-]\\d{2})$"), "$1:00")).atZoneSameInstant(zone).toLocalDateTime() }.getOrNull()
+        ?: runCatching { LocalDateTime.parse(text.take(19)) }.getOrNull()
+}

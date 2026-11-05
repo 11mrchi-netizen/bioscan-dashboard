@@ -83,6 +83,16 @@ export function localClock(context: { date: string; utc_offset_min: number }[]):
   }
 }
 
+/**
+ * Local date and hour of a LOGGED time: the app and the sync writers store the phone's wall-clock reading with a zero
+ * offset (android domain/WallClock.kt; zepp-extract toLocalLabeledUtcIso), so the digits are the local time. Reading
+ * them through localClock moved every meal and session by the UTC offset (+8 h: lunch counted as a late meal, an
+ * 08:00 coffee as afternoon caffeine, a 17:00 session on the next day).
+ */
+export function wallClock(stamp: string): { date: string; hour: number } {
+  return { date: day(stamp), hour: hourOf(stamp) }
+}
+
 /** The evening a local moment belongs to: the same date, or the day before in the small hours. */
 function eveningOf(c: { date: string; hour: number }): string {
   return c.hour < EVENING_ROLLOVER_HOUR ? shift(c.date, -1) : c.date
@@ -127,7 +137,10 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
   //   0  the check-in says none; or, only before the first check-in ever, a day with any food log (the legacy rule);
   //   null  unknown. After check-ins start, a day without one and without a positive log is unknown, not a zero.
   // Food logged in the small hours belongs to the evening before (a nightcap at 00:40, a midnight snack).
-  const clock = localClock(raw.context ?? [])
+  // Logged times (meals.logged_at, exercise_sessions.start_time) are the phone's local wall clock labelled UTC, so their
+  // digits are already local (CLAUDE.md, "Dates and times"); only real instants (trips) go through the offset clock.
+  const clock = wallClock
+  const instantClock = localClock(raw.context ?? [])
   const checkins = new Map((raw.checkins ?? []).map((c) => [c.date, c]))
   const firstCheckin = [...checkins.keys()].sort()[0] ?? null
   const mealDays = new Set<string>()
@@ -222,7 +235,7 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
   series.sleep_score = alignToAxis(axis, scores.map((r) => ({ date: day(r.day), value: num(r.sleep) })))
 
   // Routine intelligence R4: phone use, places and commutes, each known only on days its source covers.
-  Object.assign(series, routineSeries(axis, raw.routine ?? {}, clock))
+  Object.assign(series, routineSeries(axis, raw.routine ?? {}, instantClock))
 
   // Illness days (and the day after recovery) are left out of every comparison.
   const excludedDays = new Set<string>()

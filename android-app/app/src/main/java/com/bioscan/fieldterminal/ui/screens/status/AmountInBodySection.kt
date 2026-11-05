@@ -32,7 +32,6 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Duration
 import java.time.Instant
-import java.time.OffsetDateTime
 
 // The estimated amount in the body from the logged doses and the label's half-life (domain/AmountInBody.kt), over about
 // five half-lives, with the amount now and the range over the last week. Labelled as an outline, never as a blood level.
@@ -59,7 +58,8 @@ fun AmountInBodySection(supplementId: Long, halfLifeHours: Double, ingredientNam
             // Doses up to ten half-lives before the window still count at its start.
             val since = from.minus(Duration.ofMinutes((halfLifeHours * 600).toLong()))
             val doses = repo.loadDoses(supplementId, since).mapNotNull { r ->
-                val at = runCatching { OffsetDateTime.parse(r.takenAt).toInstant() }.getOrNull() ?: return@mapNotNull null
+                // taken_at is a logged wall-clock time (domain/WallClock.kt): its real instant is the digits in this zone.
+                val at = com.bioscan.fieldterminal.domain.WallClock.instant(r.takenAt, java.time.ZoneId.systemDefault()) ?: return@mapNotNull null
                 // How many doses this log was: from the servings it used, else from its count in the dose's unit.
                 val doseCount = spec.amount
                 val qty = r.servingCount?.let { it / row.servingsPerDose }

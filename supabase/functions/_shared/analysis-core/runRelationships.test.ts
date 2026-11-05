@@ -162,18 +162,18 @@ test('localClock: timestamps become local dates and hours with the recorded offs
   assert.deepEqual(localClock([])('2026-03-02T07:00:00Z'), { date: '2026-03-02', hour: 7 }) // nothing recorded: UTC
 })
 
-test('buildFrame phase B: local caffeine hours, late-night drinks on the evening before, explicit zeros from check-ins', () => {
+test('buildFrame phase B: logged times are local wall-clock digits (not shifted by the offset), local caffeine hours, late-night drinks on the evening before, explicit zeros from check-ins', () => {
   const raw: RawInputs = {
     wearable: ['2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05', '2026-03-06'].map((date) => ({ date, hrv: 60, rhr: 55, steps: 8000 })),
     sleep: [],
     wellbeing: [],
     meals: [
-      { logged_at: '2026-03-01T07:00:00Z', meal_items: [{ alcohol_g: null, caffeine_mg: 90 }] }, // 15:00 local: afternoon caffeine
-      { logged_at: '2026-03-02T16:40:00Z', meal_items: [{ alcohol_g: 14, caffeine_mg: null }] }, // 00:40 on 03-03: evening of 03-02
-      { logged_at: '2026-03-03T13:30:00Z', meal_items: [{ alcohol_g: null, caffeine_mg: null }] }, // 21:30: a late meal on 03-03
-      { logged_at: '2026-03-05T01:00:00Z', meal_items: [{ alcohol_g: null, caffeine_mg: null }] }, // breakfast on 03-05, after check-ins began
+      { logged_at: '2026-03-01T15:00:00Z', meal_items: [{ alcohol_g: null, caffeine_mg: 90 }] }, // 15:00 local: afternoon caffeine
+      { logged_at: '2026-03-03T00:40:00Z', meal_items: [{ alcohol_g: 14, caffeine_mg: null }] }, // 00:40 on 03-03: evening of 03-02
+      { logged_at: '2026-03-03T21:30:00Z', meal_items: [{ alcohol_g: null, caffeine_mg: null }] }, // 21:30: a late meal on 03-03
+      { logged_at: '2026-03-05T09:00:00Z', meal_items: [{ alcohol_g: null, caffeine_mg: null }] }, // breakfast on 03-05, after check-ins began
     ],
-    sessions: [{ start_time: '2026-03-04T10:30:00Z', duration_min: 60, type: 'run' }], // ends 19:30 local
+    sessions: [{ start_time: '2026-03-04T18:30:00Z', duration_min: 60, type: 'run' }], // ends 19:30 local
     recovery: [],
     illnesses: [],
     checkins: [

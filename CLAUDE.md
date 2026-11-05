@@ -36,3 +36,15 @@ The page keeps everything in its artifact database (read and write it with the `
 4. Report what was built, what was not, and how the map changed.
 
 The map's own page (HTML) does not need republishing to change its content: only the database changes.
+
+## Dates and times
+
+The owner lives in UTC+8, so a date taken from UTC is a day behind every morning until 08:00 local. Use the person's
+local calendar, never `toISOString().slice(0, 10)` / `current_date`. Two kinds of timestamp exist; read each as what it is:
+
+- **Logged times** (`meals.logged_at`, `exercise_sessions.start_time`, `supplement_log.taken_at`, `nutrient_intake.logged_at`,
+  `occurred_at` on stool / grip / notes / body check-ins / scale readings, `athlete_events.start_time`) are the phone's
+  wall clock labelled `+00`: their digits are local. Read them with `WallClock` (Android) or `wallClock` (analysis-core);
+  never add an offset to them.
+- **Real instants** (`created_at`, `fired_at`, `trips.start_at`, `sleep_daily` bedtime / wake, calendar events, stress
+  samples) are converted with the zone, or with `daily_context.utc_offset_min` on the server (`localClock`, `localDateAt`).

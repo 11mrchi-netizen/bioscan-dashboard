@@ -66,6 +66,13 @@ class TrimpAnchors(
     fun trimpOn(date: LocalDate, session: EnduranceSessionInput): Double? = trimp(session, restingOn(date), maxOn(date))
 }
 
+/**
+ * Provisional: RPE x minutes per unit of TRIMP, the median over the sessions that have both (live account, 17 sessions,
+ * 2026-10-29; spread 1.5 to 15). It brings a session scored by RPE alone onto the TRIMP scale; keep it equal to the
+ * analysis frame's SRPE_PER_TRIMP (supabase/functions/_shared/analysis-core/trainingLoad.ts).
+ */
+const val SRPE_PER_TRIMP = 3.8
+
 // The universal fallback when HR/power/pace are all unusable -- always
 // computable from what manual entry already asks for (duration + RPE).
 fun sRpeLoad(session: EnduranceSessionInput): Double? {

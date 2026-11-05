@@ -51,6 +51,7 @@ export const LIVE_COLUMNS: Record<string, string[]> = {
   sleep_daily: ['id', 'user_id', 'date', 'hours', 'score', 'respiratory_rate', 'created_at', 'bedtime', 'wake_time', 'deep_min', 'rem_min', 'light_min', 'source', 'stage_intervals', 'tz_offset_min'],
   wellbeing_daily: ['id', 'user_id', 'date', 'energy', 'mood', 'stress', 'soreness', 'created_at', 'morning_erection_quality', 'arousal_level'],
   body_metrics: ['id', 'user_id', 'date', 'weight_kg', 'body_fat_pct', 'lean_mass_kg', 'created_at', 'height_cm', 'source'],
+  scale_readings: ['id', 'user_id', 'occurred_at', 'weight_kg', 'impedance_ohm', 'raw_hex', 'device_mac', 'created_at'],
   hydration_daily: ['id', 'user_id', 'date', 'ml', 'created_at', 'source'],
   meals: ['id', 'user_id', 'logged_at', 'description', 'calories', 'protein_g', 'fat_g', 'carbs_g', 'created_at', 'fiber_g', 'sugar_g', 'sodium_mg', 'source'],
   exercise_sessions: ['id', 'user_id', 'type', 'start_time', 'end_time', 'duration_min', 'distance_km', 'calories_active', 'calories_total', 'avg_hr', 'max_hr', 'elevation_gain_m', 'avg_power_w', 'avg_speed_kmh', 'rpe', 'notes', 'details', 'source', 'health_connect_record_id', 'created_at'],

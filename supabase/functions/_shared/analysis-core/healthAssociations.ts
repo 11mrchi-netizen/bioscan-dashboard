@@ -23,7 +23,7 @@ import type { MatchedSet } from './evidence.ts'
 import { daysBetween, shiftDate } from './healthSeries.ts'
 import type { DayCell } from './healthSeries.ts'
 import type { Episode } from './healthEpisodes.ts'
-import { inWindow, isQuality, isTrail, longRunMinutes, musclesOf } from './healthExposures.ts'
+import { inWindow, isQuality, isTrail, longRunMinutes, lookupStats, musclesOf } from './healthExposures.ts'
 import type { ExposureContext, ExposureSpec } from './healthExposures.ts'
 import { benjaminiHochberg, weekdayOf } from './stats.ts'
 import type { Num } from './stats.ts'
@@ -320,14 +320,33 @@ export function evaluateExposures(
   regionMuscles: Set<string>,
   quality: { word: string; informativeMissingness: number | null },
 ): { evaluations: ExposureEvaluation[]; dropped: number; cases: CaseInfo[]; referenceOk: boolean[] } {
+  // Timing hook (healthExposures.ts ExposureContext.trace): a step is reported when it took 20 ms or more, or always for
+  // the regional-strength exposure, whose exercise-name lookups are the suspected cost.
+  let t = performance.now()
+  let m0 = lookupStats.musclesOf
+  let k0 = lookupStats.movementKey
+  const step = (name: string, always: boolean, info?: Record<string, number>) => {
+    if (!ctx.trace) return
+    const ms = performance.now() - t
+    if (always || ms >= 20) ctx.trace(name, ms, { ...info, musclesOf: lookupStats.musclesOf - m0, movementKey: lookupStats.movementKey - k0 })
+    t = performance.now()
+    m0 = lookupStats.musclesOf
+    k0 = lookupStats.movementKey
+  }
   const { cases, dropped, referenceOk } = crossoverFrame(cells, episodes)
+  step('ev.frame', false, { cases: cases.length })
   const evals = specs.map((spec) => {
+    const always = spec.id === 'regional_strength'
     const x = series[spec.id] ?? cells.map(() => null)
     const crossover = caseCrossover(ctx.dates, x, cases, referenceOk, spec.window)
+    step(`ev.${spec.id}.crossover`, false)
     const crossoverSensitivity = spec.sensitivity.map((w) => caseCrossover(ctx.dates, x, cases, referenceOk, w))
+    step(`ev.${spec.id}.sensitivity`, false)
     const kind = spec.sessionLevel ? sessionKindFor(spec, ctx, regionMuscles) : null
     const session = kind ? sessionLevel(ctx, cells, episodes, kind, spec.window) : null
+    step(`ev.${spec.id}.session`, always, { windows: 1, sessions: session?.exposedSessions ?? 0 })
     const sessionSensitivity = kind ? spec.sensitivity.map((w) => sessionLevel(ctx, cells, episodes, kind, w)) : []
+    step(`ev.${spec.id}.sessionSensitivity`, always, { windows: spec.sensitivity.length })
     return { exposure: spec, crossover, crossoverSensitivity, session, sessionSensitivity, qCrossover: null as number | null, qSession: null as number | null, meets: false, meetsVia: null as ExposureEvaluation['meetsVia'], reasonsNot: [] as string[] }
   })
   // One family of tests per concern: one pre-specified primary analysis per exposure, primary window only.

@@ -17,6 +17,7 @@ const NAV = [
   { to: 'explore',   label: 'Explore' },
   { to: 'data',      label: 'Data' },
   { to: 'models',    label: 'Models' },
+  { to: 'body',      label: 'Body' },
 ]
 
 export function Shell() {

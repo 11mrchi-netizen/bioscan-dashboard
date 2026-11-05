@@ -107,6 +107,25 @@ test('an intervention-linked experiment (no supplement_id) is analysed the same 
   assert.equal(payload.adherence.rate, 0, 'no adherence log source for a bare intervention yet, so zero logged days rather than a guess')
 })
 
+test('a repeatable intervention counts the days it has an event as its with-days (declined events do not count)', async () => {
+  const t = tables()
+  ;(t.experiments[0] as Row).supplement_id = null
+  ;(t.experiments[0] as Row).intervention_id = 'iv-1'
+  t.supplement_log = []
+  const bDays = Array.from({ length: 28 }, (_, i) => shift(START, 68 + i))
+  t.intervention_events = [
+    ...bDays.map((d, i) => ({ user_id: USER, intervention_id: 'iv-1', local_date: d, adhered: i === 27 ? 'no' : i % 2 ? 'partial' : 'yes' })),
+    { user_id: USER, intervention_id: 'other', local_date: shift(START, 40), adhered: 'yes' },
+  ]
+  const admin = fakeAdmin(t)
+  const now = new Date(`${shift(START, 119)}T20:00:00Z`)
+  const run = await runExperiments(admin, (await loadFrame(admin, USER, now)) as LoadedFrame, now)
+  assert.equal(run.error, undefined)
+  const payload = admin.upserts[0].payload as { adherence: { interventionDays: number; interventionLogged: number; rate: number | null } }
+  assert.equal(payload.adherence.interventionLogged, 27, 'the declined day and the other intervention\'s event are not with-days')
+  assert.equal(payload.adherence.interventionDays, 28)
+})
+
 test('an experiment that has not started publishes its stage only; abandoned ones are skipped', async () => {
   const t = tables()
   ;(t.experiments[0] as Row).protocol = { design: 'AB', phases: [{ label: 'A', start: shift(START, 130), end: shift(START, 157) }, { label: 'B', start: shift(START, 158), end: shift(START, 185) }], washoutDays: 0, minAdherence: 0.7, excludeAlcoholDays: true }

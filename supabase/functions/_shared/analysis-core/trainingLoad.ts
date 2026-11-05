@@ -1,7 +1,10 @@
 // The apps' session load, for the analysis frame (analysis review phase G). The same formula as Android
-// (data/AnalysisRepository.kt buildTrainingSessionLoads, domain/EnduranceLoad.kt) and the console (src/lib/training.ts):
-// session RPE x minutes when an RPE above 0 was logged, otherwise Banister's TRIMP, otherwise nothing (the session is left
-// out, never guessed). TRIMP's heart-rate-reserve fraction is (average - resting) / (maximum - resting) with the person's
+// (data/AnalysisRepository.kt buildTrainingSessionLoads, domain/EnduranceLoad.kt): Banister's TRIMP when the heart-rate
+// inputs allow it, otherwise session RPE x minutes brought onto the TRIMP scale, otherwise nothing (the session is left
+// out, never guessed). TRIMP comes first because RPE x minutes is not on the same scale: on the 17 sessions of the live
+// account that have both, RPE x minutes was 3.8 times TRIMP at the median (1.5 to 15 times), so a day with an RPE logged
+// counted about four times heavier than the same day without one, and 6% of the sessions carried 35% of the load.
+// Using an RPE only where there is no heart rate keeps one scale (analysis review 2026-10-29). TRIMP's heart-rate-reserve fraction is (average - resting) / (maximum - resting) with the person's
 // maximum and resting heart rate as they were on the session's date (loadAnchorsByDate), not the session's own peak,
 // which made easy sessions score about twice what they should. Erasable TypeScript, no I/O.
 
@@ -21,11 +24,23 @@ export interface LoadAnchors {
 const TRIMP_COEFFICIENT = 0.64
 const TRIMP_EXPONENT = 1.92
 
+/**
+ * Provisional: RPE x minutes per unit of TRIMP, the median over the sessions that have both (live account, 17 sessions,
+ * 2026-10-29; spread 1.5 to 15). It brings a session scored by RPE alone (no usable heart rate) onto the TRIMP scale.
+ * Re-fit it, and keep Android's copy (domain/EnduranceLoad.kt SRPE_PER_TRIMP) equal, as overlapping sessions accumulate.
+ */
+export const SRPE_PER_TRIMP = 3.8
+
 export function sessionLoad(s: SessionLoadInput, anchors: LoadAnchors): number | null {
   const duration = s.duration_min
   if (duration == null || !(duration > 0)) return null
-  if (s.rpe != null && s.rpe > 0) return s.rpe * duration
-  const avg = s.avg_hr
+  const trimp = trimpLoad(duration, s.avg_hr, anchors)
+  if (trimp !== null) return trimp
+  if (s.rpe != null && s.rpe > 0) return (s.rpe * duration) / SRPE_PER_TRIMP
+  return null
+}
+
+function trimpLoad(duration: number, avg: number | null | undefined, anchors: LoadAnchors): number | null {
   const { maxHr: max, restingHr: rest } = anchors
   if (avg == null || max == null || rest == null || max <= rest) return null
   const ratio = Math.min((avg - rest) / (max - rest), 1)

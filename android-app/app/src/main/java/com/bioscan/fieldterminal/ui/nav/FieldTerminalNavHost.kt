@@ -127,6 +127,10 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 meRequestedTab = MeTab.Health
                 goToTab(TopLevelTab.User)
             }
+            NotificationDestination.EVENTS -> {
+                labsRequestedTab = LabTab.N1
+                navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
+            }
             NotificationDestination.FUEL -> {
                 planRequestedTab = PlanTab.Food
                 goToTab(TopLevelTab.Plan)

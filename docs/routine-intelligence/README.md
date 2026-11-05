@@ -88,6 +88,10 @@ Not in R5: shifting the departure time (needs travel times by time of day, which
 
 To switch the alternatives on: register a TDX account (free), set `TDX_CLIENT_ID` and `TDX_CLIENT_SECRET` as Edge Function secrets, deploy `transit-alternatives` (verify JWT on), and compare one response of each endpoint with the parser.
 
+## Places added by hand (after R6, owner request)
+
+The PLACES card (Setup › Profile & goals › Data capture, and now also Lab › ROUTINE under the week) has ADD PLACE: a name, a category, a radius (50, 100, 150 or 300 m) and a point, either pasted ("25.0330, 121.5654", which Google Maps copies on a long-press, or a map link with `@lat,lon` or `q=lat,lon`) or USE CURRENT LOCATION (one fix). Saving stores a `manual` place and moves history to it (`claimForManualPlace`): unnamed learned places whose centre is inside its circle are absorbed (their visits and trips move to it, then they are deleted), and other visits inside the circle move when they have no place or the new one is nearer than theirs. Named places keep the visits they hold more closely. Commute flags are recomputed for the last 48 h of trips; older trips keep theirs. Tests: `ManualPlacesTest` (3).
+
 ## R6: experiments on routines
 
 The evidence board's TEST button now covers six routine questions, as daily randomised experiments (the micro-randomised design the other same-day choices use). Adherence is passive: each with-day is checked against what the phone measured, so nothing has to be logged.

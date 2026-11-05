@@ -74,6 +74,8 @@ fun PlacesCard() {
             "around the place (a point rounded to about 100 m).",
     ) {
         error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+        com.bioscan.fieldterminal.domain.routine.homeWorkProblem(places.map { it.toPlace() }, places.firstOrNull { it.source == "home_setting" }?.id)
+            ?.let { Text("$it Tap a place below to label it, or use Lab › ROUTINE › OPEN DAY MAP to see where each one is.", style = FTType.BodySmall, color = FT.Warning) }
 
         mobility?.let { m -> MobilitySummary(m) }
 
@@ -165,7 +167,7 @@ private fun StatusLine(label: String, value: String, ok: Boolean? = null) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PlaceEditor(
+internal fun PlaceEditor(
     place: PlaceRow,
     suggestion: Pair<String?, PlaceCategory?>?,
     onCancel: () -> Unit,

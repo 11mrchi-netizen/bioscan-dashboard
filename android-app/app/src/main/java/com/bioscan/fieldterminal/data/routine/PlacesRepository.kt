@@ -11,6 +11,7 @@ import com.bioscan.fieldterminal.domain.routine.Fix
 import com.bioscan.fieldterminal.domain.routine.Place
 import com.bioscan.fieldterminal.domain.routine.PlaceCategory
 import com.bioscan.fieldterminal.domain.routine.PlaceVisitTime
+import com.bioscan.fieldterminal.domain.routine.PlacedPoint
 import com.bioscan.fieldterminal.domain.routine.Stay
 import com.bioscan.fieldterminal.domain.routine.TransitionEvent
 import com.bioscan.fieldterminal.domain.routine.Trip
@@ -18,11 +19,13 @@ import com.bioscan.fieldterminal.domain.routine.TripLeg
 import com.bioscan.fieldterminal.domain.routine.TripVisit
 import com.bioscan.fieldterminal.domain.routine.assignStaysToPlaces
 import com.bioscan.fieldterminal.domain.routine.categoryFromOsm
+import com.bioscan.fieldterminal.domain.routine.commuteFlagChanges
 import com.bioscan.fieldterminal.domain.routine.hourlyPlaceVector
 import com.bioscan.fieldterminal.domain.routine.isCommute
 import com.bioscan.fieldterminal.domain.routine.mobilityDay
 import com.bioscan.fieldterminal.domain.routine.suggestWorkPlace
 import com.bioscan.fieldterminal.domain.routine.tripsBetween
+import com.bioscan.fieldterminal.domain.routine.visitsForNewPlace
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -60,7 +63,56 @@ private data class NewPlaceRow(
     val label: String? = null,
     val category: String? = null,
     val source: String,
+    @SerialName("radius_m") val radiusM: Double = 150.0,
 )
+
+// What a trip insert sends. No property has a default on purpose: the Supabase client's JSON leaves out a property that
+// equals its default, and in a multi-row insert PostgREST turns a key one row lacks into null, not the column default.
+// TripRow's active_min = 0.0 default made every batch mixing a still trip with an active one fail on the not-null
+// constraint (400), so no trip was stored from 1 Nov 2026 and mobility_daily stopped behind it.
+@Serializable
+internal data class TripInsertRow(
+    @SerialName("start_at") val startAt: String,
+    @SerialName("end_at") val endAt: String,
+    @SerialName("from_place_id") val fromPlaceId: String?,
+    @SerialName("to_place_id") val toPlaceId: String?,
+    @SerialName("distance_km") val distanceKm: Double,
+    val legs: List<TripLegRow>,
+    @SerialName("active_min") val activeMin: Double,
+    @SerialName("is_commute") val isCommute: Boolean,
+)
+
+@Serializable
+private data class CommuteFlagUpdate(@SerialName("is_commute") val isCommute: Boolean)
+
+@Serializable
+private data class VisitPlaceUpdate(@SerialName("place_id") val placeId: String?)
+
+@Serializable
+private data class TripFromUpdate(@SerialName("from_place_id") val fromPlaceId: String)
+
+@Serializable
+private data class TripToUpdate(@SerialName("to_place_id") val toPlaceId: String)
+
+@Serializable
+private data class DayFixRow(
+    val ts: String,
+    val lat: Double,
+    val lon: Double,
+    @SerialName("accuracy_m") val accuracyM: Double? = null,
+    val kind: String,
+    val activity: String? = null,
+)
+
+// One day of what was recorded, for the day map.
+data class DayRecord(
+    val visits: List<com.bioscan.fieldterminal.domain.routine.TimelineVisit>,
+    val trips: List<Trip>,
+    val storedCommute: Set<Long>,
+    val fixes: List<DayFix>,
+)
+
+data class DayFix(val ts: Long, val lat: Double, val lon: Double, val accuracyM: Double?, val activity: String?)
 
 @Serializable
 data class TripRow(
@@ -129,6 +181,8 @@ private data class PlaceOsmUpdate(
 
 private fun ms(ts: String): Long? = parseTimestamp(ts)?.toEpochMilli()
 
+private const val PAGE = 1000L
+
 class PlacesRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadPlaces(): List<PlaceRow> =
@@ -153,20 +207,32 @@ class PlacesRepository(private val supabase: SupabaseClient) {
         return result.placeIds
     }
 
-    // Trips over the last 72 hours of visits; those starting in the last 48 are replaced, as visits are.
-    suspend fun refreshTrips(now: Instant = Instant.now()) {
-        val windowStart = now.minusSeconds(72 * 3600)
-        val writeFrom = now.minusSeconds(48 * 3600)
+    // Trips between the visits of the last 72 hours; those starting in the last 48 are replaced, as visits are. A larger
+    // [writeFrom] rebuilds further back (the one-off repair after the insert bug above).
+    suspend fun refreshTrips(now: Instant = Instant.now(), writeFrom: Instant = now.minusSeconds(48 * 3600)) {
+        val windowStart = writeFrom.minusSeconds(24 * 3600)
         val visits = loadVisits(windowStart).map { TripVisit(it.first, it.second, it.third.lat, it.third.lon, it.third.placeId) }
-        val transitions = supabase.postgrest.from("activity_transitions")
-            .select(columns = Columns.list("ts,activity,transition")) {
-                filter { gte("ts", windowStart.toString()) }
-                order("ts", Order.ASCENDING)
-                limit(1000)
-            }
-            .decodeList<TransitionReadRow>()
-            .mapNotNull { r -> ms(r.ts)?.let { TransitionEvent(it, r.activity, r.transition == "enter") } }
-        val fixes = keysetPagesDescending<TripFixRow>(1000, 20_000, { it.ts }) { before ->
+        // Paged by offset, not by ts: an exit and an enter often share a timestamp, and a keyset page boundary between them
+        // would drop one. One page of 1,000 used to cover only the oldest ~36 hours of a 72-hour window, so the newest
+        // trips had no transitions and read "unknown".
+        val transitions = mutableListOf<TransitionReadRow>()
+        var offset = 0L
+        while (true) {
+            val page = supabase.postgrest.from("activity_transitions")
+                .select(columns = Columns.list("ts,activity,transition")) {
+                    filter { gte("ts", windowStart.toString()) }
+                    order("ts", Order.ASCENDING)
+                    order("activity", Order.ASCENDING)
+                    order("transition", Order.ASCENDING)
+                    range(offset, offset + PAGE - 1)
+                }
+                .decodeList<TransitionReadRow>()
+            transitions += page
+            if (page.size < PAGE) break
+            offset += PAGE
+        }
+        val events = transitions.mapNotNull { r -> ms(r.ts)?.let { TransitionEvent(it, r.activity, r.transition == "enter") } }
+        val fixes = keysetPagesDescending<TripFixRow>(1000, 100_000, { it.ts }) { before ->
             supabase.postgrest.from("location_fixes")
                 .select(columns = Columns.list("ts,lat,lon,accuracy_m")) {
                     filter {
@@ -181,10 +247,10 @@ class PlacesRepository(private val supabase: SupabaseClient) {
         }.mapNotNull { r -> ms(r.ts)?.let { Fix(it, r.lat, r.lon, r.accuracyM) } }
             .filter { (it.accuracyM ?: 0.0) <= 200.0 }
         val categories = loadPlaces().associate { it.id to PlaceCategory.of(it.category) }
-        val trips = tripsBetween(visits, transitions, fixes).filter { it.startMs >= writeFrom.toEpochMilli() }
+        val trips = tripsBetween(visits, events, fixes).filter { it.startMs >= writeFrom.toEpochMilli() }
         supabase.postgrest.from("trips").delete { filter { gte("start_at", writeFrom.toString()) } }
-        if (trips.isNotEmpty()) {
-            supabase.postgrest.from("trips").insert(trips.map { it.toRow(isCommute(it) { id -> categories[id] }) })
+        trips.chunked(500).forEach { chunk ->
+            supabase.postgrest.from("trips").insert(chunk.map { it.toRow(isCommute(it) { id -> categories[id] }) })
         }
     }
 
@@ -269,11 +335,148 @@ class PlacesRepository(private val supabase: SupabaseClient) {
         }
     }
 
+    // A new label or category can make trips commutes or stop them being ones: the stored flags follow.
     suspend fun saveLabel(id: String, label: String?, category: PlaceCategory?) {
         supabase.postgrest.from("places").update(
             PlaceLabelUpdate(label?.trim()?.ifBlank { null }, category?.key, Instant.now().toString()),
         ) { filter { eq("id", id) } }
+        recomputeCommuteFlags()
     }
+
+    // A place marked by hand on the day map. It takes the visits of the last [days] days whose centre is inside its circle
+    // and closer to it than to their current place, so it counts from the first day recorded, not only from now on.
+    suspend fun addManualPlace(lat: Double, lon: Double, radiusM: Double, label: String?, category: PlaceCategory?, days: Long = 60): String {
+        val id = UUID.randomUUID().toString()
+        supabase.postgrest.from("places").insert(
+            NewPlaceRow(id, lat, lon, label?.trim()?.ifBlank { null }, category?.key, "manual", radiusM),
+        )
+        val places = loadPlaces().filter { it.id != id }.map { it.toPlace() }
+        val visits = loadVisits(Instant.now().minusSeconds(days * 86_400))
+            .map { (s, _, v) -> PlacedPoint(s, v.lat, v.lon, v.placeId) to v.startAt }
+        val take = visitsForNewPlace(visits.map { it.first }, Place(id, lat, lon, radiusM, label, category), places).map { it.startMs }.toSet()
+        visits.filter { it.first.startMs in take }.forEach { (_, startAt) ->
+            supabase.postgrest.from("place_visits").update(VisitPlaceUpdate(id)) { filter { eq("start_at", startAt) } }
+        }
+        if (take.isNotEmpty()) relinkTrips()
+        recomputeCommuteFlags()
+        return id
+    }
+
+    // Merging [fromId] into [intoId]: its visits and trips move over, then it is deleted. For two places that are one
+    // (both ends of a building), or a place recorded by mistake next to a real one.
+    suspend fun mergePlace(fromId: String, intoId: String) {
+        supabase.postgrest.from("place_visits").update(VisitPlaceUpdate(intoId)) { filter { eq("place_id", fromId) } }
+        supabase.postgrest.from("trips").update(TripFromUpdate(intoId)) { filter { eq("from_place_id", fromId) } }
+        supabase.postgrest.from("trips").update(TripToUpdate(intoId)) { filter { eq("to_place_id", fromId) } }
+        supabase.postgrest.from("places").delete { filter { eq("id", fromId) } }
+        recomputeCommuteFlags()
+    }
+
+    // Deleting a place keeps its visits (place_id becomes null, the time counts as unlabelled). A later stay there starts
+    // a new place, so this is for a place that should not exist at all; merge is usually what is wanted.
+    suspend fun deletePlace(id: String) {
+        supabase.postgrest.from("places").delete { filter { eq("id", id) } }
+        recomputeCommuteFlags()
+    }
+
+    // The trips' ends follow their visits' places after visits were reassigned.
+    private suspend fun relinkTrips(days: Long = 60) {
+        val since = Instant.now().minusSeconds(days * 86_400)
+        val visits = loadVisits(since)
+        val endsAt = visits.associate { (_, e, v) -> e to v.placeId }
+        val startsAt = visits.associate { (s, _, v) -> s to v.placeId }
+        for (row in loadTripRows(since)) {
+            val s = ms(row.startAt) ?: continue
+            val e = ms(row.endAt) ?: continue
+            val from = endsAt[s]
+            val to = startsAt[e]
+            if (from != null && from != row.fromPlaceId) {
+                supabase.postgrest.from("trips").update(TripFromUpdate(from)) { filter { eq("start_at", row.startAt) } }
+            }
+            if (to != null && to != row.toPlaceId) {
+                supabase.postgrest.from("trips").update(TripToUpdate(to)) { filter { eq("start_at", row.startAt) } }
+            }
+        }
+    }
+
+    // Each stored trip's is_commute made to agree with the places' current categories.
+    suspend fun recomputeCommuteFlags() {
+        val categories = loadPlaces().associate { it.id to PlaceCategory.of(it.category) }
+        val rows = loadTripRows(Instant.EPOCH)
+        val trips = rows.mapNotNull { r ->
+            val s = ms(r.startAt) ?: return@mapNotNull null
+            val e = ms(r.endAt) ?: return@mapNotNull null
+            Trip(s, e, r.fromPlaceId, r.toPlaceId, r.distanceKm, emptyList()) to r.isCommute
+        }
+        val startAtOf = rows.associateBy { ms(it.startAt) }
+        commuteFlagChanges(trips) { categories[it] }.forEach { (trip, flag) ->
+            val startAt = startAtOf[trip.startMs]?.startAt ?: return@forEach
+            supabase.postgrest.from("trips").update(CommuteFlagUpdate(flag)) { filter { eq("start_at", startAt) } }
+        }
+    }
+
+    // The visits, trips and fixes of one local day (and the visits and trips that cross its midnights), for the day map.
+    suspend fun loadDay(date: LocalDate, zone: ZoneId = ZoneId.systemDefault()): DayRecord {
+        val from = date.atStartOfDay(zone).toInstant()
+        val to = date.plusDays(1).atStartOfDay(zone).toInstant()
+        val visits = supabase.postgrest.from("place_visits")
+            .select(columns = Columns.list("start_at,end_at,lat,lon,place_id")) {
+                filter {
+                    lt("start_at", to.toString())
+                    gt("end_at", from.toString())
+                }
+                order("start_at", Order.ASCENDING)
+                limit(1000)
+            }
+            .decodeList<VisitReadRow>()
+            .mapNotNull { v ->
+                val s = ms(v.startAt) ?: return@mapNotNull null
+                val e = ms(v.endAt) ?: return@mapNotNull null
+                com.bioscan.fieldterminal.domain.routine.TimelineVisit(s, e, v.lat, v.lon, v.placeId)
+            }
+        val tripRows = supabase.postgrest.from("trips")
+            .select(columns = Columns.list("start_at,end_at,from_place_id,to_place_id,distance_km,legs,active_min,is_commute")) {
+                filter {
+                    lt("start_at", to.toString())
+                    gt("end_at", from.toString())
+                }
+                order("start_at", Order.ASCENDING)
+                limit(1000)
+            }
+            .decodeList<TripRow>()
+        val trips = tripRows.mapNotNull { it.toTrip() }
+        val commute = tripRows.filter { it.isCommute }.mapNotNull { ms(it.startAt) }.toSet()
+        val fixes = keysetPagesDescending<DayFixRow>(1000, 20_000, { it.ts }) { before ->
+            supabase.postgrest.from("location_fixes")
+                .select(columns = Columns.list("ts,lat,lon,accuracy_m,kind,activity")) {
+                    filter {
+                        gte("ts", from.toString())
+                        lt("ts", (before ?: to.toString()))
+                    }
+                    order("ts", Order.DESCENDING)
+                    limit(1000)
+                }
+                .decodeList<DayFixRow>()
+        }.mapNotNull { r -> ms(r.ts)?.let { DayFix(it, r.lat, r.lon, r.accuracyM, r.activity) } }.sortedBy { it.ts }
+        return DayRecord(visits, trips, commute, fixes)
+    }
+
+    // Every trip since [since], oldest first, for the commute analysis (door-to-door chains need the non-commute legs too).
+    suspend fun tripsSince(since: Instant): List<Trip> = loadTripRows(since).mapNotNull { it.toTrip() }
+
+    private suspend fun loadTripRows(since: Instant): List<TripRow> =
+        keysetPagesDescending<TripRow>(1000, 50_000, { it.startAt }) { before ->
+            supabase.postgrest.from("trips")
+                .select(columns = Columns.list("start_at,end_at,from_place_id,to_place_id,distance_km,legs,active_min,is_commute")) {
+                    filter {
+                        gte("start_at", since.toString())
+                        if (before != null) lt("start_at", before)
+                    }
+                    order("start_at", Order.DESCENDING)
+                    limit(1000)
+                }
+                .decodeList<TripRow>()
+        }.sortedBy { ms(it.startAt) ?: 0L }
 
     // Hours and visits per place over the last [days] days, for the PLACES card.
     suspend fun placeTotals(days: Long = 14, now: Instant = Instant.now()): Map<String, Pair<Double, Int>> =
@@ -335,11 +538,7 @@ class PlacesRepository(private val supabase: SupabaseClient) {
                 limit(1000)
             }
             .decodeList<TripRow>()
-            .mapNotNull { r ->
-                val s = ms(r.startAt) ?: return@mapNotNull null
-                val e = ms(r.endAt) ?: return@mapNotNull null
-                Trip(s, e, r.fromPlaceId, r.toPlaceId, r.distanceKm, r.legs.map { TripLeg(it.mode, it.minutes) })
-            }
+            .mapNotNull { it.toTrip() }
 
     // DELETE ALL in Setup's LOCATIONS card also removes what R3 derived.
     suspend fun deleteAll() {
@@ -350,7 +549,13 @@ class PlacesRepository(private val supabase: SupabaseClient) {
     }
 }
 
-private fun Trip.toRow(isCommute: Boolean) = TripRow(
+private fun TripRow.toTrip(): Trip? {
+    val s = ms(startAt) ?: return null
+    val e = ms(endAt) ?: return null
+    return Trip(s, e, fromPlaceId, toPlaceId, distanceKm, legs.map { TripLeg(it.mode, it.minutes) })
+}
+
+internal fun Trip.toRow(isCommute: Boolean) = TripInsertRow(
     startAt = Instant.ofEpochMilli(startMs).toString(),
     endAt = Instant.ofEpochMilli(endMs).toString(),
     fromPlaceId = fromPlaceId,

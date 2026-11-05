@@ -11,6 +11,7 @@ R2 (location capture) were started together on 27 Oct 2026 at the owner's reques
 | R3 Places, trips, commute | **Built and unit-tested; migration `20261107_routine_places.sql` applied (27 Oct 2026); not installed.** |
 | R4 Analysis integration | **Built and tested (core and Android); `analysis-run` deployed (28 Oct 2026, engine 3.0.0-alpha.10); the 02:20 UTC run published all ten routine questions**. Day-type covariate and health-episode context deferred (below). |
 | R5 UX and alternatives | **Built and unit-tested; `transit-alternatives` written, not deployed, TDX calls not verified (no TDX account, host unreachable from the build session).** |
+| Day map and commute | **Built and unit-tested (5 Nov 2026); fixes the trips insert that failed from 1 Nov. Not installed on the phone yet.** See below. |
 | R6 Routine experiments | **Built and tested (core 306, Android 1,036); migration `20261108_routine_experiments.sql` applied (27 Oct 2026); live with the `analysis-run` deploy above.** |
 
 ## Verification so far
@@ -90,7 +91,7 @@ To switch the alternatives on: register a TDX account (free), set `TDX_CLIENT_ID
 
 ## Places added by hand (after R6, owner request)
 
-The PLACES card (Setup › Profile & goals › Data capture, and now also Lab › ROUTINE under the week) has ADD PLACE: a name, a category, a radius (50, 100, 150 or 300 m) and a point, either pasted ("25.0330, 121.5654", which Google Maps copies on a long-press, or a map link with `@lat,lon` or `q=lat,lon`) or USE CURRENT LOCATION (one fix). Saving stores a `manual` place and moves history to it (`claimForManualPlace`): unnamed learned places whose centre is inside its circle are absorbed (their visits and trips move to it, then they are deleted), and other visits inside the circle move when they have no place or the new one is nearer than theirs. Named places keep the visits they hold more closely. Commute flags are recomputed for the last 48 h of trips; older trips keep theirs. Tests: `ManualPlacesTest` (3).
+The PLACES card (Setup › Profile & goals › Data capture, and now also Lab › ROUTINE under the week) has ADD PLACE: a name, a category, a radius (50, 100, 150 or 300 m) and a point, either pasted ("25.0330, 121.5654", which Google Maps copies on a long-press, or a map link with `@lat,lon` or `q=lat,lon`) or USE CURRENT LOCATION (one fix). Saving stores a `manual` place and moves history to it (`claimForManualPlace`): unnamed learned places whose centre is inside its circle are absorbed (their visits and trips move to it, then they are deleted), and other visits inside the circle move when they have no place or the new one is nearer than theirs. Named places keep the visits they hold more closely. Since the day map round, adding a place also re-links the trips of the moved visits and recomputes every trip's commute flag. Tests: `ManualPlacesTest` (3).
 
 ## R6: experiments on routines
 
@@ -109,6 +110,69 @@ A habit can also be the outcome: `screen_bed_min`, `screen_pm_social` and `outdo
 A day the phone did not measure (Usage access off, mobility coverage under 80 %, no commute that day) counts as unknown adherence, not as a missed day.
 
 Tests: `routineExperiments.test.ts` (3): the plan's gate (one experiment end to end, adherence from `phone_usage_daily` only, planted effect found), a habit as the outcome, and the adherence series. `RandomisedExperimentTest` covers the new choices.
+
+## Day map and commute (5 Nov 2026)
+
+Asked for after the first week on the phone: which places are saved, the commute on a map, and whether extra places are
+being recorded.
+
+### What the first week's data showed (28 Oct - 5 Nov)
+
+- Capture works: about 1,000 fixes a day, heartbeats every hour, 48 visits found, 11 places.
+- **No trip was stored after 1 Nov.** Every `POST /trips` failed with 400, `null value in column "active_min"`. The
+  Supabase client's JSON leaves out a property equal to its default, and `TripRow.activeMin` defaulted to 0.0. In a
+  multi-row insert PostgREST sends null for a key one row lacks, so every batch mixing a still trip with an active one
+  failed. Batches where all trips had 0 active minutes went through, which is why some trips from 1 Nov exist.
+  `refreshMobility` and the OpenStreetMap lookups sat after trips in the same `try`, so `mobility_daily` stopped on 2 Nov.
+- **No commute could be found.** The place made from Setup's home location had been labelled "Work" (category work), and
+  no place was labelled Home. Commutes need one of each. Fixed in the database on 5 Nov at the owner's request (label
+  Home, category home), with the stored trips' commute flags recomputed (29 and 30 Oct became commutes).
+- **Trip modes read "unknown".** `refreshTrips` read one page of 1,000 activity transitions in time order over 72 hours,
+  but the phone records about 1,900 there, so the newest trips had no transitions.
+- Home and Work were drawn the same colour on THE WEEK BY PLACE (`DomainTraining` is `Emerald`).
+
+### Fixes
+
+| Fix | Where |
+|---|---|
+| Trip inserts send every column (`TripInsertRow`, no defaults); 500-row chunks | `data/routine/PlacesRepository.kt`; test `TripInsertRowTest` |
+| Transitions read in full, paged by offset (an exit and an enter share a timestamp, so keyset paging on `ts` could drop one) | `PlacesRepository.refreshTrips` |
+| Each worker stage (upload, visits, trips, mobility, suggestions) fails on its own and is logged | `RoutineCaptureWorker.stage` |
+| One-off repair after the update: trips rebuilt over 14 days, commute flags recomputed, `mobility_daily` for 14 days (`trips_repaired_v1`) | `RoutineCaptureWorker` |
+| A label change, merge, delete or a marked place recomputes `trips.is_commute` | `PlacesRepository.recomputeCommuteFlags` |
+| What writes (stays, trips, mobility, commute flags, added places) reads places from the network, not the read cache's disk copy, which a cold worker would get and which can predate a label changed elsewhere | `PlacesRepository.fetchLoadPlaces` |
+| Home/Work check with a one-tap MAKE THE SETUP PLACE HOME | `homeWorkProblem`; Lab › ROUTINE, the day map, Setup's PLACES |
+| Work drawn in blue (`DomainMap`) on the week strip | `RoutineTab.groupColor` |
+
+### Day map (Lab › ROUTINE › OPEN DAY MAP, or tap a day on THE WEEK BY PLACE, or a commute)
+
+| Piece | Notes |
+|---|---|
+| Map | osmdroid; CARTO dark tiles with a saved key, OpenStreetMap tiles otherwise. The path is each trip's fixes (accuracy 200 m or better) from the place left to the place reached, coloured by the activity recorded with each fix, broken where fixes are 15 min apart. Every place is drawn as its circle: strong if visited that day, faint otherwise, so a stray place shows. Names on top; tap one to edit it. |
+| Mark a place | Long-press the map: name, category, size (50 / 100 / 150 / 300 m). Saved through the same `addPlace` as Setup's ADD PLACE (`claimForManualPlace`: unnamed learned places inside the circle are absorbed, other visits move when it is nearer), then the trips' ends follow the moved visits and every trip's commute flag is recomputed. |
+| Edit a place | Name and category (with the OpenStreetMap suggestion), MERGE INTO a place within 1 km (visits and trips move, the place is deleted), DELETE (visits stay, as unlabelled time). |
+| Timeline | Visits, trips (distance, a bar of minutes by mode, COMMUTE when Home to Work) and "nothing recorded" gaps of 5 min or more, midnight to midnight (to now for today). THE DAY: time by category, on the move, nothing recorded. |
+| ‹ PREVIOUS / NEXT › | Any day; NEXT stops at today. |
+
+### Commute analysis (Lab › ROUTINE › COMMUTE)
+
+Door to door: a trip leaving Home (or Work), then trips through stops of at most 15 min each, until one reaches the
+other, within 3 h. A longer stop (dinner on the way home) makes two outings, not a commute. Per direction over 4 weeks:
+median, middle half (25th-75th percentile), range, usual departure time, median distance, typical minutes by mode (on
+foot, bicycle, vehicle, waiting, stops, unknown), and from 6 journeys the median for leaving before and after the usual
+time (descriptive only). RECENT: the last 10 journeys with a bar by mode each, all to one scale; tap one for its day map.
+
+Mode colours (on foot `#199E70`, bicycle `#C98500`, vehicle `#3987E5`, stops `#D95926`; waiting and unknown are neutral
+greys) pass the dataviz validator against the dark surface `#11161A` (lightness band, chroma, adjacent colour-blind ΔE
+8.4, contrast). A legend is always shown.
+
+The analysis engine still reads `trips.is_commute` (direct Home-Work trips), as before; the door-to-door chains are a
+view for now.
+
+Pure logic in `domain/routine/DayTimeline.kt`; tests `DayTimelineTest` (10).
+
+Not done: a day map in the console; moving a place's centre to the mean of its visits; splitting vehicle legs into rail
+and road (still waiting on TDX).
 
 ## Deploying analysis-run
 

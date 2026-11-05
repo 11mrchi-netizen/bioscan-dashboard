@@ -228,6 +228,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     LabTileScreen(
                         onBack = if (route == TileRoute.Lab.route) ({ navController.popBackStack() }) else null,
                         onOpenPantry = { navController.navigate("pantry") },
+                        onOpenDayMap = { date -> navController.navigate("routine_day/$date") },
                         requestedTab = labsRequestedTab,
                         onRequestedTabConsumed = { labsRequestedTab = null },
                         openBodyCheckIn = bodyCheckInRequested,
@@ -246,6 +247,14 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 )
             }
             composable("pantry") { PantryScreen(onBack = { navController.popBackStack() }) }
+            // The day map (Lab › ROUTINE): one day's path, places and timeline; places are labelled and marked here.
+            composable("routine_day/{date}") { backStackEntry ->
+                val date = backStackEntry.arguments?.getString("date")?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+                com.bioscan.fieldterminal.ui.screens.routine.DayMapScreen(
+                    initialDate = date ?: java.time.LocalDate.now(),
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable(TopLevelTab.User.route) {
                 MeScreen(
                     onOpenSettings = { navController.navigate(SETUP_ROUTE) },

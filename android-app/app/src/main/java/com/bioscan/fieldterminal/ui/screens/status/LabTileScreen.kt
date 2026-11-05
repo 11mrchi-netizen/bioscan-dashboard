@@ -40,6 +40,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 fun LabTileScreen(
     onBack: (() -> Unit)?,
     onOpenPantry: () -> Unit = {},
+    onOpenDayMap: (java.time.LocalDate) -> Unit = {},
     // Set by a deep link (supplement reminder -> SUPPLEMENTS, fuel reminder -> PLANNING › FOOD PLAN, body check-in
     // reminder -> TESTS with the check-in up); applied once, then cleared via the callback.
     requestedTab: LabTab? = null,
@@ -73,7 +74,7 @@ fun LabTileScreen(
             LabTab.N1 -> "WHAT GOES WITH WHAT · EXPERIMENTS · SUMMARIES"
             LabTab.Supplements -> "ROSTER · PANTRY · EXPERIMENTS"
             LabTab.Tests -> "START A TEST · RESULTS GO TO LOG"
-            LabTab.Routine -> "THE WEEK BY PLACE · COMMUTE · PHONE"
+            LabTab.Routine -> "DAY MAP · THE WEEK BY PLACE · COMMUTE · PHONE"
             LabTab.Explore -> "ANY TWO MEASURES · DAYS LATER · HOW SURE"
         },
         accent = FT.DomainLabs,
@@ -84,7 +85,7 @@ fun LabTileScreen(
             LabTab.N1 -> N1Tab()
             LabTab.Supplements -> SupplementsScreen(onOpenPantry = onOpenPantry)
             LabTab.Tests -> TestsTab(onStart = { test = it })
-            LabTab.Routine -> RoutineTab()
+            LabTab.Routine -> RoutineTab(onOpenDay = onOpenDayMap)
             LabTab.Explore -> ExploreTab()
         }
     }

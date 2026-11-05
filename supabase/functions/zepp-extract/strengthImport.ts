@@ -22,20 +22,34 @@ export interface LapSet {
   targetReps: number;
   status: number;
   exerciseCode: number;
+  /** Field [23]: the equipment of a template exercise (15 bodyweight, 11 kettlebell); 0 on free-entry laps. */
+  equipment: number;
+}
+
+/**
+ * Equipment whose lap weight Zepp records in tenths of a kilogram. Found 2026-11-05: a 16 kg kettlebell template
+ * (Kettlebell Swing, Goblet Squat) arrived as 160.0 on every set of two workouts, while the Zepp app shows 16 kg on the
+ * same workout record. Free-entry barbell laps (equipment 0) carry plain kilograms (47.5, 70), so only this code is scaled.
+ */
+export const TENTH_KG_EQUIPMENT = new Set([11]);
+
+/** A lap's weight in kilograms. */
+export function lapWeightKg(weight: number, equipment: number): number {
+  return TENTH_KG_EQUIPMENT.has(equipment) ? Math.round(weight) / 10 : weight;
 }
 
 // Parse the semicolon-separated lap string into per-set objects.
 // Index map (confirmed from live data 2026-10-08): [0]=idx, [1]=duration_sec,
 // [4]=avg_hr, [15]=IMU_detected_reps, [21]=weight_kg, [22]=target_reps,
-// [26]=status (-1 or 0=done, 2=planned/skipped), [28]=exercise_code.
+// [23]=equipment (template laps only), [26]=status (-1 or 0=done, 2=planned/skipped), [28]=exercise_code.
 export function parseLapSets(lapStr: unknown): LapSet[] {
   if (typeof lapStr !== "string" || !lapStr) return [];
   return lapStr.split(";").filter(Boolean).map((f) => {
     const c = f.split(",");
     return {
       idx: +c[0], durationSec: +c[1], avgHr: +c[4],
-      detectedReps: +c[15], weightKg: +c[21], targetReps: +c[22],
-      status: +c[26], exerciseCode: +c[28],
+      detectedReps: +c[15], weightKg: lapWeightKg(+c[21], +c[23]), targetReps: +c[22],
+      status: +c[26], exerciseCode: +c[28], equipment: +c[23],
     };
   });
 }

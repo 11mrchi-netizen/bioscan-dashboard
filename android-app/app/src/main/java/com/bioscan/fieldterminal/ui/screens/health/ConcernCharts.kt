@@ -25,6 +25,8 @@ import com.bioscan.fieldterminal.data.model.ContextLanesDto
 import com.bioscan.fieldterminal.data.model.EpisodeDto
 import com.bioscan.fieldterminal.domain.health.SeverityPoint
 import com.bioscan.fieldterminal.domain.health.recoveryCurves
+import com.bioscan.fieldterminal.ui.components.drawBar
+import com.bioscan.fieldterminal.ui.components.drawBarStub
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -158,7 +160,11 @@ fun ContextLanes(lanes: ContextLanesDto, from: LocalDate) {
             val n = vals.size.coerceAtLeast(1)
             val bw = size.width / n
             if (bars) {
-                vals.forEachIndexed { i, v -> if (v != null && v > 0) drawRect(color, Offset(i * bw, size.height * (1 - (v / max).toFloat())), Size((bw - 1f).coerceAtLeast(1f), size.height * (v / max).toFloat())) }
+                val layout = com.bioscan.fieldterminal.ui.components.BarLayout(size.width, n, com.bioscan.fieldterminal.ui.components.FTBarSpec.gapFor(n).toPx())
+                vals.forEachIndexed { i, v ->
+                    if (v != null && v > 0) drawBar(color, layout.left(i), size.height * (1 - (v / max).toFloat()), layout.barWidth, cap = i == vals.lastIndex)
+                    else drawBarStub(layout.left(i), layout.barWidth)
+                }
             } else {
                 var prev: Offset? = null
                 vals.forEachIndexed { i, v ->

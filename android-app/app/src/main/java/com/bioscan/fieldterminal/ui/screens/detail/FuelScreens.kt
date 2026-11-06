@@ -141,12 +141,16 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
             } else {
                 val balance = remember(daily, expenditure) { daily.filter { it.second.calories > 0 }.associate { it.first to it.second.calories - expenditure } }
                 val week = balance.filterKeys { it > today.minusDays(7) }.values
-                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(if (week.isEmpty()) "—" else Fmt.signed(week.average()), style = FTType.MetricMedium, color = FT.TextPrimary)
-                    Text("kcal / day · last 7 days", style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
-                }
+                // charts-bars-and-scales.md §3: a bipolar value on a zero-centred ±500 kcal axis, deficit left, surplus right.
+                val avg = week.takeIf { it.isNotEmpty() }?.average()
+                com.bioscan.fieldterminal.ui.components.FTDivergingScale(
+                    value = avg, d = 500.0, poles = com.bioscan.fieldterminal.ui.components.DivergingPoles.EnergyBalance,
+                    label = "IN − OUT · 7-DAY", valueText = avg?.let { "${Fmt.signed(it)} kcal" },
+                    deadZone = 50.0, negativeWord = "deficit", positiveWord = "surplus",
+                    description = avg?.let { "Energy balance ${Fmt.signed(it)} kcal a day, ${if (it < 0) "deficit" else "surplus"}" } ?: "Energy balance, no data",
+                )
                 Text("Expenditure about ${expenditure.roundToInt()} kcal / day", style = FTType.Caption, color = FT.TextMuted)
-                TrendChart(balance, today, days, null, Fmt.signed, NutrientColor.Calories)
+                TrendChart(balance, today, days, null, Fmt.signed, FT.Metric.EnergyBalance)
             }
         }
 
@@ -165,12 +169,19 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
                 val c = perKgSeries { it.carbsG }
                 val f = perKgSeries { it.fatG }
                 fun last7(s: List<Pair<LocalDate, Double>>) = s.takeLast(7).map { it.second }.takeIf { it.isNotEmpty() }?.average()
-                StatTiles(
+                // Each tile opens that macro's grams per kilogram over time (all logged days, not just this range).
+                fun allPerKg(pick: (DailyNutrition) -> Double) = perKg(o.allDays, weights, pick).toMap()
+                val one: (Double) -> String = { "%.1f".format(it) }
+                StatTileGrid(
                     listOf(
-                        Triple("PROTEIN", last7(p)?.let { "%.1f g".format(it) } ?: "—", moveWords(macroMove(p.map { it.second }))),
-                        Triple("CARBS", last7(c)?.let { "%.1f g".format(it) } ?: "—", moveWords(macroMove(c.map { it.second }))),
-                        Triple("FAT", last7(f)?.let { "%.1f g".format(it) } ?: "—", moveWords(macroMove(f.map { it.second }))),
+                        Stat("PROTEIN", last7(p)?.let { "%.1f g".format(it) } ?: "—", moveWords(macroMove(p.map { it.second })),
+                            HistorySpec("Protein per kg", allPerKg { it.proteinG }, "g/kg", one, NutrientColor.Protein)),
+                        Stat("CARBS", last7(c)?.let { "%.1f g".format(it) } ?: "—", moveWords(macroMove(c.map { it.second })),
+                            HistorySpec("Carbs per kg", allPerKg { it.carbsG }, "g/kg", one, NutrientColor.Carbs)),
+                        Stat("FAT", last7(f)?.let { "%.1f g".format(it) } ?: "—", moveWords(macroMove(f.map { it.second })),
+                            HistorySpec("Fat per kg", allPerKg { it.fatG }, "g/kg", one, NutrientColor.Fat)),
                     ),
+                    today,
                 )
             }
         }

@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -37,7 +39,9 @@ import com.bioscan.fieldterminal.domain.score.stoolPatternHeadline
 import com.bioscan.fieldterminal.domain.stress.analyzeStressDay
 import com.bioscan.fieldterminal.ui.screens.status.HypnogramCard
 import com.bioscan.fieldterminal.ui.screens.status.PhysiologicalStressCard
+import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
+import com.bioscan.fieldterminal.ui.theme.metricInk
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Duration
 import java.time.LocalDate
@@ -284,17 +288,17 @@ fun StressCurve(
 fun PictureThumb(view: ScoresView, picture: FullPicture) {
     val about = view.day.minusDays(1)
     when (picture) {
-        FullPicture.LAST_NIGHT -> Sparkline(sparkline(view.series[ScoreKeys.SLEEP_HOURS], view.day, 7).map { it.second }, color = FT.Category.Sleep.c300)
-        FullPicture.SLEEP_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.SLEEP_HOURS], view.day, 30).map { it.second }, color = FT.Category.Sleep.c300)
-        FullPicture.CARDIO_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.HRV], view.day, 30).map { it.second })
-        FullPicture.SEXUAL_HEALTH -> Sparkline(sparkline(view.series[ScoreKeys.MORNING_ERECTION], view.day, 30).map { it.second }, color = FT.Category.Arousal.c300)
-        FullPicture.LOAD_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.TSB], view.day, 30).map { it.second }, color = FT.Category.Activity.c300)
+        FullPicture.LAST_NIGHT -> Sparkline(sparkline(view.series[ScoreKeys.SLEEP_HOURS], view.day, 7).map { it.second }, color = metricInk(ScoreKeys.SLEEP_HOURS))
+        FullPicture.SLEEP_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.SLEEP_HOURS], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.SLEEP_HOURS))
+        FullPicture.CARDIO_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.HRV], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.HRV))
+        FullPicture.SEXUAL_HEALTH -> Sparkline(sparkline(view.series[ScoreKeys.MORNING_ERECTION], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.MORNING_ERECTION))
+        FullPicture.LOAD_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.TSB], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.TSB))
         FullPicture.INJURY -> Unit
         FullPicture.DIGESTION -> MiniStool(view.stoolWindow())
-        FullPicture.NUTRITION_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.ENERGY_RATIO], view.day, 30).map { it.second }, color = FT.DomainFuel)
-        FullPicture.HYDRATION_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.WATER_RATIO], view.day, 30).map { it.second }, color = FT.DomainFuel)
+        FullPicture.NUTRITION_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.ENERGY_RATIO], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.ENERGY_RATIO))
+        FullPicture.HYDRATION_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.WATER_RATIO], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.WATER_RATIO))
         FullPicture.STRESS_DAY -> Sparkline(view.stressDays.firstOrNull { it.date == about }?.samples?.sortedBy { it.timestamp }?.map { it.value.toDouble() }.orEmpty(), color = FT.Info)
-        FullPicture.WELLBEING_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.STRESSED_SHARE], view.day, 30).map { it.second }, color = FT.Analysis)
+        FullPicture.WELLBEING_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.STRESSED_SHARE], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.STRESSED_SHARE))
     }
 }
 
@@ -320,8 +324,8 @@ private fun MiniStool(pattern: StoolPattern, zone: ZoneId = ZoneId.systemDefault
 @Composable
 private fun NightTiles(view: ScoresView) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        NightTile("RESTING HR", view.series[ScoreKeys.RHR].orEmpty(), view.day, "bpm", { it.toInt().toString() }, 1.0, FT.DomainHeart, Modifier.weight(1f))
-        NightTile("BREATHING", view.series[ScoreKeys.SLEEP_BREATHING].orEmpty(), view.day, "/min", { "%.1f".format(it) }, 0.3, FT.Category.Sleep.c300, Modifier.weight(1f))
+        NightTile("RESTING HR", view.series[ScoreKeys.RHR].orEmpty(), view.day, "bpm", { it.toInt().toString() }, 1.0, metricInk(ScoreKeys.RHR), Modifier.weight(1f))
+        NightTile("BREATHING", view.series[ScoreKeys.SLEEP_BREATHING].orEmpty(), view.day, "/min", { "%.1f".format(it) }, 0.3, metricInk(ScoreKeys.SLEEP_BREATHING), Modifier.weight(1f))
     }
 }
 
@@ -337,11 +341,22 @@ private fun NightTile(
     modifier: Modifier,
 ) {
     val reading = com.bioscan.fieldterminal.domain.readMetric(series, day, minSd = minSd, maxAgeDays = 0)
+    var open by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusModule)
+    if (open) com.bioscan.fieldterminal.ui.screens.detail.MetricHistoryOverlay(
+        com.bioscan.fieldterminal.ui.screens.detail.HistorySpec(label.lowercase().replaceFirstChar { it.uppercase() }, series, unit, format, color, minSd = minSd),
+        day, onBack = { open = false },
+    ) { open = false }
     Column(
-        modifier.background(FT.Glass, androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusModule)).padding(12.dp),
+        modifier.background(FT.Glass, shape)
+            .ftClickable(shape = shape, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Open $label") { open = true }
+            .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(label, style = FTType.LabelCaps, color = FT.TextMuted)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.weight(1f))
+            Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+        }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(reading.latest?.let(format) ?: "—", style = FTType.MetricMedium, color = FT.TextPrimary)
             Text(unit, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))

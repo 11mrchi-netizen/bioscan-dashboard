@@ -344,9 +344,30 @@ glowing cap on the last lit tick, and a blurred radar sweep inside that brighten
 - A provisional or partial reading draws its lit ticks at 55%; no reading draws the bare track.
 - The radar blur needs Android 12; older versions show the unblurred, masked sweep.
 
+### Bar graphs and diverging scales
+`design/tokens/charts-bars-and-scales.md` is authoritative; Android draws every bar through `ui/components/FTBars.kt`.
+- Bars fill the plot exactly (`barWidth = (W − gap(n−1)) / n`), the gap always smaller than the bar (10 dp for a week,
+  5 dp for 24 h, 2.5 dp for a month, 1.5 dp past 40), rounded tops only (radius ≤ min(barWidth/2, 4 dp)).
+- Fill: a vertical gradient of the metric hue, a 10% lighter tint at the top to 22% at the baseline. Stacked segments
+  use their own hues, 2 dp apart, the top one rounded. Range bars are capsules at 40% with a brighter mean cap.
+- The latest bar is full strength with a 1 dp bright cap; a selected bar stays full and the others drop to 45%;
+  projected bars are 40%. Empty slots are 2 dp baseline stubs; no data shows the baseline and "No data yet".
+- At most one reference line (1 dp dashed, the hue at 50%); a goal band is the hue at 8% behind the bars. The readout
+  row under the plot (value in the metric hue, context muted) carries the numbers, not an axis box.
+- Score strips (LAST 30 DAYS) are bars in the score's hue (the domain's, or CHARGE's), the normal range 60–100 as the
+  goal band and 100 as the reference line.
+- Diverging scales (`FTDivergingScale`) are only for bipolar, zero-centred values: symmetric ±D axis with zero always at
+  the centre, a neutral dead-zone (or a brighter normal band), poles by meaning (energy balance: load ◀ / cardio ▶;
+  TSB and deltas: bad ◀ / ok ▶; fluid balances: warn ◀ / hydration ▶), a white thumb with a dark ring, the value
+  label in its side's colour (neutral inside the dead-zone or normal band), a chevron past ±D, a hollow thumb for low
+  confidence. Used for FORM (TSB) and ENERGY BALANCE.
+
 ### Chart ink
-- A chart is drawn in its metric's hue (`FT.Metric`); bars use the hue solid at the top fading to 25% at the base, area
-  sparklines fade top-down, the end point is a dot.
+- A chart is drawn in its metric's hue (`FT.Metric`; score inputs through `metricInk(key)`); area sparklines fade
+  top-down, the end point is a dot.
+- Lists of metrics (WHAT MOVED IT, WHAT WENT WITH IT, WHAT GOES WITH IT, metric rows and tiles) draw each metric's dot,
+  bullet band and bar in that metric's hue, and a domain in CHARGE's list in the domain hue. Direction is never the
+  mark's colour: the signed number (ok / bad), the arrow and the words say it.
 - Sleep stages use `StageAwake/Rem/Light/Deep`; HR zones `Zone.Hr`; stress lanes `Zone.Stress*`; macros and water the
   fuel metric hues (`NutrientColor`).
 - Multi-series charts carry a legend; colour is never the only signal.
@@ -361,6 +382,13 @@ glowing cap on the last lit tick, and a blurred radar sweep inside that brighten
 - **Route/spatial data** → map for spatial representation.
 
 Every chart needs explicit units, a clear time window when temporal, sensible scale, appropriate missing-data behavior, and no fabricated precision.
+
+### Every metric opens its history
+Anything that shows a metric and looks tappable (a row with ›, a tile, a night tile, a bullet row) opens a page: a score
+input opens its metric overlay, which links to **All of its history**; other metrics open `MetricHistoryOverlay` (the
+latest value and where it sits, its line over 30 D · 90 D · 1 Y · ALL with the normal band, and the window's average,
+readings, lowest and highest). A static summary tile has no › and no press feedback; a tile with a history is marked by
+its metric dot and ›. Never draw a chevron or press state on something that leads nowhere.
 
 ## 11. Analytical state, confidence, provenance
 

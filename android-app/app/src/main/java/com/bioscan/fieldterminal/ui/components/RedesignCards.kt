@@ -308,17 +308,12 @@ private fun FloatingColumns(columns: List<Pair<LocalDate, DayRange>>, color: Col
             Text("%.0f".format(lo), style = FTType.Micro, color = FT.TextMuted)
         }
         Canvas(Modifier.weight(1f).height(110.dp).padding(start = 8.dp)) {
-            val slot = size.width / columns.size
-            val w = (slot * 0.6f).coerceIn(2.dp.toPx(), 14.dp.toPx())
+            val layout = barLayout(columns.size)
+            val w = layout.barWidth.coerceIn(3.dp.toPx(), 10.dp.toPx())
             columns.forEachIndexed { i, (_, r) ->
                 val top = ((hi - r.high) / span).toFloat() * size.height
                 val bottom = ((hi - r.low) / span).toFloat() * size.height
-                drawRoundRect(
-                    color.copy(alpha = 0.75f),
-                    topLeft = Offset(i * slot + (slot - w) / 2f, top),
-                    size = Size(w, maxOf(bottom - top, 2.dp.toPx())),
-                    cornerRadius = CornerRadius(w / 2f),
-                )
+                drawRangeCapsule(color, layout.center(i), w, top, bottom, alpha = if (i == columns.lastIndex) 1f else 0.85f)
             }
         }
     }
@@ -411,15 +406,11 @@ fun StackedColumns(
     Column(modifier.fillMaxWidth()) {
         Text("$unit  0–%.1f".format(top), style = FTType.Micro, color = FT.TextMuted)
         Canvas(Modifier.fillMaxWidth().height(height)) {
-            val slot = size.width / columns.size
-            val w = (slot * 0.7f).coerceIn(2.dp.toPx(), 22.dp.toPx())
+            val layout = barLayout(columns.size)
+            val usable = size.height - FTBarSpec.TopPad.toPx()
             columns.forEachIndexed { i, c ->
-                var yBottom = size.height
-                c.parts.forEachIndexed { p, v ->
-                    val h = (v / top).toFloat() * size.height
-                    drawRect(colors[p % colors.size], Offset(i * slot + (slot - w) / 2f, yBottom - h), Size(w, h))
-                    yBottom -= h
-                }
+                if (c.parts.sum() <= 0.0) drawBarStub(layout.left(i), layout.barWidth)
+                else drawStackedBar(c.parts, colors, layout.left(i), layout.barWidth, { v -> (v / top).toFloat() * usable }, cap = i == columns.lastIndex)
             }
         }
         FlowRow(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

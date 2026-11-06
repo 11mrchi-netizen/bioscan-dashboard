@@ -92,16 +92,19 @@ fun LoadScreen(onBack: () -> Unit, onOpenSessions: () -> Unit) {
         }
 
         Section("FITNESS AND FATIGUE", info = CTL_ATL_INFO + (fitnessFatigue?.payload?.summary?.takeIf { it.isNotBlank() }?.let { "\n\n$it" } ?: "")) {
-            StatTiles(
+            StatTileGrid(
                 listOf(
-                    Triple("FITNESS · CTL", eval.ctl?.let { "%.0f".format(it) } ?: "—", "${spans.ctlDays.toInt()}-day average"),
-                    Triple("FATIGUE · ATL", eval.atl?.let { "%.0f".format(it) } ?: "—", "${spans.atlDays.toInt()}-day average"),
+                    Stat("FITNESS · CTL", eval.ctl?.let { "%.0f".format(it) } ?: "—", "${spans.ctlDays.toInt()}-day average",
+                        HistorySpec("Fitness (CTL)", points.associate { it.date to it.ctl }, "", Fmt.int, FT.Metric.Ctl, info = CTL_ATL_INFO)),
+                    Stat("FATIGUE · ATL", eval.atl?.let { "%.0f".format(it) } ?: "—", "${spans.atlDays.toInt()}-day average",
+                        HistorySpec("Fatigue (ATL)", points.associate { it.date to it.atl }, "", Fmt.int, FT.Metric.Atl, info = CTL_ATL_INFO)),
                 ),
+                today,
             )
             MultiLineChart(
                 listOf(
-                    ChartLine("Fitness", points.associate { it.date to it.ctl }, FT.Category.Activity.c500),
-                    ChartLine("Fatigue", points.associate { it.date to it.atl }, FT.Category.Activity.c300, dashed = true),
+                    ChartLine("Fitness", points.associate { it.date to it.ctl }, FT.Metric.Ctl),
+                    ChartLine("Fatigue", points.associate { it.date to it.atl }, FT.Metric.Atl, dashed = true),
                 ),
                 today, days, Fmt.int,
             )
@@ -188,7 +191,7 @@ fun InjuryScreen(onBack: () -> Unit, onOpenConcern: (String) -> Unit) {
             val latest = entries.maxBy { it.first }
             Section("OSTRC · ${area.uppercase()}", info = OSTRC_INFO, trailing = shortDate(latest.first)) {
                 Text("${latest.second.toInt()} / 100", style = FTType.MetricMedium, color = if (latest.second >= 25) FT.Warning else FT.TextPrimary)
-                TrendChart(entries.toMap(), today, LocalRangeDays.current, null, Fmt.int, FT.Warning)
+                TrendChart(entries.toMap(), today, LocalRangeDays.current, null, Fmt.int, FT.Metric.Soreness)
             }
         }
 

@@ -46,7 +46,14 @@ import com.bioscan.fieldterminal.domain.score.trendOf
 import com.bioscan.fieldterminal.ui.components.GaugePalette
 import com.bioscan.fieldterminal.ui.components.ScoreRing
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.barAlpha
+import com.bioscan.fieldterminal.ui.components.barLayout
+import com.bioscan.fieldterminal.ui.components.drawBar
+import com.bioscan.fieldterminal.ui.components.drawBarStub
+import com.bioscan.fieldterminal.ui.components.drawGoalBand
+import com.bioscan.fieldterminal.ui.components.drawReferenceLine
 import com.bioscan.fieldterminal.ui.theme.FTType
+import com.bioscan.fieldterminal.ui.theme.metricInk
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import kotlin.math.abs
@@ -57,67 +64,62 @@ import kotlin.math.roundToInt
 // Scoring system: the small graphs of the score screens (the tour's list, items 1-14). One file, so they share a look:
 // faint glass track, the band colours, labels drawn next to what they name rather than in a legend.
 
-/** A colour for a sub-score on the 0-150 scale. */
-fun scoreColor(score: Double): Color = when {
-    score >= 100 -> FT.EmeraldHighlight
-    score >= 60 -> FT.Emerald
-    score >= 40 -> FT.Warning
-    else -> FT.Critical
-}
-
 private fun dayLabel(day: LocalDate): String = "${day.dayOfMonth} ${day.month.name.take(3)}"
 
 // ---- 5. the 30-day strip, on the banded scale ----
 
-/** One bar per morning on the 0-[cap] scale, with the bands shaded behind and the 40 / 60 / 100 lines labelled. */
+/**
+ * One bar per morning on the 0-[cap] scale, in the score's own hue (the domain's, or CHARGE's): the normal range
+ * (60-100) as the goal band behind the bars and 100, the top of your normal, as the one dashed reference line
+ * (charts-bars-and-scales.md §1.7). Tap or drag to read a morning; the others dim while one is picked.
+ */
 @Composable
-fun BandedStrip(points: List<Pair<LocalDate, Double?>>, cap: Double = ScoreScale.MAX) {
+fun BandedStrip(points: List<Pair<LocalDate, Double?>>, cap: Double = ScoreScale.MAX, color: Color = FT.Domain.ChargeRadar) {
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    var pick by androidx.compose.runtime.remember(points) { androidx.compose.runtime.mutableStateOf<Int?>(null) }
+    val shown = pick ?: points.indexOfLast { it.second != null }.takeIf { it >= 0 }
+    if (points.none { it.second != null }) {
+        com.bioscan.fieldterminal.ui.components.FTBarsEmpty(com.bioscan.fieldterminal.ui.components.FTBarSpec.DetailHeight)
+        return
+    }
     Row(Modifier.fillMaxWidth()) {
-        Column(Modifier.width(26.dp).height(110.dp), verticalArrangement = Arrangement.SpaceBetween) {
+        Column(Modifier.width(26.dp).height(com.bioscan.fieldterminal.ui.components.FTBarSpec.DetailHeight), verticalArrangement = Arrangement.SpaceBetween) {
             Text(cap.roundToInt().toString(), style = FTType.Micro, color = FT.TextMuted)
             Text("0", style = FTType.Micro, color = FT.TextMuted)
         }
-        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
-        var pick by androidx.compose.runtime.remember(points) { androidx.compose.runtime.mutableStateOf<Int?>(null) }
-        Canvas(Modifier.weight(1f).height(110.dp).then(
+        Canvas(Modifier.weight(1f).height(com.bioscan.fieldterminal.ui.components.FTBarSpec.DetailHeight).then(
             with(com.bioscan.fieldterminal.ui.components.Inspect) { Modifier.inspect(points) { px, w, isTap ->
-                val i = (px / w * points.size).toInt().coerceIn(0, (points.size - 1).coerceAtLeast(0))
+                val i = com.bioscan.fieldterminal.ui.components.BarLayout(w, points.size, 0f).indexAt(px)
                 pick = if (points.getOrNull(i)?.second == null) pick else if (isTap && i == pick) null else i
             } },
         )) {
-            fun y(v: Double) = size.height * (1f - (v / cap).toFloat())
-            // Bands: low, below normal, normal, primed and above (only up to the cap).
-            val bands = listOf(0.0 to 40.0 to FT.Critical, 40.0 to 60.0 to FT.Warning, 60.0 to 100.0 to FT.Emerald, 100.0 to 150.0 to FT.EmeraldHighlight)
-            for ((range, color) in bands) {
-                val (lo, hi) = range
-                if (lo >= cap) continue
-                drawRect(color.copy(alpha = 0.06f), Offset(0f, y(min(hi, cap))), Size(size.width, y(lo) - y(min(hi, cap))))
-            }
-            for (line in listOf(40.0, 60.0, 100.0).filter { it < cap }) {
-                drawLine(FT.TextMuted.copy(alpha = if (line == 100.0) 0.8f else 0.35f), Offset(0f, y(line)), Offset(size.width, y(line)),
-                    strokeWidth = 1.5f, pathEffect = if (line == 100.0) PathEffect.dashPathEffect(floatArrayOf(8f, 8f)) else null)
-            }
-            val n = points.size.coerceAtLeast(1)
-            val slot = size.width / n
+            val usable = size.height - com.bioscan.fieldterminal.ui.components.FTBarSpec.TopPad.toPx()
+            fun y(v: Double) = size.height - (min(v, cap) / cap).toFloat() * usable
+            drawGoalBand(y(min(100.0, cap)), y(ScoreScale.NORMAL_FROM), color)
+            val layout = barLayout(points.size)
             points.forEachIndexed { i, (_, v) ->
-                if (v == null) return@forEachIndexed
-                val top = y(min(v, cap))
-                drawRect(scoreColor(v).copy(alpha = if (i == points.lastIndex || i == pick) 1f else 0.7f), Offset(i * slot + slot * 0.18f, top), Size(slot * 0.64f, size.height - top))
+                if (v == null) drawBarStub(layout.left(i), layout.barWidth)
+                else drawBar(color, layout.left(i), y(v), layout.barWidth, alpha = barAlpha(i, pick), cap = i == shown)
             }
+            if (cap > 100.0) drawReferenceLine(y(100.0), color)
             pick?.let { i ->
                 val (d, v) = points[i]
                 if (v == null) return@let
-                val cx = i * slot + slot / 2
+                val cx = layout.center(i)
                 com.bioscan.fieldterminal.ui.components.Inspect.run {
-                    drawOverlay(measurer, cx, listOf(Offset(cx, y(min(v, cap)))), dayLabel(d), listOf(com.bioscan.fieldterminal.ui.components.InspectRow(null, v.roundToInt().toString(), scoreColor(v))))
+                    drawOverlay(measurer, cx, listOf(Offset(cx, y(v))), dayLabel(d), listOf(com.bioscan.fieldterminal.ui.components.InspectRow(null, v.roundToInt().toString(), color)))
                 }
             }
         }
     }
     Row(Modifier.fillMaxWidth().padding(start = 26.dp)) {
         Text(points.firstOrNull()?.first?.let(::dayLabel) ?: "", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
-        Text("100 = top of your normal", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(2f), textAlign = TextAlign.Center)
+        Text("shaded 60–100 · dashed 100", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(2f), textAlign = TextAlign.Center)
         Text(points.lastOrNull()?.first?.let(::dayLabel) ?: "", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+    }
+    shown?.let { i ->
+        val (d, v) = points[i]
+        if (v != null) com.bioscan.fieldterminal.ui.components.BarReadout("${v.roundToInt()} · ${dayLabel(d)}", "30-day avg · ${points.mapNotNull { it.second }.average().roundToInt()}", color)
     }
 }
 
@@ -133,8 +135,12 @@ fun BulletRow(input: InputScore, points: Double?, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(input.spec.label, style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.width(96.dp), maxLines = 2)
-        if (bullet != null) BulletBar(bullet, scoreColor(input.score), Modifier.weight(1f)) else Box(Modifier.weight(1f))
+        val ink = metricInk(input.spec.key)
+        Row(Modifier.width(96.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            com.bioscan.fieldterminal.ui.components.FTMetricDot(ink, size = 7.dp)
+            Text(input.spec.label, style = FTType.BodySmall, color = FT.TextPrimary, maxLines = 2)
+        }
+        if (bullet != null) BulletBar(bullet, ink, Modifier.weight(1f)) else Box(Modifier.weight(1f))
         Text(formatJudgedValue(input), style = FTType.Value, color = FT.TextPrimary, modifier = Modifier.width(84.dp), textAlign = TextAlign.End, maxLines = 1)
         if (points != null) {
             Text("${if (points >= 0.5) "+" else ""}${points.roundToInt()}", style = FTType.Telemetry,
@@ -145,13 +151,14 @@ fun BulletRow(input: InputScore, points: Double?, onClick: () -> Unit) {
     }
 }
 
+/** A range bullet (value against its normal band or target zone), in the metric's own hue: the band faint, today the dot. */
 @Composable
 fun BulletBar(b: Bullet, dot: Color, modifier: Modifier = Modifier) {
     Canvas(modifier.height(16.dp)) {
         val cy = size.height / 2
         fun x(v: Double) = (size.width * b.fraction(v)).toFloat()
         drawLine(FT.GlassTrack, Offset(0f, cy), Offset(size.width, cy), strokeWidth = 4f, cap = StrokeCap.Round)
-        drawRoundRect(FT.Emerald.copy(alpha = 0.28f), Offset(x(b.zoneLo), cy - 6f), Size(max(2f, x(b.zoneHi) - x(b.zoneLo)), 12f), CornerRadius(4f))
+        drawRoundRect(dot.copy(alpha = 0.30f), Offset(x(b.zoneLo), cy - 6f), Size(max(2f, x(b.zoneHi) - x(b.zoneLo)), 12f), CornerRadius(4f))
         b.tick?.let { t -> drawLine(FT.TextSecondary, Offset(x(t), cy - 9f), Offset(x(t), cy + 9f), strokeWidth = 2f) }
         drawCircle(dot, radius = 6.5f, center = Offset(x(b.value), cy))
         drawCircle(FT.Base, radius = 2.5f, center = Offset(x(b.value), cy))
@@ -258,30 +265,23 @@ fun GroupRings(groups: List<Pair<String, Double?>>, palette: GaugePalette = Gaug
 
 // ---- 8. LOAD: the TSB gauge and the TSB line ----
 
-/** TSB on a scale with the productive band shaded; the last 7 mornings as a fading trail, today as the dot. */
+/**
+ * Today's TSB on a diverging scale (charts-bars-and-scales.md §3): zero centred on a symmetric ±30 axis, fatigued (bad)
+ * on the left and fresh (ok) on the right, the productive band drawn as the brighter normal band.
+ */
 @Composable
 fun TsbGauge(tsb: Series, day: LocalDate) {
-    val lo = -50.0
-    val hi = 30.0
-    val trail = (6 downTo 0).mapNotNull { i -> tsb[day.minusDays(i.toLong())] }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Canvas(Modifier.fillMaxWidth().height(30.dp)) {
-            fun x(v: Double) = (size.width * ((v.coerceIn(lo, hi) - lo) / (hi - lo))).toFloat()
-            val cy = size.height / 2
-            drawLine(FT.GlassTrack, Offset(0f, cy), Offset(size.width, cy), strokeWidth = 8f, cap = StrokeCap.Round)
-            drawRoundRect(FT.Emerald.copy(alpha = 0.3f), Offset(x(ScoreSpecs.TSB_BAND_LO), cy - 8f), Size(x(ScoreSpecs.TSB_BAND_HI) - x(ScoreSpecs.TSB_BAND_LO), 16f), CornerRadius(6f))
-            drawLine(FT.TextMuted, Offset(x(0.0), cy - 12f), Offset(x(0.0), cy + 12f), strokeWidth = 1.5f)
-            trail.forEachIndexed { i, v ->
-                val last = i == trail.lastIndex
-                drawCircle(if (last) FT.TextPrimary else FT.TextSecondary.copy(alpha = 0.25f + 0.5f * i / max(1, trail.size)), radius = if (last) 8f else 4.5f, center = Offset(x(v), cy))
-            }
-        }
-        Row(Modifier.fillMaxWidth()) {
-            Text("HIGH LOAD", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
-            Text("IN BAND", style = FTType.Micro, color = FT.Emerald, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-            Text("LOW LOAD", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
-        }
-    }
+    val today = tsb[day]
+    com.bioscan.fieldterminal.ui.components.FTDivergingScale(
+        value = today,
+        d = 30.0,
+        poles = com.bioscan.fieldterminal.ui.components.DivergingPoles.Form,
+        label = "FORM (TSB) · TODAY",
+        normalBand = ScoreSpecs.TSB_BAND_LO.coerceAtLeast(-30.0) to ScoreSpecs.TSB_BAND_HI,
+        negativeWord = "fatigued",
+        positiveWord = "fresh",
+        description = today?.let { "Form ${it.roundToInt()}, ${if (it < 0) "fatigued side" else "fresh side"}" } ?: "Form, no data",
+    )
 }
 
 /** TSB over the last [days] mornings as a line inside its productive band. */
@@ -299,7 +299,7 @@ fun TsbLine(tsb: Series, day: LocalDate, days: Int = 30) {
         Canvas(Modifier.weight(1f).height(110.dp)) {
             fun y(v: Double) = (size.height * (1 - (v - lo) / (hi - lo))).toFloat()
             fun x(i: Int) = size.width * i / (days - 1).coerceAtLeast(1)
-            drawRect(FT.Emerald.copy(alpha = 0.12f), Offset(0f, y(ScoreSpecs.TSB_BAND_HI)), Size(size.width, y(ScoreSpecs.TSB_BAND_LO) - y(ScoreSpecs.TSB_BAND_HI)))
+            drawRect(metricInk(com.bioscan.fieldterminal.domain.score.ScoreKeys.TSB).copy(alpha = 0.10f), Offset(0f, y(ScoreSpecs.TSB_BAND_HI)), Size(size.width, y(ScoreSpecs.TSB_BAND_LO) - y(ScoreSpecs.TSB_BAND_HI)))
             drawLine(FT.TextMuted.copy(alpha = 0.5f), Offset(0f, y(0.0)), Offset(size.width, y(0.0)), strokeWidth = 1f)
             val path = Path()
             var started = false
@@ -307,13 +307,13 @@ fun TsbLine(tsb: Series, day: LocalDate, days: Int = 30) {
                 if (v == null) return@forEachIndexed
                 if (!started) { path.moveTo(x(i), y(v)); started = true } else path.lineTo(x(i), y(v))
             }
-            drawPath(path, FT.TextPrimary, style = Stroke(width = 3f))
-            points.lastOrNull()?.second?.let { drawCircle(FT.EmeraldHighlight, 6f, Offset(x(days - 1), y(it))) }
+            drawPath(path, metricInk(com.bioscan.fieldterminal.domain.score.ScoreKeys.TSB), style = Stroke(width = 3f))
+            points.lastOrNull()?.second?.let { drawCircle(FT.TextPrimary, 6f, Offset(x(days - 1), y(it))) }
         }
     }
     Row(Modifier.fillMaxWidth().padding(start = 30.dp)) {
         Text(points.first().first.let(::dayLabel), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
-        Text("shaded = productive band", style = FTType.Micro, color = FT.Emerald, modifier = Modifier.weight(2f), textAlign = TextAlign.Center)
+        Text("shaded = productive band", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(2f), textAlign = TextAlign.Center)
         Text(points.last().first.let(::dayLabel), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
 }
@@ -395,27 +395,27 @@ fun MetricChart(series: Series, day: LocalDate, key: String, band: Pair<Double, 
             val labels = listOfNotNull(hi, band?.second, band?.first, lo).distinct()
             for (v in labels) {
                 val isBand = band != null && (v == band.first || v == band.second)
-                Text(formatInputValue(key, v), style = FTType.Micro, color = if (isBand) FT.Emerald else FT.TextMuted,
+                Text(formatInputValue(key, v), style = FTType.Micro, color = if (isBand) metricInk(key) else FT.TextMuted,
                     modifier = Modifier.align(Alignment.TopStart).padding(top = (128 * frac(v)).dp.coerceAtLeast(0.dp)))
             }
         }
         Canvas(Modifier.weight(1f).height(140.dp)) {
             fun x(i: Int) = size.width * i / 59f
             fun y(v: Double) = (size.height * (1 - (v - lo) / (hi - lo))).toFloat().coerceIn(4f, size.height - 4f)
-            band?.let { (a, b) -> drawRect(FT.Emerald.copy(alpha = 0.14f), Offset(0f, y(b)), Size(size.width, y(a) - y(b))) }
+            band?.let { (a, b) -> drawRect(metricInk(key).copy(alpha = 0.12f), Offset(0f, y(b)), Size(size.width, y(a) - y(b))) }
             for (week in 0..8) drawLine(FT.GlassTrack, Offset(x(59 - week * 7), 0f), Offset(x(59 - week * 7), size.height), strokeWidth = 1f)
             val path = Path()
             points.forEachIndexed { k, (i, v) -> if (k == 0) path.moveTo(x(i), y(v)) else path.lineTo(x(i), y(v)) }
             drawPath(path, FT.TextSecondary.copy(alpha = 0.5f), style = Stroke(width = 1.5f))
             val mean = Path()
             mean7.forEachIndexed { k, (i, v) -> if (k == 0) mean.moveTo(x(i), y(v)) else mean.lineTo(x(i), y(v)) }
-            drawPath(mean, FT.Emerald, style = Stroke(width = 3f))
-            points.forEach { (i, v) -> drawCircle(if (i == 59) FT.EmeraldHighlight else FT.TextSecondary, radius = if (i == 59) 7f else 3f, center = Offset(x(i), y(v))) }
+            drawPath(mean, metricInk(key), style = Stroke(width = 3f))
+            points.forEach { (i, v) -> drawCircle(if (i == 59) FT.TextPrimary else FT.TextSecondary, radius = if (i == 59) 7f else 3f, center = Offset(x(i), y(v))) }
         }
     }
     Row(Modifier.fillMaxWidth().padding(start = 52.dp)) {
         Text(dayLabel(from), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
-        Text("line = 7-day mean · shaded = $bandLabel", style = FTType.Micro, color = FT.Emerald, modifier = Modifier.weight(3f), textAlign = TextAlign.Center)
+        Text("line = 7-day mean · shaded = $bandLabel", style = FTType.Micro, color = metricInk(key), modifier = Modifier.weight(3f), textAlign = TextAlign.Center)
         Text(dayLabel(day), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
 }

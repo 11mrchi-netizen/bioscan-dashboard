@@ -53,6 +53,13 @@ import com.bioscan.fieldterminal.domain.score.Series
 import com.bioscan.fieldterminal.ui.components.LoadGuard
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.BarLayout
+import com.bioscan.fieldterminal.ui.components.FTBarSpec
+import com.bioscan.fieldterminal.ui.components.barAlpha
+import com.bioscan.fieldterminal.ui.components.barLayout
+import com.bioscan.fieldterminal.ui.components.drawBarStub
+import com.bioscan.fieldterminal.ui.components.drawRangeCapsule
+import com.bioscan.fieldterminal.ui.components.drawStackedBar
 import com.bioscan.fieldterminal.ui.components.ftDomainWash
 import com.bioscan.fieldterminal.ui.components.ftGlass
 import com.bioscan.fieldterminal.ui.screens.today.FullScreenOverlay
@@ -295,14 +302,7 @@ fun MetricRow(
         Sparkline(spark, color = color)
         Text("›", style = FTType.RowTitle, color = FT.TextMuted)
     }
-    if (open) {
-        val days = LocalRangeDays.current
-        FullScreenOverlay(title = label.uppercase(), onClose = { open = false }) {
-            Headline(reading, format, unit, today, betterHigher)
-            Section("${days} DAYS") { TrendChart(series, today, days, reading.normal, format, color) }
-            if (info != null) Section("WHAT IS IT?") { Text(info, style = FTType.BodySmall, color = FT.TextSecondary) }
-        }
-    }
+    if (open) MetricHistoryOverlay(HistorySpec(label, series, unit, format, color, log, minSd, betterHigher, info), today) { open = false }
 }
 
 /** A metric as a tile: [MetricTiles] draws them two to a row, each opening its own trend full screen. */
@@ -347,35 +347,100 @@ private fun MetricTile(t: TileSpec, today: LocalDate, modifier: Modifier) {
         Text("${positionGlyph(reading.position)} ${positionWords(reading.position)}", style = FTType.Caption, color = FT.TextMuted)
         Sparkline(spark, color = t.color)
     }
-    if (open) {
-        val days = LocalRangeDays.current
-        FullScreenOverlay(title = t.label.uppercase(), onClose = { open = false }) {
-            Headline(reading, t.format, t.unit, today, t.betterHigher)
-            Section("$days DAYS") { TrendChart(t.series, today, days, reading.normal, t.format, t.color) }
-            if (t.info != null) Section("WHAT IS IT?") { Text(t.info, style = FTType.BodySmall, color = FT.TextSecondary) }
-        }
-    }
+    if (open) MetricHistoryOverlay(HistorySpec(t.label, t.series, t.unit, t.format, t.color, minSd = t.minSd, betterHigher = t.betterHigher, info = t.info), today) { open = false }
 }
 
-/** Small number tiles, two to a row. */
+/** One small number tile; with [history] it opens that metric's history page. */
+data class Stat(val label: String, val value: String, val sub: String? = null, val history: HistorySpec? = null)
+
+/** Small number tiles, two to a row (static summaries). */
 @Composable
-fun StatTiles(tiles: List<Triple<String, String, String?>>) {
+fun StatTiles(tiles: List<Triple<String, String, String?>>) = StatTileGrid(tiles.map { (l, v, s) -> Stat(l, v, s) })
+
+/** Small number tiles, two to a row; a tile with a history is tappable (marked ›) and opens it. */
+@Composable
+fun StatTileGrid(tiles: List<Stat>, today: LocalDate = LocalDate.now()) {
+    var open by remember { mutableStateOf<HistorySpec?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (row in tiles.chunked(2)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for ((label, value, sub) in row) {
+                for (t in row) {
+                    val shape = RoundedCornerShape(FT.RadiusModule)
                     Column(
-                        Modifier.weight(1f).background(FT.Glass, RoundedCornerShape(FT.RadiusModule)).padding(10.dp),
+                        Modifier.weight(1f).background(FT.Glass, shape)
+                            .then(if (t.history != null) Modifier.ftClickable(shape = shape, role = Role.Button, onClickLabel = "Open ${t.label}") { open = t.history } else Modifier)
+                            .padding(10.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        Text(label, style = FTType.Micro, color = FT.TextMuted)
-                        Text(value, style = FTType.MetricMedium, color = FT.TextPrimary)
-                        if (sub != null) Text(sub, style = FTType.Caption, color = FT.TextMuted)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            t.history?.let { com.bioscan.fieldterminal.ui.components.FTMetricDot(it.color, Modifier.padding(end = 6.dp), size = 6.dp) }
+                            Text(t.label, style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
+                            if (t.history != null) Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+                        }
+                        Text(t.value, style = FTType.MetricMedium, color = FT.TextPrimary)
+                        if (t.sub != null) Text(t.sub, style = FTType.Caption, color = FT.TextMuted)
                     }
                 }
                 if (row.size == 1) Box(Modifier.weight(1f))
             }
         }
+    }
+    open?.let { h -> MetricHistoryOverlay(h, today) { open = null } }
+}
+
+// ---- a metric's own history page ----
+
+/** What a metric's history page needs: its series by day, how to print it, and its fixed metric hue. */
+data class HistorySpec(
+    val label: String,
+    val series: Series,
+    val unit: String,
+    val format: (Double) -> String,
+    val color: Color = FT.Metric.WeightEma,
+    val log: Boolean = false,
+    val minSd: Double = 0.0,
+    val betterHigher: Boolean? = null,
+    val info: String? = null,
+)
+
+/**
+ * The page every metric opens to (rows, tiles, night tiles, "what went with it"): the latest value and where it sits,
+ * its evolution over 30 D · 90 D · 1 Y · ALL with the normal band, and the numbers of the window (average, lowest,
+ * highest, readings). Full screen, ‹ / ✕ back to where it was opened.
+ */
+@Composable
+fun MetricHistoryOverlay(spec: HistorySpec, today: LocalDate = LocalDate.now(), onBack: (() -> Unit)? = null, onClose: () -> Unit) {
+    val first = remember(spec.series) { spec.series.keys.minOrNull() }
+    val allDays = first?.let { java.time.temporal.ChronoUnit.DAYS.between(it, today).toInt() + 1 }?.coerceAtLeast(30) ?: 365
+    var days by rememberSaveable { mutableStateOf(ChartRange.M3.days) }
+    val reading = remember(spec.series, today) { readMetric(spec.series, today, log = spec.log, minSd = spec.minSd) }
+    FullScreenOverlay(title = spec.label.uppercase(), onClose = onClose, onBack = onBack) {
+        Headline(reading, spec.format, spec.unit, today, spec.betterHigher)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (r in ChartRange.entries) Chip(r.label, days == r.days) { days = r.days }
+            if (allDays > ChartRange.Y1.days) Chip("ALL", days == allDays) { days = allDays }
+        }
+        CompositionLocalProvider(LocalRangeDays provides days) {
+            Section("$days DAYS") { TrendChart(spec.series, today, days, reading.normal, spec.format, spec.color) }
+        }
+        val window = remember(spec.series, days, today) {
+            spec.series.filterKeys { !it.isBefore(today.minusDays((days - 1).toLong())) && !it.isAfter(today) }
+        }
+        Section("IN THESE $days DAYS") {
+            if (window.isEmpty()) EmptyLine("No readings in this range.") else {
+                val lo = window.minBy { it.value }
+                val hi = window.maxBy { it.value }
+                StatTiles(
+                    listOf(
+                        Triple("AVERAGE", "${spec.format(window.values.average())} ${spec.unit}".trim(), null),
+                        Triple("READINGS", "${window.size}", "of $days days"),
+                        Triple("LOWEST", "${spec.format(lo.value)} ${spec.unit}".trim(), shortDate(lo.key)),
+                        Triple("HIGHEST", "${spec.format(hi.value)} ${spec.unit}".trim(), shortDate(hi.key)),
+                    ),
+                )
+            }
+        }
+        if (spec.info != null) Section("WHAT IS IT?") { Text(spec.info, style = FTType.BodySmall, color = FT.TextSecondary) }
     }
 }
 
@@ -595,8 +660,9 @@ fun StackedBars(
         EmptyLine("Nothing logged in this range.")
         return
     }
-    var selected by remember(columns) { mutableStateOf(columns.lastIndex) }
-    val (name, parts) = columns[selected.coerceIn(0, columns.lastIndex)]
+    var selected by remember(columns) { mutableStateOf<Int?>(null) }
+    val shown = (selected ?: columns.lastIndex).coerceIn(0, columns.lastIndex)
+    val (name, parts) = columns[shown]
     Text(
         "$name · " + labels.indices.joinToString(" · ") { "${labels[it]} ${format(parts.getOrElse(it) { 0.0 })}" } + " · total ${format(parts.sum())} $unit",
         style = FTType.Caption, color = FT.TextSecondary,
@@ -607,18 +673,12 @@ fun StackedBars(
             selected = ((px / w) * columns.size).toInt().coerceIn(0, columns.lastIndex)
         },
     ) {
-        val slot = size.width / columns.size
-        val w = (slot * 0.7f).coerceIn(2f, 28.dp.toPx())
+        val layout = barLayout(columns.size)
+        val usable = size.height - FTBarSpec.TopPad.toPx()
         columns.forEachIndexed { i, (_, values) ->
-            var y = size.height
-            val alpha = if (i == selected) 1f else 0.6f
-            values.forEachIndexed { k, v ->
-                val h = (v / top).toFloat() * size.height
-                if (h > 0.5f) {
-                    drawRoundRect(colors[k % colors.size].copy(alpha = alpha), Offset(i * slot + (slot - w) / 2, y - h), Size(w, max(1f, h - 1.5f)), CornerRadius(2f))
-                    y -= h
-                }
-            }
+            if (values.sum() <= 0.0) drawBarStub(layout.left(i), layout.barWidth)
+            else drawStackedBar(values, colors, layout.left(i), layout.barWidth, { v -> (v / top).toFloat() * usable },
+                alpha = barAlpha(i, selected), cap = i == shown)
         }
     }
     Row(Modifier.fillMaxWidth()) {
@@ -654,8 +714,12 @@ fun RangeBars(ranges: List<Pair<LocalDate, DayRange>>, day: LocalDate, days: Int
         }) {
             fun x(d: LocalDate) = size.width * java.time.temporal.ChronoUnit.DAYS.between(from, d) / (days - 1).coerceAtLeast(1).toFloat()
             fun y(v: Double) = (size.height * (1 - (v - lo) / (hi - lo))).toFloat()
-            val w = (size.width / days * 0.6f).coerceIn(1.5f, 10f)
-            for ((d, r) in shown) drawRoundRect(color.copy(alpha = if (d == day) 1f else 0.6f), Offset(x(d) - w / 2, y(r.high)), Size(w, max(2f, y(r.low) - y(r.high))), CornerRadius(w / 2))
+            val w = BarLayout(size.width, days, FTBarSpec.gapFor(days).toPx()).barWidth.coerceIn(3.dp.toPx(), 10.dp.toPx())
+            // §1.10 range bars: a capsule from the day's low to its high; the selected (or today's) at full strength.
+            for ((d, r) in shown) {
+                val i = java.time.temporal.ChronoUnit.DAYS.between(from, d).toInt()
+                drawRangeCapsule(color, x(d), w, y(r.high), y(r.low), alpha = if (pick == null) (if (d == day) 1f else 0.85f) else barAlpha(i, pick))
+            }
             pick?.let { i ->
                 val (d, r) = byIndex[i] ?: return@let
                 drawInspectOverlay(measurer, x(d), listOf(Offset(x(d), y(r.high)), Offset(x(d), y(r.low))), shortDate(d),

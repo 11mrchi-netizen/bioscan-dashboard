@@ -60,3 +60,6 @@ The visual authority is `design/FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md` (v2.0, t
   never which series or section it is. The holographic spectrum is CHARGE's only.
 - Numbers are Nunito, interface text Inter, micro-labels IBM Plex Mono, all through `FTType` roles.
 - No raw hex in screens: a new metric hue is added to `design/tokens/` and `FT.Metric` together.
+- Bars and diverging scales follow `design/tokens/charts-bars-and-scales.md` through `ui/components/FTBars.kt`; lists of
+  metrics use each metric's hue (`metricInk`) and show direction only by the number, arrow and words.
+- Anything that shows a metric and looks tappable opens its history (`MetricHistoryOverlay`); nothing has a › that leads nowhere.

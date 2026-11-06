@@ -40,6 +40,7 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.NutrientColor
+import com.bioscan.fieldterminal.ui.components.drawBar
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -146,23 +147,22 @@ private fun CarbStrip(days: List<HorizonDay>) {
                     .pointerInput(days) { detectHorizontalDragGestures { c, _ -> selected = indexAt(c.position.x, size.width.toFloat(), days.size) } },
             ) {
                 val slot = size.width / days.size
-                val barW = (slot * 0.42f).coerceAtMost(14.dp.toPx())
-                val bandW = (slot * 0.78f).coerceAtMost(26.dp.toPx())
+                val layout = com.bioscan.fieldterminal.ui.components.BarLayout(size.width, days.size, com.bioscan.fieldterminal.ui.components.FTBarSpec.gapFor(days.size).toPx())
+                val barW = layout.barWidth * 0.6f
+                val bandW = layout.barWidth
                 fun y(v: Double) = size.height - (v / top).toFloat() * size.height
                 // Recessive grid: the halfway line.
                 drawLine(FT.TextMuted.copy(alpha = 0.25f), Offset(0f, y(top / 2)), Offset(size.width, y(top / 2)), strokeWidth = 1f)
                 days.forEachIndexed { i, h ->
-                    val cx = i * slot + slot / 2
+                    val cx = layout.center(i)
                     val band = h.plan.band
                     drawRoundRect(
                         NutrientColor.Carbs.copy(alpha = 0.14f), Offset(cx - bandW / 2, y(band.highGPerKg)),
                         Size(bandW, y(band.lowGPerKg) - y(band.highGPerKg)), CornerRadius(3.dp.toPx()),
                     )
                     val v = h.plan.carbGPerKg
-                    val alpha = if (i == shown) 1f else 0.55f
-                    drawRoundRect(NutrientColor.Carbs.copy(alpha = alpha), Offset(cx - barW / 2, y(v)), Size(barW, size.height - y(v)), CornerRadius(4.dp.toPx()))
+                    drawBar(NutrientColor.Carbs, cx - barW / 2, y(v), barW, alpha = com.bioscan.fieldterminal.ui.components.barAlpha(i, selected), cap = i == shown)
                 }
-                drawLine(FT.TextMuted.copy(alpha = 0.5f), Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1f)
             }
             Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
                 days.forEachIndexed { i, h ->

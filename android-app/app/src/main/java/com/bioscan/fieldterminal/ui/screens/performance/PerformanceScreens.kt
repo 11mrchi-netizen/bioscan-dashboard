@@ -42,6 +42,8 @@ import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.screens.detail.StackedBars
 import com.bioscan.fieldterminal.ui.screens.detail.StatTiles
 import com.bioscan.fieldterminal.ui.screens.detail.shortDate
+import com.bioscan.fieldterminal.ui.components.drawBar
+import com.bioscan.fieldterminal.ui.components.drawBarStub
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -114,10 +116,11 @@ private fun SportTile(summary: SportSummary, color: Color, onClick: () -> Unit) 
         }
         Canvas(Modifier.width(84.dp).height(28.dp)) {
             val top = summary.weeklyHours.maxOrNull()?.takeIf { it > 0 } ?: 1.0
-            val slot = size.width / summary.weeklyHours.size
+            val layout = com.bioscan.fieldterminal.ui.components.BarLayout(size.width, summary.weeklyHours.size, 3.dp.toPx())
             summary.weeklyHours.forEachIndexed { i, h ->
-                val bh = (h / top).toFloat() * size.height
-                drawRoundRect(if (h > 0) color else FT.GlassTrack, Offset(i * slot + 1f, size.height - bh.coerceAtLeast(2f)), Size(slot - 2f, bh.coerceAtLeast(2f)), CornerRadius(2f))
+                val bh = (h / top).toFloat() * (size.height - 2.dp.toPx())
+                if (h > 0) drawBar(color, layout.left(i), size.height - bh, layout.barWidth, cap = i == summary.weeklyHours.lastIndex)
+                else drawBarStub(layout.left(i), layout.barWidth)
             }
         }
         Text("›", style = FTType.SectionTitle, color = FT.TextMuted)

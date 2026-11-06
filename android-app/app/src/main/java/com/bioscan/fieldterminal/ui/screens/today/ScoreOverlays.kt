@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -216,13 +217,13 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
             val max = charge.drivers.maxOfOrNull { abs(it.points) }?.coerceAtLeast(5.0) ?: 5.0
             if (charge.drivers.isEmpty()) Text("Not scored yet.", style = FTType.BodySmall, color = FT.TextMuted)
             for (d in charge.drivers) {
-                DriverBar(label = d.key.label, points = d.points, max = max, onClick = { onOpen(ScoreOverlay.Domain(d.key)) })
+                DriverBar(label = d.key.label, points = d.points, max = max, color = FT.Domain.of(d.key), onClick = { onOpen(ScoreOverlay.Domain(d.key)) })
             }
             val left = DomainKey.entries.filter { it !in charge.domainsUsed }
             if (left.isNotEmpty()) Text("Not in today's CHARGE: ${left.joinToString { it.label }} (not enough data)", style = FTType.Caption, color = FT.TextMuted)
         }
 
-        OverlaySection("LAST 30 DAYS") { BandedStrip(view.chargeStrip) }
+        OverlaySection("LAST 30 DAYS") { BandedStrip(view.chargeStrip, color = FT.Domain.ChargeRadar) }
 
         // What the nightly relationship engine found about evenings and the next morning's RECOVERY and SLEEP scores
         // (supabase/functions/_shared/analysis-core/hypotheses.ts, catalogue 2.2.0). Settled answers only.
@@ -281,22 +282,27 @@ private fun DetailLine(label: String, value: String) {
 }
 
 @Composable
-private fun DriverBar(label: String, points: Double, max: Double, onClick: () -> Unit) {
+private fun DriverBar(label: String, points: Double, max: Double, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Open $label") { onClick() }.padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(label, style = FTType.Label, color = FT.TextPrimary, modifier = Modifier.width(80.dp))
+        // The bar is in the domain's own hue; which way it moved CHARGE is the side of the centre and the signed number.
+        Row(Modifier.width(88.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            com.bioscan.fieldterminal.ui.components.FTMetricDot(color, size = 7.dp)
+            Text(label, style = FTType.Label, color = FT.TextPrimary)
+        }
         Canvas(modifier = Modifier.weight(1f).height(10.dp)) {
             val mid = size.width / 2
-            drawLine(FT.GlassTrack, Offset(mid, 0f), Offset(mid, size.height), strokeWidth = 2f)
+            drawLine(FT.Dim, Offset(mid, -2f), Offset(mid, size.height + 2f), strokeWidth = 1.dp.toPx())
             val w = (abs(points) / max).toFloat().coerceAtMost(1f) * mid
-            val color = if (points >= 0) FT.Emerald else FT.Critical
-            if (points >= 0) drawRect(color.copy(alpha = 0.7f), Offset(mid, 0f), Size(w, size.height))
-            else drawRect(color.copy(alpha = 0.7f), Offset(mid - w, 0f), Size(w, size.height))
+            val r = androidx.compose.ui.geometry.CornerRadius(size.height / 2)
+            if (points >= 0) drawRoundRect(color, Offset(mid, 0f), Size(w, size.height), r)
+            else drawRoundRect(color, Offset(mid - w, 0f), Size(w, size.height), r)
         }
-        Text("${if (points >= 0) "+" else ""}${points.roundToInt()}", style = FTType.Telemetry, color = FT.TextPrimary,
+        Text("${if (points >= 0) "+" else ""}${points.roundToInt()}", style = FTType.Telemetry,
+            color = when { points >= 1 -> FT.Ok; points <= -1 -> FT.Bad; else -> FT.TextMuted },
             modifier = Modifier.width(36.dp), textAlign = TextAlign.End)
         Text("›", style = FTType.Telemetry, color = FT.TextMuted)
     }
@@ -363,7 +369,7 @@ fun DomainOverlay(
         if (key == DomainKey.LOAD && view.series[ScoreKeys.TSB] != null) {
             OverlaySection("FATIGUE (TSB) · 30 DAYS") { TsbLine(view.series.getValue(ScoreKeys.TSB), view.day) }
         } else {
-            OverlaySection("LAST 30 DAYS") { BandedStrip(view.domainStrips[key].orEmpty(), cap = if (key.upside) ScoreScale.MAX else 100.0) }
+            OverlaySection("LAST 30 DAYS") { BandedStrip(view.domainStrips[key].orEmpty(), cap = if (key.upside) ScoreScale.MAX else 100.0, color = FT.Domain.of(key)) }
         }
         OverlaySection("DOES IT EARN ITS PLACE?") { ScorecardBlock(view.quality?.domains?.get(key), key.label, isCharge = false) }
         OverlaySection("WHAT IS ${key.label}?") { Text(whatIs(key), style = FTType.BodySmall, color = FT.TextSecondary) }
@@ -411,7 +417,7 @@ private fun ScorecardBlock(result: ScorecardResult?, label: String, isCharge: Bo
 // ---- level 3: one metric ----
 
 @Composable
-fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () -> Unit, onClose: () -> Unit) {
+fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () -> Unit, onClose: () -> Unit, onOpen: (ScoreOverlay) -> Unit = {}) {
     val domain: DomainScore = view.scores.domains.getValue(key)
     val input = domain.raw.inputs.firstOrNull { it.spec.key == inputKey }
     val spec = input?.spec ?: ScoreSpecs.ALL.getValue(key).groups.flatMap { it.inputs }.first { it.key == inputKey }
@@ -428,7 +434,7 @@ fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () 
             val points = inputPoints(domain.raw)[spec.key]
             val line = listOfNotNull(referenceLine(input), points?.let { "moved ${key.label} ${if (it >= 0) "+" else ""}${it.roundToInt()}" }).joinToString(" · ")
             if (line.isNotEmpty()) Text(line, style = FTType.BodySmall, color = FT.TextSecondary)
-            bulletOf(input)?.let { BulletBar(it, scoreColor(input.score), Modifier.fillMaxWidth()) }
+            bulletOf(input)?.let { BulletBar(it, com.bioscan.fieldterminal.ui.theme.metricInk(spec.key), Modifier.fillMaxWidth()) }
         } else {
             Text("No reading for this morning.", style = FTType.Body, color = FT.TextMuted)
         }
@@ -444,7 +450,16 @@ fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () 
             is InputKind.Band -> k.lo to k.hi
         }
         val personal = spec.kind is InputKind.Baseline || spec.kind is InputKind.Stability
-        OverlaySection("60 DAYS") { MetricChart(series, view.day, spec.key, band, if (personal) "your normal" else "on target") }
+        var history by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        OverlaySection("60 DAYS") {
+            MetricChart(series, view.day, spec.key, band, if (personal) "your normal" else "on target")
+            if (series.size > 1) com.bioscan.fieldterminal.ui.screens.detail.LinkRow("All of its history", "${series.size} mornings · 30 D to all time") { history = true }
+        }
+        if (history) com.bioscan.fieldterminal.ui.screens.detail.MetricHistoryOverlay(
+            com.bioscan.fieldterminal.ui.screens.detail.HistorySpec(spec.label, series, "", { v -> formatInputValue(spec.key, v) },
+                com.bioscan.fieldterminal.ui.theme.metricInk(spec.key), log = log, minSd = minSd, info = whatIsInput(spec.key)),
+            view.day, onBack = { history = false },
+        ) { history = false }
 
         val stats = metricStats(series, view.day, log, minSd.coerceAtLeast(1e-6))
         OverlaySection("HOW IT SITS") {
@@ -467,12 +482,19 @@ fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () 
             .sortedBy { it.score }.take(4)
         OverlaySection("WHAT WENT WITH IT · THIS MORNING") {
             if (others.isEmpty()) Text("Everything else was close to usual.", style = FTType.BodySmall, color = FT.TextMuted)
-            for (o in others) BulletRow(o, null) {}
+            // Each one opens its own page, in the domain it belongs to.
+            for (o in others) {
+                val owner = view.scores.domains.entries.firstOrNull { (_, d) -> d.raw.inputs.any { it.spec.key == o.spec.key } }?.key ?: key
+                BulletRow(o, null) { onOpen(ScoreOverlay.Input(owner, o.spec.key)) }
+            }
         }
         val related = relatedInputs(view.series, spec.key, view.day, labels)
         OverlaySection("WHAT GOES WITH IT · 120 DAYS") {
             if (related.isEmpty()) Text("Nothing moves clearly with it yet.", style = FTType.BodySmall, color = FT.TextMuted)
-            for (r in related) RelationRow(r)
+            for (r in related) {
+                val owner = ScoreSpecs.ALL.entries.firstOrNull { (_, spec) -> spec.groups.any { g -> g.inputs.any { it.key == r.key } } }?.key
+                RelationRow(r, onClick = owner?.let { o -> { onOpen(ScoreOverlay.Input(o, r.key)) } })
+            }
             if (related.isNotEmpty()) Text("Moves together, not proof of cause. Lab › N=1 tests it.", style = FTType.Micro, color = FT.TextMuted)
         }
         OverlaySection("WHAT IS IT?") { Text(whatIsInput(spec.key), style = FTType.BodySmall, color = FT.TextSecondary) }
@@ -482,17 +504,25 @@ fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () 
 
 /** One relation as a bar from the centre: right when the two rise together, left when one rises as the other falls. */
 @Composable
-private fun RelationRow(r: com.bioscan.fieldterminal.domain.score.Relation) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(r.label, style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.width(120.dp), maxLines = 1)
+private fun RelationRow(r: com.bioscan.fieldterminal.domain.score.Relation, onClick: (() -> Unit)?) {
+    val ink = com.bioscan.fieldterminal.ui.theme.metricInk(r.key)
+    Row(
+        modifier = Modifier.fillMaxWidth().then(if (onClick != null) Modifier.ftClickable(role = Role.Button, onClickLabel = "Open ${r.label}") { onClick() } else Modifier).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(Modifier.width(120.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            com.bioscan.fieldterminal.ui.components.FTMetricDot(ink, size = 7.dp)
+            Text(r.label, style = FTType.BodySmall, color = FT.TextPrimary, maxLines = 1)
+        }
         Canvas(Modifier.weight(1f).height(12.dp)) {
             val mid = size.width / 2
             drawLine(FT.TextMuted, Offset(mid, 0f), Offset(mid, size.height), strokeWidth = 1.5f)
             val w = (abs(r.r) * mid).toFloat()
-            val color = FT.Analysis
-            if (r.r >= 0) drawRect(color, Offset(mid, 2f), Size(w, size.height - 4f)) else drawRect(color, Offset(mid - w, 2f), Size(w, size.height - 4f))
+            val cr = androidx.compose.ui.geometry.CornerRadius((size.height - 4f) / 2)
+            if (r.r >= 0) drawRoundRect(ink, Offset(mid, 2f), Size(w, size.height - 4f), cr) else drawRoundRect(ink, Offset(mid - w, 2f), Size(w, size.height - 4f), cr)
         }
         Text(if (r.r >= 0) "together" else "opposite", style = FTType.Micro, color = FT.TextSecondary, modifier = Modifier.width(56.dp), textAlign = TextAlign.End)
+        if (onClick != null) Text("›", style = FTType.Telemetry, color = FT.TextMuted)
     }
 }
 
@@ -510,7 +540,7 @@ fun ScoreOverlayHost(view: ScoresView, stack: List<ScoreOverlay>, onStack: (List
         ScoreOverlay.Charge -> ChargeOverlay(view, onOpen = push, onClose = close)
         // A detail page is a pushed page: the overlays close so back from it returns to TODAY.
         is ScoreOverlay.Domain -> DomainOverlay(view, top.key, onOpen = push, onClose = close, onBack = back, onOpenDetail = { d -> close(); onOpenDetail(d) })
-        is ScoreOverlay.Input -> InputOverlay(view, top.key, top.inputKey, onBack = back ?: close, onClose = close)
+        is ScoreOverlay.Input -> InputOverlay(view, top.key, top.inputKey, onBack = back ?: close, onClose = close, onOpen = push)
         is ScoreOverlay.Picture -> PictureOverlay(view, top.picture, onBack = back ?: close, onClose = close)
     }
 }

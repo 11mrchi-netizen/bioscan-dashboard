@@ -44,7 +44,8 @@ fun EventsCard(onOpenEvent: (Long) -> Unit) {
     var adding by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.NullableEventSaver) { mutableStateOf<AthleteEvent?>(null) }
     var addingBlank by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(attempt) {
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(attempt, cacheVersion) {
         error = null
         try {
             runCatching { repo.linkCompletedEvents() }

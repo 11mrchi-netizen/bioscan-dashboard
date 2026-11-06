@@ -57,4 +57,6 @@ object RoutineSettingsStore {
     const val KEY_LAST_PHONE_RUN = "phone_usage_last_run"
     const val KEY_LAST_PHONE_ERROR = "phone_usage_last_error_at"
     const val KEY_LAST_MOBILITY_RUN = "mobility_last_run"
+    // Set once the trips and mobility_daily lost to the trip insert bug (Nov 2026) have been rebuilt.
+    const val KEY_TRIPS_REPAIRED = "trips_repaired_v1"
 }

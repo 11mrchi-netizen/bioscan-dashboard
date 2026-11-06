@@ -2,6 +2,15 @@ package com.bioscan.fieldterminal.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 // Default daily fluid range used when the user hasn't set their own: a
 // deliberately wide band around the NASEM adequate intake for adult men
@@ -23,6 +32,7 @@ fun hydrationBoundsMl(goals: NutritionGoals, exerciseDemandMl: Double): ClosedFl
 //
 // Hydration is a min-max range, not a single volume: a fixed daily number
 // is false precision for fluid intake.
+@Serializable
 data class NutritionGoals(
     val caloriesKcal: Double? = null,
     val proteinG: Double? = null,
@@ -43,10 +53,14 @@ data class NutritionGoals(
     val anySet: Boolean get() = isSet || hydrationMinMl != null || hydrationMaxMl != null
 }
 
-// Local-only, same pattern as MapSettingsStore -- one person's own daily
-// targets, no cross-device sync requirement in the issue, so no Supabase
-// table. Adding a future nutrient (fiber, fluid, caffeine) is just another
-// key/field pair here, not a storage redesign.
+// Kept on the phone (SharedPreferences, read synchronously by the score build and the fuel plan) and with the account
+// (user_profile.nutrition_goals), so a reinstall or a second phone scores FUEL against the same targets. A local change is
+// marked unsynced until the server has it, so a save made offline is pushed on the next open instead of being overwritten
+// by the older server copy.
+
+@Serializable
+private data class GoalsRow(@SerialName("nutrition_goals") val nutritionGoals: NutritionGoals?)
+
 object NutritionGoalsStore {
     private const val PREFS_NAME = "nutrition_goals"
     private const val PREF_CALORIES = "calories_kcal"
@@ -58,6 +72,8 @@ object NutritionGoalsStore {
     private const val PREF_PROTEIN_PER_KG = "protein_per_kg"
     private const val PREF_FAT_PCT = "fat_pct"
     private const val PREF_ACTIVITY = "activity_level"
+    private const val PREF_UNSYNCED = "unsynced"
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun getGoals(context: Context): NutritionGoals {
         val p = prefs(context)
@@ -75,6 +91,31 @@ object NutritionGoalsStore {
     }
 
     fun saveGoals(context: Context, goals: NutritionGoals) {
+        writeLocal(context, goals, unsynced = true)
+        scope.launch { runCatching { sync(context, SupabaseClientProvider.client) } }
+    }
+
+    fun clearGoals(context: Context) = saveGoals(context, NutritionGoals())
+
+    /**
+     * Brings the phone and the account into line: an unsynced local change is pushed; otherwise the account's copy wins,
+     * and goals that only this phone has (set before they were kept with the account) are uploaded. Called on every open.
+     */
+    suspend fun sync(context: Context, supabase: SupabaseClient) {
+        val local = getGoals(context)
+        val table = supabase.postgrest.from("user_profile")
+        if (!prefs(context).getBoolean(PREF_UNSYNCED, false)) {
+            val remote = table.select(columns = Columns.list("nutrition_goals")).decodeSingleOrNull<GoalsRow>()?.nutritionGoals
+            if (remote != null) return writeLocal(context, remote, unsynced = false)
+            // ponytail: goals cleared on one phone come back from another phone that still has them; add a cleared
+            // marker on the account if two phones are ever used.
+            if (!local.anySet && local.activityLevel == null) return
+        }
+        table.upsert(GoalsRow(local.takeIf { it.anySet || it.activityLevel != null })) { onConflict = "user_id" }
+        prefs(context).edit().putBoolean(PREF_UNSYNCED, false).apply()
+    }
+
+    private fun writeLocal(context: Context, goals: NutritionGoals, unsynced: Boolean) {
         prefs(context).edit()
             .putOrRemove(PREF_CALORIES, goals.caloriesKcal)
             .putOrRemove(PREF_PROTEIN, goals.proteinG)
@@ -85,14 +126,7 @@ object NutritionGoalsStore {
             .putOrRemove(PREF_PROTEIN_PER_KG, goals.proteinPerKg)
             .putOrRemove(PREF_FAT_PCT, goals.fatPct)
             .putOrRemoveString(PREF_ACTIVITY, goals.activityLevel)
-            .apply()
-    }
-
-    fun clearGoals(context: Context) {
-        prefs(context).edit()
-            .remove(PREF_CALORIES).remove(PREF_PROTEIN).remove(PREF_CARBS).remove(PREF_FAT)
-            .remove(PREF_HYDRATION_MIN).remove(PREF_HYDRATION_MAX)
-            .remove(PREF_PROTEIN_PER_KG).remove(PREF_FAT_PCT).remove(PREF_ACTIVITY)
+            .putBoolean(PREF_UNSYNCED, unsynced)
             .apply()
     }
 

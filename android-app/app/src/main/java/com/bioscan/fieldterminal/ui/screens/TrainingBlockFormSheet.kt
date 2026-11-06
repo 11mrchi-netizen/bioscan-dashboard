@@ -218,11 +218,11 @@ private fun FocusChipGrid(selected: TbFocus?, exclude: TbFocus?, onSelect: (TbFo
         TbFocus.entries.forEach { focus ->
             val isSelected = selected == focus
             val isExcluded = exclude == focus
-            val borderColor = if (isSelected) FT.Emerald else FT.GlassBorder
-            val bgColor = if (isSelected) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent
+            val borderColor = if (isSelected) Color.Transparent else FT.GlassBorder
+            val bgColor = if (isSelected) FT.PlatinumSolid else Color.Transparent
             val textColor = when {
                 isExcluded -> FT.TextMuted.copy(alpha = 0.35f)
-                isSelected -> FT.Emerald
+                isSelected -> FT.PlatinumInk
                 else -> FT.TextMuted
             }
             Text(

@@ -1,20 +1,27 @@
-# Field Terminal — Futuristic Material Visual Contract
+# Field Terminal — Visual Contract (v1 "new look")
 
-**Status:** Design authority for new UI  
-**Version:** 1.0  
-**Date:** 2026-09-18  
-**Figma reference:** `Futuristic Material Status`  
-**Figma contract page:** `DESIGN CONTRACT`
+**Status:** Design authority for all UI
+**Version:** 2.0 (supersedes 1.0, the emerald Futuristic Material direction)
+**Date:** 2026-11-06
+**Design handoff:** `design/tokens/` (`README.md`, `tokens.css`, `tokens.json`, `backgrounds.css`, `components.css`, `gauge.html`)
+**Canvas boards:** 14 · Components, 17 · Metric colors (v1), 18–22 · the five domain detail pages, 23 · Design tokens
 
 ## 1. Purpose
 
-This document defines the visual language for Field Terminal and the rules for extending it into a reusable design system.
+This document defines the visual language for Field Terminal and the rules for extending it.
 
-The system is based on the Futuristic Material direction: a near-black instrument surface, translucent glass layers, restrained emerald signal color, soft geometry, strong metric hierarchy, and a deliberate split between interface typography and telemetry typography.
+v1 is a dark, glassmorphic health instrument. **One colour hierarchy drives everything:**
+
+- **Background = domain.** A soft wash of the domain hue behind the page (Sleep violet, Cardio aqua, Load amber, Fuel lime,
+  Balance rose).
+- **Surface = neutral.** Faint-platinum frosted glass, never tinted by a domain or metric.
+- **Ink = metric.** Every metric keeps one fixed hue app-wide (heart red, HRV pink, SpO₂ blue, effort zones blue→red …).
+
+A page says *which domain* by its wash and *which metric* by its chart colour; the glass stays out of the way.
 
 > **Field Terminal should feel like an instrument reading the user, not a database displaying the user's data.**
 
-This is a visual and interaction contract, not an information-architecture replacement. Linear remains the authority for product IA, screen scope, and data behavior.
+This is a visual and interaction contract, not an information-architecture replacement.
 
 ## 2. Source-of-truth hierarchy
 
@@ -38,156 +45,144 @@ Color, glow, rings, borders, and motion are communication tools. Do not add deco
 Default analytical reading order: **TITLE → CONTEXT → PRIMARY STATE/METRIC → SUPPORTING SIGNALS → DETAIL**.
 
 ### Material creates depth
-Use the stack **base surface → atmospheric field → glass surface → border → content**. Depth comes from opacity, blur, shadow, and spacing.
+Use the stack **ground → domain wash → neutral glass → hairline → metric ink**. Depth comes from the glass gradient, the
+hairline and its inset top highlight, and spacing; never from tinting a card.
 
 ### Clinical + futuristic + premium
-The character should feel closer to a high-end biometric/medical instrument than cyberpunk. Avoid neon overload, gaming UI tropes, excessive monospace text, and dense sci-fi ornament.
+The character should feel closer to a high-end biometric/medical instrument than cyberpunk. The holographic spectrum is the
+one exuberant element, and it is reserved for CHARGE.
 
 ## 4. Color system
 
-### Neutral / material foundation
+The token source of truth is `design/tokens/tokens.css` (and the same values in `tokens.json`). Android mirrors it one to
+one in `ui/theme/FuturisticMaterialTokens.kt`: surfaces at the top level, then `Domain`, `Metric`, `Zone` and the
+semantic `Ok` / `Warn` / `Bad`.
 
-| Token | Hex | Role |
+### Surfaces
+
+| Token | Android | Hex | Role |
+|---|---|---|---|
+| `--ft-bg` | `Base` | `#070A0D` | Page ground |
+| `--ft-fg` | `TextPrimary` | `#EAF0F2` | Primary text, values |
+| `--ft-muted` | `TextSecondary` | `#8793A2` | Labels, supporting text |
+| — | `TextMuted` | `#6C7786` | Low-emphasis text (the lightest step that still reads on the ground) |
+| `--ft-dim` | `Dim` | `#55606E` | Non-text marks only (off ticks, idle tracks): below 4.5:1, never for text |
+| `--ft-line` | `Line` | white 10% | Hairlines, control borders |
+| `--ft-glass-border` | `GlassBorder` | white 12% | Card and tile borders |
+| — | `Surface`, `Elevated` | `#0E1317`, `#151B21` | Solid fallbacks for sheets and dialogs |
+
+### Domain framing hues (`FT.Domain`)
+
+Background wash and hero gauge only. Never a metric, never a card.
+
+| Domain | Hex | Pages |
 |---|---|---|
-| `color/neutral/base` | `#0A0C0E` | App background / instrument field |
-| `color/neutral/surface` | `#11161A` | Primary surface |
-| `color/neutral/elevated` | `#171E23` | Elevated solid surface |
-| `color/neutral/text-primary` | `#E2E8F0` | Primary text |
-| `color/neutral/text-secondary` | `#A4AFBA` | Supporting text |
-| `color/neutral/text-muted` | `#66717C` | Metadata / low-emphasis content |
-| `color/neutral/white` | `#FFFFFF` | Overlay source for glass/borders |
+| Sleep | `#8B7CFF` | SLEEP score and Sleep page |
+| Cardio (recovery) | `#2FD6C3` | RECOVERY score, Heart, Sexual health |
+| Load | `#FF8A5B` | LOAD score, Training load, Injury, Performance and sport pages |
+| Fuel | `#8CE06B` | FUEL score, Nutrition, Hydration, Digestion, Nutrient breakdown |
+| Balance | `#FF6EC7` | BALANCE score, Wellbeing |
+| CHARGE | `#6D5EFC → #19C7E0 → #5AF0C8 → #C6F06A → #FF6EC7` | The holographic composite spectrum: CHARGE only |
 
-The neutral family should stay cool and slightly desaturated.
+Each domain gauge sweeps between two stops (`FT.Domain.stops`): Sleep `#6D5EFC→#B48CFF`, Recovery `#19C7E0→#5AF0C8`,
+Load `#FF6B4D→#FFB15A`, Fuel `#4FD67A→#C6F06A`, Balance `#FF6EC7→#C08BFF`.
 
-### Primary signal / Emerald
+### Metric colours (`FT.Metric`)
 
-| Token | Hex | Role |
-|---|---|---|
-| `color/emerald/300` | `#6EE7B7` | Highlighted text / fine signal |
-| `color/emerald/500` | `#10B981` | Primary active/healthy signal |
-| `color/emerald/700` | `#047857` | Pressed / strong state |
-| `color/emerald/900` | `#064E3B` | Atmospheric dark wash |
+Every metric has one fixed hue, the same on every chart, row dot, legend and gauge that shows it. The full dictionary is
+`--m-*` in `tokens.css` (about 60 entries: cardio, sleep and stages, body, balance, load and training, fuel, digestion,
+routine). Examples: heart rate `#FF4D5E`, resting HR `#FF5D8A`, HRV `#FF6EC7`, SpO₂ `#3A8DFF`, breathing `#2FD0D0`,
+steps `#46C8A0`, sleep duration `#4A7DFF`, stages awake / REM / light / deep `#FFB04D` / `#9B6CFF` / `#4A7DFF` / `#2342C9`,
+stress `#FF6B5B`, calories `#8CE06B`, protein `#FF4D6A`, carbs `#FF9A3D`, fat `#FFD23A`, hydration `#3AA8FF`.
 
-`#10B981` is the default active/healthy signal. It is not a universal decoration color.
+Intentional shares: arousal = HRV, sodium = weight, sleeping HR = heart rate. Lab markers keep their own per-marker themes
+(`domain/LabMarkerThemes.kt`). A chart that names no metric draws in the neutral `Metric.WeightEma` (`#C7D0E0`), never in
+a status colour.
 
-### Semantic state palette
+### Ordered ramps (`FT.Zone`)
+
+- Heart-rate zones 1–5: `#6F86B0`, `#3AA0FF`, `#35C77A`, `#FFB03A`, `#FF4D4D`.
+- Stress: calm `#36D07A`, moderate `#FFB03A`, high `#FF4D4D`.
+
+### Semantic (status only)
 
 | Token | Hex | Meaning |
 |---|---|---|
-| `color/state/info` | `#60A5FA` | Informational state |
-| `color/state/warning` | `#F59E0B` | Attention required |
-| `color/state/critical` | `#F87171` | Error / critical condition |
-| `color/state/analysis` | `#A78BFA` | Model/analysis layer |
+| `--ok` (`Ok`) | `#58E39A` | Good / done / in range |
+| `--warn` (`Warn`) | `#FFC24B` | Attention |
+| `--bad` (`Bad`) | `#FF5D6C` | Error / out of range / destructive |
 
-State colors must not be used interchangeably with domain accents.
+Status colours say how something is; they never identify a metric or a domain, and are always paired with a word, glyph
+or shape. The v1.0 names (`Emerald`, `Warning`, `Critical`, `Info`, `DomainFuel`, `Category.*` …) remain in code as aliases
+onto the v1 values so the whole app moved at once; new code uses `Domain`, `Metric`, `Zone`, `Ok` / `Warn` / `Bad`.
 
-### Domain accents
+### Platinum (primary action surface)
 
-| Domain | Accent |
-|---|---|
-| Training | Emerald `#10B981` |
-| Fuel | Cyan `#22D3EE` |
-| Health | Rose `#F43F5E` |
-| Labs | Violet `#A78BFA` |
-| Map | Blue `#60A5FA` |
-| Log | Amber `#F59E0B` |
-| User | Indigo `#818CF8` |
+`--ft-platinum`: a vertical gradient `#FFFFFF → #D6DDE8` with dark ink `#0B0F14` (`FT.Platinum`, `FT.PlatinumInk`;
+`FT.PlatinumSolid` where an API takes one colour). It marks the primary action and the selected state of chips, segments
+and switches. Selection is platinum app-wide, never a domain or metric tint. A selected row that holds body text uses
+`SelectedGlass` (white 10%) with a `SelectedBorder` hairline instead, like the dock's selected tab.
 
-Domain accents identify sections or navigation; they do not encode health/warning/error.
+### Glass
 
-DAV-296: the User tab replaces Map in the bottom bar. Map's accent and screen stay in the
-codebase (unmounted from navigation, not deleted) for possible reuse elsewhere later.
+- `.ft-card` / `FTCard`, `Section`: gradient white 8.5% → 2.8% at 60%, 1 dp border white 12%, inset 1 dp top highlight
+  white 15%, radius 18 (hero card 24).
+- `.ft-tile` / tiles and link rows: the same recipe at radius 16.
+- Holographic hairline (`ftHoloHairline`): CHARGE and premium surfaces only.
+- Backdrop blur is specified at 18 px (cards) and 14 px (tiles). Compose cannot blur what is behind a surface, so the
+  Android build draws the gradient, hairline and highlight without it; over the near-black ground they carry the look.
 
-UX review 2026-10 (decision 3): the rose-accent domain is named **Health**, matching the Status tile. It holds cardio,
-recovery (sleep), wellbeing and sexual health, so "Heart" undersold it. The code's `DomainHeart` token and `HeartTab`
-enum keep their names; only the user-facing name changes.
+### Domain wash
 
-### Category colors (third tier)
-
-Three tiers, never interchangeable: **State** = how is it; **Domain** = which section; **Category** = what kind of thing is this (a log entry kind, a chart series, a sub-domain).
-
-| Category | 500 anchor | Used for |
-|---|---|---|
-| Sleep | `#4A5FD9` | sleep entries, sleep stages (stages are lightness steps 300–900 of this one hue) |
-| Activity | `#FF8040` | runs, strength, exercise series |
-| Wellbeing | `#3FA9E8` | wellness entries and series |
-| Arousal | `#E11D74` | arousal / intimacy entries (magenta-crimson, deliberately not red: red reads as Critical) |
-| Digestion | `#C9A876` | stool / OSTRC entries |
-| Intake | `#7EF2A8` | food, drink, supplement entries |
-
-Each has 300/500/700/900 stops (`FuturisticMaterialTokens.Category.*`). Guardrails:
-
-1. Category colors never appear on `FTStatePill`, state text, gauge bands or range tracks; those stay State tokens.
-2. Identity marks only — dot, left rail, icon, chip outline, series stroke. No large fills, no glow.
-3. Multi-series charts need a legend. Where a category hue sits near a state hue (Activity/Warning, Wellbeing/Info), the item also carries its text label, and state always carries pill + icon, so color is never the only signal.
-4. One category color per card unless the card is explicitly multi-series.
-5. A chart series never borrows a State color to tell series apart (no "ATL is amber, TSB is blue"); use Category or neutral tokens.
-
-### Glass / overlay system
-
-- Glass fill: white at roughly 5–8%.
-- Strong glass fill: white at roughly 8–12%.
-- Border: white at roughly 8–12%.
-- Active/focus border: semantic accent at roughly 40–70% only when state/action requires it.
-- Emerald atmospheric wash: emerald 500/900 at roughly 8–20%, large-area only.
-
-Opacity is part of the token, not a random component-specific adjustment.
+`.ft-wash` / `Modifier.ftDomainWash(hue)`: three elliptical radial glows of the domain hue behind the page: 540×440 at
+top centre (34%), 440×400 off the right edge (17%), 480×440 off the bottom left (20%). TODAY and the CHARGE overlay use
+`ftChargeWash()` (deep teal from the top, violet from the right). Pages that belong to no domain (PLAN, LOG, LAB, ME,
+Setup, sheets) keep the plain ground.
 
 ### Adding a new color
 
-Do not add an isolated hex value. Add a color only when a new semantic role is required and an existing role cannot represent it.
-
-Create a `500` anchor plus `300`, `700`, and `900` support stops. Give it a semantic name, define whether it is a state or domain color, check contrast on base and glass, ensure it does not visually dominate emerald, and document the token before using it.
-
-Never introduce a color only because two adjacent cards need more variety.
+Do not add an isolated hex value. A new metric gets one `--m-*` entry in `tokens.css` / `tokens.json` and the matching
+`FT.Metric` value; reuse an existing hue only as a documented intentional share. Never introduce a colour because two
+adjacent cards need variety, and never tint glass to tell cards apart.
 
 ## 5. Typography system
 
 ### Font roles
 
-**Inter = interface language**: navigation, screen titles, descriptions, buttons, explanatory copy, and user-facing labels.
+- **Nunito** = numbers and headline metrics: hero values, gauge centres, stat tiles, row values (`FTType.DisplayMetric`,
+  `MetricMedium`, `StatValue`, `Value`, `Telemetry`, `HeroHeading`).
+- **Inter** = interface language: titles, body copy, buttons, row titles.
+- **IBM Plex Mono** = micro-labels: units, timestamps, chips, segments, dock tabs, badges, card eyebrows (`Label`,
+  `LabelCaps`, `MonoCaption`, `Micro`).
 
-**Roboto Mono = telemetry language**: measurements, percentages, timestamps, statuses, units, data-source labels, provenance, and compact system metadata.
-
-Conceptually: **Inter = interface · Roboto Mono = telemetry**. Do not make whole screens monospace.
-
-### Type scale
-
-| Role | Font | Weight | Size |
-|---|---|---:|---:|
-| Display metric | Roboto Mono | Bold | 36–40 |
-| Page title | Inter | Bold | 24–30 |
-| Section title | Inter | Bold/Semi Bold | 18–22 |
-| Body | Inter | Regular | 15–16 |
-| Telemetry | Roboto Mono | Bold | 13–14 |
-| Label | Roboto Mono | Bold | 11–12 |
-| Micro | Roboto Mono | Regular | 10 |
+Do not make whole screens monospace. Fonts are bundled in `res/font/` with their OFL licences in
+`android-app/licenses/fonts/`.
 
 ### Implemented roles (`FTType`)
 
-Screens use these named roles; hand-written `TextStyle(...)` is not used. A new size means a new role here (and in `FTType.kt`), not a one-off.
+Screens use these named roles; hand-written `TextStyle(...)` is not used. A new size means a new role here and in
+`FTType.kt`, not a one-off.
 
 | Role | Font | Weight | Size | Use |
 |---|---|---|---:|---|
-| `DisplayMetric` | Roboto Mono | Bold | 36 | The one hero value |
-| `MetricMedium` | Roboto Mono | Bold | 24 | Supporting levels beside a hero |
+| `DisplayMetric` | Nunito | ExtraBold | 40 | The one hero value (gauge centres scale it to the gauge) |
+| `MetricMedium` | Nunito | ExtraBold | 26 | Supporting levels beside a hero, mid-size gauges |
+| `StatValue` | Nunito | ExtraBold | 30 | Stat tile value (`.ft-stat__v`) |
+| `Value` | Nunito | Bold | 15 | Row values |
+| `Telemetry` | Nunito | ExtraBold | 14 | Emphasised data, small gauge centres |
+| `HeroHeading` | Nunito | Black | 18 | The state word under a hero gauge (PRIMED) |
 | `PageTitle` | Inter | Bold | 24 | Page titles |
 | `SectionTitle` | Inter | SemiBold | 20 | Section / sheet / back-header titles |
 | `CardTitle` | Inter | Bold | 13 | `FTCard` title bar |
 | `RowTitle` | Inter | SemiBold | 15 | List-row titles |
 | `Body` / `BodySmall` | Inter | Regular | 15 / 13 | Copy |
 | `Caption` / `CaptionStrong` | Inter | Regular / SemiBold | 12 | Secondary notes |
-| `Value` | Roboto Mono | Regular | 14 | Row values |
-| `Telemetry` | Roboto Mono | Bold | 13 | Emphasised data |
-| `Label` / `LabelCaps` | Roboto Mono | Bold | 11 | Labels, pills, chips (`LabelCaps` adds 0.14em tracking) |
-| `MonoCaption` | Roboto Mono | Regular | 11 | Timestamps, metadata |
-| `Micro` | Roboto Mono | Regular | 10 | Smallest allowed; never for a primary metric |
-| `ButtonLabel` | Inter | SemiBold | 13 | Button labels (`FTButton`), add-entry type tiles |
+| `ButtonLabel` | Inter | SemiBold (Bold on platinum) | 13 | Button labels, add-entry type tiles |
+| `Label` / `LabelCaps` | IBM Plex Mono | Medium | 11 | Labels; `LabelCaps` adds 0.14em tracking for chips, segments, dock, badges, eyebrows |
+| `MonoCaption` | IBM Plex Mono | Regular | 11 | Timestamps, metadata |
+| `Micro` | IBM Plex Mono | Regular | 10 | Smallest allowed; never for a primary metric |
 
-**Compact labels (A7, 2026-10).** Short telemetry-like labels that name a state or a destination in a few characters
-(dock tabs, sub-tab chips, segmented toggles, state pills, card eyebrows) use `LabelCaps`; that is established practice
-and reads as instrument text. Anything that is an action or a choice the person reads as words (buttons, add-entry type
-tiles, settings rows, list-row titles) uses Inter (`ButtonLabel`, `RowTitle`).
+The reference sets micro-labels at 9–10 px; the app keeps 10–11 sp, the owner's earlier request for larger text on device.
 
 ### Date and time entry
 
@@ -205,34 +200,31 @@ Primary metrics should be visually dominant. Preferred pattern:
 Use a 4 px base unit: **4 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 48**.
 
 ### Radius
-Use **0 · 8 · 12 · 16 · 24 · 28 · FULL**.
 
-- 8: compact controls
-- 12–16: buttons, chips, small modules
-- 24–28: primary cards / glass surfaces
-- FULL: pills and circular controls
+| Radius | Use |
+|---|---|
+| 9 | A selected segment inside `.ft-seg` |
+| 12 | Buttons, the segmented track, non-pill selectors (`RadiusSmall`) |
+| 16 | Tiles, link rows, dock tabs (`RadiusModule`) |
+| 18 | Cards and sections (`RadiusCard`) |
+| 24 | Hero cards, sheet tops (`RadiusCardLarge`) |
+| 26 | The dock (`RadiusDock`) |
+| FULL | Chips, badges, switches, search pill, dots |
 
 ### Borders
-Default: 1 px, white at roughly 8–12% opacity. Stronger/colored borders are reserved for active, focused, warning, or critical states.
+Default: 1 dp `Line` (white 10%) on controls, `GlassBorder` (white 12%) on glass. Coloured borders only for status (ok /
+bad badges, destructive buttons).
 
 ## 7. Material and elevation
 
-### Surface levels
-
-- **Level 0** — `#0A0C0E` instrument field.
-- **Level 1** — `#11161A` solid surface.
-- **Level 2** — translucent glass, approximately 55–75% neutral fill plus blur.
-- **Level 3** — glass plus soft shadow.
-- **Level 4** — focused/modal layer for transient UI only.
-
-### Blur
-Reference values: ambient 100–120 px; normal glass 12 px; larger floating surfaces 24 px.
-
-### Shadow
-Reference: approximately 8 px y-offset, 32 px blur, low-opacity black. Floating navigation may use a larger softer shadow.
+- **Ground**: `#070A0D` with the page's domain wash.
+- **Glass**: the card / tile recipe above. The hero card uses a stronger glass (white 14% → 5%), not a colour.
+- **Floating**: the dock, `rgba(20,25,30,.72)` with a hairline (blur 20 px in the reference).
+- **Modal**: sheets and dialogs on the solid `Surface`.
 
 ### Glow
-Emerald glow is an atmospheric effect, not a component default. Use it for biometric focal visualization, active system states, and selected/engaged focal elements. Never use it behind every card or icon.
+Glow is a reading, not decoration: the gauge's radar sweep and its cap, and the metric dot (`.ft-row__dot`). Nothing else
+glows.
 
 ## 8. Layout and composition
 
@@ -257,11 +249,11 @@ Examples:
 
 `LAB DIAGNOSTICS` → `LATEST PANEL · 14 MARKERS` → sparse/distribution-aware view
 
-### Card emphasis (A3, 2026-10)
-`FTCard` has two emphasis levels. **Hero**: the one lead card of a tab, strong glass fill, primary-colour title. **Supporting**:
-every other card, default glass, title in text-secondary. Card titles are never emerald by default; emerald stays a state
-signal. A long tab opens with a **glance strip** (`FTGlanceStrip`): one chip per card below, carrying that card's state
-pill or headline, tapping scrolls to the card.
+### Card emphasis (A3, 2026-10; v1)
+`FTCard` has two emphasis levels. **Hero**: the one lead card of a tab, stronger glass and radius 24, title in primary
+text. **Supporting**: every other card, default glass, title in text-secondary. Card titles are never coloured. A long
+tab opens with a **glance strip** (`FTGlanceStrip`): one chip per card below, carrying that card's state pill or
+headline, tapping scrolls to the card.
 
 ### One pill per card (A8, 2026-10, app restructure)
 A card shows one state pill: the direction or verdict. How much data backs it (the DATA: GOOD / PARTIAL / THIN chip under
@@ -295,7 +287,7 @@ Build the system in this order:
 5. **Screens:** compose from the above primitives.
 
 ### Naming
-Use deterministic semantic names such as `Color/Signal/Emerald500`, `Color/State/Warning`, `Surface/Glass/Default`, `Radius/Card`, `Spacing/MD`, `Typography/Metric/Display`, and `Component/AnalyticalCard`.
+Use deterministic semantic names such as `Color/Metric/HeartRate`, `Color/Domain/Sleep`, `Color/State/Warn`, `Surface/Glass/Default`, `Radius/Card`, `Spacing/MD`, `Typography/Metric/Display`, and `Component/AnalyticalCard`.
 
 Avoid names such as `Green2`, `CardNew`, or `CoolBox`.
 
@@ -308,20 +300,79 @@ Bad: `Color=Green | Blue | Red | Purple | Orange` when those colors do not repre
 
 Use instance swap for icons instead of icon-specific variant matrices.
 
-### Buttons (A2, 2026-10)
+### Buttons (A2, 2026-10; v1)
 `FTButton`: `Emphasis = Primary | Secondary | Tertiary | Destructive`, `State = Default | Pressed | Focused | Disabled | Busy`.
 
-| Emphasis | Treatment | Use |
+| Emphasis | Treatment (`components.css`) | Use |
 |---|---|---|
-| Primary | Emerald 500 fill, base-colour label | The one main action of a screen or sheet (SAVE, PLAN A NEW BLOCK). At most one per screen or sheet. |
-| Secondary | Emerald outline, emerald label | Alternatives and navigation-like actions (PANTRY, EDIT, RETRY). The default. |
-| Tertiary | Label only | Low-emphasis inline actions (+ ADD ILLNESS). |
-| Destructive | Critical outline, critical label | Deleting or overwriting. Always followed by an inline confirm (CANCEL / filled critical CONFIRM); never a single tap. |
+| Primary | `.ft-btn--primary`: platinum fill, dark ink, bold | The one main action of a screen or sheet (SAVE). At most one per screen or sheet. |
+| Secondary | `.ft-btn`: white 5% fill, `Line` hairline, light ink | Alternatives and navigation-like actions. The default. |
+| Tertiary | `.ft-btn--ghost`: label only, `#E4E9F1` | Low-emphasis inline actions. |
+| Destructive | Bad outline and label | Deleting or overwriting. Always followed by an inline confirm (CANCEL / filled bad CONFIRM). |
 
-Labels use `ButtonLabel` (Inter). Minimum 48 dp touch target. Disabled = muted border and label, not clickable. Busy =
-the label says what is happening (SAVING…) and the button ignores taps.
+Labels use `ButtonLabel` (Inter). Radius 12, minimum 48 dp touch target. Disabled = muted border and label.
+
+### Controls (v1)
+
+| Component | Android | Spec |
+|---|---|---|
+| Segmented control | `SegmentedToggle`, `PeriodToggle` | `.ft-seg`: white 5% track, hairline, 3 dp padding; selected segment platinum (radius 9) with dark ink. `accentColor` is ignored. |
+| Chips | `SubTabChip`, `SubTabRow`, `DetailKit.Chip` | `.ft-chip`: mono pill, white 3% fill, hairline; selected = platinum, dark ink, bold. |
+| Switch | `FTSwitch` | `.ft-switch`: 48×27 pill; off = white 6% with hairline; on = platinum with the white knob to the right. |
+| Badge | `FTBadge` | `.ft-badge`: mono pill. `Primed` = holographic CHARGE state; `Ok` / `Bad` = status ink with a 40% border. |
+| Dock | `FieldBottomBar` | `.ft-dock`: floating pill radius 26, dark translucent fill, hairline; selected tab = light ink on white 10%, others muted. No per-tab accent. |
+| Metric dot | `FTMetricDot` | `.ft-row__dot`: 9 dp dot in the metric hue with its glow. |
+| Gauge | `FTGauge`, `ScoreRing` | See section 10. |
+
+Local chip variants in screens follow the same rule: selected = platinum (`PlatinumSolid` + `PlatinumInk`), or
+`SelectedGlass` + `SelectedBorder` for a row holding body text.
 
 ## 10. Data visualization contract
+
+### The radial gauge (v1)
+Every score is a tick gauge (`FTGauge`, the `ftGauge` logic of `design/tokens/gauge.html`): N ticks around the ring (96 on
+a hero gauge, 56 on a ring, 40 on a small one), the lit ones coloured along the palette from first to last stop, a
+glowing cap on the last lit tick, and a blurred radar sweep inside that brightens towards the value. Off ticks are white 8%.
+
+- One lap is 0–100, for CHARGE and every domain alike. Above 100 the lap stays fully lit and a second lap is drawn over
+  the first from 12 o'clock on the same scale: the same ticks in the same colours, lifted 40% towards white. 150 is one
+  and a half laps, SUPERCHARGED (125) a quarter of the second lap. The cap sits at the end of the second lap.
+- CHARGE sweeps the holographic spectrum with a `#3FE0D0` radar; a domain sweeps its own two stops with its domain hue.
+- The centre holds the number (Nunito), an optional mono label (CHARGE, RECOVERY) and the direction glyph.
+- The band is said in words under the hero gauge (`GaugeStateWord`): PRIMED and SUPERCHARGED in CHARGE's holographic
+  ink, LOW in bad, BELOW NORMAL in warn. The sweep is never recoloured by the band.
+- A provisional or partial reading draws its lit ticks at 55%; no reading draws the bare track.
+- The radar blur needs Android 12; older versions show the unblurred, masked sweep.
+
+### Bar graphs and diverging scales
+`design/tokens/charts-bars-and-scales.md` is authoritative; Android draws every bar through `ui/components/FTBars.kt`.
+- Bars fill the plot exactly (`barWidth = (W − gap(n−1)) / n`), the gap always smaller than the bar (10 dp for a week,
+  5 dp for 24 h, 2.5 dp for a month, 1.5 dp past 40), rounded tops only (radius ≤ min(barWidth/2, 4 dp)).
+- Fill: a vertical gradient of the metric hue, a 10% lighter tint at the top to 22% at the baseline. Stacked segments
+  use their own hues, 2 dp apart, the top one rounded. Range bars are capsules at 40% with a brighter mean cap.
+- The latest bar is full strength with a 1 dp bright cap; a selected bar stays full and the others drop to 45%;
+  projected bars are 40%. Empty slots are 2 dp baseline stubs; no data shows the baseline and "No data yet".
+- At most one reference line (1 dp dashed, the hue at 50%); a goal band is the hue at 8% behind the bars. The readout
+  row under the plot (value in the metric hue, context muted) carries the numbers, not an axis box.
+- Score strips (LAST 30 DAYS) are bars in the score's hue (the domain's, or CHARGE's), the normal range 60–100 as the
+  goal band and 100 as the reference line.
+- Diverging scales (`FTDivergingScale`) are only for bipolar, zero-centred values: symmetric ±D axis with zero always at
+  the centre, a neutral dead-zone (or a brighter normal band), poles by meaning (energy balance: load ◀ / cardio ▶;
+  TSB and deltas: bad ◀ / ok ▶; fluid balances: warn ◀ / hydration ▶), a white thumb with a dark ring, the value
+  label in its side's colour (neutral inside the dead-zone or normal band), a chevron past ±D, a hollow thumb for low
+  confidence. Used for FORM (TSB) and ENERGY BALANCE.
+
+### Chart ink
+- A chart is drawn in its metric's hue (`FT.Metric`; score inputs through `metricInk(key)`); area sparklines fade
+  top-down, the end point is a dot.
+- Lists of metrics (WHAT MOVED IT, WHAT WENT WITH IT, WHAT GOES WITH IT, metric rows and tiles) draw each metric's dot,
+  bullet band and bar in that metric's hue, and a domain in CHARGE's list in the domain hue. Direction is never the
+  mark's colour: the signed number (ok / bad), the arrow and the words say it.
+- Sleep stages use `StageAwake/Rem/Light/Deep`; HR zones `Zone.Hr`; stress lanes `Zone.Stress*`; macros and water the
+  fuel metric hues (`NutrientColor`).
+- Multi-series charts carry a legend; colour is never the only signal.
+
+### Chart forms
 
 - **Temporal data** → line/area trends when enough observations exist.
 - **Bounded / target-vs-actual** → rings or gauges where useful for glance reading.
@@ -331,6 +382,13 @@ the label says what is happening (SAVING…) and the button ignores taps.
 - **Route/spatial data** → map for spatial representation.
 
 Every chart needs explicit units, a clear time window when temporal, sensible scale, appropriate missing-data behavior, and no fabricated precision.
+
+### Every metric opens its history
+Anything that shows a metric and looks tappable (a row with ›, a tile, a night tile, a bullet row) opens a page: a score
+input opens its metric overlay, which links to **All of its history**; other metrics open `MetricHistoryOverlay` (the
+latest value and where it sits, its line over 30 D · 90 D · 1 Y · ALL with the normal band, and the window's average,
+readings, lowest and highest). A static summary tile has no › and no press feedback; a tile with a history is marked by
+its metric dot and ›. Never draw a chevron or press state on something that leads nowhere.
 
 ## 11. Analytical state, confidence, provenance
 
@@ -354,14 +412,12 @@ Prefer soft 120–240 ms transitions, short fades, subtle elevation changes, cha
 Avoid bounce-heavy motion, decorative parallax, long transitions, or motion that delays access to data.
 
 ### Interaction states (A1, 2026-10)
-Every tappable element uses `Modifier.ftClickable` (never `indication = null`, which gave no feedback at all):
+Every tappable element uses `Modifier.ftClickable` (never `indication = null`):
 - **Pressed**: strong glass fill (`GlassStrongFill`) drawn instantly on press, faded out over 120 ms on release, clipped to
   the element's shape. No ripple, no scale.
-- **Focused** (keyboard, switch access): 2 dp emerald-300 ring at 70%, independent of the pressed state.
-- **Selected** stays the existing accent tint + accent border + label; pressed draws on top of it.
+- **Focused** (keyboard, switch access): a 2 dp ring, independent of the pressed state.
+- **Selected**: platinum (chips, segments, switches) or the selected glass (rows, dock tabs); pressed draws on top.
 - **Disabled**: muted text and border, not clickable.
-
-The old "no spring, no scale bounce" rule came from the superseded gunmetal README; the 120 ms fade satisfies both.
 
 ## 13. Accessibility
 
@@ -394,26 +450,23 @@ The visual contract does not authorize IA or workflow changes by itself.
 ## 15. Do / Don't
 
 ### DO
-- Use one dominant primary metric.
-- Use emerald as the primary system signal.
-- Use glass selectively.
-- Use soft 24–28 px primary-card geometry.
-- Use Inter for interface language and Roboto Mono for telemetry.
+- Put the domain in the page's wash and the metric in the chart's ink.
+- Keep every card neutral glass.
+- Use one dominant primary metric per page, in Nunito.
+- Use platinum for the primary action and for selection.
+- Use each metric's fixed hue everywhere that metric appears.
 - Expose confidence and provenance.
 - Select chart types according to metric semantics.
-- Preserve generous negative space.
-- Keep domain accents subordinate to the primary signal.
 
 ### DON'T
+- Tint a card with a domain or metric hue.
+- Colour a metric with a domain hue, or a domain with a metric hue.
+- Use the holographic spectrum outside CHARGE and premium moments.
+- Use status colours (ok / warn / bad) to tell series or sections apart.
 - Make every component glow.
-- Turn every value into a chart.
-- Use domain colors as health states.
-- Use monospace for all copy.
-- Use thick borders as the main visual hierarchy.
-- Create arbitrary one-off colors.
-- Imply precision that the data do not support.
-- Make all cards visually equal.
-- Collapse multidimensional health/training state into an opaque composite score.
+- Turn every value into a chart, or imply precision the data do not support.
+- Use monospace for copy.
+- Create one-off colours outside `tokens.css`.
 
 ## 16. Figma system roadmap
 

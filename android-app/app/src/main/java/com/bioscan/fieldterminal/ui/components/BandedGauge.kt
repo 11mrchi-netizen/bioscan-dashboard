@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
+import com.bioscan.fieldterminal.ui.theme.PlexMono
 import kotlin.math.cos
 import kotlin.math.sin
 

@@ -2,7 +2,7 @@ package com.bioscan.fieldterminal.data
 
 import android.util.Base64
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
@@ -32,7 +32,7 @@ data class ExtractedLabMarker(
 )
 
 class LabExtractionRepository(private val apiKey: String) {
-    companion object { private val client = HttpClient(Android) }
+    companion object { private val client = HttpClient(OkHttp) }
 
     suspend fun extract(fileBytes: ByteArray, mimeType: String, knownMarkerNames: List<String>): List<ExtractedLabMarker> {
         val prompt = buildString {

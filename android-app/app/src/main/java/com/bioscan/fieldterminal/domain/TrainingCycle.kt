@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import java.time.LocalDate
 
 // Phase A3 (Analysis Layer). Framework-free mirror of Supabase's
@@ -51,6 +54,7 @@ fun FocusQuality.toDb(): String = when (this) {
 
 enum class FocusRole { Primary, Maintained }
 
+@Serializable
 data class FocusEntry(val quality: FocusQuality, val weight: Double, val role: FocusRole)
 
 // Training Cycle Framing doc, section 4: a mesocycle -- weeks to ~3 months,
@@ -65,6 +69,7 @@ data class FocusEntry(val quality: FocusQuality, val weight: Double, val role: F
 // numeric goal or it doesn't. currentValue is never stored here: it's
 // whatever the live metric reads right now, passed into progressFraction()
 // at render time, not a column that would drift stale between syncs.
+@Serializable
 data class TrainingCycle(
     val startDate: LocalDate,
     val endDate: LocalDate?,

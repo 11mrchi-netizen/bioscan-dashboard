@@ -45,7 +45,7 @@ fun FTStatTile(spec: StatTileSpec, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .clip(shape)
-            .background(FT.GlassFill, shape)
+            .background(FT.Glass, shape)
             .border(FT.BorderWidth, FT.GlassBorder, shape)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),

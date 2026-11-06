@@ -121,7 +121,7 @@ class NutritionMealSaveRepository(
     // in one pass -- the meal's own flat totals are the resolved sum, so
     // doc 10's "meals stays authoritative until meal_items populated"
     // transition query reads correctly the moment this returns.
-    suspend fun saveMeal(loggedAt: String, description: String, items: List<ConfirmedMealItem>): Long {
+    suspend fun saveMeal(loggedAt: String, description: String, items: List<ConfirmedMealItem>, mealSlot: String? = null): Long {
         val resolved = items.map { it to resolver.resolveMealItem(it.foodId, it.quantity, it.quantityUnit, it.servingId, it.servingCount) }
 
         val mealId = supabase.postgrest.from("meals")
@@ -136,6 +136,7 @@ class NutritionMealSaveRepository(
                     fiberG = resolved.sumNullable { it.second.nutrients.fiberG },
                     sugarG = resolved.sumNullable { it.second.nutrients.sugarG },
                     sodiumMg = resolved.sumNullable { it.second.nutrients.sodiumMg },
+                    mealSlot = mealSlot,
                 ),
             ) { select(Columns.list("id")) }
             .decodeSingle<MealIdRow>()
@@ -216,6 +217,7 @@ class NutritionMealSaveRepository(
         aiEstimateId: Long?,
         enrichment: CronometerEnrichment? = null,
         source: MealItemSource = MealItemSource.AiImage,
+        mealSlot: String? = null,
     ): Long {
         val cal = enrichment?.calories ?: estimate.calories
         val pro = enrichment?.proteinG ?: estimate.proteinG
@@ -237,6 +239,7 @@ class NutritionMealSaveRepository(
                     fiberG = fib,
                     sugarG = sug,
                     sodiumMg = sod,
+                    mealSlot = mealSlot,
                 ),
             ) { select(Columns.list("id")) }
             .decodeSingle<MealIdRow>()
@@ -367,7 +370,7 @@ class NutritionMealSaveRepository(
     // Duplicates a previous meal's items under a new meal at newLoggedAt --
     // same food_id/quantity/servings, fresh row ids. No new foods rows, no
     // re-resolution: this is a straight copy of already-correct data.
-    suspend fun cloneMeal(sourceMealId: Long, newLoggedAt: String): Long {
+    suspend fun cloneMeal(sourceMealId: Long, newLoggedAt: String, mealSlot: String? = null): Long {
         // MealRow.loggedAt is non-nullable -- must be selected even though
         // newLoggedAt (the clone's own date) is what actually gets used.
         // Same class of bug as resolveMealItem's foods query: decodeSingle
@@ -395,6 +398,7 @@ class NutritionMealSaveRepository(
                     fiberG = sourceMeal.fiberG,
                     sugarG = sourceMeal.sugarG,
                     sodiumMg = sourceMeal.sodiumMg,
+                    mealSlot = mealSlot,
                 ),
             ) { select(Columns.list("id")) }
             .decodeSingle<MealIdRow>()

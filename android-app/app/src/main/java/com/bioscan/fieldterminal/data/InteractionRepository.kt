@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.InteractionRecord
 import com.bioscan.fieldterminal.domain.RosterItem
@@ -27,6 +28,7 @@ private data class InteractionRecordRow(
     @SerialName("pmid_doi") val pmidDoi: String? = null,
     val caveats: String? = null,
     @SerialName("review_status") val reviewStatus: String = "unreviewed",
+    val version: Int? = null,
 )
 
 // Analysis Layer 3 / Phase 6. The curated interaction registry (read-only,
@@ -34,30 +36,38 @@ private data class InteractionRecordRow(
 class InteractionRepository(private val supabase: SupabaseClient) {
     private companion object {
         const val COLUMNS = "id,a_keys,a_aliases,b_keys,b_aliases,trigger_mode,prefer_together,effect,advice," +
-            "spacing_hours,severity,source,pmid_doi,caveats,review_status"
+            "spacing_hours,severity,source,pmid_doi,caveats,review_status,version"
     }
 
-    suspend fun loadRecords(): List<InteractionRecord> =
-        supabase.postgrest.from("interaction_records")
+    // The owner's verdicts (registry_reviews) decide "reviewed": confirmed counts, disputed keeps the flag and adds the
+    // owner's note to the caveats.
+    suspend fun loadRecords(): List<InteractionRecord> {
+        val reviews = runCatching { RegistryReviewRepository(supabase).loadReviews() }.getOrDefault(emptyMap())
+        return supabase.postgrest.from("interaction_records")
             .select(columns = Columns.list(COLUMNS)) { order("id", Order.ASCENDING) }
             .decodeList<InteractionRecordRow>()
             .map {
+                val review = reviews["interaction" to it.id]
+                val state = reviewState(it.reviewStatus, it.version, review)
                 InteractionRecord(
                     id = it.id,
                     aKeys = it.aKeys.toSet(), aAliases = it.aAliases.toSet(),
                     bKeys = it.bKeys.toSet(), bAliases = it.bAliases.toSet(),
                     triggerMode = it.triggerMode, preferTogether = it.preferTogether,
                     effect = it.effect, advice = it.advice, spacingHours = it.spacingHours,
-                    severity = it.severity, source = it.source, pmidDoi = it.pmidDoi, caveats = it.caveats,
-                    reviewed = it.reviewStatus == "reviewed",
+                    severity = it.severity, source = it.source, pmidDoi = it.pmidDoi,
+                    caveats = if (state == ReviewState.DISPUTED) listOfNotNull(it.caveats, "You disputed this" + (review?.note?.let { n -> ": $n" } ?: ".")).joinToString(" ") else it.caveats,
+                    reviewed = state == ReviewState.CONFIRMED,
                 )
             }
+    }
 
     suspend fun rosterItems(active: List<SupplementRow>): List<RosterItem> {
         val keysByProduct = EvidenceRepository(supabase)
             .ingredientKeysByProduct(active.mapNotNull { it.productId }.distinct())
         return active.map { s ->
-            RosterItem(s.id, s.name, s.timeOfDay, s.everyNDays, s.productId?.let { keysByProduct[it] }.orEmpty())
+            val spec = s.spec()
+            RosterItem(s.id, s.name, s.timeOfDay, spec.everyNDays, s.productId?.let { keysByProduct[it] }.orEmpty(), slots = if (spec.asNeeded) emptyList() else spec.slots)
         }
     }
 }

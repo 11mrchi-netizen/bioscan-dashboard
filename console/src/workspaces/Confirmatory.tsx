@@ -17,7 +17,7 @@ interface Effect { value: number; lo: number; hi: number; unit: string }
 interface Payload {
   id: string
   label: string
-  outcome: 'hrv' | 'rhr' | 'sleep' | 'energy' | ''
+  outcome: 'hrv' | 'rhr' | 'sleep' | 'energy' | 'recovery_score' | 'sleep_score' | ''
   rung: string
   summary: string
   reason: string | null
@@ -60,7 +60,7 @@ const CATALOGUE = [
   'screen_bed_sleep', 'screen_bed_hrv', 'night_phone_energy', 'screen_pm_social_sleep', 'outdoor_daylight_sleep',
   'home_day_energy', 'travel_day_hrv', 'travel_day_rhr', 'active_commute_hrv', 'commute_long_sleep',
 ]
-const GROUPS: [Payload['outcome'] | 'registered', string][] = [['hrv', 'HRV'], ['rhr', 'RESTING HEART RATE'], ['sleep', 'SLEEP'], ['energy', 'ENERGY'], ['registered', 'QUESTIONS YOU REGISTERED']]
+const GROUPS: [Payload['outcome'] | 'registered', string][] = [['hrv', 'HRV'], ['rhr', 'RESTING HEART RATE'], ['sleep', 'SLEEP'], ['energy', 'ENERGY'], ['recovery_score', 'RECOVERY SCORE'], ['sleep_score', 'SLEEP SCORE'], ['registered', 'QUESTIONS YOU REGISTERED']]
 
 // "CLEAR since 2026-10-13 (2 nights) · UNCLEAR 2026-10-10 to 2026-10-12 (3 nights)" from the ledger, newest first.
 function historyLine(entries: LedgerRow[]): string | null {

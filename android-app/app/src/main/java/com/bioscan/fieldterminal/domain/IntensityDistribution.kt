@@ -1,3 +1,4 @@
+@file:kotlinx.serialization.UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
 import java.time.LocalDate
@@ -26,6 +27,7 @@ fun intensityBand(zone: HeartRateZone): IntensityBand = when (zone) {
 val INTENSITY_SPORTS = setOf("run", "ride", "hike")
 
 /** One session: its date, type and heart-rate histogram (bpm to seconds), null when it has no Zepp heart-rate record. */
+@kotlinx.serialization.Serializable
 data class IntensitySession(val date: LocalDate, val sport: String?, val histogram: Map<Int, Double>?)
 
 data class WeekIntensity(

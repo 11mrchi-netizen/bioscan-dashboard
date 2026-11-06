@@ -31,7 +31,7 @@ import {
   sumNutrients,
   WEIGHT_UNIT_GRAMS,
 } from "./matching.ts";
-import { defaultServing, emptyResolvedItem, mergeSuggestions, rankForSuggestions, type Suggestion } from "./matching.ts";
+import { defaultServing, emptyResolvedItem, ESTIMATE_EXTRA_NUTRIENTS, mergeSuggestions, rankForSuggestions, type Suggestion } from "./matching.ts";
 import { catalogMeasures, catalogPer100, catalogResolvedItem, catalogSuggestion, loadCatalogFood, searchCatalog } from "./catalog.ts";
 
 export type { ResolvedItem, Suggestion } from "./matching.ts";
@@ -543,7 +543,10 @@ export async function geminiParts<T>(apiKey: string, parts: unknown[], schema: u
 
 function asEstimate(e: Partial<MacroEstimate> | null | undefined): MacroEstimate | null {
   if (!e || typeof e.calories !== "number" || !(e.calories > 0)) return null;
-  return { calories: e.calories, protein_g: e.protein_g ?? 0, carbs_g: e.carbs_g ?? 0, fat_g: e.fat_g ?? 0 };
+  const extra = e.extra && typeof e.extra === "object"
+    ? Object.fromEntries(Object.entries(e.extra).filter(([k, v]) => ESTIMATE_EXTRA_NUTRIENTS.includes(k) && typeof v === "number" && Number.isFinite(v) && v >= 0))
+    : undefined;
+  return { calories: e.calories, protein_g: e.protein_g ?? 0, carbs_g: e.carbs_g ?? 0, fat_g: e.fat_g ?? 0, ...(extra && Object.keys(extra).length ? { extra } : {}) };
 }
 
 async function decomposeMealDescription(apiKey: string, description: string): Promise<DecomposedItem[]> {
@@ -632,6 +635,27 @@ export async function lookupItems(
       "direct",
     ));
   return summarize("direct", results);
+}
+
+// Mode 3 (photo v3): the photo estimate's own foods. Each is looked up by its generic name at the grams the photo
+// showed, and the photo's per-food estimate is its independent check and stand-in, so no second AI call re-splits the
+// meal from words and re-guesses the weights. A food with no trustworthy match keeps the photo's numbers, micronutrients
+// included.
+export interface PhotoItemSpec {
+  name: string;
+  canonical_name?: string;
+  quantity_g: number;
+  estimate?: Partial<MacroEstimate>;
+}
+
+export async function lookupPhotoItems(ctx: LookupContext, items: PhotoItemSpec[], description?: string): Promise<LookupResult> {
+  const wanted = items
+    .map((i) => ({ ...i, query: (i.canonical_name?.trim() || i.name?.trim() || "") }))
+    .filter((i) => i.query && Number.isFinite(i.quantity_g) && i.quantity_g > 0);
+  const memory = await ctx.loadMemory(wanted.map((i) => i.query));
+  const results = await mapLimit(wanted, 4, async (i) =>
+    finalize(await resolveItem(ctx.session, ctx.db, { query: i.query, quantityG: i.quantity_g }, memory), asEstimate(i.estimate), "photo"));
+  return summarize("photo", results, description?.trim() ? { original_description: description.trim() } : {});
 }
 
 // Mode 2: a free-text description (typed by the user, or the photo estimate's description).

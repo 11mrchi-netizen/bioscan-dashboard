@@ -11,8 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import com.bioscan.fieldterminal.ui.components.FTSwitch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.mutableIntStateOf
@@ -66,6 +65,8 @@ const val BLINDING_HELP =
 fun ExperimentSheet(
     subjectName: String,
     intro: String = SUPPLEMENT_EXPERIMENT_INTRO,
+    // The outcome to start on (a repeatable intervention's main expected outcome); still changeable before registering.
+    initialPrimary: String? = null,
     register: suspend (name: String, primary: String, protocol: ExperimentProtocol, preview: List<MdePreviewRow>) -> Unit,
     onDismiss: () -> Unit,
     onRegistered: () -> Unit,
@@ -73,8 +74,8 @@ fun ExperimentSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val repo = remember { ExperimentsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
-    var primary by remember { mutableStateOf<String?>(null) }
-    var zone by remember { mutableStateOf<Double?>(null) }
+    var primary by remember { mutableStateOf(initialPrimary) }
+    var zone by remember { mutableStateOf(initialPrimary?.let { zoneSpec(it).zone }) }
     var periodDays by remember { mutableIntStateOf(14) }
     var pairs by remember { mutableIntStateOf(4) }
     var washout by remember { mutableIntStateOf(3) }
@@ -146,15 +147,9 @@ fun ExperimentSheet(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Label("BLINDED (A PARTNER FILLS AN ORGANISER)")
-                Switch(
+                FTSwitch(
                     checked = blinded,
                     onCheckedChange = { blinded = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = FT.DomainLog,
-                        checkedTrackColor = FT.DomainLog.copy(alpha = 0.3f),
-                        uncheckedThumbColor = FT.TextSecondary,
-                        uncheckedTrackColor = FT.GlassFill,
-                    ),
                 )
             }
             Text(BLINDING_HELP, style = FTType.Caption, color = FT.TextMuted)

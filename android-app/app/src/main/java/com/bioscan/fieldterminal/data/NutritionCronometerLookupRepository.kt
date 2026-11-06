@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.data
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -28,6 +28,24 @@ private data class CronometerRequest(val description: String)
 
 @Serializable
 private data class CronometerItemsRequest(val items: List<CronometerItemInput>)
+
+@Serializable
+private data class PhotoItemsRequest(@SerialName("photo_items") val photoItems: List<PhotoLookupItem>, val description: String)
+
+@Serializable
+private data class PhotoLookupItem(
+    val name: String,
+    @SerialName("canonical_name") val canonicalName: String,
+    @SerialName("quantity_g") val quantityG: Double,
+    val estimate: CronometerAiEstimate,
+)
+
+private fun PhotoFood.toLookupInput() = PhotoLookupItem(
+    name = name,
+    canonicalName = canonicalName,
+    quantityG = grams,
+    estimate = CronometerAiEstimate(calories = calories, proteinG = proteinG, carbsG = carbsG, fatG = fatG, extra = extra),
+)
 
 @Serializable
 data class CronometerItemInput(
@@ -85,6 +103,9 @@ data class CronometerAiEstimate(
     @SerialName("protein_g") val proteinG: Double = 0.0,
     @SerialName("carbs_g") val carbsG: Double = 0.0,
     @SerialName("fat_g") val fatG: Double = 0.0,
+    // Photo v3: the photo's estimate of further nutrients for this food (fiber, sodium, iron...), in the lookup's nutrient
+    // names. Counted when the estimate stands in for an unmatched food, so its micronutrients are not zeros.
+    val extra: Map<String, Double> = emptyMap(),
 )
 
 @Serializable
@@ -154,7 +175,7 @@ private fun CronometerItemResult.isMatched(): Boolean = matchQuality == "exact" 
 fun CronometerItemResult.counts(): Boolean = (usedEstimate && aiEstimate != null) || isMatched()
 
 fun CronometerItemResult.portionNutrients(): Map<String, Double> = when {
-    usedEstimate && aiEstimate != null -> mapOf(
+    usedEstimate && aiEstimate != null -> aiEstimate.extra + mapOf(
         "calories" to aiEstimate.calories,
         "protein" to aiEstimate.proteinG,
         "carbs" to aiEstimate.carbsG,
@@ -182,7 +203,10 @@ fun CronometerItemResult.withGrams(grams: Double): CronometerItemResult {
         servingUsed = "${formatAmount(grams)} g",
         nutrientsForPortion = portion?.let { p -> JsonObject(p.mapValues { (_, v) -> JsonPrimitive(v) }) } ?: nutrientsForPortion,
         aiEstimate = if (ratio == null) aiEstimate else aiEstimate?.let {
-            it.copy(calories = it.calories * ratio, proteinG = it.proteinG * ratio, carbsG = it.carbsG * ratio, fatG = it.fatG * ratio)
+            it.copy(
+                calories = it.calories * ratio, proteinG = it.proteinG * ratio, carbsG = it.carbsG * ratio, fatG = it.fatG * ratio,
+                extra = it.extra.mapValues { (_, v) -> v * ratio },
+            )
         },
         userEdited = true,
     )
@@ -277,6 +301,10 @@ class NutritionCronometerLookupRepository(private val supabase: SupabaseClient) 
 
     suspend fun enrichItems(items: List<CronometerItemInput>): CronometerEnrichment =
         callLookup(json.encodeToString(CronometerItemsRequest(items)))
+
+    // Photo v3: the photo estimate's own foods, looked up at the grams the photo showed (no second split of a sentence).
+    suspend fun enrichPhoto(foods: List<PhotoFood>, description: String): CronometerEnrichment =
+        callLookup(json.encodeToString(PhotoItemsRequest(foods.map { it.toLookupInput() }, description)))
 
     // Foods matching what the user is typing. Throws on a failed call (the caller keeps the previous suggestions).
     suspend fun suggest(query: String, limit: Int = 8): List<FoodSuggestion> {

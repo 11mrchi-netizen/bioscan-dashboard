@@ -57,7 +57,7 @@ fun FTSmallMultiples(
 private fun SmallMultipleCell(item: SmallMultiple, modifier: Modifier) {
     Column(
         modifier = modifier
-            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule))
+            .background(FT.Glass, RoundedCornerShape(FT.RadiusModule))
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),

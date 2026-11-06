@@ -125,7 +125,7 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
 
     // Paged: 180 days of sessions without walks can pass the API's 1,000-row cap.
     private suspend fun recorded(since: LocalDate, zone: ZoneId): List<RecordedSessionInput> =
-        ReadCache.get("fuel.recorded.$since", tables = setOf("exercise_sessions")) {
+        ReadCache.kept("fuel.recorded.$since", tables = setOf("exercise_sessions")) {
             val out = mutableListOf<RecordedRow>()
             var start = 0L
             while (true) {
@@ -144,7 +144,8 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
                 start += PAGE
             }
             out.mapNotNull { r ->
-                val s = runCatching { OffsetDateTime.parse(r.startTime).atZoneSameInstant(zone) }.getOrNull() ?: return@mapNotNull null
+                // Session starts are logged times (local digits, zero offset), unlike calendar events above, which are real UTC.
+                val s = com.bioscan.fieldterminal.domain.WallClock.zoned(r.startTime, zone) ?: return@mapNotNull null
                 RecordedSessionInput(r.id, r.type, s, r.durationMin ?: 0.0, r.caloriesActive, r.avgHr, r.rpe, r.distanceKm, r.elevationGainM)
             }
         }

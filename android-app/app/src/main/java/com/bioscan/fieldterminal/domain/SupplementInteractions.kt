@@ -34,7 +34,11 @@ data class RosterItem(
     val ingredientKeys: Set<String> = emptySet(),
     // Extra names to alias-match against (ingredient names typed in the form).
     val ingredientNames: List<String> = emptyList(),
-)
+    // Regimen model: every time of day the item is taken (twice a day = two). Empty = just [timeOfDay].
+    val slots: List<String> = emptyList(),
+) {
+    val allSlots: List<String> get() = slots.ifEmpty { listOf(timeOfDay) }
+}
 
 enum class InteractionStatus {
     SAME_SLOT, // spacing advised, both in the same time slot
@@ -100,9 +104,12 @@ fun detectInteractions(roster: List<RosterItem>, records: List<InteractionRecord
             // One product that holds both sides is a formulation, not a timing choice.
             if (a.id == b.id) continue
             if (!seen.add(minOf(a.id, b.id) to maxOf(a.id, b.id))) continue
-            val gap = slotGapHours(a.timeOfDay, b.timeOfDay)
-            val sameSlot = a.timeOfDay.equals(b.timeOfDay, ignoreCase = true)
+            // Items taken at several times of day: the closest pair of their times decides (a morning + night item and a
+            // night item share the night slot).
+            val pairs = a.allSlots.flatMap { sa -> b.allSlots.map { sb -> sa to sb } }
             val asNeeded = a.timeOfDay.equals("as-needed", true) || b.timeOfDay.equals("as-needed", true)
+            val sameSlot = pairs.any { (x, y) -> x.equals(y, ignoreCase = true) }
+            val gap = pairs.mapNotNull { (x, y) -> slotGapHours(x, y) }.minOrNull()
             val status = when {
                 r.preferTogether -> if (sameSlot && !asNeeded) InteractionStatus.TOGETHER_OK else null
                 r.spacingHours == null -> InteractionStatus.ALWAYS

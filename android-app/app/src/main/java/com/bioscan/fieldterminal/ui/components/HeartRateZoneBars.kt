@@ -55,7 +55,7 @@ fun HeartRateZoneBars(breakdown: List<HeartRateZoneBreakdown>, bounds: ZoneBound
             ) {
                 Text(zoneShortLabel(zone), style = FTType.MonoCaption, color = FT.TextSecondary, modifier = Modifier.width(22.dp))
                 Box(Modifier.weight(1f).height(22.dp), contentAlignment = Alignment.CenterStart) {
-                    Box(Modifier.fillMaxWidth().height(22.dp).clip(shape).background(FT.GlassFill, shape))
+                    Box(Modifier.fillMaxWidth().height(22.dp).clip(shape).background(FT.Glass, shape))
                     Box(Modifier.fillMaxWidth((secs.toFloat() / top).coerceIn(0f, 1f)).height(22.dp).clip(shape).background(heartRateZoneColor(zone).copy(alpha = 0.75f), shape))
                     Text("${bounds.rangeText(zone)} bpm", style = FTType.Micro, color = FT.TextPrimary, modifier = Modifier.padding(start = 8.dp))
                 }

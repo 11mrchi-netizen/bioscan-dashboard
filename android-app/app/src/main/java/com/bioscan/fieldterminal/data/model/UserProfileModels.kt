@@ -13,4 +13,7 @@ data class UserProfileRow(
     // "male" / "female" only -- matches the sex-specific reference tables
     // (KDM, some functional-age norms) this milestone consumes.
     val sex: String? = null,
+    // Inputs for impedance body composition (supabase/migrations/20261113_user_profile_height.sql).
+    @SerialName("height_cm") val heightCm: Double? = null,
+    @SerialName("athlete_mode") val athleteMode: Boolean = false,
 )

@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import { resultAllowed, ROUTINE_SERIES, serveRows, TABLE_SCOPE, tableAccess, type ScopeSettings } from './scope.ts'
 
-const ROOT = new URL('../../../../', import.meta.url).pathname
+const ROOT = fileURLToPath(new URL('../../../../', import.meta.url))
 const on: ScopeSettings = { enabled: true, optIn: [] }
 const all: ScopeSettings = { enabled: true, optIn: ['notes', 'sexual_health', 'health_concerns', 'digestive'] }
 

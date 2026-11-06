@@ -77,7 +77,8 @@ fun N1Tab() {
     val scope = rememberCoroutineScope()
 
     // Optional enrichment, reloaded after a registration or a delete: a failed read just leaves the experiment cards out.
-    LaunchedEffect(experimentsKey) {
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(experimentsKey, cacheVersion) {
         val repo = ExperimentsRepository(SupabaseClientProvider.client)
         runCatching { experiments = repo.loadExperiments() }
         runCatching { experimentResults = repo.loadResults() }
@@ -115,9 +116,7 @@ fun N1Tab() {
         if (guard.error != null) {
             LoadErrorCard(guard)
         } else {
-            Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FT.DomainLabs)
-            }
+            com.bioscan.fieldterminal.ui.components.SkeletonSections()
         }
         return
     }
@@ -158,6 +157,10 @@ fun N1Tab() {
             },
         )
         experimentError?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+        // Interventions repeated now and then (nasal strips, a lactose meal): events, how each felt, and the evidence so far.
+        InterventionEventsSection()
+        // Bundles of those around one objective (docs/intervention-protocol-intelligence).
+        ProtocolsSection()
         N1ScorecardsCard(scorecards, typicality = typicalityView(typicality).scorecard)
         // Health concerns (docs/health-concerns): patterns found in check-ins and the trials testing them.
         com.bioscan.fieldterminal.ui.screens.health.HealthN1Section()

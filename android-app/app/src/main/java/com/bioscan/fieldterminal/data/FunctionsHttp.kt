@@ -1,7 +1,7 @@
 package com.bioscan.fieldterminal.data
 
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 
@@ -9,7 +9,7 @@ import io.ktor.client.plugins.HttpTimeout
  * Client for edge functions called outside the Supabase SDK. Without a timeout a function that never answers (Gemini or
  * Cronometer stalling) leaves the caller's spinner running forever.
  */
-internal fun functionsClient(requestTimeoutMs: Long = 45_000): HttpClient = HttpClient(Android) {
+internal fun functionsClient(requestTimeoutMs: Long = 45_000): HttpClient = HttpClient(OkHttp) {
     install(HttpTimeout) {
         requestTimeoutMillis = requestTimeoutMs
         connectTimeoutMillis = 15_000

@@ -1,0 +1,125 @@
+/* Field Terminal — design tokens (metric colours v1)
+   Source: docs/analysis-layer-2/02-metric-registry.md + wearable fields + Bristol.
+   Model: domain colour lives in the page background wash; cards are neutral
+   faint-platinum frosted glass; each metric keeps its own fixed hue in the content. */
+
+:root {
+  /* ---- surfaces ---- */
+  --ft-bg:            #070a0d;
+  --ft-fg:            #eaf0f2;
+  --ft-muted:         #8793a2;
+  --ft-dim:           #55606e;
+  --ft-line:          rgba(255,255,255,.10);
+  /* neutral frosted-glass card recipe */
+  --ft-glass-bg:      linear-gradient(135deg, rgba(255,255,255,.085), rgba(255,255,255,.028) 60%);
+  --ft-glass-border:  rgba(255,255,255,.12);
+  --ft-glass-blur:    blur(18px) saturate(1.1);
+
+  /* ---- domain framing hues (background wash + hero gauge only) ---- */
+  --ft-domain-sleep:     #8b7cff;
+  --ft-domain-cardio:    #2fd6c3;  /* recovery */
+  --ft-domain-load:      #ff8a5b;
+  --ft-domain-fuel:      #8ce06b;
+  --ft-domain-balance:   #ff6ec7;
+  --ft-charge-a:         #6d5efc;  /* CHARGE = holographic composite spectrum */
+  --ft-charge-b:         #19c7e0;
+  --ft-charge-c:         #5af0c8;
+  --ft-charge-d:         #c6f06a;
+  --ft-charge-e:         #ff6ec7;
+
+  /* ---- metric colours (fixed, app-wide) ---- */
+  /* cardio / blood / breath */
+  --m-heart-rate:        #ff4d5e;
+  --m-resting-hr:        #ff5d8a;
+  --m-max-hr:            #e03a4a;
+  --m-hrv:               #ff6ec7;
+  --m-spo2:              #3a8dff;
+  --m-respiratory:       #2fd0d0;
+  --m-blood-pressure:    #e75bd0;
+  --m-skin-temp:         #ffa23a;
+  --m-steps:             #46c8a0;
+  --m-vo2max:            #8b6cff;
+
+  /* sleep */
+  --m-sleep-score:       #6d8cff;
+  --m-sleep-duration:    #4a7dff;
+  --m-stage-awake:       #ffb04d;
+  --m-stage-rem:         #9b6cff;
+  --m-stage-light:       #4a7dff;
+  --m-stage-deep:        #2342c9;
+  --m-sleeping-hr:       #ff4d5e;  /* = heart-rate */
+  --m-regularity:        #36d07a;
+  --m-circadian:         #5ab0ff;
+
+  /* body */
+  --m-weight:            #9aa6bd;
+  --m-weight-ema:        #c7d0e0;
+  --m-body-fat:          #ff9a3d;
+  --m-lean-mass:         #36d07a;
+  --m-muscle-potential:  #5ad1b0;
+  --m-measurements:      #9b6cff;
+  --m-energy-balance:    #4aa8ff;
+
+  /* balance / wellbeing */
+  --m-mood:              #ffd23a;
+  --m-energy:            #ff9a3d;
+  --m-stress:            #ff6b5b;
+  --m-soreness:          #e0556b;
+  --m-arousal:           #ff6ec7;  /* shares HRV hue by request */
+  --m-phys-stress:       #ff5d5d;
+  --m-hr-dip:            #36d07a;
+  --m-meal-timing:       #ffb03a;
+
+  /* load / training */
+  --m-ctl:               #3a8dff;  /* fitness */
+  --m-atl:               #ff844d;  /* fatigue */
+  --m-tsb:               #36d07a;  /* form */
+  --m-trimp:             #ff6b4d;
+  --m-srpe:              #ff9a4d;
+  --m-rpe:               #ff7a3a;
+  --m-pace:              #4ad6c0;
+  --m-speed:             #35c7e0;
+  --m-power:             #ffd23a;
+  --m-cadence:           #9b6cff;
+  --m-distance:          #5ab0ff;
+  --m-duration:          #9aa6bd;
+  --m-elevation:         #b98a4d;
+  --m-grip:              #e0556b;
+
+  /* fuel / nutrition */
+  --m-calories:          #8ce06b;
+  --m-carbs:             #ff9a3d;
+  --m-protein:           #ff4d6a;
+  --m-fat:               #ffd23a;
+  --m-fiber:             #5ac86b;
+  --m-sugar:             #ff6ec7;
+  --m-sodium:            #9aa6bd;  /* = weight */
+  --m-hydration:         #3aa8ff;
+  --m-caffeine:          #b98a4d;
+  --m-sweat-rate:        #35c7e0;
+
+  /* digestion — stool consistency */
+  --m-stool-hard:        #8a5a2b;
+  --m-stool-healthy:     #c79a5a;
+  --m-stool-loose:       #e0a94d;
+  --m-stool-liquid:      #e0774d;
+  --m-gut-comfort:       #8ce06b;
+
+  /* routine */
+  --m-phone-sleep:       #9b6cff;
+  --m-night-screen:      #7a6cff;
+  --m-daylight:          #ffd23a;
+  --m-commute:           #5ab0ff;
+  --m-active-travel:     #36d07a;
+
+  /* ---- ordered ramps ---- */
+  --z-hr-1: #6f86b0;  --z-hr-2: #3aa0ff;  --z-hr-3: #35c77a;  --z-hr-4: #ffb03a;  --z-hr-5: #ff4d4d;
+  --z-stress-calm:     #36d07a;
+  --z-stress-moderate: #ffb03a;
+  --z-stress-high:     #ff4d4d;
+
+  /* ---- semantic (status only) ---- */
+  --ok:   #58e39a;
+  --warn: #ffc24b;
+  --bad:  #ff5d6c;
+}

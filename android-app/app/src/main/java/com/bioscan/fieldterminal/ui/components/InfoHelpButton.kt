@@ -44,7 +44,7 @@ fun InfoHelpButton(title: String, body: String, modifier: Modifier = Modifier, d
         modifier = modifier
             .size(20.dp)
             .clip(CircleShape)
-            .background(FT.GlassFill)
+            .background(FT.Glass)
             .border(FT.BorderWidth, FT.GlassBorder, CircleShape)
             .ftClickable(shape = CircleShape, role = Role.Button, onClickLabel = "Explain") { open = true },
         contentAlignment = Alignment.Center,

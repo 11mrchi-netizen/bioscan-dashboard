@@ -205,7 +205,7 @@ fun LabExtractionSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
 @Composable
 private fun EditableMarkerCard(row: EditableMarkerRow, onRemove: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule)).padding(14.dp),
+        modifier = Modifier.fillMaxWidth().background(FT.Glass, RoundedCornerShape(FT.RadiusModule)).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

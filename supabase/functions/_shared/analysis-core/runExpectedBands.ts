@@ -5,7 +5,8 @@
 import type { Admin, LoadedFrame } from './runRelationships.ts'
 import { analyseExpectedBand, BAND_SPECS } from './expectedBand.ts'
 import { fnv1a } from './hash.ts'
-import { CORE_VERSION } from './version.ts'
+import { publishResults } from './publish.ts'
+import type { ResultRow } from './publish.ts'
 
 export const EXPECTED_BAND_KIND = 'expected_band'
 
@@ -40,30 +41,21 @@ export async function runExpectedBands(admin: Admin, loaded: LoadedFrame, now: D
   const breaks = await loadConfirmedBreaks(admin, userId)
   if ('error' in breaks) return { userId, error: breaks.error as string }
 
-  const metrics: NonNullable<ExpectedBandRun['metrics']> = []
+  const rows: ResultRow[] = []
+  const have = new Map<string, number>()
   for (const spec of BAND_SPECS) {
     const restartDates = breaks.get(spec.metric) ?? []
     const values = frame.series[spec.metric] ?? frame.dates.map(() => null)
     const result = analyseExpectedBand({ spec, dates: frame.dates, values, excluded: frame.excluded, restartDates })
-    const { error } = await admin.from('analysis_results').upsert(
-      {
-        user_id: userId,
-        kind: EXPECTED_BAND_KIND,
-        key: spec.metric,
-        as_of: today,
-        engine_version: CORE_VERSION,
-        inputs_hash: fnv1a(JSON.stringify([frame.dates[0], values, frame.excluded, restartDates])),
-        state: result.state,
-        confidence_have: result.have,
-        confidence_need: result.need,
-        payload: result,
-        calculated_at: now.toISOString(),
-      },
-      { onConflict: 'user_id,kind,key,as_of,engine_version' },
-    )
-    if (error) return { userId, error: error.message, metrics }
-    await admin.from('analysis_results').delete().eq('user_id', userId).eq('kind', EXPECTED_BAND_KIND).eq('key', spec.metric).eq('engine_version', CORE_VERSION).lt('as_of', today)
-    metrics.push({ metric: spec.metric, state: result.state, have: result.have })
+    rows.push({
+      kind: EXPECTED_BAND_KIND, key: spec.metric, state: result.state, have: result.have, need: result.need, payload: result,
+      hash: fnv1a(JSON.stringify([frame.dates[0], values, frame.excluded, restartDates])),
+    })
+    have.set(spec.metric, result.have)
   }
+  // one upsert per batch and one delete per batch (publish.ts)
+  const out = await publishResults(admin, userId, today, rows, now)
+  const metrics: NonNullable<ExpectedBandRun['metrics']> = out.published.map((p) => ({ metric: p.key, state: p.state, have: have.get(p.key) ?? 0 }))
+  if (out.error) return { userId, error: out.error, metrics }
   return { userId, metrics }
 }

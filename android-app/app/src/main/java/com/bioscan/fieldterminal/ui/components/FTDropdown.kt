@@ -34,7 +34,7 @@ private fun DropdownBox(text: String, placeholder: String, modifier: Modifier, m
     Box(modifier) {
         Row(
             Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)
-                .border(FT.BorderWidth, FT.GlassBorder, shape).background(FT.GlassFill, shape)
+                .border(FT.BorderWidth, FT.GlassBorder, shape).background(FT.Glass, shape)
                 .ftClickable(shape = shape) { open = true }.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -51,7 +51,7 @@ fun FTDropdown(options: List<Pair<String, String>>, selected: String?, placehold
     DropdownBox(options.firstOrNull { it.first == selected }?.second.orEmpty(), placeholder, modifier) { dismiss ->
         options.forEach { (key, label) ->
             DropdownMenuItem(
-                text = { Text(label, style = FTType.Body, color = if (key == selected) FT.DomainTraining else FT.TextPrimary) },
+                text = { Text(label, style = FTType.Body, color = if (key == selected) FT.TextPrimary else FT.TextSecondary) },
                 onClick = { onSelect(key); dismiss() },
             )
         }
@@ -68,7 +68,7 @@ fun FTMultiDropdown(options: List<Pair<String, String>>, selected: List<String>,
         Box {
             Row(
                 Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)
-                    .border(FT.BorderWidth, FT.GlassBorder, shape).background(FT.GlassFill, shape)
+                    .border(FT.BorderWidth, FT.GlassBorder, shape).background(FT.Glass, shape)
                     .ftClickable(shape = shape) { open = true }.padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -80,7 +80,7 @@ fun FTMultiDropdown(options: List<Pair<String, String>>, selected: List<String>,
                 options.forEach { (key, label) ->
                     val on = key in selected
                     DropdownMenuItem(
-                        text = { Text((if (on) "[x] " else "[ ] ") + label, style = FTType.Body, color = if (on) FT.DomainTraining else FT.TextPrimary) },
+                        text = { Text((if (on) "[x] " else "[ ] ") + label, style = FTType.Body, color = if (on) FT.TextPrimary else FT.TextPrimary) },
                         onClick = { onChange(if (on) selected - key else selected + key) },
                     )
                 }

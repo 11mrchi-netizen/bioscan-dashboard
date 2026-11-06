@@ -44,7 +44,7 @@ class BodyCheckinTest {
 
     @Test
     fun `limbs are measured on both sides, skinfolds on the right, optional sites only when chosen`() {
-        assertEquals(19, BODY_CHECKIN_SLOTS.size)
+        assertEquals(21, BODY_CHECKIN_SLOTS.size) // 19 + wrist and ankle (one each)
         assertTrue(BODY_CHECKIN_SLOTS.filter { it.site.method == MeasureMethod.CALIPER }.all { it.side == BodySide.RIGHT })
         assertEquals(listOf(BodySide.RIGHT, BodySide.LEFT), BODY_CHECKIN_SLOTS.filter { it.site == BodySite.CALF }.map { it.side })
         val slots = activeSlots(tape = true, calipers = true, flexedArms = false, chestSkinfold = false)

@@ -20,7 +20,7 @@ import { analyseDaily, analysePairs, FOUR_WORDS, fourWord, shiftDay } from './ra
 import type { FourWord, PeriodPhase } from './randomized.ts'
 
 export type MetricId = 'hrv' | 'rhr' | 'sleep_hours' | 'deep_rem_min' | 'energy' | 'mood' | 'stress' | 'soreness' | 'fueling_carb_rate'
-  | 'screen_bed_min' | 'screen_pm_social' | 'outdoor_daylight_min'
+  | 'screen_bed_min' | 'screen_pm_social' | 'outdoor_daylight_min' | 'resp_rate'
 
 interface MetricInfo {
   label: string
@@ -50,6 +50,8 @@ export const METRIC_INFO: Record<MetricId, MetricInfo> = {
   screen_bed_min: { label: 'Phone in the hour before sleep', series: 'screen_bed_min', ln: false, unit: 'min', breakKeys: [] },
   screen_pm_social: { label: 'Social and video apps after 21:00', series: 'screen_pm_social', ln: false, unit: 'min', breakKeys: [] },
   outdoor_daylight_min: { label: 'Outdoors in daylight (estimated)', series: 'outdoor_daylight_min', ln: false, unit: 'min', breakKeys: [] },
+  // Repeatable interventions (a nasal strip): the night's mean respiratory rate from sleep_daily.
+  resp_rate: { label: 'Respiratory rate, sleep', series: 'resp_rate', ln: false, unit: 'br/min', breakKeys: [] },
 }
 
 export const MIN_PHASE_DAYS = 14
@@ -416,6 +418,8 @@ const FAVOURABLE: Record<MetricId, 1 | -1> = {
   hrv: 1, rhr: -1, sleep_hours: 1, deep_rem_min: 1, energy: 1, mood: 1, stress: -1, soreness: -1, fueling_carb_rate: 1,
   // Routine intelligence R6: less phone around bedtime and late at night, more daylight.
   screen_bed_min: -1, screen_pm_social: -1, outdoor_daylight_min: 1,
+  // A slower breathing rate reads as favourable (wording only; not a medical claim).
+  resp_rate: -1,
 }
 
 /** Each outcome's default no-effect zone in its display unit (% for HRV, minutes for sleep), as the evidence board uses;
@@ -425,6 +429,7 @@ export const DEFAULT_ZONE: Record<MetricId, { zone: number; unit: string; scale?
   energy: { zone: 0.5, unit: 'points' }, mood: { zone: 0.5, unit: 'points' }, stress: { zone: 0.5, unit: 'points' }, soreness: { zone: 0.5, unit: 'points' },
   fueling_carb_rate: { zone: 5, unit: 'g/h' },
   screen_bed_min: { zone: 10, unit: 'min' }, screen_pm_social: { zone: 10, unit: 'min' }, outdoor_daylight_min: { zone: 10, unit: 'min' },
+  resp_rate: { zone: 0.3, unit: 'br/min' },
 }
 
 /** The blocks whose exclusions are frozen when they end: the periods, or for a daily design each week of the schedule

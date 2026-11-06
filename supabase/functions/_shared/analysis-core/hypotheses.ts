@@ -11,11 +11,16 @@
 // outcomes stay within the evidence board's four groups; the plan's commute-and-evening-stress question is asked of
 // that night's sleep instead, since stress is an exposure here, not an outcome.
 //
+// Morning scores (catalogue 2.2.0): the same evening exposures asked of next-morning RECOVERY and SLEEP, the app's own
+// domain scores (score_history; 80 is a typical morning, the scale runs to 150). CHARGE is not an outcome: alcohol,
+// late caffeine, felt stress and late screens are CHARGE inputs through FUEL and BALANCE, so a link would be partly
+// built in. RECOVERY (HRV, resting HR, night stress, soreness, energy) and SLEEP hold none of these exposures.
+//
 // Left out on purpose: "supplement started -> outcome". A step exposure against a trending series is confounded by time, so
 // supplements are tested as pre-registered N-of-1 experiments (Phase 5) with their own design, not here.
 import type { Hypothesis } from './relationship.ts'
 
-export const CATALOGUE_VERSION = '2.1.0'
+export const CATALOGUE_VERSION = '2.2.0'
 
 const EXPLICIT_MODEL = 'A day counts as none only when the evening check-in says so (or, before the first check-in, when food was logged that day); other days are left out.'
 const DEVICE_MODEL = 'Sessions come from the watch; days with a watch record and no session count as none.'
@@ -30,6 +35,31 @@ const HRV = { target: 'hrv', targetTransform: 'ln' as const, targetUnit: 'ms', n
 const RHR = { target: 'rhr', targetUnit: 'bpm', noEffect: 1, outcome: 'rhr' as const }
 const SLEEP = { target: 'sleep_hours', targetScale: 60, targetUnit: 'min', noEffect: 10, outcome: 'sleep' as const }
 const ENERGY = { target: 'energy', ordinal: true, targetUnit: 'points', noEffect: 0.5, outcome: 'energy' as const }
+// Five points on the 0-150 score scale: about a quarter of the distance from a typical morning (80) to the top of normal.
+const RECOVERY_SCORE = { target: 'recovery_score', targetUnit: 'points', noEffect: 5, outcome: 'recovery_score' as const }
+const SLEEP_SCORE = { target: 'sleep_score', targetUnit: 'points', noEffect: 5, outcome: 'sleep_score' as const }
+const SCORE_NOTE = ' Scores come from the app; mornings it could not score are left out.'
+
+function morningScoreQuestions(): Hypothesis[] {
+  const exposures: { cause: string; key: string; causeText: string; model: string; sign: -1 | 0 | 1; recovery: boolean; sleep: boolean; label: string }[] = [
+    { cause: 'alcohol_any', key: 'alcohol', label: 'Alcohol', causeText: 'A day with alcohol', model: EXPLICIT_MODEL, sign: -1, recovery: true, sleep: true },
+    { cause: 'caffeine_pm_any', key: 'caffeine_pm', label: 'Caffeine after 14:00', causeText: 'A day with caffeine after 14:00', model: EXPLICIT_MODEL, sign: -1, recovery: false, sleep: true },
+    { cause: 'late_meal', key: 'late_meal', label: 'A meal after 21:00', causeText: 'A day with a meal after 21:00', model: EXPLICIT_MODEL, sign: -1, recovery: true, sleep: true },
+    { cause: 'stress_high', key: 'stress', label: 'A high-stress day', causeText: 'A high-stress day', model: STRESS_MODEL, sign: -1, recovery: true, sleep: true },
+    { cause: 'evening_training', key: 'evening_training', label: 'Training after 19:00', causeText: 'A day with training after 19:00', model: DEVICE_MODEL, sign: 0, recovery: true, sleep: true },
+    { cause: 'training_day', key: 'training', label: 'A training day', causeText: 'A training day', model: DEVICE_MODEL, sign: 0, recovery: true, sleep: false },
+  ]
+  return exposures.flatMap((e) => [
+    ...(e.recovery ? [{
+      id: `${e.key}_recovery_score`, label: `${e.label} and next-morning RECOVERY`, cause: e.cause, lag: 1, exposure: 'binary' as const, ...RECOVERY_SCORE,
+      causeText: e.causeText, targetText: 'next-morning RECOVERY score', expectedSign: e.sign, exposureModel: e.model + SCORE_NOTE,
+    }] : []),
+    ...(e.sleep ? [{
+      id: `${e.key}_sleep_score`, label: `${e.label} and that night's SLEEP score`, cause: e.cause, lag: 1, exposure: 'binary' as const, ...SLEEP_SCORE,
+      causeText: e.causeText, targetText: 'that night\'s SLEEP score', expectedSign: e.sign, exposureModel: e.model + SCORE_NOTE,
+    }] : []),
+  ])
+}
 
 export const HYPOTHESES: Hypothesis[] = [
   {
@@ -126,6 +156,7 @@ export const HYPOTHESES: Hypothesis[] = [
     id: 'commute_long_sleep', label: 'A longer commute than usual and that night\'s sleep', cause: 'commute_long', lag: 1, exposure: 'binary', ...SLEEP,
     causeText: 'A commute at least a quarter longer than the usual of the last four weeks', targetText: 'that night\'s sleep', expectedSign: 0, exposureModel: COMMUTE_MODEL,
   },
+  ...morningScoreQuestions(),
 ]
 
 // Analysis review phase E: questions a person registers from a hint (what came before off mornings). Each is tested only

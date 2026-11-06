@@ -253,4 +253,13 @@ class NotificationRulesTest {
         val rule = NotificationRuleRow(kind = NotificationKind.EVENING_LOG, schedule = NotificationSchedule(times = listOf("19:30")))
         assertEquals(listOf(java.time.LocalTime.of(19, 30)), scheduledTimes(rule))
     }
+
+    @Test
+    fun firedAtIsARealInstantReadInTheLocalZone() {
+        val taipei = java.time.ZoneId.of("Asia/Taipei")
+        // 21:05 in Taipei is 13:05 UTC; read as digits it was 13:05 and an hour's min gap never held.
+        assertEquals(LocalDateTime.of(2026, 11, 4, 21, 5), firedAtLocal("2026-11-04T13:05:00+00:00", taipei))
+        assertEquals(LocalDateTime.of(2026, 11, 5, 7, 18, 44), firedAtLocal("2026-11-04 23:18:44+00", taipei))
+        assertNull(firedAtLocal("not a time", taipei))
+    }
 }

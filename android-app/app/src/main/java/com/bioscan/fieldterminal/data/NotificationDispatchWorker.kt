@@ -22,12 +22,19 @@ import com.bioscan.fieldterminal.domain.notifications.wellbeingCheckinNeeded
 import com.bioscan.fieldterminal.domain.notifications.nextFireTime
 import com.bioscan.fieldterminal.domain.notifications.supplementsDueForBucket
 import com.bioscan.fieldterminal.domain.notifications.withinLimits
+import com.bioscan.fieldterminal.domain.notifications.firedAtLocal
 import com.bioscan.fieldterminal.domain.notifications.FUEL_PROMPT_WINDOW_MIN
 import com.bioscan.fieldterminal.domain.notifications.dueFuelPrompts
 import com.bioscan.fieldterminal.domain.notifications.fuelPrompts
+import com.bioscan.fieldterminal.data.model.EventRow
+import com.bioscan.fieldterminal.domain.notifications.PromptEvent
+import com.bioscan.fieldterminal.domain.notifications.PromptWindow
+import com.bioscan.fieldterminal.domain.notifications.eventDrawNeeded
+import com.bioscan.fieldterminal.domain.notifications.followUpsDue
+import com.bioscan.fieldterminal.domain.notifications.interventionsToDraw
+import com.bioscan.fieldterminal.domain.notifications.unratedEvents
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneOffset
 import java.util.concurrent.TimeUnit
 
 // Runs every 15 minutes (WorkManager minimum). For each enabled rule, checks
@@ -51,11 +58,14 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
         val now = LocalDateTime.now()
         val windowStart = now.minusMinutes(15)
         val today = LocalDate.now()
-        val dayStart = today.atStartOfDay().toInstant(ZoneOffset.UTC)
+        // notification_log.fired_at is a real instant (now() on insert), not a logged wall-clock time: today starts at local
+        // midnight, and each firing is read in this zone (its digits were 8 h early in UTC+8, so the min gap never held).
+        val zone = java.time.ZoneId.systemDefault()
+        val dayStart = today.atStartOfDay(zone).toInstant()
 
         val shownToday = runCatching { repo.loadShownSince(dayStart) }
             .getOrElse { emptyList() }
-            .map { ShownEntry(it.ruleKind, LocalDateTime.parse(it.firedAt.take(19))) }
+            .mapNotNull { e -> firedAtLocal(e.firedAt, zone)?.let { ShownEntry(e.ruleKind, it) } }
 
         val nm = NotificationManagerCompat.from(applicationContext)
 
@@ -66,6 +76,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
             if (!withinLimits(rule, prefs, now, shownToday)) continue
 
             var logAllIds: List<Long> = emptyList()
+            var supplementBucket: String? = null
             val (title, body) = when (rule.kind) {
                 NotificationKind.SUPPLEMENT_DUE -> {
                     // Find which bucket this fire belongs to by matching the scheduled time
@@ -78,7 +89,8 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                     val suppRepo = SupplementsRepository(supabase)
                     val overview = runCatching { suppRepo.loadOverview() }.getOrElse { continue }
                     val activeIds = overview.active.mapNotNull { it.id }.toList()
-                    val lastTaken = runCatching { suppRepo.loadRecentTakenDates(activeIds) }.getOrElse { emptyMap() }
+                    val takes = runCatching { suppRepo.loadRecentTakes(activeIds, today) }.getOrElse { com.bioscan.fieldterminal.data.RecentTakes(emptyMap(), emptyMap()) }
+                    val lastTaken = takes.lastTaken
                     val takenToday = lastTaken.entries
                         .filter { (_, d) -> d == today }
                         .map { it.key }
@@ -91,9 +103,11 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                         takenToday,
                         today,
                         rule.conditions.skipIfLogged,
+                        takes.takesToday,
                     )
                     if (due.isEmpty()) continue
                     logAllIds = due.map { it.id }
+                    supplementBucket = bucket
                     val names = due.take(3).joinToString(", ") { it.name }
                     val more = if (due.size > 3) " +${due.size - 3} more" else ""
                     "Time for your $bucket supplements" to "$names$more"
@@ -140,6 +154,35 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                     "Health check-in" to "Anything bothering you today? NOTHING is one tap, and it counts."
                 }
 
+                // Repeatable interventions: each branch fetches, the decision is in domain/notifications/EventPrompts.kt. A read that
+                // returns nothing (offline, failed) means no prompt this window rather than a wrong one.
+                NotificationKind.EVENT_RATING -> {
+                    val events = promptEvents(InterventionEventsRepository(supabase).loadRecentEvents())
+                    val due = unratedEvents(events, java.time.Instant.now())
+                    if (due.isEmpty()) continue
+                    "How did it feel?" to "${due.size} ${if (due.size == 1) "event" else "events"} to rate, before you look at any numbers"
+                }
+
+                NotificationKind.EVENT_DRAW -> {
+                    val ev = InterventionEventsRepository(supabase)
+                    val enabled = ev.loadInterventions().filter { it.drawEnabled }.map { it.id }
+                    if (enabled.isEmpty()) continue
+                    val drawnToday = ev.loadDraws().filter { it.localDate == today.toString() }.map { it.interventionId }.toSet()
+                    if (!eventDrawNeeded(enabled, drawnToday)) continue
+                    "Today's draw" to "Flip the coin for ${interventionsToDraw(enabled, drawnToday).size} intervention(s): it decides before the day starts"
+                }
+
+                NotificationKind.EVENT_FOLLOWUP -> {
+                    val ev = InterventionEventsRepository(supabase)
+                    val windows = ev.loadExpectations().filter { it.outcomeKind == "tracked" && it.role == "primary" }
+                        .map { PromptWindow(it.interventionId, it.outcomeKey, it.windowStartH, it.windowEndH) }
+                    if (windows.isEmpty()) continue
+                    val values = ev.loadRecentTrackedValueTimes().mapNotNull { v -> parseInstant(v.observedAt)?.let { v.outcomeId to it } }
+                    val due = followUpsDue(promptEvents(ev.loadRecentEvents()), windows, values, java.time.Instant.now())
+                    if (due.isEmpty()) continue
+                    "Log the outcome" to "${due.size} ${if (due.size == 1) "event has" else "events have"} a window that closed with nothing logged"
+                }
+
                 else -> continue
             }
 
@@ -149,7 +192,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                 .setContentText(body)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true)
-                .setContentIntent(NotificationActionReceiver.contentIntent(applicationContext, rule.kind))
+                .setContentIntent(NotificationActionReceiver.contentIntent(applicationContext, rule.kind, supplementBucket))
             if (rule.kind == NotificationKind.SUPPLEMENT_DUE && logAllIds.isNotEmpty()) {
                 builder.addAction(
                     0,
@@ -213,3 +256,9 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
         }
     }
 }
+
+// PostgREST returns timestamptz as "2026-10-28T22:00:00+00:00", which Instant.parse rejects; OffsetDateTime reads both forms.
+private fun parseInstant(text: String): java.time.Instant? = runCatching { java.time.OffsetDateTime.parse(text).toInstant() }.getOrNull()
+
+private fun promptEvents(rows: List<EventRow>): List<PromptEvent> =
+    rows.mapNotNull { r -> parseInstant(r.occurredAt)?.let { PromptEvent(r.id, r.interventionId, it, r.feeling) } }

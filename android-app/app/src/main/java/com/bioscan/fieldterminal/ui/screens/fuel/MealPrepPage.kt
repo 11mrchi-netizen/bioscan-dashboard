@@ -98,9 +98,10 @@ fun MealPrepPage(overview: NutritionOverview?, modifier: Modifier = Modifier) {
     var loaded by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(weekStart, attempt, overview) {
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(weekStart, attempt, overview, cacheVersion) {
         error = null
-        loaded = false
+        if (plan == null) loaded = false
         try {
             plan = FuelPlanRepository(SupabaseClientProvider.client).loadWeekPlan(context, overview, weekStart)
             week = runCatching { repo.loadWeek(weekStart) }.getOrNull()
@@ -176,14 +177,14 @@ private fun Chips(options: List<FoodOption>, selected: List<String>, enabled: Bo
             val canAdd = on || selected.size < max
             Box(
                 Modifier
-                    .background(if (on) FT.DomainFuel.copy(alpha = 0.22f) else Color.Transparent, shape)
-                    .border(FT.BorderWidth, if (on) FT.DomainFuel else FT.GlassBorder, shape)
+                    .background(if (on) FT.PlatinumSolid else Color.Transparent, shape)
+                    .border(FT.BorderWidth, if (on) Color.Transparent else FT.GlassBorder, shape)
                     .ftClickable(enabled = enabled && canAdd, shape = shape) { onToggle(f.id) }
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
                 Text(
                     f.name.uppercase() + if (f.usual) " ·" else "",
-                    style = FTType.LabelCaps, color = if (canAdd || on) FT.TextPrimary else FT.TextMuted,
+                    style = FTType.LabelCaps, color = if (on) FT.PlatinumInk else if (canAdd) FT.TextPrimary else FT.TextMuted,
                 )
             }
         }

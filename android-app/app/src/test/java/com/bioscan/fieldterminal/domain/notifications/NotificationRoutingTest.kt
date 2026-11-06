@@ -19,6 +19,14 @@ class NotificationRoutingTest {
         ).forEach { assertEquals(it, NotificationDestination.LOG, notificationDestination(it)) }
     }
 
+    @Test fun interventionRemindersOpenTheRepeatableCard() {
+        listOf(NotificationKind.EVENT_RATING, NotificationKind.EVENT_DRAW, NotificationKind.EVENT_FOLLOWUP)
+            .forEach {
+                assertEquals(it, NotificationDestination.EVENTS, notificationDestination(it))
+                org.junit.Assert.assertTrue(it in NotificationKind.ALL)
+            }
+    }
+
     @Test fun unknownOrMissingKindGoesNowhere() {
         assertEquals(NotificationDestination.NONE, notificationDestination(null))
         assertEquals(NotificationDestination.NONE, notificationDestination("something_else"))

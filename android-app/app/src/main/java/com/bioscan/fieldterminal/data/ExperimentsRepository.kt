@@ -9,7 +9,7 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -91,7 +91,7 @@ data class ExperimentPayload(val stage: String = "before", val adherence: Experi
 data class ExperimentResultRow(val key: String, val state: String = "before", val payload: ExperimentPayload = ExperimentPayload())
 
 class ExperimentsRepository(private val supabase: SupabaseClient) {
-    companion object { private val client = HttpClient(Android) }
+    companion object { private val client = HttpClient(OkHttp) }
     private val json = Json { ignoreUnknownKeys = true }
 
     // The smallest difference a design with these phase lengths could detect on this person's own data, per outcome.
@@ -133,7 +133,11 @@ class ExperimentsRepository(private val supabase: SupabaseClient) {
     }
 
     // Every column, so the read keeps working before the phase F migration adds deleted_at; deleted ones are left out here.
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadExperiments(): List<ExperimentRow> =
+        com.bioscan.fieldterminal.data.ReadCache.get("experiments.all", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(ExperimentRow.serializer())) { fetchLoadExperiments() }
+
+    private suspend fun fetchLoadExperiments(): List<ExperimentRow> =
         try {
             supabase.postgrest.from("experiments")
                 .select(columns = Columns.ALL)
@@ -144,7 +148,11 @@ class ExperimentsRepository(private val supabase: SupabaseClient) {
             emptyList()
         }
 
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadResults(): Map<String, ExperimentResultRow> =
+        com.bioscan.fieldterminal.data.ReadCache.get("experiments.results", tables = null, serializer = kotlinx.serialization.builtins.MapSerializer(kotlinx.serialization.serializer<String>(), ExperimentResultRow.serializer())) { fetchLoadResults() }
+
+    private suspend fun fetchLoadResults(): Map<String, ExperimentResultRow> =
         try {
             supabase.postgrest.from("analysis_results")
                 .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "experiment") } }

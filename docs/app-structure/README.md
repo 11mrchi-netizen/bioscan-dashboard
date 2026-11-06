@@ -1,5 +1,10 @@
 # App structure (October 2026)
 
+> **Superseded in part (November 2026):** the dock is now **TODAY · PLAN · + LOG · LAB · ME**, rebuilt around the
+> scoring system. See `docs/scoring-system/README.md` (Build status). The Training, Nutrition and Health pages below
+> are detail pages now, opened from the domain overlays' THE FULL PICTURE tiles. The map below is the
+> October structure, kept for history.
+
 The owner's "Field terminal new structure" document, as built, and the six content changes that came with it. The
 code is authoritative: `ui/nav/TopLevelTab.kt` holds every tab set, `ui/nav/FieldTerminalNavHost.kt` the routes and
 links.

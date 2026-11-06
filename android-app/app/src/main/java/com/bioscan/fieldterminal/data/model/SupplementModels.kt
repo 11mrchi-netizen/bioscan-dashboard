@@ -18,7 +18,27 @@ data class SupplementRow(
     // composition -- addSupplementsTaken()'s nutrient mapping falls back to
     // the pre-existing name-inference path for those, unchanged.
     @SerialName("product_id") val productId: Long? = null,
+    // Regimen model (migration 20261115_regimen_model.sql): read through domain/Regimen.kt's spec(), which falls back to
+    // the columns above for rows (or cached copies) that do not carry these.
+    @SerialName("start_date") val startDate: String? = null,
+    val kind: String? = null,
+    val form: String? = null,
+    val route: String? = null,
+    @SerialName("dose_amount") val doseAmount: Double? = null,
+    @SerialName("dose_unit") val doseUnit: String? = null,
+    val slots: List<String> = emptyList(),
+    val schedule: com.bioscan.fieldterminal.domain.ScheduleJson? = null,
+    @SerialName("dose_steps") val doseSteps: com.bioscan.fieldterminal.domain.DoseStepsJson? = null,
+    /** The prescriber's syringe units (U-100) for one dose, for injectables. */
+    @SerialName("syringe_units") val syringeUnits: Double? = null,
+    /** A tablet that can be split in half. */
+    val scored: Boolean = false,
+    @SerialName("servings_per_dose") val servingsPerDose: Double = 1.0,
 )
+
+/** Every column [SupplementRow] reads, for selects. */
+const val SUPPLEMENT_ROW_COLUMNS =
+    "id,name,dose,time_of_day,status,start_date,end_date,ai_note,every_n_days,product_id,kind,form,route,dose_amount,dose_unit,slots,schedule,dose_steps,syringe_units,scored,servings_per_dose"
 
 // DAV-81
 @Serializable

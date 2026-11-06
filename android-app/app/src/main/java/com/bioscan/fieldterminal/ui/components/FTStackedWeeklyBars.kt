@@ -73,43 +73,24 @@ fun FTStackedWeeklyBars(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(height)
-                .pointerInput(weeks) { detectTapGestures { selected = indexAt(it.x, size.width.toFloat(), weeks.size) } }
-                .pointerInput(weeks) { detectHorizontalDragGestures { change, _ -> selected = indexAt(change.position.x, size.width.toFloat(), weeks.size) } },
+                .pointerInput(weeks) { detectTapGestures { selected = BarLayout(size.width.toFloat(), weeks.size, 0f).indexAt(it.x) } }
+                .pointerInput(weeks) { detectHorizontalDragGestures { change, _ -> selected = BarLayout(size.width.toFloat(), weeks.size, 0f).indexAt(change.position.x) } },
         ) {
-            val slot = size.width / weeks.size
-            val barW = (slot * 0.62f).coerceAtMost(26.dp.toPx())
-            val usable = size.height - 4.dp.toPx()
-            val gap = 2.dp.toPx()
-            val radius = minOf(4.dp.toPx(), barW / 2f)
+            val layout = barLayout(weeks.size)
+            val usable = size.height - FTBarSpec.TopPad.toPx()
             weeks.forEachIndexed { i, w ->
-                val x = i * slot + (slot - barW) / 2f
-                val alpha = if (i == shown) 1f else if (i == weeks.lastIndex) 0.85f else 0.5f
+                val x = layout.left(i)
                 if (w.total <= 0) {
-                    drawRoundRect(FT.GlassTrack, Offset(x, size.height - 2.dp.toPx()), Size(barW, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
+                    drawBarStub(x, layout.barWidth)
                     return@forEachIndexed
                 }
-                val topPart = w.parts.indexOfLast { it > 0 }
-                var y = size.height
-                w.parts.forEachIndexed { p, v ->
-                    if (v <= 0) return@forEachIndexed
-                    val h = (v / top).toFloat() * usable
-                    val drawn = if (p == topPart) h else (h - gap).coerceAtLeast(1f)
-                    val color = parts[p].color.copy(alpha = alpha)
-                    if (p == topPart) {
-                        // Rounded at the top only: a round rect, its lower corners squared off by a plain rect.
-                        drawRoundRect(color, Offset(x, y - drawn), Size(barW, drawn), CornerRadius(radius))
-                        val square = minOf(radius, drawn / 2f)
-                        drawRect(color, Offset(x, y - square), Size(barW, square))
-                    } else {
-                        drawRect(color, Offset(x, y - drawn), Size(barW, drawn))
-                    }
-                    y -= h
-                }
+                drawStackedBar(w.parts, parts.map { it.color }, x, layout.barWidth, { v -> (v / top).toFloat() * usable },
+                    alpha = barAlpha(i, selected), cap = i == shown)
             }
             if (average != null && average.size == weeks.size) {
                 val path = Path()
                 average.forEachIndexed { i, v ->
-                    val pt = Offset(i * slot + slot / 2f, size.height - (v / top).toFloat() * usable)
+                    val pt = Offset(layout.center(i), size.height - (v / top).toFloat() * usable)
                     if (i == 0) path.moveTo(pt.x, pt.y) else path.lineTo(pt.x, pt.y)
                 }
                 drawPath(path, FT.TextPrimary.copy(alpha = 0.85f), style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round))
@@ -136,5 +117,3 @@ fun StackLegendRow(part: StackPart, text: String) {
     }
 }
 
-private fun indexAt(x: Float, width: Float, count: Int): Int =
-    ((x / width) * count).toInt().coerceIn(0, count - 1)

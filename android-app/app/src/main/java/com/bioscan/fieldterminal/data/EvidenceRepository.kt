@@ -24,6 +24,8 @@ private data class IngredientKeyRow(
 
 @Serializable
 private data class EvidenceClaimRow(
+    val id: Long = 0,
+    val version: Int? = null,
     @SerialName("subject_key") val subjectKey: String,
     @SerialName("claim_text") val claimText: String,
     @SerialName("review_status") val reviewStatus: String = "unreviewed",
@@ -67,7 +69,7 @@ class EvidenceRepository(private val supabase: SupabaseClient) {
         if (allKeys.isEmpty()) return emptyMap()
 
         val claims = supabase.postgrest.from("evidence_records")
-            .select(columns = Columns.list("subject_key,claim_text,review_status")) {
+            .select(columns = Columns.list("id,version,subject_key,claim_text,review_status")) {
                 filter {
                     eq("subject_type", "ingredient")
                     isIn("subject_key", allKeys.toList())
@@ -75,7 +77,17 @@ class EvidenceRepository(private val supabase: SupabaseClient) {
                 order("id", Order.ASCENDING)
             }
             .decodeList<EvidenceClaimRow>()
-            .map { EvidenceClaim(it.subjectKey, it.claimText, reviewed = it.reviewStatus == "reviewed") }
+            // The owner's verdicts: a confirmed claim counts as reviewed, a disputed one is not shown as an expected outcome.
+            .let { rows ->
+                val reviews = runCatching { RegistryReviewRepository(supabase).loadReviews() }.getOrDefault(emptyMap())
+                rows.mapNotNull {
+                    when (reviewState(it.reviewStatus, it.version, reviews["evidence" to it.id])) {
+                        ReviewState.DISPUTED -> null
+                        ReviewState.CONFIRMED -> EvidenceClaim(it.subjectKey, it.claimText, reviewed = true)
+                        ReviewState.UNREVIEWED -> EvidenceClaim(it.subjectKey, it.claimText, reviewed = false)
+                    }
+                }
+            }
 
         return supplements.mapNotNull { s ->
             val keys = s.productId?.let { keysByProduct[it] } ?: return@mapNotNull null

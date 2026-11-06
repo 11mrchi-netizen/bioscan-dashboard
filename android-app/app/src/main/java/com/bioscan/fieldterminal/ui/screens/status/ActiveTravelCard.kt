@@ -17,7 +17,6 @@ import com.bioscan.fieldterminal.data.routine.RoutineSettingsStore
 import com.bioscan.fieldterminal.data.routine.RoutineStream
 import com.bioscan.fieldterminal.domain.routine.ActiveTravelWeek
 import com.bioscan.fieldterminal.domain.routine.activeTravel
-import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -35,8 +34,8 @@ fun ActiveTravelCard() {
         value = softLoad { PlacesRepository(SupabaseClientProvider.client).loadTrips(now.minusSeconds(14 * 86_400)) }
             ?.let { activeTravel(it, now.toEpochMilli()) }
     }
-    FTCard(
-        title = "ACTIVE TRAVEL",
+    com.bioscan.fieldterminal.ui.screens.detail.Section(
+        "ACTIVE TRAVEL · 7 DAYS",
         info = "Minutes on foot or on a bicycle in trips between places, from location capture. Shown beside training load, " +
             "not added to it: session load needs a session's effort (RPE or heart rate), which a walk to the station does " +
             "not have. Workouts recorded by the watch are not trips and are not counted here.",
@@ -45,17 +44,14 @@ fun ActiveTravelCard() {
         if (w == null) {
             Text("No trips recorded yet.", style = FTType.BodySmall, color = FT.TextSecondary)
         } else {
-            Line("Last 7 days", "%.0f min · %d trips".format(w.lastWeekMin, w.trips))
-            Line("On foot · bicycle", "%.0f · %.0f min".format(w.onFootMin, w.bicycleMin))
-            Line("The 7 days before", "%.0f min".format(w.previousWeekMin))
+            com.bioscan.fieldterminal.ui.screens.detail.StatTiles(
+                listOf(
+                    Triple("ON FOOT", "%.0f min".format(w.onFootMin), null),
+                    Triple("BICYCLE", "%.0f min".format(w.bicycleMin), null),
+                    Triple("TRIPS", "${w.trips}", null),
+                    Triple("WEEK BEFORE", "%.0f min".format(w.previousWeekMin), "total %.0f min this week".format(w.lastWeekMin)),
+                ),
+            )
         }
-    }
-}
-
-@Composable
-private fun Line(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = FTType.Body, color = FT.TextPrimary)
-        Text(value, style = FTType.Telemetry, color = FT.TextSecondary)
     }
 }

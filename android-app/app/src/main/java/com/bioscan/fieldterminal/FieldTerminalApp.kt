@@ -15,6 +15,8 @@ import com.bioscan.fieldterminal.util.Perf
 class FieldTerminalApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // Pages open from the last data they showed (kept on disk) while fresh data loads (data/ReadCache.kt).
+        com.bioscan.fieldterminal.data.ReadCache.init(filesDir)
         Perf.enabled = BuildConfig.DEBUG // logcat tag "perf"; see util/Perf.kt
         Thread({
             Perf.timed("startup.warm") {
@@ -36,6 +38,9 @@ class FieldTerminalApp : Application() {
             Triple(NotificationKind.EVENING_CHECKIN, "Evening Check-in (structured)", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.BODY_CHECKIN, "Monthly Body Check-in", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.HEALTH_CHECKIN, "Health Check-in", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(NotificationKind.EVENT_RATING, "How an intervention felt", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(NotificationKind.EVENT_DRAW, "Daily intervention draw", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(NotificationKind.EVENT_FOLLOWUP, "Outcome follow-up", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.FUEL_SESSION, "Fuel before and after sessions", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.FUEL_EVENT, "Race week fuelling", NotificationManager.IMPORTANCE_HIGH),
         ).forEach { (id, name, importance) ->

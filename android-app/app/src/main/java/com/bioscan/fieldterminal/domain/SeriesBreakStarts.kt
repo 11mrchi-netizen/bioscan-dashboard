@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import java.time.LocalDate
 
 // Analysis Layer 3 / R1 (docs/analysis-layer-3). A baseline restarts only after a CONFIRMED series break: a statistical
@@ -9,6 +12,7 @@ import java.time.LocalDate
 // metric key, the start of the current regime -- the date to pass as `windowStart` to the SWC evaluators.
 //
 // Metric keys match the published results: "hrv", "rhr", "steps", "sleep_hours", "deep_min", "rem_min", "light_min".
+@Serializable
 data class SeriesBreakStarts(val byMetric: Map<String, LocalDate> = emptyMap()) {
     fun start(metric: String): LocalDate? = byMetric[metric]
 

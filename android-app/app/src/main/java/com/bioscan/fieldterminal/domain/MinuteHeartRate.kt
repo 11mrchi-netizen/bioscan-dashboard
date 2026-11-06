@@ -1,3 +1,4 @@
+@file:kotlinx.serialization.UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
 import com.bioscan.fieldterminal.data.model.HrPoint
@@ -12,6 +13,8 @@ const val MINUTE_HR_MAX_BPM = 220
 
 /** More minutes than this without a reading break the line: the band was off, not a slow change. */
 const val MINUTE_HR_MAX_GAP_MINUTES = 5
+
+@kotlinx.serialization.Serializable
 
 data class HeartRateDay(val date: LocalDate, val points: List<HrPoint>)
 

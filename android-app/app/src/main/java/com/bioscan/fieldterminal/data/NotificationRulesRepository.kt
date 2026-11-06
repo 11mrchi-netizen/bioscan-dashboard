@@ -91,6 +91,28 @@ private val DEFAULT_RULES = listOf(
         conditions = NotificationConditions(skipIfLogged = true),
         limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 30),
     ),
+    // Repeatable interventions: rate last night's event (09:00), the daily draw (18:00), a tracked-outcome follow-up (20:00).
+    NewNotificationRuleRow(
+        kind = NotificationKind.EVENT_RATING,
+        enabled = true,
+        schedule = NotificationSchedule(times = listOf("09:00")),
+        conditions = NotificationConditions(skipIfLogged = true),
+        limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 30),
+    ),
+    NewNotificationRuleRow(
+        kind = NotificationKind.EVENT_DRAW,
+        enabled = true,
+        schedule = NotificationSchedule(times = listOf("18:00")),
+        conditions = NotificationConditions(skipIfLogged = true),
+        limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 30),
+    ),
+    NewNotificationRuleRow(
+        kind = NotificationKind.EVENT_FOLLOWUP,
+        enabled = true,
+        schedule = NotificationSchedule(times = listOf("20:00")),
+        conditions = NotificationConditions(skipIfLogged = true),
+        limits = NotificationLimits(maxPerDay = 1, minGapMin = 60, snoozeMin = 30),
+    ),
     // Fuel planning: no clock times; the worker reads the planned sessions and races (domain/notifications/FuelPrompts.kt).
     NewNotificationRuleRow(
         kind = NotificationKind.FUEL_SESSION,

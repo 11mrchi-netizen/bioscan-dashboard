@@ -109,3 +109,23 @@ actual `meal_item` via DAV-164's resolver, is DAV-168's job.
 - Any UI. All three repositories are ready for DAV-168 to call; nothing in `AddEntrySheet.kt`
   changed, including its existing image-capture flow, which DAV-168 will point at the new
   repository instead of `NutritionEstimationRepository`.
+
+
+## Photo logging v3 (Nov 2026)
+
+What we took from SparkyFitness's photo pipeline (open source) after comparing it with ours:
+
+- **The photo's foods go to the lookup as they are.** `nutrition-estimate-image` (model version 3, prompt and shaping in
+  `estimate.ts`, tested by `estimate.test.ts`) lists the meal's foods one by one: a diary name, a generic English name
+  for the database, grams, portion, preparation, macros and eleven micronutrients, a high/medium/low confidence and
+  the assumptions behind it. The app sends them to `nutrition-cronometer-lookup` as `photo_items`
+  (`lookupPhotoItems`): each is matched by its generic name at the grams the photo showed, with the photo's numbers as
+  its independent check. v2 sent only the meal's one-line description, which a second AI call split again and weighed
+  from words. The v2 whole-meal fields stay in the response, summed from the foods.
+- **A note and a weighed total go with the photo.** The note is authoritative over the photo; a total weight is shared
+  across the foods. On the confirm sheet "Not right? Say what it is" reruns the estimate with the correction.
+- **Questions and assumptions are shown.** Up to three questions with short answers to tap (each reruns the estimate
+  on the same photos with the answer), the confidence in words with what limits it, and under each food what the photo
+  saw and assumed.
+- **Micronutrients when nothing matches.** A food with no trustworthy database match stands in with the photo's
+  estimate, now micronutrients included (`MacroEstimate.extra`), instead of zeros.

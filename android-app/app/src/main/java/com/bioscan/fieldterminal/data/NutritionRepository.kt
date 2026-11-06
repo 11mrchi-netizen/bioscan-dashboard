@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.data.model.BeverageItemRow
 import com.bioscan.fieldterminal.data.model.HydrationDailyRow
 import com.bioscan.fieldterminal.data.model.MealRow
@@ -11,6 +14,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import java.time.LocalDate
 
+@Serializable
 data class NutritionOverview(
     val today: DailyNutrition?, // the real calendar-today's totals, or null if
                                  // nothing's been logged yet today -- was
@@ -36,11 +40,19 @@ data class NutritionOverview(
 
 class NutritionRepository(private val supabase: SupabaseClient) {
 
-    suspend fun loadOverview(): NutritionOverview {
+    /** Kept on disk with the read cache, so the nutrition pages open at once; keyed on the day, "today" being in it. */
+    suspend fun loadOverview(): NutritionOverview =
+        ReadCache.get(
+            "nutrition.overview.${java.time.LocalDate.now()}",
+            tables = setOf("meals", "meal_items", "hydration_daily"),
+            serializer = NutritionOverview.serializer(),
+        ) { fetchOverview() }
+
+    private suspend fun fetchOverview(): NutritionOverview {
         // Redesign: the range selector reaches ALL, so this margin is 5000 meals (years of logging), not 500.
         // Still a row-count margin rather than a date filter, the "bounded, not unbounded" tradeoff LogRepository makes.
         val meals = supabase.postgrest.from("meals")
-            .select(columns = Columns.list("id,logged_at,description,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg")) {
+            .select(columns = Columns.list("id,logged_at,description,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg,meal_slot")) {
                 order("logged_at", Order.DESCENDING)
                 limit(5000)
             }
@@ -102,7 +114,7 @@ class NutritionRepository(private val supabase: SupabaseClient) {
     // the actual duplication).
     suspend fun loadRecentMeals(limit: Int = 10): List<MealRow> =
         supabase.postgrest.from("meals")
-            .select(columns = Columns.list("id,logged_at,description,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg")) {
+            .select(columns = Columns.list("id,logged_at,description,calories,protein_g,fat_g,carbs_g,fiber_g,sugar_g,sodium_mg,meal_slot")) {
                 order("logged_at", Order.DESCENDING)
                 limit(limit.toLong())
             }

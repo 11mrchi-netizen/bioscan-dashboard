@@ -99,3 +99,60 @@ fun categoryFromOsm(osmClass: String?, osmType: String?): PlaceCategory? {
         else -> null
     }
 }
+
+// ---- places added by hand ----
+
+// Radii offered when a place is added by hand (the table allows 25 m to 2 km).
+val MANUAL_PLACE_RADII_M = listOf(50.0, 100.0, 150.0, 300.0)
+
+private val LAT_LON = Regex("""(-?\d{1,3}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)""")
+private val MAP_LINK = Regex("""(?:@|[?&](?:q|ll|query|destination)=)(-?\d{1,3}(?:\.\d+)?)(?:,|%2C)\s*(-?\d{1,3}(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+
+/**
+ * A latitude and longitude from what a person pastes: "25.0330, 121.5654" (Google Maps' long-press copy), the same with a
+ * space or semicolon, or a map link carrying "@lat,lon" or "q=lat,lon". Null when nothing in range is found. A link's own
+ * coordinates win over other numbers in it.
+ */
+fun parseCoordinates(text: String): Pair<Double, Double>? {
+    val t = text.trim()
+    if (t.isEmpty()) return null
+    val m = MAP_LINK.find(t) ?: LAT_LON.find(t) ?: return null
+    val lat = m.groupValues[1].toDoubleOrNull() ?: return null
+    val lon = m.groupValues[2].toDoubleOrNull() ?: return null
+    return (lat to lon).takeIf { lat in -90.0..90.0 && lon in -180.0..180.0 && !(lat == 0.0 && lon == 0.0) }
+}
+
+data class VisitAtPlace(val key: String, val lat: Double, val lon: Double, val placeId: String?)
+
+data class ManualPlaceClaim(val visitKeys: List<String>, val absorbedPlaceIds: Set<String>)
+
+/**
+ * What a place added by hand takes over. Unnamed learned places whose centre lies inside its circle are absorbed (their
+ * visits move to it, and they go away), since they were the phone's guess at the same place. Any other visit inside the
+ * circle moves to it when it has no place or the new place is nearer than its own; places the person named keep the
+ * visits they hold more closely.
+ */
+fun claimForManualPlace(place: Place, visits: List<VisitAtPlace>, known: List<PlaceRowLike>): ManualPlaceClaim {
+    val absorbed = known
+        .filter { it.source == "learned" && it.label == null && haversineM(it.lat, it.lon, place.lat, place.lon) <= place.radiusM }
+        .map { it.id }
+        .toSet()
+    val byId = known.associateBy { it.id }
+    val keys = visits.filter { v ->
+        if (v.placeId != null && v.placeId in absorbed) return@filter true
+        val d = haversineM(v.lat, v.lon, place.lat, place.lon)
+        if (d > place.radiusM) return@filter false
+        val current = v.placeId?.let { byId[it] } ?: return@filter true
+        d < haversineM(v.lat, v.lon, current.lat, current.lon)
+    }.map { it.key }
+    return ManualPlaceClaim(keys, absorbed)
+}
+
+// The few fields of a stored place the claim needs (PlaceRow in the data layer).
+interface PlaceRowLike {
+    val id: String
+    val lat: Double
+    val lon: Double
+    val label: String?
+    val source: String
+}

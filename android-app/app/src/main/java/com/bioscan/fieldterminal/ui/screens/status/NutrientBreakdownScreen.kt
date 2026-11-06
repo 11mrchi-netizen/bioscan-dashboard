@@ -1,18 +1,14 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,7 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,15 +28,17 @@ import com.bioscan.fieldterminal.domain.NUTRIENT_REFERENCE
 import com.bioscan.fieldterminal.domain.NutrientCategory
 import com.bioscan.fieldterminal.domain.NutrientInfo
 import com.bioscan.fieldterminal.domain.nutrientDisplayName
-import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
-import com.bioscan.fieldterminal.ui.components.PinnedPage
-import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.components.drawZonedTrack
 import com.bioscan.fieldterminal.ui.components.drawZonedValue
 import com.bioscan.fieldterminal.ui.components.zoneEdges
 import com.bioscan.fieldterminal.ui.components.zonedFraction
+import com.bioscan.fieldterminal.ui.screens.detail.Chip
+import com.bioscan.fieldterminal.ui.screens.detail.DetailScreen
+import com.bioscan.fieldterminal.ui.screens.detail.EmptyLine
+import com.bioscan.fieldterminal.ui.screens.detail.Loading
+import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
@@ -58,6 +55,15 @@ private enum class ValueMode(val label: String) {
     Average("AVG/DAY"),
 }
 
+// The page follows the shared detail kit (ui/screens/detail/DetailKit.kt): the DetailScreen header, chips for the window
+// and the value mode, one glass Section per category, and slim one-line bars like ShareBars, here on the zoned scale.
+
+private const val BREAKDOWN_INFO =
+    "Each bar is on the same scale as the other nutrition bars: the first 70 % runs up to the reference intake (RDA), the " +
+        "green part is the RDA to the upper limit, the grey end is over the limit. With no upper limit the last 30 % is the " +
+        "good range; with only a limit, everything under it is. In TOTAL the reference is multiplied by the days with data. " +
+        "Reference values are adult male intakes (NASEM DRI): general guides, not personal targets."
+
 @Composable
 fun NutrientBreakdownScreen(onBack: () -> Unit) {
     var timeRange by remember { mutableStateOf(TimeRange.Today) }
@@ -72,165 +78,86 @@ fun NutrientBreakdownScreen(onBack: () -> Unit) {
         isLoading = false
     }
 
-    PinnedPage(onBack = onBack, title = "NUTRIENT BREAKDOWN", subtitle = "VITAMINS · MINERALS · OTHER NUTRIENTS", accent = FT.DomainFuel) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp)) {
-            SegmentedToggle(
-                options = TimeRange.entries,
-                selected = timeRange,
-                labelOf = { it.label },
-                onSelect = { timeRange = it },
-            )
-            Spacer(Modifier.height(8.dp))
-            SegmentedToggle(
-                options = ValueMode.entries,
-                selected = valueMode,
-                labelOf = { it.label },
-                onSelect = { valueMode = it },
-            )
+    DetailScreen("NUTRIENT BREAKDOWN", onBack, eyebrow = "FUEL", domain = FT.Domain.Fuel, ranged = false) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            TimeRange.entries.forEach { r -> Chip(r.label, r == timeRange) { timeRange = r } }
         }
-
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ValueMode.entries.forEach { m -> Chip(m.label, m == valueMode) { valueMode = m } }
+        }
+        val d = data
         when {
             guard.error != null && !isLoading -> LoadErrorCard(guard)
-            isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FT.DomainFuel)
-            }
-            data != null -> {
-                val d = data!!
+            isLoading || d == null -> Loading(guard)
+            d.nutrients.isEmpty() -> EmptyLine("No nutrient data logged for this period.")
+            else -> {
                 val divisor = if (valueMode == ValueMode.Average) d.daysCovered.toDouble() else 1.0
                 val rdaMultiplier = if (valueMode == ValueMode.Total) d.daysCovered else 1
-
-                if (d.nutrients.isEmpty()) {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                        Text(
-                            "No nutrient data logged for this period.",
-                            style = FTType.Body,
-                            color = FT.TextSecondary,
-                        )
-                    }
-                } else {
-                    val periodNote = when (timeRange) {
-                        TimeRange.Today -> "today"
-                        else -> "last ${timeRange.days} days (${d.daysCovered} day${if (d.daysCovered != 1) "s" else ""} with data)"
-                    }
-                    val modeNote = if (valueMode == ValueMode.Average) "daily average" else "accumulated total"
-                    Text(
-                        "$modeNote — $periodNote",
-                        style = FTType.Caption,
-                        color = FT.TextMuted,
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
-                    )
-
-                    NutrientCategory.entries.forEach { category ->
-                        val nutrients = nutrientsForCategory(category, d.nutrients)
-                        if (nutrients.isNotEmpty()) {
-                            NutrientCategoryCard(
-                                category = category,
-                                nutrients = nutrients,
-                                divisor = divisor,
-                                rdaMultiplier = rdaMultiplier,
-                            )
+                val periodNote = when (timeRange) {
+                    TimeRange.Today -> "today"
+                    else -> "last ${timeRange.days} days (${d.daysCovered} day${if (d.daysCovered != 1) "s" else ""} with data)"
+                }
+                val modeNote = if (valueMode == ValueMode.Average) "Daily average" else "Total"
+                Text("$modeNote · $periodNote", style = FTType.Caption, color = FT.TextMuted)
+                NutrientCategory.entries.forEach { category ->
+                    val nutrients = nutrientsForCategory(category, d.nutrients)
+                    if (nutrients.isNotEmpty()) {
+                        Section(category.label.uppercase(), info = BREAKDOWN_INFO) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                nutrients.forEach { (info, raw) -> NutrientRow(info, raw / divisor, rdaMultiplier) }
+                            }
                         }
                     }
-
-                    Text(
-                        "RDA values shown are adult male reference intakes (NASEM DRI). " +
-                            "They are general guides, not personal targets.",
-                        style = FTType.Caption,
-                        color = FT.TextMuted,
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp),
-                    )
                 }
             }
         }
     }
 }
 
-@Composable
-private fun NutrientCategoryCard(
-    category: NutrientCategory,
-    nutrients: List<Pair<NutrientInfo, Double>>,
-    divisor: Double,
-    rdaMultiplier: Int,
-) {
-    FTCard(
-        title = category.label,
-        modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
-    ) {
-        nutrients.forEach { (info, rawAmount) ->
-            val amount = rawAmount / divisor
-            NutrientRow(info = info, amount = amount, rdaMultiplier = rdaMultiplier)
-        }
-    }
-}
-
+/** One line: name, a slim zoned bar, the amount; the reference range in small type under the bar when there is one. */
 @Composable
 private fun NutrientRow(info: NutrientInfo, amount: Double, rdaMultiplier: Int) {
-    val effectiveRda = info.rda?.times(rdaMultiplier)
-    val effectiveUL = info.upperLimit?.times(rdaMultiplier)
-
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                info.displayName,
-                style = FTType.BodySmall,
-                color = FT.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                formatAmount(amount, info.unit),
-                style = FTType.Telemetry,
-                color = FT.TextPrimary,
-                textAlign = TextAlign.End,
-            )
+    val rda = info.rda?.times(rdaMultiplier)
+    val ul = info.upperLimit?.times(rdaMultiplier)
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(info.displayName, style = FTType.Caption, color = FT.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.width(110.dp))
+            Box(Modifier.weight(1f)) { NutrientBar(amount, rda, ul) }
+            Text(formatAmount(amount, info.unit), style = FTType.Telemetry, color = FT.TextPrimary, textAlign = TextAlign.End,
+                maxLines = 1, modifier = Modifier.width(76.dp))
         }
-
-        if (effectiveRda != null || effectiveUL != null) {
-            val rangeLabel = when {
-                effectiveRda != null && effectiveUL != null ->
-                    "Range: ${formatAmount(effectiveRda, info.unit)} – ${formatAmount(effectiveUL, info.unit)}"
-                effectiveRda != null ->
-                    "Range: ≥ ${formatAmount(effectiveRda, info.unit)}"
-                else ->
-                    "Range: < ${formatAmount(effectiveUL!!, info.unit)}"
-            }
-            Text(
-                rangeLabel,
-                style = FTType.Caption,
-                color = FT.TextMuted,
-            )
-            Spacer(Modifier.height(4.dp))
-            NutrientBar(amount = amount, rda = effectiveRda, upperLimit = effectiveUL)
+        val range = when {
+            rda != null && ul != null -> "${formatAmount(rda, info.unit)} – ${formatAmount(ul, info.unit)}"
+            rda != null -> "≥ ${formatAmount(rda, info.unit)}"
+            ul != null -> "< ${formatAmount(ul, info.unit)}"
+            else -> null
         }
+        range?.let { Text(it, style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.padding(start = 118.dp)) }
     }
 }
 
-// The same 70 / 20 / 10 layout as the other nutrition bars (ZonedScale.kt): under the RDA, the RDA to the upper limit,
-// over it. With no upper limit the last 30 % is the good range; with only an upper limit, everything under it is good.
-// The fill keeps its state colour (no nutrient identity here); the RDA and limit sit on the zone edges.
+// The same 70 / 20 / 10 layout as the other nutrition bars (ZonedScale.kt), drawn 8 dp tall like the page kit's bars.
+// The fill keeps its state colour (no nutrient identity here). No reference: an empty track.
 @Composable
 private fun NutrientBar(amount: Double, rda: Double?, upperLimit: Double?) {
-    val edges = zoneEdges(rda, upperLimit) ?: return
-    val fraction = zonedFraction(amount, rda, upperLimit) ?: return
-
+    val edges = zoneEdges(rda, upperLimit)
+    val fraction = zonedFraction(amount, rda, upperLimit)
     val barColor = when {
         upperLimit != null && amount > upperLimit -> FT.Warning
         rda != null && amount >= rda -> FT.Emerald
         rda != null && amount >= rda * 0.7 -> FT.Emerald.copy(alpha = 0.7f)
         else -> FT.TextSecondary
     }
-
-    Canvas(modifier = Modifier.fillMaxWidth().height(30.dp)) {
-        val barH = 14.dp.toPx()
+    Canvas(Modifier.fillMaxWidth().height(12.dp)) {
+        val barH = 8.dp.toPx()
         val cy = size.height / 2f
+        if (edges == null || fraction == null) {
+            drawZonedTrack(cy, barH, 1f to 1f, FT.Emerald)
+            return@Canvas
+        }
         drawZonedTrack(cy, barH, edges, FT.Emerald)
-        drawZonedValue(cy, barH, fraction, barColor, 10.dp.toPx())
+        drawZonedValue(cy, barH, fraction, barColor, 4.dp.toPx())
     }
 }
 

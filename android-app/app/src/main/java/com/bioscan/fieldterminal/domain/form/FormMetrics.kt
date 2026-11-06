@@ -1,3 +1,4 @@
+@file:kotlinx.serialization.UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.form
 
 import com.bioscan.fieldterminal.domain.interquartileRange
@@ -46,6 +47,7 @@ data class StepMetrics(
 )
 
 /** The middle value over the clip's steps, their spread (interquartile range) and how many there were. */
+@kotlinx.serialization.Serializable
 data class MetricSummary(val median: Double, val spread: Double, val n: Int)
 
 fun summarise(values: List<Double?>): MetricSummary? {

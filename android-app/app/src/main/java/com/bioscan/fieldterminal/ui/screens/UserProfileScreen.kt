@@ -52,6 +52,8 @@ fun UserProfileScreen(
     // UX review P5: opens Training › Plan, the one home of the training block.
     onOpenTrainingPlan: () -> Unit = {},
     onOpenSkill: (Skill) -> Unit = {},
+    // Scoring system rebuild: inside ME the page has ME's header, so its own is left out.
+    showHeader: Boolean = true,
 ) {
     var agingOverview by remember { mutableStateOf<AgingProfileOverview?>(null) }
     val agingGuard = rememberLoadGuard()
@@ -88,7 +90,7 @@ fun UserProfileScreen(
     val activeCycle = cycles?.firstOrNull { it.isActiveOn(LocalDate.now()) }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        ScreenHeader(title = "USER", context = "HEALTHSPAN · SKILLS · TRAINING BLOCK")
+        if (showHeader) ScreenHeader(title = "USER", context = "HEALTHSPAN · SKILLS · TRAINING BLOCK")
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),

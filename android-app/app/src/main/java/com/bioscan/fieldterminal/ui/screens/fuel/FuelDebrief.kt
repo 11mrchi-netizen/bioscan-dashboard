@@ -172,10 +172,10 @@ fun FuelDebriefContent(target: DebriefTarget, onSaved: () -> Unit) {
                 val on = s in symptoms
                 val shape = RoundedCornerShape(FT.RadiusSmall)
                 Text(
-                    s.label.uppercase(), style = FTType.LabelCaps, color = if (on) FT.Warning else FT.TextSecondary,
+                    s.label.uppercase(), style = FTType.LabelCaps, color = if (on) FT.PlatinumInk else FT.TextSecondary,
                     modifier = Modifier
-                        .border(FT.BorderWidth, if (on) FT.Warning else FT.GlassBorder, shape)
-                        .background(if (on) FT.Warning.copy(alpha = 0.14f) else androidx.compose.ui.graphics.Color.Transparent, shape)
+                        .border(FT.BorderWidth, if (on) androidx.compose.ui.graphics.Color.Transparent else FT.GlassBorder, shape)
+                        .background(if (on) FT.PlatinumSolid else androidx.compose.ui.graphics.Color.Transparent, shape)
                         .ftClickable(shape = shape) { if (on) symptoms.remove(s) else symptoms.add(s) }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 )

@@ -2,6 +2,7 @@
 //
 //   { items: [{ description, quantity_g?, food_id? }] }  direct lookup of each item, or of the given Cronometer food_id
 //   { description: "one apple" | "Pan-seared steak with brown rice..." }  a single food or a whole meal
+//   { photo_items: [{ name, canonical_name, quantity_g, estimate }], description? }  a photo estimate's foods (photo v3)
 //   { suggest: { query: "pepperoni pi", limit?: 8 } }  foods to pick while typing a replacement or a new ingredient
 //   Items may name a Cronometer food (food_id) or an app catalog food (catalog_food_id: barcode products, label scans).
 //
@@ -10,7 +11,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { cronoLogin, isFailure, lookupDescription, lookupItems, memoryLoader, suggestFoods } from "../_shared/nutrition-lookup/lookup.ts";
+import { cronoLogin, isFailure, lookupDescription, lookupItems, lookupPhotoItems, memoryLoader, type PhotoItemSpec, suggestFoods } from "../_shared/nutrition-lookup/lookup.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,6 +58,7 @@ Deno.serve(async (req: Request) => {
       items?: Array<{ description: string; quantity_g?: number; food_id?: number; catalog_food_id?: number }>;
       description?: string;
       suggest?: { query?: string; limit?: number };
+      photo_items?: PhotoItemSpec[];
     };
     try {
       body = await req.json();
@@ -73,6 +75,11 @@ Deno.serve(async (req: Request) => {
 
     if (body.suggest) {
       return json({ suggestions: await suggestFoods(ctx, body.suggest.query ?? "", body.suggest.limit ?? 8) }, 200);
+    }
+
+    // Photo v3: the photo estimate's own foods, looked up as they are (no second split).
+    if (body.photo_items && Array.isArray(body.photo_items) && body.photo_items.length > 0) {
+      return json(await lookupPhotoItems(ctx, body.photo_items, body.description), 200);
     }
 
     if (body.items && Array.isArray(body.items) && body.items.length > 0) {

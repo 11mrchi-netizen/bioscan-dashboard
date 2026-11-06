@@ -63,7 +63,11 @@ sealed interface TransitResult {
 class RoutineRepository(private val supabase: SupabaseClient) {
     private val json = Json { ignoreUnknownKeys = true }
 
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun mobilitySince(from: LocalDate): List<MobilityDailyRow> =
+        com.bioscan.fieldterminal.data.ReadCache.get("routine.mobility.$from", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(MobilityDailyRow.serializer())) { fetchMobilitySince(from) }
+
+    private suspend fun fetchMobilitySince(from: LocalDate): List<MobilityDailyRow> =
         supabase.postgrest.from("mobility_daily")
             .select(columns = Columns.list("date,coverage_pct,minutes_by_category,n_places,new_places,entropy_norm,radius_gyration_km,time_from_home_min,outdoor_daylight_min,routine_similarity,day_type")) {
                 filter { gte("date", from.toString()) }
@@ -71,7 +75,11 @@ class RoutineRepository(private val supabase: SupabaseClient) {
             }
             .decodeList<MobilityDailyRow>()
 
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun phoneSince(from: LocalDate): List<PhoneDaySlice> =
+        com.bioscan.fieldterminal.data.ReadCache.get("routine.phone.$from", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(PhoneDaySlice.serializer())) { fetchPhoneSince(from) }
+
+    private suspend fun fetchPhoneSince(from: LocalDate): List<PhoneDaySlice> =
         supabase.postgrest.from("phone_usage_daily")
             .select(columns = Columns.list("date,coverage_pct,screen_min,unlocks,bed_window_min,night_unlocks")) {
                 filter { gte("date", from.toString()) }
@@ -81,7 +89,11 @@ class RoutineRepository(private val supabase: SupabaseClient) {
             .map { PhoneDaySlice(LocalDate.parse(it.date), it.screenMin, it.bedWindowMin, it.nightUnlocks) }
 
     // Minutes and launches per app over the days since [from], most used first.
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun appsSince(from: LocalDate, top: Int = 5): List<AppWeekTotal> =
+        com.bioscan.fieldterminal.data.ReadCache.get("routine.apps.$from.$top", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(AppWeekTotal.serializer())) { fetchAppsSince(from, top) }
+
+    private suspend fun fetchAppsSince(from: LocalDate, top: Int = 5): List<AppWeekTotal> =
         supabase.postgrest.from("phone_app_usage_daily")
             .select(columns = Columns.list("date,package,app_label,category,foreground_min,launches,bed_window_min,after_21_min")) {
                 filter { gte("date", from.toString()) }
@@ -119,7 +131,11 @@ class RoutineRepository(private val supabase: SupabaseClient) {
             .decodeList<SessionStartRow>()
             .mapNotNull { parseTimestamp(it.startTime)?.toEpochMilli() }
 
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun commutesSince(since: Instant): List<Trip> =
+        com.bioscan.fieldterminal.data.ReadCache.get("routine.commutes.${since.epochSecond / 86_400}", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(Trip.serializer())) { fetchCommutesSince(since) }
+
+    private suspend fun fetchCommutesSince(since: Instant): List<Trip> =
         supabase.postgrest.from("trips")
             .select(columns = Columns.list("start_at,end_at,from_place_id,to_place_id,distance_km,legs,active_min,is_commute")) {
                 filter {

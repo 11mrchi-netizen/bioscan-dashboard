@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain.stress
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.comparison.personalBaseline
 import java.time.Instant
@@ -15,11 +18,13 @@ import java.time.ZoneId
 // as equivalent to wellbeing_daily's subjective stress rating.
 const val STRESS_RHYTHM_MODEL_VERSION = "v1"
 
+@Serializable
 data class PhysiologicalStressReading(val timestamp: Instant, val value: Int)
 
 // avgStress/maxStress/.../proportions as reported by Zepp's own daily
 // all_day_stress summary -- kept as-is, not re-derived from the intraday
 // samples, since it's already real and independently computed by the watch.
+@Serializable
 data class StressDailySummary(
     val avg: Int?,
     val max: Int?,
@@ -30,6 +35,7 @@ data class StressDailySummary(
     val highProportion: Int?,
 )
 
+@Serializable
 data class StressDay(val date: LocalDate, val samples: List<PhysiologicalStressReading>, val summary: StressDailySummary)
 
 data class StressRhythmResult(

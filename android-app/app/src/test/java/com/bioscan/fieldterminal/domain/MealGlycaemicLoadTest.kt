@@ -7,8 +7,27 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MealGlycaemicLoadTest {
-    private fun meal(at: String, carbs: Double?, fibre: Double? = 0.0, sugar: Double? = 0.0, protein: Double? = 0.0, fat: Double? = 0.0) =
-        MealRow(loggedAt = "2026-10-26T${at}:00+08:00", carbsG = carbs, fiberG = fibre, sugarG = sugar, proteinG = protein, fatG = fat, description = "m$at")
+    private fun meal(at: String, carbs: Double?, fibre: Double? = 0.0, sugar: Double? = 0.0, protein: Double? = 0.0, fat: Double? = 0.0, slot: String? = null) =
+        MealRow(loggedAt = "2026-10-26T${at}:00+08:00", carbsG = carbs, fiberG = fibre, sugarG = sugar, proteinG = protein, fatG = fat, description = "m$at", mealSlot = slot)
+
+    @Test
+    fun theSameLabelIsOneMealAndANothingLoggedDrinkIsLeftOut() {
+        // 4 Nov: breakfast at 10:46, a black coffee at 11:06 (nothing logged), lunch at 12:23 and a cookie at 12:46.
+        val coffee = MealRow(loggedAt = "2026-10-26T11:06:00+08:00", description = "Coffee")
+        val rows = estimateMealResponses(listOf(meal("10:46", 58.8, slot = "breakfast"), coffee, meal("12:23", 115.6, slot = "lunch"), meal("12:46", 25.2, slot = "lunch")))
+        assertEquals(listOf(1, 2), rows.map { it.meals })
+        assertTrue(rows.all { it.band != null })
+    }
+
+    @Test
+    fun twoSnacksHoursApartAreTwoRises() {
+        assertEquals(listOf(1, 1), groupMeals(listOf(meal("10:00", 20.0, slot = "snack"), meal("16:00", 20.0, slot = "snack"))).map { it.size })
+    }
+
+    @Test
+    fun unlabelledMealsAreNotChainedPastNinetyMinutesFromTheFirst() {
+        assertEquals(listOf(2, 1), groupMeals(listOf(meal("10:00", 10.0), meal("11:00", 10.0), meal("12:00", 10.0))).map { it.size })
+    }
 
     @Test
     fun mealsWithinNinetyMinutesShareOneRise() {
@@ -61,5 +80,14 @@ class MealGlycaemicLoadTest {
     @Test
     fun noMealsNoEstimates() {
         assertEquals(emptyList<MealGlycaemicEstimate>(), estimateMealResponses(emptyList()))
+    }
+
+    @Test
+    fun aSlotTakesItsHighestBand() {
+        val bare = meal("08:00", 80.0, fibre = 2.0, sugar = 50.0, protein = 5.0, fat = 2.0)
+        val small = meal("12:00", 10.0)
+        assertEquals(GlycaemicBand.High, slotBand(listOf(small, bare)))
+        assertEquals(GlycaemicBand.Low, slotBand(listOf(small)))
+        assertNull(slotBand(listOf(meal("12:00", null))))
     }
 }

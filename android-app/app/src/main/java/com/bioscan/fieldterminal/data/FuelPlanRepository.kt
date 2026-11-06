@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.builtins.nullable
 import android.content.Context
 import com.bioscan.fieldterminal.domain.ActivityLevel
 import com.bioscan.fieldterminal.domain.EnergyBalanceKind
@@ -64,12 +67,13 @@ import java.time.ZonedDateTime
 // maintenance, body weight and composition, the days before, the weather, the sweat profile, the person's products and
 // settings; and keeps a copy of each plan when it changes (fuel_plans) so the screens can say what changed.
 
-const val FUEL_ENGINE_VERSION = "1"
+const val FUEL_ENGINE_VERSION = "2" // 2: breakfast at 09:00 by default; no meal moved before 06:00
 
 /** Days shown on the fuel plan page: today and the ten after it. */
 const val FUEL_HORIZON_DAYS = 11
 
 /** One day of the plan page: the plan, its coded meals, two example plates per meal and the day in everyday terms. */
+@Serializable
 data class HorizonDay(
     val day: PlannedDay,
     val plan: DayFuelPlan,
@@ -81,8 +85,10 @@ data class HorizonDay(
 )
 
 /** A prep week's days (Monday to Sunday) with their coded meals, and the foods to portion from. */
+@Serializable
 data class WeekPlan(val days: List<CodedDay>, val foods: List<com.bioscan.fieldterminal.domain.fuel.FoodOption>, val weightKg: Double)
 
+@Serializable
 data class TodayFuel(
     val today: DayFuelPlan,
     val todayCoded: CodedDay,
@@ -99,10 +105,15 @@ data class TodayFuel(
     val weightKg: Double,
     /** Today and the next ten days ([FUEL_HORIZON_DAYS]), today first (with the same plan as [today]). */
     val horizon: List<HorizonDay> = emptyList(),
+    /** The glucose-spiking band of the meals logged in each slot today (domain/MealGlycaemicLoad.kt), by slot name. */
+    val glycaemic: Map<String, com.bioscan.fieldterminal.domain.GlycaemicBand> = emptyMap(),
 )
 
+@Serializable
 sealed interface TodayFuelResult {
+    @Serializable
     data class Ready(val fuel: TodayFuel) : TodayFuelResult
+    @Serializable
     data object NeedsWeight : TodayFuelResult
 }
 
@@ -113,7 +124,7 @@ data class PeriodizationView(
 )
 
 @Serializable
-private data class MealCarbsRow(@SerialName("logged_at") val loggedAt: String, @SerialName("carbs_g") val carbsG: Double? = null)
+private data class MealCarbsRow(@SerialName("logged_at") val loggedAt: String, @SerialName("carbs_g") val carbsG: Double? = null, @SerialName("meal_slot") val mealSlot: String? = null)
 
 data class EventFuel(val event: AthleteEvent, val plan: RaceFuelPlan, val changes: List<String>, val loadedAt: ZonedDateTime)
 
@@ -151,7 +162,7 @@ private val FUEL_TABLES = setOf(
 
 class FuelPlanRepository(private val supabase: SupabaseClient) {
 
-    private suspend fun bodyComposition(): List<BodyCompRow> = ReadCache.get("fuel.body_comp", tables = setOf("body_metrics")) {
+    private suspend fun bodyComposition(): List<BodyCompRow> = ReadCache.kept("fuel.body_comp", tables = setOf("body_metrics")) {
         supabase.postgrest.from("body_metrics")
             .select(Columns.list("date,weight_kg,lean_mass_kg,body_fat_pct")) { order("date", Order.DESCENDING); limit(30) }
             .decodeList<BodyCompRow>()
@@ -182,9 +193,13 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
      * Today's plan and the next ten days. Shared for a minute by the plan page and Today's line (the settings and the
      * goal are local, so they are part of the key); a write to any table the plan reads drops it.
      */
-    suspend fun loadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult {
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult =
+        com.bioscan.fieldterminal.data.ReadCache.get("fuel.today.v$FUEL_ENGINE_VERSION.g.${now.toLocalDate()}", tables = null, serializer = TodayFuelResult.serializer()) { fetchLoadToday(context, overview, now) }
+
+    private suspend fun fetchLoadToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime = ZonedDateTime.now()): TodayFuelResult {
         val key = "fuel.today.${now.toLocalDate()}.${FuelSettingsStore.get(context).hashCode()}.${NutritionGoalsStore.getGoals(context).hashCode()}.${overview?.todaysMeals?.size}"
-        return ReadCache.get(key, ttlMs = 60_000L, tables = FUEL_TABLES) { computeToday(context, overview, now) }
+        return ReadCache.kept(key, ttlMs = 60_000L, tables = FUEL_TABLES) { computeToday(context, overview, now) }
     }
 
     private suspend fun computeToday(context: Context, overview: NutritionOverview?, now: ZonedDateTime): TodayFuelResult = coroutineScope {
@@ -227,11 +242,19 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
 
         // Logged meals today, placed in their slots.
         val bySlot = mutableMapOf<String, Double>()
+        val mealsBySlot = mutableMapOf<String, MutableList<com.bioscan.fieldterminal.data.model.MealRow>>()
         overview?.todaysMeals.orEmpty().forEach { m ->
-            val at = runCatching { OffsetDateTime.parse(m.loggedAt).atZoneSameInstant(zone) }.getOrNull() ?: return@forEach
-            val slot = mealForLog(todayCoded.meals, at) ?: return@forEach
-            bySlot[slot.kind.name] = (bySlot[slot.kind.name] ?: 0.0) + (m.carbsG ?: 0.0)
+            // Meal times are logged times: the local wall clock with a zero offset (domain/WallClock.kt).
+            // The meal's own label first (meals.meal_slot); meals logged without one are placed by time.
+            val labelled = com.bioscan.fieldterminal.domain.fuel.mealSlotOf(m.mealSlot)
+            val kind = labelled?.name ?: run {
+                val at = com.bioscan.fieldterminal.domain.WallClock.zoned(m.loggedAt, zone) ?: return@forEach
+                mealForLog(todayCoded.meals, at)?.kind?.name
+            } ?: return@forEach
+            bySlot[kind] = (bySlot[kind] ?: 0.0) + (m.carbsG ?: 0.0)
+            mealsBySlot.getOrPut(kind) { mutableListOf() } += m
         }
+        val glycaemic = mealsBySlot.mapNotNull { (k, ms) -> com.bioscan.fieldterminal.domain.slotBand(ms)?.let { k to it } }.toMap()
         val adherenceMap = todayCoded.meals.associate { meal -> meal.kind.name to ((bySlot[meal.kind.name] ?: 0.0) to adherence(meal, bySlot[meal.kind.name])) }
 
         // Long sessions in the next three days (events have their own page).
@@ -285,7 +308,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         }
 
         TodayFuelResult.Ready(
-            TodayFuel(todayPlan, todayCoded, tomorrowPlan, tomorrowCoded, history, changes, energy.fromGoal, energy.observedMaintenance, adherenceMap, longSessions, countdown, kg, horizon),
+            TodayFuel(todayPlan, todayCoded, tomorrowPlan, tomorrowCoded, history, changes, energy.fromGoal, energy.observedMaintenance, adherenceMap, longSessions, countdown, kg, horizon, glycaemic),
         )
     }
 
@@ -321,7 +344,11 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
      * A prep week's days, Monday to Sunday, coded with the goal holding over that week, and the foods to portion from:
      * what the PREP page portions its containers and breakfasts for.
      */
-    suspend fun loadWeekPlan(context: Context, overview: NutritionOverview?, weekStart: LocalDate, now: ZonedDateTime = ZonedDateTime.now()): WeekPlan? = coroutineScope {
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadWeekPlan(context: Context, overview: NutritionOverview?, weekStart: LocalDate, now: ZonedDateTime = ZonedDateTime.now()): WeekPlan? =
+        ReadCache.get("fuel.week.v$FUEL_ENGINE_VERSION.$weekStart.${now.toLocalDate()}", tables = null, serializer = WeekPlan.serializer().nullable) { fetchLoadWeekPlan(context, overview, weekStart, now) }
+
+    private suspend fun fetchLoadWeekPlan(context: Context, overview: NutritionOverview?, weekStart: LocalDate, now: ZonedDateTime = ZonedDateTime.now()): WeekPlan? = coroutineScope {
         val zone = now.zone
         val settings = FuelSettingsStore.get(context)
         val daysD = async { PlannedDayRepository(supabase).load(weekStart, days = 7 + 3, now = now) }
@@ -421,8 +448,10 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
                 if (day.date !in fullDates) return@forEachIndexed
                 val coded = codeMeals(plans[i], day, past.getOrNull(i + 1), kg, zone, settings.meals, settings.trainLow, energy.deficit, settings.toleratedGPerHour)
                 val bySlot = mutableMapOf<String, Double>()
-                meals.filter { it.first.toLocalDate() == day.date }.forEach { (at, carbs) ->
-                    mealForLog(coded.meals, at)?.let { bySlot[it.kind.name] = (bySlot[it.kind.name] ?: 0.0) + carbs }
+                meals.filter { it.at.toLocalDate() == day.date }.forEach { m ->
+                    // The meal's own label first; unlabelled meals are placed by time.
+                    val kind = m.slot?.name ?: mealForLog(coded.meals, m.at)?.kind?.name ?: return@forEach
+                    bySlot[kind] = (bySlot[kind] ?: 0.0) + m.carbs
                 }
                 coded.meals.forEach { m -> outcomes += com.bioscan.fieldterminal.domain.fuel.CodedMealOutcome(m.code, adherence(m, bySlot[m.kind.name])) }
             }
@@ -430,17 +459,19 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         PeriodizationView(index, full.size, com.bioscan.fieldterminal.domain.fuel.codeAdherence(outcomes))
     }
 
-    private suspend fun mealsSince(since: LocalDate, zone: java.time.ZoneId): List<Pair<ZonedDateTime, Double>> =
+    private data class PastMeal(val at: ZonedDateTime, val carbs: Double, val slot: com.bioscan.fieldterminal.domain.fuel.MealSlotKind?)
+
+    private suspend fun mealsSince(since: LocalDate, zone: java.time.ZoneId): List<PastMeal> =
         supabase.postgrest.from("meals")
-            .select(Columns.list("logged_at,carbs_g")) {
+            .select(Columns.list("logged_at,carbs_g,meal_slot")) {
                 filter { gte("logged_at", since.atStartOfDay(zone).toInstant().toString()) }
                 limit(1000)
             }
             .decodeList<MealCarbsRow>()
-            .mapNotNull { r -> runCatching { OffsetDateTime.parse(r.loggedAt).atZoneSameInstant(zone) to (r.carbsG ?: 0.0) }.getOrNull() }
+            .mapNotNull { r -> com.bioscan.fieldterminal.domain.WallClock.zoned(r.loggedAt, zone)?.let { PastMeal(it, r.carbsG ?: 0.0, com.bioscan.fieldterminal.domain.fuel.mealSlotOf(r.mealSlot)) } }
 
     /** The person's fuel products with their newest recipe. */
-    suspend fun products(): List<FuelProductOption> = ReadCache.get("fuel.products", tables = setOf("fueling_products", "fueling_recipe_versions")) {
+    suspend fun products(): List<FuelProductOption> = ReadCache.kept("fuel.products", tables = setOf("fueling_products", "fueling_recipe_versions")) {
         FuelingRepository(supabase).loadProducts().mapNotNull { p ->
             val v = p.latest ?: return@mapNotNull null
             val carbs = v.carbsG ?: return@mapNotNull null

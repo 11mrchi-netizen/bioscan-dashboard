@@ -9,7 +9,7 @@ import com.bioscan.fieldterminal.domain.whenLocal
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -104,7 +104,7 @@ class LogAgentRepository(private val supabase: SupabaseClient) {
             "supplement_taken" -> add.addSupplementTakenById(
                 (p.whenLocal() ?: throw LogAgentException("No valid time for this supplement")).toAppIso(),
                 p.supplementId!!,
-                p.quantity,
+                p.quantity.toDouble(),
             )
             "recovery" -> add.addRecoverySession(p.localDate()!!, p.name!!.trim(), p.category ?: "other", p.durationMin)
             else -> throw LogAgentException("${p.kind} entries are not written from here")

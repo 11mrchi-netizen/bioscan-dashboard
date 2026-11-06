@@ -56,39 +56,37 @@ fun FTWeeklyBars(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("WEEK OF ${WEEK_FMT.format(buckets[shown].weekStart).uppercase()}", style = FTType.Label, color = FT.TextMuted, modifier = Modifier.weight(1f))
-            Text("${valueFormat(buckets[shown].value)} $unit", style = FTType.Value, color = FT.TextPrimary)
+            Text("${valueFormat(buckets[shown].value)} $unit", style = FTType.Telemetry, color = color)
         }
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(height)
                 .pointerInput(buckets) {
-                    detectTapGestures { selected = indexAt(it.x, size.width.toFloat(), buckets.size) }
+                    detectTapGestures { selected = BarLayout(size.width.toFloat(), buckets.size, 0f).indexAt(it.x) }
                 }
                 .pointerInput(buckets) {
-                    detectHorizontalDragGestures { change, _ -> selected = indexAt(change.position.x, size.width.toFloat(), buckets.size) }
+                    detectHorizontalDragGestures { change, _ -> selected = BarLayout(size.width.toFloat(), buckets.size, 0f).indexAt(change.position.x) }
                 },
         ) {
-            val slot = size.width / buckets.size
-            val barW = (slot * 0.62f).coerceAtMost(26.dp.toPx())
+            val layout = barLayout(buckets.size)
             val base = size.height
             buckets.forEachIndexed { i, b ->
-                val x = i * slot + (slot - barW) / 2f
-                val h = (b.value / top).toFloat() * (size.height - 4.dp.toPx())
-                val alpha = if (i == shown) 1f else if (i == buckets.lastIndex) 0.85f else 0.5f
+                val x = layout.left(i)
+                val h = (b.value / top).toFloat() * (size.height - FTBarSpec.TopPad.toPx())
                 if (b.value > 0) {
-                    drawRoundRect(color.copy(alpha = alpha), Offset(x, base - h), Size(barW, h), CornerRadius(barW / 3f))
+                    drawBar(color, x, base - h, layout.barWidth, alpha = barAlpha(i, selected), cap = i == shown)
                 } else {
-                    drawRoundRect(FT.GlassTrack, Offset(x, base - 2.dp.toPx()), Size(barW, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
+                    drawBarStub(x, layout.barWidth)
                 }
             }
             if (average != null && average.size == buckets.size) {
                 val path = Path()
                 average.forEachIndexed { i, v ->
-                    val p = Offset(i * slot + slot / 2f, base - (v / top).toFloat() * (size.height - 4.dp.toPx()))
+                    val p = Offset(layout.center(i), base - (v / top).toFloat() * (size.height - FTBarSpec.TopPad.toPx()))
                     if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
                 }
-                drawPath(path, FT.TextPrimary.copy(alpha = 0.85f), style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round))
+                drawPath(path, androidx.compose.ui.graphics.lerp(color, androidx.compose.ui.graphics.Color.White, 0.5f).copy(alpha = 0.8f), style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round))
             }
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -102,5 +100,3 @@ fun FTWeeklyBars(
     }
 }
 
-private fun indexAt(x: Float, width: Float, count: Int): Int =
-    ((x / width) * count).toInt().coerceIn(0, count - 1)

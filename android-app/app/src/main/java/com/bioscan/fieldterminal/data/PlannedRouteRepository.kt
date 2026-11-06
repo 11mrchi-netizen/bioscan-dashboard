@@ -13,7 +13,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
@@ -43,7 +43,7 @@ class PlannedRouteRepository(
     private val accessToken: String,
     private val supabase: SupabaseClient,
 ) {
-    companion object { private val client = HttpClient(Android) }
+    companion object { private val client = HttpClient(OkHttp) }
 
     // A failed download/parse never blocks the caller from moving on to the
     // next event (DAV-148's own acceptance criteria) -- every real failure

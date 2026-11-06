@@ -64,10 +64,26 @@ class MealCodesTest {
     }
 
     @Test
-    fun aMealDuringASessionMovesBeforeIt() {
-        val pd = PlannedDay(day, listOf(session(7, 120.0, Intensity.LONG)))
-        val breakfast = codeMeals(plan(pd), pd, null, kg, zone).meals.first { it.kind == MealSlotKind.BREAKFAST }
-        assertEquals(at(day, 4, 30), breakfast.time)
+    fun aMealDuringASessionMovesBeforeItUnlessThatIsTooEarly() {
+        // Lunch 12:30 inside an 11:00-13:00 long run: 2.5 h before, at 08:30.
+        val late = PlannedDay(day, listOf(session(11, 120.0, Intensity.LONG)))
+        assertEquals(at(day, 8, 30), codeMeals(plan(late), late, null, kg, zone).meals.first { it.kind == MealSlotKind.LUNCH }.time)
+        // Breakfast 07:30 inside a 07:00-09:00 run: before would be 04:30, so it moves after, to 09:30.
+        val early = PlannedDay(day, listOf(session(7, 120.0, Intensity.LONG)))
+        val coded = codeMeals(plan(early), early, null, kg, zone, times = MealTimes(breakfast = java.time.LocalTime.of(7, 30)))
+        assertEquals(at(day, 9, 30), coded.meals.first { it.kind == MealSlotKind.BREAKFAST }.time)
+        // Nothing is planned before 06:00, pre-session snacks included.
+        assertTrue(coded.meals.none { it.time.toLocalTime() < EARLIEST_MEAL })
+    }
+
+    @Test
+    fun breakfastIsAtNineByDefaultAndStaysThereAfterAnEarlyHour() {
+        val pd = PlannedDay(day, listOf(session(7, 60.0, Intensity.HARD)))
+        val coded = codeMeals(plan(pd), pd, null, kg, zone)
+        val breakfast = coded.meals.first { it.kind == MealSlotKind.BREAKFAST }
+        assertEquals(at(day, 9, 0), breakfast.time)
+        assertEquals(CarbCode.HIGH, breakfast.code) // within 2 h of the end: the refill
+        assertTrue(coded.meals.none { it.kind == MealSlotKind.PRE_SESSION })
     }
 
     @Test

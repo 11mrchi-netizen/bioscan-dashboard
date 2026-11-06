@@ -115,7 +115,7 @@ private fun PickerBox(label: String, valueText: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
+            .background(FT.Glass, RoundedCornerShape(FT.RadiusSmall))
             .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -325,7 +325,7 @@ private fun WheelPicker(
         // centre-slot highlight
         Box(
             Modifier.fillMaxWidth().height(itemHeight).align(Alignment.Center)
-                .background(FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
+                .background(FT.Glass, RoundedCornerShape(FT.RadiusSmall))
         )
         LazyColumn(state = state, flingBehavior = fling, modifier = Modifier.fillMaxSize()) {
             items(WHEEL_PAD_ROWS) { Box(Modifier.height(itemHeight).fillMaxWidth()) }

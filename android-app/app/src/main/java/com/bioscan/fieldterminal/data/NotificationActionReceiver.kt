@@ -42,7 +42,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 val toLog = idsStillToLog(ids, takenToday)
                 val addRepo = AddEntryRepository(supabase)
                 val takenAt = LocalDateTime.now().toAppIso()
-                for (id in toLog) addRepo.addSupplementTakenById(takenAt, id, 1)
+                for (id in toLog) addRepo.addSupplementTakenById(takenAt, id, 1.0)
                 runCatching { NotificationRulesRepository(supabase).appendLog(kind, NotificationOutcome.ACTIONED, action = "log_all") }
             } catch (e: Exception) {
                 val retry = NotificationCompat.Builder(app, kind)
@@ -63,14 +63,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_LOG_ALL = "com.bioscan.fieldterminal.action.LOG_ALL"
         const val EXTRA_KIND = "notification_kind"
+        const val EXTRA_BUCKET = "notification_bucket"
         const val EXTRA_SUPPLEMENT_IDS = "supplement_ids"
         const val EXTRA_NOTIFICATION_ID = "notification_id"
 
         // Tapping a notification opens MainActivity, which routes by kind (MainActivity.onNewIntent / FieldTerminalNavHost).
         // Request code is per kind so intents for different kinds don't collapse into one PendingIntent.
-        fun contentIntent(context: Context, kind: String): PendingIntent {
+        /** [bucket]: for a supplement reminder, the block it is about (morning, afternoon, night), opened ready to log. */
+        fun contentIntent(context: Context, kind: String, bucket: String? = null): PendingIntent {
             val intent = Intent(context, MainActivity::class.java)
                 .putExtra(EXTRA_KIND, kind)
+                .apply { if (bucket != null) putExtra(EXTRA_BUCKET, bucket) }
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             return PendingIntent.getActivity(context, kind.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         }

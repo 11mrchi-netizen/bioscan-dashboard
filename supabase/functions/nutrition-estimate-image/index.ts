@@ -1,5 +1,10 @@
 // nutrition-estimate-image — DAV-167
 //
+// v3 (2026-11, photo logging v3): the meal's foods one by one -- generic name for the database, grams, preparation,
+// assumptions, confidence and micronutrients -- which the app sends straight to the lookup (photo_items), plus the
+// person's note (authoritative) and weighed total as inputs and up to three questions whose answers rerun it. The v2
+// whole-meal fields below stay in the response, summed from the foods. Prompt and shaping live in estimate.ts.
+//
 // Server-side Gemini vision call for photo-based meal/beverage logging.
 //
 // v2 (2026-09-30, user request): reworked from "candidates only, matched
@@ -21,6 +26,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { buildPrompt, RESPONSE_SCHEMA, shapeEstimate } from "./estimate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,47 +46,16 @@ function json(body: unknown, status: number) {
 // nutrition-estimate-text -- see that function's own comment.
 const MODEL = "gemini-3.5-flash-lite";
 const FALLBACK_MODEL = "gemini-3.1-flash-lite";
-const MODEL_VERSION = "2"; // 2: one aggregate whole-meal estimate across 1+ photos, nutrients included (was candidates-only)
+// 3: the meal's foods one by one (grams, preparation, assumptions, confidence, micronutrients), the person's note and
+// plate weight as inputs, and up to three questions; the v2 whole-meal fields stay, summed from the foods.
+const MODEL_VERSION = "3";
 
-const PROMPT = `Look at these photo(s) of one single meal (one or more angles/items of the same
-sitting, not separate meals) and produce ONE combined, approximate nutrition estimate for
-everything visible across all photos together.
-
-Photos cannot reliably reveal exact weight, hidden ingredients, cooking oil, or obscured
-components. Do your best whole-meal approximation anyway rather than refusing or asking for more
-detail -- this is explicitly meant to be a fast, approximate estimate, not a lab measurement.
-Mentally identify the distinct foods/beverages present, then sum their nutrition into one total.
-
-Return:
-- description: a short human-readable summary of the whole meal (e.g. "Grilled chicken breast
-  with rice and steamed broccoli")
-- calories, protein_g, carbs_g, fat_g: your best approximate totals for the whole meal
-- fiber_g, sugar_g, sodium_mg: include if visually inferable, omit if you have no basis to guess
-- confidence: 0 to 1, your overall confidence in this whole-meal approximation (this should
-  usually be modest -- a photo estimate is never as certain as a measured meal)`;
-
-const RESPONSE_SCHEMA = {
-  type: "OBJECT",
-  properties: {
-    description: { type: "STRING" },
-    calories: { type: "NUMBER" },
-    protein_g: { type: "NUMBER" },
-    carbs_g: { type: "NUMBER" },
-    fat_g: { type: "NUMBER" },
-    fiber_g: { type: "NUMBER" },
-    sugar_g: { type: "NUMBER" },
-    sodium_mg: { type: "NUMBER" },
-    confidence: { type: "NUMBER" },
-  },
-  required: ["description", "calories", "protein_g", "carbs_g", "fat_g", "confidence"],
-};
-
-async function callGemini(apiKey: string, images: string[], mimeType: string): Promise<{ status: number; body: string; model: string }> {
+async function callGemini(apiKey: string, prompt: string, images: string[], mimeType: string): Promise<{ status: number; body: string; model: string }> {
   const requestBody = JSON.stringify({
     contents: [
       {
         parts: [
-          { text: PROMPT },
+          { text: prompt },
           ...images.map((data) => ({ inline_data: { mime_type: mimeType, data } })),
         ],
       },
@@ -135,7 +110,9 @@ Deno.serve(async (req: Request) => {
       return json({ error: "not_configured", message: "GEMINI_API_KEY must be set as an Edge Function secret." }, 500);
     }
 
-    let body: { images?: string[]; mimeType?: string };
+    // v3: note (what the person says the meal is, authoritative), totalWeightG (weighed food), answers (to the questions
+    // of an earlier estimate of the same photos).
+    let body: { images?: string[]; mimeType?: string; note?: string; totalWeightG?: number; answers?: Array<{ question: string; answer: string }> };
     try {
       body = await req.json();
     } catch {
@@ -146,7 +123,12 @@ Deno.serve(async (req: Request) => {
     if (!images || !Array.isArray(images) || images.length === 0) return json({ error: "missing_image" }, 400);
 
     const startedAt = Date.now();
-    const { status, body: geminiBodyText, model: servedByModel } = await callGemini(apiKey, images, mimeType);
+    const prompt = buildPrompt(body.note, body.totalWeightG, body.answers);
+    const { status, body: geminiBodyText, model: servedByModel } = await callGemini(apiKey, prompt, images, mimeType);
+    const inputLabel = `[image estimate v3, ${images.length} photo(s)` +
+      (body.note?.trim() ? `; note: ${body.note.trim().slice(0, 200)}` : "") +
+      (body.totalWeightG ? `; weighed ${body.totalWeightG} g` : "") +
+      ((body.answers ?? []).length ? `; ${(body.answers ?? []).length} answer(s)` : "") + "]";
     const latencyMs = Date.now() - startedAt;
 
     const db = createClient(
@@ -161,7 +143,7 @@ Deno.serve(async (req: Request) => {
         user_id: user.id,
         model: servedByModel,
         model_version: MODEL_VERSION,
-        prompt_text: `[image estimate, ${images.length} photo(s)]`,
+        prompt_text: inputLabel,
         raw_response: safeParseJson(geminiBodyText),
         latency_ms: latencyMs,
         accepted: false,
@@ -171,7 +153,7 @@ Deno.serve(async (req: Request) => {
 
     const geminiResponse = safeParseJson(geminiBodyText);
     const candidateText = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;
-    const parsedOutput = candidateText ? safeParseJson(candidateText) : null;
+    const parsedOutput = candidateText ? shapeEstimate(safeParseJson(candidateText)) : null;
 
     const { data: estimateRow, error: insertError } = await db
       .from("ai_estimates")
@@ -179,7 +161,7 @@ Deno.serve(async (req: Request) => {
         user_id: user.id,
         model: servedByModel,
         model_version: MODEL_VERSION,
-        prompt_text: `[image estimate, ${images.length} photo(s)]`,
+        prompt_text: inputLabel,
         raw_response: geminiResponse,
         parsed_output: parsedOutput,
         latency_ms: latencyMs,

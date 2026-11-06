@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import java.time.ZonedDateTime
 import kotlin.math.roundToInt
 
@@ -115,6 +118,7 @@ fun heatBand(tempC: Double, humidityPct: Double?): HeatBand {
     }
 }
 
+@Serializable
 data class HeatSummary(val band: HeatBand, val maxTempC: Double, val maxHeatIndexC: Double, val strongSun: Boolean, val lines: List<String>)
 
 /** The heat over a stretch of hours (a race, a long run): its hottest hour, and what that means for the plan. */

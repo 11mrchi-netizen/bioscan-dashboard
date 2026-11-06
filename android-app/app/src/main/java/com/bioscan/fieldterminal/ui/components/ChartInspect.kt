@@ -19,7 +19,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
+import com.bioscan.fieldterminal.ui.theme.PlexMono
 
 // Shared tap/drag-to-inspect behavior for DateTrendLine and LineChart (25/9
 // rework). Horizontal drag only: every chart lives inside a vertically
@@ -76,4 +76,11 @@ internal fun DrawScope.drawInspectOverlay(
     drawRoundRect(FT.Surface.copy(alpha = 0.96f), Offset(left, top), androidx.compose.ui.geometry.Size(w, h), CornerRadius(8f))
     drawRoundRect(FT.GlassBorder, Offset(left, top), androidx.compose.ui.geometry.Size(w, h), CornerRadius(8f), style = Stroke(1f))
     drawText(layout, topLeft = Offset(left + padPx, top + padPx))
+}
+
+/** The same touch handling and overlay, for charts outside this package. */
+internal object Inspect {
+    fun Modifier.inspect(key: Any?, onPick: (x: Float, width: Float, isTap: Boolean) -> Unit): Modifier = chartInspect(key, onPick)
+    fun DrawScope.drawOverlay(measurer: TextMeasurer, x: Float, dots: List<Offset>, header: String, rows: List<InspectRow>) =
+        drawInspectOverlay(measurer, x, dots, header, rows)
 }

@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.aging
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.domain.LiftReading
 import com.bioscan.fieldterminal.domain.SRI_REGULAR
 import com.bioscan.fieldterminal.domain.SriEvaluation
@@ -90,6 +93,7 @@ enum class ScoreBasis(val label: String) {
     MIXED("lifter standards and grip percentile, averaged"),
 }
 
+@Serializable
 data class HealthspanFactor(
     val id: HealthspanFactorId,
     val status: FactorStatus,
@@ -101,6 +105,7 @@ data class HealthspanFactor(
     val basis: ScoreBasis? = null,
 )
 
+@Serializable
 data class HealthspanSummary(
     val factors: List<HealthspanFactor>,
     val assessed: Int,

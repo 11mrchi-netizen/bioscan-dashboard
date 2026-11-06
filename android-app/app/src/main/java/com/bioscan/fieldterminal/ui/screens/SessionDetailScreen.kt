@@ -280,9 +280,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
         )
 
         when {
-            loadingHeader -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FT.Emerald)
-            }
+            loadingHeader -> com.bioscan.fieldterminal.ui.components.SkeletonSections()
             header == null -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
                 Text(headerError ?: "Session not found.", style = FTType.BodySmall, color = FT.TextSecondary)
             }

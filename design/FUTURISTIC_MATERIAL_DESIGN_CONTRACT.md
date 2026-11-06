@@ -334,8 +334,9 @@ Every score is a tick gauge (`FTGauge`, the `ftGauge` logic of `design/tokens/ga
 a hero gauge, 56 on a ring, 40 on a small one), the lit ones coloured along the palette from first to last stop, a
 glowing cap on the last lit tick, and a blurred radar sweep inside that brightens towards the value. Off ticks are white 8%.
 
-- The full ring is the whole score scale, 0–150 (`ScoreScale.MAX`), for CHARGE and every domain alike; 100 (top of
-  normal) sits at two thirds.
+- One lap is 0–100, for CHARGE and every domain alike. Above 100 the outer lap stays fully lit and a second lap of ticks
+  runs just inside it (radius 28–34 of the 100 viewBox) from 12 o'clock on the same scale, brighter: 150 is one and a half
+  laps, SUPERCHARGED (125) a quarter of the second lap. The cap sits at the end of the second lap.
 - CHARGE sweeps the holographic spectrum with a `#3FE0D0` radar; a domain sweeps its own two stops with its domain hue.
 - The centre holds the number (Nunito), an optional mono label (CHARGE, RECOVERY) and the direction glyph.
 - The band is said in words under the hero gauge (`GaugeStateWord`): PRIMED and SUPERCHARGED in CHARGE's holographic

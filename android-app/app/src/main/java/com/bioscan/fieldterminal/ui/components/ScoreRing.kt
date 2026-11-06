@@ -22,8 +22,9 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
 
-// Scoring system (docs/scoring-system/02-page-mockups.md §0), drawn as the v1 tick gauge (FTGauge.kt): the full ring is
-// the whole 0-150 scale, so 100 (top of normal) sits at two thirds and SUPERCHARGED (125) past five sixths. The sweep is
+// Scoring system (docs/scoring-system/02-page-mockups.md §0), drawn as the v1 tick gauge (FTGauge.kt): one lap is 0-100;
+// above 100 a second lap of ticks runs inside the first from 12 o'clock on the same scale, so 150 is one and a half laps
+// and SUPERCHARGED (125) is a quarter of the second lap. The sweep is
 // CHARGE's holographic spectrum or the domain's own two stops; the band is said in words beside the ring
 // ([bandWordColor] / the overlay text), never by tinting the sweep. A provisional or partial reading draws its lit ticks
 // faded. The centre holds the number, the direction against yesterday, and an optional label.
@@ -72,7 +73,7 @@ fun ScoreRing(
         if (capped) append(", capped")
     }
     FTGauge(
-        pct = shown?.let { (it / ScoreScale.MAX).toFloat() },
+        pct = shown?.let { (it / ScoreScale.TOP_OF_NORMAL).toFloat() },
         palette = palette,
         size = size,
         dim = state != RingState.SCORED,

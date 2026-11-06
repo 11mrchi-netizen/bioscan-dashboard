@@ -23,7 +23,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
 
 // Scoring system (docs/scoring-system/02-page-mockups.md §0), drawn as the v1 tick gauge (FTGauge.kt): one lap is 0-100;
-// above 100 a second lap of ticks runs inside the first from 12 o'clock on the same scale, so 150 is one and a half laps
+// above 100 a second lap is drawn over the first from 12 o'clock on the same scale, brighter, so 150 is one and a half laps
 // and SUPERCHARGED (125) is a quarter of the second lap. The sweep is
 // CHARGE's holographic spectrum or the domain's own two stops; the band is said in words beside the ring
 // ([bandWordColor] / the overlay text), never by tinting the sweep. A provisional or partial reading draws its lit ticks

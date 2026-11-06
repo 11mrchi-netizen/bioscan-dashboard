@@ -702,7 +702,7 @@ private fun QtyRow(qty: Double, step: Double = SUPPLEMENT_QTY_STEP, words: ((Dou
                 modifier = Modifier
                     .size(32.dp)
                     .clip(shape)
-                    .background(FT.GlassFill, shape)
+                    .background(FT.Glass, shape)
                     .border(FT.BorderWidth, FT.GlassBorder, shape)
                     .ftClickable(shape = shape) {
                         // 0 is allowed: the item is not taken this time and is left out of the save.
@@ -747,13 +747,13 @@ private fun FuelForm(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                        .background(if (isSelected) FT.DomainLog.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
+                        .border(FT.BorderWidth, if (isSelected) Color.Transparent else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                        .background(if (isSelected) FT.PlatinumSolid else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
                         .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { subType = sub }
                         .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(sub.label, style = sheetActionLabelStyle, color = if (isSelected) FT.DomainLog else FT.TextSecondary)
+                    Text(sub.label, style = sheetActionLabelStyle, color = if (isSelected) FT.PlatinumInk else FT.TextSecondary)
                 }
             }
         }
@@ -1682,8 +1682,8 @@ private fun BundleToggleRow(label: String, itemNames: String, checked: Boolean, 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(FT.BorderWidth, if (checked) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .background(if (checked) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(FT.RadiusModule))
+            .border(FT.BorderWidth, if (checked) FT.SelectedBorder else FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
+            .background(if (checked) FT.SelectedGlass else Color.Transparent, RoundedCornerShape(FT.RadiusModule))
             .ftClickable(onClick = onToggle, shape = RoundedCornerShape(FT.RadiusModule))
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1702,8 +1702,8 @@ private fun CheckToggleRow(label: String, checked: Boolean, onToggle: () -> Unit
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(FT.BorderWidth, if (checked) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .background(if (checked) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(FT.RadiusModule))
+            .border(FT.BorderWidth, if (checked) FT.SelectedBorder else FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
+            .background(if (checked) FT.SelectedGlass else Color.Transparent, RoundedCornerShape(FT.RadiusModule))
             .ftClickable(onClick = onToggle, shape = RoundedCornerShape(FT.RadiusModule))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1862,8 +1862,8 @@ private fun IntChipRow(range: IntRange, selected: Int?, onSelect: (Int) -> Unit)
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                    .background(if (isSelected) FT.DomainLog.copy(alpha = 0.18f) else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
+                    .border(FT.BorderWidth, if (isSelected) Color.Transparent else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                    .background(if (isSelected) FT.PlatinumSolid else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
                     .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onSelect(n) }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
@@ -1871,7 +1871,7 @@ private fun IntChipRow(range: IntRange, selected: Int?, onSelect: (Int) -> Unit)
                 Text(
                     "$n",
                     style = FTType.Value,
-                    color = if (isSelected) FT.DomainLog else FT.TextSecondary,
+                    color = if (isSelected) FT.PlatinumInk else FT.TextSecondary,
                 )
             }
         }
@@ -2335,8 +2335,8 @@ internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int =
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                            .background(if (isSelected) FT.DomainLog.copy(alpha = 0.18f) else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
+                            .border(FT.BorderWidth, if (isSelected) Color.Transparent else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                            .background(if (isSelected) FT.PlatinumSolid else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
                             .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onSelect(if (isSelected) null else option) }
                             .padding(vertical = 10.dp, horizontal = 2.dp),
                         contentAlignment = Alignment.Center,
@@ -2344,7 +2344,7 @@ internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int =
                         Text(
                             option.uppercase(),
                             style = FTType.MonoCaption,
-                            color = if (isSelected) FT.DomainLog else FT.TextSecondary,
+                            color = if (isSelected) FT.PlatinumInk else FT.TextSecondary,
                         )
                     }
                 }

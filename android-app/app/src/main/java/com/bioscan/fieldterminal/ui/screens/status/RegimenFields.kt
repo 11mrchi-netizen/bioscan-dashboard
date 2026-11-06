@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.RegimenDraft
@@ -379,8 +380,8 @@ private fun Switch(text: String, on: Boolean, onChange: (Boolean) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(if (on) "☑" else "☐", style = FTType.RowTitle, color = if (on) FT.Emerald else FT.TextSecondary)
-        Text(text, style = FTType.BodySmall, color = FT.TextPrimary)
+        Text(text, style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f))
+        com.bioscan.fieldterminal.ui.components.FTSwitch(checked = on, onCheckedChange = null)
     }
 }
 
@@ -395,14 +396,14 @@ private fun Chips(options: List<String>, selected: List<String>, perRow: Int, on
                     val on = option in selected
                     Box(
                         Modifier.weight(1f)
-                            .border(FT.BorderWidth, if (on) FT.Emerald else FT.GlassBorder, shape)
-                            .background(if (on) FT.Emerald.copy(alpha = 0.14f) else FT.GlassFill, shape)
+                            .border(FT.BorderWidth, if (on) Color.Transparent else FT.GlassBorder, shape)
+                            .background(if (on) FT.PlatinumSolid else FT.GlassFill, shape)
                             .ftClickable(shape = shape) { onTap(option) }
                             .padding(vertical = 9.dp, horizontal = 2.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         // A chip shows the name only ("Injection (vial / pen)" reads INJECTION): the note in brackets did not fit.
-                        Text(option.substringBefore(" (").uppercase(), style = FTType.Micro, color = if (on) FT.Emerald else FT.TextSecondary, maxLines = 1)
+                        Text(option.substringBefore(" (").uppercase(), style = FTType.Micro, color = if (on) FT.PlatinumInk else FT.TextSecondary, maxLines = 1)
                     }
                 }
                 repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }

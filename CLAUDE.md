@@ -48,3 +48,15 @@ local calendar, never `toISOString().slice(0, 10)` / `current_date`. Two kinds o
   never add an offset to them.
 - **Real instants** (`created_at`, `fired_at`, `trips.start_at`, `sleep_daily` bedtime / wake, calendar events, stress
   samples) are converted with the zone, or with `daily_context.utc_offset_min` on the server (`localClock`, `localDateAt`).
+
+## Visual design
+
+The visual authority is `design/FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md` (v2.0, the v1 "new look"); its token source is
+`design/tokens/` (`tokens.css` / `tokens.json`), mirrored one to one in `ui/theme/FuturisticMaterialTokens.kt`. The rules:
+
+- **Background = domain** (`ftDomainWash(FT.Domain.*)` on the page), **surface = neutral glass** (`ftGlass`, never tinted),
+  **ink = metric** (`FT.Metric.*`, one fixed hue per metric app-wide). Never colour a metric with a domain hue or tint a card.
+- Selection and the primary action are platinum (`FT.Platinum`); status colours (`Ok` / `Warn` / `Bad`) say how something is,
+  never which series or section it is. The holographic spectrum is CHARGE's only.
+- Numbers are Nunito, interface text Inter, micro-labels IBM Plex Mono, all through `FTType` roles.
+- No raw hex in screens: a new metric hue is added to `design/tokens/` and `FT.Metric` together.

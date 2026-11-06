@@ -69,8 +69,11 @@ import com.bioscan.fieldterminal.domain.score.weekday
 import com.bioscan.fieldterminal.domain.score.whatIs
 import com.bioscan.fieldterminal.domain.score.whatIsInput
 import com.bioscan.fieldterminal.ui.components.RingState
+import com.bioscan.fieldterminal.ui.components.GaugePalette
 import com.bioscan.fieldterminal.ui.components.ScoreRing
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.ftChargeWash
+import com.bioscan.fieldterminal.ui.components.ftDomainWash
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -97,10 +100,18 @@ fun FullScreenOverlay(
     onClose: () -> Unit,
     onBack: (() -> Unit)? = null,
     trailing: String? = null,
+    // v1 background wash: a domain hue (FT.Domain.*), CHARGE's own wash with [chargeWash], or the plain ground.
+    wash: androidx.compose.ui.graphics.Color? = null,
+    chargeWash: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val page: @Composable () -> Unit = {
-        Column(modifier = Modifier.fillMaxSize().background(FT.Base).statusBarsPadding().navigationBarsPadding().imePadding()) {
+        val washed = when {
+            chargeWash -> Modifier.ftChargeWash()
+            wash != null -> Modifier.ftDomainWash(wash)
+            else -> Modifier
+        }
+        Column(modifier = Modifier.fillMaxSize().background(FT.Base).then(washed).statusBarsPadding().navigationBarsPadding().imePadding()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -131,7 +142,7 @@ fun FullScreenOverlay(
 fun OverlaySection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth()
-            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule))
+            .background(FT.Glass, RoundedCornerShape(FT.RadiusModule))
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -147,9 +158,13 @@ private val TARGET_INPUTS = setOf(ScoreKeys.ENERGY_RATIO, ScoreKeys.PROTEIN_RATI
 private fun dayLabel(day: LocalDate): String = "${weekday(day).take(3).uppercase()} ${day.dayOfMonth} ${day.month.name.take(3)}"
 
 @Composable
-private fun RingHeader(score: Double?, change: Double?, state: RingState, capped: Boolean, words: String, sentence: String?, description: String) {
+private fun RingHeader(
+    score: Double?, change: Double?, state: RingState, capped: Boolean, words: String, sentence: String?, description: String,
+    palette: GaugePalette = GaugePalette.Charge,
+) {
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        ScoreRing(score = score, trend = trendOf(change), size = 168.dp, state = state, capped = capped, description = description)
+        ScoreRing(score = score, trend = trendOf(change), size = 176.dp, state = state, capped = capped, description = description,
+            palette = palette, label = description.uppercase())
         Text(words, style = FTType.LabelCaps, color = FT.TextSecondary)
         if (sentence != null) Text(sentence, style = FTType.Body, color = FT.TextPrimary, textAlign = TextAlign.Center)
     }
@@ -160,7 +175,7 @@ private fun RingHeader(score: Double?, change: Double?, state: RingState, capped
 @Composable
 fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () -> Unit) {
     val charge = view.scores.charge
-    FullScreenOverlay(title = "CHARGE", trailing = dayLabel(view.day), onClose = onClose) {
+    FullScreenOverlay(title = "CHARGE", trailing = dayLabel(view.day), onClose = onClose, chargeWash = true) {
         val status = if (view.status == ChargeStatus.FINAL) "FINAL ✓" else "PROVISIONAL"
         val words = listOfNotNull(charge.score?.let { bandWord(null, it) }, status).joinToString(" · ")
         val sentence = listOfNotNull(
@@ -301,21 +316,22 @@ fun DomainOverlay(
     val domain = view.scores.domains.getValue(key)
     val about = if (key == DomainKey.SLEEP || key == DomainKey.RECOVERY) "${weekday(view.day.minusDays(1)).uppercase().take(3)} NIGHT"
     else weekday(view.day.minusDays(1)).uppercase()
-    FullScreenOverlay(title = key.label, trailing = about, onClose = onClose, onBack = onBack) {
+    FullScreenOverlay(title = key.label, trailing = about, onClose = onClose, onBack = onBack, wash = FT.Domain.of(key)) {
         val words = listOfNotNull(
             domain.score?.let { bandWord(key, it) } ?: "PARTIAL",
             if (key == DomainKey.LOAD) view.scores.loadDirection?.label else null,
             if (key == DomainKey.BALANCE) view.scores.ansState?.label else null,
             if (domain.calibrating) "CALIBRATING" else null,
         ).joinToString(" · ")
-        RingHeader(domain.score, domain.change, if (domain.partial) RingState.PARTIAL else RingState.SCORED, false, words, domainSentence(domain), key.label)
+        RingHeader(domain.score, domain.change, if (domain.partial) RingState.PARTIAL else RingState.SCORED, false, words, domainSentence(domain), key.label,
+            palette = GaugePalette.of(key))
         if (key == DomainKey.LOAD) view.series[ScoreKeys.TSB]?.let { TsbGauge(it, view.day) }
         if (key == DomainKey.BALANCE && view.scores.ansState == AnsState.SATURATED) {
             Text("SATURATED: HRV is high while the pattern looks like overreaching, so RECOVERY gets no points above 100 this morning.",
                 style = FTType.Caption, color = FT.Warning)
         }
         val groups = domain.raw.groups
-        if (groups.size > 1) GroupRings(groups.map { it.group.label to it.score })
+        if (groups.size > 1) GroupRings(groups.map { it.group.label to it.score }, GaugePalette.of(key))
         val points = inputPoints(domain.raw)
         for (g in groups) {
             OverlaySection(if (groups.size > 1) "WHAT MOVED IT · ${g.group.label.uppercase()}" else "WHAT MOVED IT") {
@@ -405,7 +421,7 @@ fun InputOverlay(view: ScoresView, key: DomainKey, inputKey: String, onBack: () 
         is InputKind.Stability -> k.log to k.minSd
         else -> false to 0.0
     }
-    FullScreenOverlay(title = spec.label.uppercase(), trailing = key.label, onClose = onClose, onBack = onBack) {
+    FullScreenOverlay(title = spec.label.uppercase(), trailing = key.label, onClose = onClose, onBack = onBack, wash = FT.Domain.of(key)) {
         if (input != null) {
             Text(formatJudgedValue(input), style = FTType.DisplayMetric, color = FT.TextPrimary)
             Text("${directionGlyph(input.direction)} ${directionWords(input.direction)}", style = FTType.LabelCaps, color = FT.TextSecondary)

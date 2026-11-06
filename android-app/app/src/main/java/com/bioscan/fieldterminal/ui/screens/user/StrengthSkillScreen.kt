@@ -53,7 +53,7 @@ private val TIER_LABELS = listOf("Novice", "Interm.", "Advanced", "Elite")
 /** The Strength page (ME › PERFORMANCE › Strength). */
 @Composable
 fun StrengthScreen(onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
-    com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("STRENGTH", onBack, eyebrow = "PERFORMANCE") {
+    com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("STRENGTH", onBack, eyebrow = "PERFORMANCE", domain = FT.Domain.Load) {
         LoadedContent(load = { UserDataCache.strength() }) { StrengthContent(it) }
         GripStrengthCard()
         com.bioscan.fieldterminal.ui.screens.performance.RecentSessions("strength", onOpenSession)

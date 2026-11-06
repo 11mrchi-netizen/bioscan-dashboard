@@ -50,7 +50,7 @@ fun WhyButton(why: WhyContext, modifier: Modifier = Modifier) {
         modifier = modifier
             .height(20.dp)
             .clip(shape)
-            .background(FT.GlassFill)
+            .background(FT.Glass)
             .border(FT.BorderWidth, FT.GlassBorder, shape)
             .ftClickable(shape = shape, role = Role.Button, onClickLabel = "Ask the assistant why") { open = true }
             .padding(horizontal = 7.dp),

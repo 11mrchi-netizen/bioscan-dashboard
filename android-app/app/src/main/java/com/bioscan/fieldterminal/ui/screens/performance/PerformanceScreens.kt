@@ -98,7 +98,7 @@ private fun SportTile(summary: SportSummary, color: Color, onClick: () -> Unit) 
     val shape = RoundedCornerShape(FT.RadiusModule)
     Row(
         modifier = Modifier.fillMaxWidth()
-            .background(FT.GlassFill, shape)
+            .background(FT.Glass, shape)
             .border(FT.BorderWidth, FT.GlassBorder, shape)
             .ftClickable(shape = shape, role = Role.Button, onClickLabel = "Open ${summary.sport.label}") { onClick() }
             .padding(14.dp),
@@ -153,7 +153,7 @@ fun RecentSessions(sportKey: String, onOpenSession: (Long) -> Unit, count: Int =
 fun SportScreen(sportKey: String, onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
     val sessions = rememberSportSessions()
     val label = sportOf(sportKey, null).label
-    DetailScreen(label.uppercase(), onBack, eyebrow = "PERFORMANCE") {
+    DetailScreen(label.uppercase(), onBack, eyebrow = "PERFORMANCE", domain = FT.Domain.Load) {
         if (sessions == null) {
             EmptyLine("Loading…")
             return@DetailScreen
@@ -190,12 +190,12 @@ fun SportScreen(sportKey: String, onBack: () -> Unit, onOpenSession: (Long) -> U
         }
         Section("EACH SESSION") {
             val byDay = mine.groupBy { it.date }
-            MetricRow("Duration", byDay.mapValues { (_, l) -> l.sumOf { it.durationMin ?: 0.0 } }.filterValues { it > 0 }, "min", Fmt.int, minSd = 5.0,
+            MetricRow("Duration", byDay.mapValues { (_, l) -> l.sumOf { it.durationMin ?: 0.0 } }.filterValues { it > 0 }, "min", Fmt.int, minSd = 5.0, color = FT.Metric.Duration,
                 info = "Minutes of this sport a day (sessions on the same day added).")
             val dist = byDay.mapValues { (_, l) -> l.mapNotNull { it.distanceKm }.sum() }.filterValues { it > 0 }
-            if (dist.isNotEmpty()) MetricRow("Distance", dist, "km", Fmt.one, minSd = 0.5, info = "Kilometres a day.")
+            if (dist.isNotEmpty()) MetricRow("Distance", dist, "km", Fmt.one, minSd = 0.5, color = FT.Metric.Distance, info = "Kilometres a day.")
             val hr = byDay.mapValues { (_, l) -> l.mapNotNull { it.avgHr }.takeIf { it.isNotEmpty() }?.average() }.filterValues { it != null }.mapValues { it.value!! }
-            if (hr.isNotEmpty()) MetricRow("Average HR", hr, "bpm", Fmt.int, minSd = 3.0, info = "The session's average heart rate. For the same effort, a lower one over months usually means fitter.")
+            if (hr.isNotEmpty()) MetricRow("Average HR", hr, "bpm", Fmt.int, minSd = 3.0, color = FT.Metric.HeartRate, info = "The session's average heart rate. For the same effort, a lower one over months usually means fitter.")
         }
         Section("RECORDS") {
             StatTiles(

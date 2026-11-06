@@ -40,24 +40,25 @@ fun <T> SubTabRow(items: List<T>, selected: T, label: (T) -> String, onSelect: (
     }
 }
 
+// `.ft-chip`: a mono pill; the selected one is platinum with dark ink.
 @Composable
 fun SubTabChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val (textColor, borderColor, background) = if (selected) {
-        Triple(FT.Emerald, FT.Emerald, FT.Emerald.copy(alpha = 0.1f))
-    } else {
-        Triple(FT.TextSecondary, FT.GlassBorder, Color.Transparent)
-    }
-    val shape = RoundedCornerShape(FT.RadiusSmall)
-
+    val shape = RoundedCornerShape(50)
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .defaultMinSize(minHeight = 48.dp) // under Android's 48dp minimum touch target
-            .border(FT.BorderWidth, borderColor, shape)
-            .background(background, shape)
-            .ftClickable(onClick = onClick, shape = shape)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .defaultMinSize(minHeight = 40.dp)
+            .then(
+                if (selected) Modifier.background(FT.Platinum, shape)
+                else Modifier.border(FT.BorderWidth, FT.Line, shape).background(Color(0x08FFFFFF), shape),
+            )
+            .ftClickable(onClick = onClick, shape = shape, role = androidx.compose.ui.semantics.Role.Tab)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
-        Text(text = label, style = FTType.LabelCaps, color = textColor)
+        Text(
+            text = label,
+            style = if (selected) FTType.LabelCaps.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) else FTType.LabelCaps,
+            color = if (selected) FT.PlatinumInk else FT.TextSecondary,
+        )
     }
 }

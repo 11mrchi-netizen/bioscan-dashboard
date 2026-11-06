@@ -77,7 +77,7 @@ private enum class RunSurface(val label: String) { ROAD("ROAD"), TRAIL("TRAIL") 
 /** The Running page (ME › PERFORMANCE › Running). */
 @Composable
 fun RunningScreen(onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
-    com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("RUNNING", onBack, eyebrow = "PERFORMANCE") {
+    com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("RUNNING", onBack, eyebrow = "PERFORMANCE", domain = FT.Domain.Load) {
         LoadedContent(load = { UserDataCache.running() }) { RunningContent(it) }
         com.bioscan.fieldterminal.ui.screens.performance.RecentSessions("run", onOpenSession)
     }

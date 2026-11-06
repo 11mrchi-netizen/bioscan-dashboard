@@ -239,7 +239,7 @@ private fun SupplementsContent(
                         Text(timeOfDay.uppercase(), style = sectionLabelStyle, color = FT.TextSecondary)
                         // App restructure: the time-of-day groups had square corners; they use the module radius like every other block.
                         val groupShape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusModule)
-                        Column(modifier = Modifier.fillMaxWidth().clip(groupShape).background(FT.GlassFill, groupShape).border(FT.BorderWidth, FT.GlassBorder, groupShape)) {
+                        Column(modifier = Modifier.fillMaxWidth().clip(groupShape).background(FT.Glass, groupShape).border(FT.BorderWidth, FT.GlassBorder, groupShape)) {
                             items.forEachIndexed { i, s ->
                                 ActiveRow(s, outcomes[s.id].orEmpty(), showDivider = i < items.lastIndex, onClick = { onSupplementClick(s) }, onExperiment = { onExperiment(s) })
                             }

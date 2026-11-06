@@ -112,9 +112,9 @@ internal fun HypnogramCard(latest: SleepAnalysisRow?) {
             if (deep != null && rem != null && light != null) {
                 FTSegmentBar(
                     listOf(
-                        FTSegment("Deep ${deep.toInt()} min", deep, FT.Category.Sleep.c700),
-                        FTSegment("REM ${rem.toInt()} min", rem, FT.Category.Sleep.c500),
-                        FTSegment("Light ${light.toInt()} min", light, FT.Category.Sleep.c300),
+                        FTSegment("Deep ${deep.toInt()} min", deep, FT.Metric.StageDeep),
+                        FTSegment("REM ${rem.toInt()} min", rem, FT.Metric.StageRem),
+                        FTSegment("Light ${light.toInt()} min", light, FT.Metric.StageLight),
                     ),
                 )
                 Text("Timed stages are not stored for this night, so only the time in each stage shows.", style = FTType.Caption, color = FT.TextMuted)
@@ -126,10 +126,10 @@ internal fun HypnogramCard(latest: SleepAnalysisRow?) {
 }
 
 private fun stageColor(stage: SleepStage) = when (stage) {
-    SleepStage.Awake -> FT.Warning
-    SleepStage.Rem -> FT.Category.Sleep.c500
-    SleepStage.Light -> FT.Category.Sleep.c300
-    SleepStage.Deep -> FT.Category.Sleep.c700
+    SleepStage.Awake -> FT.Metric.StageAwake
+    SleepStage.Rem -> FT.Metric.StageRem
+    SleepStage.Light -> FT.Metric.StageLight
+    SleepStage.Deep -> FT.Metric.StageDeep
 }
 
 @Composable

@@ -598,10 +598,10 @@ private fun PlaceSheet(
                         Text(
                             "${p.label ?: p.osmName ?: "Unlabelled"} · %.0f m".format(d),
                             style = FTType.Label,
-                            color = if (selected) FT.Emerald else FT.TextSecondary,
+                            color = if (selected) FT.PlatinumInk else FT.TextSecondary,
                             modifier = Modifier
-                                .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, shape)
-                                .background(if (selected) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent, shape)
+                                .border(FT.BorderWidth, if (selected) Color.Transparent else FT.GlassBorder, shape)
+                                .background(if (selected) FT.PlatinumSolid else Color.Transparent, shape)
                                 .ftClickable(shape = shape) { mergeTarget = if (selected) null else p }
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                         )
@@ -660,10 +660,10 @@ private fun MarkPlaceSheet(point: GeoPoint, onDismiss: () -> Unit, onSave: (Stri
                     Text(
                         label,
                         style = FTType.Label,
-                        color = if (selected) FT.Emerald else FT.TextSecondary,
+                        color = if (selected) FT.PlatinumInk else FT.TextSecondary,
                         modifier = Modifier
-                            .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, shape)
-                            .background(if (selected) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent, shape)
+                            .border(FT.BorderWidth, if (selected) Color.Transparent else FT.GlassBorder, shape)
+                            .background(if (selected) FT.PlatinumSolid else Color.Transparent, shape)
                             .ftClickable(shape = shape) { radius = r }
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                     )

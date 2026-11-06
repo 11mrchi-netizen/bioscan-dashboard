@@ -53,6 +53,8 @@ import com.bioscan.fieldterminal.domain.score.Series
 import com.bioscan.fieldterminal.ui.components.LoadGuard
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.ftDomainWash
+import com.bioscan.fieldterminal.ui.components.ftGlass
 import com.bioscan.fieldterminal.ui.screens.today.FullScreenOverlay
 import com.bioscan.fieldterminal.ui.screens.today.Sparkline
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -81,6 +83,8 @@ fun DetailScreen(
     eyebrow: String? = null,
     ranged: Boolean = true,
     defaultRange: ChartRange = ChartRange.M3,
+    // v1: the page's domain hue, drawn as the background wash (FT.Domain.*). Null keeps the plain ground.
+    domain: Color? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var range by rememberSaveable { mutableStateOf(defaultRange) }
@@ -90,7 +94,7 @@ fun DetailScreen(
     androidx.compose.runtime.LaunchedEffect(Unit) {
         markers = runCatching { loadRegimenMarkers() }.getOrDefault(emptyList())
     }
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).then(if (domain != null) Modifier.ftDomainWash(domain) else Modifier)) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("‹", style = FTType.SectionTitle, color = FT.TextSecondary,
                 modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Back") { onBack() }.padding(12.dp))
@@ -113,18 +117,18 @@ fun DetailScreen(
     }
 }
 
+// `.ft-chip`: a mono pill; the selected one is platinum with dark ink.
 @Composable
 fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
     Text(
         label,
-        style = FTType.Label,
-        color = if (selected) FT.Emerald else FT.TextSecondary,
+        style = if (selected) FTType.LabelCaps.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) else FTType.LabelCaps,
+        color = if (selected) FT.PlatinumInk else FT.TextSecondary,
         modifier = Modifier
-            .border(FT.BorderWidth, if (selected) FT.Emerald.copy(alpha = 0.7f) else FT.GlassBorder, shape)
-            .background(if (selected) FT.Emerald.copy(alpha = 0.12f) else FT.GlassFill, shape)
+            .then(if (selected) Modifier.background(FT.Platinum, shape) else Modifier.border(FT.BorderWidth, FT.Line, shape).background(Color(0x08FFFFFF), shape))
             .ftClickable(shape = shape, role = Role.Tab, onClickLabel = label) { onClick() }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp),
     )
 }
 
@@ -134,9 +138,8 @@ fun Section(title: String, info: String? = null, trailing: String? = null, conte
     var open by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxWidth()
-            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule))
-            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .padding(14.dp),
+            .ftGlass(RoundedCornerShape(FT.RadiusCard))
+            .padding(start = 16.dp, end = 16.dp, top = 15.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -164,8 +167,7 @@ fun InfoOverlay(title: String, body: String, onClose: () -> Unit) {
 fun LinkRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth()
-            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule))
-            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
+            .ftGlass(RoundedCornerShape(FT.RadiusModule))
             .ftClickable(shape = RoundedCornerShape(FT.RadiusModule), role = Role.Button, onClickLabel = title) { onClick() }
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -245,7 +247,7 @@ fun MetricPanel(
     info: String? = null,
     log: Boolean = false,
     minSd: Double = 0.0,
-    color: Color = FT.Emerald,
+    color: Color = FT.Metric.WeightEma, // neutral ink when a caller names no metric hue
     betterHigher: Boolean? = null,
     target: Pair<Double, Double>? = null,
     targetLabel: String? = null,
@@ -270,7 +272,7 @@ fun MetricRow(
     info: String? = null,
     log: Boolean = false,
     minSd: Double = 0.0,
-    color: Color = FT.Emerald,
+    color: Color = FT.Metric.WeightEma,
     betterHigher: Boolean? = null,
     flag: String? = null,
     note: String? = null,
@@ -311,7 +313,7 @@ data class TileSpec(
     val format: (Double) -> String,
     val info: String? = null,
     val minSd: Double = 0.0,
-    val color: Color = FT.Emerald,
+    val color: Color = FT.Metric.WeightEma,
     val betterHigher: Boolean? = null,
 )
 
@@ -334,7 +336,7 @@ private fun MetricTile(t: TileSpec, today: LocalDate, modifier: Modifier) {
     val spark = remember(t.series) { t.series.entries.sortedBy { it.key }.takeLast(30).map { it.value } }
     val shape = RoundedCornerShape(FT.RadiusModule)
     Column(
-        modifier.background(FT.GlassFill, shape).ftClickable(shape = shape, role = Role.Button, onClickLabel = "Open ${t.label}") { open = true }.padding(10.dp),
+        modifier.background(FT.Glass, shape).ftClickable(shape = shape, role = Role.Button, onClickLabel = "Open ${t.label}") { open = true }.padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(t.label.uppercase(), style = FTType.Micro, color = FT.TextMuted)
@@ -363,7 +365,7 @@ fun StatTiles(tiles: List<Triple<String, String, String?>>) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for ((label, value, sub) in row) {
                     Column(
-                        Modifier.weight(1f).background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule)).padding(10.dp),
+                        Modifier.weight(1f).background(FT.Glass, RoundedCornerShape(FT.RadiusModule)).padding(10.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         Text(label, style = FTType.Micro, color = FT.TextMuted)
@@ -404,7 +406,7 @@ fun TrendChart(
     days: Int,
     band: Pair<Double, Double>?,
     format: (Double) -> String,
-    color: Color = FT.Emerald,
+    color: Color = FT.Metric.WeightEma,
     target: Pair<Double, Double>? = null,
     targetLabel: String? = null,
     height: Int = 140,
@@ -670,7 +672,7 @@ fun RangeBars(ranges: List<Pair<LocalDate, DayRange>>, day: LocalDate, days: Int
 
 /** Horizontal share bars, one per labelled part, each with its value at the end (component scores, distributions). */
 @Composable
-fun ShareBars(rows: List<Triple<String, Double, String>>, max: Double, color: Color = FT.Emerald) {
+fun ShareBars(rows: List<Triple<String, Double, String>>, max: Double, color: Color = FT.Metric.WeightEma) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         for ((label, value, text) in rows) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

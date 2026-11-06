@@ -21,8 +21,8 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Contract A2 (design/FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md, "Buttons"): the shared button, formerly AmberButton, which
 // drew every action the same way (SAVE, PANTRY, diagnostics and DELETE alike). Emphasis says what kind of action it is:
-//   Primary     - the one main action of a screen or sheet (emerald fill)
-//   Secondary   - alternatives and navigation-like actions (emerald outline; the default, and AmberButton's old look)
+//   Primary     - the one main action of a screen or sheet (v1 platinum fill, dark ink)
+//   Secondary   - alternatives and navigation-like actions (faint glass, hairline, light ink; the default)
 //   Tertiary    - low-emphasis inline actions (label only)
 //   Destructive - deleting or overwriting (critical outline); always followed by FTConfirmDestructive, never one tap
 // Labels are Inter (`FTType.ButtonLabel`, contract A7). 48dp minimum touch target; press/focus feedback via ftClickable.
@@ -68,31 +68,38 @@ private fun ButtonBox(
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(FT.RadiusSmall)
-    val accent = when (emphasis) {
-        FTButtonEmphasis.Destructive -> FT.Critical
-        FTButtonEmphasis.Tertiary -> FT.EmeraldHighlight
-        else -> FT.Emerald
+    // .ft-btn (secondary), .ft-btn--primary (platinum), .ft-btn--ghost (tertiary); destructive keeps the bad status hue.
+    val critical = emphasis == FTButtonEmphasis.Destructive
+    val background: Modifier = when {
+        !enabled -> Modifier
+        critical && filled -> Modifier.background(FT.Bad, shape)
+        filled -> Modifier.background(FT.Platinum, shape)
+        emphasis == FTButtonEmphasis.Secondary -> Modifier.background(Color(0x0DFFFFFF), shape)
+        else -> Modifier
     }
-    val fill = if (enabled && filled) accent else Color.Transparent
     val border = when {
-        !enabled -> FT.TextMuted
-        emphasis == FTButtonEmphasis.Tertiary -> Color.Transparent
-        else -> accent
+        !enabled -> FT.TextMuted.copy(alpha = 0.5f)
+        filled || emphasis == FTButtonEmphasis.Tertiary -> Color.Transparent
+        critical -> FT.Bad
+        else -> FT.Line
     }
     val text = when {
         !enabled -> FT.TextMuted
-        filled -> FT.Base
-        else -> accent
+        filled && critical -> FT.Base
+        filled -> FT.PlatinumInk
+        critical -> FT.Bad
+        emphasis == FTButtonEmphasis.Tertiary -> Color(0xFFE4E9F1)
+        else -> FT.TextPrimary
     }
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-            .background(fill, shape)
+            .then(background)
             .border(FT.BorderWidth, border, shape)
             .ftClickable(enabled = enabled, shape = shape, role = Role.Button, onClick = onClick)
             .padding(horizontal = if (emphasis == FTButtonEmphasis.Tertiary) 8.dp else 20.dp, vertical = 12.dp),
     ) {
-        Text(text = label, style = FTType.ButtonLabel, color = text)
+        Text(text = label, style = if (filled && !critical) FTType.ButtonLabel.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) else FTType.ButtonLabel, color = text)
     }
 }

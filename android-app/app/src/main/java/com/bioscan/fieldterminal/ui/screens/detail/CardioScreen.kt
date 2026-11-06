@@ -47,7 +47,7 @@ fun CardioScreen(onBack: () -> Unit) {
             )
         }
     }
-    DetailScreen("HEART", onBack, eyebrow = "RECOVERY") {
+    DetailScreen("HEART", onBack, eyebrow = "RECOVERY", domain = FT.Domain.Cardio) {
         val w = wearable
         val s = sleep
         if (w == null || s == null) {
@@ -55,24 +55,24 @@ fun CardioScreen(onBack: () -> Unit) {
             return@DetailScreen
         }
         val today = LocalDate.now()
-        MetricPanel("HRV", remember(w) { w.wSeries { it.hrv } }, "ms", Fmt.int, info = HRV_INFO, log = true, minSd = 0.03, color = FT.DomainHeart, betterHigher = true)
+        MetricPanel("HRV", remember(w) { w.wSeries { it.hrv } }, "ms", Fmt.int, info = HRV_INFO, log = true, minSd = 0.03, color = FT.Metric.Hrv, betterHigher = true)
         Section("HEART RATE · DAY RANGE", info = HR_INFO) { RangeBars(ranges, today, LocalRangeDays.current, "bpm") }
         Section("MORE") {
-            MetricRow("Resting HR", w.wSeries { it.rhr }, "bpm", Fmt.int, minSd = 1.0, color = FT.DomainHeart, betterHigher = false,
+            MetricRow("Resting HR", w.wSeries { it.rhr }, "bpm", Fmt.int, minSd = 1.0, color = FT.Metric.RestingHr, betterHigher = false,
                 info = "Your lowest steady heart rate, overnight. A rise of a few beats over your normal for several days often means fatigue, heat, alcohol or an illness coming.")
-            MetricRow("SpO2", w.wSeries { it.spo2 }, "%", Fmt.int, minSd = 0.5,
+            MetricRow("SpO2", w.wSeries { it.spo2 }, "%", Fmt.int, minSd = 0.5, color = FT.Metric.Spo2,
                 info = "Blood-oxygen saturation from your band, nightly average. Most healthy people sit at 95-100 %; wrist readings are noisy, so look for runs of low nights, not one.")
             val stepSeries = w.wSeries { it.steps }
             val recent = stepSeries.filterKeys { !it.isBefore(today.minusDays(15)) }.values
             val band = if (recent.size >= 2) runCatching {
                 comparePopulation("steps", recent.average(), PopulationContext(ageYears = null, sex = null, geography = null), steps).bandLabel
             }.getOrNull()?.replace('_', ' ')?.lowercase() else null
-            MetricRow("Steps", stepSeries, "", Fmt.kSteps, minSd = 500.0, betterHigher = true,
+            MetricRow("Steps", stepSeries, "", Fmt.kSteps, minSd = 500.0, color = FT.Metric.Steps, betterHigher = true,
                 note = band?.let { "15-day average: $it" },
                 info = "Steps a day." + (band?.let { " Your 15-day average falls in the population band \"$it\" (Tudor-Locke and Bassett's steps-a-day categories)." } ?: ""))
             val rr = s.series { it.respiratoryRate }
             val anomaly = evaluateRespiratoryAnomaly(rr.entries.sortedBy { it.key }.map { it.key to it.value }).flagged
-            MetricRow("Breathing", rr, "/min", Fmt.one, minSd = 0.3, flag = if (anomaly) "two nights well outside your normal" else null,
+            MetricRow("Breathing", rr, "/min", Fmt.one, minSd = 0.3, color = FT.Metric.Respiratory, flag = if (anomaly) "two nights well outside your normal" else null,
                 info = "Breaths per minute asleep. Flagged when two nights in a row sit more than 2 SD from your baseline. Not a diagnosis.")
         }
     }

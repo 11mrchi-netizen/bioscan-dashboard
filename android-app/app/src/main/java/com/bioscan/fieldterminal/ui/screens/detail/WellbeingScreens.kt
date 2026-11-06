@@ -41,7 +41,7 @@ fun WellbeingScreen(onBack: () -> Unit) {
             )
         }
     }
-    DetailScreen("WELLBEING", onBack, eyebrow = "BALANCE") {
+    DetailScreen("WELLBEING", onBack, eyebrow = "BALANCE", domain = FT.Domain.Balance) {
         val wb = wellbeing
         if (wb == null) {
             Loading(guard)
@@ -49,7 +49,7 @@ fun WellbeingScreen(onBack: () -> Unit) {
         }
         val stressSeries = remember(stress) { stress.mapNotNull { d -> d.summary.avg?.let { d.date to it.toDouble() } }.toMap() }
         MetricPanel(
-            "BODY STRESS · DAILY AVERAGE", stressSeries, "/ 100", Fmt.int, minSd = 3.0, color = FT.Info, betterHigher = false,
+            "BODY STRESS · DAILY AVERAGE", stressSeries, "/ 100", Fmt.int, minSd = 3.0, color = FT.Metric.Stress, betterHigher = false,
             info = "Your band's stress score (0-100, from heart-rate variability through the day), daily average. It is the body's " +
                 "reading, kept apart from the stress you rate yourself below. The curve through a single day is on BALANCE › Stress through the day.",
         )
@@ -75,7 +75,7 @@ fun SexualHealthScreen(onBack: () -> Unit) {
             parallel({ wellbeing = repo.loadWellbeingDaily() }, { activity = repo.loadSexualActivityDaily() })
         }
     }
-    DetailScreen("SEXUAL HEALTH", onBack, eyebrow = "RECOVERY") {
+    DetailScreen("SEXUAL HEALTH", onBack, eyebrow = "RECOVERY", domain = FT.Domain.Cardio) {
         val wb = wellbeing
         val sa = activity
         if (wb == null || sa == null) {

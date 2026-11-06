@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +24,8 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // options. PeriodToggle/TotalsPeriod stay as their own thing (shared with
 // the Nutrition tab, which this rework doesn't touch); new call sites use
 // this instead of adding a fourth copy.
+// v1 `.ft-seg`: one faint glass track with a hairline; the selected segment is platinum with dark ink. [accentColor] is
+// kept for old call sites and no longer tints anything: selection is platinum app-wide, colour belongs to metrics.
 @Composable
 fun <T> SegmentedToggle(
     options: List<T>,
@@ -30,25 +33,34 @@ fun <T> SegmentedToggle(
     labelOf: (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
-    accentColor: Color = FT.Emerald,
+    @Suppress("UNUSED_PARAMETER") accentColor: Color = FT.TextPrimary,
 ) {
-    val shape = RoundedCornerShape(FT.RadiusSmall)
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    val outer = RoundedCornerShape(FT.RadiusSmall)
+    val inner = RoundedCornerShape(9.dp)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color(0x0DFFFFFF), outer)
+            .border(FT.BorderWidth, FT.Line, outer)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
         options.forEach { option ->
             val isSelected = option == selected
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .border(FT.BorderWidth, if (isSelected) accentColor else FT.GlassBorder, shape)
-                    .background(if (isSelected) accentColor.copy(alpha = 0.14f) else Color.Transparent, shape)
-                    .ftClickable(shape = shape) { onSelect(option) }
-                    .padding(vertical = 8.dp),
+                    .defaultMinSize(minHeight = 40.dp)
+                    .then(if (isSelected) Modifier.background(FT.Platinum, inner) else Modifier)
+                    .ftClickable(shape = inner, role = androidx.compose.ui.semantics.Role.Tab) { onSelect(option) }
+                    .padding(vertical = 8.dp, horizontal = 4.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     labelOf(option),
-                    style = FTType.LabelCaps,
-                    color = if (isSelected) accentColor else FT.TextSecondary,
+                    style = if (isSelected) FTType.LabelCaps.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) else FTType.LabelCaps,
+                    color = if (isSelected) FT.PlatinumInk else FT.TextSecondary,
+                    maxLines = 1,
                 )
             }
         }

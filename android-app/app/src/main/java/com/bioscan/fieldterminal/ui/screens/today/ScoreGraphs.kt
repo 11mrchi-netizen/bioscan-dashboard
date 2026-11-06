@@ -43,6 +43,7 @@ import com.bioscan.fieldterminal.domain.score.bulletOf
 import com.bioscan.fieldterminal.domain.score.formatInputValue
 import com.bioscan.fieldterminal.domain.score.formatJudgedValue
 import com.bioscan.fieldterminal.domain.score.trendOf
+import com.bioscan.fieldterminal.ui.components.GaugePalette
 import com.bioscan.fieldterminal.ui.components.ScoreRing
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -160,8 +161,8 @@ fun BulletBar(b: Bullet, dot: Color, modifier: Modifier = Modifier) {
 // ---- 3. CHARGE's weights as one bar, defaults beneath ----
 
 private val DOMAIN_TINTS = mapOf(
-    DomainKey.RECOVERY to FT.Emerald, DomainKey.SLEEP to FT.Category.Sleep.c300, DomainKey.LOAD to FT.Category.Activity.c300,
-    DomainKey.FUEL to FT.DomainFuel, DomainKey.BALANCE to FT.Analysis,
+    DomainKey.RECOVERY to FT.Domain.Cardio, DomainKey.SLEEP to FT.Domain.Sleep, DomainKey.LOAD to FT.Domain.Load,
+    DomainKey.FUEL to FT.Domain.Fuel, DomainKey.BALANCE to FT.Domain.Balance,
 )
 
 fun domainTint(key: DomainKey): Color = DOMAIN_TINTS.getValue(key)
@@ -244,11 +245,11 @@ fun SkillChart(result: ScorecardResult, scoreLabel: String) {
 // ---- 7. a domain's groups as small rings ----
 
 @Composable
-fun GroupRings(groups: List<Pair<String, Double?>>) {
+fun GroupRings(groups: List<Pair<String, Double?>>, palette: GaugePalette = GaugePalette.Charge) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         for ((label, score) in groups) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                ScoreRing(score = score, trend = null, size = 46.dp, stroke = 5.dp, description = label)
+                ScoreRing(score = score, trend = null, size = 52.dp, palette = palette, description = label)
                 Text(label.uppercase(), style = FTType.Micro, color = FT.TextSecondary)
             }
         }

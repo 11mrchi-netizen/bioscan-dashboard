@@ -68,7 +68,7 @@ fun LoadScreen(onBack: () -> Unit, onOpenSessions: () -> Unit) {
         }
     }
     val running by produceState<RunningHistory?>(null, guard.attempt) { value = softLoad { UserDataCache.running() } ?: value }
-    DetailScreen("TRAINING LOAD", onBack, eyebrow = "LOAD") {
+    DetailScreen("TRAINING LOAD", onBack, eyebrow = "LOAD", domain = FT.Domain.Load) {
         val s = sessions
         val w = wearable
         if (s == null || w == null) {
@@ -162,7 +162,7 @@ fun InjuryScreen(onBack: () -> Unit, onOpenConcern: (String) -> Unit) {
             )
         }
     }
-    DetailScreen("INJURY", onBack, eyebrow = "LOAD") {
+    DetailScreen("INJURY", onBack, eyebrow = "LOAD", domain = FT.Domain.Load) {
         Section("INJURIES AND PAIN", info = "Body concerns you are tracking (injuries and recurring pain). Tap one for its own page.") {
             ConcernsTab(onOpenConcern = onOpenConcern, anatomicalOnly = true)
         }

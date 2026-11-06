@@ -230,10 +230,10 @@ private fun <T> Chips(options: List<T>, selected: T?, label: (T) -> String, onPi
             Text(
                 label(c),
                 style = FTType.Label,
-                color = if (on) FT.Emerald else FT.TextSecondary,
+                color = if (on) FT.PlatinumInk else FT.TextSecondary,
                 modifier = Modifier
-                    .border(FT.BorderWidth, if (on) FT.Emerald else FT.GlassBorder, shape)
-                    .background(if (on) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent, shape)
+                    .border(FT.BorderWidth, if (on) Color.Transparent else FT.GlassBorder, shape)
+                    .background(if (on) FT.PlatinumSolid else Color.Transparent, shape)
                     .ftClickable(shape = shape) { onPick(if (on) null else c) }
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             )

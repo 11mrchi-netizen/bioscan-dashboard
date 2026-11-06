@@ -109,7 +109,7 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
             ?.mapNotNull { r -> r.weightKg?.let { LocalDate.parse(r.date) to it } }.orEmpty()
     }
     val goals = NutritionGoalsStore.getGoals(LocalContext.current)
-    DetailScreen("NUTRITION", onBack, eyebrow = "FUEL") {
+    DetailScreen("NUTRITION", onBack, eyebrow = "FUEL", domain = FT.Domain.Fuel) {
         val o = overview
         if (o == null) {
             Loading(guard)
@@ -228,7 +228,7 @@ fun HydrationScreen(onBack: () -> Unit) {
             ?.filter { WallClock.date(it.startTime) == today }?.sumOf { it.durationMin ?: 0.0 } ?: 0.0
         if (exerciseMinutes > 0) sweat = softLoad { todaySweatRate(SupabaseClientProvider.client, MapSettingsStore.getHome(context)) }
     }
-    DetailScreen("HYDRATION", onBack, eyebrow = "FUEL") {
+    DetailScreen("HYDRATION", onBack, eyebrow = "FUEL", domain = FT.Domain.Fuel) {
         val o = overview
         if (o == null) {
             Loading(guard)
@@ -311,7 +311,7 @@ fun DigestionScreen(onBack: () -> Unit) {
     var stool by remember { mutableStateOf<List<StoolAnalysisRow>?>(null) }
     val guard = rememberLoadGuard()
     LaunchedEffect(guard.attempt) { guard.run { stool = AnalysisRepository(SupabaseClientProvider.client).loadStoolLog() } }
-    DetailScreen("DIGESTION", onBack, eyebrow = "FUEL", defaultRange = ChartRange.M1) {
+    DetailScreen("DIGESTION", onBack, eyebrow = "FUEL", domain = FT.Domain.Fuel, defaultRange = ChartRange.M1) {
         val rows = stool
         if (rows == null) {
             Loading(guard)

@@ -24,18 +24,18 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.roundToInt
 
-// Session detail's HR zone breakdown. Its own fixed ordinal palette (low to
+// Session detail's HR zone breakdown. The v1 ordinal HR-zone ramp (--z-hr-1..5, low to
 // high effort), not a reuse of FT's Warning/Critical -- those are this app's
 // reserved data-quality/alert semantics elsewhere, and reusing them for
 // "zone 3"/"zone 5" would conflate a status color with a series identity,
 // same mixup MacroDonutChart.kt's own dedicated MACRO_COLORS already avoids.
 private val HR_ZONE_COLORS: Map<HeartRateZone, Color> = mapOf(
     HeartRateZone.BelowZ1 to FT.TextMuted,
-    HeartRateZone.Z1 to Color(0xFF60A5FA),
-    HeartRateZone.Z2 to Color(0xFF34D399),
-    HeartRateZone.Z3 to Color(0xFFFBBF24),
-    HeartRateZone.Z4 to Color(0xFFFB923C),
-    HeartRateZone.Z5 to Color(0xFFF87171),
+    HeartRateZone.Z1 to FT.Zone.Hr[0],
+    HeartRateZone.Z2 to FT.Zone.Hr[1],
+    HeartRateZone.Z3 to FT.Zone.Hr[2],
+    HeartRateZone.Z4 to FT.Zone.Hr[3],
+    HeartRateZone.Z5 to FT.Zone.Hr[4],
 )
 
 fun heartRateZoneColor(zone: HeartRateZone): Color = HR_ZONE_COLORS.getValue(zone)

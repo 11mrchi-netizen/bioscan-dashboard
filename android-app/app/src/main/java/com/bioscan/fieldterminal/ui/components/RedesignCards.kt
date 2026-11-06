@@ -61,7 +61,7 @@ fun TimeRangeDropdown(modifier: Modifier = Modifier) {
             Modifier
                 .height(32.dp)
                 .border(FT.BorderWidth, FT.GlassBorder, shape)
-                .background(FT.GlassFill, shape)
+                .background(FT.Glass, shape)
                 .ftClickable(shape = shape, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Change the time range") { open = true }
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -73,7 +73,7 @@ fun TimeRangeDropdown(modifier: Modifier = Modifier) {
         androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = FT.Elevated) {
             TimeRange.entries.forEach { r ->
                 androidx.compose.material3.DropdownMenuItem(
-                    text = { Text(r.label, style = FTType.LabelCaps, color = if (r == GlobalTimeRange.selected) FT.DomainTraining else FT.TextPrimary) },
+                    text = { Text(r.label, style = FTType.LabelCaps, color = if (r == GlobalTimeRange.selected) FT.TextPrimary else FT.TextPrimary) },
                     onClick = { GlobalTimeRange.selected = r; open = false },
                 )
             }
@@ -86,7 +86,7 @@ fun TimeRangeDropdown(modifier: Modifier = Modifier) {
 fun RedesignCard(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(FT.RadiusCard)
     Column(
-        modifier = modifier.fillMaxWidth().clip(shape).border(FT.BorderWidth, FT.GlassBorder, shape).background(FT.GlassFill, shape).padding(16.dp),
+        modifier = modifier.fillMaxWidth().clip(shape).border(FT.BorderWidth, FT.GlassBorder, shape).background(FT.Glass, shape).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         content = content,
     )

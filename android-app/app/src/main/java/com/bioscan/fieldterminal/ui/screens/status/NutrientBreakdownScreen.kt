@@ -78,7 +78,7 @@ fun NutrientBreakdownScreen(onBack: () -> Unit) {
         isLoading = false
     }
 
-    DetailScreen("NUTRIENT BREAKDOWN", onBack, eyebrow = "FUEL", ranged = false) {
+    DetailScreen("NUTRIENT BREAKDOWN", onBack, eyebrow = "FUEL", domain = FT.Domain.Fuel, ranged = false) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             TimeRange.entries.forEach { r -> Chip(r.label, r == timeRange) { timeRange = r } }
         }

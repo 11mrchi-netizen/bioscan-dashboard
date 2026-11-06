@@ -63,14 +63,14 @@ Semantic state is mandatory: it gives each component a safe display fallback. Av
 
 | State | Meaning supplied by upstream | Futuristic Material treatment | Required non-color cue |
 |---|---|---|---|
-| Optimal | Favorable in supplied metric context | Emerald signal | Optimal label and state icon/shape |
-| Neutral | No positive or negative claim | Cool neutral; no emerald glow | Normal or Current label when exposed |
+| Optimal | Favorable in supplied metric context | Ok `#58E39A` | Optimal label and state icon/shape |
+| Neutral | No positive or negative claim | Cool neutral; no status colour | Normal or Current label when exposed |
 | Warning | Attention warranted | color/state/warning; restrained border/pill | Attention label and warning icon |
 | Critical | Urgent/materially adverse state supplied upstream | color/state/critical; highest hierarchy | Critical label and critical icon |
 | Building | More data/history/work is required | color/state/analysis; subdued | Building label plus requirement/context |
 | Unavailable | No usable presentation value | Muted neutral | Unavailable label plus concise reason if provided |
 
-State colors communicate interpretation, never data domain. Fuel may be cyan as a section identity while a warning metric retains warning treatment. Building and unavailable are not errors; they must be useful and dignified.
+State colors communicate interpretation, never data domain. Fuel may wash a page lime as its domain while a warning metric retains warning treatment. Building and unavailable are not errors; they must be useful and dignified.
 
 ## Trend rendering
 
@@ -157,7 +157,7 @@ Every chart frame owns title, context/time window, unit, scale, visible missingn
 | FTDataState | Availability/reason | Sparse/building/unavailable surface | Treat absence as a permanent loading/error |
 | FTAnalyticalCard | Metric presentation + slots | Contract hierarchy | Implement metric-specific business rules |
 
-All components use only Futuristic Material semantic tokens: near-black/material surfaces, Inter interface type, Roboto Mono telemetry, 4 px spacing, approved radii, and state/domain separation. Category screens may not introduce raw hex values, ad-hoc elevation, or bespoke chart framing.
+All components use only Futuristic Material semantic tokens: the v1 token set (`design/tokens/`): domain wash, neutral glass, fixed metric ink, Nunito numbers, Inter interface type, IBM Plex Mono micro-labels, 4 px spacing, approved radii, and state/domain/metric separation. Category screens may not introduce raw hex values, ad-hoc elevation, or bespoke chart framing.
 
 ## Composition precedence
 

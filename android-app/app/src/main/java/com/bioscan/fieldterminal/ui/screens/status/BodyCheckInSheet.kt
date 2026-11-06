@@ -345,13 +345,13 @@ private fun Toggle(text: String, on: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .border(FT.BorderWidth, if (on) FT.DomainFuel else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-            .background(if (on) FT.DomainFuel.copy(alpha = 0.12f) else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
+            .border(FT.BorderWidth, if (on) FT.SelectedBorder else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+            .background(if (on) FT.SelectedGlass else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
             .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onChange(!on) }
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(if (on) "■" else "□", style = FTType.Label, color = if (on) FT.DomainFuel else FT.TextMuted, modifier = Modifier.padding(end = 10.dp))
+        Text(if (on) "■" else "□", style = FTType.Label, color = if (on) FT.TextPrimary else FT.TextMuted, modifier = Modifier.padding(end = 10.dp))
         Text(text, style = FTType.BodySmall, color = FT.TextPrimary)
     }
 }

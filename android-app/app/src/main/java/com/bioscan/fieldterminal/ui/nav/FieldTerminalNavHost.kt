@@ -33,6 +33,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -340,15 +341,13 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     }
 }
 
-// Floating dock: inset from the screen edges, soft 24dp geometry, glass-border
-// outline, and a rounded selected pill (accent tint + accent outline) instead
-// of the old full-width square bar with a top rule. Custom rather than
-// Material3's NavigationBar so the pill, accent-per-tab and Roboto Mono labels
-// follow the Futuristic Material contract. Selected state is accent color AND
-// the filled pill AND the label, never color alone.
+// v1 `.ft-dock`: a floating pill (26dp) of dark translucent glass with a hairline, inset from the screen edges. The
+// selected tab is light ink on a faint white pill; the others are muted. No per-tab accent: colour belongs to the
+// domain wash and the metric ink, and the dock stays neutral. Selected state is the pill AND the brighter label, never
+// colour alone. Custom rather than Material3's NavigationBar so the pill and the mono labels follow the contract.
 @Composable
 private fun FieldBottomBar(selectedTab: TopLevelTab, onTabSelected: (TopLevelTab) -> Unit) {
-    val dockShape = RoundedCornerShape(FT.RadiusCard)
+    val dockShape = RoundedCornerShape(FT.RadiusDock)
     val pillShape = RoundedCornerShape(FT.RadiusModule)
     // Landscape on a phone leaves ~360 dp of height: the dock drops its icons (the labels name the tabs) to keep the page.
     val compact = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480
@@ -363,9 +362,9 @@ private fun FieldBottomBar(selectedTab: TopLevelTab, onTabSelected: (TopLevelTab
                 .fillMaxWidth()
                 .height(if (compact) 40.dp else 64.dp)
                 .clip(dockShape)
-                .background(FT.Surface)
-                .border(FT.BorderWidth, FT.GlassBorder, dockShape)
-                .padding(6.dp),
+                .background(Color(0xB814191E))
+                .border(FT.BorderWidth, FT.Line, dockShape)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             // A `for` loop, not `.forEach { }` -- `weight()` needs RowScope as
@@ -374,27 +373,20 @@ private fun FieldBottomBar(selectedTab: TopLevelTab, onTabSelected: (TopLevelTab
             // non-inline lambda passed to `entries.forEach` here.
             for (tab in TopLevelTab.entries) {
                 val isSelected = tab == selectedTab
-                val accent = tab.domainAccent
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .clip(pillShape)
                         .then(
-                            if (isSelected) {
-                                Modifier
-                                    .background(accent.copy(alpha = 0.14f), pillShape)
-                                    .border(FT.BorderWidth, accent.copy(alpha = 0.55f), pillShape)
-                            } else {
-                                Modifier
-                            },
+                            if (isSelected) Modifier.background(Color(0x1AFFFFFF), pillShape) else Modifier,
                         )
                         .ftClickable(shape = pillShape, role = Role.Tab) { onTabSelected(tab) }
                         .semantics { selected = isSelected },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    val tint = if (isSelected) accent else FT.TextSecondary
+                    val tint = if (isSelected) Color(0xFFF2F5FA) else FT.TextSecondary
                     // The label below already names the tab; describing the icon too made screen readers say it twice.
                     if (!compact) Icon(
                         painter = painterResource(tab.iconRes),
@@ -421,18 +413,6 @@ private val TopLevelTab.iconRes
         TopLevelTab.Log -> R.drawable.ic_tab_log
         TopLevelTab.Lab -> R.drawable.ic_tab_lab
         TopLevelTab.User -> R.drawable.ic_tab_user
-    }
-
-// User and Log have documented domain accents (contract section 4); Status
-// and Setup aren't "domains" with their own accent in that table, so they
-// default to Emerald, the contract's own primary/default signal.
-private val TopLevelTab.domainAccent
-    get() = when (this) {
-        TopLevelTab.Status -> FT.Emerald
-        TopLevelTab.Plan -> FT.DomainTraining
-        TopLevelTab.Log -> FT.DomainLog
-        TopLevelTab.Lab -> FT.DomainLabs
-        TopLevelTab.User -> FT.DomainUser
     }
 
 private const val TAB_FADE_MS = 150

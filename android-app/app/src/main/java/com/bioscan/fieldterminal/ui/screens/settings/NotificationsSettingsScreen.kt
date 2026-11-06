@@ -14,8 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import com.bioscan.fieldterminal.ui.components.FTSwitch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -124,18 +123,12 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                             style = FTType.LabelCaps,
                             color = FT.TextSecondary,
                         )
-                        Switch(
+                        FTSwitch(
                             checked = prefs.quietEnabled,
                             onCheckedChange = {
                                 notifPrefs = notifPrefs?.copy(quietEnabled = it)
                                 notifSavedAt = null
                             },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = FT.Emerald,
-                                checkedTrackColor = FT.Emerald.copy(alpha = 0.3f),
-                                uncheckedThumbColor = FT.TextSecondary,
-                                uncheckedTrackColor = FT.GlassFill,
-                            ),
                         )
                     }
                     if (prefs.quietEnabled) {
@@ -189,18 +182,12 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                                     style = FTType.LabelCaps,
                                     color = FT.TextSecondary,
                                 )
-                                Switch(
+                                FTSwitch(
                                     checked = rule?.enabled ?: true,
                                     onCheckedChange = { enabled ->
                                         rules = rules.map { if (it.kind == kind) it.copy(enabled = enabled) else it }
                                         scope.launch { runCatching { notificationsRepository.setRuleEnabled(kind, enabled) } }
                                     },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = FT.Emerald,
-                                        checkedTrackColor = FT.Emerald.copy(alpha = 0.3f),
-                                        uncheckedThumbColor = FT.TextSecondary,
-                                        uncheckedTrackColor = FT.GlassFill,
-                                    ),
                                 )
                             }
                         }

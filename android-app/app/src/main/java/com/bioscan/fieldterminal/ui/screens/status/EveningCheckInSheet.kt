@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.EveningCheckinRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
@@ -159,13 +160,13 @@ private fun SymptomChips(selected: List<String>, onToggle: (String) -> Unit) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .border(FT.BorderWidth, if (on) FT.DomainLog else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                            .background(if (on) FT.DomainLog.copy(alpha = 0.18f) else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
+                            .border(FT.BorderWidth, if (on) Color.Transparent else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                            .background(if (on) FT.PlatinumSolid else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
                             .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall), role = Role.Checkbox) { onToggle(symptom) }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(symptom.uppercase(), style = FTType.MonoCaption, color = if (on) FT.DomainLog else FT.TextSecondary)
+                        Text(symptom.uppercase(), style = FTType.MonoCaption, color = if (on) FT.PlatinumInk else FT.TextSecondary)
                     }
                 }
             }

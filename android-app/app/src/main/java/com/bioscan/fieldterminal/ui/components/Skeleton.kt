@@ -37,7 +37,7 @@ fun SkeletonSections(count: Int = 3) {
         repeat(count) { i ->
             val shape = RoundedCornerShape(FT.RadiusModule)
             Column(
-                Modifier.fillMaxWidth().background(FT.GlassFill, shape).border(FT.BorderWidth, FT.GlassBorder, shape).padding(14.dp).alpha(pulse),
+                Modifier.fillMaxWidth().background(FT.Glass, shape).border(FT.BorderWidth, FT.GlassBorder, shape).padding(14.dp).alpha(pulse),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Bar(0.35f, 10.dp)

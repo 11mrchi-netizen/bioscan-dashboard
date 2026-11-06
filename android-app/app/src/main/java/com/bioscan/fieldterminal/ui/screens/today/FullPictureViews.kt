@@ -338,7 +338,7 @@ private fun NightTile(
 ) {
     val reading = com.bioscan.fieldterminal.domain.readMetric(series, day, minSd = minSd, maxAgeDays = 0)
     Column(
-        modifier.background(FT.GlassFill, androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusModule)).padding(12.dp),
+        modifier.background(FT.Glass, androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusModule)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(label, style = FTType.LabelCaps, color = FT.TextMuted)
@@ -359,10 +359,10 @@ private fun NightTile(
 // ---- Stress through the day: the last seven days by zone ----
 
 private fun stressZoneColor(z: com.bioscan.fieldterminal.domain.stress.StressZone): Color = when (z) {
-    com.bioscan.fieldterminal.domain.stress.StressZone.HIGH -> FT.Critical
-    com.bioscan.fieldterminal.domain.stress.StressZone.MEDIUM -> FT.Warning
-    com.bioscan.fieldterminal.domain.stress.StressZone.NORMAL -> FT.Info
-    com.bioscan.fieldterminal.domain.stress.StressZone.RELAXED -> FT.Emerald
+    com.bioscan.fieldterminal.domain.stress.StressZone.HIGH -> FT.Zone.StressHigh
+    com.bioscan.fieldterminal.domain.stress.StressZone.MEDIUM -> FT.Zone.StressModerate
+    com.bioscan.fieldterminal.domain.stress.StressZone.NORMAL -> FT.Metric.Circadian
+    com.bioscan.fieldterminal.domain.stress.StressZone.RELAXED -> FT.Zone.StressCalm
 }
 
 /**

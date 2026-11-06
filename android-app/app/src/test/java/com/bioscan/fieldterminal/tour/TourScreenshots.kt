@@ -184,21 +184,21 @@ class TourScreenshots {
     @Test fun t09_last_night() = shot("09_last_night") { PictureOverlay(VIEW, FullPicture.LAST_NIGHT, onBack = {}, onClose = {}) }
     // The detail pages' kit, drawn with the tour person's series (the pages themselves load their own rows).
     @Test fun t10_detail_kit() = shot("10_detail_kit") {
-        com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("SLEEP", onBack = {}, eyebrow = "SLEEP") {
+        com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("SLEEP", onBack = {}, eyebrow = "SLEEP", domain = FT.Domain.Sleep) {
             com.bioscan.fieldterminal.ui.screens.detail.MetricPanel(
                 "DURATION", VIEW.series.getValue(ScoreKeys.SLEEP_HOURS), "", com.bioscan.fieldterminal.ui.screens.detail.Fmt.hm,
-                info = "x", minSd = 0.25, betterHigher = true, target = 7.0 to 9.0, targetLabel = "7–9 h", today = TODAY,
+                info = "x", minSd = 0.25, color = FT.Metric.SleepDuration, betterHigher = true, target = 7.0 to 9.0, targetLabel = "7–9 h", today = TODAY,
             )
             com.bioscan.fieldterminal.ui.screens.detail.Section("STAGES", info = "x") {
                 com.bioscan.fieldterminal.ui.screens.detail.StackedBars(
                     (13 downTo 0).map { i -> TODAY.minusDays(i.toLong()).dayOfMonth.toString() to listOf(60.0 + i % 3 * 10, 230.0, 85.0 + i % 4 * 5) },
-                    listOf(com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens.Category.Sleep.c700, com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens.Category.Sleep.c300, com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens.Category.Sleep.c500),
+                    listOf(FT.Metric.StageDeep, FT.Metric.StageLight, FT.Metric.StageRem),
                     listOf("Deep", "Light", "REM"), com.bioscan.fieldterminal.ui.screens.detail.Fmt.int, "min",
                 )
             }
             com.bioscan.fieldterminal.ui.screens.detail.Section("EACH STAGE") {
-                com.bioscan.fieldterminal.ui.screens.detail.MetricRow("HRV", VIEW.series.getValue(ScoreKeys.HRV), "ms", com.bioscan.fieldterminal.ui.screens.detail.Fmt.int, log = true, minSd = 0.03, today = TODAY)
-                com.bioscan.fieldterminal.ui.screens.detail.MetricRow("Resting HR", VIEW.series.getValue(ScoreKeys.RHR), "bpm", com.bioscan.fieldterminal.ui.screens.detail.Fmt.int, minSd = 1.0, today = TODAY)
+                com.bioscan.fieldterminal.ui.screens.detail.MetricRow("HRV", VIEW.series.getValue(ScoreKeys.HRV), "ms", com.bioscan.fieldterminal.ui.screens.detail.Fmt.int, log = true, minSd = 0.03, color = FT.Metric.Hrv, today = TODAY)
+                com.bioscan.fieldterminal.ui.screens.detail.MetricRow("Resting HR", VIEW.series.getValue(ScoreKeys.RHR), "bpm", com.bioscan.fieldterminal.ui.screens.detail.Fmt.int, minSd = 1.0, color = FT.Metric.RestingHr, today = TODAY)
             }
         }
     }

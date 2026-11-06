@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Field Terminal — Gauge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070a0d; --fg:#eaf0f2; --mut:#8793a2; --line:rgba(255,255,255,.1);
+    --num:'Nunito', system-ui, sans-serif; --mono:'IBM Plex Mono', ui-monospace, monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--fg); font-family:var(--num);
+    min-height:100vh; display:flex; align-items:center; justify-content:center; padding:32px;
+    background-image:
+      radial-gradient(640px 440px at 50% -10%, rgba(45,120,130,.28), transparent 62%),
+      radial-gradient(520px 440px at 108% 60%, rgba(109,94,252,.16), transparent 58%);}
+  .wrap{width:100%; max-width:640px}
+  .eyebrow{font-family:var(--mono); font-size:10px; letter-spacing:.3em; color:var(--mut); text-align:center}
+  h1{font-weight:900; font-size:24px; text-align:center; margin:8px 0 22px}
+  .card{position:relative; border-radius:24px; padding:26px 24px 22px; overflow:hidden;
+    background:linear-gradient(135deg, rgba(255,255,255,.085), rgba(255,255,255,.028) 60%);
+    border:1px solid rgba(255,255,255,.12);
+    -webkit-backdrop-filter:blur(18px) saturate(1.1); backdrop-filter:blur(18px) saturate(1.1);
+    box-shadow:0 20px 50px -28px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.15);}
+  .hero{display:flex; flex-direction:column; align-items:center}
+  .gauge{position:relative}
+  .gauge .val{font-family:var(--num); font-weight:800; letter-spacing:-.02em}
+  .gauge .lab{font-family:var(--mono); font-size:10px; letter-spacing:.26em; color:var(--mut); margin-top:5px}
+  .state{font-family:var(--num); font-weight:800; font-size:16px; margin-top:12px;
+    background:linear-gradient(100deg,#8af0d2,#8bd3ff 55%,#c6a8ff); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .slider{width:100%; margin:20px 0 4px}
+  input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:7px; border-radius:999px;
+    background:linear-gradient(90deg,#6d5efc,#19c7e0 35%,#5af0c8 60%,#c6f06a 82%,#ff6ec7); outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:19px; height:19px; border-radius:50%; background:#fff; box-shadow:0 0 0 3px var(--bg); cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:19px; height:19px; border:none; border-radius:50%; background:#fff; box-shadow:0 0 0 3px var(--bg)}
+  .scalelab{display:flex; justify-content:space-between; font-family:var(--mono); font-size:9px; color:var(--mut)}
+  .rings{display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-top:22px}
+  .ring{display:flex; flex-direction:column; align-items:center; gap:7px}
+  .ring .rk{font-family:var(--mono); font-size:8px; letter-spacing:.06em; color:var(--mut)}
+  .foot{text-align:center; font-family:var(--mono); font-size:10px; color:var(--mut); margin-top:20px; line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">FIELD TERMINAL</div>
+  <h1>Radial gauge · radar sweep</h1>
+  <div class="card">
+    <div class="hero">
+      <div id="big" class="gauge"></div>
+      <div id="state" class="state">PRIMED</div>
+    </div>
+    <div class="slider">
+      <input id="range" type="range" min="0" max="150" value="118" aria-label="CHARGE value">
+      <div class="scalelab"><span>0</span><span>100 normal</span><span>125 peak</span><span>150</span></div>
+    </div>
+    <div class="rings" id="rings"></div>
+  </div>
+  <div class="foot">Drag the slider — ticks, sweep gradient, glowing cap and the internal radar glow all recompute live.</div>
+</div>
+
+<script>
+/* ---- gauge generator (same logic as gauge.js) ---- */
+function _hx(h){ h = h.replace('#',''); return [0,2,4].map(i => parseInt(h.slice(i,i+2),16)); }
+function ftGrad(stops, t){
+  t = Math.max(0, Math.min(1, t));
+  const seg = (stops.length - 1) * t, i = Math.min(stops.length - 2, Math.floor(seg)), f = seg - i;
+  const a = _hx(stops[i]), b = _hx(stops[i + 1]);
+  const m = (x, y) => Math.round(x + (y - x) * f);
+  return `rgb(${m(a[0],b[0])},${m(a[1],b[1])},${m(a[2],b[2])})`;
+}
+function ftGauge({ N = 56, pct, stops, cx = 50, r1 = 36, r2 = 45, radarHex }){
+  const on = Math.max(1, Math.round(pct * N)), ticks = [];
+  for (let i = 0; i < N; i++){
+    const t = on > 1 ? i / (on - 1) : 1;
+    ticks.push({ angle: i / N * 360, color: i < on ? ftGrad(stops, t) : 'rgba(255,255,255,0.08)' });
+  }
+  const ea = ((on - 0.5) / N) * 360 * Math.PI / 180, er = (r1 + r2) / 2;
+  const cap = { x: +(cx + er * Math.sin(ea)).toFixed(2), y: +(cx - er * Math.cos(ea)).toFixed(2), color: ftGrad(stops, 1) };
+  const rgb = _hx(radarHex).join(','), A = pct * 360;
+  const radar = `conic-gradient(from -90deg, rgba(${rgb},0.03) 0deg, rgba(${rgb},0.08) ${(A*0.28).toFixed(1)}deg, rgba(${rgb},0.28) ${(A*0.72).toFixed(1)}deg, rgba(${rgb},0.7) ${A.toFixed(1)}deg, rgba(${rgb},0) ${(A+1.6).toFixed(1)}deg)`;
+  return { ticks, cap, radar };
+}
+
+/* ---- DOM renderer ---- */
+const SVGNS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs){ const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+function renderGauge(container, o){
+  container.innerHTML = '';
+  const size = o.size;
+  container.style.width = size + 'px'; container.style.height = size + 'px'; container.style.position = 'relative';
+  const g = ftGauge({ N:o.N, pct:o.value/o.max, stops:o.stops, cx:50, r1:36, r2:45, radarHex:o.radarHex });
+
+  const radar = document.createElement('div');
+  radar.style.cssText = `position:absolute;inset:${Math.round(size*0.15)}px;border-radius:50%;filter:blur(${Math.round(size*0.08)}px);`
+    + `-webkit-mask:radial-gradient(circle,#000 0 52%,transparent 86%);mask:radial-gradient(circle,#000 0 52%,transparent 86%);background:${g.radar}`;
+  container.appendChild(radar);
+
+  const svg = svgEl('svg', { viewBox:'0 0 100 100' });
+  svg.style.cssText = 'position:relative;z-index:1;width:100%;height:100%;display:block';
+  g.ticks.forEach(t => svg.appendChild(svgEl('line', {
+    x1:50, y1:5, x2:50, y2:14, transform:`rotate(${t.angle.toFixed(2)} 50 50)`,
+    stroke:t.color, 'stroke-width':1.7, 'stroke-linecap':'round', 'vector-effect':'non-scaling-stroke'
+  })));
+  const cap = svgEl('circle', { cx:g.cap.x, cy:g.cap.y, r:2.6, fill:g.cap.color });
+  cap.style.filter = 'drop-shadow(0 0 4px rgba(255,255,255,.7))';
+  svg.appendChild(cap);
+  container.appendChild(svg);
+
+  const c = document.createElement('div');
+  c.style.cssText = 'position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1';
+  c.innerHTML = `<span class="val" style="font-size:${Math.round(size*0.3)}px">${o.display != null ? o.display : Math.round(o.value)}</span><span class="lab">${o.label}</span>`;
+  container.appendChild(c);
+}
+
+/* ---- data ---- */
+const CHARGE = { N:96, max:150, stops:['#6d5efc','#19c7e0','#5af0c8','#c6f06a','#ff6ec7'], radarHex:'#3fe0d0', label:'CHARGE' };
+const DOMAINS = [
+  { k:'SLEEP',    v:82, stops:['#6d5efc','#b48cff'], radarHex:'#8b7cff' },
+  { k:'RECOVERY', v:74, stops:['#19c7e0','#5af0c8'], radarHex:'#2fd6c3' },
+  { k:'LOAD',     v:61, stops:['#ff6b4d','#ffb15a'], radarHex:'#ff8a5b' },
+  { k:'FUEL',     v:90, stops:['#4fd67a','#c6f06a'], radarHex:'#8ce06b' },
+  { k:'BALANCE',  v:68, stops:['#ff6ec7','#c08bff'], radarHex:'#ff6ec7' }
+];
+function chargeState(v){ return v >= 125 ? 'SUPERCHARGED' : v >= 100 ? 'PRIMED' : v >= 70 ? 'STEADY' : 'LOW'; }
+
+/* ---- mount ---- */
+const bigEl = document.getElementById('big'), rangeEl = document.getElementById('range'), stateEl = document.getElementById('state');
+function drawBig(){
+  const v = +rangeEl.value;
+  renderGauge(bigEl, { size:220, N:CHARGE.N, value:v, max:CHARGE.max, stops:CHARGE.stops, radarHex:CHARGE.radarHex, label:CHARGE.label, display:v });
+  stateEl.textContent = chargeState(v);
+}
+rangeEl.addEventListener('input', drawBig);
+drawBig();
+
+const ringsEl = document.getElementById('rings');
+DOMAINS.forEach(d => {
+  const wrap = document.createElement('div'); wrap.className = 'ring';
+  const gEl = document.createElement('div');
+  wrap.appendChild(gEl);
+  const k = document.createElement('span'); k.className = 'rk'; k.textContent = d.k;
+  wrap.appendChild(k);
+  ringsEl.appendChild(wrap);
+  renderGauge(gEl, { size:84, N:56, value:d.v, max:100, stops:d.stops, radarHex:d.radarHex, label:'', display:d.v });
+});
+</script>
+</body>
+</html>

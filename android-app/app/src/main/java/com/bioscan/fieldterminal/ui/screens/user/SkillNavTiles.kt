@@ -52,7 +52,7 @@ private fun SkillTile(skill: Skill, level: SkillLevel?, onClick: () -> Unit, mod
     val shape = RoundedCornerShape(FT.RadiusModule)
     Column(
         modifier = modifier
-            .background(FT.GlassFill, shape)
+            .background(FT.Glass, shape)
             .border(FT.BorderWidth, FT.GlassBorder, shape)
             .ftClickable(onClick = onClick, shape = shape)
             .padding(12.dp),

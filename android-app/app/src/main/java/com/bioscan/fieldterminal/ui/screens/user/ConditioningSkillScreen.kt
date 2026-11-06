@@ -38,7 +38,7 @@ import java.time.temporal.ChronoUnit
 
 @Composable
 fun ConditioningSkillScreen(onBack: () -> Unit) {
-    com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("CONDITIONING", onBack, eyebrow = "PERFORMANCE") {
+    com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("CONDITIONING", onBack, eyebrow = "PERFORMANCE", domain = FT.Domain.Load) {
         LoadedContent(load = { UserDataCache.conditioning() }) { ConditioningContent(it) }
     }
 }

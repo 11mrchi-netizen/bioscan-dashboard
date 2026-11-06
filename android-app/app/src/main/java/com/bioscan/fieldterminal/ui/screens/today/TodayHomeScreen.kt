@@ -49,8 +49,11 @@ import com.bioscan.fieldterminal.domain.score.DomainKey
 import com.bioscan.fieldterminal.domain.score.trendOf
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.RingState
+import com.bioscan.fieldterminal.ui.components.GaugePalette
+import com.bioscan.fieldterminal.ui.components.GaugeStateWord
 import com.bioscan.fieldterminal.ui.components.ScoreRing
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.ftChargeWash
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.status.EveningCheckInSheet
 import com.bioscan.fieldterminal.ui.screens.status.NutritionTodayCard
@@ -385,7 +388,7 @@ fun TodayContent(
     onSoFar: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxSize().ftChargeWash().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -400,7 +403,8 @@ fun TodayContent(
             ScoreRing(
                 score = charge?.score,
                 trend = trendOf(charge?.change),
-                size = 200.dp,
+                size = 220.dp,
+                label = "CHARGE",
                 state = when {
                     v == null -> RingState.BUILDING
                     charge?.score == null -> RingState.PARTIAL
@@ -412,7 +416,10 @@ fun TodayContent(
                 description = "Charge",
                 modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Open Charge", enabled = v != null) { onOpenOverlay(ScoreOverlay.Charge) },
             )
-            Text("CHARGE", style = FTType.LabelCaps, color = FT.TextMuted)
+            charge?.score?.let { sc ->
+                val band = com.bioscan.fieldterminal.domain.score.ScoreScale.band(sc)
+                GaugeStateWord(band.label, band, holo = true)
+            }
             // The open illness and what the body's signals say, or an early heads-up (domain/score/IllnessRead.kt).
             v?.illness?.let { Text("⚠ ${it.reason}", style = FTType.Caption, color = FT.Warning, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
             v?.signals?.takeIf { it.verdict == com.bioscan.fieldterminal.domain.score.SignalsVerdict.HEADS_UP || v.illness != null }?.let {
@@ -432,7 +439,8 @@ fun TodayContent(
                     ScoreRing(
                         score = d?.score,
                         trend = trendOf(d?.change),
-                        size = 58.dp,
+                        size = 62.dp,
+                        palette = GaugePalette.of(key),
                         state = if (d == null || d.partial) RingState.PARTIAL else RingState.SCORED,
                         emptyText = if (v == null) "…" else "—",
                         description = key.label,
@@ -449,7 +457,7 @@ fun TodayContent(
         soFar?.let { s ->
             Column(
                 modifier = Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Open intake so far") { onSoFar() }
-                    .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule)).padding(14.dp),
+                    .background(FT.Glass, RoundedCornerShape(FT.RadiusModule)).padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -470,7 +478,7 @@ fun TodayContent(
 private fun Section(title: String, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth()
-            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule))
+            .background(FT.Glass, RoundedCornerShape(FT.RadiusModule))
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),

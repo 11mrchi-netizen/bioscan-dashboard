@@ -46,9 +46,9 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 
-private val DEEP = FT.Category.Sleep.c700
-private val LIGHT = FT.Category.Sleep.c300
-private val REM = FT.Category.Sleep.c500
+private val DEEP = FT.Metric.StageDeep
+private val LIGHT = FT.Metric.StageLight
+private val REM = FT.Metric.StageRem
 
 internal fun List<SleepAnalysisRow>.series(pick: (SleepAnalysisRow) -> Double?): Series =
     mapNotNull { r -> pick(r)?.let { LocalDate.parse(r.date) to it } }.toMap()
@@ -111,7 +111,7 @@ fun SleepScreen(onBack: () -> Unit) {
         }
     }
     val scorecards by rememberScorecards(wearable, sleep, wellbeing, sessions, breakStarts, loadSpans)
-    DetailScreen("SLEEP", onBack, eyebrow = "SLEEP") {
+    DetailScreen("SLEEP", onBack, eyebrow = "SLEEP", domain = FT.Domain.Sleep) {
         val s = sleep
         val w = wearable
         val wb = wellbeing
@@ -133,7 +133,7 @@ fun SleepScreen(onBack: () -> Unit) {
 
         MetricPanel(
             "DURATION", remember(s) { s.series { it.hours } }, "", Fmt.hm, info = SLEEP_INFO_DURATION,
-            minSd = 0.25, color = FT.Category.Sleep.c300, betterHigher = true, target = 7.0 to 9.0, targetLabel = "7–9 h",
+            minSd = 0.25, color = FT.Metric.SleepDuration, betterHigher = true, target = 7.0 to 9.0, targetLabel = "7–9 h",
         )
 
         Section("EACH STAGE") {
@@ -143,7 +143,7 @@ fun SleepScreen(onBack: () -> Unit) {
                 info = "Minutes of light sleep a night, usually about half of it.")
             MetricRow("REM", s.series { it.remMin }, "min", Fmt.int, color = REM, minSd = 8.0, betterHigher = true,
                 info = "Minutes of REM (dreaming) sleep, which lengthens towards morning; a short night cuts REM most.")
-            MetricRow("Breathing", s.series { it.respiratoryRate }, "/min", Fmt.one, minSd = 0.3,
+            MetricRow("Breathing", s.series { it.respiratoryRate }, "/min", Fmt.one, color = FT.Metric.Respiratory, minSd = 0.3,
                 info = "Breaths per minute asleep. It is very steady night to night, so a jump of more than one breath a minute is worth noticing (illness, alcohol, a hard day).")
         }
 

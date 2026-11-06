@@ -113,7 +113,7 @@ private fun FactorRow(f: HealthspanFactor, expanded: Boolean, assessed: Int, onC
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .then(if (expanded) Modifier.background(FT.GlassFill, RoundedCornerShape(FT.RadiusSmall)) else Modifier)
+            .then(if (expanded) Modifier.background(FT.Glass, RoundedCornerShape(FT.RadiusSmall)) else Modifier)
             .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
             .padding(horizontal = if (expanded) 10.dp else 0.dp, vertical = if (expanded) 10.dp else 4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),

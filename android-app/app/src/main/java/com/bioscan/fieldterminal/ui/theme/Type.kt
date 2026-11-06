@@ -6,34 +6,35 @@ import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import com.bioscan.fieldterminal.R
 
-// Bundled font files (res/font/) -- see android-app/licenses/fonts/ for their
-// OFL license text. Both families ship as variable fonts upstream (no static
-// per-weight files), so each named weight below is one FontVariation.Settings
-// instance over the same underlying file -- standard variable-font usage, not
-// a workaround.
+// Bundled font files (res/font/) -- see android-app/licenses/fonts/ for their OFL license text.
+// design/FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md (v1 "new look"): Nunito for numbers and headline metrics, Inter for
+// interface language, IBM Plex Mono for micro-labels and telemetry. Inter and Nunito ship as variable fonts (one
+// FontVariation.Settings instance per named weight); IBM Plex Mono ships as static files per weight.
 
-// design/FUTURISTIC_MATERIAL_DESIGN_CONTRACT.md's typography split: Inter for
-// interface language, Roboto Mono for telemetry.
-private fun inter(weight: FontWeight) = Font(
-    resId = R.font.inter_variable,
-    weight = weight,
-    variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
-)
-
-private fun robotoMono(weight: FontWeight) = Font(
-    resId = R.font.roboto_mono_variable,
+private fun variable(resId: Int, weight: FontWeight) = Font(
+    resId = resId,
     weight = weight,
     variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
 )
 
 val Inter = FontFamily(
-    inter(FontWeight.Normal), // 400 -- body
-    inter(FontWeight.Medium), // 500
-    inter(FontWeight.SemiBold), // 600 -- section title
-    inter(FontWeight.Bold), // 700 -- page title
+    variable(R.font.inter_variable, FontWeight.Normal), // 400 -- body
+    variable(R.font.inter_variable, FontWeight.Medium), // 500
+    variable(R.font.inter_variable, FontWeight.SemiBold), // 600 -- section title, buttons
+    variable(R.font.inter_variable, FontWeight.Bold), // 700 -- page title
 )
 
-val RobotoMono = FontFamily(
-    robotoMono(FontWeight.Normal), // 400 -- micro
-    robotoMono(FontWeight.Bold), // 700 -- telemetry/label
+/** Numbers: the hero value, gauge centres, stat tiles. */
+val Nunito = FontFamily(
+    variable(R.font.nunito_variable, FontWeight.Bold), // 700
+    variable(R.font.nunito_variable, FontWeight.ExtraBold), // 800 -- metric values
+    variable(R.font.nunito_variable, FontWeight.Black), // 900 -- headings on hero surfaces
+)
+
+/** Micro-labels and telemetry: units, timestamps, chips, eyebrows. */
+val PlexMono = FontFamily(
+    Font(R.font.ibm_plex_mono_regular, FontWeight.Normal),
+    Font(R.font.ibm_plex_mono_medium, FontWeight.Medium),
+    Font(R.font.ibm_plex_mono_semibold, FontWeight.SemiBold),
+    Font(R.font.ibm_plex_mono_bold, FontWeight.Bold),
 )

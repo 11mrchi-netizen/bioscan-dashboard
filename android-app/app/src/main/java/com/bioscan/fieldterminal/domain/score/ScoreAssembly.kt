@@ -236,7 +236,7 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
         // Phone before sleep: measured minutes win (below); a check-in answer stands in only without a measurement.
         if (c.date !in src.phoneBedMin) b.put(ScoreKeys.LATE_SCREEN, morning, c.lateScreen?.let { if (it) LATE_SCREEN_YES_MIN else 0.0 })
         // The evening's own stress answer is about the day just lived; it replaces the morning answer when both exist.
-        b.put(ScoreKeys.FELT_STRESS, morning, c.stress?.toDouble())
+        b.put(ScoreKeys.FELT_STRESS, morning, c.stress?.let(::eveningStressOnTen))
     }
 
     // ---- GUT (the day before) ----
@@ -301,3 +301,10 @@ fun capsFrom(episodes: List<Triple<String, LocalDate, LocalDate?>>): (LocalDate)
     episodes.firstOrNull { (_, start, end) -> !day.isBefore(start) && (end == null || !day.isAfter(end)) }
         ?.let { (reason, start, _) -> ChargeCap("$reason · day ${ChronoUnit.DAYS.between(start, day) + 1}") }
 }
+
+/**
+ * The evening check-in asks stress on 1-5 (EveningCheckInSheet); the morning wellbeing answer, which shares the felt
+ * stress series, is 0-10. The evening answer goes onto the 0-10 scale (1 -> 0, 3 -> 5, 5 -> 10) before the two meet, so
+ * an evening answer never reads as a calmer day than the same feeling given in the morning.
+ */
+fun eveningStressOnTen(stress: Int): Double = ((stress.coerceIn(1, 5) - 1) * 2.5)

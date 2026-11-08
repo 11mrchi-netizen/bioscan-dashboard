@@ -50,9 +50,16 @@ class ScoreAssemblyTest {
         assertNull(series.getValue(ScoreKeys.ENERGY_RATIO)[monday])
         assertEquals(2.0, series.getValue(ScoreKeys.DRINKS)[tuesday]!!, 1e-9)
         assertEquals(LATE_SCREEN_YES_MIN, series.getValue(ScoreKeys.LATE_SCREEN)[tuesday]!!, 1e-9) // a check-in "yes" without a measurement
-        assertEquals(2.0, series.getValue(ScoreKeys.FELT_STRESS)[tuesday]!!, 1e-9) // the evening answer wins
+        assertEquals(2.5, series.getValue(ScoreKeys.FELT_STRESS)[tuesday]!!, 1e-9) // the evening answer wins, put on 0-10 (2 of 1-5 -> 2.5)
         assertEquals(30.0, series.getValue(ScoreKeys.STRESSED_SHARE)[tuesday]!!, 1e-9)
         assertEquals(40.0, series.getValue(ScoreKeys.RELAXED_SHARE)[tuesday]!!, 1e-9)
+    }
+
+    @Test
+    fun eveningStressGoesOntoTheMorningZeroToTenScale() {
+        assertEquals(0.0, eveningStressOnTen(1), 1e-9)
+        assertEquals(5.0, eveningStressOnTen(3), 1e-9)
+        assertEquals(10.0, eveningStressOnTen(5), 1e-9)
     }
 
     @Test

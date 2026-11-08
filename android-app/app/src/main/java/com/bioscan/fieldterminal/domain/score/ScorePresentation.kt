@@ -60,7 +60,7 @@ fun formatInputValue(key: String, value: Double): String = when (key) {
     ScoreKeys.RHR -> "${value.roundToInt()} bpm"
     ScoreKeys.NIGHT_STRESS, ScoreKeys.WIND_DOWN -> "${value.roundToInt()}"
     ScoreKeys.SORENESS, ScoreKeys.ENERGY, ScoreKeys.MORNING_ERECTION, ScoreKeys.AROUSAL,
-    ScoreKeys.FELT_STRESS, ScoreKeys.MOOD -> "${value.roundToInt()}/5"
+    ScoreKeys.FELT_STRESS, ScoreKeys.MOOD -> "${value.roundToInt()}/10" // the check-in asks 0-10 (evening stress is rescaled)
     ScoreKeys.TSB -> "${value.roundToInt()}"
     ScoreKeys.DAYS_WITHOUT_REST -> "${value.roundToInt()} d"
     ScoreKeys.MONOTONY -> one(value)

@@ -20,9 +20,9 @@ val REGIMEN_WATCHED_METRICS: List<WatchedMetric> = listOf(
     WatchedMetric(ScoreKeys.RHR, "Resting heart rate", "bpm", false, 0),
     WatchedMetric(ScoreKeys.SLEEP_HOURS, "Sleep", "h", true, 1),
     WatchedMetric(ScoreKeys.NIGHT_STRESS, "Night stress", "", false, 0),
-    WatchedMetric(ScoreKeys.ENERGY, "Energy", "/5", true, 1),
-    WatchedMetric(ScoreKeys.MOOD, "Mood", "/5", true, 1),
-    WatchedMetric(ScoreKeys.FELT_STRESS, "Felt stress", "/5", false, 1),
+    WatchedMetric(ScoreKeys.ENERGY, "Energy", "/10", true, 1),
+    WatchedMetric(ScoreKeys.MOOD, "Mood", "/10", true, 1),
+    WatchedMetric(ScoreKeys.FELT_STRESS, "Felt stress", "/10", false, 1),
 )
 
 /** Days compared on each side of a change, the days skipped right after it, and the readings needed on each side. */

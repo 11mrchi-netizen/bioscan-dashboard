@@ -131,6 +131,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
 
         val w = wearable.await()
         val sessionRows = sessions.await()
+        val drinkRows = drinks.await()
         val sources = ScoreSources(
             wearable = w,
             sleep = sleep.await(),
@@ -139,13 +140,18 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             loadSpans = spans.await(),
             planned = planned.await(),
             nutrition = nut?.allDays.orEmpty(),
-            hydrationMl = nut?.hydrationHistory.orEmpty().mapNotNull { row ->
-                row.ml?.let { ml -> runCatching { LocalDate.parse(row.date) }.getOrNull()?.let { it to ml.toDouble() } }
-            }.toMap(),
+            // Water logged as water, plus what the other drinks count for (the Hydration page adds them the same way).
+            hydrationMl = run {
+                val water = nut?.hydrationHistory.orEmpty().mapNotNull { row ->
+                    row.ml?.let { ml -> runCatching { LocalDate.parse(row.date) }.getOrNull()?.let { it to ml.toDouble() } }
+                }.toMap()
+                val fromDrinks = com.bioscan.fieldterminal.domain.drinkHydrationByDay(drinkRows, zone)
+                (water.keys + fromDrinks.keys).associateWith { (water[it] ?: 0.0) + (fromDrinks[it] ?: 0.0) }
+            },
             // The saved nutrition goal for every past day: the fuel plan's day-by-day targets are not kept for past days.
             targets = { FuelTargets(goals.caloriesKcal, goals.proteinG, goals.carbsG, goals.hydrationMinMl ?: DEFAULT_HYDRATION_MIN_ML) },
             checkins = checkins.await(),
-            drinks = drinks.await(),
+            drinks = drinkRows,
             stool = stool.await(),
             stressDays = stress.await(),
             hrDip = hrDip.await(),

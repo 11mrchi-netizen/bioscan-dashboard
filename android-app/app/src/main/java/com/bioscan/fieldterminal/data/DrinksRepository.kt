@@ -39,7 +39,7 @@ class DrinksRepository(private val supabase: SupabaseClient) {
     suspend fun logged(days: Long = 400, zone: ZoneId = ZoneId.systemDefault()): List<LoggedDrink> = withContext(Dispatchers.IO) {
         val since = java.time.LocalDate.now(zone).minusDays(days).toString()
         supabase.postgrest.from("meal_items")
-            .select(columns = Columns.raw("food_id,description,quantity,quantity_unit,beverage_class,caffeine_mg,alcohol_g,meals!inner(logged_at)")) {
+            .select(columns = Columns.raw("food_id,description,quantity,quantity_unit,beverage_class,caffeine_mg,alcohol_g,effective_hydration_ml,meals!inner(logged_at)")) {
                 filter {
                     eq("is_beverage", true)
                     gte("meals.logged_at", since)
@@ -58,6 +58,7 @@ class DrinksRepository(private val supabase: SupabaseClient) {
                     ml = r.quantity?.takeIf { r.quantityUnit == null || r.quantityUnit == "ml" || r.quantityUnit == "g" },
                     caffeineMg = r.caffeineMg,
                     alcoholG = r.alcoholG,
+                    hydrationMl = r.effectiveHydrationMl,
                 )
             }
     }
@@ -139,6 +140,7 @@ private data class LoggedDrinkRow(
     @SerialName("beverage_class") val beverageClass: String? = null,
     @SerialName("caffeine_mg") val caffeineMg: Double? = null,
     @SerialName("alcohol_g") val alcoholG: Double? = null,
+    @SerialName("effective_hydration_ml") val effectiveHydrationMl: Double? = null,
     @SerialName("meals") val meal: LoggedAtRow,
 )
 

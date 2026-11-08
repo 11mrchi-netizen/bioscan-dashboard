@@ -110,6 +110,8 @@ data class LoggedDrink(
     val ml: Double?,
     val caffeineMg: Double?,
     val alcoholG: Double?,
+    /** The water it counts for (its volume times its kind's retention factor). */
+    val hydrationMl: Double? = null,
 )
 
 /** A usual drink: what it is, the amount usually had and how often. */
@@ -143,6 +145,10 @@ fun drinkDays(logged: List<LoggedDrink>, zone: ZoneId): Map<LocalDate, DrinkDay>
             alcoholG = day.sumOf { it.alcoholG ?: 0.0 },
         )
     }
+
+/** The water drinks count for, by local day (on top of the water logged as water). */
+fun drinkHydrationByDay(logged: List<LoggedDrink>, zone: ZoneId): Map<LocalDate, Double> =
+    logged.filter { (it.hydrationMl ?: 0.0) > 0 }.groupBy { it.at.atZone(zone).toLocalDate() }.mapValues { (_, d) -> d.sumOf { it.hydrationMl!! } }
 
 /** Grams of pure alcohol in one standard drink (the WHO / Taiwan measure). */
 const val STANDARD_DRINK_G = 10.0

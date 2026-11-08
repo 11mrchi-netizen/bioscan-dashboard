@@ -56,6 +56,12 @@ def usda_class(name: str, category: str) -> tuple[str, str | None] | None:
         if any(w in n for w in ("liqueur", "pina colada", "daiquiri", "sour", "martini", "tequila sunrise", "mojito", "margarita", "cocktail")):
             return "alcohol", "cocktail"
         return "alcohol", "spirits"
+    if "hard cider" in n:
+        return "alcohol", "cider"
+    if re.search(r"milk beverage|muscle milk", n):
+        return "milk", "flavoured_milk" if "flavored" in n else None
+    if "soft drink" in n:
+        return "soda", None
     if "coffee" in n and "liqueur" not in n:
         return "coffee", "espresso" if "espresso" in n else ("latte" if "latte" in n or "milk" in n else None)
     if re.search(r"\btea\b|\bchai\b", n):

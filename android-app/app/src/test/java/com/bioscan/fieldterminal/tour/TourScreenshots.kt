@@ -216,6 +216,8 @@ class TourScreenshots {
             com.bioscan.fieldterminal.ui.components.FTRatingSlider("STRESS", 3, 0..10, FT.Metric.Stress, {}, lowWord = "calm", highWord = "very stressed")
             com.bioscan.fieldterminal.ui.components.FTRatingSlider("SORENESS", null, 0..10, FT.Metric.Soreness, {}, lowWord = "none", highWord = "very sore")
             com.bioscan.fieldterminal.ui.components.FTRatingSlider("GUT", 3, 0..4, FT.Metric.GutComfort, {}, lowWord = "rough", highWord = "comfortable")
+            com.bioscan.fieldterminal.ui.screens.BristolSlider(4) {}
+            com.bioscan.fieldterminal.ui.screens.BristolSlider(6) {}
         }
     }
 }

@@ -1843,7 +1843,7 @@ private fun StoolForm(
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateTimeField("WHEN", dateTime, { dateTime = it })
-        Column { FormLabel("BRISTOL TYPE (1-7)"); IntChipRow(1..7, bristolType) { bristolType = it } }
+        BristolSlider(bristolType) { bristolType = it }
         com.bioscan.fieldterminal.ui.components.FTRatingSlider("DISCOMFORT", discomfort.toIntOrNull(), 0..10, FT.Metric.StoolLoose, { discomfort = it?.toString() ?: "" }, lowWord = "none", highWord = "severe")
         SaveButton(saving, bristolType != null) {
             onSave(dateTime.toIsoWithOffset(), bristolType!!, discomfort.toIntOrNull())
@@ -2538,4 +2538,35 @@ private fun NoteForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDate
             onSave(dateTime.toIsoWithOffset(), text.trim())
         }
     }
+}
+
+/** The Bristol stool form scale's seven types, in words. */
+val BRISTOL_WORDS = listOf(
+    "Separate hard lumps",
+    "Lumpy, sausage-shaped",
+    "Sausage with cracks",
+    "Smooth, soft sausage",
+    "Soft blobs, clear edges",
+    "Mushy, ragged edges",
+    "Watery, no pieces",
+)
+
+/**
+ * Bristol type on a slider: each type in its lane's colour as the stool hypnogram draws it (hard, healthy, loose,
+ * liquid), its words instead of its number, and the lanes named under the track. Required, so no CLEAR.
+ */
+@Composable
+fun BristolSlider(value: Int?, onChange: (Int) -> Unit) {
+    val lanes = com.bioscan.fieldterminal.domain.score.StoolLane.DRAWN.reversed()
+    com.bioscan.fieldterminal.ui.components.FTRatingSlider(
+        label = "STOOL FORM (BRISTOL)",
+        value = value,
+        range = 1..7,
+        color = FT.Metric.StoolHealthy,
+        onChange = { v -> v?.let(onChange) },
+        optional = false,
+        valueText = { t -> "${BRISTOL_WORDS[t - 1]} · ${com.bioscan.fieldterminal.domain.score.StoolLane.of(t)?.label?.lowercase() ?: ""}" },
+        stepColor = { t -> com.bioscan.fieldterminal.domain.score.StoolLane.of(t)?.let { com.bioscan.fieldterminal.ui.screens.today.laneColor(it) } ?: FT.TextMuted },
+        scale = lanes.map { it.types to it.label },
+    )
 }

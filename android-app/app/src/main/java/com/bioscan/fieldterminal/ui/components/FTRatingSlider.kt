@@ -59,6 +59,11 @@ fun FTRatingSlider(
     highWord: String? = null,
     optional: Boolean = true,
     enabled: Boolean = true,
+    // A categorical scale (Bristol): words instead of the number, a colour per step instead of one hue, and named
+    // stretches of the scale under the track. Unset, the slider is the plain metric-hue rating above.
+    valueText: ((Int) -> String)? = null,
+    stepColor: ((Int) -> Color)? = null,
+    scale: List<Pair<IntRange, String>>? = null,
 ) {
     val haptic = LocalHapticFeedback.current
     val current by rememberUpdatedState(value)
@@ -73,7 +78,11 @@ fun FTRatingSlider(
         }
     }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+        val ink = value?.let { stepColor?.invoke(it) } ?: color
+        if (valueText != null) {
+            Text(label, style = FTType.LabelCaps, color = FT.TextSecondary)
+            Text(value?.let(valueText) ?: "—", style = FTType.RowTitle, color = if (value == null) FT.TextMuted else ink)
+        } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             Text(label, style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.weight(1f))
             Text(
                 value?.toString() ?: "—",
@@ -89,7 +98,7 @@ fun FTRatingSlider(
                 .semantics {
                     role = Role.Button
                     contentDescription = label
-                    stateDescription = value?.let { "$it of ${range.last}" } ?: "not set"
+                    stateDescription = value?.let { v -> valueText?.invoke(v) ?: "$v of ${range.last}" } ?: "not set"
                     progressBarRangeInfo = ProgressBarRangeInfo((value ?: range.first).toFloat(), range.first.toFloat()..range.last.toFloat(), steps - 1)
                     if (enabled) setProgress { target ->
                         change(target.roundToInt().coerceIn(range.first, range.last)); true
@@ -110,7 +119,17 @@ fun FTRatingSlider(
             val th = 7.dp.toPx()
             fun x(v: Int) = inset + w * (v - range.first) / steps.coerceAtLeast(1)
             drawRoundRect(FT.GlassTrack, Offset(inset, cy - th / 2), Size(w, th), CornerRadius(th / 2))
-            if (value != null) {
+            if (stepColor != null) {
+                // Each step owns the stretch half way to its neighbours, in its own colour; brighter once chosen.
+                val half = w / steps.coerceAtLeast(1) / 2
+                for (v in range) {
+                    val from = (x(v) - half).coerceAtLeast(inset)
+                    val to = (x(v) + half).coerceAtMost(inset + w)
+                    val a = if (value == null) 0.45f else if (v == value) 1f else 0.55f
+                    drawRoundRect(stepColor(v).copy(alpha = a), Offset(from, cy - th / 2), Size(to - from, th),
+                        CornerRadius(if (v == range.first || v == range.last) th / 2 else 0f))
+                }
+            } else if (value != null) {
                 val end = x(value)
                 drawRoundRect(
                     Brush.horizontalGradient(listOf(color.copy(alpha = 0.35f), lerp(color, Color.White, 0.08f)), startX = inset, endX = end.coerceAtLeast(inset + 1f)),
@@ -125,10 +144,22 @@ fun FTRatingSlider(
                 val at = Offset(x(value), cy)
                 drawCircle(FT.Base, 8.5.dp.toPx() + 3.dp.toPx(), at)
                 drawCircle(Color.White, 8.5.dp.toPx(), at)
-                drawCircle(color, 3.dp.toPx(), at)
+                drawCircle(ink, 3.dp.toPx(), at)
             }
         }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (scale != null) {
+            // Named stretches of the scale, each centred under its steps.
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                for ((r, name) in scale) {
+                    Text(name, style = FTType.Micro, color = stepColor?.invoke(r.first) ?: FT.TextMuted, textAlign = TextAlign.Center,
+                        modifier = Modifier.weight((r.last - r.first + 1).toFloat()))
+                }
+            }
+            if (optional && value != null && enabled) {
+                Text("CLEAR", style = FTType.LabelCaps, color = FT.TextSecondary,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).ftClickable(role = Role.Button, onClickLabel = "Clear $label") { change(null) }.padding(horizontal = 10.dp, vertical = 4.dp))
+            }
+        } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(lowWord?.let { "${range.first} · $it" } ?: "${range.first}", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
             if (optional && value != null && enabled) {
                 Text("CLEAR", style = FTType.LabelCaps, color = FT.TextSecondary,

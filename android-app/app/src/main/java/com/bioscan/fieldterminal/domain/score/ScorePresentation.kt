@@ -66,8 +66,8 @@ fun formatInputValue(key: String, value: Double): String = when (key) {
     ScoreKeys.MONOTONY -> one(value)
     ScoreKeys.PLAN_DONE -> pct(value)
     ScoreKeys.FUEL_LOGGED_SHARE, ScoreKeys.ENERGY_RATIO, ScoreKeys.PROTEIN_RATIO, ScoreKeys.CARB_RATIO, ScoreKeys.WATER_RATIO -> pct(value)
-    ScoreKeys.DRINKS -> "${value.roundToInt()}"
-    ScoreKeys.LATE_CAFFEINE -> if (value >= 0.5) "yes" else "no"
+    ScoreKeys.DRINKS -> if (value == Math.rint(value)) "${value.roundToInt()}" else one(value)
+    ScoreKeys.LATE_CAFFEINE -> "${value.roundToInt()} mg"
     ScoreKeys.LATE_SCREEN -> "${value.roundToInt()} min"
     ScoreKeys.GUT_SYMPTOMS -> if (value < 0.05) "none" else one(value)
     ScoreKeys.GUT_TIMING -> clock(value)
@@ -236,8 +236,8 @@ fun whatIsInput(key: String): String = when (key) {
     ScoreKeys.PROTEIN_RATIO -> "Yesterday's protein against your target."
     ScoreKeys.CARB_RATIO -> "Yesterday's carbs against your target."
     ScoreKeys.WATER_RATIO -> "Yesterday's water against your target."
-    ScoreKeys.DRINKS -> "Alcoholic drinks yesterday, from the evening check-in."
-    ScoreKeys.LATE_CAFFEINE -> "Caffeine after 14:00 yesterday, from the evening check-in."
+    ScoreKeys.DRINKS -> "Standard drinks (10 g of alcohol each) yesterday, from the drinks logged and the evening check-in, whichever says more."
+    ScoreKeys.LATE_CAFFEINE -> "Caffeine from 14:00 on yesterday, from the drinks logged; a check-in \"yes\" with nothing logged counts as one coffee (95 mg). Up to 50 mg costs nothing."
     ScoreKeys.GUT_SYMPTOMS -> "Gut discomfort and symptoms yesterday."
     ScoreKeys.GUT_TIMING -> "Time of yesterday's first bowel movement, against your usual window."
     ScoreKeys.GUT_TIMING_SPREAD -> "How much your first bowel movement's time moved over 14 days. Smaller is more regular."

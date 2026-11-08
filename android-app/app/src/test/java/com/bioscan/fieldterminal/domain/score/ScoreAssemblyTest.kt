@@ -56,6 +56,37 @@ class ScoreAssemblyTest {
     }
 
     @Test
+    fun loggedDrinksGiveLateCaffeineInMgAndAlcoholInStandardDrinks() {
+        fun at(h: Int) = monday.atTime(h, 0).toInstant(ZoneOffset.UTC)
+        val drinks = listOf(
+            com.bioscan.fieldterminal.domain.LoggedDrink(at(9), 1L, "Americano", "coffee", 360.0, 160.0, null),
+            com.bioscan.fieldterminal.domain.LoggedDrink(at(15), 2L, "Bubble milk tea", "tea", 700.0, 98.0, null),
+            com.bioscan.fieldterminal.domain.LoggedDrink(at(20), 3L, "Beer 5% ABV", "alcohol", 500.0, null, 19.7),
+        )
+        val series = assembleScoreSeries(
+            ScoreSources(
+                drinks = drinks,
+                // The check-in said one drink and no late caffeine: the logs say more, so they win.
+                checkins = listOf(EveningCheckin(monday, drinks = 1, caffeineAfter14 = false)),
+                zone = zone,
+            ),
+            today = tuesday,
+        )
+        assertEquals(98.0, series.getValue(ScoreKeys.LATE_CAFFEINE)[tuesday]!!, 1e-9) // only the 15:00 tea
+        assertEquals(1.97, series.getValue(ScoreKeys.DRINKS)[tuesday]!!, 1e-9)
+    }
+
+    @Test
+    fun aCheckInYesWithNothingLoggedStandsForOneCoffee() {
+        val series = assembleScoreSeries(
+            ScoreSources(checkins = listOf(EveningCheckin(monday, drinks = 3, caffeineAfter14 = true)), zone = zone),
+            today = tuesday,
+        )
+        assertEquals(com.bioscan.fieldterminal.domain.CHECKIN_LATE_CAFFEINE_MG, series.getValue(ScoreKeys.LATE_CAFFEINE)[tuesday]!!, 1e-9)
+        assertEquals(3.0, series.getValue(ScoreKeys.DRINKS)[tuesday]!!, 1e-9)
+    }
+
+    @Test
     fun eveningStressGoesOntoTheMorningZeroToTenScale() {
         assertEquals(0.0, eveningStressOnTen(1), 1e-9)
         assertEquals(5.0, eveningStressOnTen(3), 1e-9)

@@ -766,7 +766,12 @@ private fun FuelForm(
                 onCanonicalSaved = onCanonicalSaved,
                 externalActivityActive = externalActivityActive,
             )
-            FuelSubType.Drink -> DrinkForm(saving, onSave = { date, ml -> onSubmit { it.addDrink(date, ml) } }, onCanonicalSaved = onCanonicalSaved)
+            FuelSubType.Drink -> DrinkLogForm(
+                saving,
+                onWater = { date, ml -> onSubmit { it.addDrink(date, ml) } },
+                onSaved = onCanonicalSaved,
+                externalActivityActive = externalActivityActive,
+            )
             FuelSubType.Supplements -> SupplementsForm(saving, preselectBundle = supplementBundle, onSave = { takenAt, items, source, quantities, sites -> onSubmit { it.addSupplementsTaken(takenAt, items, source, quantities, sites) } })
             FuelSubType.Endurance -> com.bioscan.fieldterminal.ui.screens.fuel.RunFuelEntry(onSaved = onCanonicalSaved)
         }
@@ -1338,99 +1343,28 @@ private data class LabelTarget(val barcode: String, val name: String, val brand:
 // Beverage classes from DAV-181's hydration_factor_models vocabulary that
 // go through the meal_items path (non-water). Water stays on the simple
 // hydration_daily path for backward compatibility.
-private val BEVERAGE_CLASSES = listOf("coffee", "tea", "juice", "soda", "milk", "electrolyte", "alcohol")
-// Common strengths, as a shortcut to the ABV field (label to ABV text). Any other strength is typed in.
-private val ALCOHOL_PRESETS = listOf("beer 5" to "5", "wine 12" to "12", "spirits 40" to "40")
-private val BEVERAGE_CLASS_LABELS = mapOf(
-    "coffee" to "COFFEE", "tea" to "TEA", "juice" to "JUICE",
-    "soda" to "SODA", "milk" to "MILK", "electrolyte" to "ELECTROLYTE", "alcohol" to "ALCOHOL",
-)
 
+// Editing a day's water total (hydration_daily); new drinks are logged in DrinkLogForm.
 @Composable
 private fun DrinkForm(
     saving: Boolean,
     initialDate: LocalDate = LocalDate.now(),
     initialMl: Int? = null,
     onSave: (date: String, ml: Int) -> Unit,
-    // DAV-181: non-water beverage path bypasses hydration_daily entirely and
-    // writes a meal_items row with effective hydration via the retention model.
-    // Same "whole sheet is done" signal as FoodForm.onCanonicalSaved.
-    onCanonicalSaved: () -> Unit = {},
 ) {
-    val scope = rememberCoroutineScope()
     var date by remember { mutableStateOf(initialDate) }
     var ml by remember { mutableStateOf(initialMl?.toString() ?: "") }
-    var beverageClass by remember { mutableStateOf<String?>(null) }
-    // Analysis Layer 3 / R2: alcohol is stored as grams of ethanol, so it needs the label strength.
-    var abv by remember { mutableStateOf("") }
-    var beverageSaving by remember { mutableStateOf(false) }
-    var beverageError by remember { mutableStateOf<String?>(null) }
     val mlValue = ml.toIntOrNull()
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateField("DATE", date, { date = it })
-        // UX review P3: the usual glass and bottle sizes one tap away; the field still takes any amount.
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FormLabel("AMOUNT (ML)")
+            FormLabel("WATER THAT DAY (ML)")
             TextChipRow(DRINK_PRESETS_ML, ml.takeIf { it in DRINK_PRESETS_ML }, perRow = 4) { ml = it ?: "" }
             FieldTextField(ml, { ml = it }, "e.g. 500", keyboardType = KeyboardType.Number)
         }
-
-        // Unselected = water → simple hydration_daily path. Any other class
-        // creates a meal_items beverage row with the DAV-181 retention factor.
-        Column {
-            FormLabel("TYPE (WATER IF UNSELECTED)")
-            TextChipRow(BEVERAGE_CLASSES, beverageClass, perRow = 4) { beverageClass = it }
-        }
-
-        if (beverageClass == "alcohol") {
-            Column {
-                FormLabel("STRENGTH (ABV %)")
-                FieldTextField(abv, { abv = it }, "e.g. 5", keyboardType = KeyboardType.Decimal)
-            }
-            TextChipRow(ALCOHOL_PRESETS.map { it.first }, ALCOHOL_PRESETS.firstOrNull { it.second == abv }?.first, perRow = 3) { picked ->
-                abv = ALCOHOL_PRESETS.firstOrNull { it.first == picked }?.second ?: ""
-            }
-            val grams = mlValue?.let { v -> abv.toDoubleOrNull()?.let { a -> ethanolGrams(v.toDouble(), a) } }
-            Text(
-                if (grams != null) "= $grams g of pure ethanol" else "Enter volume and strength to record grams of ethanol.",
-                style = FTType.BodySmall,
-                color = FT.TextSecondary,
-            )
-        }
-
-        beverageError?.let {
-            Text(it, style = FTType.BodySmall, color = FT.Critical)
-        }
-
-        if (beverageClass == null) {
-            SaveButton(saving, mlValue != null && mlValue > 0) {
-                onSave(date.toString(), mlValue!!)
-            }
-        } else {
-            val label = BEVERAGE_CLASS_LABELS[beverageClass] ?: beverageClass!!.uppercase()
-            FTButton(label = if (beverageSaving) "SAVING..." else "LOG $label", emphasis = FTButtonEmphasis.Primary) {
-                val vol = mlValue ?: return@FTButton
-                if (vol <= 0 || beverageSaving) return@FTButton
-                val abvValue = abv.toDoubleOrNull()
-                if (beverageClass == "alcohol" && ethanolGrams(vol.toDouble(), abvValue ?: 0.0) == null) {
-                    beverageError = "Enter the drink's strength (ABV %, above 0 and at most 100)."
-                    return@FTButton
-                }
-                beverageSaving = true
-                beverageError = null
-                scope.launch {
-                    try {
-                        val loggedAt = date.atTime(LocalTime.now()).toIsoWithOffset()
-                        NutritionMealSaveRepository(SupabaseClientProvider.client)
-                            .saveBeverageDrink(loggedAt, beverageClass!!, vol.toDouble(), abvValue.takeIf { beverageClass == "alcohol" })
-                        onCanonicalSaved()
-                    } catch (e: Exception) {
-                        beverageError = e.message ?: "Could not save beverage"
-                        beverageSaving = false
-                    }
-                }
-            }
+        SaveButton(saving, mlValue != null && mlValue > 0) {
+            onSave(date.toString(), mlValue!!)
         }
     }
 }

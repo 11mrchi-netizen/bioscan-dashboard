@@ -147,7 +147,7 @@ object ScoreSpecs {
                 InputSpec(ScoreKeys.CARB_RATIO, "Carbs", 20.0, InputKind.AtLeast(1.0, scale = 0.2)),
                 InputSpec(ScoreKeys.WATER_RATIO, "Water", 15.0, InputKind.AtLeast(1.0, scale = 0.2)),
                 InputSpec(ScoreKeys.DRINKS, "Alcohol", 5.0, InputKind.AtMost(1.0, scale = 1.5)),
-                InputSpec(ScoreKeys.LATE_CAFFEINE, "Late caffeine", 5.0, InputKind.AtMost(0.0, scale = 1.0)),
+                InputSpec(ScoreKeys.LATE_CAFFEINE, "Late caffeine", 5.0, InputKind.AtMost(50.0, scale = 100.0)),
             ),
             gateKey = ScoreKeys.FUEL_LOGGED_SHARE, gateMin = MIN_LOGGED_SHARE,
         ),

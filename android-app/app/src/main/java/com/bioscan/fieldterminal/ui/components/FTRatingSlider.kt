@@ -64,6 +64,9 @@ fun FTRatingSlider(
     valueText: ((Int) -> String)? = null,
     stepColor: ((Int) -> Color)? = null,
     scale: List<Pair<IntRange, String>>? = null,
+    // A long scale (an amount in steps) has no dot per step, and says what its ends are in its own words.
+    ticks: Boolean = true,
+    endLabels: Pair<String, String>? = null,
 ) {
     val haptic = LocalHapticFeedback.current
     val current by rememberUpdatedState(value)
@@ -136,7 +139,7 @@ fun FTRatingSlider(
                     Offset(inset, cy - th / 2), Size((end - inset).coerceAtLeast(th), th), CornerRadius(th / 2),
                 )
             }
-            for (v in range) {
+            if (ticks) for (v in range) {
                 val filled = value != null && v <= value
                 drawCircle(if (filled) Color.White.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.18f), 1.5.dp.toPx(), Offset(x(v), cy))
             }
@@ -160,14 +163,14 @@ fun FTRatingSlider(
                     modifier = Modifier.align(Alignment.CenterHorizontally).ftClickable(role = Role.Button, onClickLabel = "Clear $label") { change(null) }.padding(horizontal = 10.dp, vertical = 4.dp))
             }
         } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(lowWord?.let { "${range.first} · $it" } ?: "${range.first}", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
+            Text(endLabels?.first ?: lowWord?.let { "${range.first} · $it" } ?: "${range.first}", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
             if (optional && value != null && enabled) {
                 Text("CLEAR", style = FTType.LabelCaps, color = FT.TextSecondary,
                     modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Clear $label") { change(null) }.padding(horizontal = 10.dp, vertical = 4.dp))
             } else if (value == null) {
                 Text("slide or tap", style = FTType.Micro, color = FT.TextMuted)
             }
-            Text(highWord?.let { "$it · ${range.last}" } ?: "${range.last}", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+            Text(endLabels?.second ?: highWord?.let { "$it · ${range.last}" } ?: "${range.last}", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
         }
     }
 }

@@ -54,6 +54,8 @@ data class ScoreSources(
     val mealTimes: List<Instant> = emptyList(),
     /** Each night's heart-rate dip from the waking day, in percent (v_hr_dip), keyed by the wake date. */
     val hrDip: Map<LocalDate, Double> = emptyMap(),
+    /** Logged drinks (beverage meal items): their caffeine and alcohol feed late caffeine and alcohol. */
+    val drinks: List<com.bioscan.fieldterminal.domain.LoggedDrink> = emptyList(),
     /** Minutes on the phone in the hour before that night's sleep, by phone day (04:00 to 04:00; phone_usage_daily). */
     val phoneBedMin: Map<LocalDate, Double> = emptyMap(),
     val zone: ZoneId = ZoneId.systemDefault(),
@@ -229,10 +231,24 @@ fun assembleScoreSeries(src: ScoreSources, today: LocalDate = LocalDate.now(src.
         val lastSd = sd(week.map { it.max() })
         if (firstSd != null && lastSd != null) b.put(ScoreKeys.MEAL_TIMING_SPREAD, d, (firstSd + lastSd) / 2)
     }
+    // Alcohol (standard drinks of 10 g) and caffeine from 14:00 on (mg): what was logged, and the evening check-in's
+    // answer, whichever says more -- a beer not logged still counts when the check-in names it, and a "yes" to late
+    // caffeine with nothing logged stands for one cup of coffee.
+    val drinkDays = com.bioscan.fieldterminal.domain.drinkDays(src.drinks, zone)
+    val checkinOf = src.checkins.associateBy { it.date }
+    for (d in drinkDays.keys + checkinOf.keys) {
+        val logged = drinkDays[d]
+        val c = checkinOf[d]
+        val alcohol = listOfNotNull(logged?.alcoholG?.div(com.bioscan.fieldterminal.domain.STANDARD_DRINK_G), c?.drinks?.toDouble()).maxOrNull()
+        val caffeine = listOfNotNull(
+            logged?.caffeineAfter14Mg,
+            c?.caffeineAfter14?.let { if (it) com.bioscan.fieldterminal.domain.CHECKIN_LATE_CAFFEINE_MG else 0.0 },
+        ).maxOrNull()
+        b.put(ScoreKeys.DRINKS, d.plusDays(1), alcohol)
+        b.put(ScoreKeys.LATE_CAFFEINE, d.plusDays(1), caffeine)
+    }
     for (c in src.checkins) {
         val morning = c.date.plusDays(1)
-        b.put(ScoreKeys.DRINKS, morning, c.drinks?.toDouble())
-        b.put(ScoreKeys.LATE_CAFFEINE, morning, c.caffeineAfter14?.let { if (it) 1.0 else 0.0 })
         // Phone before sleep: measured minutes win (below); a check-in answer stands in only without a measurement.
         if (c.date !in src.phoneBedMin) b.put(ScoreKeys.LATE_SCREEN, morning, c.lateScreen?.let { if (it) LATE_SCREEN_YES_MIN else 0.0 })
         // The evening's own stress answer is about the day just lived; it replaces the morning answer when both exist.

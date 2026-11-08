@@ -120,6 +120,8 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         // Phone before sleep (Rhythm): read softly, like the HR dip; without it Rhythm is meal timing alone.
         val phoneBed = async { runCatching { loadPhoneBedMinutes() }.getOrDefault(emptyMap()) }
         val checkins = async { runCatching { EveningCheckinRepository(supabase).loadSince(today.minusDays(400)) }.getOrDefault(emptyList()) }
+        // Logged drinks: read softly; without them alcohol and late caffeine fall back to the evening check-in.
+        val drinks = async { runCatching { DrinksRepository(supabase).logged(days = 400, zone = zone) }.getOrDefault(emptyList()) }
         // The open illness and its check-ins: the ceiling follows how much it limits the person, not a flat 40.
         val illnessEpisode = async { runCatching { loadIllnessEpisode(healthFlag) }.getOrNull() }
         val nut = nutrition ?: runCatching { NutritionRepository(supabase).loadOverview() }.getOrNull()
@@ -143,6 +145,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             // The saved nutrition goal for every past day: the fuel plan's day-by-day targets are not kept for past days.
             targets = { FuelTargets(goals.caloriesKcal, goals.proteinG, goals.carbsG, goals.hydrationMinMl ?: DEFAULT_HYDRATION_MIN_ML) },
             checkins = checkins.await(),
+            drinks = drinks.await(),
             stool = stool.await(),
             stressDays = stress.await(),
             hrDip = hrDip.await(),

@@ -79,4 +79,17 @@ class TodayStoreTest {
         assertNotEquals(base, scoreInputsKey(view.day, view.series, emptyMap(), listOf("gut 2026-11-02"), true, false))
         assertNotEquals(base, scoreInputsKey(view.day.plusDays(1), view.series, emptyMap(), emptyList(), true, false))
     }
+
+    // Today's meals, water and stress land on tomorrow morning; planned sessions lie ahead. Neither moves this morning's
+    // scores, so neither changes the key (they used to, and the scores were recomputed on every open).
+    @Test
+    fun whatIsDatedAfterTheMorningDoesNotChangeTheKey() {
+        val view = tourPerson()
+        val base = scoreInputsKey(view.day, view.series, emptyMap(), emptyList(), closedYesterday = true, afterNoon = false)
+        val tomorrow = view.day.plusDays(1)
+        val withToday = view.series + (com.bioscan.fieldterminal.domain.score.ScoreKeys.STRESSED_SHARE to
+            (view.series[com.bioscan.fieldterminal.domain.score.ScoreKeys.STRESSED_SHARE].orEmpty() + (tomorrow to 37.0)))
+        assertEquals(base, scoreInputsKey(view.day, withToday, emptyMap(), emptyList(), true, false))
+        assertEquals(base, scoreInputsKey(view.day, view.series, mapOf(tomorrow to 0.0), emptyList(), true, false))
+    }
 }

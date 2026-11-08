@@ -321,6 +321,7 @@ Labels use `ButtonLabel` (Inter). Radius 12, minimum 48 dp touch target. Disable
 | Switch | `FTSwitch` | `.ft-switch`: 48×27 pill; off = white 6% with hairline; on = platinum with the white knob to the right. |
 | Badge | `FTBadge` | `.ft-badge`: mono pill. `Primed` = holographic CHARGE state; `Ok` / `Bad` = status ink with a 40% border. |
 | Dock | `FieldBottomBar` | `.ft-dock`: floating pill radius 26, dark translucent fill, hairline; selected tab = light ink on white 10%, others muted. No per-tab accent. |
+| Rating slider | `FTRatingSlider` | `.ft-range` in the metric's hue: every rating (0–10 check-ins, RPE, severity, discomfort, evening stress 1–5, gut 0–4, debrief scores) is slid or tapped, never typed or picked from a list. Track filled in a gradient of the metric hue up to the value, a dot per step, white thumb with a ground-coloured ring, the value large in the metric hue, end words under it. An optional rating starts unset ("—", no thumb) and has CLEAR, so "not answered" never saves as 0. |
 | Metric dot | `FTMetricDot` | `.ft-row__dot`: 9 dp dot in the metric hue with its glow. |
 | Gauge | `FTGauge`, `ScoreRing` | See section 10. |
 

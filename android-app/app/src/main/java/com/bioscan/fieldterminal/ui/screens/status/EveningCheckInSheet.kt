@@ -55,8 +55,6 @@ import java.util.Locale
 // explicit none, which is what lets a quiet evening count as a real zero (domain/EveningCheckin.kt).
 private val DRINK_OPTIONS = listOf("0", "1", "2", "3", "4+")
 private val YES_NO = listOf("NO", "YES")
-private val STRESS_OPTIONS = listOf("1", "2", "3", "4", "5")
-private val GUT_COMFORT_OPTIONS = listOf("0", "1", "2", "3", "4")
 private val TIME_OF_DAY = DateTimeFormatter.ofPattern("HH:mm")
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -108,16 +106,12 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
             TextChipRow(YES_NO, draft.lateMeal?.let { if (it) "YES" else "NO" }, perRow = 2) { picked ->
                 draft = draft.copy(lateMeal = picked?.let { it == "YES" })
             }
-            CheckInLabel("STRESS TODAY, 1 TO 5 (OPTIONAL)")
-            TextChipRow(STRESS_OPTIONS, draft.stress?.toString(), perRow = 5) { picked ->
-                draft = draft.copy(stress = picked?.toInt())
-            }
+            com.bioscan.fieldterminal.ui.components.FTRatingSlider("STRESS TODAY", draft.stress, 1..5, FT.Metric.Stress, { draft = draft.copy(stress = it) },
+                lowWord = "calm", highWord = "very stressed")
 
             // Scoring system (FUEL › gut): how the gut was, what happened, and the day's logged movements with their times.
-            CheckInLabel("GUT, 0 ROUGH TO 4 COMFORTABLE")
-            TextChipRow(GUT_COMFORT_OPTIONS, draft.gutComfort?.toString(), perRow = 5) { picked ->
-                draft = draft.copy(gutComfort = picked?.toInt())
-            }
+            com.bioscan.fieldterminal.ui.components.FTRatingSlider("GUT", draft.gutComfort, 0..4, FT.Metric.GutComfort, { draft = draft.copy(gutComfort = it) },
+                lowWord = "rough", highWord = "comfortable")
             CheckInLabel("ANY OF THESE? (TICK ALL THAT HAPPENED)")
             SymptomChips(draft.gutSymptoms.orEmpty()) { symptom ->
                 val now = draft.gutSymptoms.orEmpty()

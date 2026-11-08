@@ -251,7 +251,7 @@ fun RateEventSheet(eventId: String, interventionName: String, onDismiss: () -> U
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("HOW DID IT FEEL · ${interventionName.uppercase()}", style = FTType.SectionTitle, color = FT.DomainLabs)
             Text("Rate it before looking at any numbers, so the data can't colour it. 0 is worst, 10 is best.", style = FTType.BodySmall, color = FT.TextSecondary)
-            TextChipRow((0..10).map { it.toString() }, feeling, perRow = 6) { feeling = it }
+            com.bioscan.fieldterminal.ui.components.FTRatingSlider("HOW IT FELT", feeling?.toIntOrNull(), 0..10, FT.Metric.Mood, { feeling = it?.toString() }, lowWord = "worst", highWord = "best")
             SheetLabel("NOTE (OPTIONAL)")
             FieldTextField(note, { note = it }, "e.g. strip came off at 3am", singleLine = false)
             error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }

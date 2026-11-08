@@ -68,7 +68,6 @@ import java.util.Locale
 enum class CheckInStart { Overview, NewBody, NewGeneral }
 
 private val CHANGE_LABELS = listOf("GONE", "BETTER", "SAME", "WORSE")
-private val SEVERITY_OPTIONS = (0..10).map { it.toString() }
 private val TIMING = listOf("during_session" to "DURING", "after_session" to "AFTER", "next_morning" to "NEXT MORNING", "at_rest" to "AT REST", "night" to "NIGHT")
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -166,7 +165,7 @@ fun HealthCheckInSheet(
                     }
                     if (a != null && a.change != ConcernChange.Gone) {
                         Text("SEVERITY 0-10", style = FTType.Micro, color = FT.TextMuted)
-                        TextChipRow(SEVERITY_OPTIONS, a.severity?.toString(), perRow = 6) { picked -> answers[c.id] = a.copy(severity = picked?.toInt()) }
+                        com.bioscan.fieldterminal.ui.components.FTRatingSlider("SEVERITY", a.severity, 0..10, FT.Metric.Soreness, { v -> answers[c.id] = a.copy(severity = v) }, lowWord = "none", highWord = "worst")
                         Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)
                         TextChipRow(IMPACT_LABELS, a.impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> answers[c.id] = a.copy(impact = picked?.let { IMPACT_LABELS.indexOf(it) }) }
                     }
@@ -258,8 +257,7 @@ private fun NewProblemStep(
     TextChipRow(symptomOptions.map { it.label }, symptomOptions.firstOrNull { it.code == symptom }?.label, perRow = 3) { picked ->
         symptom = symptomOptions.firstOrNull { it.label == picked }?.code
     }
-    Text("SEVERITY 0-10", style = FTType.Micro, color = FT.TextMuted)
-    TextChipRow(SEVERITY_OPTIONS, severity?.toString(), perRow = 6) { severity = it?.toInt() }
+    com.bioscan.fieldterminal.ui.components.FTRatingSlider("SEVERITY", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "none", highWord = "worst")
     Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)
     TextChipRow(IMPACT_LABELS, impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> impact = picked?.let { IMPACT_LABELS.indexOf(it) } }
 

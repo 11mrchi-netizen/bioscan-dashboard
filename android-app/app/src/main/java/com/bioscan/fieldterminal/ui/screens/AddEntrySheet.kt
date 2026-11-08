@@ -1844,7 +1844,7 @@ private fun StoolForm(
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateTimeField("WHEN", dateTime, { dateTime = it })
         Column { FormLabel("BRISTOL TYPE (1-7)"); IntChipRow(1..7, bristolType) { bristolType = it } }
-        Column { FormLabel("DISCOMFORT 0-10 (OPTIONAL)"); FieldTextField(discomfort, { discomfort = it }, "e.g. 2", keyboardType = KeyboardType.Number) }
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("DISCOMFORT", discomfort.toIntOrNull(), 0..10, FT.Metric.StoolLoose, { discomfort = it?.toString() ?: "" }, lowWord = "none", highWord = "severe")
         SaveButton(saving, bristolType != null) {
             onSave(dateTime.toIsoWithOffset(), bristolType!!, discomfort.toIntOrNull())
         }
@@ -2013,7 +2013,7 @@ private fun SexualActivityInstanceEditor(
         }
         TextChipRow(YES_NO_OPTIONS, if (instance.orgasm) "Yes" else "No") { instance.orgasm = it == "Yes" }
         if (instance.orgasm) {
-            Column { FormLabel("ORGASM INTENSITY 0-10 (OPTIONAL)"); FieldTextField(instance.orgasmIntensity, { instance.orgasmIntensity = it }, "e.g. 7", keyboardType = KeyboardType.Number) }
+            com.bioscan.fieldterminal.ui.components.FTRatingSlider("ORGASM INTENSITY", instance.orgasmIntensity.toIntOrNull(), 0..10, FT.Metric.Arousal, { instance.orgasmIntensity = it?.toString() ?: "" }, lowWord = "faint", highWord = "intense")
         }
         if (isMasturbation) {
             Column { FormLabel("WATCHED PORN"); TextChipRow(YES_NO_OPTIONS, instance.watchedPorn?.let { if (it) "Yes" else "No" }) { instance.watchedPorn = it?.let { s -> s == "Yes" } } }
@@ -2238,12 +2238,12 @@ private fun WellnessForm(
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateField("DATE", date, { date = it })
-        Column { FormLabel("ENERGY 0-10 (OPTIONAL)"); FieldTextField(energy, { energy = it }, "e.g. 7", keyboardType = KeyboardType.Number) }
-        Column { FormLabel("MOOD 0-10 (OPTIONAL)"); FieldTextField(mood, { mood = it }, "e.g. 7", keyboardType = KeyboardType.Number) }
-        Column { FormLabel("STRESS 0-10 (OPTIONAL)"); FieldTextField(stress, { stress = it }, "e.g. 3", keyboardType = KeyboardType.Number) }
-        Column { FormLabel("SORENESS 0-10 (OPTIONAL)"); FieldTextField(soreness, { soreness = it }, "e.g. 2", keyboardType = KeyboardType.Number) }
-        Column { FormLabel("MORNING WOOD 0-10 (OPTIONAL)"); FieldTextField(morningWood, { morningWood = it }, "e.g. 7", keyboardType = KeyboardType.Number) }
-        Column { FormLabel("AROUSAL LEVEL 0-10 (OPTIONAL)"); FieldTextField(arousalLevel, { arousalLevel = it }, "e.g. 5", keyboardType = KeyboardType.Number) }
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("ENERGY", energy.toIntOrNull(), 0..10, FT.Metric.Energy, { energy = it?.toString() ?: "" }, lowWord = "drained", highWord = "full")
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("MOOD", mood.toIntOrNull(), 0..10, FT.Metric.Mood, { mood = it?.toString() ?: "" }, lowWord = "low", highWord = "great")
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("STRESS", stress.toIntOrNull(), 0..10, FT.Metric.Stress, { stress = it?.toString() ?: "" }, lowWord = "calm", highWord = "very stressed")
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("SORENESS", soreness.toIntOrNull(), 0..10, FT.Metric.Soreness, { soreness = it?.toString() ?: "" }, lowWord = "none", highWord = "very sore")
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("MORNING WOOD", morningWood.toIntOrNull(), 0..10, FT.Metric.Arousal, { morningWood = it?.toString() ?: "" }, lowWord = "none", highWord = "full")
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("AROUSAL LEVEL", arousalLevel.toIntOrNull(), 0..10, FT.Metric.Arousal, { arousalLevel = it?.toString() ?: "" }, lowWord = "none", highWord = "very high")
         val valid = listOf(energy, mood, stress, soreness, morningWood, arousalLevel).any { it.isNotBlank() }
         SaveButton(saving, valid) {
             onSave(date.toString(), energy.toIntOrNull(), mood.toIntOrNull(), stress.toIntOrNull(), soreness.toIntOrNull(), morningWood.toIntOrNull(), arousalLevel.toIntOrNull())
@@ -2305,7 +2305,7 @@ private fun ExerciseDetailsForm(
             }
         }
 
-        Column { FormLabel("RPE 0-10 (OPTIONAL)"); FieldTextField(rpe, { rpe = it }, "e.g. 6", keyboardType = KeyboardType.Number) }
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("RPE (EFFORT)", rpe.toIntOrNull(), 0..10, FT.Metric.Rpe, { rpe = it?.toString() ?: "" }, lowWord = "rest", highWord = "max")
         Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "Anything else worth noting", singleLine = false) }
         SaveButton(saving, true) {
             // Changing the exercises makes them the person's own, so no Zepp sync overwrites them; saving only RPE or

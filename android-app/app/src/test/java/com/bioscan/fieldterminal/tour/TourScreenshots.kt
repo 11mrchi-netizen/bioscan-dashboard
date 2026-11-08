@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -205,4 +207,15 @@ class TourScreenshots {
     @Test fun t11_stress() = shot("11_stress_day") { PictureOverlay(VIEW, FullPicture.STRESS_DAY, onBack = {}, onClose = {}) }
     @Test fun t12_metric_sleep() = shot("12_metric_sleep_hours") { InputOverlay(VIEW, DomainKey.SLEEP, ScoreKeys.SLEEP_HOURS, onBack = {}, onClose = {}) }
     @Test fun t13_metric_protein() = shot("13_metric_protein") { InputOverlay(VIEW, DomainKey.FUEL, ScoreKeys.PROTEIN_RATIO, onBack = {}, onClose = {}) }
+    @Test fun t14_rating_sliders() = shot("14_rating_sliders") {
+        androidx.compose.foundation.layout.Column(
+            Modifier.padding(20.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(18.dp),
+        ) {
+            com.bioscan.fieldterminal.ui.components.FTRatingSlider("ENERGY", 7, 0..10, FT.Metric.Energy, {}, lowWord = "drained", highWord = "full")
+            com.bioscan.fieldterminal.ui.components.FTRatingSlider("MOOD", 8, 0..10, FT.Metric.Mood, {}, lowWord = "low", highWord = "great")
+            com.bioscan.fieldterminal.ui.components.FTRatingSlider("STRESS", 3, 0..10, FT.Metric.Stress, {}, lowWord = "calm", highWord = "very stressed")
+            com.bioscan.fieldterminal.ui.components.FTRatingSlider("SORENESS", null, 0..10, FT.Metric.Soreness, {}, lowWord = "none", highWord = "very sore")
+            com.bioscan.fieldterminal.ui.components.FTRatingSlider("GUT", 3, 0..4, FT.Metric.GutComfort, {}, lowWord = "rough", highWord = "comfortable")
+        }
+    }
 }

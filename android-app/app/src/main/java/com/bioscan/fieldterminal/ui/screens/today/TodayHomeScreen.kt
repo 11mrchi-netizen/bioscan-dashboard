@@ -223,6 +223,8 @@ fun TodayHomeScreen(
     var logFood by remember { mutableStateOf(false) }
     var checkInDate by remember { mutableStateOf<LocalDate?>(null) }
     var supplementBucket by remember { mutableStateOf<String?>(null) }
+    // A voice already done: tapping it shows a read-only card instead of the log flow.
+    var doneRow by remember { mutableStateOf<PlanRow?>(null) }
     var loading by remember { mutableStateOf(kept == null) }
 
     LaunchedEffect(openCheckIn) {
@@ -305,6 +307,18 @@ fun TodayHomeScreen(
         loading = false
     }
 
+    // What a voice's action opens (the log/detail flow); reused by a not-done tap and by the completed card's button.
+    val openAction: (PlanAction) -> Unit = { action ->
+        when (action) {
+            PlanAction.SoFar -> soFar = true
+            is PlanAction.Meal -> mealKind = action.kind
+            is PlanAction.CloseDay -> checkInDate = action.date
+            is PlanAction.Supplements -> supplementBucket = action.bucket
+            is PlanAction.Tab -> onOpenTab(action.tab)
+            PlanAction.Bedtime -> stack = listOf(ScoreOverlay.Domain(com.bioscan.fieldterminal.domain.score.DomainKey.SLEEP))
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
         if (guard.error != null && view == null) {
             LoadErrorCard(guard)
@@ -320,16 +334,8 @@ fun TodayHomeScreen(
             loading = loading && view == null,
             today = now.toLocalDate(),
             onOpenOverlay = { stack = listOf(it) },
-            onRow = { action ->
-                when (action) {
-                    PlanAction.SoFar -> soFar = true
-                    is PlanAction.Meal -> mealKind = action.kind
-                    is PlanAction.CloseDay -> checkInDate = action.date
-                    is PlanAction.Supplements -> supplementBucket = action.bucket
-                    is PlanAction.Tab -> onOpenTab(action.tab)
-                    PlanAction.Bedtime -> stack = listOf(ScoreOverlay.Domain(com.bioscan.fieldterminal.domain.score.DomainKey.SLEEP))
-                }
-            },
+            // A completed voice opens its card; one still to do opens its log flow.
+            onRow = { row -> if (row.done) doneRow = row else openAction(row.action) },
             onSoFar = { soFar = true },
         )
     }
@@ -369,6 +375,52 @@ fun TodayHomeScreen(
     checkInDate?.let { date ->
         EveningCheckInSheet(date = date, onDismiss = { checkInDate = null }, onSaved = { checkInDate = null; guard.retry() })
     }
+    doneRow?.let { row ->
+        CompletedVoiceCard(row, fuel, onClose = { doneRow = null }) {
+            val action = row.action
+            doneRow = null
+            openAction(action)
+        }
+    }
+}
+
+/**
+ * A voice already done: a read-only card of what it was and a short summary of what was logged, with one button to
+ * open or change the underlying record. Taps on a voice still to do go straight to its log flow instead.
+ */
+@Composable
+private fun CompletedVoiceCard(row: PlanRow, fuel: TodayFuel?, onClose: () -> Unit, onEdit: () -> Unit) {
+    FullScreenOverlay(title = row.title, trailing = row.time?.format(TIME), onClose = onClose) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("DONE ✓", style = FTType.LabelCaps, color = FT.Emerald)
+            row.detail?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
+        }
+        when (val action = row.action) {
+            is PlanAction.Meal -> {
+                fuel?.todayCoded?.meals?.firstOrNull { it.kind == action.kind }?.let {
+                    Text(com.bioscan.fieldterminal.domain.fuel.mealTargetLine(it), style = FTType.BodySmall, color = FT.TextSecondary)
+                }
+                fuel?.adherence?.get(action.kind.name)?.let { (g, adh) ->
+                    if (adh != com.bioscan.fieldterminal.domain.fuel.MealAdherence.NOT_LOGGED)
+                        Text("Logged ${g.roundToInt()} g carbs · ${adh.label}", style = FTType.LabelCaps, color = FT.Emerald)
+                }
+                com.bioscan.fieldterminal.ui.components.FTButton(label = "VIEW OR CHANGE WHAT YOU LOGGED",
+                    emphasis = com.bioscan.fieldterminal.ui.components.FTButtonEmphasis.Secondary, modifier = Modifier.fillMaxWidth()) { onEdit() }
+            }
+            is PlanAction.CloseDay -> {
+                Text("You closed this day. Its morning scores finalise once everything has synced.", style = FTType.BodySmall, color = FT.TextSecondary)
+                com.bioscan.fieldterminal.ui.components.FTButton(label = "OPEN THE CHECK-IN",
+                    emphasis = com.bioscan.fieldterminal.ui.components.FTButtonEmphasis.Secondary, modifier = Modifier.fillMaxWidth()) { onEdit() }
+            }
+            is PlanAction.Tab -> {
+                Text("Recorded ✓", style = FTType.LabelCaps, color = FT.Emerald)
+                com.bioscan.fieldterminal.ui.components.FTButton(label = "OPEN IN PLAN",
+                    emphasis = com.bioscan.fieldterminal.ui.components.FTButtonEmphasis.Secondary, modifier = Modifier.fillMaxWidth()) { onEdit() }
+            }
+            else -> Unit
+        }
+        Spacer(Modifier.height(24.dp))
+    }
 }
 
 /**
@@ -384,7 +436,7 @@ fun TodayContent(
     today: LocalDate,
     now: LocalTime = LocalTime.now(),
     onOpenOverlay: (ScoreOverlay) -> Unit,
-    onRow: (PlanAction) -> Unit,
+    onRow: (PlanRow) -> Unit,
     onSoFar: () -> Unit,
 ) {
     Column(
@@ -496,12 +548,12 @@ private fun Section(title: String, content: @Composable androidx.compose.foundat
  * supplements as small pills, closing the day as a diamond; filled once done. A NOW line sits where the clock is.
  */
 @Composable
-private fun DayTimeline(rows: List<PlanRow>, now: LocalTime, onRow: (PlanAction) -> Unit) {
+private fun DayTimeline(rows: List<PlanRow>, now: LocalTime, onRow: (PlanRow) -> Unit) {
     val nowIndex = rows.indexOfFirst { it.time != null && it.time.isAfter(now) }.let { if (it < 0) rows.size else it }
     Column {
         rows.forEachIndexed { i, row ->
             if (i == nowIndex && rows.any { it.time != null }) NowLine(now)
-            TimelineRow(row, first = i == 0, last = i == rows.lastIndex && nowIndex != rows.size) { onRow(row.action) }
+            TimelineRow(row, first = i == 0, last = i == rows.lastIndex && nowIndex != rows.size) { onRow(row) }
         }
         if (nowIndex == rows.size && rows.isNotEmpty()) NowLine(now)
     }

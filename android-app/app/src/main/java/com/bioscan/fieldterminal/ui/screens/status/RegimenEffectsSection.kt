@@ -2,7 +2,11 @@ package com.bioscan.fieldterminal.ui.screens.status
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,7 +59,11 @@ fun RegimenEffectsSection(itemId: Long) {
         else -> "you started it"
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("SINCE ${what.substringBefore(" (").uppercase()}", style = FTType.LabelCaps, color = FT.TextSecondary)
+        // The "not proof of cause" caveat moves behind the "?" so the card stays to what changed and what moved.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("SINCE ${what.substringBefore(" (").uppercase()}", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.weight(1f))
+            InfoHelpButton(title = "SINCE THE CHANGE", body = EFFECT_CAUSE_INFO)
+        }
         Text("${v.change.date.dayOfMonth} ${v.change.date.month.name.take(3).lowercase()}: $what. Three weeks before against the weeks after.",
             style = FTType.Caption, color = FT.TextMuted)
         if (v.readings.isEmpty()) {
@@ -70,7 +78,9 @@ fun RegimenEffectsSection(itemId: Long) {
             Text("Also changed within two weeks: " + v.nearby.map { shortItemName(it.itemName) }.distinct().joinToString(", ") + ".",
                 style = FTType.Caption, color = FT.Warning)
         }
-        Text("This is what happened alongside the change, not proof it caused it: sleep, training, illness and the season move " +
-            "these too. TEST IT on the supplements list runs a proper experiment.", style = FTType.Caption, color = FT.TextMuted)
     }
 }
+
+private const val EFFECT_CAUSE_INFO =
+    "This is what happened alongside the change, not proof it caused it: sleep, training, illness and the season move " +
+        "these too. TEST IT on the supplements list runs a proper experiment."

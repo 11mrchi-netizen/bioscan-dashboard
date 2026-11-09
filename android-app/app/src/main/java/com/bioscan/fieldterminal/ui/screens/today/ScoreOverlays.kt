@@ -72,6 +72,7 @@ import com.bioscan.fieldterminal.domain.score.whatIsInput
 import com.bioscan.fieldterminal.ui.components.RingState
 import com.bioscan.fieldterminal.ui.components.GaugePalette
 import com.bioscan.fieldterminal.ui.components.ScoreRing
+import com.bioscan.fieldterminal.ui.components.InfoHelpButton
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.ftChargeWash
 import com.bioscan.fieldterminal.ui.components.ftDomainWash
@@ -140,7 +141,7 @@ fun FullScreenOverlay(
 }
 
 @Composable
-fun OverlaySection(title: String, content: @Composable ColumnScope.() -> Unit) {
+fun OverlaySection(title: String, info: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth()
             .background(FT.Glass, RoundedCornerShape(FT.RadiusModule))
@@ -148,7 +149,15 @@ fun OverlaySection(title: String, content: @Composable ColumnScope.() -> Unit) {
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(title, style = FTType.LabelCaps, color = FT.TextMuted)
+        // The title; when [info] is set, a "?" opens the method/limits as a disclaimer popup so the card stays clean.
+        if (info != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.weight(1f))
+                InfoHelpButton(title = title, body = info)
+            }
+        } else {
+            Text(title, style = FTType.LabelCaps, color = FT.TextMuted)
+        }
         content()
     }
 }
@@ -193,7 +202,7 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
         }
 
         view.illness?.let { ill ->
-            OverlaySection("ILLNESS") {
+            OverlaySection("ILLNESS", info = ILLNESS_INFO) {
                 Text("⚠ ${ill.reason}", style = FTType.BodySmall, color = FT.Warning)
                 Text(
                     ill.ceiling?.let { c ->
@@ -202,14 +211,11 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
                     style = FTType.Caption, color = FT.TextSecondary,
                 )
                 view.signals?.let { Text(it.line, style = FTType.Caption, color = FT.TextSecondary) }
-                Text(ILLNESS_INFO, style = FTType.Caption, color = FT.TextMuted)
             }
         }
         view.signals?.takeIf { view.illness == null }?.let { s ->
-            OverlaySection(if (s.verdict == com.bioscan.fieldterminal.domain.score.SignalsVerdict.HEADS_UP) "HEADS-UP" else "BODY SIGNALS") {
+            OverlaySection(if (s.verdict == com.bioscan.fieldterminal.domain.score.SignalsVerdict.HEADS_UP) "HEADS-UP" else "BODY SIGNALS", info = SIGNALS_INFO) {
                 Text(s.line, style = FTType.BodySmall, color = if (s.verdict == com.bioscan.fieldterminal.domain.score.SignalsVerdict.HEADS_UP) FT.Warning else FT.TextSecondary)
-                Text("Resting HR, HRV and breathing against your own last 60 mornings; two or more far from usual together is the pattern that often comes before feeling ill. It does not change CHARGE.",
-                    style = FTType.Caption, color = FT.TextMuted)
             }
         }
 
@@ -232,7 +238,7 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
                 .getOrDefault(emptyList())
                 .filter { it.payload.outcome == "recovery_score" || it.payload.outcome == "sleep_score" }
         }
-        OverlaySection("WHAT GOES WITH YOUR MORNINGS") {
+        OverlaySection("WHAT GOES WITH YOUR MORNINGS", info = MORNINGS_INFO) {
             val rows = effects
             val settled = rows.orEmpty().filter { it.state == "clear" || it.state == "negligible" }
                 .sortedWith(compareBy({ if (it.state == "clear") 0 else 1 }, { -(kotlin.math.abs(it.payload.effect?.value ?: 0.0)) }))
@@ -249,8 +255,6 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
                         color = if (r.state == "clear") FT.TextPrimary else FT.TextSecondary)
                 }
             }
-            Text("Associations from your own days, adjusted for weekday, trend and the morning before; not proof of cause. CHARGE itself is not tested: alcohol, caffeine and stress are already among its inputs.",
-                style = FTType.Caption, color = FT.TextMuted)
         }
 
         OverlaySection("WEIGHTS") {
@@ -549,3 +553,11 @@ private const val ILLNESS_INFO =
     "The ceiling follows the TRAINING answer of your health check-ins: full training sets none, reduced 70, training " +
         "modified 55, daily life affected (or a temperature of 38 °C or more) 40. With no check-in yet it is 55. An answer " +
         "holds for two days, then eases one step every two days without a new one."
+
+private const val SIGNALS_INFO =
+    "Resting HR, HRV and breathing against your own last 60 mornings; two or more far from usual together is the " +
+        "pattern that often comes before feeling ill. It does not change CHARGE."
+
+private const val MORNINGS_INFO =
+    "Associations from your own days, adjusted for weekday, trend and the morning before; not proof of cause. " +
+        "CHARGE itself is not tested: alcohol, caffeine and stress are already among its inputs."

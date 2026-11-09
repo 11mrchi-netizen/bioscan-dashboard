@@ -20,7 +20,15 @@ object NotificationKind {
     val FUEL = setOf(FUEL_SESSION, FUEL_EVENT)
     // Health concerns (docs/health-concerns): the daily check-in at 21:00 (owner decision), skipped once one is saved.
     const val HEALTH_CHECKIN = "health_checkin"
-    val ALL = listOf(SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG, EVENING_CHECKIN, BODY_CHECKIN, FUEL_SESSION, FUEL_EVENT, HEALTH_CHECKIN)
+    // Repeatable interventions (docs/intervention-protocol-intelligence): rate how an event felt (morning), the daily coin-flip
+    // draw (evening) and the follow-up value for a tracked outcome whose window has closed.
+    const val EVENT_RATING = "event_rating"
+    const val EVENT_DRAW = "event_draw"
+    const val EVENT_FOLLOWUP = "event_followup"
+    val ALL = listOf(
+        SUPPLEMENT_DUE, CHECKIN_MORNING, CHECKIN_EVENING, WELLBEING_CHECKIN, EVENING_LOG, EVENING_CHECKIN, BODY_CHECKIN, FUEL_SESSION, FUEL_EVENT, HEALTH_CHECKIN,
+        EVENT_RATING, EVENT_DRAW, EVENT_FOLLOWUP,
+    )
 }
 
 object NotificationOutcome {

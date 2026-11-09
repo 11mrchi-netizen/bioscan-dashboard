@@ -35,6 +35,7 @@ import com.bioscan.fieldterminal.domain.aggregateMealsByDay
 import com.bioscan.fieldterminal.domain.seriesBreakStartsFrom
 import com.bioscan.fieldterminal.domain.INTENSITY_SPORTS
 import com.bioscan.fieldterminal.domain.IntensitySession
+import com.bioscan.fieldterminal.domain.SRPE_PER_TRIMP
 import com.bioscan.fieldterminal.domain.TrimpAnchors
 import com.bioscan.fieldterminal.domain.mondayOf
 import io.github.jan.supabase.SupabaseClient
@@ -435,22 +436,24 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
 // DAV-205 (24/9 fixes): shared by StatusRepository (figure's leg zone) and
 // TrainingTileScreen (Load tab + Injury tab's OSTRC context) so all three
 // always agree on the same session_load numbers instead of drifting apart
-// like the toMetricState() mapping did before DAV-210. RPE-based load takes
-// priority when a session has one (a direct subjective-effort number);
-// TRIMP (domain/EnduranceLoad.kt) is the fallback for the near-total majority
-// of sessions with real HR data but no RPE. TRIMP's anchors are taken as of
+// like the toMetricState() mapping did before DAV-210. TRIMP (domain/EnduranceLoad.kt)
+// comes first when the heart-rate inputs allow it; a session with only an RPE is
+// scored RPE x minutes / SRPE_PER_TRIMP, which puts it on the TRIMP scale. (RPE x
+// minutes used to take priority, but it is about 3.8 times TRIMP on the sessions
+// that have both, so a day with an RPE counted about four times heavier; analysis
+// review 2026-10-29.) TRIMP's anchors are taken as of
 // each session's date (TrimpAnchors): the person's robust maximum from these
 // same rows' session maxima and the 30-day median resting heart rate from
-// [restingDaily]. Same rules as the server and the console: an RPE counts when
-// above 0, a session needs a duration above 0.
+// [restingDaily]. Same rules as the server: an RPE counts when above 0, a session
+// needs a duration above 0.
 fun buildTrainingSessionLoads(sessions: List<TrainingLoadSessionRow>, restingDaily: List<Pair<LocalDate, Double>>): List<Pair<LocalDate, Double>> {
     fun dateOf(row: TrainingLoadSessionRow) = OffsetDateTime.parse(row.startTime).toLocalDateTime().toLocalDate()
     val anchors = TrimpAnchors(sessions.mapNotNull { row -> row.maxHr?.let { dateOf(row) to it } }, restingDaily)
     return sessions.mapNotNull { row ->
         val duration = row.durationMin?.takeIf { it > 0 } ?: return@mapNotNull null
         val date = dateOf(row)
-        val load = row.rpe?.takeIf { it > 0 }?.let { duration * it }
-            ?: anchors.trimpOn(date, EnduranceSessionInput(duration, null, row.avgHr, row.maxHr, null, null, null))
+        val load = anchors.trimpOn(date, EnduranceSessionInput(duration, null, row.avgHr, row.maxHr, null, null, null))
+            ?: row.rpe?.takeIf { it > 0 }?.let { duration * it / SRPE_PER_TRIMP }
             ?: return@mapNotNull null
         date to load
     }

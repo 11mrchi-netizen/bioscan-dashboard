@@ -36,6 +36,9 @@ class FieldTerminalApp : Application() {
             Triple(NotificationKind.EVENING_CHECKIN, "Evening Check-in (structured)", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.BODY_CHECKIN, "Monthly Body Check-in", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.HEALTH_CHECKIN, "Health Check-in", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(NotificationKind.EVENT_RATING, "How an intervention felt", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(NotificationKind.EVENT_DRAW, "Daily intervention draw", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(NotificationKind.EVENT_FOLLOWUP, "Outcome follow-up", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.FUEL_SESSION, "Fuel before and after sessions", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.FUEL_EVENT, "Race week fuelling", NotificationManager.IMPORTANCE_HIGH),
         ).forEach { (id, name, importance) ->

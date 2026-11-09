@@ -40,5 +40,8 @@ jobs:
       - name: Zepp extraction decoder tests
         run: node --test "supabase/functions/zepp-extract/*.test.ts"
 
+      - name: Body composition tests
+        run: node --test "supabase/functions/_shared/body-composition/*.test.ts"
+
       - name: Console schema tests
         run: node --test "console/src/lib/*.test.ts"

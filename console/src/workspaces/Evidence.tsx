@@ -18,6 +18,7 @@ import { useState } from 'react'
 import { Confirmatory } from './Confirmatory'
 import { Experiments } from './Experiments'
 import { Interventions } from './Interventions'
+import { Repeatable } from './Repeatable'
 import { Fueling } from './Fueling'
 import { Ledger } from './Ledger'
 import { EventExplorer } from './EventExplorer'
@@ -25,7 +26,7 @@ import { Discovery } from './Discovery'
 import { Decisions } from './Decisions'
 import './Evidence.css'
 
-type Tab = 'decisions' | 'confirmatory' | 'discovery' | 'experiments' | 'interventions' | 'fueling' | 'ledger' | 'events'
+type Tab = 'decisions' | 'confirmatory' | 'discovery' | 'experiments' | 'interventions' | 'repeatable' | 'fueling' | 'ledger' | 'events'
 
 export function Evidence() {
   const [tab, setTab] = useState<Tab>('decisions')
@@ -33,7 +34,7 @@ export function Evidence() {
     <div className="rlab-shell">
       <div className="rlab-tabs">
         <h2 className="rlab-shell-title">Evidence</h2>
-        {(['decisions', 'confirmatory', 'ledger', 'events', 'discovery', 'experiments', 'interventions', 'fueling'] as const).map(t => (
+        {(['decisions', 'confirmatory', 'ledger', 'events', 'discovery', 'experiments', 'interventions', 'repeatable', 'fueling'] as const).map(t => (
           <button key={t} className={`rlab-tab mono ${tab === t ? 'rlab-tab-on' : ''}`} onClick={() => setTab(t)}>{t === 'confirmatory' ? 'EVIDENCE' : t.toUpperCase()}</button>
         ))}
       </div>
@@ -41,6 +42,7 @@ export function Evidence() {
         : tab === 'confirmatory' ? <div className="rlab"><Confirmatory /></div>
         : tab === 'experiments' ? <div className="rlab"><Experiments /></div>
         : tab === 'interventions' ? <div className="rlab"><Interventions /></div>
+        : tab === 'repeatable' ? <div className="rlab"><Repeatable /></div>
         : tab === 'fueling' ? <div className="rlab"><Fueling /></div>
         : tab === 'ledger' ? <div className="rlab"><Ledger /></div>
         : tab === 'events' ? <div className="rlab"><EventExplorer /></div>

@@ -315,19 +315,24 @@
       "key": "body_fat_pct",
       "docName": "Body fat %",
       "kind": "raw",
-      "methodology": "Body fat percentage from a bioelectrical-impedance reading. Two readings are compared only when at least 30 days apart and the difference exceeds a least significant change.",
+      "methodology": "Body fat percentage from a bioelectrical-impedance reading: the scale weigh-in (fat-free mass from the Sun 2003 height, weight and impedance equation, fat = weight minus fat-free mass) or Health Connect on days without a weigh-in. Two readings are compared only when at least 30 days apart and the difference exceeds a least significant change.",
       "limitations": [
         "Impedance readings vary with hydration, food and time of day; noise can exceed the real change over weeks.",
-        "Not interchangeable with DEXA."
+        "Not interchangeable with DEXA.",
+        "The scale estimate uses a population equation (error about 3-4 kg of fat-free mass) on a foot-to-foot impedance; its level can be biased, so the trend is more reliable than any single value."
       ],
       "references": [
         {
           "citation": "Hopkins WG. Measures of reliability in sports medicine and science. Sports Med 2000;30(1):1-15.",
           "doi": "10.2165/00007256-200030010-00001"
+        },
+        {
+          "citation": "Sun SS, Chumlea WC, Heymsfield SB, et al. Development of bioelectrical impedance analysis prediction equations for body composition with the use of a multicomponent model for use in epidemiologic surveys. Am J Clin Nutr 2003;77(2):331-340.",
+          "doi": "10.1093/ajcn/77.2.331"
         }
       ],
       "productDefined": false,
-      "methodologyVersion": "1.0.0"
+      "methodologyVersion": "1.1.0"
     },
     {
       "key": "lean_mass",

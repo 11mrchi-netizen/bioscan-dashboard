@@ -106,6 +106,10 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 healthRequestedTab = HealthTab.Concerns
                 navController.navigate(TileRoute.Health.route) { launchSingleTop = true }
             }
+            NotificationDestination.EVENTS -> {
+                labsRequestedTab = LabTab.N1
+                navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }
+            }
             NotificationDestination.FUEL -> {
                 planningRequestedSection = PlanningSection.Food
                 navController.navigate(TileRoute.Lab.route) { launchSingleTop = true }

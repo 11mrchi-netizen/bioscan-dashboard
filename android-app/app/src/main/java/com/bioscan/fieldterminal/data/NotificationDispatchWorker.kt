@@ -25,6 +25,13 @@ import com.bioscan.fieldterminal.domain.notifications.withinLimits
 import com.bioscan.fieldterminal.domain.notifications.FUEL_PROMPT_WINDOW_MIN
 import com.bioscan.fieldterminal.domain.notifications.dueFuelPrompts
 import com.bioscan.fieldterminal.domain.notifications.fuelPrompts
+import com.bioscan.fieldterminal.data.model.EventRow
+import com.bioscan.fieldterminal.domain.notifications.PromptEvent
+import com.bioscan.fieldterminal.domain.notifications.PromptWindow
+import com.bioscan.fieldterminal.domain.notifications.eventDrawNeeded
+import com.bioscan.fieldterminal.domain.notifications.followUpsDue
+import com.bioscan.fieldterminal.domain.notifications.interventionsToDraw
+import com.bioscan.fieldterminal.domain.notifications.unratedEvents
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -140,6 +147,35 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                     "Health check-in" to "Anything bothering you today? NOTHING is one tap, and it counts."
                 }
 
+                // Repeatable interventions: each branch fetches, the decision is in domain/notifications/EventPrompts.kt. A read that
+                // returns nothing (offline, failed) means no prompt this window rather than a wrong one.
+                NotificationKind.EVENT_RATING -> {
+                    val events = promptEvents(InterventionEventsRepository(supabase).loadRecentEvents())
+                    val due = unratedEvents(events, java.time.Instant.now())
+                    if (due.isEmpty()) continue
+                    "How did it feel?" to "${due.size} ${if (due.size == 1) "event" else "events"} to rate, before you look at any numbers"
+                }
+
+                NotificationKind.EVENT_DRAW -> {
+                    val ev = InterventionEventsRepository(supabase)
+                    val enabled = ev.loadInterventions().filter { it.drawEnabled }.map { it.id }
+                    if (enabled.isEmpty()) continue
+                    val drawnToday = ev.loadDraws().filter { it.localDate == today.toString() }.map { it.interventionId }.toSet()
+                    if (!eventDrawNeeded(enabled, drawnToday)) continue
+                    "Today's draw" to "Flip the coin for ${interventionsToDraw(enabled, drawnToday).size} intervention(s): it decides before the day starts"
+                }
+
+                NotificationKind.EVENT_FOLLOWUP -> {
+                    val ev = InterventionEventsRepository(supabase)
+                    val windows = ev.loadExpectations().filter { it.outcomeKind == "tracked" && it.role == "primary" }
+                        .map { PromptWindow(it.interventionId, it.outcomeKey, it.windowStartH, it.windowEndH) }
+                    if (windows.isEmpty()) continue
+                    val values = ev.loadRecentTrackedValueTimes().mapNotNull { v -> parseInstant(v.observedAt)?.let { v.outcomeId to it } }
+                    val due = followUpsDue(promptEvents(ev.loadRecentEvents()), windows, values, java.time.Instant.now())
+                    if (due.isEmpty()) continue
+                    "Log the outcome" to "${due.size} ${if (due.size == 1) "event has" else "events have"} a window that closed with nothing logged"
+                }
+
                 else -> continue
             }
 
@@ -213,3 +249,9 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
         }
     }
 }
+
+// PostgREST returns timestamptz as "2026-10-28T22:00:00+00:00", which Instant.parse rejects; OffsetDateTime reads both forms.
+private fun parseInstant(text: String): java.time.Instant? = runCatching { java.time.OffsetDateTime.parse(text).toInstant() }.getOrNull()
+
+private fun promptEvents(rows: List<EventRow>): List<PromptEvent> =
+    rows.mapNotNull { r -> parseInstant(r.occurredAt)?.let { PromptEvent(r.id, r.interventionId, it, r.feeling) } }

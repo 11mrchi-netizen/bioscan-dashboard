@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { caseCrossover, crossoverFrame, fisherGreater, poissonBinomialUpper, sessionLevel } from './healthAssociations.ts'
 import { measureEpisodes } from './healthEpisodes.ts'
-import { buildExposureSeries, inWindow, movementKey, musclesOf } from './healthExposures.ts'
+import { buildExposureSeries, inWindow, lookupStats, movementKey, musclesOf } from './healthExposures.ts'
 import type { ExposureContext } from './healthExposures.ts'
 import { buildConcernSeries, shiftDate } from './healthSeries.ts'
 import { vocab } from './runHealth.ts'
@@ -103,4 +103,55 @@ test('session level: symptoms after trail runs against other runs, only from sym
   assert.ok(r.exposedSessions >= 5)
   assert.equal(r.exposedFollowed, r.exposedSessions)
   assert.ok(r.p !== null && r.p < 0.01)
+})
+
+// The indexed lookup must return exactly what the original linear scan did (the scan recomputed movementKey for every
+// library row on every miss, which made the nightly health run exceed the Edge CPU limit).
+function musclesOfLinear(name: string, library: { name: string; primary_muscles: string[] | null }[]): string[] | null {
+  const exact = library.find((l) => l.name.toLowerCase() === name.toLowerCase())
+  if (exact) return exact.primary_muscles ?? []
+  const key = movementKey(name)
+  if (!key) return null
+  const byKey = library.find((l) => movementKey(l.name) === key)
+  return byKey ? byKey.primary_muscles ?? [] : null
+}
+
+test('musclesOf with the library index gives the linear scan\'s answer for hits, misses, duplicates and odd names', () => {
+  const library = [
+    { name: 'Back Squat', primary_muscles: ['quadriceps', 'glutes'] },
+    { name: 'Squat (BB)', primary_muscles: ['quadriceps'] },
+    { name: 'Lunge (BB)', primary_muscles: ['hamstrings'] }, // same movement key as the next row: the first must win
+    { name: 'Lunge (DB)', primary_muscles: ['calves'] },
+    { name: 'Bench Press', primary_muscles: ['chest'] },
+    { name: 'bench press', primary_muscles: ['triceps'] }, // same lower-cased name: the first row must win
+    { name: 'Pull-ups', primary_muscles: ['lats'] },
+    { name: 'Plank', primary_muscles: null },
+    { name: 'Overhead Press', primary_muscles: ['shoulders'] },
+    { name: '(BB)', primary_muscles: ['nothing'] }, // movement key is empty
+  ]
+  const names = [
+    'Back Squat', 'back squat', 'BACK SQUAT', 'Barbell Squats', 'Squat', 'squats', 'Bench Press', 'BENCH PRESS', 'Chest Press', 'chest press',
+    'Pullups', 'Pull-ups', 'pull ups', 'chin ups', 'Plank', 'plank', 'Standing Barbell Press', 'Military Press', 'Shoulder Press',
+    'Lunge', 'lunges', 'Unknown thing', '', '   ', '(BB)', 'the', 'Bent Over Row', 'Deadlift', 'inclined bench press',
+  ]
+  for (const n of names) assert.deepEqual(musclesOf(n, library), musclesOfLinear(n, library), JSON.stringify(n))
+  assert.deepEqual(musclesOf('Squat', library), ['quadriceps'], 'no row is named Squat, so the first row with its key wins')
+  assert.deepEqual(musclesOf('Lunge', library), ['hamstrings'], 'the first of two rows with the same key wins')
+  assert.deepEqual(musclesOf('bench press', library), ['chest'], 'the first row with the name wins')
+  assert.equal(musclesOf('Plank', library)?.length, 0, 'a known exercise without muscles is [] not null')
+})
+
+test('musclesOf re-indexes a library that changed between calls', () => {
+  const library = [{ name: 'Squat', primary_muscles: ['quadriceps'] }]
+  assert.equal(musclesOf('Lunge', library), null)
+  library.push({ name: 'Lunge', primary_muscles: ['glutes'] })
+  assert.deepEqual(musclesOf('Lunge', library), ['glutes'])
+})
+
+test('musclesOf computes each library movement key once, not once per lookup', () => {
+  const library = Array.from({ length: 300 }, (_, i) => ({ name: `Exercise number ${i}`, primary_muscles: ['x'] }))
+  musclesOf('warm up', library) // builds the index
+  const before = lookupStats.movementKey
+  for (let i = 0; i < 100; i++) musclesOf(`not in the library ${i}`, library)
+  assert.equal(lookupStats.movementKey - before, 100, 'one key for the looked-up name, none for the library rows')
 })

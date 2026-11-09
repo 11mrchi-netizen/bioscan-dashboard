@@ -70,6 +70,8 @@ private fun ProfileCard(scope: CoroutineScope) {
     val userProfileRepository = remember { UserProfileRepository(SupabaseClientProvider.client) }
     var dobInput by remember { mutableStateOf("") }
     var selectedSex by remember { mutableStateOf<String?>(null) }
+    var heightInput by remember { mutableStateOf("") }
+    var athleteMode by remember { mutableStateOf(false) }
     var profileSaving by remember { mutableStateOf(false) }
     var profileError by remember { mutableStateOf(false) }
     var profileSavedAt by remember { mutableStateOf<String?>(null) }
@@ -79,6 +81,8 @@ private fun ProfileCard(scope: CoroutineScope) {
             val profile = userProfileRepository.loadProfile()
             dobInput = profile?.dateOfBirth ?: ""
             selectedSex = profile?.sex
+            heightInput = profile?.heightCm?.let { "%.0f".format(it) } ?: ""
+            athleteMode = profile?.athleteMode ?: false
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -90,7 +94,8 @@ private fun ProfileCard(scope: CoroutineScope) {
     FTCard(title = "PROFILE") {
         Text(
             "Date of birth and sex, used by the Aging Profile (User tab) and by population " +
-                "comparisons elsewhere. Stored with your account, not on this device only.",
+                "comparisons elsewhere. Height and athlete mode feed the body-composition estimates from " +
+                "the scale's impedance. Stored with your account, not on this device only.",
             style = FTType.BodySmall,
             color = FT.TextSecondary,
         )
@@ -111,15 +116,34 @@ private fun ProfileCard(scope: CoroutineScope) {
                 SexChip("Female", selectedSex == "female") { selectedSex = if (selectedSex == "female") null else "female" }
             }
         }
+        FieldTextField(
+            value = heightInput,
+            onValueChange = { heightInput = it },
+            placeholder = "Height (cm)",
+        )
+        Column {
+            Text(
+                "ATHLETE MODE",
+                style = FTType.LabelCaps,
+                color = FT.TextSecondary,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SexChip("Off", !athleteMode) { athleteMode = false }
+                SexChip("On", athleteMode) { athleteMode = true }
+            }
+        }
         FTButton(label = if (profileSaving) "SAVING…" else "SAVE PROFILE", emphasis = FTButtonEmphasis.Primary) {
             val dob = dobInput.trim().ifBlank { null }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
-            if (dobInput.isNotBlank() && dob == null) {
+            val height = heightInput.trim().replace(',', '.').ifBlank { null }?.toDoubleOrNull()
+            val heightInvalid = heightInput.isNotBlank() && (height == null || height !in 100.0..230.0)
+            if ((dobInput.isNotBlank() && dob == null) || heightInvalid) {
                 profileError = true
             } else {
                 profileError = false
                 scope.launchSafe(onError = { profileError = true }, onDone = { profileSaving = false }) {
                     profileSaving = true
-                    userProfileRepository.saveProfile(dob, selectedSex)
+                    userProfileRepository.saveProfile(dob, selectedSex, height, athleteMode)
                     profileSaving = false
                     profileSavedAt = java.time.LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                 }
@@ -127,7 +151,7 @@ private fun ProfileCard(scope: CoroutineScope) {
         }
         if (profileError) {
             Text(
-                "Enter the date as YYYY-MM-DD (e.g. 1990-05-14).",
+                "Enter the date as YYYY-MM-DD (e.g. 1990-05-14) and height in cm (100–230).",
                 style = FTType.Caption,
                 color = FT.Critical,
             )

@@ -66,6 +66,8 @@ const val BLINDING_HELP =
 fun ExperimentSheet(
     subjectName: String,
     intro: String = SUPPLEMENT_EXPERIMENT_INTRO,
+    // The outcome to start on (a repeatable intervention's main expected outcome); still changeable before registering.
+    initialPrimary: String? = null,
     register: suspend (name: String, primary: String, protocol: ExperimentProtocol, preview: List<MdePreviewRow>) -> Unit,
     onDismiss: () -> Unit,
     onRegistered: () -> Unit,
@@ -73,8 +75,8 @@ fun ExperimentSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val repo = remember { ExperimentsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
-    var primary by remember { mutableStateOf<String?>(null) }
-    var zone by remember { mutableStateOf<Double?>(null) }
+    var primary by remember { mutableStateOf(initialPrimary) }
+    var zone by remember { mutableStateOf(initialPrimary?.let { zoneSpec(it).zone }) }
     var periodDays by remember { mutableIntStateOf(14) }
     var pairs by remember { mutableIntStateOf(4) }
     var washout by remember { mutableIntStateOf(3) }

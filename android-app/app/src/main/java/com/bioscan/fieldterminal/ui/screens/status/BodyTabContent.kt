@@ -205,7 +205,7 @@ private fun BodyPage(
         fatFree == null -> "Needs a body-fat reading: a weigh-in on the scale, or a body check-in."
         else -> null
     })
-    FitnessAgeSection(sex, profile?.dateOfBirth?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, checkins)
+    // Fitness age now lives on the Aging page (ME › Healthspan › AGING), with the other age models.
 }
 
 @Composable

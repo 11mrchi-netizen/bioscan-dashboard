@@ -54,6 +54,13 @@ fun AgingProfileScreen(onBack: () -> Unit) {
     LaunchedEffect(guard.attempt) {
         guard.run { overview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview() }
     }
+    // For the folded-in Fitness Age (HUNT model): sex, date of birth and body check-ins (its waist feeds the VO2peak).
+    var profile by remember { mutableStateOf<com.bioscan.fieldterminal.data.model.UserProfileRow?>(null) }
+    var checkins by remember { mutableStateOf<List<com.bioscan.fieldterminal.domain.BodyCheckinRecord>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        profile = runCatching { com.bioscan.fieldterminal.data.UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull()
+        checkins = runCatching { com.bioscan.fieldterminal.data.BodyCheckinRepository(SupabaseClientProvider.client).loadHistory() }.getOrElse { emptyList() }
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
         TileHeader(onBack = onBack, title = "AGING PROFILE", subtitle = "BIOLOGICAL AGE · DIMENSIONS · HISTORY", accent = FT.DomainUser)
@@ -74,6 +81,11 @@ fun AgingProfileScreen(onBack: () -> Unit) {
                 OverviewCard(current)
                 DimensionsCard(current)
                 HistoryCard(current)
+                com.bioscan.fieldterminal.ui.screens.status.FitnessAgeSection(
+                    sex = profile?.sex?.takeIf { it == "male" || it == "female" },
+                    birth = profile?.dateOfBirth?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
+                    checkins = checkins,
+                )
             }
         }
     }

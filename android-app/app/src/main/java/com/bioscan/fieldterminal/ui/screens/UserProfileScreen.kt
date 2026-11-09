@@ -101,7 +101,7 @@ fun UserProfileScreen(
                 LoadErrorCard(failed, onRetry = { agingGuard.retry(); cyclesGuard.retry() })
             }
 
-            HealthspanCard(healthspan?.summary, healthspanFailed)
+            HealthspanCard(healthspan?.summary, healthspanFailed, onOpenAging = onOpenAging)
 
             AgingCard(agingOverview, onOpenAging)
 

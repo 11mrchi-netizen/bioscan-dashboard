@@ -40,8 +40,8 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // assessed factor at its score, so its 50 and 25 rings are those two lines; a factor that could not be assessed is a dashed
 // spoke marked "—", left out of the polygon. The headline is the mean of the assessed scores, from domain/aging/Healthspan.kt.
 @Composable
-fun HealthspanCard(summary: HealthspanSummary?, failed: Boolean = false) {
-    var selected by remember { mutableStateOf<Int?>(null) }
+fun HealthspanCard(summary: HealthspanSummary?, failed: Boolean = false, onOpenAging: () -> Unit = {}) {
+    var openFactor by remember { mutableStateOf<HealthspanFactor?>(null) }
     FTCard(
         title = "HEALTHSPAN",
         info = "A general score from 1 to 100: the mean of the factors that could be assessed from your own data. Each factor is scored 1-100 on one scale, favorable from 50 and an opportunity below 25: as a percentile for your age and sex where a population table exists, otherwise against cited clinical targets or lifter standards. A factor is assessed only when its input is recent, complete and consistent; otherwise it says what is missing. Chart: each factor at its score; the 50 and 25 rings are the favorable and opportunity lines; a dashed spoke marked — is not assessed. Product-defined, not a medical assessment.",
@@ -67,22 +67,25 @@ fun HealthspanCard(summary: HealthspanSummary?, failed: Boolean = false) {
             )
         }
 
+        // Tapping a factor (row or chart vertex) opens its page; biological age opens the Aging page, which holds its history.
+        val open: (HealthspanFactor) -> Unit = { f ->
+            if (f.id == HealthspanFactorId.BIOLOGICAL_AGE) onOpenAging() else openFactor = f
+        }
         FTRadarChart(
             axes = summary.factors.map { f ->
                 val (tag, color) = f.status.tag()
                 RadarAxis(f.id.short(), f.score?.toDouble(), color)
             },
-            selectedIndex = selected,
-            onSelect = { selected = if (selected == it) null else it },
+            selectedIndex = null,
+            onSelect = { i -> summary.factors.getOrNull(i)?.let(open) },
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            summary.factors.forEachIndexed { i, f ->
-                FactorRow(f, expanded = i == selected, assessed = summary.assessed) { selected = if (selected == i) null else i }
-            }
+            summary.factors.forEach { f -> FactorRow(f) { open(f) } }
         }
         Text("PRODUCT-DEFINED · PROVISIONAL · NOT CLINICALLY VALIDATED", style = FTType.Micro, color = FT.TextMuted)
     }
+    openFactor?.let { f -> HealthspanFactorOverlay(f) { openFactor = null } }
 }
 
 private fun FactorStatus.tag(): Pair<String, Color> = when (this) {
@@ -103,36 +106,26 @@ private fun HealthspanFactorId.short(): String = when (this) {
     HealthspanFactorId.GLYCAEMIC -> "GLUCOSE"
 }
 
-// Collapsed: the factor, its score and status, one line. Expanded (tap the row or the chart vertex): what the number is
-// measured against, what was measured, what is missing, the caveats and the one action.
+// One row: the factor, its score and status, and a › — it opens the factor's own page (score, basis and the trend of
+// each metric behind it). An unassessed factor shows what it is waiting for.
 @Composable
-private fun FactorRow(f: HealthspanFactor, expanded: Boolean, assessed: Int, onClick: () -> Unit) {
+private fun FactorRow(f: HealthspanFactor, onClick: () -> Unit) {
     val (tag, color) = f.status.tag()
-    // The whole row is the touch target, at least 48 dp tall (it was 28 dp: the padding sat outside the clickable area).
+    // The whole row is the touch target, at least 48 dp tall.
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .then(if (expanded) Modifier.background(FT.Glass, RoundedCornerShape(FT.RadiusSmall)) else Modifier)
             .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
-            .padding(horizontal = if (expanded) 10.dp else 0.dp, vertical = if (expanded) 10.dp else 4.dp),
+            .padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(f.id.label, style = if (expanded) FTType.RowTitle else FTType.Body, color = if (expanded) FT.TextPrimary else FT.TextSecondary, modifier = Modifier.weight(1f))
+            Text(f.id.label, style = FTType.Body, color = FT.TextSecondary, modifier = Modifier.weight(1f))
             Text(f.score?.let { "$it · $tag" } ?: tag, style = FTType.MonoCaption, color = color)
+            Text("›", style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(start = 6.dp))
         }
-        if (expanded) {
-            f.reading?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
-            if (f.score != null && f.basis != null && assessed > 0) {
-                Text("${f.score} / 100, ${f.basis.label}; 1 of $assessed factors in the mean.", style = FTType.Caption, color = FT.TextMuted)
-            }
-            if (f.missingInputs.isNotEmpty()) {
-                Text("Needs: " + f.missingInputs.joinToString("; "), style = FTType.Caption, color = FT.TextMuted)
-            }
-            f.notes.forEach { Text(it, style = FTType.Caption, color = FT.TextMuted) }
-            f.action?.let { Text(it, style = FTType.Caption, color = if (f.status == FactorStatus.OPPORTUNITY) FT.Warning else FT.TextMuted) }
-        } else if (f.status == FactorStatus.UNASSESSED && f.missingInputs.isNotEmpty()) {
+        if (f.status == FactorStatus.UNASSESSED && f.missingInputs.isNotEmpty()) {
             Text("Needs: " + f.missingInputs.first(), style = FTType.Caption, color = FT.TextMuted, maxLines = 1)
         }
     }

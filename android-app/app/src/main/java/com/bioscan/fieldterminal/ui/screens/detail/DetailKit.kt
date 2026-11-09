@@ -260,12 +260,19 @@ fun MetricPanel(
     target: Pair<Double, Double>? = null,
     targetLabel: String? = null,
     today: LocalDate = LocalDate.now(),
+    // When set, the chart shows these series each in their own colour (with a legend) instead of the single trend line;
+    // the headline still reads the main [series]. Used for body fat measured several ways (scale, tape, caliper).
+    overlay: List<com.bioscan.fieldterminal.ui.components.TrendSeries>? = null,
     extra: @Composable ColumnScope.() -> Unit = {},
 ) {
     val reading = remember(series, today) { readMetric(series, today, log = log, minSd = minSd) }
     Section(title, info = info) {
         Headline(reading, format, unit, today, betterHigher)
-        TrendChart(series, today, LocalRangeDays.current, reading.normal, format, color, target = target, targetLabel = targetLabel)
+        if (overlay != null) {
+            com.bioscan.fieldterminal.ui.components.DateTrendLine(series = overlay, legend = true, valueFormat = format)
+        } else {
+            TrendChart(series, today, LocalRangeDays.current, reading.normal, format, color, target = target, targetLabel = targetLabel)
+        }
         extra()
     }
 }

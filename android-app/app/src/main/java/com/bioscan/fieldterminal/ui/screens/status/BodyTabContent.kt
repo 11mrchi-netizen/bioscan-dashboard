@@ -162,7 +162,16 @@ private fun BodyPage(
     val tape = remember(checkins, heightCm, sex) { checkins.mapNotNull { c -> navyBodyFat(c, heightCm, sex)?.let { c.date to it } }.sortedBy { it.first } }
     val folds = remember(checkins, age, sex) { checkins.mapNotNull { c -> jacksonPollockBodyFat(c, age, sex)?.let { c.date to it } }.sortedBy { it.first } }
     val blended = remember(scaleFat, tape, folds) { rollingBodyFat(scaleFat + tape + folds).toMap() }
-    MetricPanel("BODY FAT", blended, "%", Fmt.one, info = BODY_FAT_INFO, minSd = 0.5, color = FT.DomainFuel, today = today) {
+    // Each method as its own line, one hue each, so they read apart (map request). DEXA has no source yet.
+    val bodyFatOverlay = remember(scaleFat, tape, folds) {
+        listOf(
+            com.bioscan.fieldterminal.ui.components.TrendSeries(scaleFat, FT.Metric.BodyFat, label = "SCALE", maxGapDays = 400),
+            com.bioscan.fieldterminal.ui.components.TrendSeries(tape, FT.Metric.BodyFatTape, label = "TAPE", maxGapDays = 400),
+            com.bioscan.fieldterminal.ui.components.TrendSeries(folds, FT.Metric.BodyFatCaliper, label = "CALIPER", maxGapDays = 400),
+        ).filter { it.points.isNotEmpty() }
+    }
+    MetricPanel("BODY FAT", blended, "%", Fmt.one, info = BODY_FAT_INFO, minSd = 0.5, color = FT.DomainFuel, today = today,
+        overlay = bodyFatOverlay.takeIf { it.isNotEmpty() }) {
         val methods = listOfNotNull(
             scaleFat.lastOrNull()?.let { Triple("SCALE", "%.1f %%".format(it.second), shortDay(it.first)) },
             tape.lastOrNull()?.let { Triple("TAPE", "%.1f %%".format(it.second), shortDay(it.first)) },

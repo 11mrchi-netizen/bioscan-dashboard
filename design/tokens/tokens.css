@@ -55,6 +55,10 @@
   --m-weight:            #9aa6bd;
   --m-weight-ema:        #c7d0e0;
   --m-body-fat:          #ff9a3d;
+  /* body-fat by method, each a distinct hue so the sources read apart on one chart (scale keeps --m-body-fat) */
+  --m-body-fat-tape:     #38c6d4;
+  --m-body-fat-caliper:  #a97bff;
+  --m-body-fat-dexa:     #e86fb0;
   --m-lean-mass:         #36d07a;
   --m-muscle-potential:  #5ad1b0;
   --m-measurements:      #9b6cff;

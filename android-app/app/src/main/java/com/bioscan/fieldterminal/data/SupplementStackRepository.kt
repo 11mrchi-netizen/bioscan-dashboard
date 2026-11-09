@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.spec
+import com.bioscan.fieldterminal.domain.dosesPerDay
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.StackEntry
 import com.bioscan.fieldterminal.domain.StackIngredient
@@ -42,7 +44,7 @@ class SupplementStackRepository(private val supabase: SupabaseClient) {
     suspend fun loadActiveStack(): List<StackEntry> {
         val today = LocalDate.now()
         val supplements = supabase.postgrest.from("supplements")
-            .select(columns = Columns.list("id,name,dose,time_of_day,status,end_date,every_n_days,product_id"))
+            .select(columns = Columns.raw(com.bioscan.fieldterminal.data.model.SUPPLEMENT_ROW_COLUMNS))
             .decodeList<SupplementRow>()
             .filter { it.status.equals("active", ignoreCase = true) }
             .filter { it.endDate == null || LocalDate.parse(it.endDate) >= today }
@@ -68,18 +70,21 @@ class SupplementStackRepository(private val supabase: SupabaseClient) {
         val linksByProduct = links.groupBy { it.productId }
 
         return supplements.map { s ->
+            val spec = s.spec()
             StackEntry(
                 supplementId = s.id,
                 name = s.name,
                 everyNDays = s.everyNDays,
-                asNeeded = s.timeOfDay.equals("as-needed", ignoreCase = true),
+                asNeeded = spec.asNeeded,
+                dosesPerDay = spec.dosesPerDay(),
                 matchConfidence = s.productId?.let { products[it]?.matchConfidence },
                 ingredients = s.productId?.let { linksByProduct[it] }.orEmpty().mapNotNull { link ->
                     val ing = ingredients[link.ingredientId] ?: return@mapNotNull null
                     StackIngredient(
                         canonicalKey = ing.canonicalKey,
                         nutrientKey = ing.nutrientKey,
-                        amount = link.elementalAmount ?: link.compoundAmount,
+                        // Label rows are per serving; one dose is servings_per_dose of them (3 softgels, 4 capsules).
+                        amount = (link.elementalAmount ?: link.compoundAmount) * s.servingsPerDose,
                         unit = link.elementalUnit ?: link.compoundUnit,
                         hasElemental = link.elementalAmount != null,
                     )

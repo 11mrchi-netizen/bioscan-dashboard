@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -210,15 +211,18 @@ internal fun BlockHistoryCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
+                    // The date range gives way (wraps) to the session counts, so at large font sizes the two never run together.
                     Text(
                         dateRange,
                         style = FTType.MonoCaption,
                         color = FT.TextMuted,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp),
                     )
                     Text(
                         sessions,
                         style = FTType.MonoCaption,
                         color = FT.TextSecondary,
+                        maxLines = 1,
                     )
                 }
             }

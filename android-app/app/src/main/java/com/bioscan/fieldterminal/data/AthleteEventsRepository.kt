@@ -1,5 +1,7 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.UseSerializers
 import com.bioscan.fieldterminal.data.model.CalendarEventRow
 import com.bioscan.fieldterminal.domain.events.AidStation
 import com.bioscan.fieldterminal.domain.events.AthleteEvent
@@ -164,6 +166,7 @@ fun AthleteEvent.withCourse(profile: CourseProfile): AthleteEvent = copy(
 )
 
 /** A calendar entry that reads like a race and is not an event yet: the app offers MAKE THIS AN EVENT. */
+@Serializable
 data class EventSuggestion(val calendarEvent: CalendarEventRow, val start: ZonedDateTime)
 
 class AthleteEventsRepository(private val supabase: SupabaseClient) {
@@ -174,7 +177,11 @@ class AthleteEventsRepository(private val supabase: SupabaseClient) {
             .decodeList<AthleteEventRow>().map { it.toDomain() }
 
     /** Open events from [from] for [days] days, soonest first. */
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadUpcoming(from: LocalDate, days: Long = 400): List<AthleteEvent> =
+        ReadCache.get("events.upcoming.$from.$days", tables = setOf("athlete_events", "exercise_sessions"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.domain.events.AthleteEvent.serializer())) { fetchLoadUpcoming(from, days) }
+
+    private suspend fun fetchLoadUpcoming(from: LocalDate, days: Long = 400): List<AthleteEvent> =
         supabase.postgrest.from("athlete_events")
             .select {
                 filter {
@@ -237,7 +244,8 @@ class AthleteEventsRepository(private val supabase: SupabaseClient) {
             }
             .decodeList<SessionTimesRow>()
             .mapNotNull { s ->
-                runCatching { OffsetDateTime.parse(s.startTime).atZoneSameInstant(zone) }.getOrNull()
+                // Session starts are logged times (local digits, zero offset): domain/WallClock.kt.
+                com.bioscan.fieldterminal.domain.WallClock.zoned(s.startTime, zone)
                     ?.let { EventSessionCandidate(s.id, s.type, it, s.durationMin ?: 0.0) }
             }
         var linked = 0
@@ -254,7 +262,11 @@ class AthleteEventsRepository(private val supabase: SupabaseClient) {
      * Calendar entries in the next [days] days that read like a race and are not events yet. Reads the synced
      * calendar_events table (CalendarSyncRepository); empty until the calendar has been synced once.
      */
-    suspend fun loadSuggestions(days: Long = 365): List<EventSuggestion> {
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadSuggestions(days: Long = 365): List<EventSuggestion> =
+        ReadCache.get("events.suggestions.$days.${java.time.LocalDate.now()}", tables = setOf("athlete_events", "calendar_events", "exercise_sessions"), serializer = kotlinx.serialization.builtins.ListSerializer(EventSuggestion.serializer())) { fetchLoadSuggestions(days) }
+
+    private suspend fun fetchLoadSuggestions(days: Long = 365): List<EventSuggestion> {
         val now = Instant.now()
         val calendar = supabase.postgrest.from("calendar_events")
             .select {

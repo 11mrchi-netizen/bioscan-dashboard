@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -62,6 +63,12 @@ import kotlinx.coroutines.launch
 // applied here to the sign-in/loading states -- the 4-tab UI itself is
 // styled in FieldTerminalNavHost.kt and its screens). Real per-screen
 // content is Phase C onward, per mobile-app-implementation-roadmap.md.
+// The notification tapped, as "kind" or "kind:bucket" (a supplement reminder names its block).
+private fun notificationTarget(intent: Intent): String? {
+    val kind = intent.getStringExtra(NotificationActionReceiver.EXTRA_KIND) ?: return null
+    return intent.getStringExtra(NotificationActionReceiver.EXTRA_BUCKET)?.let { "$kind:$it" } ?: kind
+}
+
 class MainActivity : ComponentActivity() {
     // The notification kind the user tapped, held until FieldTerminalNavHost (only shown once signed in) has navigated
     // to its destination and cleared it. Compose state, so a tap while the app is already open (onNewIntent) re-triggers it.
@@ -70,16 +77,22 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        pendingNotificationKind = intent.getStringExtra(NotificationActionReceiver.EXTRA_KIND)
+        pendingNotificationKind = notificationTarget(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Edge to edge on every Android version (15+ enforces it already), with light icons on the dark base: the
+        // Scaffold and the overlays pad for the status bar, the navigation bar and the keyboard themselves.
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         Perf.enabled = BuildConfig.DEBUG // logcat tag "perf"; see util/Perf.kt
         // Notification channels, the Supabase client and the metric registry are warmed on a background thread by FieldTerminalApp.
         // Only on a fresh launch: after process restore the same intent is redelivered and would re-navigate.
         if (savedInstanceState == null) {
-            pendingNotificationKind = intent?.getStringExtra(NotificationActionReceiver.EXTRA_KIND)
+            pendingNotificationKind = intent?.let(::notificationTarget)
         }
         setContent {
             FieldTerminalTheme {
@@ -124,6 +137,8 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
             // Play services' registrations alive.
             RoutineCaptureWorker.schedule(context)
             LocationCollector.registerAll(context)
+            // Daily targets live with the account too (FUEL scores intake against them).
+            runCatching { com.bioscan.fieldterminal.data.NutritionGoalsStore.sync(context, SupabaseClientProvider.client) }
         }
     }
 
@@ -167,7 +182,8 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
             GateView.SIGN_IN -> {
                 androidx.compose.runtime.LaunchedEffect(Unit) {
                     appShown = false
-                    com.bioscan.fieldterminal.data.ReadCache.invalidateAll() // nothing of the last user survives sign-out
+                    com.bioscan.fieldterminal.data.ReadCache.clearEverything() // nothing of the last user survives sign-out, in memory or on disk
+                    com.bioscan.fieldterminal.ui.screens.today.TodayStore.clearEverything(context)
                 }
                 SignInPrompt("SIGN IN WITH GOOGLE", FTButtonEmphasis.Primary, signInError) {
                     scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }

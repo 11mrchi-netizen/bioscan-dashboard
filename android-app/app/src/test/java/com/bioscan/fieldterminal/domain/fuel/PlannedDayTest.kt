@@ -164,4 +164,43 @@ class PlannedDayTest {
         val c = finalIntensity("strength", 100.0, Classified(Intensity.MODERATE, "planned as hypertrophy"))
         assertEquals(Intensity.MODERATE, c.intensity)
     }
+
+    @Test
+    fun aSessionDoneLaterThanPlannedIsStillThatSessionNotAnExtra() {
+        // Planned for 07:00, done in the evening: it replaces the plan, keeps its title, and nothing is added.
+        val planned = listOf(PlannedSessionInput(1, today, LocalTime.of(7, 0), 45.0, "max_strength", "Kettlebell circuit"))
+        val late = RecordedSessionInput(21, "strength", at(today, 18, 40), 35.0)
+        val item = resolve(planned = planned, recorded = listOf(late), n = at(today, 20))[0].items.single()
+        assertTrue(item.recorded)
+        assertEquals("Kettlebell circuit", item.title)
+        assertEquals(18, item.start!!.hour)
+    }
+
+    @Test
+    fun twoPlansAndTwoRecordingsPairClosestFirstAndOnlyTheUnexpectedOneIsExtra() {
+        val planned = listOf(
+            PlannedSessionInput(1, today, LocalTime.of(7, 0), 45.0, "aerobic_base", "Easy run"),
+            PlannedSessionInput(2, today, LocalTime.of(18, 0), 45.0, "max_strength", "Gym"),
+        )
+        val recorded = listOf(
+            RecordedSessionInput(31, "run", at(today, 11, 30), 40.0), // the morning run, late
+            RecordedSessionInput(32, "strength", at(today, 17, 50), 50.0), // the gym, on time
+            RecordedSessionInput(33, "run", at(today, 20, 0), 30.0), // nothing planned is left for it: an extra
+        )
+        val items = resolve(planned = planned, recorded = recorded, n = at(today, 21))[0].items
+        assertEquals(3, items.size)
+        assertTrue(items.all { it.recorded })
+        assertEquals("Easy run", items.single { it.sourceId == "session:31" }.title)
+        assertEquals("Gym", items.single { it.sourceId == "session:32" }.title)
+        assertEquals("Run", items.single { it.sourceId == "session:33" }.title)
+    }
+
+    @Test
+    fun aDifferentKindOfSessionIsNotTakenForThePlan() {
+        // A planned strength session and a recorded run: the run is extra, the gym session stays planned today.
+        val planned = listOf(PlannedSessionInput(1, today, LocalTime.of(7, 0), 45.0, "max_strength", "Gym"))
+        val items = resolve(planned = planned, recorded = listOf(RecordedSessionInput(41, "run", at(today, 7, 5), 30.0)), n = at(today, 9))[0].items
+        assertEquals(2, items.size)
+        assertEquals(1, items.count { !it.recorded && it.title == "Gym" })
+    }
 }

@@ -1,9 +1,13 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.data.model.LabResultRow
 
 enum class MarkerDirection { UP, DOWN, FLAT, UNKNOWN }
 
+@Serializable
 data class MarkerComparison(
     val name: String,
     val unit: String?,

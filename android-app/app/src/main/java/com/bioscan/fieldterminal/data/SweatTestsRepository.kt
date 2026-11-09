@@ -45,7 +45,7 @@ private fun SweatTestRow.toDomain() = SweatTest(
 
 class SweatTestsRepository(private val supabase: SupabaseClient) {
 
-    suspend fun loadAll(): List<SweatTest> = ReadCache.get("fuel.sweat_tests", tables = setOf("sweat_tests")) {
+    suspend fun loadAll(): List<SweatTest> = ReadCache.kept("fuel.sweat_tests", tables = setOf("sweat_tests")) {
         supabase.postgrest.from("sweat_tests")
             .select { order("tested_on", Order.DESCENDING); limit(200) }
             .decodeList<SweatTestRow>().map { it.toDomain() }

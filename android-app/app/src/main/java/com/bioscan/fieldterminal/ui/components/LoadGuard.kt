@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.components
 
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -55,8 +56,38 @@ class LoadGuard {
     }
 }
 
+/**
+ * [refreshOnUpdates]: load again when a background refresh of the read cache brings different data (the page opened from
+ * the last data it showed, kept on disk). The reload reads the fresh copy from memory. TODAY passes false: it keeps its
+ * own page and decides itself when to rebuild.
+ */
 @Composable
-fun rememberLoadGuard(): LoadGuard = remember { LoadGuard() }
+fun rememberLoadGuard(refreshOnUpdates: Boolean = true): LoadGuard {
+    val guard = remember { LoadGuard() }
+    if (refreshOnUpdates) {
+        androidx.compose.runtime.LaunchedEffect(guard) {
+            // A burst of refreshes landing together (a page reads several tables) reloads once.
+            com.bioscan.fieldterminal.data.ReadCache.updates.collectLatest {
+                kotlinx.coroutines.delay(300)
+                guard.retry()
+            }
+        }
+    }
+    return guard
+}
+
+/** A number that grows each time a background refresh brings different data: a key for loads outside a LoadGuard. */
+@Composable
+fun rememberCacheVersion(): Int {
+    var version by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        com.bioscan.fieldterminal.data.ReadCache.updates.collectLatest {
+            kotlinx.coroutines.delay(300)
+            version++
+        }
+    }
+    return version
+}
 
 // Plain words for the two cases a person can act on: no connection, and everything else.
 fun describeLoadFailure(e: Throwable): String {

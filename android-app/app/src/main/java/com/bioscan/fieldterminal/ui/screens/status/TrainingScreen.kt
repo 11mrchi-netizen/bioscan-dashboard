@@ -63,7 +63,8 @@ private fun TrainingOverviewLoaded(content: @Composable (TrainingOverview) -> Un
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) {
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(cacheVersion) {
         try {
             overview = TrainingRepository(SupabaseClientProvider.client).loadOverview()
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -76,9 +77,7 @@ private fun TrainingOverviewLoaded(content: @Composable (TrainingOverview) -> Un
 
     val o = overview
     when {
-        isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.DomainTraining)
-        }
+        isLoading -> com.bioscan.fieldterminal.ui.components.SkeletonSections()
         error != null || o == null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             Text("Failed to load: ${error ?: "no data"}", style = FTType.BodySmall, color = FT.Critical)
         }

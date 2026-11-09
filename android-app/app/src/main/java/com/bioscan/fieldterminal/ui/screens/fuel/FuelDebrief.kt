@@ -172,10 +172,10 @@ fun FuelDebriefContent(target: DebriefTarget, onSaved: () -> Unit) {
                 val on = s in symptoms
                 val shape = RoundedCornerShape(FT.RadiusSmall)
                 Text(
-                    s.label.uppercase(), style = FTType.LabelCaps, color = if (on) FT.Warning else FT.TextSecondary,
+                    s.label.uppercase(), style = FTType.LabelCaps, color = if (on) FT.PlatinumInk else FT.TextSecondary,
                     modifier = Modifier
-                        .border(FT.BorderWidth, if (on) FT.Warning else FT.GlassBorder, shape)
-                        .background(if (on) FT.Warning.copy(alpha = 0.14f) else androidx.compose.ui.graphics.Color.Transparent, shape)
+                        .border(FT.BorderWidth, if (on) androidx.compose.ui.graphics.Color.Transparent else FT.GlassBorder, shape)
+                        .background(if (on) FT.PlatinumSolid else androidx.compose.ui.graphics.Color.Transparent, shape)
                         .ftClickable(shape = shape) { if (on) symptoms.remove(s) else symptoms.add(s) }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 )
@@ -183,14 +183,12 @@ fun FuelDebriefContent(target: DebriefTarget, onSaved: () -> Unit) {
         }
         if (symptoms.isEmpty()) Text("Nothing ticked: no discomfort.", style = FTType.Caption, color = FT.TextMuted)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f)) { DLabel("GUT (0 FINE - 10 BAD)"); FTDropdown(SCORES, gi, "0-10") { gi = it } }
-            Column(Modifier.weight(1f)) { DLabel("ENERGY (0 EMPTY - 10 STRONG)"); FTDropdown(SCORES, energy, "0-10") { energy = it } }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f)) { DLabel("TIREDNESS (0 FRESH - 10 SPENT)"); FTDropdown(SCORES, fatigue, "0-10") { fatigue = it } }
-            Column(Modifier.weight(1f)) { DLabel("THIRST (0 NONE - 10 SEVERE)"); FTDropdown(SCORES, thirst, "0-10") { thirst = it } }
-        }
+        // Ratings are slid, not picked from a list, each in its metric's hue.
+        fun slid(v: String?) = v?.toIntOrNull()
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("GUT", slid(gi), 0..10, FT.Metric.StoolLoose, { gi = it?.toString() ?: "" }, lowWord = "fine", highWord = "bad")
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("ENERGY", slid(energy), 0..10, FT.Metric.Energy, { energy = it?.toString() ?: "" }, lowWord = "empty", highWord = "strong")
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("TIREDNESS", slid(fatigue), 0..10, FT.Metric.Atl, { fatigue = it?.toString() ?: "" }, lowWord = "fresh", highWord = "spent")
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("THIRST", slid(thirst), 0..10, FT.Metric.Hydration, { thirst = it?.toString() ?: "" }, lowWord = "none", highWord = "severe")
         Text("Weigh-ins (optional): without clothes, before the start and at the finish before drinking. They make this a sweat test.", style = FTType.Caption, color = FT.TextSecondary)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) { DLabel("BEFORE KG"); FieldTextField(before, { before = it }, "e.g. 70.2", keyboardType = KeyboardType.Decimal) }

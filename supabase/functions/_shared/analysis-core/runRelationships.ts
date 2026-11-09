@@ -45,6 +45,8 @@ export interface RawInputs {
   context?: { date: string; utc_offset_min: number }[]
   /** Routine intelligence R4: phone use and mobility published by the phone (routineExposures.ts). */
   routine?: RoutineInputs
+  /** The app's scored mornings (score_history): next-morning RECOVERY and SLEEP as outcomes (catalogue 2.2.0). */
+  scores?: { day: string; recovery: number | null; sleep: number | null; charge?: number | null }[]
 }
 
 // Until 04:00 the small hours belong to the evening before: a drink or a late meal logged at 00:40 is part of that night.
@@ -81,6 +83,16 @@ export function localClock(context: { date: string; utc_offset_min: number }[]):
     const local = new Date(t + offsetFor(new Date(t).toISOString().slice(0, 10)) * 60000).toISOString()
     return { date: local.slice(0, 10), hour: Number(local.slice(11, 13)) }
   }
+}
+
+/**
+ * Local date and hour of a LOGGED time: the app and the sync writers store the phone's wall-clock reading with a zero
+ * offset (android domain/WallClock.kt; zepp-extract toLocalLabeledUtcIso), so the digits are the local time. Reading
+ * them through localClock moved every meal and session by the UTC offset (+8 h: lunch counted as a late meal, an
+ * 08:00 coffee as afternoon caffeine, a 17:00 session on the next day).
+ */
+export function wallClock(stamp: string): { date: string; hour: number } {
+  return { date: day(stamp), hour: hourOf(stamp) }
 }
 
 /** The evening a local moment belongs to: the same date, or the day before in the small hours. */
@@ -129,7 +141,10 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
   //   0  the check-in says none; or, only before the first check-in ever, a day with any food log (the legacy rule);
   //   null  unknown. After check-ins start, a day without one and without a positive log is unknown, not a zero.
   // Food logged in the small hours belongs to the evening before (a nightcap at 00:40, a midnight snack).
-  const clock = localClock(raw.context ?? [])
+  // Logged times (meals.logged_at, exercise_sessions.start_time) are the phone's local wall clock labelled UTC, so their
+  // digits are already local (CLAUDE.md, "Dates and times"); only real instants (trips) go through the offset clock.
+  const clock = wallClock
+  const instantClock = localClock(raw.context ?? [])
   const checkins = new Map((raw.checkins ?? []).map((c) => [c.date, c]))
   const firstCheckin = [...checkins.keys()].sort()[0] ?? null
   const mealDays = new Set<string>()
@@ -218,8 +233,13 @@ export function buildFrame(raw: RawInputs, today: string, lookbackDays = RELATIO
   const firstRecovery = [...recoveryDays].sort()[0]
   series.recovery_any = axis.map((d) => (recoveryDays.has(d) ? 1 : firstRecovery !== undefined && d >= firstRecovery ? 0 : null))
 
+  // The app's own morning scores (score_history), dated by the morning they describe, as HRV is.
+  const scores = raw.scores ?? []
+  series.recovery_score = alignToAxis(axis, scores.map((r) => ({ date: day(r.day), value: num(r.recovery) })))
+  series.sleep_score = alignToAxis(axis, scores.map((r) => ({ date: day(r.day), value: num(r.sleep) })))
+
   // Routine intelligence R4: phone use, places and commutes, each known only on days its source covers.
-  Object.assign(series, routineSeries(axis, raw.routine ?? {}, clock))
+  Object.assign(series, routineSeries(axis, raw.routine ?? {}, instantClock))
 
   // Illness days (and the day after recovery) are left out of every comparison.
   const excludedDays = new Set<string>()
@@ -256,7 +276,14 @@ export interface RelationshipRun {
 
 export interface LoadedFrame {
   userId: string
+  /** The UTC date of the run: the frame's last day. */
   today: string
+  /**
+   * The person's own calendar date at the run, from their latest UTC offset in daily_context (else the UTC date). Check-ins
+   * and episode marks carry the person's local date, so the health engine reads up to this day: east of UTC the nightly
+   * run (20:42 UTC) and morning check-ins otherwise fall a day "in the future" and are left out.
+   */
+  localToday?: string
   frame: Frame
 }
 
@@ -268,7 +295,7 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
   const q = (table: string, cols: string, col: string, from: string) => (a: number, b: number) =>
     admin.from(table).select(cols).eq('user_id', userId).gte(col, from).order(col).range(a, b)
 
-  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes] = await Promise.all([
+  const [wearable, sleep, wellbeing, meals, sessions, recovery, ill, checkins, context, health, phone, phoneApps, mobility, commutes, scoreRows] = await Promise.all([
     fetchAll<RawInputs['wearable'][number]>(q('wearable_daily', 'date, hrv, rhr, steps', 'date', since)),
     fetchAll<RawInputs['sleep'][number]>(q('sleep_daily', 'date, hours, deep_min, rem_min, respiratory_rate', 'date', since)),
     fetchAll<RawInputs['wellbeing'][number]>(q('wellbeing_daily', 'date, energy, mood, stress, soreness', 'date', since)),
@@ -289,6 +316,8 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
     fetchAll<NonNullable<RoutineInputs['mobility']>[number]>(q('mobility_daily', 'date, coverage_pct, day_type, outdoor_daylight_min', 'date', since)),
     fetchAll<NonNullable<RoutineInputs['commutes']>[number]>((a: number, b: number) =>
       admin.from('trips').select('start_at, end_at, active_min').eq('user_id', userId).eq('is_commute', true).gte('start_at', sinceStamp).order('start_at').range(a, b)),
+    // The app's scored mornings: read softly (the table may not exist yet, or the app may not have written it).
+    fetchAll<NonNullable<RawInputs['scores']>[number]>(q('score_history', 'day, recovery, sleep, charge', 'day', since)),
   ])
   const failed = [wearable, sleep, wellbeing, meals, sessions, recovery].find((r) => r.error)
   if (failed) return { userId, error: failed.error as string }
@@ -307,10 +336,19 @@ export async function loadFrame(admin: Admin, userId: string, now: Date = new Da
         mobility: mobility.error ? [] : mobility.rows,
         commutes: commutes.error ? [] : commutes.rows,
       },
+      scores: scoreRows.error ? [] : scoreRows.rows,
     },
     today,
   )
-  return { userId, today, frame }
+  return { userId, today, localToday: localDateAt(now, context.error ? [] : context.rows), frame }
+}
+
+/** The person's calendar date at [now] from the newest UTC offset logged (dates up to the day after the UTC date). */
+export function localDateAt(now: Date, context: { date: string; utc_offset_min: number | null }[]): string {
+  const utc = now.toISOString().slice(0, 10)
+  const latest = context.filter((c) => c.utc_offset_min !== null && c.date <= shift(utc, 1)).sort((a, b) => a.date.localeCompare(b.date)).at(-1)
+  if (!latest) return utc
+  return new Date(now.getTime() + Number(latest.utc_offset_min) * 60_000).toISOString().slice(0, 10)
 }
 
 export async function runRelationships(admin: Admin, userId: string, now: Date = new Date(), loaded?: LoadedFrame): Promise<RelationshipRun> {

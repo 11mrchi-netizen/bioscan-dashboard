@@ -86,7 +86,7 @@ class ScaleReadingRepository(private val supabase: SupabaseClient) {
         profileInput(reading.weightKg, reading.impedanceOhm, on)?.let { bodyComposition(it) }
 
     /** Every saved weigh-in, oldest first. */
-    suspend fun loadReadings(): List<ScaleReadingRow> = ReadCache.get(CACHE_KEY, tables = setOf("scale_readings")) {
+    suspend fun loadReadings(): List<ScaleReadingRow> = ReadCache.kept(CACHE_KEY, tables = setOf("scale_readings")) {
         supabase.postgrest.from("scale_readings")
             .select(Columns.list("id,occurred_at,weight_kg,impedance_ohm")) { order("occurred_at", Order.ASCENDING) }
             .decodeList<ScaleReadingRow>()

@@ -5,6 +5,7 @@ import {
   confidence,
   defaultServing,
   defaultState,
+  emptyResolvedItem,
   implausibility,
   isPlainQuery,
   looksCompound,
@@ -242,3 +243,16 @@ const merged = mergeSuggestions(
 assert.deepEqual(merged.map((s) => `${s.ref.kind}:${s.ref.id}`), ["cronometer:9", "catalog:2", "cronometer:11", "catalog:1", "catalog:3"]);
 
 console.log("matching.test.ts: all assertions passed");
+
+// Photo v3: a photo estimate standing in for an unmatched food adds its micronutrients too; unknown keys are ignored.
+{
+  const unmatched = { ...emptyResolvedItem("pickled mustard greens", 40), ai_estimate: { calories: 12, protein_g: 0.5, carbs_g: 2, fat_g: 0.1, extra: { sodium: 900, iron: 0.6, glitter: 5 } } };
+  reconcile(unmatched);
+  assert.equal(unmatched.used_estimate, true);
+  const sum = sumNutrients([unmatched]);
+  assert.equal(sum.totals.calories, 12);
+  assert.equal(sum.totals.sodium, 900);
+  assert.equal(sum.totals.iron, 0.6);
+  assert.equal(sum.totals.glitter, undefined);
+}
+console.log("photo v3 extras ok");

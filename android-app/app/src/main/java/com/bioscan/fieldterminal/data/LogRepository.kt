@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.data.model.LogEncounterRow
 import com.bioscan.fieldterminal.data.model.LogExerciseRow
 import com.bioscan.fieldterminal.data.model.LogHydrationRow
@@ -39,6 +42,7 @@ const val LOG_WINDOW_DAYS = 28
 
 // The merged entries from `since` on, how far back each flaggable mark's source is known to be complete, and the
 // supplement roster.
+@Serializable
 data class LogFeed(
     val entries: List<LogEntry>,
     val coverage: Map<LogMark, LocalDate?>,
@@ -48,7 +52,11 @@ data class LogFeed(
 
 class LogRepository(private val supabase: SupabaseClient) {
 
-    suspend fun loadFeed(since: LocalDate): LogFeed = coroutineScope {
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadFeed(since: LocalDate): LogFeed =
+        ReadCache.get("log.feed.$since", tables = null, serializer = LogFeed.serializer()) { fetchLoadFeed(since) }
+
+    private suspend fun fetchLoadFeed(since: LocalDate): LogFeed = coroutineScope {
         // Date columns from `since`; timestamps from the day before, so an entry near midnight is not lost to the stored
         // offset, then trimmed to `since` once parsed (entries are grouped by their own wall-clock day).
         val fromDate = since.toString()
@@ -154,7 +162,7 @@ class LogRepository(private val supabase: SupabaseClient) {
         val schedule = async {
             try {
                 supabase.postgrest.from("supplements")
-                    .select(columns = Columns.list("id,status,start_date,end_date,every_n_days"))
+                    .select(columns = Columns.list("id,status,start_date,end_date,every_n_days,time_of_day,slots,schedule"))
                     .decodeList<SupplementScheduleRow>()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e

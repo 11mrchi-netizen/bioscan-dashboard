@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,13 +36,18 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // showed a bare arrow, because "the sub-tab rail says where you are" -- but LOAD / PLAN / INJURY never named the section.
 @Composable
 // App restructure: [action] sits at the header's end (Today's "ADD ABOUT LAST EVENING").
-fun TileHeader(onBack: () -> Unit, title: String? = null, subtitle: String? = null, accent: Color? = null, action: (@Composable () -> Unit)? = null) {
+fun TileHeader(onBack: (() -> Unit)?, title: String? = null, subtitle: String? = null, accent: Color? = null, action: (@Composable () -> Unit)? = null) {
     Row(
         modifier = Modifier.fillMaxWidth().background(FT.Surface).padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = FT.TextSecondary)
+        // Scoring system rebuild: a top-level tab page (PLAN, LAB, ME) has no back arrow.
+        if (onBack != null) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = FT.TextSecondary)
+            }
+        } else {
+            Spacer(Modifier.width(10.dp))
         }
         if (title != null) {
             // Domain accents identify a section (contract §4); the dot is identity only, never state.
@@ -58,7 +65,7 @@ fun TileHeader(onBack: () -> Unit, title: String? = null, subtitle: String? = nu
 // rail pass their own `scrollState` and scroll it to the top when the tab changes.
 @Composable
 fun PinnedPage(
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     title: String,
     subtitle: String? = null,
     accent: Color? = null,

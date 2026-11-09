@@ -91,7 +91,7 @@ class MealPrepRepository(private val supabase: SupabaseClient) {
 
     /** The prep weeks starting on [weekStarts]; missing weeks are left out. */
     suspend fun loadWeeks(weekStarts: List<LocalDate>): List<MealPrepWeek> =
-        ReadCache.get("fuel.prep.${weekStarts.joinToString(",")}", tables = setOf(WEEKS)) {
+        ReadCache.kept("fuel.prep.${weekStarts.joinToString(",")}", tables = setOf(WEEKS)) {
             supabase.postgrest.from(WEEKS)
                 .select(Columns.list("week_start,picks,recipes,skipped,containers,status")) { filter { isIn("week_start", weekStarts.map { it.toString() }) } }
                 .decodeList<PrepWeekRow>().mapNotNull { it.toDomain() }
@@ -103,7 +103,7 @@ class MealPrepRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from(WEEKS).upsert(week.toRow()) { onConflict = "user_id,week_start" }
     }
 
-    suspend fun loadBreakfast(): List<BreakfastItem> = ReadCache.get("fuel.breakfast", tables = setOf(BREAKFAST)) {
+    suspend fun loadBreakfast(): List<BreakfastItem> = ReadCache.kept("fuel.breakfast", tables = setOf(BREAKFAST)) {
         supabase.postgrest.from(BREAKFAST).select(Columns.list("items")).decodeList<BreakfastRow>()
             .firstOrNull()?.items.orEmpty().map { BreakfastItem(it.foodId, it.grams) }
     }

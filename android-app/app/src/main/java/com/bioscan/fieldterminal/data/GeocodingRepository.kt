@@ -1,7 +1,7 @@
 package com.bioscan.fieldterminal.data
 
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
@@ -16,7 +16,7 @@ import kotlinx.serialization.json.Json
 // to light, non-bulk use -- both true here (a handful of calendar events'
 // addresses per screen load, on demand, nothing cached/scheduled).
 class GeocodingRepository {
-    companion object { private val client = HttpClient(Android) }
+    companion object { private val client = HttpClient(OkHttp) }
     private val json = Json { ignoreUnknownKeys = true }
 
     // Null on no match or any failure, deliberately not a thrown exception --

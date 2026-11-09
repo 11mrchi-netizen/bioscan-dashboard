@@ -15,6 +15,8 @@ import com.bioscan.fieldterminal.util.Perf
 class FieldTerminalApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // Pages open from the last data they showed (kept on disk) while fresh data loads (data/ReadCache.kt).
+        com.bioscan.fieldterminal.data.ReadCache.init(filesDir)
         Perf.enabled = BuildConfig.DEBUG // logcat tag "perf"; see util/Perf.kt
         Thread({
             Perf.timed("startup.warm") {

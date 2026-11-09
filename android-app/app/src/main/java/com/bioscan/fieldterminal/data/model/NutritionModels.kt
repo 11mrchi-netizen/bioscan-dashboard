@@ -17,6 +17,7 @@ data class MealRow(
     @SerialName("sugar_g") val sugarG: Double? = null,
     @SerialName("sodium_mg") val sodiumMg: Double? = null,
     val source: String? = null,
+    @SerialName("meal_slot") val mealSlot: String? = null,
 )
 
 @Serializable
@@ -116,6 +117,8 @@ data class MealItemRow(
     @SerialName("hydration_confidence") val hydrationConfidence: Double? = null,
     @SerialName("cronometer_nutrients") val cronometerNutrients: JsonObject? = null,
     @SerialName("cronometer_source") val cronometerSource: String? = null,
+    // The drink's class (hydration_factor_models), kept on the item: a drink with no catalog food still knows what it was.
+    @SerialName("beverage_class") val beverageClass: String? = null,
 )
 
 @Serializable

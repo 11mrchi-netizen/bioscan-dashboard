@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.data.model.LabDrawIdRow
 import com.bioscan.fieldterminal.data.model.LabDrawRow
 import com.bioscan.fieldterminal.data.model.LabResultRow
@@ -14,6 +17,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import java.time.LocalDate
 
+@Serializable
 data class LabsOverview(
     val earlierDraw: LabDrawRow?,
     val latestDraw: LabDrawRow?,
@@ -22,7 +26,11 @@ data class LabsOverview(
 
 class LabsRepository(private val supabase: SupabaseClient) {
 
-    suspend fun loadOverview(): LabsOverview {
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadOverview(): LabsOverview =
+        ReadCache.get("labs.overview", tables = setOf("lab_draws", "lab_results"), serializer = LabsOverview.serializer()) { fetchLoadOverview() }
+
+    private suspend fun fetchLoadOverview(): LabsOverview {
         val draws = supabase.postgrest.from("lab_draws")
             .select(columns = Columns.list("id,draw_date,lab_name")) {
                 order("draw_date", Order.ASCENDING)

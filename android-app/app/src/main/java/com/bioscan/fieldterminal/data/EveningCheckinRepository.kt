@@ -21,13 +21,15 @@ data class EveningCheckinRow(
     @SerialName("late_meal") val lateMeal: Boolean? = null,
     val stress: Int? = null,
     @SerialName("late_screen") val lateScreen: Boolean? = null,
+    @SerialName("gut_comfort") val gutComfort: Int? = null,
+    @SerialName("gut_symptoms") val gutSymptoms: List<String>? = null,
 )
 
 fun EveningCheckinRow.toDomain(): EveningCheckin =
-    EveningCheckin(LocalDate.parse(date), drinks, caffeineAfter14, lateMeal, stress, lateScreen)
+    EveningCheckin(LocalDate.parse(date), drinks, caffeineAfter14, lateMeal, stress, lateScreen, gutComfort, gutSymptoms)
 
 fun EveningCheckin.toRow(): EveningCheckinRow =
-    EveningCheckinRow(date.toString(), drinks, caffeineAfter14, lateMeal, stress, lateScreen)
+    EveningCheckinRow(date.toString(), drinks, caffeineAfter14, lateMeal, stress, lateScreen, gutComfort, gutSymptoms)
 
 @Serializable
 private data class DailyContextRow(
@@ -36,11 +38,14 @@ private data class DailyContextRow(
     @SerialName("time_zone") val timeZone: String,
 )
 
+// gut_comfort and gut_symptoms: supabase/migrations/20261113_evening_checkin_gut.sql.
+private const val CHECKIN_COLUMNS = "date,drinks,caffeine_after_14,late_meal,stress,late_screen,gut_comfort,gut_symptoms"
+
 class EveningCheckinRepository(private val supabase: SupabaseClient) {
 
     suspend fun load(date: LocalDate): EveningCheckin? =
         supabase.postgrest.from("evening_checkins")
-            .select(columns = Columns.list("date,drinks,caffeine_after_14,late_meal,stress,late_screen")) {
+            .select(columns = Columns.list(CHECKIN_COLUMNS)) {
                 filter { eq("date", date.toString()) }
             }
             .decodeList<EveningCheckinRow>()
@@ -49,7 +54,7 @@ class EveningCheckinRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadSince(since: LocalDate): List<EveningCheckin> =
         supabase.postgrest.from("evening_checkins")
-            .select(columns = Columns.list("date,drinks,caffeine_after_14,late_meal,stress,late_screen")) {
+            .select(columns = Columns.list(CHECKIN_COLUMNS)) {
                 filter { gte("date", since.toString()) }
                 order("date", Order.ASCENDING)
             }

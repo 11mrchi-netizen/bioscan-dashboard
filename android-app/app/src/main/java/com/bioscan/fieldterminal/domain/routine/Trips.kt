@@ -1,4 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.routine
+
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 
 // Routine intelligence R3: trips between consecutive visits. A trip runs from one visit's end to the next visit's start;
 // its legs come from the activity transitions in that span (each entered activity lasts until the next one), its distance
@@ -9,8 +13,10 @@ data class TransitionEvent(val ts: Long, val activity: String, val enter: Boolea
 
 data class TripVisit(val startMs: Long, val endMs: Long, val lat: Double, val lon: Double, val placeId: String?)
 
+@Serializable
 data class TripLeg(val mode: String, val minutes: Double)
 
+@Serializable
 data class Trip(
     val startMs: Long,
     val endMs: Long,

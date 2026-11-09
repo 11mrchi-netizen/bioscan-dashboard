@@ -77,7 +77,8 @@ fun N1Tab() {
     val scope = rememberCoroutineScope()
 
     // Optional enrichment, reloaded after a registration or a delete: a failed read just leaves the experiment cards out.
-    LaunchedEffect(experimentsKey) {
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(experimentsKey, cacheVersion) {
         val repo = ExperimentsRepository(SupabaseClientProvider.client)
         runCatching { experiments = repo.loadExperiments() }
         runCatching { experimentResults = repo.loadResults() }
@@ -115,9 +116,7 @@ fun N1Tab() {
         if (guard.error != null) {
             LoadErrorCard(guard)
         } else {
-            Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FT.DomainLabs)
-            }
+            com.bioscan.fieldterminal.ui.components.SkeletonSections()
         }
         return
     }

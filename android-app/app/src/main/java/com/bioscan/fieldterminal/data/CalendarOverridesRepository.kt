@@ -22,7 +22,7 @@ private data class OverrideRow(
 
 class CalendarOverridesRepository(private val supabase: SupabaseClient) {
 
-    suspend fun load(): Map<String, CalendarOverride> = ReadCache.get("fuel.calendar_overrides", tables = setOf(TABLE)) {
+    suspend fun load(): Map<String, CalendarOverride> = ReadCache.kept("fuel.calendar_overrides", tables = setOf(TABLE)) {
         supabase.postgrest.from(TABLE).select(Columns.list("event_id,treat_as,duration_min,intensity")).decodeList<OverrideRow>()
             .mapNotNull { r ->
                 val kind = OverrideKind.of(r.treatAs) ?: return@mapNotNull null

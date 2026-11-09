@@ -1,7 +1,7 @@
 package com.bioscan.fieldterminal.data
 
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
@@ -29,7 +29,7 @@ private val json = Json { ignoreUnknownKeys = true }
 class SupplementImpactException(message: String) : Exception(message)
 
 class SupplementImpactRepository(private val apiKey: String) {
-    companion object { private val client = HttpClient(Android) }
+    companion object { private val client = HttpClient(OkHttp) }
 
     suspend fun describeImpact(name: String, dose: String): String {
         val requestBody = buildJsonObject {

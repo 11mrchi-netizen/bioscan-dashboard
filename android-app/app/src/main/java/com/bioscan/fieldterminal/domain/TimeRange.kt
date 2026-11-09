@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -44,6 +47,7 @@ fun aggregate(points: List<Pair<LocalDate, Double>>, range: TimeRange, asOf: Loc
 }
 
 /** A day's low and high (heart rate, blood pressure). */
+@Serializable
 data class DayRange(val low: Double, val high: Double)
 
 /**

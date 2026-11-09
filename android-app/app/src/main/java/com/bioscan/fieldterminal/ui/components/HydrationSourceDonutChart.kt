@@ -26,7 +26,7 @@ import kotlin.math.roundToInt
 // so Water vs Beverages (modeled) is the one real categorical split this
 // data supports -- not a fabricated coffee/tea/soda breakdown. Same fixed
 // categorical order + Canvas drawArc pattern as MacroDonutChart.kt.
-private val HYDRATION_SOURCE_COLORS = listOf(FT.Info, FT.DomainFuel) // water, beverages, in that fixed order
+private val HYDRATION_SOURCE_COLORS = listOf(FT.Metric.Hydration, FT.Metric.Caffeine) // water, beverages, in that fixed order
 
 @Composable
 fun HydrationSourceDonutChart(waterMl: Double, beverageMl: Double, modifier: Modifier = Modifier) {

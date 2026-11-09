@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.data.model.Vo2MaxRow
 import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
 import com.bioscan.fieldterminal.domain.aging.LabDraw
@@ -16,6 +19,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import java.time.LocalDate
 
+@Serializable
 data class AgingProfileOverview(
     val chronologicalAgeYears: Int?,
     // Latest available result and full per-draw history are both exposed --
@@ -49,7 +53,11 @@ private data class LabResultRow(
 // path) and the new user_profile table.
 class AgingProfileRepository(private val supabase: SupabaseClient) {
 
-    suspend fun loadOverview(): AgingProfileOverview {
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadOverview(): AgingProfileOverview =
+        ReadCache.get("aging.overview", tables = null, serializer = AgingProfileOverview.serializer()) { fetchLoadOverview() }
+
+    private suspend fun fetchLoadOverview(): AgingProfileOverview {
         val profile = UserProfileRepository(supabase).loadProfile()
         val dateOfBirth = profile?.dateOfBirth?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
         val chronoAge = dateOfBirth?.let { chronologicalAgeYears(it) }

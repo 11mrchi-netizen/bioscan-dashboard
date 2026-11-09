@@ -61,7 +61,7 @@ private fun SettingsNavRow(title: String, subtitle: String, onClick: () -> Unit)
         modifier = Modifier
             .fillMaxWidth()
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusCard))
-            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusCard))
+            .background(FT.Glass, RoundedCornerShape(FT.RadiusCard))
             .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusCard))
             .padding(horizontal = 16.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

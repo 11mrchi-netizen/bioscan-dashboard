@@ -53,6 +53,8 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.bioscan.fieldterminal.domain.formatAmount
+import com.bioscan.fieldterminal.domain.spec
 
 // DAV-81. The roster (`supplements`) itself had no UI to create or edit --
 // only ever read, by SupplementsScreen.kt's display and AddEntrySheet.kt's
@@ -60,16 +62,6 @@ import java.time.LocalDate
 // share this one sheet since they're the same 3 fields either way; ending a
 // supplement is a separate, single-tap action here rather than a 4th field,
 // since it's a status transition, not part of "what/how much/when."
-private val TIME_OF_DAY_OPTIONS = listOf("morning", "afternoon", "night", "as-needed")
-
-// null = daily (no restriction). Values match the every_n_days column.
-private val EVERY_N_DAYS_OPTIONS: List<Pair<Int?, String>> = listOf(
-    null to "DAILY",
-    2 to "2 DAYS",
-    3 to "3 DAYS",
-    4 to "4 DAYS",
-    7 to "WEEKLY",
-)
 private val sheetHeaderTitleStyle = FTType.SectionTitle
 private val sheetActionLabelStyle = FTType.LabelCaps
 
@@ -89,9 +81,8 @@ fun SupplementFormSheet(
     val context = LocalContext.current
 
     var name by remember { mutableStateOf(existing?.name ?: "") }
-    var dose by remember { mutableStateOf(existing?.dose ?: "") }
-    var timeOfDay by remember { mutableStateOf(existing?.timeOfDay ?: "morning") }
-    var everyNDays by remember { mutableStateOf(existing?.everyNDays) }
+    // Regimen model: kind, dose, form and route, times of day, schedule, cycle and dose steps (RegimenFields.kt).
+    val regimen = remember(existing?.id) { RegimenEditorState(existing) }
     var saving by remember { mutableStateOf(false) }
     var ending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -105,6 +96,9 @@ fun SupplementFormSheet(
         val pid = existing?.productId ?: return@LaunchedEffect
         try {
             val full = repo.loadProductIngredientsFull(pid)
+            // The rows are per label serving; the sheet shows one dose (label x servings per dose).
+            val spd = existing.servingsPerDose
+            fun perDose(v: Double) = com.bioscan.fieldterminal.domain.formatAmount(Math.round(v * spd * 1000) / 1000.0)
             ingredients.clear()
             full.forEach { ing ->
                 ingredients.add(EditableIngredient().apply {
@@ -113,9 +107,9 @@ fun SupplementFormSheet(
                     // overwrote the supplement NAME field with the ingredient name.
                     this.name = ing.name
                     nutrientKey = ing.nutrientKey ?: ""
-                    compoundAmount = ing.compoundAmount.toString()
+                    compoundAmount = perDose(ing.compoundAmount)
                     compoundUnit = ing.compoundUnit
-                    elementalAmount = ing.elementalAmount?.toString() ?: ""
+                    elementalAmount = ing.elementalAmount?.let(::perDose) ?: ""
                     elementalUnit = ing.elementalUnit ?: ""
                 })
             }
@@ -134,61 +128,16 @@ fun SupplementFormSheet(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(
-                if (existing == null) "ADD SUPPLEMENT" else "EDIT SUPPLEMENT",
+                if (existing == null) "ADD TO YOUR REGIMEN" else "EDIT ${regimen.kind.label.uppercase()}",
                 style = sheetHeaderTitleStyle,
                 color = FT.Emerald,
             )
 
             Column { FormFieldLabel("NAME"); FieldTextField(name, { name = it }, "e.g. Vitamin D3 (NOW Foods)") }
-            Column { FormFieldLabel("DOSE"); FieldTextField(dose, { dose = it }, "e.g. 5000 IU") }
+            RegimenFields(regimen)
 
-            Column {
-                FormFieldLabel("TIME OF DAY")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TIME_OF_DAY_OPTIONS.forEach { option ->
-                        val selected = option == timeOfDay
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                                .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-                                .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { timeOfDay = option }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                option.uppercase(),
-                                style = FTType.MonoCaption,
-                                color = if (selected) FT.Emerald else FT.TextSecondary,
-                            )
-                        }
-                    }
-                }
-            }
-
-            Column {
-                FormFieldLabel("FREQUENCY")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    EVERY_N_DAYS_OPTIONS.forEach { (days, label) ->
-                        val selected = days == everyNDays
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-                                .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-                                .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { everyNDays = days }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                label,
-                                style = FTType.Micro,
-                                color = if (selected) FT.Emerald else FT.TextSecondary,
-                            )
-                        }
-                    }
-                }
-            }
+            // One dose: how much of the form, then what that dose contains.
+            DoseCountField(regimen)
 
             IngredientsSection(ingredients)
 
@@ -198,8 +147,9 @@ fun SupplementFormSheet(
                 roster.filter { it.id != draftId } + RosterItem(
                     id = draftId,
                     name = name,
-                    timeOfDay = timeOfDay,
-                    everyNDays = everyNDays,
+                    timeOfDay = regimen.firstSlot,
+                    everyNDays = regimen.everyNDaysOrNull,
+                    slots = if (regimen.asNeeded) emptyList() else com.bioscan.fieldterminal.domain.REGIMEN_SLOTS.filter { it in regimen.slots },
                     ingredientKeys = roster.firstOrNull { it.id == draftId }?.ingredientKeys.orEmpty(),
                     ingredientNames = ingredients.map { it.name },
                 ),
@@ -294,15 +244,23 @@ fun SupplementFormSheet(
                 )
             }
 
+            // Medications, hormones, peptides: a reference card from RxNorm and the FDA label (or PubMed); supplements keep
+            // their label-database check below.
+            if (regimen.kind != com.bioscan.fieldterminal.domain.RegimenKind.SUPPLEMENT) {
+                RegimenReferenceSection(existing?.id, name.trim(), roster.filter { it.id != existing?.id }.map { it.id to it.name },
+                    unit = regimen.unit, dose = regimen.amount.replace(',', '.').toDoubleOrNull())
+            }
+
             existing?.productId?.let { ProductVerifySection(it) }
 
             error?.let {
                 Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical)
             }
 
-            val valid = name.isNotBlank() && dose.isNotBlank()
+            val (draft, missing) = regimen.draft(name)
+            if (missing != null && name.isNotBlank()) Text(missing, style = FTType.Caption, color = FT.TextMuted)
             FTButton(label = if (saving) "SAVING..." else "SAVE", emphasis = FTButtonEmphasis.Primary) {
-                if (valid && !saving) {
+                if (draft != null && !saving) {
                     saving = true
                     error = null
                     scope.launch {
@@ -311,15 +269,32 @@ fun SupplementFormSheet(
                             // rows with a real name count -- a blank row left
                             // over from "+ ADD INGREDIENT" is silently dropped
                             // rather than saved as an empty ingredient.
-                            val filledIngredients = ingredients.mapNotNull { it.toInputOrNull() }
+                            val perDose = ingredients.mapNotNull { it.toInputOrNull() }
+                            // The ingredients are entered per dose; the product keeps them per label serving, so the
+                            // pantry (which counts servings) and the nutrient totals stay right. A label serving that can
+                            // be compared with the dose sets servings per dose; otherwise the serving becomes one unit
+                            // (capsules, tablets...) or the dose itself (measured forms).
+                            val wholeUnits = com.bioscan.fieldterminal.domain.formRule(draft.form)?.splitting != com.bioscan.fieldterminal.domain.Splitting.MEASURED
+                            val pid = existing?.productId
+                            val (labelSize, labelUnit) = pid?.let { runCatching { repo.loadProductServing(it) }.getOrDefault(null to null) } ?: (null to null)
+                            val known = com.bioscan.fieldterminal.domain.servingsPerDose(draft.amount, draft.unit, labelSize, labelUnit)
+                            val spd = known ?: if (wholeUnits) draft.amount else 1.0
+                            val servingSize = if (known != null) labelSize!! else if (wholeUnits) 1.0 else draft.amount
+                            fun perServing(list: List<IngredientInput>) = list.map { i ->
+                                i.copy(compoundAmount = i.compoundAmount / spd, elementalAmount = i.elementalAmount?.let { it / spd })
+                            }
                             val productId = when {
-                                filledIngredients.isNotEmpty() && existing?.productId != null -> {
-                                    repo.replaceProductIngredients(existing.productId, filledIngredients)
-                                    existing.productId
+                                perDose.isNotEmpty() && pid != null -> {
+                                    repo.replaceProductIngredients(pid, perServing(perDose))
+                                    if (known == null) repo.setProductServing(pid, servingSize, draft.unit)
+                                    pid
                                 }
-                                filledIngredients.isNotEmpty() -> repo.createProductWithIngredients(name.trim(), null, null, filledIngredients)
+                                perDose.isNotEmpty() -> repo.createProductWithIngredients(name.trim(), servingSize, draft.unit, perServing(perDose))
+                                pid != null && known == null && labelSize == null -> { repo.setProductServing(pid, servingSize, draft.unit); pid }
                                 else -> null
                             }
+                            // Servings per dose change only with a label they were worked out from (compared, or just set).
+                            val draft = draft.copy(servingsPerDose = if (known != null || productId != null) spd else null)
 
                             if (existing == null) {
                                 // DAV-83: best-effort only -- a failed or
@@ -330,14 +305,14 @@ fun SupplementFormSheet(
                                 // failures elsewhere in this app.
                                 val aiNote = GeminiApiKeyStore.get(context)?.let { key ->
                                     try {
-                                        SupplementImpactRepository(key).describeImpact(name.trim(), dose.trim())
+                                        SupplementImpactRepository(key).describeImpact(name.trim(), "${formatAmount(draft.amount)} ${draft.unit}")
                                     } catch (e: Exception) {
                                         null
                                     }
                                 }
-                                repo.addSupplement(name.trim(), dose.trim(), timeOfDay, LocalDate.now(), aiNote, everyNDays, productId)
+                                repo.saveRegimen(null, draft, productId, aiNote)
                             } else {
-                                repo.updateSupplement(existing.id, name.trim(), dose.trim(), timeOfDay, everyNDays, productId)
+                                repo.saveRegimen(existing.id, draft, productId)
                             }
                             onSaved()
                         } catch (e: Exception) {
@@ -352,7 +327,7 @@ fun SupplementFormSheet(
             if (existing != null && existing.status == "active") {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    if (ending) "ENDING..." else "END THIS SUPPLEMENT",
+                    if (ending) "ENDING..." else "STOP TAKING IT",
                     style = FTType.BodySmall,
                     color = FT.Critical,
                     modifier = Modifier
@@ -372,6 +347,43 @@ fun SupplementFormSheet(
                             }
                         },
                 )
+            }
+            if (existing != null && existing.status == "ended") {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (ending) "RESTARTING..." else "START TAKING IT AGAIN",
+                    style = FTType.LabelCaps,
+                    color = FT.Emerald,
+                    modifier = Modifier.fillMaxWidth().ftClickable {
+                        if (!ending) {
+                            ending = true
+                            scope.launch {
+                                try {
+                                    // Saves any edits first, so a restart can come back at a new dose or schedule.
+                                    draft?.let { repo.saveRegimen(existing.id, it, existing.productId) }
+                                    repo.restartSupplement(existing.id)
+                                    onSaved()
+                                } catch (e: Exception) {
+                                    error = e.message ?: "Unknown error"
+                                    ending = false
+                                }
+                            }
+                        }
+                    },
+                )
+            }
+            if (existing != null) {
+                var itemWatches by remember(existing.id) { mutableStateOf<List<com.bioscan.fieldterminal.domain.LabWatch>>(emptyList()) }
+                LaunchedEffect(existing.id) {
+                    itemWatches = runCatching { com.bioscan.fieldterminal.data.LabWatchRepository(SupabaseClientProvider.client).watches() }
+                        .getOrDefault(emptyList()).filter { it.itemId == existing.id }
+                }
+                LabWatchSection(itemWatches, title = "LABS TO WATCH", showItem = false)
+                RegimenEffectsSection(existing.id)
+                if (regimen.injectable) {
+                    InjectableSection(existing.id, existing.spec(), regimen.syringeUnits.replace(',', '.').toDoubleOrNull() ?: existing.syringeUnits)
+                }
+                RegimenHistory(existing.id)
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -415,7 +427,8 @@ private class EditableIngredient {
 @Composable
 private fun IngredientsSection(ingredients: androidx.compose.runtime.snapshots.SnapshotStateList<EditableIngredient>) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        FormFieldLabel("INGREDIENTS (OPTIONAL)")
+        FormFieldLabel("INGREDIENTS IN ONE DOSE (OPTIONAL)")
+        Text("Amounts for the dose above. Scanned labels list one serving: check they match your dose.", style = FTType.Caption, color = FT.TextMuted)
         ingredients.forEachIndexed { i, ingredient -> IngredientEditor(ingredient) { ingredients.removeAt(i) } }
         Text(
             "+ ADD INGREDIENT",

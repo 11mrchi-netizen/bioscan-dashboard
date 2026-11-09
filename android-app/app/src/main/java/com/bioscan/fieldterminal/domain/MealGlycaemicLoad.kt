@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.domain
 import com.bioscan.fieldterminal.data.model.MealRow
 import java.time.OffsetDateTime
 
-// Glucose-spiking estimate (Today › Glucose spiking): a coarse, per-meal relative glycaemic load from what is logged
+// Glucose-spiking estimate (FUEL › Nutrition › Glucose spiking; a band chip on each TODAY meal page): a coarse, per-meal relative glycaemic load from what is logged
 // (carbohydrate, fibre, sugar, protein, fat). It is NOT a glucose prediction: there is no glucose or glycaemic-index data
 // here, individual responses to the same meal differ widely (Zeevi 2015; Berry 2020), and the modifier sizes below are
 // heuristics, so the output is an ordinal band, never mg/dL. docs/ft-redesign/model-plans.md, section 2.
@@ -50,13 +50,21 @@ data class MealGlycaemicEstimate(
 
 /** Meals in time order, a new group wherever the gap to the previous meal exceeds [gapMin]. */
 fun groupMeals(meals: List<MealRow>, gapMin: Int = MEAL_GROUP_GAP_MIN): List<List<MealRow>> {
-    val sorted = meals.mapNotNull { m -> runCatching { OffsetDateTime.parse(m.loggedAt) }.getOrNull()?.let { it to m } }.sortedBy { it.first }
-    val groups = mutableListOf<MutableList<Pair<OffsetDateTime, MealRow>>>()
-    for (p in sorted) {
-        val last = groups.lastOrNull()?.last()
-        if (last != null && java.time.Duration.between(last.first, p.first).toMinutes() <= gapMin) groups.last() += p else groups += mutableListOf(p)
+    // A drink with nothing logged (black coffee, water, electrolytes) adds nothing to a rise and must not make the meal's
+    // carbs unknown: it is left out.
+    val timed = meals.filterNot { it.calories == null && it.carbsG == null && it.proteinG == null && it.fatG == null }
+        .mapNotNull { m -> runCatching { OffsetDateTime.parse(m.loggedAt) }.getOrNull()?.let { it to m } }.sortedBy { it.first }
+    // Meals labelled with the same main meal (breakfast, lunch, dinner; meals.meal_slot) are one meal, however far apart they
+    // were logged. Snacks, pre-session and recovery fuel happen several times a day, so they are not joined by label.
+    fun main(m: MealRow) = com.bioscan.fieldterminal.domain.fuel.mealSlotOf(m.mealSlot)?.main == true
+    val labelled = timed.filter { main(it.second) }.groupBy { it.second.mealSlot }.values.map { it.toMutableList() }
+    // The rest share a rise when logged within [gapMin] of the first of them, so a long grazing run is not chained into one.
+    val unlabelled = mutableListOf<MutableList<Pair<OffsetDateTime, MealRow>>>()
+    for (p in timed.filterNot { main(it.second) }) {
+        val first = unlabelled.lastOrNull()?.first()
+        if (first != null && java.time.Duration.between(first.first, p.first).toMinutes() <= gapMin) unlabelled.last() += p else unlabelled += mutableListOf(p)
     }
-    return groups.map { g -> g.map { it.second } }
+    return (labelled + unlabelled).sortedBy { it.first().first }.map { g -> g.map { it.second } }
 }
 
 private fun List<Double?>.sumKnown(): Double? = if (any { it == null }) null else sumOf { it!! }
@@ -104,3 +112,7 @@ fun estimateMealResponses(meals: List<MealRow>): List<MealGlycaemicEstimate> = g
         drivers, missing,
     )
 }
+
+/** The highest band among one meal slot's logged meals (each rise estimated as above); null when none had carbs logged. */
+fun slotBand(meals: List<MealRow>): GlycaemicBand? =
+    estimateMealResponses(meals).mapNotNull { it.band }.maxByOrNull { it.ordinal }

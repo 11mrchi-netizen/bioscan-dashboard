@@ -99,7 +99,7 @@ private fun GlanceChipView(chip: GlanceChip, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .clip(shape)
-            .background(FT.GlassFill)
+            .background(FT.Glass)
             .border(FT.BorderWidth, FT.GlassBorder, shape)
             .ftClickable(shape = shape, role = Role.Button, onClickLabel = "Go to ${chip.label.lowercase()}", onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp),

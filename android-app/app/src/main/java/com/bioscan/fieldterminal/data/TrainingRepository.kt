@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.data.model.Vo2MaxRow
 import com.bioscan.fieldterminal.domain.averagePaceMinPerKmSince
@@ -41,6 +44,7 @@ import java.time.temporal.ChronoUnit
 // insert from before manual creation was retired 2026-09-15) is also
 // collapsed to one.
 
+@Serializable
 data class TrainingOverview(
     val thisWeekDistanceKm: Double,
     val fourWeekAvgKmPerWeek: Double,
@@ -83,7 +87,11 @@ data class TrainingOverview(
 
 class TrainingRepository(private val supabase: SupabaseClient) {
 
-    suspend fun loadOverview(): TrainingOverview {
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadOverview(): TrainingOverview =
+        ReadCache.get("training.overview", tables = setOf("exercise_sessions"), serializer = TrainingOverview.serializer()) { fetchLoadOverview() }
+
+    private suspend fun fetchLoadOverview(): TrainingOverview {
         // 200 is a generous row-count margin, not a real 90-day date filter
         // -- same "bounded, not unbounded" tradeoff this query already made
         // when it only covered runs.

@@ -230,8 +230,15 @@ private fun ProposalCard(
                 }
             }
             "wellbeing" -> p.needs.filter { dim -> wellbeingOf(p, dim) == null }.forEach { dim ->
-                AgentLabel("${dim.uppercase()} (0-10)")
-                TextChipRow((0..10).map { it.toString() }, null, perRow = 6) { picked -> picked?.toIntOrNull()?.let { onChange(withDim(p, dim, it)) } }
+                val ink = when (dim) {
+                    "energy" -> FT.Metric.Energy
+                    "mood" -> FT.Metric.Mood
+                    "stress" -> FT.Metric.Stress
+                    "soreness" -> FT.Metric.Soreness
+                    else -> FT.Metric.WeightEma
+                }
+                // Picking a value answers the question (the row disappears), so the slider has no CLEAR.
+                com.bioscan.fieldterminal.ui.components.FTRatingSlider(dim.uppercase(), null, 0..10, ink, { v -> v?.let { onChange(withDim(p, dim, it)) } }, optional = false)
             }
             "supplement_taken" -> if (p.supplementId == null) {
                 if (p.candidates.isEmpty()) {

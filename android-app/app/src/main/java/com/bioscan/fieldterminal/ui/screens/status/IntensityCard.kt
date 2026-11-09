@@ -35,9 +35,10 @@ import com.bioscan.fieldterminal.domain.IntensityBand
 import com.bioscan.fieldterminal.domain.WeekIntensity
 import com.bioscan.fieldterminal.domain.ZoneMethod
 import com.bioscan.fieldterminal.domain.weeklyIntensity
-import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
 import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.ui.components.drawBarStub
+import com.bioscan.fieldterminal.ui.components.drawStackedBar
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
@@ -81,7 +82,7 @@ fun IntensityCard(modifier: Modifier = Modifier) {
     val w = weeks ?: return
     if (w.none { it.totalSeconds > 0 }) return
 
-    FTCard(title = "INTENSITY, LAST 12 WEEKS", info = INFO, infoDetails = INFO_DETAILS, methodology = "intensity_distribution", modifier = modifier) {
+    com.bioscan.fieldterminal.ui.screens.detail.Section("INTENSITY · 12 WEEKS", info = INFO + "\n\n" + INFO_DETAILS) {
         var selected by remember(w) { mutableStateOf<Int?>(null) }
         val shown = selected ?: w.lastIndex
         val week = w[shown]
@@ -125,26 +126,17 @@ private fun StackedWeeks(weeks: List<WeekIntensity>, shown: Int, onSelect: (Int)
             .pointerInput(weeks) { detectTapGestures { onSelect(indexAt(it.x, size.width.toFloat())) } }
             .pointerInput(weeks) { detectHorizontalDragGestures { change, _ -> onSelect(indexAt(change.position.x, size.width.toFloat())) } },
     ) {
-        val slot = size.width / weeks.size
-        val barW = (slot * 0.62f).coerceAtMost(26.dp.toPx())
-        val usable = size.height - 4.dp.toPx()
-        val gap = 2.dp.toPx()
+        val layout = com.bioscan.fieldterminal.ui.components.BarLayout(size.width, weeks.size, com.bioscan.fieldterminal.ui.components.FTBarSpec.gapFor(weeks.size).toPx())
+        val usable = size.height - com.bioscan.fieldterminal.ui.components.FTBarSpec.TopPad.toPx()
         weeks.forEachIndexed { i, wk ->
-            val x = i * slot + (slot - barW) / 2f
-            val alpha = if (i == shown) 1f else 0.55f
+            val x = layout.left(i)
             if (wk.totalSeconds <= 0) {
-                drawRoundRect(FT.GlassTrack, Offset(x, size.height - 2.dp.toPx()), Size(barW, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
+                drawBarStub(x, layout.barWidth)
                 return@forEachIndexed
             }
-            var y = size.height
-            IntensityBand.entries.forEach { band ->
-                val h = ((wk.seconds[band] ?: 0.0) / top).toFloat() * usable
-                if (h > 0.5f) {
-                    val drawn = (h - gap).coerceAtLeast(1f)
-                    drawRoundRect(BAND_COLORS.getValue(band).copy(alpha = alpha), Offset(x, y - drawn), Size(barW, drawn), CornerRadius(2.dp.toPx()))
-                    y -= h
-                }
-            }
+            // charts-bars-and-scales.md §1.10: stacked from the baseline, 2 dp between segments, the top one rounded.
+            drawStackedBar(IntensityBand.entries.map { wk.seconds[it] ?: 0.0 }, IntensityBand.entries.map { BAND_COLORS.getValue(it) },
+                x, layout.barWidth, { v -> (v / top).toFloat() * usable }, alpha = if (i == shown) 1f else com.bioscan.fieldterminal.ui.components.FTBarSpec.DIMMED_ALPHA, cap = i == shown)
         }
     }
 }

@@ -29,6 +29,8 @@ data class StackEntry(
     // supplement_products.match_confidence ("low" = inferred, "manual" = entered).
     val matchConfidence: String?,
     val ingredients: List<StackIngredient>,
+    // Planned doses a day on average (domain/Regimen.kt: slots, weekdays, cycles); null = one dose every everyNDays.
+    val dosesPerDay: Double? = null,
 )
 
 data class NutrientExposure(
@@ -133,7 +135,11 @@ fun analyzeStack(entries: List<StackEntry>, reference: Map<String, NutrientInfo>
                 )
                 continue
             }
-            val perDay = if (entry.everyNDays != null && entry.everyNDays > 1) converted / entry.everyNDays else converted
+            val perDay = when {
+                entry.dosesPerDay != null -> converted * entry.dosesPerDay
+                entry.everyNDays != null && entry.everyNDays > 1 -> converted / entry.everyNDays
+                else -> converted
+            }
             val a = acc.getOrPut(key) { ExposureAcc(targetUnit) }
             a.amount += perDay
             a.contributors += entry.name

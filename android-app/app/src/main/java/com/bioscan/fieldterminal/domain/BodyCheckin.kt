@@ -1,3 +1,4 @@
+@file:kotlinx.serialization.UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain
 
 import java.time.LocalDate
@@ -55,10 +56,14 @@ enum class BodySite(
         "Arm raised to the side, elbow bent, biceps fully tensed: around the peak.", optional = true),
     FOREARM("forearm", "Forearm", MeasureMethod.TAPE, true, 15.0..50.0,
         "Widest part just below the elbow, arm relaxed, palm up."),
+    WRIST("wrist", "Wrist", MeasureMethod.TAPE, false, 10.0..30.0,
+        "Right wrist, hand open and relaxed: the smallest point between the hand and the wrist bone (just on the hand side of the bump). Tape snug, not pressing. Frame size: asked until recorded once."),
     THIGH("thigh", "Thigh", MeasureMethod.TAPE, true, 30.0..100.0,
         "Standing, weight on both feet: halfway between the hip crease and the top of the kneecap."),
     CALF("calf", "Calf", MeasureMethod.TAPE, true, 20.0..65.0,
         "Standing, weight on both feet: the widest part of the calf."),
+    ANKLE("ankle", "Ankle", MeasureMethod.TAPE, false, 12.0..40.0,
+        "Right ankle, standing with weight on both feet: the smallest point just above the ankle bones. Tape snug, not pressing. Frame size: asked until recorded once."),
     SF_ABDOMINAL("sf_abdominal", "Abdominal skinfold", MeasureMethod.CALIPER, false, 2.0..60.0,
         "Vertical fold 2 cm to the right of the navel."),
     SF_SUPRAILIAC("sf_suprailiac", "Suprailiac skinfold", MeasureMethod.CALIPER, false, 2.0..60.0,
@@ -107,7 +112,11 @@ fun needsAnotherReading(method: MeasureMethod, readings: List<Double>): Boolean 
 fun parseReading(site: BodySite, text: String): Double? =
     text.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in site.range }
 
+@kotlinx.serialization.Serializable
+
 data class BodyMeasurement(val site: BodySite, val side: BodySide, val readings: List<Double>, val value: Double = median(readings))
+
+@kotlinx.serialization.Serializable
 
 data class BodyCheckinRecord(
     val id: Long,
@@ -291,10 +300,10 @@ fun skinfoldSumChange(history: List<BodyCheckinRecord>): SumChange? {
 // ---- The sitting's order -----------------------------------------------------------------------------------------
 
 /** The slots of this sitting: every site, minus the optional ones not chosen and the sections left out. */
-fun activeSlots(tape: Boolean, calipers: Boolean, flexedArms: Boolean, chestSkinfold: Boolean): List<BodySlot> =
+fun activeSlots(tape: Boolean, calipers: Boolean, flexedArms: Boolean, chestSkinfold: Boolean, frame: Boolean = false): List<BodySlot> =
     BODY_CHECKIN_SLOTS.filter { slot ->
         when (slot.site.method) {
-            MeasureMethod.TAPE -> tape && (slot.site != BodySite.BICEPS_FLEXED || flexedArms)
+            MeasureMethod.TAPE -> tape && (slot.site != BodySite.BICEPS_FLEXED || flexedArms) && (slot.site !in FRAME_SITES || frame)
             MeasureMethod.CALIPER -> calipers && (slot.site != BodySite.SF_CHEST || chestSkinfold)
         }
     }
@@ -332,3 +341,14 @@ fun rollingBodyFat(readings: List<Pair<LocalDate, Double>>, windowDays: Long = 2
     readings.map { it.first }.distinct().sorted().map { d ->
         d to readings.filter { !it.first.isAfter(d) && it.first.isAfter(d.minusDays(windowDays)) }.map { it.second }.average()
     }
+
+/** Bone girths for frame size (muscle potential): they barely change, so the check-in asks for them until recorded once. */
+val FRAME_SITES = setOf(BodySite.WRIST, BodySite.ANKLE)
+
+/** The newest recorded wrist and ankle girths (cm), each from whichever check-in last took it; null until both are known. */
+fun latestFrame(history: List<BodyCheckinRecord>): Pair<Double, Double>? {
+    val sorted = history.sortedBy { it.occurredAt }
+    val wrist = sorted.lastOrNull { it.value(BodySite.WRIST, BodySide.NONE) != null }?.value(BodySite.WRIST, BodySide.NONE)
+    val ankle = sorted.lastOrNull { it.value(BodySite.ANKLE, BodySide.NONE) != null }?.value(BodySite.ANKLE, BodySide.NONE)
+    return if (wrist != null && ankle != null) wrist to ankle else null
+}

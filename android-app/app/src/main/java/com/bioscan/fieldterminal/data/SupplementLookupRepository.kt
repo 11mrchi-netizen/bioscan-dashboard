@@ -5,7 +5,7 @@ import com.bioscan.fieldterminal.data.model.SuppcoLookupResponse
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -41,7 +41,7 @@ data class ProductLookup(
 // memory so a double tap does not hit them twice. Successful results only.
 class SupplementLookupRepository(private val supabase: SupabaseClient) {
     companion object {
-        private val client = HttpClient(Android)
+        private val client = HttpClient(OkHttp)
         private val cache = ConcurrentHashMap<String, Pair<Long, ProviderResult<*>>>()
     }
 

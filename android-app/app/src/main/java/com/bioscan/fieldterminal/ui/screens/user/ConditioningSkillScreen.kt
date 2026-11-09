@@ -38,16 +38,15 @@ import java.time.temporal.ChronoUnit
 
 @Composable
 fun ConditioningSkillScreen(onBack: () -> Unit) {
-    SkillPage("CONDITIONING", "CONSISTENCY · HEART RATE · BLOCKS · MIX", onBack) {
+    com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("CONDITIONING", onBack, eyebrow = "PERFORMANCE", domain = FT.Domain.Load) {
         LoadedContent(load = { UserDataCache.conditioning() }) { ConditioningContent(it) }
     }
 }
 
 @Composable
 private fun ConditioningContent(history: ConditioningHistory) {
-    val timeframe = com.bioscan.fieldterminal.ui.components.GlobalTimeRange.selected.toPerformanceTimeframe()
     val today = remember { LocalDate.now() }
-    val from = today.minusMonths(timeframe.months)
+    val from = today.minusDays(com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays.current - 1L)
     val level = remember(history) { conditioningLevelOf(history, today) }
     val inWindow = history.entries.filter { !it.date.isBefore(from) }
 
@@ -62,7 +61,7 @@ private fun ConditioningContent(history: ConditioningHistory) {
     }
 
     if (history.entries.isEmpty()) {
-        FTDataState(DataAvailability.Building, "No conditioning sessions imported yet.")
+        com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No conditioning sessions imported yet.")
         return
     }
 
@@ -75,7 +74,7 @@ private fun ConditioningContent(history: ConditioningHistory) {
 
 @Composable
 private fun ConsistencyCard(history: ConditioningHistory, from: LocalDate, today: LocalDate) {
-    FTCard(title = "CONSISTENCY", info = "Conditioning sessions per Monday-to-Sunday week; quiet weeks are real zeros. The line is the trailing 4-week average.") {
+    com.bioscan.fieldterminal.ui.screens.detail.Section(title = "CONSISTENCY", info = "Conditioning sessions per Monday-to-Sunday week; quiet weeks are real zeros. The line is the trailing 4-week average.") {
         val weekly = bucketWeekly(history.entries, { it.date }, { 1.0 }, from, today)
         FTWeeklyBars(weekly, skillColor(Skill.CONDITIONING), "sessions", average = trailingWeeklyAverage(weekly), valueFormat = { "%.0f".format(it) })
         val total = weekly.sumOf { it.value }
@@ -85,13 +84,13 @@ private fun ConsistencyCard(history: ConditioningHistory, from: LocalDate, today
 
 @Composable
 private fun HeartRateCard(inWindow: List<com.bioscan.fieldterminal.data.ConditioningEntry>) {
-    FTCard(title = "HEART RATE", info = "Average and peak heart rate for sessions that are linked to a same-day wearable recording. Sessions without a linked recording have no heart-rate data and are not estimated.") {
+    com.bioscan.fieldterminal.ui.screens.detail.Section(title = "HEART RATE", info = "Average and peak heart rate for sessions that are linked to a same-day wearable recording. Sessions without a linked recording have no heart-rate data and are not estimated.") {
         val withHr = inWindow.filter { it.avgHr != null }
         val linked = inWindow.count { it.avgHr != null }
         Text("$linked of ${inWindow.size} sessions in this window have linked wearable heart rate.", style = FTType.Caption, color = FT.TextSecondary)
         if (withHr.size < 2) {
-            FTDataState(DataAvailability.Building, "Needs at least 2 sessions with linked heart rate to draw a trend.")
-            return@FTCard
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("Needs at least 2 sessions with linked heart rate to draw a trend.")
+            return@Section
         }
         DateTrendLine(
             series = listOf(
@@ -111,11 +110,11 @@ private fun HeartRateCard(inWindow: List<com.bioscan.fieldterminal.data.Conditio
 
 @Composable
 private fun BlocksCard(history: ConditioningHistory) {
-    FTCard(title = "BLOCKS", info = "One point per training block (oldest to newest), each on its own scale, from the block metrics view. Early vs late heart rate compares the first and last conditioning sessions of a block; the app does not judge which direction is better.") {
+    com.bioscan.fieldterminal.ui.screens.detail.Section(title = "BLOCKS", info = "One point per training block (oldest to newest), each on its own scale, from the block metrics view. Early vs late heart rate compares the first and last conditioning sessions of a block; the app does not judge which direction is better.") {
         val blocks = history.blocks.filter { it.conditioningSessions > 0 }.sortedBy { it.startDate }.takeLast(10)
         if (blocks.size < 2) {
-            FTDataState(DataAvailability.Building, "Needs at least 2 training blocks with conditioning sessions to compare.")
-            return@FTCard
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("Needs at least 2 training blocks with conditioning sessions to compare.")
+            return@Section
         }
         fun series(pick: (com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow) -> Double?) =
             blocks.mapNotNull { b -> pick(b)?.let { v -> runCatching { LocalDate.parse(b.startDate) }.getOrNull()?.to(v) } }
@@ -151,11 +150,11 @@ private fun BlocksCard(history: ConditioningHistory) {
 
 @Composable
 private fun MixCard(inWindow: List<com.bioscan.fieldterminal.data.ConditioningEntry>) {
-    FTCard(title = "MIX", info = "How sessions in this window split by template, and which drills you did most. Counts only; no intensity is inferred from drill names.") {
+    com.bioscan.fieldterminal.ui.screens.detail.Section(title = "MIX", info = "How sessions in this window split by template, and which drills you did most. Counts only; no intensity is inferred from drill names.") {
         val templates = inWindow.groupingBy { it.template?.takeIf { t -> t.isNotBlank() } ?: "Unlabelled" }.eachCount().entries.sortedByDescending { it.value }
         if (templates.isEmpty()) {
-            FTDataState(DataAvailability.Building, "No sessions in this window.")
-            return@FTCard
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No sessions in this window.")
+            return@Section
         }
         val shades = listOf(FT.Category.Activity.c500, FT.Category.Activity.c300, FT.Category.Activity.c700, FT.Category.Activity.c900)
         FTSegmentBar(templates.take(4).mapIndexed { i, e -> FTSegment(e.key, e.value.toDouble(), shades[i % shades.size]) })

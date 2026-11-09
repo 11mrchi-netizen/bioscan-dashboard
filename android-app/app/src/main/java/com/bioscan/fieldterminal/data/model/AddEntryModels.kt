@@ -14,6 +14,8 @@ data class NewMealRow(
     @SerialName("fiber_g") val fiberG: Double? = null,
     @SerialName("sugar_g") val sugarG: Double? = null,
     @SerialName("sodium_mg") val sodiumMg: Double? = null,
+    // Which planned meal it was (breakfast, lunch, snack, dinner, pre_session, recovery); null = placed by time.
+    @SerialName("meal_slot") val mealSlot: String? = null,
 )
 
 @Serializable
@@ -128,6 +130,8 @@ data class NewSupplementLogRow(
     val source: String? = null,
     // Label servings consumed (supplements.servings_per_dose); pantry consumption.
     @SerialName("serving_count") val servingCount: Double? = null,
+    // Injectables: where this dose went (domain/Injectables.kt site keys).
+    @SerialName("injection_site") val injectionSite: String? = null,
 )
 
 // Update-only counterpart -- a taken supplement's name/supplement_id are

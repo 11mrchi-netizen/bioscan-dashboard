@@ -70,8 +70,10 @@ import java.time.format.DateTimeFormatter
 // ui/screens/AddEntrySheet.kt). Any successful save or delete bumps
 // `reloadKey` so the feed re-fetches immediately.
 @Composable
-fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
+fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     var feed by remember { mutableStateOf<LogFeed?>(null) }
+    // Entries deleted but still inside their undo window: hidden at once, shown again on UNDO or a failed delete.
+    var hidden by remember { mutableStateOf(emptySet<Pair<LogSource, Long>>()) }
     var visibleDays by remember { mutableIntStateOf(LOG_PAGE_DAYS) }
     // How many days back the feed is loaded; LOAD OLDER widens it once the loaded days are all shown, until a widening
     // finds nothing older.
@@ -80,6 +82,15 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     var loadingOlder by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
+    // Scoring system rebuild: + LOG in the dock opens the menu straight away. The request is remembered across a restore,
+    // so the sheet is not opened again for a tap that was already handled.
+    var handledMenuRequest by rememberSaveable { mutableStateOf(0) }
+    LaunchedEffect(openMenuRequest) {
+        if (openMenuRequest > handledMenuRequest) {
+            handledMenuRequest = openMenuRequest
+            showAddSheet = true
+        }
+    }
     var actionEntry by remember { mutableStateOf<LogEntry?>(null) }
     var editingEntry by remember { mutableStateOf<LogEntry?>(null) }
     var sleepDetailEntryId by remember { mutableStateOf<Long?>(null) }
@@ -88,7 +99,8 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     var expandedKeys by rememberSaveable { mutableStateOf("") }
     var gapsOnly by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(reloadKey, windowDays) {
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(reloadKey, windowDays, cacheVersion) {
         error = null
         try {
             val since = LocalDate.now().minusDays(windowDays - 1L)
@@ -114,9 +126,9 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
     }
 
     // Everything about days (grouping, marks, gaps, summaries) is computed in the domain; the screen only draws it.
-    val days = remember(feed) {
+    val days = remember(feed, hidden) {
         feed?.let { f ->
-            buildLogDays(f.entries, LocalDate.now(), f.coverage, { date -> supplementExpectedOn(f.supplementSchedule, date) }, from = f.since)
+            buildLogDays(f.entries.filter { (it.source to it.id) !in hidden }, LocalDate.now(), f.coverage, { date -> supplementExpectedOn(f.supplementSchedule, date) }, from = f.since)
         }.orEmpty()
     }
     val expanded = expandedKeys.split(',').filter { it.isNotEmpty() }.toSet()
@@ -222,7 +234,16 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit) {
             },
             onDeleted = {
                 actionEntry = null
-                refresh()
+                val key = entry.source to entry.id
+                hidden = hidden + key
+                com.bioscan.fieldterminal.ui.components.Toasts.undoable(
+                    "Deleted: ${entry.headline}",
+                    commit = {
+                        com.bioscan.fieldterminal.data.AddEntryRepository(SupabaseClientProvider.client).deleteEntry(entry.source, entry.id)
+                        refresh()
+                    },
+                    onUndo = { hidden = hidden - key },
+                )
             },
             onViewDetail = when (entry.source) {
                 LogSource.Exercise -> {

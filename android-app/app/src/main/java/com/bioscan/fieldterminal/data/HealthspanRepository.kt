@@ -1,5 +1,7 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.data
 
+import kotlinx.serialization.UseSerializers
 import com.bioscan.fieldterminal.data.model.ExerciseSessionRow
 import com.bioscan.fieldterminal.domain.LiftSet
 import com.bioscan.fieldterminal.domain.bestLifts
@@ -43,6 +45,7 @@ private data class HsResultRow(
 @Serializable
 private data class HsGripRow(@SerialName("occurred_at") val occurredAt: String, val hand: String, val kg: Double)
 
+@Serializable
 data class HealthspanBundle(
     val summary: HealthspanSummary,
     // The VO2max placement used for the running level on the same page; null when no table fits.
@@ -82,7 +85,11 @@ private suspend fun vo2Table(supabase: SupabaseClient, aging: AgingProfileOvervi
 // function. This class decides nothing about cut-offs; it only refuses to pass a value it cannot vouch for.
 class HealthspanRepository(private val supabase: SupabaseClient) {
 
-    suspend fun load(aging: AgingProfileOverview): HealthspanBundle {
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun load(aging: AgingProfileOverview): HealthspanBundle =
+        ReadCache.get("healthspan.${java.time.LocalDate.now()}", tables = null, serializer = HealthspanBundle.serializer()) { fetchLoad(aging) }
+
+    private suspend fun fetchLoad(aging: AgingProfileOverview): HealthspanBundle {
         val asOf = LocalDate.now()
         val sex = UserProfileRepository(supabase).loadProfile()?.sex?.takeIf { it == "male" || it == "female" }
         val age = aging.chronologicalAgeYears
@@ -123,7 +130,7 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
 
         // Strength: best estimated 1RM per lift over about six months, the latest body weight, the latest logged grip.
         // Cached: the User tab reloads this card on every visit (back from a skill page included).
-        val liftSets = ReadCache.get("healthspan.strength.$asOf", tables = setOf("exercise_sessions")) {
+        val liftSets = ReadCache.kept("healthspan.strength.$asOf", tables = setOf("exercise_sessions")) {
             supabase.postgrest.from("exercise_sessions")
                 .select(columns = Columns.list("id,type,start_time,source,details")) {
                     filter {

@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.analysis
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.domain.Confidence
 import com.bioscan.fieldterminal.domain.EvalState
 import java.time.LocalDate
@@ -14,6 +17,7 @@ import java.time.LocalDate
 // data/model/AnalysisModels.kt. Additive changes keep the major version (docs/analysis-layer-3/contract-v3.md).
 const val ANALYSIS_CONTRACT_VERSION = "3.0.0"
 
+@Serializable
 data class Provenance(val origin: String, val algorithm: String?, val algorithmVersion: String?)
 
 enum class CompletenessTier { MINIMAL, PARTIAL, FULL }
@@ -21,6 +25,7 @@ enum class CompletenessTier { MINIMAL, PARTIAL, FULL }
 // DAV-66 (docs/analysis-layer-2/05-confidence-propagation.md). present/ideal
 // name real input fields or data sources (e.g. "meal_items", "hydration_daily"),
 // never abstract categories -- that doc's own stated rule.
+@Serializable
 data class InputCompleteness(val present: Set<String>, val ideal: Set<String>) {
     val tier: CompletenessTier get() = when {
         present == ideal && ideal.isNotEmpty() -> CompletenessTier.FULL
@@ -94,6 +99,7 @@ enum class Directionality { HIGHER_BETTER, LOWER_BETTER, OPTIMAL_RANGE, TARGET_V
 // validity period.
 enum class ComparisonState { OK, NO_REFERENCE, INSUFFICIENT_DATA, LOW_CONFIDENCE, NON_COMPARABLE, STALE_REFERENCE }
 
+@Serializable
 data class ComparisonResult(
     val metric: String,
     val comparisonType: ComparisonType,

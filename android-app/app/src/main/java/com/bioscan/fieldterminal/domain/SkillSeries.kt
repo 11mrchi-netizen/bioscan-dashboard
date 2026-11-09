@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class)
 package com.bioscan.fieldterminal.domain
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.domain.training.movementKey
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -126,6 +129,7 @@ fun <T> bucketWeeklyStacked(
 
 // ---- Strength ---------------------------------------------------------------------------------
 
+@Serializable
 data class LoggedSet(val date: LocalDate, val exerciseName: String, val reps: Int, val weightKg: Double, val rpe: Int? = null)
 
 // Same Epley rule and 12-rep gate as StrengthLoad.estimatedOneRepMax, so a PR card, a session card and

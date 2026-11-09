@@ -61,7 +61,7 @@ export interface Hypothesis {
   /** Half-width of the no-effect zone, in the effect's display unit (% for ln targets). Fixed before any data. */
   noEffect: number
   /** The outcome group the evidence board files the row under. */
-  outcome: 'hrv' | 'rhr' | 'sleep' | 'energy'
+  outcome: 'hrv' | 'rhr' | 'sleep' | 'energy' | 'recovery_score' | 'sleep_score'
   /** Ordinal target (0-10 scores): analysed as a number, said in points. */
   ordinal?: boolean
 }
@@ -398,7 +398,7 @@ function summarise(h: Hypothesis, o: RelationshipOutcome): string {
 }
 
 // The favourable direction of each outcome group: higher HRV, lower resting heart rate, more sleep, more energy.
-const FAVOURABLE: Record<Hypothesis['outcome'], 1 | -1> = { hrv: 1, rhr: -1, sleep: 1, energy: 1 }
+const FAVOURABLE: Record<Hypothesis['outcome'], 1 | -1> = { hrv: 1, rhr: -1, sleep: 1, energy: 1, recovery_score: 1, sleep_score: 1 }
 
 /** Partial pooling within each family of questions about the same exposure (pooling.ts). Mutates `pooled`. */
 export function poolFamilies(hypotheses: Hypothesis[], outcomes: RelationshipOutcome[]): void {

@@ -37,6 +37,13 @@ import com.bioscan.fieldterminal.domain.DetectedInteraction
 import com.bioscan.fieldterminal.domain.InteractionRecord
 import com.bioscan.fieldterminal.domain.RosterItem
 import com.bioscan.fieldterminal.domain.detectInteractions
+import com.bioscan.fieldterminal.domain.RegimenKind
+import com.bioscan.fieldterminal.domain.doseTextOn
+import com.bioscan.fieldterminal.domain.amountOn
+import com.bioscan.fieldterminal.domain.scheduleWords
+import com.bioscan.fieldterminal.domain.spec
+import com.bioscan.fieldterminal.domain.stateWords
+import com.bioscan.fieldterminal.domain.stepsWords
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -66,6 +73,7 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     var reloadKey by remember { mutableIntStateOf(0) }
     var editing by remember { mutableStateOf<SupplementRow?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
+    var reviewing by remember { mutableStateOf(false) }
     // Analysis Layer 3 / Phase 5: supplement N-of-1 experiments.
     var experimenting by remember { mutableStateOf<SupplementRow?>(null) }
     var experiments by remember { mutableStateOf<List<ExperimentRow>>(emptyList()) }
@@ -76,11 +84,16 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     var rosterItems by remember { mutableStateOf<List<RosterItem>>(emptyList()) }
     val detections = remember(interactionRecords, rosterItems) { detectInteractions(rosterItems, interactionRecords) }
 
+    // Reference cards: the other active items each FDA label names (owner's name, mention).
+    var labelNotes by remember { mutableStateOf<List<Pair<String, com.bioscan.fieldterminal.domain.LabelMention>>>(emptyList()) }
+
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(reloadKey) {
-        isLoading = true
+    val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    LaunchedEffect(reloadKey, cacheVersion) {
+        // The kept roster stays on screen while a fresher one loads.
+        isLoading = overview == null
         error = null
         try {
             val loaded = SupplementsRepository(SupabaseClientProvider.client).loadOverview()
@@ -94,6 +107,16 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
                 interactionRecords = interactionRepo.loadRecords()
                 rosterItems = interactionRepo.rosterItems(loaded.active)
             }.onFailure { interactionRecords = emptyList(); rosterItems = emptyList() }
+            labelNotes = runCatching {
+                val refs = com.bioscan.fieldterminal.data.RegimenReferenceRepository(SupabaseClientProvider.client).loadAll()
+                val active = loaded.active.associateBy { it.id }
+                refs.flatMap { ref ->
+                    val owner = active[ref.supplementId] ?: return@flatMap emptyList()
+                    val label = ref.label ?: return@flatMap emptyList()
+                    com.bioscan.fieldterminal.domain.labelMentions(label.sections, loaded.active.filter { it.id != owner.id }.map { it.id to it.name })
+                        .map { owner.name to it }
+                }
+            }.getOrDefault(emptyList())
             val expRepo = ExperimentsRepository(SupabaseClientProvider.client)
             // Daily tests of a behaviour live on the Today page; supplements and fueling products here.
             experiments = expRepo.loadExperiments().filter { it.protocol?.behaviour == null }
@@ -105,9 +128,7 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     }
 
     when {
-        isLoading -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = FT.Emerald)
-        }
+        isLoading -> com.bioscan.fieldterminal.ui.components.SkeletonSections()
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
             Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
         }
@@ -128,8 +149,11 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
                 }
             },
             detections = detections,
+            labelNotes = labelNotes,
+            onOpenReview = { reviewing = true },
         )
     }
+    if (reviewing) RegistryReviewScreen(onClose = { reviewing = false; reloadKey++ })
 
     if (showAddSheet) {
         SupplementFormSheet(
@@ -173,6 +197,8 @@ private fun SupplementsContent(
     experimentResults: Map<String, ExperimentResultRow>,
     onDeleteExperiment: (ExperimentRow) -> Unit,
     detections: List<DetectedInteraction>,
+    labelNotes: List<Pair<String, com.bioscan.fieldterminal.domain.LabelMention>> = emptyList(),
+    onOpenReview: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
@@ -202,7 +228,10 @@ private fun SupplementsContent(
             // taken" bundles -- this roster view and that logging view now
             // read as the same mental model instead of a flat list here vs.
             // grouped there.
-            val grouped = overview.active.groupBy { it.timeOfDay }
+            // Regimen model: an item taken twice a day is listed under both its times; as-needed items have their own group.
+            val grouped = TIME_OF_DAY_ORDER.associateWith { slot ->
+                overview.active.filter { s -> val sp = s.spec(); if (slot == "as-needed") sp.asNeeded else slot in sp.slots }
+            }.filterValues { it.isNotEmpty() }
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 TIME_OF_DAY_ORDER.forEach { timeOfDay ->
                     val items = grouped[timeOfDay] ?: return@forEach
@@ -210,7 +239,7 @@ private fun SupplementsContent(
                         Text(timeOfDay.uppercase(), style = sectionLabelStyle, color = FT.TextSecondary)
                         // App restructure: the time-of-day groups had square corners; they use the module radius like every other block.
                         val groupShape = androidx.compose.foundation.shape.RoundedCornerShape(FT.RadiusModule)
-                        Column(modifier = Modifier.fillMaxWidth().clip(groupShape).background(FT.GlassFill, groupShape).border(FT.BorderWidth, FT.GlassBorder, groupShape)) {
+                        Column(modifier = Modifier.fillMaxWidth().clip(groupShape).background(FT.Glass, groupShape).border(FT.BorderWidth, FT.GlassBorder, groupShape)) {
                             items.forEachIndexed { i, s ->
                                 ActiveRow(s, outcomes[s.id].orEmpty(), showDivider = i < items.lastIndex, onClick = { onSupplementClick(s) }, onExperiment = { onExperiment(s) })
                             }
@@ -221,6 +250,26 @@ private fun SupplementsContent(
         }
 
         InteractionsSection(detections)
+        Text(
+            "REVIEW THE SOURCES BEHIND THESE ›",
+            style = FTType.MonoCaption,
+            color = FT.Emerald,
+            modifier = Modifier.ftClickable(onClick = onOpenReview).padding(vertical = 4.dp),
+        )
+
+        if (labelNotes.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionLabel("FROM THE LABELS", FT.Warning)
+                Text("What an FDA label says about something else you take, in its own words. Read it; it is not a verdict.",
+                    style = FTType.Caption, color = FT.TextMuted)
+                labelNotes.forEach { (owner, m) ->
+                    Column {
+                        Text("$owner's label names ${m.itemName} · ${m.section}", style = FTType.BodySmall, color = FT.TextPrimary)
+                        Text("\u201C${m.excerpt}\u201D", style = FTType.Caption, color = FT.TextSecondary)
+                    }
+                }
+            }
+        }
 
         ExperimentsSection(experiments, experimentResults, onDelete = onDeleteExperiment)
 
@@ -228,7 +277,7 @@ private fun SupplementsContent(
             SectionLabel("ENDED", FT.TextSecondary)
             Column(modifier = Modifier.fillMaxWidth()) {
                 overview.ended.forEachIndexed { i, s ->
-                    EndedRow(s, showDivider = i < overview.ended.lastIndex)
+                    EndedRow(s, showDivider = i < overview.ended.lastIndex, onClick = { onSupplementClick(s) })
                 }
             }
         }
@@ -277,14 +326,23 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
                         .ftClickable(onClick = onExperiment),
                 )
             }
+            val spec = s.spec()
+            val today = java.time.LocalDate.now()
             Column(horizontalAlignment = Alignment.End) {
-                Text(s.dose, style = FTType.Telemetry, color = FT.TextPrimary)
+                Text(com.bioscan.fieldterminal.domain.unitsWords(1.0, spec.amountOn(today), spec.unit) ?: spec.doseTextOn(today), style = FTType.Telemetry, color = FT.TextPrimary)
+                s.syringeUnits?.let { Text("${com.bioscan.fieldterminal.domain.formatAmount(it)} UNITS", style = FTType.MonoCaption, color = FT.TextSecondary) }
+                if (spec.kind != RegimenKind.SUPPLEMENT) {
+                    Text(spec.kind.label.uppercase(), style = FTType.MonoCaption, color = FT.DomainLog, modifier = Modifier.padding(top = 3.dp))
+                }
                 Text(
-                    s.timeOfDay.uppercase(),
+                    spec.scheduleWords().uppercase(),
                     style = FTType.MonoCaption,
                     color = FT.TextSecondary,
                     modifier = Modifier.padding(top = 3.dp),
                 )
+                (spec.stateWords(today) ?: spec.stepsWords()?.takeIf { spec.steps != null })?.let {
+                    Text(it, style = FTType.Caption, color = FT.Warning, modifier = Modifier.padding(top = 3.dp))
+                }
             }
         }
         if (showDivider) {
@@ -294,9 +352,9 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
 }
 
 @Composable
-private fun EndedRow(s: SupplementRow, showDivider: Boolean) {
+private fun EndedRow(s: SupplementRow, showDivider: Boolean, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().ftClickable(onClick = onClick).padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(s.name, style = FTType.RowTitle, color = FT.TextSecondary)

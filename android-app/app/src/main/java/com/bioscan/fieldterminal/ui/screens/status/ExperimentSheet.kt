@@ -11,8 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import com.bioscan.fieldterminal.ui.components.FTSwitch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.mutableIntStateOf
@@ -148,15 +147,9 @@ fun ExperimentSheet(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Label("BLINDED (A PARTNER FILLS AN ORGANISER)")
-                Switch(
+                FTSwitch(
                     checked = blinded,
                     onCheckedChange = { blinded = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = FT.DomainLog,
-                        checkedTrackColor = FT.DomainLog.copy(alpha = 0.3f),
-                        uncheckedThumbColor = FT.TextSecondary,
-                        uncheckedTrackColor = FT.GlassFill,
-                    ),
                 )
             }
             Text(BLINDING_HELP, style = FTType.Caption, color = FT.TextMuted)

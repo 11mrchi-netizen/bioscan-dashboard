@@ -271,7 +271,7 @@ fun FTCard(
     why: com.bioscan.fieldterminal.domain.WhyContext? = null,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(FT.RadiusCard)
+    val shape = RoundedCornerShape(if (emphasis == FTCardEmphasis.Hero) FT.RadiusCardLarge else FT.RadiusCard)
     val context = androidx.compose.ui.platform.LocalContext.current
     // remembered: the help text is a pure function of the key, so it is built once, not on every recomposition of the card
     val registryEntry = androidx.compose.runtime.remember(methodology) {
@@ -292,8 +292,8 @@ fun FTCard(
             // chart) visibly squared off past the rounded corners without
             // this. clip() is what actually confines any child to the shape.
             .clip(shape)
-            .border(FT.BorderWidth, FT.GlassBorder, shape)
-            .background(if (emphasis == FTCardEmphasis.Hero) FT.GlassStrongFill else FT.GlassFill, shape)
+            // v1 .ft-card: neutral glass, never tinted by a domain or metric; the hero card is a stronger glass.
+            .ftGlass(shape, strong = emphasis == FTCardEmphasis.Hero)
             .then(if (onClick != null) Modifier.ftClickable(shape = shape, onClick = onClick) else Modifier),
     ) {
         Row(
@@ -328,7 +328,7 @@ fun FTDataState(availability: DataAvailability, reason: String?, modifier: Modif
         modifier = modifier
             .fillMaxWidth()
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule))
+            .background(FT.Glass, RoundedCornerShape(FT.RadiusModule))
             .padding(12.dp),
     ) {
         Text(label, color = if (availability == DataAvailability.Building) FT.Analysis else FT.TextSecondary, style = FTType.Label)
@@ -342,7 +342,7 @@ fun FTChartFrame(chart: ChartPresentation, modifier: Modifier = Modifier, conten
         modifier = modifier
             .fillMaxWidth()
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule))
+            .background(FT.Glass, RoundedCornerShape(FT.RadiusModule))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -373,7 +373,7 @@ fun FTAnalyticalCard(
             .fillMaxWidth()
             .semantics { contentDescription = presentation.accessibilitySummary }
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusCard))
-            .background(FT.GlassFill, RoundedCornerShape(FT.RadiusCard))
+            .background(FT.Glass, RoundedCornerShape(FT.RadiusCard))
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

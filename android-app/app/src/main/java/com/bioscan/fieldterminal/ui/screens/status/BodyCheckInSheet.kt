@@ -79,11 +79,14 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     var history by remember { mutableStateOf<List<BodyCheckinRecord>>(emptyList()) }
     var knownHeight by remember { mutableStateOf<Double?>(null) }
     var caliper by remember { mutableStateOf("") }
+    // Wrist and ankle (frame size for muscle potential): on until both are recorded once, then only when asked.
+    var frame by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         history = runCatching { repo.loadHistory() }.getOrElse { emptyList() }
         knownHeight = runCatching { repo.latestHeightCm() }.getOrNull()
         // Last time's caliper, unless the person already typed one.
         if (caliper.isEmpty()) caliper = history.lastOrNull()?.caliper.orEmpty()
+        frame = com.bioscan.fieldterminal.domain.latestFrame(history) == null
     }
     val last = history.lastOrNull()
 
@@ -110,7 +113,7 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    val slots = activeSlots(tape, calipers, flexedArms, chestFold)
+    val slots = activeSlots(tape, calipers, flexedArms, chestFold, frame)
     fun go(next: CheckInStep) {
         trail = trail + step
         step = next
@@ -176,6 +179,7 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     Label("SECTIONS")
                     Toggle("Tape girths (about 8 minutes)", tape) { tape = it }
                     if (tape) Toggle("Also flexed upper arms", flexedArms) { flexedArms = it }
+                    if (tape) Toggle("Wrist and ankle (frame size, for muscle potential)", frame) { frame = it }
                     Toggle("Skinfolds with a caliper (about 6 minutes)", calipers) { calipers = it }
                     if (calipers) {
                         Toggle("Also the chest skinfold", chestFold) { chestFold = it }
@@ -341,13 +345,13 @@ private fun Toggle(text: String, on: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .border(FT.BorderWidth, if (on) FT.DomainFuel else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-            .background(if (on) FT.DomainFuel.copy(alpha = 0.12f) else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
+            .border(FT.BorderWidth, if (on) FT.SelectedBorder else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+            .background(if (on) FT.SelectedGlass else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
             .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onChange(!on) }
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(if (on) "■" else "□", style = FTType.Label, color = if (on) FT.DomainFuel else FT.TextMuted, modifier = Modifier.padding(end = 10.dp))
+        Text(if (on) "■" else "□", style = FTType.Label, color = if (on) FT.TextPrimary else FT.TextMuted, modifier = Modifier.padding(end = 10.dp))
         Text(text, style = FTType.BodySmall, color = FT.TextPrimary)
     }
 }

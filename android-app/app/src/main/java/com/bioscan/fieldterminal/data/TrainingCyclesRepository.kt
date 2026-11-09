@@ -35,7 +35,11 @@ import kotlinx.serialization.json.jsonPrimitive
 // form -- a real, smaller-than-ideal scope, not silently dropped.
 class TrainingCyclesRepository(private val supabase: SupabaseClient) {
 
-    suspend fun loadCycles(): List<TrainingCycle> {
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
+    suspend fun loadCycles(): List<TrainingCycle> =
+        ReadCache.get("cycles.all", tables = setOf("training_cycles"), serializer = kotlinx.serialization.builtins.ListSerializer(TrainingCycle.serializer())) { fetchLoadCycles() }
+
+    private suspend fun fetchLoadCycles(): List<TrainingCycle> {
         val rows = supabase.postgrest.from("training_cycles")
             .select(columns = Columns.list("id,start_date,end_date,focus,goal_metric,starting_value,target_value,notes")) {
                 order("start_date", Order.DESCENDING)
@@ -111,7 +115,11 @@ class TrainingCyclesRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
+    // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun loadBlockSummaries(): List<TrainingBlockSummaryRow> =
+        ReadCache.get("cycles.block_summaries", tables = null, serializer = kotlinx.serialization.builtins.ListSerializer(TrainingBlockSummaryRow.serializer())) { fetchLoadBlockSummaries() }
+
+    private suspend fun fetchLoadBlockSummaries(): List<TrainingBlockSummaryRow> =
         supabase.postgrest.from("v_training_block_metrics")
             .select { order("start_date", Order.DESCENDING) }
             .decodeList<TrainingBlockSummaryRow>()

@@ -7,7 +7,7 @@ import com.bioscan.fieldterminal.domain.fuel.WeatherSeries
 import com.bioscan.fieldterminal.domain.fuel.WeatherSource
 import com.bioscan.fieldterminal.domain.fuel.climatology
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -27,7 +27,7 @@ class WeatherFetchException(message: String) : Exception(message)
 // entry closest to the session's own start time, rather than only "now",
 // since this is a forecast for a session that may be up to a week out.
 class WeatherRepository {
-    companion object { private val client = HttpClient(Android) }
+    companion object { private val client = HttpClient(OkHttp) }
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun fetchAt(lat: Double, lon: Double, at: ZonedDateTime): SessionWeather {
@@ -102,7 +102,7 @@ class WeatherRepository {
     // last [years] years, from the archive), labelled as such. Cached for 30 minutes per place and window.
     suspend fun fetchHourly(lat: Double, lon: Double, from: ZonedDateTime, to: ZonedDateTime, years: Int = 10): WeatherSeries {
         val key = "weather.hourly.%.3f.%.3f.%s.%s".format(lat, lon, from.toLocalDate(), to.toLocalDate())
-        return ReadCache.get(key, ttlMs = 30 * 60_000L, tables = emptySet()) {
+        return ReadCache.kept(key, ttlMs = 30 * 60_000L, tables = emptySet()) {
             val now = ZonedDateTime.now(from.zone)
             val targetHours = generateSequence(from.truncatedTo(ChronoUnit.HOURS)) { it.plusHours(1) }.takeWhile { !it.isAfter(to) }.toList()
             if (!to.toLocalDate().isAfter(now.toLocalDate().plusDays(FORECAST_DAYS - 1))) {

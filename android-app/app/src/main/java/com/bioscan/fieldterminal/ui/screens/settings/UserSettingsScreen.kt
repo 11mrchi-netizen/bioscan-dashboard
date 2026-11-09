@@ -169,8 +169,8 @@ private fun ProfileCard(scope: CoroutineScope) {
 private fun SexChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-            .background(if (selected) FT.Emerald.copy(alpha = 0.14f) else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
+            .border(FT.BorderWidth, if (selected) Color.Transparent else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+            .background(if (selected) FT.PlatinumSolid else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
             .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
             .padding(horizontal = 20.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
@@ -178,7 +178,7 @@ private fun SexChip(label: String, selected: Boolean, onClick: () -> Unit) {
         Text(
             label.uppercase(),
             style = FTType.LabelCaps,
-            color = if (selected) FT.Emerald else FT.TextSecondary,
+            color = if (selected) FT.PlatinumInk else FT.TextSecondary,
         )
     }
 }

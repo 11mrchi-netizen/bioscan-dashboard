@@ -34,6 +34,7 @@ private data class HabitItemRow(
 @Serializable
 private data class HabitMealRow(
     @SerialName("logged_at") val loggedAt: String,
+    @SerialName("meal_slot") val mealSlot: String? = null,
     val description: String? = null,
     @SerialName("meal_items") val items: List<HabitItemRow> = emptyList(),
 )
@@ -56,14 +57,14 @@ class FoodHabitsRepository(private val supabase: SupabaseClient) {
 
     /** The foods to suggest from, the person's first. Falls back to the plain staples when nothing can be read. */
     suspend fun foods(times: MealTimes, zone: ZoneId = ZoneId.systemDefault()): List<FoodOption> =
-        ReadCache.get("fuel.food_habits.$times", ttlMs = 60 * 60_000L, tables = setOf("meals", "meal_items", "foods", "food_nutrients")) {
+        ReadCache.kept("fuel.food_habits.$times", ttlMs = 60 * 60_000L, tables = setOf("meals", "meal_items", "foods", "food_nutrients")) {
             runCatching { load(times, zone) }.getOrDefault(STAPLE_FOODS)
         }
 
     private suspend fun load(times: MealTimes, zone: ZoneId): List<FoodOption> {
         val since = OffsetDateTime.now(zone).minusDays(HABIT_DAYS)
         val meals = supabase.postgrest.from("meals")
-            .select(Columns.raw("logged_at,description,meal_items(description,food_id,quantity,quantity_unit,is_beverage)")) {
+            .select(Columns.raw("logged_at,description,meal_slot,meal_items(description,food_id,quantity,quantity_unit,is_beverage)")) {
                 filter { gte("logged_at", since.toInstant().toString()) }
                 limit(1000)
             }
@@ -71,8 +72,10 @@ class FoodHabitsRepository(private val supabase: SupabaseClient) {
         val descriptions = mutableListOf<Pair<MealSlotKind, String>>()
         val logged = mutableListOf<LoggedFood>()
         for (m in meals) {
-            val at = runCatching { OffsetDateTime.parse(m.loggedAt).atZoneSameInstant(zone) }.getOrNull() ?: continue
-            val slot = slotForTime(at.toLocalTime(), times)
+            // Meal times are logged times: the local wall clock with a zero offset (domain/WallClock.kt).
+            val at = com.bioscan.fieldterminal.domain.WallClock.zoned(m.loggedAt, zone) ?: continue
+            // The meal's own label first; unlabelled meals are placed by time.
+            val slot = com.bioscan.fieldterminal.domain.fuel.mealSlotOf(m.mealSlot) ?: slotForTime(at.toLocalTime(), times)
             // One text per meal, so a staple counts once per meal however many items name it.
             descriptions += slot to (listOfNotNull(m.description) + m.items.mapNotNull { it.description }).joinToString(" · ")
             m.items.forEach { i ->

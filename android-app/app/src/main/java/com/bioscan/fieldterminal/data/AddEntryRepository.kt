@@ -56,6 +56,15 @@ import kotlinx.serialization.json.put
 // someone logs on the same day, so those three go through upsert() instead.
 class AddEntryRepository(private val supabase: SupabaseClient) {
 
+    /** The meal labels already used on [date] (logged times are local digits with a zero offset), except [exceptId]. */
+    suspend fun mealSlotsOn(date: java.time.LocalDate, exceptId: Long? = null): Set<com.bioscan.fieldterminal.domain.fuel.MealSlotKind> =
+        supabase.postgrest.from("meals").select(Columns.list("id,meal_slot")) {
+            filter {
+                gte("logged_at", date.atStartOfDay().atOffset(java.time.ZoneOffset.UTC).toString())
+                lt("logged_at", date.plusDays(1).atStartOfDay().atOffset(java.time.ZoneOffset.UTC).toString())
+            }
+        }.decodeList<MealSlotRow>().filter { it.id != exceptId }.mapNotNull { com.bioscan.fieldterminal.domain.fuel.mealSlotOf(it.mealSlot) }.toSet()
+
     suspend fun addFood(
         loggedAt: String,
         description: String,
@@ -66,6 +75,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         fiberG: Double?,
         sugarG: Double?,
         sodiumMg: Double?,
+        mealSlot: String? = null,
     ) {
         supabase.postgrest.from("meals").insert(
             NewMealRow(
@@ -78,6 +88,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
                 fiberG = fiberG,
                 sugarG = sugarG,
                 sodiumMg = sodiumMg,
+                mealSlot = mealSlot,
             )
         )
     }
@@ -189,7 +200,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     }
 
     // Same write as the Supplements form for one roster item (dose string, product link, nutrient intake), by roster id.
-    suspend fun addSupplementTakenById(takenAt: String, supplementId: Long, quantity: Int) {
+    suspend fun addSupplementTakenById(takenAt: String, supplementId: Long, quantity: Double) {
         val row = supabase.postgrest.from("supplements")
             .select(columns = Columns.list("id,name,dose")) { filter { eq("id", supplementId) } }
             .decodeList<SupplementDoseRow>()
@@ -212,7 +223,15 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // other source already uses. `items` is (supplement id, name, roster
     // dose string) triples from whichever bundle(s)/individual as-needed
     // toggles were checked -- each gets its own parsed dose default (DAV-156).
-    suspend fun addSupplementsTaken(takenAt: String, items: List<Triple<Long, String, String>>, source: String = "manual", quantities: Map<Long, Int> = emptyMap()) {
+    suspend fun addSupplementsTaken(
+        takenAt: String,
+        items: List<Triple<Long, String, String>>,
+        source: String = "manual",
+        quantities: Map<Long, Double> = emptyMap(),
+        sites: Map<Long, String> = emptyMap(),
+    ) {
+        // A quantity of 0 means "not taken": nothing is logged for it.
+        val items = items.filter { (quantities[it.first] ?: 1.0) > 0.0 }
         if (items.isEmpty()) return
         // product_id is optional provenance: a failed roster lookup must never
         // block recording that the supplement was taken.
@@ -222,13 +241,14 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         // scales the ingredient contribution. Missing link row = the default of 1.
         val servingsBySupp = links.mapValues { it.value.servingsPerDose }
         val rows = items.map { (id, name, dose) ->
-            val qty = quantities[id] ?: 1
+            val qty = quantities[id] ?: 1.0
             val (value, unit) = parseDose(dose)
             NewSupplementLogRow(
                 supplementId = id, supplementName = name, takenAt = takenAt,
                 doseValue = value?.let { it * qty }, doseUnit = unit,
                 productId = productIdBySupp[id], source = source,
                 servingCount = (servingsBySupp[id] ?: 1.0) * qty,
+                injectionSite = sites[id],
             )
         }
         val insertedRows = supabase.postgrest.from("supplement_log")
@@ -263,7 +283,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         items: List<Triple<Long, String, String>>,
         productIdBySupp: Map<Long, Long>,
         servingsBySupp: Map<Long, Double>,
-        quantities: Map<Long, Int> = emptyMap(),
+        quantities: Map<Long, Double> = emptyMap(),
     ) {
         if (logRows.isEmpty()) return
         val supplementIds = logRows.map { it.supplementId }
@@ -276,7 +296,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         val suppRepo = SupplementsRepository(supabase)
         val nutrientRows = mutableListOf<NutrientIntakeRow>()
         for (logRow in logRows) {
-            val qty = quantities[logRow.supplementId] ?: 1
+            val qty = quantities[logRow.supplementId] ?: 1.0
             val productId = productIdBySupp[logRow.supplementId]
             val suppProfile = profilesBySupp[logRow.supplementId]
             if (productId != null) {
@@ -358,6 +378,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         fiberG: Double?,
         sugarG: Double?,
         sodiumMg: Double?,
+        mealSlot: String? = null,
     ) {
         supabase.postgrest.from("meals").update(
             NewMealRow(
@@ -370,6 +391,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
                 fiberG = fiberG,
                 sugarG = sugarG,
                 sodiumMg = sodiumMg,
+                mealSlot = mealSlot,
             )
         ) { filter { eq("id", id) } }
     }
@@ -491,7 +513,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
     // doc comment). fetchExerciseSession only selects the editable fields
     // (id, type, rpe, notes) -- everything else is Health-Connect-sourced
     // and read-only in this app.
-    suspend fun fetchMeal(id: Long) = fetchById<LogMealRow>("meals", "id,logged_at,description,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg", id)
+    suspend fun fetchMeal(id: Long) = fetchById<LogMealRow>("meals", "id,logged_at,description,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meal_slot", id)
     suspend fun fetchHydration(id: Long) = fetchById<LogHydrationRow>("hydration_daily", "id,date,ml", id)
     suspend fun fetchEncounter(id: Long) = fetchById<LogEncounterRow>(
         "encounters",
@@ -601,3 +623,6 @@ private fun inferNutrientFromName(name: String): String? {
         else -> null
     }
 }
+
+@kotlinx.serialization.Serializable
+private data class MealSlotRow(val id: Long, @SerialName("meal_slot") val mealSlot: String? = null)

@@ -55,10 +55,15 @@ fun SkillPage(title: String, subtitle: String, onBack: () -> Unit, content: @Com
 // Runs `load` once; shows a spinner, the content, or an honest failure -- never a blank page.
 @Composable
 fun <T : Any> LoadedContent(load: suspend () -> T, content: @Composable (T) -> Unit) {
-    val state: State<Result<T>?> = produceState<Result<T>?>(initialValue = null) { value = runCatching { load() } }
+    // Keyed on the cache version: when a background refresh brings newer data, the content loads again (from memory).
+    val version = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
+    val state: State<Result<T>?> = produceState<Result<T>?>(initialValue = null, version) {
+        val result = runCatching { load() }
+        if (result.isSuccess || value == null) value = result
+    }
     val result = state.value
     if (result == null) {
-        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.Emerald) }
+        com.bioscan.fieldterminal.ui.components.SkeletonSections()
         return
     }
     val value = result.getOrNull()
@@ -68,10 +73,10 @@ fun <T : Any> LoadedContent(load: suspend () -> T, content: @Composable (T) -> U
 
 @Composable
 fun SkillHeroCard(skill: Skill, level: SkillLevel, info: String, extra: @Composable ColumnScope.() -> Unit = {}) {
-    FTCard(dataQuality = level.confidence, title = "${skill.title} LEVEL", info = info) {
+    com.bioscan.fieldterminal.ui.screens.detail.Section("${skill.title} LEVEL", info = info) {
         val position = level.position
         if (position == null) {
-            FTDataState(DataAvailability.Building, level.reason)
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine(level.reason ?: "Not enough data yet.")
         } else {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(level.label, style = FTType.MetricMedium, color = FT.TextPrimary)

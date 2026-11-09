@@ -5,13 +5,16 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // One colour per nutrient, the same on every Nutrition page (bars, donut, legends, trend, plan carb strip and chips) and
 // in Setup's goal rows. Identity only: whether a value is on target is always said in words, never by these colours.
-// Chosen with the dataviz palette validator as a set on the dark surface (#11161A, all pairs): lightness 0.48-0.67,
-// chroma >= 0.10, normal-vision dE >= 16, contrast >= 3:1; the worst colour-blind pair (calories/carbs, dE 7.6) is always
-// labelled. None of them is a state colour (emerald, amber, red).
+// v1: the fixed metric hues (FT.Metric, design/tokens/tokens.css --m-calories / protein / carbs / fat / hydration).
+// Carbs and fat sit close to the warn hue, so every use carries its label; colour is never the only signal.
 object NutrientColor {
-    val Calories = Color(0xFF9085E9) // violet
-    val Protein = Color(0xFFD55181) // magenta
-    val Carbs = Color(0xFF16A3B8) // cyan
-    val Fat = Color(0xFFC98500) // gold
-    val Water = FT.DomainFuel
+    val Calories: Color = FT.Metric.Calories
+    val Protein: Color = FT.Metric.Protein
+    val Carbs: Color = FT.Metric.Carbs
+    val Fat: Color = FT.Metric.Fat
+    val Water: Color = FT.Metric.Hydration
+    val Fiber: Color = FT.Metric.Fiber
+    val Sugar: Color = FT.Metric.Sugar
+    val Sodium: Color = FT.Metric.Sodium
+    val Caffeine: Color = FT.Metric.Caffeine
 }

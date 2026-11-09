@@ -169,8 +169,8 @@ internal fun ProgramCard(title: String, meta: String, note: String?, selected: B
     val shape = RoundedCornerShape(FT.RadiusModule)
     Column(
         Modifier.padding(top = 10.dp).fillMaxWidth()
-            .border(BorderStroke(FT.BorderWidth, if (selected) FT.DomainTraining else FT.GlassBorder), shape)
-            .background(if (selected) FT.DomainTraining.copy(alpha = 0.10f) else FT.GlassFill, shape)
+            .border(BorderStroke(FT.BorderWidth, if (selected) FT.SelectedBorder else FT.GlassBorder), shape)
+            .background(if (selected) FT.SelectedGlass else FT.GlassFill, shape)
             .ftClickable(shape = shape, onClick = onClick).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -449,7 +449,7 @@ private fun Section(state: TrainingPlannerState, id: String, title: String, summ
     val open = state.openSection == id
     val shape = RoundedCornerShape(FT.RadiusModule)
     Column(
-        Modifier.padding(top = 10.dp).fillMaxWidth().border(BorderStroke(FT.BorderWidth, if (open) FT.DomainTraining else FT.GlassBorder), shape).background(FT.GlassFill, shape).padding(14.dp),
+        Modifier.padding(top = 10.dp).fillMaxWidth().border(BorderStroke(FT.BorderWidth, if (open) FT.DomainTraining else FT.GlassBorder), shape).background(FT.Glass, shape).padding(14.dp),
     ) {
         Row(Modifier.fillMaxWidth().ftClickable(shape = shape) { state.openSection = if (open) null else id }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) {

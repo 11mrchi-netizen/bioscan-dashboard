@@ -94,6 +94,8 @@ data class PlannedOutcomeRow(
 data class StoolAnalysisRow(
     @SerialName("occurred_at") val occurredAt: String,
     @SerialName("bristol_type") val bristolType: Int? = null,
+    // 0-10 from the stool form, optional. Scoring system: feeds FUEL's gut symptoms when the check-in has none.
+    val discomfort: Int? = null,
 )
 
 // Phase A4 (Category 8). OSTRC-H2 half.
@@ -454,4 +456,17 @@ data class ExpectedBandPayload(
     val recent: List<BandPoint> = emptyList(),
     val next: BandPoint? = null,
     val ewma: BandEwma = BandEwma(),
+)
+
+@Serializable
+data class SportSessionRow(
+    val id: Long,
+    val type: String? = null,
+    val source: String? = null,
+    @SerialName("start_time") val startTime: String,
+    @SerialName("duration_min") val durationMin: Double? = null,
+    @SerialName("distance_km") val distanceKm: Double? = null,
+    @SerialName("avg_hr") val avgHr: Double? = null,
+    @SerialName("max_hr") val maxHr: Double? = null,
+    @SerialName("elevation_gain_m") val elevationGainM: Double? = null,
 )

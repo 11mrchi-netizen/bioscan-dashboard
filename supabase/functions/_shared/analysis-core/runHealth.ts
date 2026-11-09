@@ -26,7 +26,7 @@ import type { HealthVocab } from './healthVocab.ts'
 import { fetchAll } from './paging.ts'
 import { publishResults } from './publish.ts'
 import { loadConfirmedBreaks } from './runExpectedBands.ts'
-import { localClock } from './runRelationships.ts'
+import { wallClock } from './runRelationships.ts'
 import type { Admin, LoadedFrame } from './runRelationships.ts'
 import { weekdayOf } from './stats.ts'
 import type { Num } from './stats.ts'
@@ -62,7 +62,9 @@ interface PublishRow { kind: string; key: string; state: string; have: number | 
 export type HealthTrace = (step: string, ms: number, info?: Record<string, number>) => void
 
 export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = new Date(), trace?: HealthTrace): Promise<HealthRun> {
-  const { userId, frame, today } = loaded
+  const { userId, frame } = loaded
+  // Check-ins and marks are dated in the person's own calendar, so the health engine runs to their local date.
+  const today = loaded.localToday ?? loaded.today
   let last = performance.now()
   const mark = (step: string, info?: Record<string, number>) => {
     const t = performance.now()
@@ -97,10 +99,9 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
   if (failed) return { userId, error: failed.error }
 
   // ---- the exposure context, on the frame's day axis ----
-  const clock = localClock((context.error ? [] : context.rows).filter((r) => r.utc_offset_min !== null))
   const dates = frame.dates
   const dateSet = new Set(dates)
-  const sess = sessions.rows.map((s) => ({ ...s, date: clock(s.start_time).date })).filter((s) => dateSet.has(s.date))
+  const sess = sessions.rows.map((s) => ({ ...s, date: wallClock(s.start_time).date })).filter((s) => dateSet.has(s.date))
   const histograms = new Map<number, Record<string, number>>()
   const zeppSport = new Map<number, string>()
   for (const d of details.rows) {
@@ -162,7 +163,7 @@ export async function runHealth(admin: Admin, loaded: LoadedFrame, now: Date = n
     if (!s) continue
     const marks = inputs.marks.filter((mk) => mk.concern_id === concern.id)
     const summary = summariseConcern(concern, s.cells, marks, today)
-    const cellsWin = winStart >= 0 ? s.cells.slice(winStart) : s.cells.filter((c) => dateSet.has(c.date))
+    const cellsWin = winStart >= 0 ? s.cells.slice(winStart, winStart + dates.length) : s.cells.filter((c) => dateSet.has(c.date))
     concernData.set(concern.id, { cells: s.cells, episodes: summary.episodes })
     mark(`c${ci}.summary`, { cells: s.cells.length, episodes: summary.episodes.length })
     const exposureSeries = buildExposureSeries(ctx, concern, vocab.regions)

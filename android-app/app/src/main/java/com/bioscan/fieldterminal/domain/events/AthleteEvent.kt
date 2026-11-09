@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.events
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import com.bioscan.fieldterminal.domain.trail.CoursePoint
 import java.time.Duration
 import java.time.LocalDate
@@ -61,6 +64,7 @@ enum class EventStatus(val key: String, val label: String) {
     }
 }
 
+@Serializable
 data class AidStation(
     val name: String,
     val km: Double,
@@ -71,6 +75,7 @@ data class AidStation(
     val cutoffMin: Double? = null,
 )
 
+@Serializable
 data class AthleteEvent(
     val id: Long? = null,
     val name: String,

@@ -1,5 +1,8 @@
+@file:UseSerializers(com.bioscan.fieldterminal.domain.LocalDateSerializer::class, com.bioscan.fieldterminal.domain.InstantSerializer::class, com.bioscan.fieldterminal.domain.LocalTimeSerializer::class, com.bioscan.fieldterminal.domain.LocalDateTimeSerializer::class, com.bioscan.fieldterminal.domain.ZonedDateTimeSerializer::class, com.bioscan.fieldterminal.domain.OffsetDateTimeSerializer::class, com.bioscan.fieldterminal.domain.DurationSerializer::class, com.bioscan.fieldterminal.domain.YearMonthSerializer::class, com.bioscan.fieldterminal.domain.ZoneIdSerializer::class)
 package com.bioscan.fieldterminal.domain.fuel
 
+import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.Serializable
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.temporal.TemporalAdjusters
@@ -97,6 +100,7 @@ fun letterFor(weekStart: LocalDate, date: LocalDate, slot: PrepSlot): Char? {
     }
 }
 
+@Serializable
 data class Container(val date: LocalDate, val slot: PrepSlot, val letter: Char, val plate: Plate, val target: PlateTarget)
 
 /** A cooked container as stored: grams per food id. */
@@ -145,6 +149,7 @@ fun containerFromStored(s: StoredContainer, foods: Map<String, FoodOption>, targ
 // ---- Breakfast ------------------------------------------------------------------------------------------------------
 
 /** One food of the person's fixed breakfast and its usual amount. */
+@kotlinx.serialization.Serializable
 data class BreakfastItem(val foodId: String, val grams: Double)
 
 const val BREAKFAST_MIN_SCALE = 0.5
@@ -164,8 +169,10 @@ fun scaleBreakfast(template: List<BreakfastItem>, target: PlateTarget, foods: Ma
 
 // ---- A prepped day --------------------------------------------------------------------------------------------------
 
+@Serializable
 data class Remainder(val carbG: Double, val proteinG: Double, val fatG: Double?)
 
+@Serializable
 data class PreppedDay(
     val date: LocalDate,
     val breakfast: Plate?,

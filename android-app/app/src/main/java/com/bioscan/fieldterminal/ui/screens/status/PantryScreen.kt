@@ -89,7 +89,7 @@ fun PantryScreen(onBack: () -> Unit) {
             val list = items
             when {
                 error != null && list == null -> Text("Failed to load: $error", style = body, color = FT.Critical)
-                list == null -> Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.Emerald) }
+                list == null -> com.bioscan.fieldterminal.ui.components.SkeletonSections()
                 list.isEmpty() -> Text("No supplements with a linked product yet. Add ingredients to a supplement (or verify it by barcode) to track its stock here.", style = body, color = FT.TextSecondary)
                 else -> {
                     val attention = list.filter { it.assessment.findings.any { f -> f.kind != PantryFindingKind.NoStock } }
@@ -123,7 +123,7 @@ private fun Section(title: String, items: List<PantryItem>, onOpen: (Long) -> Un
 @Composable
 private fun PantryRow(item: PantryItem, onClick: () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().background(FT.GlassFill, RoundedCornerShape(FT.RadiusModule)).border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
+        Modifier.fillMaxWidth().background(FT.Glass, RoundedCornerShape(FT.RadiusModule)).border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
             .ftClickable(shape = RoundedCornerShape(FT.RadiusModule), onClick = onClick).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {

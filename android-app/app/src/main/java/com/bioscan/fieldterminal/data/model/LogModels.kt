@@ -15,6 +15,7 @@ data class LogMealRow(
     @SerialName("fiber_g") val fiberG: Double? = null,
     @SerialName("sugar_g") val sugarG: Double? = null,
     @SerialName("sodium_mg") val sodiumMg: Double? = null,
+    @SerialName("meal_slot") val mealSlot: String? = null,
 )
 
 // Phase G3: replaces LogRunRow -- `exercise_sessions` covers any activity
@@ -173,4 +174,7 @@ data class SupplementScheduleRow(
     @SerialName("start_date") val startDate: String? = null,
     @SerialName("end_date") val endDate: String? = null,
     @SerialName("every_n_days") val everyNDays: Int? = null,
+    @SerialName("time_of_day") val timeOfDay: String? = null,
+    val slots: List<String> = emptyList(),
+    val schedule: com.bioscan.fieldterminal.domain.ScheduleJson? = null,
 )

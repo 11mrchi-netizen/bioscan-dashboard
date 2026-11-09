@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildZeppExercises, doneSets, exercisesFingerprint, exercisesSource, parseLapSets, planStrengthDetails, type ZeppExercise,
+  buildZeppExercises, doneSets, exercisesFingerprint, exercisesSource, lapWeightKg, parseLapSets, planStrengthDetails, type ZeppExercise,
 } from "./strengthImport.ts";
 
 // One lap in Zepp's comma layout: [0]=idx [1]=duration [4]=avg_hr [15]=detected reps [21]=kg [22]=reps [26]=status [28]=code.
@@ -21,6 +21,11 @@ const exercisesFrom = (laps: string[]) => buildZeppExercises(doneSets(parseLapSe
 const before = exercisesFrom([lap(0, 3, 5, 60), lap(1, 3, 5, 60), lap(2, 3, 5, 80), lap(3, 3, 5, 80)]);
 // The same workout after correcting the exercises in the Zepp app.
 const after = exercisesFrom([lap(0, 3, 5, 60), lap(1, 3, 5, 60), lap(2, 6, 5, 80), lap(3, 6, 5, 80)]);
+
+test("rest laps (exercise code 0) from a template are not exercises", () => {
+  const ex = exercisesFrom([lap(0, 3, 5, 60), lap(1, 0, 0, 0), lap(2, 3, 5, 60), lap(3, 0, 0, 0)]);
+  assert.deepEqual(ex.map((e) => [e.name, e.sets.length]), [["Barbell Squats", 2]]);
+});
 
 test("laps become exercises in order, skipped planned sets dropped", () => {
   const ex = exercisesFrom([lap(0, 3, 5, 60), lap(1, 3, 5, 60), lap(2, 6, 8, 40, 2), lap(3, 6, 8, 40), lap(4, 3, 3, 100)]);
@@ -71,3 +76,16 @@ test("other keys of details are kept, and a workout without done sets writes not
   assert.equal(plan.details!.note_key, "kept");
   assert.deepEqual(planStrengthDetails({}, []), { details: null, action: "no_sets" });
 });
+
+test("kettlebell template laps carry tenths of a kilogram; free-entry and bodyweight laps are kilograms", () => {
+  // Real laps (2026-11-05): Kettlebell Swing at 16 kg arrives as 160.0 with equipment 11; a push-up (15) has no weight;
+  // a barbell press from a free-entry workout (equipment 0) is 47.5 kg as it stands.
+  const swing = "0,33,0,s00000000000,108,33,-20000,-1,-1,0.0,0.0,-1,0.0,0,0,3,36,0,6,20,3,160.0,20,11,0,0.0,5,2,107,0"
+  const push = "2,26,0,s00000000000,94,26,-20000,-1,-1,0.0,0.0,-1,0.0,0,0,2,0,0,0,0,3,0.0,0,15,0,0.0,5,2,62,0"
+  const press = "1,22,0,s00000000000,87,0,-20000,-1,-1,0.0,0.0,-1,0.0,0,0,7,0,-1,0,0,0,47.5,4,0,0,0.0,0,-1,1761,-1"
+  const [s, p, b] = parseLapSets([swing, push, press].join(";"))
+  assert.equal(s.weightKg, 16)
+  assert.equal(p.weightKg, 0)
+  assert.equal(b.weightKg, 47.5)
+  assert.equal(lapWeightKg(125, 11), 12.5)
+})

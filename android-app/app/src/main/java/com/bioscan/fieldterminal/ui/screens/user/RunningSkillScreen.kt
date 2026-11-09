@@ -74,27 +74,24 @@ private fun partIndex(category: RunCategory): Int = when (category) {
 
 private enum class RunSurface(val label: String) { ROAD("ROAD"), TRAIL("TRAIL") }
 
-// App restructure: the Running page is Training's RUNNING tab.
+/** The Running page (ME › PERFORMANCE › Running). */
 @Composable
-fun RunningTab() {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
+fun RunningScreen(onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
+    com.bioscan.fieldterminal.ui.screens.detail.DetailScreen("RUNNING", onBack, eyebrow = "PERFORMANCE", domain = FT.Domain.Load) {
         LoadedContent(load = { UserDataCache.running() }) { RunningContent(it) }
+        com.bioscan.fieldterminal.ui.screens.performance.RecentSessions("run", onOpenSession)
     }
 }
 
 @Composable
 private fun RunningContent(history: RunningHistory) {
-    val timeframe = com.bioscan.fieldterminal.ui.components.GlobalTimeRange.selected.toPerformanceTimeframe()
     var surfaceName by rememberSaveable { mutableStateOf(RunSurface.ROAD.name) }
     val surface = RunSurface.valueOf(surfaceName)
     val aging by produceState<AgingProfileOverview?>(initialValue = null) { value = runCatching { UserDataCache.aging() }.getOrNull() }
     val vo2Percentile by produceState<Double?>(initialValue = null) { value = runCatching { UserDataCache.vo2Percentile() }.getOrNull() }
     val level = remember(history, vo2Percentile) { runningLevelOf(history, vo2Percentile) }
     val today = remember { LocalDate.now() }
-    val from = today.minusMonths(timeframe.months)
+    val from = today.minusDays(com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays.current - 1L)
 
     SkillHeroCard(
         Skill.RUNNING, level,
@@ -162,7 +159,7 @@ private fun VolumeCard(history: RunningHistory, from: LocalDate, today: LocalDat
     val inWindow = history.runs.filter { !it.date.isBefore(from) }
     val placedByHeartRate = inWindow.count { it.categoryBasis == RunCategoryBasis.HEART_RATE_TIME || it.categoryBasis == RunCategoryBasis.AVERAGE_HEART_RATE }
     val placedByClimb = inWindow.count { it.categoryBasis == RunCategoryBasis.CLIMB }
-    FTCard(
+    com.bioscan.fieldterminal.ui.screens.detail.Section(
         title = "VOLUME",
         info = "Kilometres per Monday-to-Sunday week, split by kind of run. TRAIL: tagged trail or recorded as a trail run by Zepp. " +
             "QUALITY: tempo, threshold, intervals, hills and races. EASY: easy, recovery and long runs. A run without a run type is " +
@@ -172,8 +169,8 @@ private fun VolumeCard(history: RunningHistory, from: LocalDate, today: LocalDat
             "trailing 4-week average.",
     ) {
         if (inWindow.isEmpty()) {
-            FTDataState(DataAvailability.Building, "No runs with distance in this window.")
-            return@FTCard
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No runs with distance in this window.")
+            return@Section
         }
         val weeks = bucketWeeklyStacked(history.runs, { it.date }, { it.distanceKm }, { partIndex(it.category) }, RUN_PARTS.size, from, today)
         val total = inWindow.sumOf { it.distanceKm }
@@ -218,11 +215,11 @@ private fun RawAndMedianCard(
     baseline: RunBaseline,
     extra: (List<Pair<LocalDate, Double>>) -> List<TrendSeries> = { emptyList() },
 ) {
-    FTCard(title = title, info = info) {
+    com.bioscan.fieldterminal.ui.screens.detail.Section(title = title, info = info) {
         val raw = all.filter { !it.first.isBefore(from) }
         if (raw.isEmpty()) {
-            FTDataState(DataAvailability.Building, emptyText)
-            return@FTCard
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine(emptyText)
+            return@Section
         }
         val line = baseline.line(all).filter { !it.first.isBefore(from) }
         val latest = line.lastOrNull()?.second
@@ -285,7 +282,7 @@ private fun PaceCard(history: RunningHistory, trail: Boolean, from: LocalDate, t
 // label gutter so a date sits at the same place in both; two units never share an axis.
 @Composable
 private fun CadenceStrideCard(form: List<RunFormPoint>, from: LocalDate, today: LocalDate, trail: Boolean) {
-    FTCard(
+    com.bioscan.fieldterminal.ui.screens.detail.Section(
         title = "CADENCE · STRIDE LENGTH",
         info = "Steps per minute per run with its median, and below it stride length as a median (Zepp; road 28 days, trail the last " +
             "5 trail runs within 60 days). For the same " +
@@ -297,8 +294,8 @@ private fun CadenceStrideCard(form: List<RunFormPoint>, from: LocalDate, today: 
         val cadenceMedian = baseline.line(cadenceAll).filter { !it.first.isBefore(from) }
         val stride = baseline.line(form.series { it.strideCm }).filter { !it.first.isBefore(from) }
         if (cadence.isEmpty() && stride.isEmpty()) {
-            FTDataState(DataAvailability.Building, "No ${if (trail) "trail" else "road"} runs with cadence in this window.")
-            return@FTCard
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No ${if (trail) "trail" else "road"} runs with cadence in this window.")
+            return@Section
         }
         val dates = (cadence + stride).map { it.first }
         val range = dates.min()..dates.max()
@@ -327,7 +324,7 @@ private fun CadenceStrideCard(form: List<RunFormPoint>, from: LocalDate, today: 
 
 @Composable
 private fun RecordsCard(history: RunningHistory, trail: Boolean, today: LocalDate) {
-    FTCard(
+    com.bioscan.fieldterminal.ui.screens.detail.Section(
         title = "RECORDS",
         info = if (trail) {
             "All-time trail bests: the longest trail run, the biggest climb, the fastest grade-adjusted pace over 10 km or more (raw pace " +
@@ -340,8 +337,8 @@ private fun RecordsCard(history: RunningHistory, trail: Boolean, today: LocalDat
         val records = remember(runs, trail) { runRecords(runs, trail, today) }
         val longest = records.longest
         if (longest == null) {
-            FTDataState(DataAvailability.Building, "No ${if (trail) "trail" else "road"} runs recorded yet.")
-            return@FTCard
+            com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No ${if (trail) "trail" else "road"} runs recorded yet.")
+            return@Section
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             FTMetricRow(if (trail) "Longest trail run" else "Longest run", "${"%.1f".format(longest.value)} km · ${DATE_FMT.format(longest.date)}")
@@ -357,42 +354,3 @@ private fun RecordsCard(history: RunningHistory, trail: Boolean, today: LocalDat
 }
 
 // ---- FITNESS (shown on Training › LOAD) ---------------------------------------------------------------------------------
-
-private enum class FitnessMetric(val label: String) { VO2MAX("VO2MAX"), LACTATE_THRESHOLD("LACTATE THRESHOLD") }
-
-/** VO2max and lactate threshold: slow-moving fitness estimates, on the Load tab with its timeframe. */
-@Composable
-fun RunningFitnessCard(timeframe: PerformanceTimeframe) {
-    LoadedContent(load = { UserDataCache.running() }) { history -> FitnessCard(history, timeframe) }
-}
-
-@Composable
-private fun FitnessCard(history: RunningHistory, timeframe: PerformanceTimeframe) {
-    val available = listOfNotNull(
-        FitnessMetric.VO2MAX.takeIf { history.vo2MaxSeries.isNotEmpty() },
-        FitnessMetric.LACTATE_THRESHOLD.takeIf { history.ltPaceSeries.isNotEmpty() },
-    )
-    FTCard(title = "FITNESS", info = "Slow-moving wearable estimates, not lab tests: VO2max from your watch via Health Connect, lactate threshold from Zepp (recomputed on qualifying runs).") {
-        if (available.isEmpty()) {
-            FTDataState(DataAvailability.Building, "No VO2max or lactate-threshold readings yet.")
-            return@FTCard
-        }
-        var selected by remember(available) { mutableStateOf(available.first()) }
-        if (available.size > 1) SegmentedToggle(available, selected, { it.label }, { selected = it }, accentColor = skillColor(Skill.RUNNING))
-        when (selected) {
-            FitnessMetric.VO2MAX -> {
-                FTMetricValue(DisplayValue(primary = "%.1f".format(history.latestVo2Max ?: history.vo2MaxSeries.last().second), unit = "ML/KG/MIN"))
-                PerformanceTrend(history.vo2MaxSeries, timeframe, { "%.1f".format(it) }, "ml/kg/min")
-            }
-            FitnessMetric.LACTATE_THRESHOLD -> {
-                FTMetricValue(
-                    DisplayValue(
-                        primary = formatPace(history.ltPaceSeries.last().second),
-                        secondary = history.ltHrSeries.lastOrNull()?.second?.let { "%.0f bpm".format(it) } ?: "HR unavailable",
-                    ),
-                )
-                PerformanceTrend(history.ltPaceSeries, timeframe, ::formatPace, "pace · min:sec per km")
-            }
-        }
-    }
-}

@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
+import com.bioscan.fieldterminal.ui.theme.PlexMono
 
 // Session Detail's PERFORMANCE card used to print Average/Min-Max as three
 // plain StatLines -- this replaces them with one visual: a track spanning

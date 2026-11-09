@@ -47,7 +47,7 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
-import com.bioscan.fieldterminal.ui.theme.RobotoMono
+import com.bioscan.fieldterminal.ui.theme.PlexMono
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
@@ -110,6 +110,7 @@ data class ReviewSeedItem(
 fun NutritionCandidateReviewSheet(
     seedItems: List<ReviewSeedItem>,
     mealDateTime: LocalDateTime,
+    mealSlot: String? = null,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
 ) {
@@ -179,7 +180,7 @@ fun NutritionCandidateReviewSheet(
                 saveError = null
                 scope.launch {
                     try {
-                        saveRepo.saveMeal(mealDateTime.toIsoWithOffset(), description.trim(), rows.mapNotNull { confirmed[it.first] })
+                        saveRepo.saveMeal(mealDateTime.toIsoWithOffset(), description.trim(), rows.mapNotNull { confirmed[it.first] }, mealSlot)
                         saving = false
                         onSaved()
                     } catch (e: Exception) {
@@ -359,8 +360,8 @@ private fun ReviewItemCard(
                     val shape = RoundedCornerShape(FT.RadiusSmall)
                     Row(
                         modifier = Modifier
-                            .border(FT.BorderWidth, if (isSelected) FT.DomainLog else FT.GlassBorder, shape)
-                            .background(if (isSelected) FT.DomainLog.copy(alpha = 0.14f) else Color.Transparent, shape)
+                            .border(FT.BorderWidth, if (isSelected) Color.Transparent else FT.GlassBorder, shape)
+                            .background(if (isSelected) FT.PlatinumSolid else Color.Transparent, shape)
                             .ftClickable(shape = shape) {
                                 if (isSelected) {
                                     selectedServing = null
@@ -374,7 +375,7 @@ private fun ReviewItemCard(
                         Text(
                             serving.servingName,
                             style = FTType.MonoCaption,
-                            color = if (isSelected) FT.DomainLog else FT.TextSecondary,
+                            color = if (isSelected) FT.PlatinumInk else FT.TextSecondary,
                         )
                     }
                 }

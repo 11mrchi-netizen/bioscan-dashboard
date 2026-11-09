@@ -25,7 +25,7 @@ private data class WeightOnlyRow(@SerialName("weight_kg") val weightKg: Double? 
 private const val FALLBACK_TEMP_C = 18.0
 
 suspend fun todaySweatRate(supabase: SupabaseClient, home: Pair<Double, Double>?): TodaySweat? = runCatching {
-    val weight = ReadCache.get("fuel.latest_weight", tables = setOf("body_metrics")) {
+    val weight = ReadCache.kept("fuel.latest_weight", tables = setOf("body_metrics")) {
         supabase.postgrest.from("body_metrics").select(Columns.list("weight_kg")) {
             filter { filterNot("weight_kg", FilterOperator.IS, "null") }
             order("date", Order.DESCENDING)

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.dosesPerDay
 import com.bioscan.fieldterminal.data.model.SuppcoProduct
 import com.bioscan.fieldterminal.data.model.flagTexts
 import com.bioscan.fieldterminal.domain.PantryAssessment
@@ -54,7 +55,13 @@ private data class PantrySupplementRow(
     @SerialName("every_n_days") val everyNDays: Int? = null,
     @SerialName("product_id") val productId: Long? = null,
     @SerialName("servings_per_dose") val servingsPerDose: Double = 1.0,
-)
+    val slots: List<String> = emptyList(),
+    val schedule: com.bioscan.fieldterminal.domain.ScheduleJson? = null,
+) {
+    /** Planned doses a day on average (twice a day, every N days, weekdays, cycles: domain/Regimen.kt). */
+    fun dosesPerDay(): Double =
+        com.bioscan.fieldterminal.domain.regimenSpec(timeOfDay, everyNDays, "", slots = slots, schedule = schedule).dosesPerDay()
+}
 
 @Serializable
 private data class PantryProductRow(
@@ -107,7 +114,7 @@ class PantryRepository(private val supabase: SupabaseClient) {
 
     suspend fun load(today: LocalDate = LocalDate.now()): List<PantryItem> {
         val roster = supabase.postgrest.from("supplements")
-            .select(columns = Columns.list("id,time_of_day,status,end_date,every_n_days,product_id,servings_per_dose"))
+            .select(columns = Columns.list("id,time_of_day,status,end_date,every_n_days,product_id,servings_per_dose,slots,schedule"))
             .decodeList<PantrySupplementRow>()
         val active = roster.filter { it.productId != null && isSupplementActive(it.status, it.endDate?.let(LocalDate::parse), today) }
         val events = supabase.postgrest.from("supplement_stock_events")
@@ -134,8 +141,8 @@ class PantryRepository(private val supabase: SupabaseClient) {
         val facts = loadLatestSuppco(productIds, products.associate { it.id to it.name })
 
         return products.map { p ->
-            val rosterItems = active.filter { it.productId == p.id && !it.timeOfDay.equals("as-needed", ignoreCase = true) }
-            val scheduled = if (rosterItems.isEmpty()) null else rosterItems.sumOf { it.servingsPerDose / (it.everyNDays?.takeIf { n -> n > 1 } ?: 1) }
+            val rosterItems = active.filter { it.productId == p.id && it.dosesPerDay() > 0 }
+            val scheduled = if (rosterItems.isEmpty()) null else rosterItems.sumOf { it.servingsPerDose * it.dosesPerDay() }
             val rows = events.filter { it.productId == p.id }
             val f = facts[p.id]
             val assessment = assessPantry(

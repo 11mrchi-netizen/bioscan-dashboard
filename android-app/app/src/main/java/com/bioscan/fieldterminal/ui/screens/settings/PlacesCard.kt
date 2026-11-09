@@ -83,6 +83,8 @@ fun PlacesCard(showDay: Boolean = true) {
             "the visits already recorded inside its circle.",
     ) {
         error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+        com.bioscan.fieldterminal.domain.routine.homeWorkProblem(places.map { it.toPlace() }, places.firstOrNull { it.source == "home_setting" }?.id)
+            ?.let { Text("$it Tap a place below to label it, or use Lab › ROUTINE › OPEN DAY MAP to see where each one is.", style = FTType.BodySmall, color = FT.Warning) }
 
         if (showDay) {
             mobility?.let { m -> MobilitySummary(m) }
@@ -194,7 +196,7 @@ private fun StatusLine(label: String, value: String, ok: Boolean? = null) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PlaceEditor(
+internal fun PlaceEditor(
     place: PlaceRow,
     suggestion: Pair<String?, PlaceCategory?>?,
     onCancel: () -> Unit,
@@ -228,10 +230,10 @@ private fun <T> Chips(options: List<T>, selected: T?, label: (T) -> String, onPi
             Text(
                 label(c),
                 style = FTType.Label,
-                color = if (on) FT.Emerald else FT.TextSecondary,
+                color = if (on) FT.PlatinumInk else FT.TextSecondary,
                 modifier = Modifier
-                    .border(FT.BorderWidth, if (on) FT.Emerald else FT.GlassBorder, shape)
-                    .background(if (on) FT.Emerald.copy(alpha = 0.12f) else Color.Transparent, shape)
+                    .border(FT.BorderWidth, if (on) Color.Transparent else FT.GlassBorder, shape)
+                    .background(if (on) FT.PlatinumSolid else Color.Transparent, shape)
                     .ftClickable(shape = shape) { onPick(if (on) null else c) }
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             )

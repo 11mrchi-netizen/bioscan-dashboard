@@ -259,9 +259,8 @@ private fun SupplementsContent(
 
         if (labelNotes.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("FROM THE LABELS", FT.Warning)
-                Text("What an FDA label says about something else you take, in its own words. Read it; it is not a verdict.",
-                    style = FTType.Caption, color = FT.TextMuted)
+                SectionLabel("FROM THE LABELS", FT.Warning,
+                    info = "What an FDA label says about something else you take, in its own words. Read it; it is not a verdict.")
                 labelNotes.forEach { (owner, m) ->
                     Column {
                         Text("$owner's label names ${m.itemName} · ${m.section}", style = FTType.BodySmall, color = FT.TextPrimary)
@@ -285,10 +284,11 @@ private fun SupplementsContent(
 }
 
 @Composable
-private fun SectionLabel(text: String, color: androidx.compose.ui.graphics.Color) {
+private fun SectionLabel(text: String, color: androidx.compose.ui.graphics.Color, info: String? = null) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(text, style = sectionLabelStyle, color = color)
         Box(Modifier.weight(1f).height(1.dp).background(FT.GlassBorder))
+        if (info != null) com.bioscan.fieldterminal.ui.components.InfoHelpButton(title = text, body = info)
     }
 }
 

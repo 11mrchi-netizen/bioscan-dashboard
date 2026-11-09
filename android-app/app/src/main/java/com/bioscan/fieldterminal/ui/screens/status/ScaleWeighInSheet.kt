@@ -139,15 +139,18 @@ fun ScaleWeighInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     val p = preview
                     val split = p?.split
                     if (split != null) {
-                        Text(
-                            "Body fat %.1f %%  ·  Fat-free %.1f kg  ·  Water %.1f L".format(split.bodyFatPct, split.fatFreeKg, p.totalBodyWaterL ?: 0.0),
-                            style = FTType.BodySmall, color = FT.TextPrimary,
-                        )
+                        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Text(
+                                "Body fat %.1f %%  ·  Fat-free %.1f kg  ·  Water %.1f L".format(split.bodyFatPct, split.fatFreeKg, p.totalBodyWaterL ?: 0.0),
+                                style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f),
+                            )
+                            com.bioscan.fieldterminal.ui.components.InfoHelpButton(title = "BODY COMPOSITION",
+                                body = "Estimates from impedance: trust the trend over a single reading. Weigh at the same time, ideally fasted.")
+                        }
                         p.skeletalMuscleKg?.let { Text("Skeletal muscle ~%.1f kg".format(it), style = FTType.Caption, color = FT.TextSecondary) }
                         if (!p.qualityOk) {
                             Text("This reading looks off (hydration or contact). It will be saved, but not used for body fat.", style = FTType.Caption, color = FT.Warning)
                         }
-                        Text("Estimates from impedance: trust the trend over a single reading. Weigh at the same time, ideally fasted.", style = FTType.Caption, color = FT.TextSecondary)
                     } else if (previewLoaded) {
                         Text("Add height, date of birth and sex in Setup › Profile to see body composition.", style = FTType.Caption, color = FT.TextSecondary)
                     }

@@ -149,9 +149,12 @@ fun TrialSheet(concernId: String, concernTitle: String, onDismiss: () -> Unit, o
             TextChipRow(OUTCOMES.map { it.second }, OUTCOMES.first { it.first == outcome }.second, perRow = 2) { picked ->
                 OUTCOMES.firstOrNull { it.second == picked }?.let { outcome = it.first }
             }
-            Text("LENGTH", style = FTType.Micro, color = FT.TextMuted)
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("LENGTH", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
+                com.bioscan.fieldterminal.ui.components.InfoHelpButton(title = "LENGTH",
+                    body = "Compared with the same number of weeks before it starts (at least four). Check in on good days too, or the read will say there is not enough to compare.")
+            }
             TextChipRow(listOf("4 WEEKS", "6 WEEKS", "8 WEEKS"), "$weeks WEEKS", perRow = 3) { picked -> picked?.let { weeks = it.substringBefore(' ').toInt() } }
-            Text("Compared with the same number of weeks before it starts (at least four). Check in on good days too, or the read will say there is not enough to compare.", style = FTType.Caption, color = FT.TextMuted)
             error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FTButton(label = "CANCEL", modifier = Modifier.weight(1f)) { onDismiss() }

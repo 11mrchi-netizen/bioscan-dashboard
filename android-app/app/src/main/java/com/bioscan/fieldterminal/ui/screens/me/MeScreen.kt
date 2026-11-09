@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.screens.user.Skill
 import com.bioscan.fieldterminal.ui.components.SubTabRow
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.nav.MeTab
@@ -51,7 +52,7 @@ fun MeScreen(
             onRequestedTabConsumed()
         }
     }
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
         TileHeader(
             onBack = null,
             title = "ME",

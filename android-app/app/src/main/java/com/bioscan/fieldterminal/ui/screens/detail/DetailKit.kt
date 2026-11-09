@@ -61,6 +61,7 @@ import com.bioscan.fieldterminal.ui.components.drawBarStub
 import com.bioscan.fieldterminal.ui.components.drawRangeCapsule
 import com.bioscan.fieldterminal.ui.components.drawStackedBar
 import com.bioscan.fieldterminal.ui.components.ftDomainWash
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.ftGlass
 import com.bioscan.fieldterminal.ui.screens.today.FullScreenOverlay
 import com.bioscan.fieldterminal.ui.screens.today.Sparkline
@@ -101,7 +102,7 @@ fun DetailScreen(
     androidx.compose.runtime.LaunchedEffect(Unit) {
         markers = runCatching { loadRegimenMarkers() }.getOrDefault(emptyList())
     }
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base).then(if (domain != null) Modifier.ftDomainWash(domain) else Modifier)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).then(if (domain != null) Modifier.ftDomainWash(domain) else Modifier.ftPlatinumWash())) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("‹", style = FTType.SectionTitle, color = FT.TextSecondary,
                 modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Back") { onBack() }.padding(12.dp))

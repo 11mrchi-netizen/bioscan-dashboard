@@ -26,6 +26,7 @@ import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.domain.levels.SkillLevel
 import com.bioscan.fieldterminal.ui.components.FTCard
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
@@ -89,7 +90,7 @@ fun UserProfileScreen(
     }
     val activeCycle = cycles?.firstOrNull { it.isActiveOn(LocalDate.now()) }
 
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
         if (showHeader) ScreenHeader(title = "USER", context = "HEALTHSPAN · SKILLS · TRAINING BLOCK")
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),

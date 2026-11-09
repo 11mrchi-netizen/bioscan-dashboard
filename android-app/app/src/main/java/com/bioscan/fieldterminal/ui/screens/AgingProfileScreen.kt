@@ -29,6 +29,7 @@ import com.bioscan.fieldterminal.domain.DataAvailability
 import com.bioscan.fieldterminal.domain.aging.BiologicalAgeResult
 import com.bioscan.fieldterminal.domain.DisplayValue
 import com.bioscan.fieldterminal.ui.components.DotPlot
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDataState
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
@@ -54,7 +55,7 @@ fun AgingProfileScreen(onBack: () -> Unit) {
         guard.run { overview = AgingProfileRepository(SupabaseClientProvider.client).loadOverview() }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
         TileHeader(onBack = onBack, title = "AGING PROFILE", subtitle = "BIOLOGICAL AGE · DIMENSIONS · HISTORY", accent = FT.DomainUser)
 
         val current = overview

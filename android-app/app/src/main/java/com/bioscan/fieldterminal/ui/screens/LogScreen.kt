@@ -54,6 +54,7 @@ import com.bioscan.fieldterminal.domain.buildLogDays
 import com.bioscan.fieldterminal.domain.category
 import com.bioscan.fieldterminal.domain.supplementExpectedOn
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.SubTabChip
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -138,7 +139,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+        Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
             val current = feed
             val gapCount = days.count { it.hasGap }
             // UX review P4: the header counts today (the all-time count of loaded rows said little) and keeps the gap count.

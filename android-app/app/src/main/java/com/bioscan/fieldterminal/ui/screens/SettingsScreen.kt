@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.auth.GoogleAuthManager
 import com.bioscan.fieldterminal.ui.components.FTButton
+import com.bioscan.fieldterminal.ui.components.ftPlatinumWash
 import com.bioscan.fieldterminal.ui.components.ScreenHeader
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -36,7 +37,7 @@ fun SettingsScreen(
     onOpenConnectedServices: () -> Unit,
     onOpenTraining: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
         ScreenHeader(title = "SETUP", context = "PROFILE · NOTIFICATIONS · CONNECTED SERVICES · TRAINING")
         Column(
             modifier = Modifier.fillMaxSize().padding(22.dp),

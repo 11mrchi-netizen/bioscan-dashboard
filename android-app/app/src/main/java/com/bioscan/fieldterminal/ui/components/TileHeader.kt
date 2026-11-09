@@ -75,7 +75,8 @@ fun PinnedPage(
     headerAction: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
+    // A page with only an accent dot (no domain wash) gets the neutral platinum glow instead of a flat ground.
+    Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {
         TileHeader(onBack = onBack, title = title, subtitle = subtitle, accent = accent, action = headerAction)
         if (rail != null) {
             rail()

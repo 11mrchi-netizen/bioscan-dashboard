@@ -60,6 +60,16 @@ fun Modifier.ftDomainWash(hue: Color): Modifier = drawBehind {
     glow(hue, 0.20f, Offset(size.width * -0.12f, size.height * 0.94f), 480.dp.toPx(), 440.dp.toPx(), 0.64f)
 }
 
+/**
+ * The neutral page wash for screens with no domain hue: a soft platinum glow top centre and a fainter one bottom-left,
+ * so a page that is not colour-themed reads as part of the system without borrowing any metric's colour. Kept low-alpha
+ * because platinum is near-white; put it on the page's root, over [FT.Base] and under the content, like [ftDomainWash].
+ */
+fun Modifier.ftPlatinumWash(): Modifier = drawBehind {
+    glow(FT.PlatinumSolid, 0.10f, Offset(size.width * 0.5f, size.height * -0.12f), 540.dp.toPx(), 440.dp.toPx(), 0.64f)
+    glow(FT.PlatinumSolid, 0.05f, Offset(size.width * -0.12f, size.height * 0.96f), 480.dp.toPx(), 440.dp.toPx(), 0.64f)
+}
+
 /** The CHARGE page's wash (gauge.html): deep teal from the top, violet from the right. */
 fun Modifier.ftChargeWash(): Modifier = drawBehind {
     glow(Color(0xFF2D7882), 0.28f, Offset(size.width * 0.5f, size.height * -0.10f), 640.dp.toPx(), 440.dp.toPx(), 0.62f)

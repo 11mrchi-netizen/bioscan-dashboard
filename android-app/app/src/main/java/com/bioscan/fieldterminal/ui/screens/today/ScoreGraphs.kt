@@ -301,12 +301,7 @@ fun TsbLine(tsb: Series, day: LocalDate, days: Int = 30) {
             fun x(i: Int) = size.width * i / (days - 1).coerceAtLeast(1)
             drawRect(metricInk(com.bioscan.fieldterminal.domain.score.ScoreKeys.TSB).copy(alpha = 0.10f), Offset(0f, y(ScoreSpecs.TSB_BAND_HI)), Size(size.width, y(ScoreSpecs.TSB_BAND_LO) - y(ScoreSpecs.TSB_BAND_HI)))
             drawLine(FT.TextMuted.copy(alpha = 0.5f), Offset(0f, y(0.0)), Offset(size.width, y(0.0)), strokeWidth = 1f)
-            val path = Path()
-            var started = false
-            points.forEachIndexed { i, (_, v) ->
-                if (v == null) return@forEachIndexed
-                if (!started) { path.moveTo(x(i), y(v)); started = true } else path.lineTo(x(i), y(v))
-            }
+            val path = com.bioscan.fieldterminal.ui.components.smoothedPath(points.mapIndexedNotNull { i, (_, v) -> v?.let { Offset(x(i), y(it)) } })
             drawPath(path, metricInk(com.bioscan.fieldterminal.domain.score.ScoreKeys.TSB), style = Stroke(width = 3f))
             points.lastOrNull()?.second?.let { drawCircle(FT.TextPrimary, 6f, Offset(x(days - 1), y(it))) }
         }
@@ -361,8 +356,7 @@ fun Sparkline(values: List<Double>, modifier: Modifier = Modifier, color: Color 
         val lo = values.min()
         val hi = values.max().let { if (it - lo < 1e-9) lo + 1 else it }
         fun at(i: Int) = Offset(size.width * i / (values.size - 1), (size.height * (1 - (values[i] - lo) / (hi - lo))).toFloat().coerceIn(2f, size.height - 2f))
-        val path = Path()
-        values.indices.forEach { i -> if (i == 0) path.moveTo(at(i).x, at(i).y) else path.lineTo(at(i).x, at(i).y) }
+        val path = com.bioscan.fieldterminal.ui.components.smoothedPath(values.indices.map { at(it) })
         drawPath(path, color, style = Stroke(width = 2.5f))
         drawCircle(FT.TextPrimary, 3.5f, at(values.lastIndex))
     }
@@ -407,8 +401,7 @@ fun MetricChart(series: Series, day: LocalDate, key: String, band: Pair<Double, 
             val path = Path()
             points.forEachIndexed { k, (i, v) -> if (k == 0) path.moveTo(x(i), y(v)) else path.lineTo(x(i), y(v)) }
             drawPath(path, FT.TextSecondary.copy(alpha = 0.5f), style = Stroke(width = 1.5f))
-            val mean = Path()
-            mean7.forEachIndexed { k, (i, v) -> if (k == 0) mean.moveTo(x(i), y(v)) else mean.lineTo(x(i), y(v)) }
+            val mean = com.bioscan.fieldterminal.ui.components.smoothedPath(mean7.map { (i, v) -> Offset(x(i), y(v)) })
             drawPath(mean, metricInk(key), style = Stroke(width = 3f))
             points.forEach { (i, v) -> drawCircle(if (i == 59) FT.TextPrimary else FT.TextSecondary, radius = if (i == 59) 7f else 3f, center = Offset(x(i), y(v))) }
         }

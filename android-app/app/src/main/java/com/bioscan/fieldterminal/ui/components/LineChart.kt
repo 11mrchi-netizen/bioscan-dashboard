@@ -115,13 +115,7 @@ fun LineChart(
                     selected = if (isTap && selected == nearest) null else nearest
                 },
         ) {
-            val line = Path().apply {
-                shown.forEachIndexed { i, p ->
-                    val x = xFor(xs[i], size.width)
-                    val y = yFor(p.value.toFloat(), size.height)
-                    if (i == 0) moveTo(x, y) else lineTo(x, y)
-                }
-            }
+            val line = smoothedPath(shown.mapIndexed { i, p -> Offset(xFor(xs[i], size.width), yFor(p.value.toFloat(), size.height)) })
 
             if (filled) {
                 val fill = Path().apply {

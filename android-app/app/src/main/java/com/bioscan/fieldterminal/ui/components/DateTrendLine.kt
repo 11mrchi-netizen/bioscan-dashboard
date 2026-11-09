@@ -271,13 +271,7 @@ fun DateTrendLine(
                         if (seg.size == 1) {
                             drawCircle(s.color, radius = 3.5f, center = Offset(xFor(seg[0].first, size.width), yFor(seg[0].second, size.height)))
                         } else {
-                            val line = Path().apply {
-                                seg.forEachIndexed { i, (day, value) ->
-                                    val x = xFor(day, size.width)
-                                    val y = yFor(value, size.height)
-                                    if (i == 0) moveTo(x, y) else lineTo(x, y)
-                                }
-                            }
+                            val line = smoothedPath(seg.map { (day, value) -> Offset(xFor(day, size.width), yFor(value, size.height)) })
                             drawPath(
                                 line,
                                 color = s.color,

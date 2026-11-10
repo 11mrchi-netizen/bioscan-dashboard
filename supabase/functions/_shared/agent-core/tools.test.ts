@@ -30,7 +30,7 @@ test('a tool whose tables are not shared is not offered', () => {
 })
 
 test('the registered space matches the registered_questions checks in the migration', () => {
-  const sql = readFileSync(new URL('../../../migrations/20261016_evidence_ledger.sql', import.meta.url), 'utf8')
+  const sql = readFileSync(new URL('../../../migrations/20261015133225_evidence_ledger.sql', import.meta.url), 'utf8')
   const list = (col: string) => [...sql.match(new RegExp(`${col} text not null check \\(${col} in \\(([^)]*)\\)`))![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1])
   assert.deepEqual(list('exposure'), REGISTERED_SPACE.exposures)
   assert.deepEqual(list('outcome'), REGISTERED_SPACE.outcomes)

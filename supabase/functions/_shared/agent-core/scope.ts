@@ -44,7 +44,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     // training
     'exercise_sessions', 'zepp_workout_detail', 'runs', 'running_form_analyses', 'athlete_events', 'athlete_maxes',
     'exercise_library', 'planned_sessions', 'training_blocks', 'training_block_domains', 'training_cycles',
-    'training_definitions', 'training_settings', 'v_training_block_metrics',
+    'training_definitions', 'training_settings', 'v_training_block_metrics', 'training_plans', 'training_thresholds',
+    'planned_session_deviations', 'session_plan_links',
     // nutrition, supplements, fuel
     'meals', 'meal_items', 'nutrient_intake', 'foods', 'food_nutrients', 'food_servings', 'food_sources',
     'breakfast_templates', 'meal_prep_weeks', 'fuel_plans', 'fuel_plan_reviews', 'fuel_schedules', 'fueling_intake_log',
@@ -71,9 +72,9 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
   ...never(
     // routine and location
     'location_fixes', 'place_visits', 'places', 'trips', 'mobility_daily', 'activity_transitions', 'phone_usage_daily',
-    'phone_app_usage_daily', 'phone_app_categories', 'daily_context', 'planned_routes',
+    'phone_app_usage_daily', 'phone_app_categories', 'daily_context', 'planned_routes', 'routine_activities', 'routine_logs',
     // other people and the calendar
-    'people', 'calendar_events', 'calendar_event_overrides',
+    'people', 'calendar_events', 'calendar_event_overrides', 'calendar_strength_staging', 'calendar_strength_staging_review',
     // free text by nature
     'notes',
   ),
@@ -83,6 +84,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'collector_heartbeats', 'daily_field_provenance', 'ai_estimates', 'nutrition_backfill_review',
     'exercise_session_tombstones', 'experiment_exclusion_snapshots', 'food_match_memory', 'clothing_items', 'laundry_loads',
     'agent_threads', 'agent_turns', 'agent_hints', 'agent_digests', 'agent_settings',
+    // device push tokens; the raw inputs behind a meal estimate (typed text, photo paths), read through meals instead
+    'push_subscriptions', 'meal_inputs',
   ),
 }
 

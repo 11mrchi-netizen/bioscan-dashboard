@@ -177,6 +177,8 @@ data class InferredInputs(
     val phoneByCategory: Map<LocalDate, Map<String, Double>> = emptyMap(),
     /** Hours asleep, by the day the night ends on. */
     val sleepHours: Map<LocalDate, Double> = emptyMap(),
+    /** Door-to-door commuting minutes (to work and home), by day. */
+    val commuteMin: Map<LocalDate, Double> = emptyMap(),
 )
 
 private val PHONE_LINES = linkedMapOf("video" to "Video on the phone", "social" to "Social apps", "game" to "Games on the phone", "news" to "News", "audio" to "Listening on the phone")
@@ -201,6 +203,7 @@ fun inferredTime(inputs: InferredInputs): List<TimeEntry> {
         PHONE_LINES.forEach { (cat, label) -> cats[cat]?.takeIf { it >= 1 }?.let { out += TimeEntry("phone:$cat", label, TimeSource.PHONE, d, it) } }
     }
     inputs.sleepHours.forEach { (d, h) -> if (h > 0) out += TimeEntry("sleep", "Asleep", TimeSource.SLEEP, d, h * 60) }
+    inputs.commuteMin.forEach { (d, m) -> if (m > 0) out += TimeEntry("commute", "Commuting", TimeSource.LOCATION, d, m) }
     return out
 }
 

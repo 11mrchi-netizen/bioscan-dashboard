@@ -44,6 +44,8 @@ enum class MeTab(val label: String) {
     Body("BODY"),
     Health("HEALTH"),
     Bloodwork("BLOODWORK"),
+    // Routine R8: the long view of the routine (ui/screens/me/RoutinePage.kt).
+    Routine("ROUTINE"),
 }
 
 // LAB's old pushed route (it was a Status tile before it became a dock tab); kept so a saved back stack still resolves.

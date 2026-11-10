@@ -32,6 +32,20 @@ class PlacesTripsMobilityTest {
     }
 
     @Test
+    fun aOneOffStopKeepsItsVisitButLaterStaysNearbyStartTheirOwnPlace() {
+        // A restaurant named as a one-off stop at 13:00: the lunch stay (12:10) stays with it, even when the hourly job
+        // re-assigns it; dinner nearby (19:30) starts a new place instead of joining it.
+        var n = 0
+        val restaurant = Place("rest", office.first, office.second, label = "Restaurant", category = PlaceCategory.FOOD, stopSinceMs = t(d, 13))
+        val lunch = stay(office).copy(startTs = t(d, 12, 10))
+        val dinner = stay(office, 40.0).copy(startTs = t(d, 19, 30))
+        val result = assignStaysToPlaces(listOf(lunch, dinner), listOf(restaurant)) { "new${n++}" }
+        assertEquals(listOf("rest", "new0"), result.placeIds)
+        // A place visited again takes both.
+        assertEquals(listOf("rest", "rest"), assignStaysToPlaces(listOf(lunch, dinner), listOf(restaurant.copy(stopSinceMs = null))) { "x" }.placeIds)
+    }
+
+    @Test
     fun workIsSuggestedFromWeekdayOfficeHoursOnly() {
         val week = (0L..4L).map { d.minusDays(1).plusDays(it) } // Mon..Fri
         val visits = week.map { PlaceVisitTime("office", t(it, 8, 30), t(it, 18, 30)) } +

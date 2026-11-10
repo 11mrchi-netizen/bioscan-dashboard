@@ -202,9 +202,9 @@ fun DayMapScreen(initialDate: LocalDate, onBack: () -> Unit) {
             place = p,
             places = places,
             onDismiss = { editing = null },
-            onSave = { label, category ->
+            onSave = { label, category, stop ->
                 scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { editing = null; reload++ }) {
-                    repo.saveLabel(p.id, label, category)
+                    repo.saveLabel(p.id, label, category, stop)
                 }
             },
             onMerge = { into ->
@@ -551,7 +551,7 @@ private fun PlaceSheet(
     place: PlaceRow,
     places: List<PlaceRow>,
     onDismiss: () -> Unit,
-    onSave: (String?, PlaceCategory?) -> Unit,
+    onSave: (String?, PlaceCategory?, Boolean) -> Unit,
     onMerge: (PlaceRow) -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -673,7 +673,8 @@ private fun MarkPlaceSheet(point: GeoPoint, onDismiss: () -> Unit, onSave: (Stri
                 place = PlaceRow("new", point.latitude, point.longitude, radius, source = "manual"),
                 suggestion = null,
                 onCancel = onDismiss,
-                onSave = { label, category -> onSave(label, category, radius) },
+                onSave = { label, category, _ -> onSave(label, category, radius) },
+                showStop = false,
             )
         }
     }

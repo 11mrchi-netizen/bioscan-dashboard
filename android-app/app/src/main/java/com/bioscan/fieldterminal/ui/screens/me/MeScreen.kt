@@ -44,6 +44,7 @@ fun MeScreen(
     onOpenSport: (com.bioscan.fieldterminal.domain.Sport) -> Unit = {},
     requestedTab: MeTab? = null,
     onRequestedTabConsumed: () -> Unit = {},
+    onOpenDayMap: (java.time.LocalDate) -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(requestedTab ?: MeTab.Healthspan) }
     LaunchedEffect(requestedTab) {
@@ -62,6 +63,7 @@ fun MeScreen(
                 MeTab.Body -> "WEIGHT · BODY FAT · MEASUREMENTS"
                 MeTab.Health -> "INJURIES · PAIN · SYMPTOMS · ILLNESS"
                 MeTab.Bloodwork -> "LAB DRAWS · MARKERS"
+                MeTab.Routine -> "THE DAYS · TIME · PLACES · PHONE · PRACTICES"
             },
             accent = FT.DomainUser,
             action = {
@@ -94,6 +96,7 @@ fun MeScreen(
                         MeTab.Body -> com.bioscan.fieldterminal.ui.screens.status.BodyTabContent()
                         MeTab.Health -> com.bioscan.fieldterminal.ui.screens.health.ConcernsTab(onOpenConcern = onOpenConcern)
                         MeTab.Bloodwork -> com.bioscan.fieldterminal.ui.screens.status.LabsScreen()
+                        MeTab.Routine -> RoutinePage(onOpenDay = onOpenDayMap)
                         MeTab.Healthspan -> Unit
                     }
                 }

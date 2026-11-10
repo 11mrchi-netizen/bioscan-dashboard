@@ -54,8 +54,13 @@ data class PlaceRow(
     @SerialName("osm_name") val osmName: String? = null,
     @SerialName("osm_category") val osmCategory: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("stop_since") val stopSince: String? = null,
 ) : PlaceRowLike {
-    fun toPlace() = Place(id, lat, lon, radiusM, label, PlaceCategory.of(category))
+    fun toPlace() = Place(
+        id, lat, lon, radiusM, label, PlaceCategory.of(category),
+        stopSince?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() },
+    )
+    val isStop: Boolean get() = stopSince != null
 }
 
 @Serializable
@@ -186,6 +191,9 @@ private data class DailyContextWeatherRow(
 private data class PlaceLabelUpdate(val label: String?, val category: String?, @SerialName("updated_at") val updatedAt: String)
 
 @Serializable
+private data class PlaceStopUpdate(@SerialName("stop_since") val stopSince: String?)
+
+@Serializable
 private data class PlaceOsmUpdate(
     @SerialName("osm_name") val osmName: String?,
     @SerialName("osm_category") val osmCategory: String?,
@@ -207,7 +215,7 @@ class PlacesRepository(private val supabase: SupabaseClient) {
 
     private suspend fun fetchLoadPlaces(): List<PlaceRow> =
         supabase.postgrest.from("places")
-            .select(columns = Columns.list("id,lat,lon,radius_m,label,category,source,osm_name,osm_category,created_at"))
+            .select(columns = Columns.list("id,lat,lon,radius_m,label,category,source,osm_name,osm_category,created_at,stop_since"))
             .decodeList<PlaceRow>()
 
     // Each stay's place, creating places for stays no known place holds. Setup's home location becomes the Home place the
@@ -356,10 +364,20 @@ class PlacesRepository(private val supabase: SupabaseClient) {
     }
 
     // A new label or category can make trips commutes or stop them being ones: the stored flags follow.
-    suspend fun saveLabel(id: String, label: String?, category: PlaceCategory?) {
+    /**
+     * Names a place. [stop]: true marks it a one-off stop from now (kept from when it was first marked), false a place
+     * visited again; null leaves it as it is.
+     */
+    suspend fun saveLabel(id: String, label: String?, category: PlaceCategory?, stop: Boolean? = null) {
         supabase.postgrest.from("places").update(
             PlaceLabelUpdate(label?.trim()?.ifBlank { null }, category?.key, Instant.now().toString()),
         ) { filter { eq("id", id) } }
+        if (stop != null) {
+            val current = fetchLoadPlaces().firstOrNull { it.id == id }
+            if (stop != (current?.isStop == true)) {
+                supabase.postgrest.from("places").update(PlaceStopUpdate(if (stop) Instant.now().toString() else null)) { filter { eq("id", id) } }
+            }
+        }
         recomputeCommuteFlags()
     }
 

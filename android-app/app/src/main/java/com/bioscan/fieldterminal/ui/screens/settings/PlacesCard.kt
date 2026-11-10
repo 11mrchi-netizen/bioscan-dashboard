@@ -135,9 +135,9 @@ fun PlacesCard(showDay: Boolean = true) {
                     place = p,
                     suggestion = suggestion,
                     onCancel = { editing = null },
-                    onSave = { label, category ->
+                    onSave = { label, category, stop ->
                         scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { editing = null; reload++ }) {
-                            repo.saveLabel(p.id, label, category)
+                            repo.saveLabel(p.id, label, category, stop)
                         }
                     },
                 )
@@ -200,13 +200,24 @@ internal fun PlaceEditor(
     place: PlaceRow,
     suggestion: Pair<String?, PlaceCategory?>?,
     onCancel: () -> Unit,
-    onSave: (String?, PlaceCategory?) -> Unit,
+    onSave: (String?, PlaceCategory?, Boolean) -> Unit,
+    showStop: Boolean = true,
 ) {
     var label by remember(place.id) { mutableStateOf(place.label ?: "") }
     var category by remember(place.id) { mutableStateOf(PlaceCategory.of(place.category)) }
+    var stop by remember(place.id) { mutableStateOf(place.isStop) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         FieldTextField(value = label, onValueChange = { label = it }, placeholder = "Name (Home, Office, Gym…)")
         Chips(PlaceCategory.entries, category, { it.label }) { category = it }
+        if (showStop) {
+            // A restaurant or a shop: named once, it should not collect every later stay within 150 m.
+            Chips(listOf(false, true), stop, { if (it) "ONE-OFF STOP" else "A PLACE I GO BACK TO" }) { stop = it ?: stop }
+            Text(
+                if (stop) "Its visits so far keep this name; the next stay nearby starts a place of its own."
+                else "Later stays within its circle join it.",
+                style = FTType.Caption, color = FT.TextSecondary,
+            )
+        }
         if (suggestion != null) {
             FTButton("USE SUGGESTION", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Tertiary) {
                 suggestion.first?.let { label = it }
@@ -215,7 +226,7 @@ internal fun PlaceEditor(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             FTButton("CANCEL", modifier = Modifier.weight(1f), onClick = onCancel)
-            FTButton("SAVE", modifier = Modifier.weight(1f), emphasis = FTButtonEmphasis.Primary) { onSave(label, category) }
+            FTButton("SAVE", modifier = Modifier.weight(1f), emphasis = FTButtonEmphasis.Primary) { onSave(label, category, stop) }
         }
     }
 }

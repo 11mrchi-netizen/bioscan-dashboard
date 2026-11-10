@@ -175,6 +175,13 @@ object FuturisticMaterialTokens {
         val Daylight = Color(0xFFFFD23A)
         val Commute = Color(0xFF5AB0FF)
         val ActiveTravel = Color(0xFF36D07A)
+        // routine: kinds of time on the 24-hour ribbon (asleep is SleepDuration, on the move Commute)
+        val TimeHome = Color(0xFF2FB8A0)
+        val TimeWork = Color(0xFFE8C26A)
+        val TimeOut = Color(0xFFFF8FB1)
+        val TimeTraining = Color(0xFFFF6A3D)
+        val TimeLogged = Color(0xFFB8E04A)
+        val TimePhone = Color(0xFFA7B0FF)
     }
 
     // ---- ordered ramps (--z-*) ----

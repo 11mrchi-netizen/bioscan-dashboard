@@ -115,6 +115,13 @@
   --m-daylight:          #ffd23a;
   --m-commute:           #5ab0ff;
   --m-active-travel:     #36d07a;
+  /* routine: kinds of time on the 24-hour ribbon (asleep is --m-sleep-duration, on the move --m-commute) */
+  --m-time-home:         #2fb8a0;
+  --m-time-work:         #e8c26a;
+  --m-time-out:          #ff8fb1;
+  --m-time-training:     #ff6a3d;
+  --m-time-logged:       #b8e04a;
+  --m-time-phone:        #a7b0ff;
 
   /* ---- ordered ramps ---- */
   --z-hr-1: #6f86b0;  --z-hr-2: #3aa0ff;  --z-hr-3: #35c77a;  --z-hr-4: #ffb03a;  --z-hr-5: #ff4d4d;

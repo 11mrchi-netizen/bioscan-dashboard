@@ -273,6 +273,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     onOpenSport = { sport -> navController.navigate(com.bioscan.fieldterminal.ui.screens.performance.sportRoute(sport)) },
                     requestedTab = meRequestedTab,
                     onRequestedTabConsumed = { meRequestedTab = null },
+                    onOpenDayMap = { date -> navController.navigate("routine_day/$date") },
                 )
             }
             composable("aging_profile") { AgingProfileScreen(onBack = { navController.popBackStack() }) }

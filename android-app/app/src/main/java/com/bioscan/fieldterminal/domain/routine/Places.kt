@@ -33,21 +33,26 @@ data class Place(
     val radiusM: Double = DEFAULT_PLACE_RADIUS_M,
     val label: String? = null,
     val category: PlaceCategory? = null,
+    /** A one-off stop (a restaurant, a shop) since this instant (epoch ms): stays that start later never join it. */
+    val stopSinceMs: Long? = null,
 )
 
 const val DEFAULT_PLACE_RADIUS_M = 150.0
 
+/** Whether a stay starting at [startMs] may join [place]: always, unless the place became a one-off stop before it. */
+fun Place.takes(startMs: Long): Boolean = stopSinceMs == null || startMs < stopSinceMs
+
 data class PlaceAssignment(val placeIds: List<String>, val created: List<Place>)
 
 // Each stay's place id, in order, and the places created on the way (a later stay in the same batch can join a place an
-// earlier one created).
+// earlier one created). A one-off stop only takes the stays from before it was marked one.
 fun assignStaysToPlaces(stays: List<Stay>, known: List<Place>, newId: () -> String): PlaceAssignment {
     val places = known.toMutableList()
     val created = mutableListOf<Place>()
     val ids = stays.map { s ->
         val nearest = places
             .map { it to haversineM(s.lat, s.lon, it.lat, it.lon) }
-            .filter { (p, d) -> d <= p.radiusM }
+            .filter { (p, d) -> d <= p.radiusM && p.takes(s.startTs) }
             .minByOrNull { it.second }
             ?.first
         nearest?.id ?: Place(newId(), s.lat, s.lon).also { places += it; created += it }.id

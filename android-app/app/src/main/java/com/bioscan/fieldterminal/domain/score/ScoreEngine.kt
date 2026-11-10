@@ -23,7 +23,8 @@ import kotlin.math.abs
 // 3: sleep debt is carried night to night (SleepDebt.kt) instead of a 7-night sum.
 // 4: Rhythm's phone input is the measured minutes on the phone before sleep.
 // 5: the evening check-in's 1-5 stress is put on the morning's 0-10 scale before the two share felt stress.
-const val SCORE_MODEL_VERSION = "6"
+// 7: an illness is capped by its gravity (severity, training answer, fever, above or below the neck), not its being open.
+const val SCORE_MODEL_VERSION = "7"
 const val RANK_WINDOW_DAYS = 180
 const val MIN_RANK_HISTORY = 28
 const val CAP_CEILING = 40.0

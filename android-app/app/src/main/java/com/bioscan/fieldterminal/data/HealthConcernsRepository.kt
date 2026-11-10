@@ -95,9 +95,9 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
 
     // ---- raw tables ----
 
-    suspend fun loadConcerns(): List<HealthConcernRow> = ReadCache.get("health.concerns", tables = setOf("health_concerns"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.HealthConcernRow.serializer())) {
+    suspend fun loadConcerns(): List<HealthConcernRow> = ReadCache.get("health.concerns.v2", tables = setOf("health_concerns"), serializer = kotlinx.serialization.builtins.ListSerializer(com.bioscan.fieldterminal.data.model.HealthConcernRow.serializer())) {
         supabase.postgrest.from("health_concerns")
-            .select(columns = Columns.list("id,title,kind,onset_type,regions,symptoms,excludes_from_baselines,archived_at,legacy_source,created_at")) {
+            .select(columns = Columns.list("id,title,kind,onset_type,regions,symptoms,excludes_from_baselines,archived_at,legacy_source,created_at,category,illness_type,label_diagnosis")) {
                 order("created_at", Order.DESCENDING)
             }
             .decodeList<HealthConcernRow>()
@@ -118,7 +118,7 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
      * logged that day (scoring: the illness ceiling, domain/score/IllnessRead.kt). Retracted and superseded rows are left out.
      */
     suspend fun loadIllnessCheckIns(concernId: String, since: LocalDate): List<com.bioscan.fieldterminal.domain.score.IllnessCheckIn> =
-        ReadCache.get("health.illness_checkins.$concernId.$since", tables = setOf("health_observations", "health_signals"),
+        ReadCache.get("health.illness_checkins.v2.$concernId.$since", tables = setOf("health_observations", "health_signals"),
             serializer = kotlinx.serialization.builtins.ListSerializer(IllnessDayRow.serializer())) {
             val obs = supabase.postgrest.from("health_observations")
                 .select(columns = Columns.list("id,local_date,function_impact")) {
@@ -126,16 +126,20 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
                 }
                 .decodeList<IllnessObsRow>()
             val temps = if (obs.isEmpty()) emptyList() else supabase.postgrest.from("health_signals")
-                .select(columns = Columns.list("observation_id,temperature_c")) {
+                .select(columns = Columns.list("observation_id,temperature_c,severity,symptom")) {
                     filter { eq("concern_id", concernId); isIn("observation_id", obs.map { it.id }) }
                 }
                 .decodeList<IllnessTempRow>()
-            val tempByObs = temps.groupBy { it.observationId }.mapValues { (_, t) -> t.mapNotNull { it.temperatureC }.maxOrNull() }
+            val byObs = temps.groupBy { it.observationId }
             obs.groupBy { it.localDate }.map { (day, rows) ->
-                IllnessDayRow(day, rows.mapNotNull { it.functionImpact }.maxOrNull(), rows.mapNotNull { tempByObs[it.id] }.maxOrNull())
+                val sigs = rows.flatMap { byObs[it.id].orEmpty() }
+                IllnessDayRow(
+                    day, rows.mapNotNull { it.functionImpact }.maxOrNull(), sigs.mapNotNull { it.temperatureC }.maxOrNull(),
+                    sigs.mapNotNull { it.severity }.maxOrNull(), sigs.map { it.symptom }.toSet(),
+                )
             }
         }.mapNotNull { r ->
-            runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { com.bioscan.fieldterminal.domain.score.IllnessCheckIn(it, r.impact, r.temperatureC) }
+            runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { com.bioscan.fieldterminal.domain.score.IllnessCheckIn(it, r.impact, r.temperatureC, r.severity, r.symptoms) }
         }
 
     suspend fun lastCheckinDate(): LocalDate? = loadLatestObservations(1).firstOrNull()?.localDate?.let(LocalDate::parse)
@@ -155,6 +159,61 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
         if (plan.concerns.isNotEmpty()) supabase.postgrest.from("health_concerns").insert(plan.concerns)
         if (plan.observations.isNotEmpty()) supabase.postgrest.from("health_observations").insert(plan.observations)
         if (plan.signals.isNotEmpty()) supabase.postgrest.from("health_signals").insert(plan.signals)
+    }
+
+    /** An illness: its concern, first check-in and signals, and the start mark when it began before today. */
+    suspend fun saveIllness(plan: com.bioscan.fieldterminal.domain.health.IllnessPlan) {
+        save(plan.checkIn)
+        plan.startMark?.let { supabase.postgrest.from("health_episode_marks").insert(it) }
+    }
+
+    /** Saves a symptom check; returns its signals' ids (for TRACK AS ILLNESS, which gives them to the new illness). */
+    suspend fun saveCheck(plan: CheckInPlan): List<Long> {
+        supabase.postgrest.from("health_observations").insert(plan.observations)
+        if (plan.signals.isEmpty()) return emptyList()
+        return supabase.postgrest.from("health_signals").insert(plan.signals) { select(Columns.list("id,observation_id,symptom")) }
+            .decodeList<CheckSignalRow>().map { it.id }
+    }
+
+    /** The symptom checks of the last [days] days, newest first, each with its signals. */
+    suspend fun loadChecks(days: Long = 14): List<SymptomCheckRow> {
+        val since = LocalDate.now().minusDays(days).toString()
+        val obs = supabase.postgrest.from("health_observations")
+            .select(columns = Columns.list("id,observed_at,local_date,assessment")) {
+                filter { eq("scope", "check"); gte("local_date", since); exact("superseded_at", null); eq("retracted", false) }
+                order("observed_at", Order.DESCENDING)
+                limit(50)
+            }
+            .decodeList<CheckObsRow>()
+        if (obs.isEmpty()) return emptyList()
+        val sigs = supabase.postgrest.from("health_signals")
+            .select(columns = Columns.list("id,observation_id,concern_id,symptom,severity")) { filter { isIn("observation_id", obs.map { it.id }) } }
+            .decodeList<CheckSignalRow>()
+            .groupBy { it.observationId }
+        return obs.map { SymptomCheckRow(it.id, it.localDate, it.assessment, sigs[it.id].orEmpty()) }
+    }
+
+    /** A symptom check's signals become part of [concernId] (TRACK AS ILLNESS): once, as every signal assignment. */
+    suspend fun assignSignals(signalIds: List<Long>, concernId: String) {
+        if (signalIds.isEmpty()) return
+        supabase.postgrest.from("health_signals").update(buildJsonObject { put("concern_id", concernId) }) {
+            filter { isIn("id", signalIds); exact("concern_id", null) }
+        }
+    }
+
+    /** What the symptom check prefills from: last night's sleep and the last three days' recorded training. */
+    suspend fun loadCheckContext(today: LocalDate = LocalDate.now()): com.bioscan.fieldterminal.domain.health.CheckContext {
+        val sleep = runCatching {
+            supabase.postgrest.from("sleep_daily").select(columns = Columns.list("date,hours")) { filter { eq("date", today.toString()) } }
+                .decodeList<CheckSleepRow>().mapNotNull { it.hours }.maxOrNull()
+        }.getOrNull()
+        val sessions = runCatching {
+            // Session starts are logged times (local digits, zero offset): the local day string compares as a date.
+            supabase.postgrest.from("exercise_sessions").select(columns = Columns.list("type,duration_min")) {
+                filter { gte("start_time", today.minusDays(3).toString()); neq("type", "walk") }
+            }.decodeList<CheckSessionRow>().mapNotNull { it.durationMin }
+        }.getOrNull()
+        return com.bioscan.fieldterminal.domain.health.CheckContext(sleep, sessions?.sum(), sessions?.maxOrNull())
     }
 
     /** Withdraws a check-in by saving a retraction that supersedes it; nothing is deleted. */
@@ -238,7 +297,35 @@ private data class IllnessObsRow(
 private data class IllnessTempRow(
     @kotlinx.serialization.SerialName("observation_id") val observationId: String,
     @kotlinx.serialization.SerialName("temperature_c") val temperatureC: Double? = null,
+    val severity: Int? = null,
+    val symptom: String = "",
 )
 
 @Serializable
-internal data class IllnessDayRow(val date: String, val impact: Int?, val temperatureC: Double?)
+internal data class IllnessDayRow(val date: String, val impact: Int?, val temperatureC: Double?, val severity: Int? = null, val symptoms: Set<String> = emptySet())
+
+/** One symptom check as the Health tab lists it. */
+data class SymptomCheckRow(val id: String, val date: String, val assessment: kotlinx.serialization.json.JsonObject?, val signals: List<CheckSignalRow>)
+
+@Serializable
+private data class CheckObsRow(
+    val id: String,
+    @kotlinx.serialization.SerialName("observed_at") val observedAt: String,
+    @kotlinx.serialization.SerialName("local_date") val localDate: String,
+    val assessment: kotlinx.serialization.json.JsonObject? = null,
+)
+
+@Serializable
+data class CheckSignalRow(
+    val id: Long,
+    @kotlinx.serialization.SerialName("observation_id") val observationId: String,
+    @kotlinx.serialization.SerialName("concern_id") val concernId: String? = null,
+    val symptom: String,
+    val severity: Int? = null,
+)
+
+@Serializable
+private data class CheckSleepRow(val date: String, val hours: Double? = null)
+
+@Serializable
+private data class CheckSessionRow(val type: String, @kotlinx.serialization.SerialName("duration_min") val durationMin: Double? = null)

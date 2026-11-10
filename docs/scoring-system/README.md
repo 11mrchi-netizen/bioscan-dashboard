@@ -89,10 +89,12 @@ CHARGE(D+1) = rank_in_own_history( 0.35·RECOVERY + 0.20·SLEEP + 0.15·LOAD_fat
 - `LOAD_fatigue` is LOAD's fatigue side only. Too little training makes you fresher, so it doesn't lower CHARGE.
 - **Caps:**
   - an acute injury (first 7 days) or an acute gut episode (diarrhoea or nausea) caps CHARGE at 40;
-  - an open illness caps it by how much it limits you (`domain/score/IllnessRead.kt`), from the TRAINING answer of the
-    latest health check-in: full training no ceiling (the ⚠ stays), reduced 70, training modified 55, daily life
-    affected or a temperature of 38 °C or more 40; no check-in yet 55. An answer holds two days, then eases one step
-    every two days. With several caps the lowest wins;
+  - an open illness caps it by its gravity (`domain/score/IllnessRead.kt`, model 7), from the latest check-in's
+    severity, TRAINING answer, temperature and symptoms: mild (above the neck only, up to 3/10, training as usual or
+    reduced) 85; moderate (below the neck, 4-6/10, or training modified) 65; severe (a fever of 38 °C, 7/10 or more,
+    5/10 or more below the neck, or daily life affected) 40; nothing left (0/10, full training) no ceiling; no check-in
+    yet moderate. A grade holds two days, then eases one step every two days. Small things logged through the symptom
+    check belong to no illness and cap nothing. With several caps the lowest wins;
   - the body's signals (resting HR up, HRV down, breathing up, z ≥ 2 against your own 60 mornings) are read each
     morning: while ill, a line says whether they agree with the check-in; otherwise two or more together raise a
     heads-up, explained away instead when the evening before logged drinks, a stress of 4-5, or a session ended

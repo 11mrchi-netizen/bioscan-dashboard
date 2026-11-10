@@ -1,5 +1,5 @@
 {
-  "vocabVersion": "1.0.0",
+  "vocabVersion": "1.1.0",
   "questions": [
     { "id": "swelling", "text": "Any swelling?", "type": "yes_no" },
     { "id": "gave_way", "text": "Did it give way or feel unstable?", "type": "yes_no" },
@@ -62,6 +62,22 @@
     { "code": "sym.muscle_aches", "label": "Body aches", "scope": "systemic", "group": "general", "followups": [] },
     { "code": "sym.low_mood", "label": "Low mood", "scope": "systemic", "group": "general", "followups": [] },
     { "code": "sym.poor_sleep", "label": "Poor sleep", "scope": "systemic", "group": "general", "followups": [] },
+    { "code": "sym.sneezing", "label": "Sneezing", "scope": "systemic", "group": "respiratory", "followups": [] },
+    { "code": "sym.sinus_pressure", "label": "Sinus pressure", "scope": "systemic", "group": "respiratory", "followups": [] },
+    { "code": "sym.loss_smell", "label": "Loss of taste or smell", "scope": "systemic", "group": "respiratory", "followups": [] },
+    { "code": "sym.chest_tightness", "label": "Chest tightness", "scope": "systemic", "group": "respiratory", "followups": ["breathing"] },
+    { "code": "sym.breathless", "label": "Short of breath", "scope": "systemic", "group": "respiratory", "followups": ["breathing"] },
+    { "code": "sym.earache", "label": "Earache", "scope": "systemic", "group": "head", "followups": [] },
+    { "code": "sym.eye_irritation", "label": "Itchy or red eyes", "scope": "systemic", "group": "head", "followups": [] },
+    { "code": "sym.chills", "label": "Chills", "scope": "systemic", "group": "general", "followups": ["temperature"] },
+    { "code": "sym.heartburn", "label": "Heartburn", "scope": "systemic", "group": "digestive", "followups": [] },
+    { "code": "sym.bloating", "label": "Bloating", "scope": "systemic", "group": "digestive", "followups": [] },
+    { "code": "sym.diarrhoea", "label": "Diarrhoea", "scope": "systemic", "group": "digestive", "followups": [] },
+    { "code": "sym.constipation", "label": "Constipation", "scope": "systemic", "group": "digestive", "followups": [] },
+    { "code": "sym.stomach_cramps", "label": "Stomach cramps", "scope": "systemic", "group": "digestive", "followups": [] },
+    { "code": "sym.vomiting", "label": "Vomiting", "scope": "systemic", "group": "digestive", "followups": [] },
+    { "code": "sym.rash", "label": "Rash or itch", "scope": "systemic", "group": "skin", "followups": [] },
+    { "code": "sym.urinary", "label": "Burning when peeing", "scope": "systemic", "group": "urinary", "followups": ["temperature"] },
     { "code": "sym.other", "label": "Other", "scope": "any", "followups": [] }
   ],
   "exerciseMuscles": ["quadriceps", "shoulders", "abdominals", "chest", "hamstrings", "triceps", "biceps", "lats", "middle back", "calves", "lower back", "forearms", "glutes", "traps", "adductors", "abductors", "neck"]

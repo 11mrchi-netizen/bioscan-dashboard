@@ -177,7 +177,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             val key = scoreInputsKey(
                 today, series, plannedDone,
                 caps = episodes.map { it.toString() } + gutDays.map { "gut $it" } +
-                    listOfNotNull(illness?.let { "illness-v2 ${it.label} ${it.start} ${it.checkIns}" }),
+                    listOfNotNull(illness?.let { "illness-v3 ${it.label} ${it.start} ${it.checkIns}" }),
                 closedYesterday = closedYesterday,
                 afterNoon = now.toLocalTime() >= java.time.LocalTime.NOON,
             )

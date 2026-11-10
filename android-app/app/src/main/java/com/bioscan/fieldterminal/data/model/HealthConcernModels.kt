@@ -26,7 +26,13 @@ data class HealthConcernRow(
     @SerialName("archived_at") val archivedAt: String? = null,
     @SerialName("legacy_source") val legacySource: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
-)
+    /** injury, infection or illness; null = read from kind (anatomical = injury, else illness). */
+    val category: String? = null,
+    @SerialName("illness_type") val illnessType: String? = null,
+    @SerialName("label_diagnosis") val labelDiagnosis: String? = null,
+) {
+    val categoryOrKind: String get() = category ?: if (kind == "anatomical") "injury" else "illness"
+}
 
 @Serializable
 data class NewHealthConcernRow(
@@ -37,6 +43,9 @@ data class NewHealthConcernRow(
     val regions: List<RegionRef>,
     val symptoms: List<String>,
     @SerialName("excludes_from_baselines") val excludesFromBaselines: Boolean,
+    val category: String? = null,
+    @SerialName("illness_type") val illnessType: String? = null,
+    @SerialName("label_diagnosis") val labelDiagnosis: String? = null,
 )
 
 // Insert rows go out in one request, and PostgREST fills a key one row leaves out with NULL (not the column default) when
@@ -62,6 +71,10 @@ data class HealthObservationInsert(
     val note: String? = null,
     val supersedes: String? = null,
     @EncodeDefault val retracted: Boolean = false,
+    /** A symptom check's answers and what it concluded (domain/health/SymptomCheck.kt); null on any other check-in. */
+    val assessment: kotlinx.serialization.json.JsonObject? = null,
+    /** Description only: {"medication": "...", "saw_clinician": true, "test": "covid", "test_result": "positive"}. */
+    val care: kotlinx.serialization.json.JsonObject? = null,
 )
 
 @OptIn(ExperimentalSerializationApi::class)

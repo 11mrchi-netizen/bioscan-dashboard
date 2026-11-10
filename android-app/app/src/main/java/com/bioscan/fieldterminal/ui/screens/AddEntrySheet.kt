@@ -174,6 +174,8 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
     var recent by remember { mutableStateOf(parseRecentChoices(addPrefs.getString("recent_add_choices", null))) }
     // Injury and illness have their own form sheets (shared with Training › Injury); picking one swaps this sheet for it.
     var healthForm by rememberSaveable(stateSaver = com.bioscan.fieldterminal.ui.components.AddEntryTargetSaver) { mutableStateOf<AddEntryTarget?>(null) }
+    // A symptom check's symptoms and signals, carried into the illness it is tracked as.
+    var illnessPrefill by remember { mutableStateOf<Pair<Set<String>, List<Long>>>(emptySet<String>() to emptyList()) }
     // Analysis Layer 3 / R2: "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
     var sayIt by rememberSaveable { mutableStateOf(start is AddEntryStart.SayIt) }
     var foodPrefill by rememberSaveable { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
@@ -200,6 +202,15 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
 
     when (healthForm) {
         AddEntryTarget.HealthCheckIn -> com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
+        AddEntryTarget.IllnessForm -> com.bioscan.fieldterminal.ui.screens.health.IllnessSheet(
+            onDismiss = onDismiss, onSaved = onSaved, prefillSymptoms = illnessPrefill.first, adoptSignalIds = illnessPrefill.second,
+        )
+        // TRACK AS ILLNESS / INJURY from here goes on to the matching sheet in place of this one.
+        AddEntryTarget.SymptomCheck -> com.bioscan.fieldterminal.ui.screens.health.SymptomCheckSheet(
+            onDismiss = onDismiss, onSaved = onSaved,
+            onTrackIllness = { symptoms, signals -> illnessPrefill = symptoms to signals; healthForm = AddEntryTarget.IllnessForm },
+            onTrackInjury = { healthForm = AddEntryTarget.HealthCheckIn },
+        )
         AddEntryTarget.BodyCheckIn -> com.bioscan.fieldterminal.ui.screens.status.BodyCheckInSheet(onDismiss = onDismiss, onSaved = onSaved)
         AddEntryTarget.EventForm -> com.bioscan.fieldterminal.ui.screens.events.EventFormSheet(onDismiss = onDismiss, onSaved = { onSaved() })
         AddEntryTarget.SweatTest -> com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet(onDismiss = onDismiss, onSaved = onSaved)
@@ -666,7 +677,7 @@ private fun choiceColor(choice: AddEntryChoice): Color = when (choice) {
     AddEntryChoice.Supplements -> FT.Category.Intake.c700
     AddEntryChoice.Wellbeing -> FT.Category.Wellbeing.c500
     AddEntryChoice.Stool -> FT.Category.Digestion.c500
-    AddEntryChoice.HealthCheckIn -> FT.DomainHeart
+    AddEntryChoice.HealthCheckIn, AddEntryChoice.IllnessLog, AddEntryChoice.SymptomCheck -> FT.DomainHeart
     AddEntryChoice.Grip, AddEntryChoice.BodyCheckIn, AddEntryChoice.SweatTest, AddEntryChoice.ScaleWeighIn -> FT.Category.Activity.c500
     AddEntryChoice.Event -> FT.DomainTraining
     AddEntryChoice.SexualActivity, AddEntryChoice.Encounter -> FT.Category.Arousal.c500

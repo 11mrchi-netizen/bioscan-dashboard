@@ -237,6 +237,39 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
             }
         }
 
+        // Practices (domain/routine/Practices.kt): each with its reminder on, at its own time, once a day, until it is logged.
+        // The window is 30 min, wider than the run's 15, because a late run must not miss one; the key keeps it to one.
+        val practiceRule = rules.firstOrNull { it.enabled && it.kind == NotificationKind.PRACTICE_DUE }
+        if (practiceRule != null && prefs.masterEnabled) {
+            runCatching {
+                val practices = com.bioscan.fieldterminal.data.routine.PracticesRepository(supabase)
+                val due = com.bioscan.fieldterminal.domain.routine.practicesDue(practices.activities(), practices.logsSince(today), now.minusMinutes(30), now)
+                if (due.isNotEmpty()) {
+                    val shownKeys = runCatching { repo.loadShownSince(dayStart) }.getOrElse { emptyList() }.mapNotNull { it.dedupeKey }.toSet()
+                    val shown = shownToday.toMutableList()
+                    for (a in due) {
+                        val key = com.bioscan.fieldterminal.domain.routine.practiceReminderKey(a.id, today)
+                        if (key in shownKeys || !withinLimits(practiceRule, prefs, now, shown)) continue
+                        val R = com.bioscan.fieldterminal.data.routine.RoutineActionReceiver
+                        val n = NotificationCompat.Builder(applicationContext, NotificationKind.PRACTICE_DUE)
+                            .setSmallIcon(android.R.drawable.ic_dialog_info)
+                            .setContentTitle(a.name)
+                            .setContentText(a.targetMin?.let { "$it min, now" } ?: "Now")
+                            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                            .setAutoCancel(true)
+                            .setContentIntent(NotificationActionReceiver.contentIntent(applicationContext, NotificationKind.PRACTICE_DUE))
+                            .addAction(0, "DONE", R.intent(applicationContext, R.ACTION_DONE, a.id, a.name, a.targetMin))
+                            .addAction(0, "START", R.intent(applicationContext, R.ACTION_START, a.id, a.name, a.targetMin))
+                            .addAction(0, "SKIP", R.intent(applicationContext, R.ACTION_SKIP, a.id, a.name, a.targetMin))
+                            .build()
+                        nm.notify(R.reminderNotificationId(a.id), n)
+                        runCatching { repo.appendLog(NotificationKind.PRACTICE_DUE, NotificationOutcome.SHOWN, dedupeKey = key) }
+                        shown += ShownEntry(NotificationKind.PRACTICE_DUE, now)
+                    }
+                }
+            }
+        }
+
         return Result.success()
     }
 

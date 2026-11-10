@@ -13,6 +13,7 @@ R2 (location capture) were started together on 27 Oct 2026 at the owner's reques
 | R5 UX and alternatives | **Built and unit-tested; `transit-alternatives` written, not deployed, TDX calls not verified (no TDX account, host unreachable from the build session).** |
 | Day map and commute | **Built and unit-tested (5 Nov 2026); fixes the trips insert that failed from 1 Nov. Not installed on the phone yet.** See below. |
 | R6 Routine experiments | **Built and tested (core 306, Android 1,036); migration `20261108_routine_experiments.sql` applied (27 Oct 2026); live with the `analysis-run` deploy above.** |
+| R7 Practices and logged time | **Built and unit-tested (10 Nov 2026); migration `20261110044303_routine_practices.sql` applied. Not installed on the phone yet.** See below. |
 
 ## Verification so far
 
@@ -211,3 +212,21 @@ Then call it once (or wait for the 04:30 nightly run) and check that `analysis_r
 2. Build and install the app from your own machine (the Google sign-in client is registered to your debug key); Setup › Profile & goals › Data capture: grant usage access, turn PHONE USE on.
 3. Grant precise location, then "Allow all the time", physical activity and the battery exemption; turn LOCATIONS on.
 4. Keep the diary for the R2 gate for a week.
+
+## R7: practices, logged time and the week's time
+
+| Piece | Where | Notes |
+|---|---|---|
+| Tables | `migrations/20261110044303_routine_practices.sql` | `routine_activities` (name, practice or pastime, kind of activity, planned length, ISO days, local time, reminder, archived) and `routine_logs` (local day, start and end as logged wall-clock times, minutes, done or skipped, source timer / manual / reminder, note, `client_key` for idempotent saves). Owner-only RLS for all four commands. `notification_rules.kind` gains `practice_due`, seeded for existing users. |
+| Practices (pure) | `domain/routine/Practices.kt` | Today's practices (scheduled ones in time order, DONE once anything is logged, SKIPPED, DUE from its time, LATER; unscheduled ones ANYTIME); reminders due in a window, once per practice and day, not once logged; kept = scheduled days done over 28 days (today counts only once done) and the streak; a block between 00:00 and 04:00 counts for the evening before. |
+| Time other data shows (pure) | same file, `inferredTime`, `weekTime` | Training by type from recorded sessions (watch walks too, when recorded); walking and cycling legs of trips (running legs left to the watch's sessions); outdoor daylight from `mobility_daily`; phone use by category (video, social, games, news, listening) from `phone_usage_daily`; sleep. Never summed: a walk is also time outdoors. Per line: today and the daily average of the 7 days before (a day with none is zero). |
+| Repository | `data/routine/PracticesRepository.kt` | Activities and logs; the inferred reads are soft (a stream that is off gives nothing). Trips are real instants, read in the phone's zone; session starts are logged times. |
+| Timer | `data/routine/RoutineTimerStore.kt` | One running timer, kept on the phone until it stops (nothing half-written); an ongoing silent notification with STOP. Under a minute is dropped. |
+| Reminders | `NotificationDispatchWorker.kt`, `data/routine/RoutineActionReceiver.kt` | Each practice with its reminder on, at its own time (a 30-minute window, keyed once a day): DONE logs the planned length, START starts the timer, SKIP logs the skip. Setup › Notifications › PRACTICES turns them all off. Tap opens Lab › ROUTINE. |
+| Lab › ROUTINE | `ui/screens/routine/PracticesCards.kt` | PRACTICES (today with DONE / START / SKIP, days kept, streak, ADD A PRACTICE; tap to change or remove), TIME (the timer, START TIMING chips, ADD TIME AFTERWARDS, today's blocks; tap to change or delete), THE WEEK'S TIME. |
+
+Tests: `PracticesTest` (7).
+
+Next (owner decision, 10 Nov 2026): practices and logged time go to the evidence board once a few weeks of data exist
+(e.g. reading before bed and that night's sleep, meditation and next-morning HRV). The series are in `routine_logs` by
+local day; `analysis-core/routineExposures.ts` is where they would be read.

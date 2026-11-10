@@ -64,8 +64,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-// Routine intelligence R5 (docs/routine-intelligence/01-research-and-plan.md, section 10): Lab › ROUTINE. The week by
-// place, the commute with other ways to make it, and the phone. Views of what was recorded, not findings: what goes with
+// Routine intelligence R5 (docs/routine-intelligence/01-research-and-plan.md, section 10): Lab › ROUTINE. Practices, logged
+// time and the week's time (R7), then the week by place, the commute with other ways to make it, and the phone. Views of what was recorded, not findings: what goes with
 // what lives on N=1's evidence board, under the contract's rules.
 @Composable
 fun RoutineTab(onOpenDay: (LocalDate) -> Unit = {}) {
@@ -98,6 +98,8 @@ fun RoutineTab(onOpenDay: (LocalDate) -> Unit = {}) {
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp)) {
         error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+        // Routine R7: practices, logged time and the week's time (ui/screens/routine/PracticesCards.kt).
+        com.bioscan.fieldterminal.ui.screens.routine.RoutineTimeSection()
         FTButton("OPEN DAY MAP", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Primary) { onOpenDay(LocalDate.now()) }
         WeekCard(strip, onOpenDay)
         // Naming places is what turns the week and the commute into categories, so it sits here as well as in Setup.

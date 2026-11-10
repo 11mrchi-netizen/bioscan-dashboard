@@ -43,6 +43,9 @@ class FieldTerminalApp : Application() {
             Triple(NotificationKind.EVENT_FOLLOWUP, "Outcome follow-up", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.FUEL_SESSION, "Fuel before and after sessions", NotificationManager.IMPORTANCE_DEFAULT),
             Triple(NotificationKind.FUEL_EVENT, "Race week fuelling", NotificationManager.IMPORTANCE_HIGH),
+            Triple(NotificationKind.PRACTICE_DUE, "Practices", NotificationManager.IMPORTANCE_DEFAULT),
+            // The running routine timer: silent, it only carries STOP.
+            Triple(com.bioscan.fieldterminal.data.routine.RoutineTimerStore.CHANNEL, "Routine timer", NotificationManager.IMPORTANCE_LOW),
         ).forEach { (id, name, importance) ->
             nm.createNotificationChannel(NotificationChannel(id, name, importance))
         }

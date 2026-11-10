@@ -58,6 +58,7 @@ private val RULE_LABELS = mapOf(
     NotificationKind.EVENT_RATING to "RATE HOW IT FELT",
     NotificationKind.EVENT_DRAW to "DAILY INTERVENTION DRAW",
     NotificationKind.EVENT_FOLLOWUP to "OUTCOME FOLLOW-UP",
+    NotificationKind.PRACTICE_DUE to "PRACTICES",
     NotificationKind.FUEL_SESSION to "FUEL BEFORE AND AFTER KEY SESSIONS",
     NotificationKind.FUEL_EVENT to "RACE WEEK FUELLING",
 )

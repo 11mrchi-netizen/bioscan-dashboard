@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Home Terminal</string>
+    <string name="collector_channel">Environment collector</string>
+    <string name="collector_running">Recording the home\'s environment</string>
+</resources>

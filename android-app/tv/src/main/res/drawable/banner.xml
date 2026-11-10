@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The 320 × 180 banner Google TV shows in its app row: a house outline over a thermometer bar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path android:fillColor="@color/banner_background" android:pathData="M0,0h320v180h-320z" />
+    <path
+        android:pathData="M110,100 L160,55 L210,100 M122,90 V135 H198 V90"
+        android:strokeColor="@color/banner_ink"
+        android:strokeWidth="8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path android:fillColor="@color/banner_ink" android:pathData="M154,95h12v30h-12z" />
+</vector>

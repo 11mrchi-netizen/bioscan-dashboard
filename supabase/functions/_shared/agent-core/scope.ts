@@ -73,8 +73,6 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     // routine and location
     'location_fixes', 'place_visits', 'places', 'trips', 'mobility_daily', 'activity_transitions', 'phone_usage_daily',
     'phone_app_usage_daily', 'phone_app_categories', 'daily_context', 'planned_routes', 'routine_activities', 'routine_logs',
-    // the home's own sensors (rooms, devices, temperature and air at home)
-    'home_sensors', 'home_env_readings',
     // other people and the calendar
     'people', 'calendar_events', 'calendar_event_overrides', 'calendar_strength_staging', 'calendar_strength_staging_review',
     // free text by nature

@@ -66,12 +66,16 @@ sets the week's energy and protein, the plan shapes each day.
 ## Phase 3 notes: the day engine
 
 - `domain/fuel/DayFuelPlan.kt` (`planFuelDay`, `planFuelDays`). Carbohydrate bands (Thomas 2016): rest or a short easy
-  session 3-5 g/kg; up to about 75 min 5-7; 75-240 min 6-10; over 240 min 8-12; easy days sit low in the band, hard
-  ones high, races at 90 %. The day before a hard, long or race session that starts before noon steps up one band. The
+  session 3-5 g/kg; up to 90 min 5-7; 90-240 min 6-10; over 240 min 8-12; easy days sit at the band's floor, moderate
+  a quarter up, hard and long halfway, races at 75 %. The day before a hard, long or race session that starts before
+  noon is lifted to the next band's floor. The
   two days before an A or B race over 90 minutes load at 10-12 g/kg (low fibre the day before). The goal's calories
   stay the weekly average: day = goal + that day's session energy − the week's mean session energy. Protein stays at the
   goal (1.8 g/kg without one). Fat is the remainder with a 20 % floor; when it binds, carbohydrate gives way (the
   step-up first, then to the low end of the day's own band) and only then does the day's energy rise, with a note.
+  No day asks for more than 4,500 kcal (`MAX_DAY_KCAL`): the excess moves to the day after, the day before, then two
+  days out (`spreadDayEnergy`, never onto past days), and where even the ceiling leaves too little room, carbohydrate
+  gives way instead of energy rising past it.
   Energy availability below 30 kcal/kg fat-free mass is named (IOC REDs 2023); a deficit goal on a key day is noted.
 - `domain/fuel/MealCodes.kt` (`codeMeals`): LOW / MEDIUM / HIGH per meal with the reason (HIGH 1-4 h before or 2 h
   after a key session, the evening before a hard morning, all of a loading day; LOW on rest days and, by opt-in only,

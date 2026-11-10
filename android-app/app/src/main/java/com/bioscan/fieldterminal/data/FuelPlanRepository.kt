@@ -67,7 +67,7 @@ import java.time.ZonedDateTime
 // maintenance, body weight and composition, the days before, the weather, the sweat profile, the person's products and
 // settings; and keeps a copy of each plan when it changes (fuel_plans) so the screens can say what changed.
 
-const val FUEL_ENGINE_VERSION = "2" // 2: breakfast at 09:00 by default; no meal moved before 06:00
+const val FUEL_ENGINE_VERSION = "3" // 3: 4,500 kcal day ceiling, spread to the days around; lower carbohydrate within bands. 2: breakfast at 09:00 by default; no meal moved before 06:00
 
 /** Days shown on the fuel plan page: today and the ten after it. */
 const val FUEL_HORIZON_DAYS = 11

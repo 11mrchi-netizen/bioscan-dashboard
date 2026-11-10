@@ -249,8 +249,15 @@ internal fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () ->
     val startMin = start.trim().toIntOrNull()
     val intervalMin = every.trim().toIntOrNull()
     val n = count.trim().toIntOrNull()
-    val valid = label.isNotBlank() && startMin != null && startMin >= -240 && n != null && n in 1..200 &&
-        (n == 1 || (intervalMin != null && intervalMin in 1..600))
+    // A block with no name is called after its form ("Gel"): the name is never what stops a save.
+    val name = label.trim().ifBlank { form.label.lowercase().replaceFirstChar { it.uppercase() } }
+    val problem = when {
+        startMin == null || startMin < -240 -> "FIRST AT needs minutes from the start, from -240."
+        n == null || n !in 1..200 -> "HOW MANY needs a number from 1 to 200."
+        n > 1 && (intervalMin == null || intervalMin !in 1..600) -> "EVERY needs minutes between intakes, 1 to 600."
+        else -> null
+    }
+    val valid = problem == null
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -267,7 +274,7 @@ internal fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () ->
                     FTDropdown(options, selectedKey, "Pick a product to fill the amounts") { pick(it) }
                 }
             }
-            Column { SheetLabel("NAME"); FieldTextField(label, { label = it }, "e.g. Maurten gel") }
+            Column { SheetLabel("NAME (OPTIONAL)"); FieldTextField(label, { label = it }, "e.g. Maurten gel") }
             Text("In ONE intake:", style = FTType.Caption, color = FT.TextSecondary)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(Modifier.weight(1f)) { SheetLabel("CARBS G"); FieldTextField(carbs, { carbs = it }, "0", keyboardType = KeyboardType.Decimal) }
@@ -284,13 +291,14 @@ internal fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () ->
             }
             Text("Minutes from the start; a minus sign is before it (a pre-workout at -30).", style = FTType.Caption, color = FT.TextSecondary)
             if (valid) {
-                val preview = FuelBlock(initial.id, label, form.key, startMin!!, intervalMin ?: 0, n!!, num(carbs) ?: 0.0, num(fluid) ?: 0.0, num(sodium) ?: 0.0, num(caffeine) ?: 0.0)
+                val preview = FuelBlock(initial.id, name, form.key, startMin!!, intervalMin ?: 0, n!!, num(carbs) ?: 0.0, num(fluid) ?: 0.0, num(sodium) ?: 0.0, num(caffeine) ?: 0.0)
                 Text("${n} intake${if (n == 1) "" else "s"}, ${amount(preview.carbsG * n)} g carbs, ${amount(preview.fluidMl * n)} ml, last at ${clock(preview.endMin)}", style = FTType.LabelCaps, color = FT.TextPrimary)
             }
+            problem?.let { Text(it, style = FTType.Caption, color = FT.Warning) }
             FTButton("SAVE BLOCK", enabled = valid, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
                 onSave(
                     FuelBlock(
-                        id = initial.id, label = label.trim(), form = form.key, startMin = startMin!!, intervalMin = if (n!! > 1) intervalMin!! else 0, count = n,
+                        id = initial.id, label = name, form = form.key, startMin = startMin!!, intervalMin = if (n!! > 1) intervalMin!! else 0, count = n,
                         carbsG = num(carbs) ?: 0.0, fluidMl = num(fluid) ?: 0.0, sodiumMg = num(sodium) ?: 0.0, caffeineMg = num(caffeine) ?: 0.0,
                         fuelingProductId = fuelingId, supplementProductId = supplementId,
                     ),

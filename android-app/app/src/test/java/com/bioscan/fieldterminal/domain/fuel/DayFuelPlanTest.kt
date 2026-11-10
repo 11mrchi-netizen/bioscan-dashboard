@@ -128,4 +128,37 @@ class DayFuelPlanTest {
         assertEquals(63.75, fatFreeMass(75.0, null, 15.0)!!, 1e-9)
         assertNull(fatFreeMass(75.0, null, null))
     }
+
+    @Test
+    fun noDayAsksForMoreThanTheCeilingAndTheRestMovesToTheDaysAround() {
+        // A five-hour Sunday: about 3,000 kcal of running on a 2,900 week.
+        val big = week.dropLast(1) + PlannedDay(monday.plusDays(6), listOf(item(monday.plusDays(6), 8, 300.0, Intensity.LONG, 3000.0, "Long day")))
+        val raw = big.map { rawDayEnergy(it, big, WeekEnergy(2900.0, 130.0, true))!! }
+        assertTrue(raw[6] > MAX_DAY_KCAL)
+        val plans = planFuelDays(big, WeekEnergy(2900.0, 130.0, true), kg)
+        plans.forEach { assertTrue(it.kcal!! <= MAX_DAY_KCAL + 0.5) }
+        assertEquals(MAX_DAY_KCAL, plans[6].kcal!!, 0.5)
+        assertTrue(plans[6].notes.any { "Capped at 4500" in it })
+        // Sunday is the last day here: its excess goes to the day before.
+        assertTrue(plans[5].notes.any { "moved here" in it })
+    }
+
+    @Test
+    fun theExcessGoesToTheDayAfterFirstAndNeverOnToPastDays() {
+        val spread = spreadDayEnergy(listOf(2500.0, 2500.0, 5300.0, 2000.0, 2500.0), firstMovable = 2)
+        assertEquals(listOf(2500.0, 2500.0, 4500.0, 2800.0, 2500.0), spread.map { it.kcal })
+        val crowded = spreadDayEnergy(listOf(4400.0, 4300.0, 6000.0, 4400.0, 4400.0))
+        assertEquals(4500.0, crowded[1].kcal!!, 0.0)
+        assertTrue(crowded.all { it.kcal!! <= 4500.0 })
+    }
+
+    @Test
+    fun anHourAndAQuarterOfModerateRunningIsNotAHighDay() {
+        // 76 minutes, moderate, before a long Wednesday morning: the moderate band, lifted to the high band's floor.
+        val tue = PlannedDay(monday.plusDays(1), listOf(item(monday.plusDays(1), 8, 76.0, Intensity.MODERATE, 800.0, "LSS")))
+        val wed = PlannedDay(monday.plusDays(2), listOf(item(monday.plusDays(2), 7, 120.0, Intensity.LONG, 1300.0, "Long")))
+        val plan = planFuelDay(tue, wed, listOf(tue, wed), goal.copy(dailyKcal = 3400.0), kg)
+        assertEquals(BAND_HIGH, plan.band)
+        assertEquals(6.0, plan.carbGPerKg, 1e-6)
+    }
 }

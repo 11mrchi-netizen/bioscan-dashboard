@@ -212,6 +212,13 @@ private fun resolveDay(
         .forEach { c ->
             val start = c.start.withZoneSameInstant(zone)
             if (items.any { startsClose(it.start, start, 60) && it.start != null }) return@forEach
+            // An event of the day with no start time is this entry ("Long Run" in the calendar, "Almost 30km" as the
+            // event): the event takes the entry's start, so a recording finds it, and the session is counted once.
+            val untimed = items.indexOfFirst { it.source == PlanSource.EVENT && it.start == null && compatible(it.type, typeFromCalendarTitle(c.title)) }
+            if (untimed >= 0) {
+                items[untimed] = items[untimed].copy(start = start)
+                return@forEach
+            }
             val override = overrides[c.eventId]
             if (override?.kind == OverrideKind.IGNORE) return@forEach
             val type = typeFromCalendarTitle(c.title)

@@ -33,7 +33,7 @@ measurements.
 - A heartbeat goes to `collector_heartbeats` (stream `home_env`) every 5 minutes. A gap in the readings with no
   heartbeat means the collector was down. A gap with heartbeats means nothing changed.
 
-### Tables (`supabase/migrations/20261110000000_home_environment.sql`)
+### Tables (`supabase/migrations/20261110110000_home_environment.sql`)
 
 - `home_sensors (user_id, id, name, room, device_types, vendor, product, first_seen_at, last_seen_at)`: `id` is the
   Home APIs device id.

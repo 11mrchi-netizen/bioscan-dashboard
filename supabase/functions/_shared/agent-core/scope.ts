@@ -77,6 +77,9 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'people', 'calendar_events', 'calendar_event_overrides', 'calendar_strength_staging', 'calendar_strength_staging_review',
     // free text by nature
     'notes',
+    // the home's environment (docs/home-environment): light and changes in the readings show when someone is home, so
+    // it stays closed until a phase decides what of it the assistant may see (bedroom temperature beside sleep, say)
+    'home_sensors', 'home_env_readings',
   ),
   ...internal(
     'sync_log', 'zepp_raw_extracts', 'zepp_history_pull', 'zepp_sync_state', 'calendar_sync_state', 'notification_log',

@@ -238,7 +238,8 @@ private fun ProposalCard(
                     else -> FT.Metric.WeightEma
                 }
                 // Picking a value answers the question (the row disappears), so the slider has no CLEAR.
-                com.bioscan.fieldterminal.ui.components.FTRatingSlider(dim.uppercase(), null, 0..10, ink, { v -> v?.let { onChange(withDim(p, dim, it)) } }, optional = false)
+                com.bioscan.fieldterminal.ui.components.FTRatingSlider(dim.uppercase(), null, 0..10, ink, { v -> v?.let { onChange(withDim(p, dim, it)) } }, optional = false,
+                    reversed = dim == "stress" || dim == "soreness")
             }
             "supplement_taken" -> if (p.supplementId == null) {
                 if (p.candidates.isEmpty()) {

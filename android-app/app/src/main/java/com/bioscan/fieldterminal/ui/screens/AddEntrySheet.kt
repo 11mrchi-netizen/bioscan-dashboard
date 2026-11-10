@@ -272,7 +272,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                                 onSubmit { it.addEncounter(date = date, encounterType = et, notes = n, occurredAt = occurredAt, locationType = loc, durationMin = dur, activities = acts, myRating = rating) }
                             },
                         )
-                        AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d -> onSubmit { it.addStool(occurredAt, bt, d) } })
+                        AddEntryType.Stool -> StoolForm(saving, onSave = { occurredAt, bt, d, empty -> onSubmit { it.addStool(occurredAt, bt, d, empty) } })
                         AddEntryType.Wellness -> WellnessForm(saving, onSave = { date, e, m, s, so, mw, al -> onSubmit { it.addWellbeing(date, e, m, s, so, mw, al) } })
                         AddEntryType.Note -> NoteForm(saving, onSave = { occurredAt, text -> onSubmit { it.addNote(occurredAt, text) } })
                         AddEntryType.Ostrc -> OstrcForm(saving, onSave = { date, ba, q1, q2, q3, q4, n -> onSubmit { it.addOstrc(date, ba, q1, q2, q3, q4, n) } })
@@ -447,7 +447,8 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     initialDateTime = parseIsoToLocalDateTime(row.occurredAt),
                     initialBristolType = row.bristolType,
                     initialDiscomfort = row.discomfort,
-                    onSave = { occurredAt, bt, d -> onSubmit { it.updateStool(row.id, occurredAt, bt, d) } },
+                    initialEmpty = row.completeEvacuation,
+                    onSave = { occurredAt, bt, d, empty -> onSubmit { it.updateStool(row.id, occurredAt, bt, d, empty) } },
                 )
                 is LogGripRow -> GripForm(
                     saving,
@@ -1763,24 +1764,36 @@ private fun GripForm(
     }
 }
 
+/** The stool form's "does it feel empty?" answers: stored value to the chip's words, bad to good like the scales. */
+internal val EMPTY_OPTIONS = listOf("no" to "NO", "partly" to "NOT QUITE", "yes" to "YES")
+
 @Composable
 private fun StoolForm(
     saving: Boolean,
     initialDateTime: LocalDateTime = LocalDateTime.now(),
     initialBristolType: Int? = null,
     initialDiscomfort: Int? = null,
-    onSave: (occurredAt: String, bristolType: Int, discomfort: Int?) -> Unit,
+    initialEmpty: String? = null,
+    onSave: (occurredAt: String, bristolType: Int, discomfort: Int?, completeEvacuation: String?) -> Unit,
 ) {
     var dateTime by remember { mutableStateOf(initialDateTime) }
     var bristolType by remember { mutableStateOf(initialBristolType) }
     var discomfort by remember { mutableStateOf(initialDiscomfort?.toString() ?: "") }
+    var empty by remember { mutableStateOf(initialEmpty) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DateTimeField("WHEN", dateTime, { dateTime = it })
         BristolSlider(bristolType) { bristolType = it }
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("DISCOMFORT", discomfort.toIntOrNull(), 0..10, FT.Metric.StoolLoose, { discomfort = it?.toString() ?: "" }, lowWord = "none", highWord = "severe")
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("DISCOMFORT", discomfort.toIntOrNull(), 0..10, FT.Metric.StoolLoose, { discomfort = it?.toString() ?: "" }, lowWord = "none", highWord = "severe", reversed = true)
+        // The sense of complete evacuation; optional (tap the chosen one again to clear it).
+        Column {
+            FormLabel("DOES IT FEEL EMPTY?")
+            TextChipRow(EMPTY_OPTIONS.map { it.second }, EMPTY_OPTIONS.firstOrNull { it.first == empty }?.second, perRow = 3) { picked ->
+                empty = EMPTY_OPTIONS.firstOrNull { it.second == picked }?.first
+            }
+        }
         SaveButton(saving, bristolType != null) {
-            onSave(dateTime.toIsoWithOffset(), bristolType!!, discomfort.toIntOrNull())
+            onSave(dateTime.toIsoWithOffset(), bristolType!!, discomfort.toIntOrNull(), empty)
         }
     }
 }
@@ -2174,8 +2187,8 @@ private fun WellnessForm(
         DateField("DATE", date, { date = it })
         com.bioscan.fieldterminal.ui.components.FTRatingSlider("ENERGY", energy.toIntOrNull(), 0..10, FT.Metric.Energy, { energy = it?.toString() ?: "" }, lowWord = "drained", highWord = "full")
         com.bioscan.fieldterminal.ui.components.FTRatingSlider("MOOD", mood.toIntOrNull(), 0..10, FT.Metric.Mood, { mood = it?.toString() ?: "" }, lowWord = "low", highWord = "great")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("STRESS", stress.toIntOrNull(), 0..10, FT.Metric.Stress, { stress = it?.toString() ?: "" }, lowWord = "calm", highWord = "very stressed")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("SORENESS", soreness.toIntOrNull(), 0..10, FT.Metric.Soreness, { soreness = it?.toString() ?: "" }, lowWord = "none", highWord = "very sore")
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("STRESS", stress.toIntOrNull(), 0..10, FT.Metric.Stress, { stress = it?.toString() ?: "" }, lowWord = "calm", highWord = "very stressed", reversed = true)
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("SORENESS", soreness.toIntOrNull(), 0..10, FT.Metric.Soreness, { soreness = it?.toString() ?: "" }, lowWord = "none", highWord = "very sore", reversed = true)
         com.bioscan.fieldterminal.ui.components.FTRatingSlider("MORNING WOOD", morningWood.toIntOrNull(), 0..10, FT.Metric.Arousal, { morningWood = it?.toString() ?: "" }, lowWord = "none", highWord = "full")
         com.bioscan.fieldterminal.ui.components.FTRatingSlider("AROUSAL LEVEL", arousalLevel.toIntOrNull(), 0..10, FT.Metric.Arousal, { arousalLevel = it?.toString() ?: "" }, lowWord = "none", highWord = "very high")
         val valid = listOf(energy, mood, stress, soreness, morningWood, arousalLevel).any { it.isNotBlank() }

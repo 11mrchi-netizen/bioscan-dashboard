@@ -87,7 +87,7 @@ class LogRepository(private val supabase: SupabaseClient) {
         }
         val stool = async {
             supabase.postgrest.from("stool_log")
-                .select(columns = Columns.list("id,occurred_at,bristol_type,discomfort")) {
+                .select(columns = Columns.list("id,occurred_at,bristol_type,discomfort,complete_evacuation")) {
                     filter { gte("occurred_at", fromTimestamp) }
                     order("occurred_at", Order.DESCENDING)
                     limit(FETCH_CAP_PER_SOURCE)

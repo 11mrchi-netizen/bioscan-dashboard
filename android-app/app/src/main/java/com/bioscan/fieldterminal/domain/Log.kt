@@ -184,7 +184,10 @@ fun buildLogEntries(
             kind = LogEntryKind.Stool,
             timestamp = parseTimestamp(s.occurredAt),
             headline = "Bristol ${s.bristolType}",
-            detail = s.discomfort?.let { "Discomfort $it/10" },
+            detail = listOfNotNull(
+                s.discomfort?.let { "Discomfort $it/10" },
+                when (s.completeEvacuation) { "yes" -> "feels empty"; "partly" -> "not quite empty"; "no" -> "not empty"; else -> null },
+            ).joinToString(" · ").ifEmpty { null },
         )
     }
 

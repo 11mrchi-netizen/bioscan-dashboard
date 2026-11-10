@@ -185,10 +185,10 @@ fun FuelDebriefContent(target: DebriefTarget, onSaved: () -> Unit) {
 
         // Ratings are slid, not picked from a list, each in its metric's hue.
         fun slid(v: String?) = v?.toIntOrNull()
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("GUT", slid(gi), 0..10, FT.Metric.StoolLoose, { gi = it?.toString() ?: "" }, lowWord = "fine", highWord = "bad")
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("GUT", slid(gi), 0..10, FT.Metric.StoolLoose, { gi = it?.toString() ?: "" }, lowWord = "fine", highWord = "bad", reversed = true)
         com.bioscan.fieldterminal.ui.components.FTRatingSlider("ENERGY", slid(energy), 0..10, FT.Metric.Energy, { energy = it?.toString() ?: "" }, lowWord = "empty", highWord = "strong")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("TIREDNESS", slid(fatigue), 0..10, FT.Metric.Atl, { fatigue = it?.toString() ?: "" }, lowWord = "fresh", highWord = "spent")
-        com.bioscan.fieldterminal.ui.components.FTRatingSlider("THIRST", slid(thirst), 0..10, FT.Metric.Hydration, { thirst = it?.toString() ?: "" }, lowWord = "none", highWord = "severe")
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("TIREDNESS", slid(fatigue), 0..10, FT.Metric.Atl, { fatigue = it?.toString() ?: "" }, lowWord = "fresh", highWord = "spent", reversed = true)
+        com.bioscan.fieldterminal.ui.components.FTRatingSlider("THIRST", slid(thirst), 0..10, FT.Metric.Hydration, { thirst = it?.toString() ?: "" }, lowWord = "none", highWord = "severe", reversed = true)
         Text("Weigh-ins (optional): without clothes, before the start and at the finish before drinking. They make this a sweat test.", style = FTType.Caption, color = FT.TextSecondary)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) { DLabel("BEFORE KG"); FieldTextField(before, { before = it }, "e.g. 70.2", keyboardType = KeyboardType.Decimal) }

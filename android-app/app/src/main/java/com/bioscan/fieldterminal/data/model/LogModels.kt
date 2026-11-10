@@ -48,6 +48,7 @@ data class LogStoolRow(
     @SerialName("occurred_at") val occurredAt: String,
     @SerialName("bristol_type") val bristolType: Int,
     val discomfort: Int? = null,
+    @SerialName("complete_evacuation") val completeEvacuation: String? = null,
 )
 
 // Handgrip dynamometer reading (best of the attempts, kg), one hand per row.

@@ -53,8 +53,10 @@ import java.util.Locale
 // Analysis review phase B: the evening check-in (reminder at 22:25; also opened from Today's LAST EVENING card the next
 // morning). One tap per exposure the relationship engine asks about. NOTHING ELSE turns every unanswered exposure into an
 // explicit none, which is what lets a quiet evening count as a real zero (domain/EveningCheckin.kt).
-private val DRINK_OPTIONS = listOf("0", "1", "2", "3", "4+")
-private val YES_NO = listOf("NO", "YES")
+// Every row of the check-in reads bad on the left, good on the right, like the scales: more drinks first, then none;
+// YES (late caffeine, a late meal) before NO. Answers map by their words, so the order changes nothing that is stored.
+private val DRINK_OPTIONS = listOf("4+", "3", "2", "1", "0")
+private val YES_NO = listOf("YES", "NO")
 private val TIME_OF_DAY = DateTimeFormatter.ofPattern("HH:mm")
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -107,7 +109,7 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
                 draft = draft.copy(lateMeal = picked?.let { it == "YES" })
             }
             com.bioscan.fieldterminal.ui.components.FTRatingSlider("STRESS TODAY", draft.stress, 1..5, FT.Metric.Stress, { draft = draft.copy(stress = it) },
-                lowWord = "calm", highWord = "very stressed")
+                lowWord = "calm", highWord = "very stressed", reversed = true)
 
             // Scoring system (FUEL › gut): how the gut was, what happened, and the day's logged movements with their times.
             com.bioscan.fieldterminal.ui.components.FTRatingSlider("GUT", draft.gutComfort, 0..4, FT.Metric.GutComfort, { draft = draft.copy(gutComfort = it) },

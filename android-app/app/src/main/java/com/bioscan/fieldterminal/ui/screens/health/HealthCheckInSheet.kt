@@ -165,7 +165,7 @@ fun HealthCheckInSheet(
                     }
                     if (a != null && a.change != ConcernChange.Gone) {
                         Text("SEVERITY 0-10", style = FTType.Micro, color = FT.TextMuted)
-                        com.bioscan.fieldterminal.ui.components.FTRatingSlider("SEVERITY", a.severity, 0..10, FT.Metric.Soreness, { v -> answers[c.id] = a.copy(severity = v) }, lowWord = "none", highWord = "worst")
+                        com.bioscan.fieldterminal.ui.components.FTRatingSlider("SEVERITY", a.severity, 0..10, FT.Metric.Soreness, { v -> answers[c.id] = a.copy(severity = v) }, lowWord = "none", highWord = "worst", reversed = true)
                         Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)
                         TextChipRow(IMPACT_LABELS, a.impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> answers[c.id] = a.copy(impact = picked?.let { IMPACT_LABELS.indexOf(it) }) }
                     }
@@ -257,7 +257,7 @@ private fun NewProblemStep(
     TextChipRow(symptomOptions.map { it.label }, symptomOptions.firstOrNull { it.code == symptom }?.label, perRow = 3) { picked ->
         symptom = symptomOptions.firstOrNull { it.label == picked }?.code
     }
-    com.bioscan.fieldterminal.ui.components.FTRatingSlider("SEVERITY", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "none", highWord = "worst")
+    com.bioscan.fieldterminal.ui.components.FTRatingSlider("SEVERITY", severity, 0..10, FT.Metric.Soreness, { severity = it }, lowWord = "none", highWord = "worst", reversed = true)
     Text("TRAINING", style = FTType.Micro, color = FT.TextMuted)
     TextChipRow(IMPACT_LABELS, impact?.let { IMPACT_LABELS[it] }, perRow = 2) { picked -> impact = picked?.let { IMPACT_LABELS.indexOf(it) } }
 

@@ -65,6 +65,8 @@ data class NewStoolRow(
     @SerialName("occurred_at") val occurredAt: String,
     @SerialName("bristol_type") val bristolType: Int,
     val discomfort: Int? = null,
+    // Does it feel empty afterwards: "yes" / "partly" / "no"; null when not answered.
+    @SerialName("complete_evacuation") val completeEvacuation: String? = null,
 )
 
 @Serializable

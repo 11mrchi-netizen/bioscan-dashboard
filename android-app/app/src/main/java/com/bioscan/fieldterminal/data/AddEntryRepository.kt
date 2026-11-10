@@ -146,9 +146,9 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         )
     }
 
-    suspend fun addStool(occurredAt: String, bristolType: Int, discomfort: Int?) {
+    suspend fun addStool(occurredAt: String, bristolType: Int, discomfort: Int?, completeEvacuation: String? = null) {
         supabase.postgrest.from("stool_log").insert(
-            NewStoolRow(occurredAt = occurredAt, bristolType = bristolType, discomfort = discomfort)
+            NewStoolRow(occurredAt = occurredAt, bristolType = bristolType, discomfort = discomfort, completeEvacuation = completeEvacuation)
         )
     }
 
@@ -436,9 +436,9 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { filter { eq("id", id) } }
     }
 
-    suspend fun updateStool(id: Long, occurredAt: String, bristolType: Int, discomfort: Int?) {
+    suspend fun updateStool(id: Long, occurredAt: String, bristolType: Int, discomfort: Int?, completeEvacuation: String? = null) {
         supabase.postgrest.from("stool_log").update(
-            NewStoolRow(occurredAt = occurredAt, bristolType = bristolType, discomfort = discomfort)
+            NewStoolRow(occurredAt = occurredAt, bristolType = bristolType, discomfort = discomfort, completeEvacuation = completeEvacuation)
         ) { filter { eq("id", id) } }
     }
 
@@ -520,7 +520,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         "id,date,status,occurred_at,encounter_type,location_type,duration_min,activities,my_rating,notes,calendar_event_title,person_id",
         id,
     )
-    suspend fun fetchStool(id: Long) = fetchById<LogStoolRow>("stool_log", "id,occurred_at,bristol_type,discomfort", id)
+    suspend fun fetchStool(id: Long) = fetchById<LogStoolRow>("stool_log", "id,occurred_at,bristol_type,discomfort,complete_evacuation", id)
     suspend fun fetchGrip(id: Long) = fetchById<LogGripRow>("grip_strength_log", "id,occurred_at,hand,kg", id)
     suspend fun fetchNote(id: Long) = fetchById<LogNoteRow>("notes", "id,occurred_at,text", id)
     suspend fun fetchWellbeing(id: Long) = fetchById<LogWellbeingRow>("wellbeing_daily", "id,date,energy,mood,stress,soreness,morning_erection_quality,arousal_level", id)

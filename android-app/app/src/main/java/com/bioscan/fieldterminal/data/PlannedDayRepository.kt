@@ -5,6 +5,7 @@ import com.bioscan.fieldterminal.domain.fuel.DemandHistory
 import com.bioscan.fieldterminal.domain.fuel.PlannedDay
 import com.bioscan.fieldterminal.domain.fuel.PlannedSessionInput
 import com.bioscan.fieldterminal.domain.fuel.RecordedSessionInput
+import com.bioscan.fieldterminal.domain.fuel.StoredLink
 import com.bioscan.fieldterminal.domain.fuel.isTrainingSession
 import com.bioscan.fieldterminal.domain.fuel.resolvePlannedDays
 import com.bioscan.fieldterminal.domain.fuel.trimpPerMinute
@@ -36,6 +37,7 @@ private data class PlannedSessionTimesRow(
     val domain: String? = null,
     val title: String,
     @SerialName("gcal_event_id") val gcalEventId: String? = null,
+    @SerialName("exercise_session_id") val exerciseSessionId: Long? = null,
 )
 
 @Serializable
@@ -81,19 +83,29 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
         val weightD = async { runCatching { latestWeight() }.getOrNull() }
         // Before the migration that adds it, the table is missing: no overrides.
         val overridesD = async { runCatching { CalendarOverridesRepository(supabase).load() }.getOrDefault(emptyMap()) }
+        val linksRepo = SessionPlanLinksRepository(supabase)
+        val storedD = async { linksRepo.load() }
 
         val recorded = recordedD.await()
         val anchors = anchorsD.await()
         val history = demandHistory(recorded, anchors?.restingHr, anchors?.maxHr, weightD.await())
-        resolvePlannedDays(
-            from, days, eventsD.await(), plannedD.await(), calendarD.await(),
-            recorded.filter { !it.start.toLocalDate().isBefore(from) }, history, now, overridesD.await(),
+        val events = eventsD.await()
+        val planned = plannedD.await()
+        // The links events and the training plan already carry, then the stored answers over them.
+        val links = events.mapNotNull { e -> e.exerciseSessionId?.let { it to StoredLink(it, "event:${e.id}", manual = true, planTitle = e.name) } }.toMap() +
+            planned.mapNotNull { p -> p.exerciseSessionId?.let { it to StoredLink(it, "planned:${p.id}", manual = true, planTitle = p.title) } }.toMap() +
+            storedD.await()
+        val resolved = resolvePlannedDays(
+            from, days, events, planned, calendarD.await(),
+            recorded.filter { !it.start.toLocalDate().isBefore(from) }, history, now, overridesD.await(), links,
         )
+        runCatching { linksRepo.keepFinished(resolved, now.toLocalDate()) }
+        resolved
     }
 
     private suspend fun planned(from: LocalDate, to: LocalDate): List<PlannedSessionInput> =
         supabase.postgrest.from("planned_sessions")
-            .select(Columns.list("id,scheduled_date,start_time,duration_min,domain,title,gcal_event_id")) {
+            .select(Columns.list("id,scheduled_date,start_time,duration_min,domain,title,gcal_event_id,exercise_session_id")) {
                 filter {
                     gte("scheduled_date", from.toString())
                     lt("scheduled_date", to.toString())
@@ -104,7 +116,7 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
             .map { r ->
                 PlannedSessionInput(
                     r.id, LocalDate.parse(r.scheduledDate), r.startTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() },
-                    r.durationMin, r.domain, r.title, r.gcalEventId,
+                    r.durationMin, r.domain, r.title, r.gcalEventId, r.exerciseSessionId,
                 )
             }
 

@@ -285,6 +285,25 @@ Friday with skippable meals; stored in Supabase; unreadable long calendar entrie
   adds up through breakfast and snacks. The migration was applied twice on a local Postgres 16 (policies, checks,
   uniqueness, other users) and then live.
 
+## Phase 12 notes: matching recordings to plans, and the long-session fuel loop
+
+- Plans differ from what is done: the calendar's 07:00 placeholder run at 07:55, 13 km where 19.3 were planned, a hike
+  for a run. `domain/fuel/SessionMatching.kt` scores each recording against each plan of its day: kind of session (same
+  0, compatible 0.8, else never), start (0.15 an hour, at most 1.5; untimed 0.6), size (distance log ratio × 1.2 when
+  both have one, else duration log ratio × 0.8; at most 2), role (a long plan is the day's longest recording −0.3, or
+  not +0.6). Leaving a recording unmatched costs 2; the cheapest pairing of the day wins (exhaustive up to six of each).
+  Confidence exp(−0.7 × cost), at least 0.8 for each other's only pair; under 0.5 it is shown as one to CHECK.
+- `session_plan_links` (migration 20261110040502) keeps one answer per recording: `manual` (the person's, always first,
+  may point at a plan of the day before or after, or say "not planned") or `auto` (the app's match, kept once its day
+  is over so it stops moving). The links events (`athlete_events.exercise_session_id`) and the training plan
+  (`planned_sessions.exercise_session_id`) carry count as answers too; a kept event match fills the event's own link.
+- Fuel › Plan, MATCHED SESSIONS: the recordings of the last three days and today, each with its plan and how sure the
+  match is; RIGHT / CHANGE on the uncertain ones, a tap on any of them for the choice of plans.
+- LONG SESSION FUEL: each long (90 min and over) non-event session of those days has its fuel schedule, kept under the
+  plan (`fuel_schedules` kind `planned`, ref = the plan item's id) and seeded from the race planner (weather, sweat,
+  catalog, tolerance). It stays once the run is recorded, and DEBRIEF WHAT YOU TOOK checks the intake against it (the
+  debrief finds the schedule through the link, or today's live match). Events keep their own FUEL tab.
+
 ## Read-only check on live data
 
 Run once through the real engine on the owner's data (values reported in the PR conversation, not kept in the repository,

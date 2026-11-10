@@ -91,6 +91,10 @@ fun FuelPlanPage(
         val horizon = (result as? TodayFuelResult.Ready)?.fuel?.horizon.orEmpty().take(days)
         CalendarReviewCard(horizon.flatMap { it.day.reviews }, onAnswered = { attempt++ })
         TodaysFuelCard(result, error, onRetry = { attempt++ }, onOpenSettings = { settingsOpen = true })
+        val recent = (result as? TodayFuelResult.Ready)?.fuel?.recentDays.orEmpty()
+        val today = LocalDate.now()
+        MatchedSessionsCard(recent, today, onChanged = { attempt++ })
+        LongSessionFuelCard(recent, today)
         if (horizon.size > 1) NextDaysCard(horizon, openDays, onToggleDay)
         if (onOpenFullPlan != null) {
             FTButton("OPEN THE FULL PLAN · 10 DAYS AND MEAL PREP", emphasis = FTButtonEmphasis.Secondary, modifier = Modifier.fillMaxWidth(), onClick = onOpenFullPlan)
@@ -229,12 +233,15 @@ private fun DayRow(d: HorizonDay, open: Boolean, onToggle: () -> Unit) {
                 Text("Fuel steps and weather for the long session appear in TODAY'S FUEL from three days before.", style = FTType.Caption, color = FT.TextSecondary)
             }
             Timeline(d.coded, emptyMap(), emptyMap(), d.suggestions, d.prep)
-            // A long planned run is where fuelling gets tested: its own schedule, checked against what you took in the debrief.
-            d.day.items.filter { it.durationMin >= 90 && it.eventId == null && !it.recorded }.forEach { item ->
+            // A long planned run is where fuelling gets tested: its own schedule, kept under the plan so it follows the
+            // recording it is matched to, and checked against what you took in the debrief (LONG SESSION FUEL).
+            val context = LocalContext.current
+            d.day.items.filter { isLongNonEvent(it) && !it.recorded }.forEach { item ->
+                val key = scheduleKey(item) ?: return@forEach
                 FuelScheduleCard(
-                    kind = "planned", refKey = "${item.source.name}:${item.sourceId}".take(64), durationMin = item.durationMin.roundToInt(),
-                    toleratedGPerHour = com.bioscan.fieldterminal.data.FuelSettingsStore.get(androidx.compose.ui.platform.LocalContext.current).toleratedGPerHour,
-                    seed = null,
+                    kind = key.first, refKey = key.second, durationMin = item.durationMin.roundToInt(),
+                    toleratedGPerHour = com.bioscan.fieldterminal.data.FuelSettingsStore.get(context).toleratedGPerHour,
+                    seed = { FuelPlanRepository(SupabaseClientProvider.client).seedSchedule(context, item) },
                 )
             }
         }

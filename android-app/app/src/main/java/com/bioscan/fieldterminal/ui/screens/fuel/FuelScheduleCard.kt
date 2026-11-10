@@ -80,7 +80,8 @@ fun FuelScheduleCard(
     refKey: String,
     durationMin: Int,
     toleratedGPerHour: Double,
-    seed: (() -> List<FuelBlock>)?,
+    /** The planner's first schedule, offered as START FROM THE PLAN (it may read the weather, so it suspends). */
+    seed: (suspend () -> List<FuelBlock>)?,
     modifier: Modifier = Modifier,
 ) {
     val repo = remember { FuelScheduleRepository(SupabaseClientProvider.client) }
@@ -92,6 +93,7 @@ fun FuelScheduleCard(
     var error by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<FuelBlock?>(null) }
     var isNew by remember { mutableStateOf(false) }
+    var seeding by remember { mutableStateOf(false) }
 
     LaunchedEffect(kind, refKey) {
         try {
@@ -130,8 +132,20 @@ fun FuelScheduleCard(
                     style = FTType.BodySmall, color = FT.TextSecondary,
                 )
                 seed?.let { s ->
-                    FTButton("START FROM THE PLAN", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
-                        blocks.clear(); blocks.addAll(s()); persist("plan")
+                    FTButton(if (seeding) "BUILDING…" else "START FROM THE PLAN", enabled = !seeding, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
+                        seeding = true
+                        scope.launch {
+                            try {
+                                val seeded = s()
+                                blocks.clear(); blocks.addAll(seeded); persist("plan")
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                error = describeLoadFailure(e)
+                            } finally {
+                                seeding = false
+                            }
+                        }
                     }
                 }
                 FTButton("START EMPTY", modifier = Modifier.fillMaxWidth()) { persist("manual") }

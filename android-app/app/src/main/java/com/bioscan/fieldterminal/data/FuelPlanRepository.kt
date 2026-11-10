@@ -67,7 +67,7 @@ import java.time.ZonedDateTime
 // maintenance, body weight and composition, the days before, the weather, the sweat profile, the person's products and
 // settings; and keeps a copy of each plan when it changes (fuel_plans) so the screens can say what changed.
 
-const val FUEL_ENGINE_VERSION = "3" // 3: 4,500 kcal day ceiling, spread to the days around; lower carbohydrate within bands. 2: breakfast at 09:00 by default; no meal moved before 06:00
+const val FUEL_ENGINE_VERSION = "4" // 4: scored, stored matching of recordings to plans. 3: 4,500 kcal day ceiling, spread to the days around; lower carbohydrate within bands. 2: breakfast at 09:00 by default; no meal moved before 06:00
 
 /** Days shown on the fuel plan page: today and the ten after it. */
 const val FUEL_HORIZON_DAYS = 11
@@ -107,6 +107,8 @@ data class TodayFuel(
     val horizon: List<HorizonDay> = emptyList(),
     /** The glucose-spiking band of the meals logged in each slot today (domain/MealGlycaemicLoad.kt), by slot name. */
     val glycaemic: Map<String, com.bioscan.fieldterminal.domain.GlycaemicBand> = emptyMap(),
+    /** The three days before today, today and tomorrow, as resolved: their recordings, matches and plans. */
+    val recentDays: List<PlannedDay> = emptyList(),
 )
 
 @Serializable
@@ -157,7 +159,7 @@ private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 /** The tables today's plan reads: a write to any of them drops the cached plan. */
 private val FUEL_TABLES = setOf(
     "meals", "meal_items", "planned_sessions", "calendar_events", "athlete_events", "exercise_sessions", "body_metrics",
-    "sweat_tests", "fueling_products", "fueling_recipe_versions", "fueling_intake_log", "user_profile", "calendar_event_overrides", "meal_prep_weeks", "breakfast_templates",
+    "sweat_tests", "fueling_products", "fueling_recipe_versions", "fueling_intake_log", "user_profile", "calendar_event_overrides", "meal_prep_weeks", "breakfast_templates", "session_plan_links",
 )
 
 class FuelPlanRepository(private val supabase: SupabaseClient) {
@@ -308,7 +310,10 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         }
 
         TodayFuelResult.Ready(
-            TodayFuel(todayPlan, todayCoded, tomorrowPlan, tomorrowCoded, history, changes, energy.fromGoal, energy.observedMaintenance, adherenceMap, longSessions, countdown, kg, horizon, glycaemic),
+            TodayFuel(
+                todayPlan, todayCoded, tomorrowPlan, tomorrowCoded, history, changes, energy.fromGoal, energy.observedMaintenance, adherenceMap,
+                longSessions, countdown, kg, horizon, glycaemic, recentDays = days.filter { !it.date.isBefore(today.minusDays(3)) && !it.date.isAfter(today.plusDays(1)) },
+            ),
         )
     }
 
@@ -365,6 +370,29 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
             codeMeals(plans[i], days[i], days.getOrNull(i + 1), kg, zone, settings.meals, settings.trainLow, energy.deficit, settings.toleratedGPerHour)
         }
         WeekPlan(coded, foodsD.await(), kg)
+    }
+
+    /**
+     * A first schedule for a planned long session: the race planner's steps for it (weather where the forecast reaches,
+     * the sweat profile, the products in the catalog, the tolerance setting), as editable blocks.
+     */
+    suspend fun seedSchedule(context: Context, item: PlannedItem): List<com.bioscan.fieldterminal.domain.fuel.FuelBlock> {
+        val settings = FuelSettingsStore.get(context)
+        val inputs = runCatching { NutritionTargetsRepository(supabase).loadMaintenanceInputs() }.getOrDefault(MaintenanceInputs())
+        val kg = inputs.weightKg ?: runCatching { bodyComposition() }.getOrDefault(emptyList()).firstNotNullOfOrNull { it.weightKg } ?: 70.0
+        val start = item.start ?: ZonedDateTime.now()
+        val weather = MapSettingsStore.getHome(context)?.let { (lat, lon) ->
+            runCatching { WeatherRepository().fetchHourly(lat, lon, start.minusHours(1), start.plusMinutes(item.durationMin.toLong() + 60)) }.getOrNull()
+        } ?: WeatherSeries.NONE
+        val sweat = runCatching { SweatTestsRepository(supabase).profile(kg) }.getOrNull() ?: com.bioscan.fieldterminal.domain.fuel.sweatProfile(emptyList(), kg)
+        val plan = planRaceFuel(
+            RaceFuelInput(
+                item.title, item.type, item.intensity, start, item.durationMin, item.durationMin * 0.9, item.durationMin * 1.1,
+                "the planned session length", distanceKm = item.distanceKm, weather = weather, sweat = sweat, weightKg = kg,
+                settings = settings.race, products = runCatching { products() }.getOrDefault(emptyList()),
+            ),
+        )
+        return com.bioscan.fieldterminal.domain.fuel.seedBlocks(plan)
     }
 
     /** The race or long-day plan for an event. */

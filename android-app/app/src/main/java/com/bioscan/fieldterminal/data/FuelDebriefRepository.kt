@@ -53,6 +53,8 @@ data class DebriefTarget(
     val durationMin: Double?,
     val schedule: FuelScheduleRow?,
     val existing: FuelReviewRow?,
+    /** The plan the recording was (SessionMatching.kt), when there is one: where its schedule is kept. */
+    val planRef: String? = null,
 )
 
 /** Everything the person answered besides what they took. */
@@ -93,19 +95,43 @@ fun effectiveGutScore(score: Int, symptoms: Set<FuelSymptom>): Int = maxOf(
 
 class FuelDebriefRepository(private val supabase: SupabaseClient) {
     private val schedules = FuelScheduleRepository(supabase)
+    private val links = SessionPlanLinksRepository(supabase)
 
-    /** The schedule for an activity: the event's, else the planned session linked to it, else one made on the activity itself. */
-    private suspend fun scheduleFor(sessionId: Long?, eventId: Long?): FuelScheduleRow? {
+    /**
+     * The schedule for an activity: the event's; else the one made for the plan it was ([planRef], or its stored link);
+     * else the planned session the training plan linked to it; else one made on the activity itself.
+     */
+    private suspend fun scheduleFor(sessionId: Long?, eventId: Long?, planRef: String? = null): FuelScheduleRow? {
         if (eventId != null) schedules.load("event", eventId.toString())?.let { return it }
+        planRef?.takeIf { !it.startsWith("event:") }?.let { ref -> schedules.load("planned", planKey(ref))?.let { return it } }
         if (sessionId != null) {
             val planned = runCatching {
                 supabase.postgrest.from("planned_sessions").select(Columns.list("id")) { filter { eq("exercise_session_id", sessionId) }; limit(1) }
                     .decodeList<PlannedLinkRow>().firstOrNull()
             }.getOrNull()
-            if (planned != null) schedules.load("planned", "PLANNED_SESSION:${planned.id}")?.let { return it }
+            if (planned != null) schedules.load("planned", planKey("planned:${planned.id}"))?.let { return it }
             return schedules.load("session", sessionId.toString())
         }
         return null
+    }
+
+    /**
+     * The plan [sessionId] was: its stored link, else today's live match (a link is only kept once the day is over).
+     */
+    private suspend fun planRefFor(sessionId: Long, date: LocalDate): String? {
+        links.linkFor(sessionId)?.let { return it.planRef }
+        return runCatching {
+            PlannedDayRepository(supabase).load(date, days = 1).flatMap { it.items }.firstOrNull { it.sessionId == sessionId }?.planRef
+        }.getOrNull()
+    }
+
+    /** A recording as the plan page shows it (domain/fuel/PlannedDay.kt), for its debrief. */
+    suspend fun targetForRecording(item: com.bioscan.fieldterminal.domain.fuel.PlannedItem, date: LocalDate): DebriefTarget? {
+        val sid = item.sessionId ?: return null
+        return DebriefTarget(
+            sid, item.eventId, item.title, date, item.type, item.durationMin,
+            scheduleFor(sid, item.eventId, item.planRef), existingReview(sid, item.eventId), item.planRef,
+        )
     }
 
     private suspend fun existingReview(sessionId: Long?, eventId: Long?): FuelReviewRow? = runCatching {
@@ -119,10 +145,14 @@ class FuelDebriefRepository(private val supabase: SupabaseClient) {
             supabase.postgrest.from("athlete_events").select(Columns.list("id,name,event_date")) { filter { eq("exercise_session_id", s.id) }; limit(1) }
                 .decodeList<SessionLinkRow>().firstOrNull()
         }.getOrNull()
+        // Session starts are logged times: their digits are local (domain/WallClock.kt).
         val date = runCatching { java.time.OffsetDateTime.parse(s.startTime).toLocalDate() }.getOrDefault(LocalDate.now())
+        val planRef = planRefFor(s.id, date)
+        val eventId = event?.id ?: planRef?.takeIf { it.startsWith("event:") }?.removePrefix("event:")?.toLongOrNull()
+        val title = event?.name ?: links.linkFor(s.id)?.planTitle ?: s.type.replaceFirstChar { it.uppercase() }
         return DebriefTarget(
-            s.id, event?.id, event?.name ?: s.type.replaceFirstChar { it.uppercase() }, date, s.type, s.durationMin,
-            scheduleFor(s.id, event?.id), existingReview(s.id, event?.id),
+            s.id, eventId, title, date, s.type, s.durationMin,
+            scheduleFor(s.id, eventId, planRef), existingReview(s.id, eventId), planRef,
         )
     }
 

@@ -71,6 +71,9 @@ internal fun fuelNutrientOf(ingredientName: String): String? {
     }
 }
 
+/** The ref_key a plan's schedule is kept under: the plan item's id ("calendar:<event id>", "planned:<id>"), at most 64. */
+fun planKey(planRef: String): String = planRef.take(64)
+
 class FuelScheduleRepository(private val supabase: SupabaseClient) {
 
     suspend fun load(kind: String, refKey: String): FuelScheduleRow? =

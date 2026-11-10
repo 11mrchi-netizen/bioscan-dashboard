@@ -33,15 +33,16 @@ measurements.
 - A heartbeat goes to `collector_heartbeats` (stream `home_env`) every 5 minutes. A gap in the readings with no
   heartbeat means the collector was down. A gap with heartbeats means nothing changed.
 
-### Tables (`supabase/migrations/20261110110000_home_environment.sql`)
+### Tables (`supabase/migrations/20261110132739_home_environment.sql`)
 
 - `home_sensors (user_id, id, name, room, device_types, vendor, product, first_seen_at, last_seen_at)`: `id` is the
   Home APIs device id.
-- `home_env_readings (user_id, sensor_id, metric, measured_at, value, raw)`: `metric` is one of `temperature_c`,
+- `home_env_readings (user_id, sensor_id, metric, measured_at, value, raw, room)`: `metric` is one of `temperature_c`,
   `humidity_pct`, `illuminance_lux`, `co2_ppm`, `pm25_ugm3` or `air_quality` (1 good … 6 extremely poor).
   `measured_at` is a **real instant**: when the collector received the value, in true UTC. Convert it with the zone,
   and never read its digits as local time.
-  `raw` is the value as Matter sent it, so a conversion can be redone.
+  `raw` is the value as Matter sent it, so a conversion can be redone. `room` is the sensor's Google Home room at the
+  time of the reading (so moving a sensor does not move its history); `home_sensors.room` is where it is now.
 
 Light is the one conversion to check on the first run. Matter encodes illuminance as `10000 × log10(lux) + 1`, and the
 collector converts on that basis. The Home APIs reference calls the value "lux", which may mean Google already

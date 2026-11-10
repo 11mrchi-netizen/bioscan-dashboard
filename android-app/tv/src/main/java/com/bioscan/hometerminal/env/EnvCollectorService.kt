@@ -100,7 +100,11 @@ class EnvCollectorService : Service() {
             val gate = SampleGate()
             source.measurements().retrying("measurements").collect { m ->
                 CollectorStatus.received(m)
-                if (gate.admit(m)) uploader.readings.add(listOf(EnvOutbox.encode(m)))
+                if (gate.admit(m)) {
+                    // The room the sensor is in now, from the latest device list (null until that list has arrived).
+                    val room = CollectorStatus.state.value.sensors.firstOrNull { it.id == m.sensorId }?.room
+                    uploader.readings.add(listOf(EnvOutbox.encode(m, room)))
+                }
             }
         }
         scope.launch {

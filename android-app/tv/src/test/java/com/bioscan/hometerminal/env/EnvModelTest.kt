@@ -85,8 +85,10 @@ class EnvModelTest {
     @Test
     fun aReadingSurvivesTheOutbox() {
         val reading = Measurement("dev", EnvMetric.CO2_PPM, 612.0, 612.0, t0)
-        val back = EnvOutbox.decode(EnvOutbox.encode(reading))!!
-        assertEquals(QueuedReading("dev", "co2_ppm", t0.toEpochMilli(), 612.0, 612.0), back)
+        val back = EnvOutbox.decode(EnvOutbox.encode(reading, "Bedroom"))!!
+        assertEquals(QueuedReading("dev", "co2_ppm", t0.toEpochMilli(), 612.0, 612.0, "Bedroom"), back)
+        // A line queued before rooms were stamped still decodes.
+        assertNull(EnvOutbox.decode("""{"sensorId":"dev","metric":"co2_ppm","atMs":1,"value":1.0,"raw":null}""")!!.room)
         assertNull(EnvOutbox.decode("not json"))
     }
 }

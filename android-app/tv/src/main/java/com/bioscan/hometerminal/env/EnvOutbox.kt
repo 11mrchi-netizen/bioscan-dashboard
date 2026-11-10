@@ -6,9 +6,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** A reading waiting to be uploaded. [atMs] is epoch milliseconds (a real instant). */
+/** A reading waiting to be uploaded. [atMs] is epoch milliseconds (a real instant); [room] the sensor's room then. */
 @Serializable
-data class QueuedReading(val sensorId: String, val metric: String, val atMs: Long, val value: Double, val raw: Double?)
+data class QueuedReading(val sensorId: String, val metric: String, val atMs: Long, val value: Double, val raw: Double?, val room: String? = null)
 
 /**
  * Readings and heartbeats wait here, one JSON line each, until an upload succeeds: the TV can lose the network or the
@@ -48,8 +48,8 @@ class EnvOutbox(private val file: File, private val maxBytes: Long = 24L * 1024 
     companion object {
         val json = Json { ignoreUnknownKeys = true }
 
-        fun encode(m: Measurement): String =
-            json.encodeToString(QueuedReading.serializer(), QueuedReading(m.sensorId, m.metric.column, m.at.toEpochMilli(), m.value, m.raw))
+        fun encode(m: Measurement, room: String? = null): String =
+            json.encodeToString(QueuedReading.serializer(), QueuedReading(m.sensorId, m.metric.column, m.at.toEpochMilli(), m.value, m.raw, room))
 
         fun decode(line: String): QueuedReading? = runCatching { json.decodeFromString(QueuedReading.serializer(), line) }.getOrNull()
     }

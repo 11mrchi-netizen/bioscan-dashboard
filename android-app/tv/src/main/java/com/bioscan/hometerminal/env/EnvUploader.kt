@@ -28,6 +28,7 @@ private data class ReadingRow(
     @SerialName("measured_at") val measuredAt: String,
     val value: Double,
     val raw: Double?,
+    val room: String?,
 )
 
 @Serializable
@@ -88,7 +89,7 @@ class EnvUploader(context: Context) {
             if (batch.isEmpty()) break
             // A line that does not decode, or whose sensor was never stored, can never be written: it is dropped.
             val rows = batch.mapNotNull(EnvOutbox::decode).filter { it.sensorId in knownIds }.map {
-                ReadingRow(it.sensorId, it.metric, Instant.ofEpochMilli(it.atMs).toString(), it.value, it.raw)
+                ReadingRow(it.sensorId, it.metric, Instant.ofEpochMilli(it.atMs).toString(), it.value, it.raw, it.room)
             }
             if (rows.isNotEmpty()) {
                 db.from("home_env_readings").upsert(rows) {

@@ -7,7 +7,8 @@
 --    stored as true UTC; convert it with the zone, never read its digits as local time.
 --    The collector writes a value when it changes, and the same value again when the sensor reports it 15 minutes or
 --    more after the last write, so a flat line still shows the sensor was alive. raw keeps the value exactly as Matter reported it (hundredths of a degree,
---    hundredths of a percent, Matter's log-scaled illuminance), so a conversion can be redone.
+--    hundredths of a percent, Matter's log-scaled illuminance), so a conversion can be redone. room is the sensor's
+--    Google Home room when the value was taken, so moving a sensor does not move its history.
 -- 3. collector_heartbeats gains the 'home_env' stream: proof the collector was running, so a gap reads as unknown.
 --
 -- Every new table: RLS, owner only, for all four commands.
@@ -38,6 +39,7 @@ create table public.home_env_readings (
   measured_at timestamptz not null,
   value double precision not null,
   raw double precision,
+  room text,
   source text not null default 'google_home_api',
   primary key (user_id, sensor_id, metric, measured_at),
   foreign key (user_id, sensor_id) references public.home_sensors (user_id, id) on delete cascade

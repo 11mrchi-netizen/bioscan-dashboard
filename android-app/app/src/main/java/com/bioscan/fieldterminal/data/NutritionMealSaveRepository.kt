@@ -472,6 +472,7 @@ class NutritionMealSaveRepository(
 private fun beverageClassDisplayName(beverageClass: String): String = when (beverageClass) {
     "coffee" -> "Coffee"
     "tea" -> "Tea"
+    "infusion" -> "Herbal tea"
     "juice" -> "Juice"
     "soda" -> "Soda"
     "milk" -> "Milk"

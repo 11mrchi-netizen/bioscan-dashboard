@@ -4,7 +4,7 @@
 export const LOG_AGENT_PROMPT = `You convert one short message from a person logging their day into structured entries. Output one entry per distinct thing logged. Do not log anything that is not in the message.
 
 Entry kinds:
-- drink: a beverage. beverage_class is one of water/coffee/tea/milk/plant_milk/soda/juice/electrolyte/alcohol. Give volume_value and volume_unit exactly as said (e.g. 500 and "ml", 1.5 and "l", 12 and "oz"); omit them if no volume was said, or if the container has no fixed size (glass, can, bottle, pint, shot). count is how many identical drinks, only if stated. For alcohol give abv_percent ONLY if the strength was said (e.g. "5%"); never assume a typical strength.
+- drink: a beverage. beverage_class is one of water/coffee/tea/infusion/milk/plant_milk/soda/juice/electrolyte/alcohol (infusion = a herbal or caffeine-free tea: chamomile, mint, barley, ginger). Give volume_value and volume_unit exactly as said (e.g. 500 and "ml", 1.5 and "l", 12 and "oz"); omit them if no volume was said, or if the container has no fixed size (glass, can, bottle, pint, shot). count is how many identical drinks, only if stated. For alcohol give abv_percent ONLY if the strength was said (e.g. "5%"); never assume a typical strength.
 - meal: food that was eaten. meal_text is the food part of the message, copied as said. Beverages go in drink entries, not here.
 - wellbeing: how they feel. mentioned lists which of energy/mood/stress/soreness they talked about. Give a 0-10 score for a dimension ONLY if a number was said (e.g. "energy 7", "stress 3/10"); never convert words like "tired" or "good" into a number.
 - supplement_taken: a supplement or medication taken. supplement_name as said. quantity only if a count was said.

@@ -11,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,13 +59,14 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.math.roundToInt
 
-// The drink log: a real drink, found by usual drinks, its kind, a search of the catalog (USDA, Taiwan FDA, scanned
-// products) or its barcode, then the amount on a slider in the drink's own sizes. Plain water keeps the day's running
+// The drink log, top to bottom: FIND A DRINK (a search of the catalog: USDA, Taiwan FDA, scanned products; or its barcode),
+// KIND (a typical drink of a kind, herbal tea among them), USUALS (kept closed). A pick opens the panel with when, the
+// amount on a slider in the drink's own sizes and what it brings. Plain water keeps the day's running
 // total (hydration_daily); every other drink is saved as a meal item with its calories, sugar, caffeine and alcohol.
 
 /** The kinds of drink, in the order offered, with their names. */
 internal val DRINK_KINDS = listOf(
-    "water" to "Water", "coffee" to "Coffee", "tea" to "Tea", "milk" to "Milk", "plant_milk" to "Plant milk",
+    "water" to "Water", "coffee" to "Coffee", "tea" to "Tea", "infusion" to "Herbal tea", "milk" to "Milk", "plant_milk" to "Plant milk",
     "juice" to "Juice", "soda" to "Soda", "electrolyte" to "Electrolyte", "alcohol" to "Alcohol",
 )
 
@@ -96,6 +98,7 @@ internal fun DrinkLogForm(
     var dateTime by remember { mutableStateOf(LocalDateTime.now()) }
     var defaults by remember { mutableStateOf<List<DrinkMatch>>(emptyList()) }
     var usual by remember { mutableStateOf<List<Pair<UsualDrink, DrinkMatch?>>>(emptyList()) }
+    var usualOpen by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<DrinkMatch>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
@@ -191,33 +194,6 @@ internal fun DrinkLogForm(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DateTimeField("WHEN", dateTime, { dateTime = it })
-
-        if (usual.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                DrinkLabel("USUAL")
-                usual.forEach { (u, match) ->
-                    DrinkRow(
-                        title = match?.title ?: u.description,
-                        detail = "${u.ml.roundToInt()} ml · ${u.times}× in 60 days",
-                        selected = picked != null && picked?.id == match?.id && match != null,
-                    ) {
-                        val k = match?.beverageClass ?: u.beverageClass
-                        pick(match ?: defaults.firstOrNull { it.beverageClass == k }, k, u.ml)
-                    }
-                }
-            }
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            DrinkLabel("KIND")
-            TextChipRow(DRINK_KINDS.map { it.second }, DRINK_KINDS.firstOrNull { it.first == kind && (picked == null || picked?.drinkDefault == true) }?.second, perRow = 3) { label ->
-                val k = DRINK_KINDS.firstOrNull { it.second == label }?.first
-                if (k == null) { kind = null; picked = null; steps = null }
-                else pick(if (k == "water") null else defaults.firstOrNull { it.beverageClass == k }, k)
-            }
-        }
-
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             DrinkLabel("FIND A DRINK")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -240,7 +216,40 @@ internal fun DrinkLogForm(
                 ) { pick(m, m.beverageClass); query = ""; results = emptyList() }
             }
             if (query.trim().length >= 2 && !searching && results.isEmpty()) {
-                Text("Nothing found. Pick the kind above, or scan the barcode or label.", style = FTType.BodySmall, color = FT.TextMuted)
+                Text("Nothing found. Pick the kind below, or scan the barcode or label.", style = FTType.BodySmall, color = FT.TextMuted)
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            DrinkLabel("KIND")
+            TextChipRow(DRINK_KINDS.map { it.second }, DRINK_KINDS.firstOrNull { it.first == kind && (picked == null || picked?.drinkDefault == true) }?.second, perRow = 3) { label ->
+                val k = DRINK_KINDS.firstOrNull { it.second == label }?.first
+                if (k == null) { kind = null; picked = null; steps = null }
+                else pick(if (k == "water") null else defaults.firstOrNull { it.beverageClass == k }, k)
+            }
+        }
+
+        // Usual drinks, kept closed: one tap opens them.
+        if (usual.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().ftClickable(onClickLabel = if (usualOpen) "Close usual drinks" else "Open usual drinks") { usualOpen = !usualOpen }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DrinkLabel("USUALS (${usual.size})")
+                    Spacer(Modifier.weight(1f))
+                    Text(if (usualOpen) "−" else "+", style = FTType.LabelCaps, color = FT.TextSecondary)
+                }
+                if (usualOpen) usual.forEach { (u, match) ->
+                    DrinkRow(
+                        title = match?.title ?: u.description,
+                        detail = "${u.ml.roundToInt()} ml · ${u.times}× in 60 days",
+                        selected = picked != null && picked?.id == match?.id && match != null,
+                    ) {
+                        val k = match?.beverageClass ?: u.beverageClass
+                        pick(match ?: defaults.firstOrNull { it.beverageClass == k }, k, u.ml)
+                    }
+                }
             }
         }
 
@@ -252,6 +261,7 @@ internal fun DrinkLogForm(
             val amounts = drinkAmounts(picked, ml, abvValue)
             Column(Modifier.fillMaxWidth().ftGlass(RoundedCornerShape(FT.RadiusModule)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val p = picked
+                DateTimeField("WHEN", dateTime, { dateTime = it })
                 Text(if (k == "water") "Water" else p?.title ?: DRINK_KINDS.first { it.first == k }.second, style = FTType.RowTitle, color = FT.TextPrimary)
                 if (p != null) Text(
                     listOfNotNull(p.nameZh?.takeIf { it != p.name }, if (p.drinkDefault) "a typical ${DRINK_KINDS.firstOrNull { it.first == k }?.second?.lowercase()}" else null, "numbers from ${sourceName(p.source)}").joinToString(" · "),

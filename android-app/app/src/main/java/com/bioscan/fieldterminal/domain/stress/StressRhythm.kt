@@ -21,9 +21,8 @@ const val STRESS_RHYTHM_MODEL_VERSION = "v1"
 @Serializable
 data class PhysiologicalStressReading(val timestamp: Instant, val value: Int)
 
-// avgStress/maxStress/.../proportions as reported by Zepp's own daily
-// all_day_stress summary -- kept as-is, not re-derived from the intraday
-// samples, since it's already real and independently computed by the watch.
+// The local day's average, range and band shares, recomputed from its samples
+// with Zepp's bands: Zepp's own roll-up describes a UTC day (StressLocalDays.kt).
 @Serializable
 data class StressDailySummary(
     val avg: Int?,

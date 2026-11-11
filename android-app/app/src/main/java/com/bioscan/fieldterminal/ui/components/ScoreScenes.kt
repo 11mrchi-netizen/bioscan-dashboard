@@ -48,7 +48,7 @@ import kotlin.random.Random
 // scene behind the ring, in the page's own hue, that follows the score.
 //   - drawn in code, illustrated: layered noise for ridges and hills, depth by atmospheric fade and mist between
 //     layers, multi-stop skies, soft glows (sun, moon, windows), a fine film grain; nothing added to the APK;
-//   - light: about 60 % of a full scene, dark, a soft dark disc behind the ring, the foot fading into the page;
+//   - light: about 50 % of a full scene, dark, a soft dark disc behind the ring, the foot fading into the page;
 //   - very slow movement (one cycle in 16 to 24 s), still when the phone's animations are off or there is no score;
 //   - the still layers are drawn once into an image (for the size and the score); only what moves is drawn per frame;
 //   - the score moves the scene smoothly (designed at 20, 50 and 85). The number and its words carry the meaning.
@@ -59,7 +59,7 @@ import kotlin.random.Random
 
 enum class ScoreScene { CHARGE, SLEEP, RECOVERY, LOAD, FUEL, BALANCE }
 
-private const val STRENGTH = 0.62f
+private const val STRENGTH = 0.50f
 
 /** The scene behind a score's header. [score] 0-100, null when there is none yet. Size it to the header. */
 @Composable
@@ -344,7 +344,7 @@ private fun DrawScope.ridgesStill(t: Float) {
     // a rim of last light along the front ridge
     val rim = Path().apply { var x = 0f; moveTo(0f, front(0f)); while (x <= size.width) { lineTo(x, front(x)); x += 3f } }
     drawPath(rim, Brush.horizontalGradient(listOf(ink(dusk, 0.15f), ink(dusk, 0.5f)), 0f, size.width), style = Stroke(1f * density))
-    // the trail: a dotted line just under the ridge line, from the foot to the summit
+    // the trail: a dotted line just under the ridge line, only on the climb right of the ring, up to the summit
     val trail = trailPoints(front)
     for (i in trail.indices step 3) if (i + 1 < trail.size) drawLine(ink(mix(c, Color.White, 0.6f), 0.55f), trail[i], trail[i + 1], 1.2f * density, cap = StrokeCap.Round)
     // a small flag on the summit
@@ -355,7 +355,7 @@ private fun DrawScope.ridgesStill(t: Float) {
 
 private fun DrawScope.trailPoints(front: (Float) -> Float): List<Offset> {
     val pts = mutableListOf<Offset>()
-    var x = size.width * 0.04f
+    var x = size.width * 0.70f
     val end = size.width * 0.88f
     while (x <= end) { pts += Offset(x, front(x) + 7f * density); x += 4f * density }
     pts += Offset(end, front(end) + 2f * density)
@@ -367,11 +367,43 @@ private fun DrawScope.ridgesMoving(t: Float, phase: Float) {
     // a long soft cloud drifting
     val cx = ((phase + 0.3f) % 1f) * (size.width * 1.4f) - size.width * 0.2f
     for (k in 0 until 4) glow(Offset(cx + k * 26f * density, size.height * (0.14f + 0.01f * k)), 34f * density, mix(c, Color.White, 0.55f), 0.18f)
-    // the marker on the trail, its height the score, breathing slowly
+    // a hiker on the trail, as high up the climb as the score, walking slowly
     val trail = trailPoints(frontRidge(Noise(60), size.width, size.height))
-    val m = trail[((trail.size - 1) * t).toInt().coerceIn(0, trail.size - 1)]
-    glow(m, (16f + 4f * wave(phase * 2)) * density, mix(c, Color.White, 0.3f), 0.7f)
-    drawCircle(ink(Color.White, 1f), 3.2f * density, m)
+    val i = ((trail.size - 1) * t).toInt().coerceIn(0, trail.size - 1)
+    val at = trail[i]
+    val ahead = trail[(i + 2).coerceAtMost(trail.size - 1)]
+    glow(at - Offset(0f, 8f * density), 18f * density, mix(c, Color.White, 0.4f), 0.45f)
+    hiker(at, ahead, phase, ink(mix(c, Color.White, 0.75f), 1.6f))
+}
+
+/**
+ * A hiker standing on [foot], facing up the trail toward [ahead]: head, a forward-leaning body, a pack, legs in stride
+ * and a pole planted ahead. [phase] swings the stride slowly.
+ */
+private fun DrawScope.hiker(foot: Offset, ahead: Offset, phase: Float, color: Color) {
+    val u = density
+    val slope = ((ahead.y - foot.y) / (ahead.x - foot.x).coerceAtLeast(1f)).coerceIn(-1.5f, 0f) // up the hill is negative
+    val stride = wave(phase * 6) // one stride every few seconds
+    val hip = foot + Offset(0f, -7f * u)
+    val shoulder = hip + Offset(1.6f * u, -6f * u)
+    val head = shoulder + Offset(1.2f * u, -3f * u)
+    fun ground(dx: Float) = foot + Offset(dx, dx * slope)
+    val legA = ground((2.6f + 1.4f * stride) * u)
+    val legB = ground((-2.2f + 1.4f * -stride) * u)
+    val w = 1.7f * u
+    // legs, the far one dimmer
+    drawLine(color.copy(alpha = color.alpha * 0.7f), hip, legB, w, cap = StrokeCap.Round)
+    drawLine(color, hip, legA, w, cap = StrokeCap.Round)
+    // body, leaning into the climb
+    drawLine(color, hip, shoulder, 2.4f * u, cap = StrokeCap.Round)
+    // the pack on the back
+    drawRoundRect(color, Offset(hip.x - 3.4f * u, shoulder.y + 0.2f * u), Size(3.0f * u, 5.2f * u), androidx.compose.ui.geometry.CornerRadius(1.2f * u))
+    // the head
+    drawCircle(color, 1.9f * u, head)
+    // the arm and pole, planted ahead
+    val hand = shoulder + Offset(3.0f * u, 3.2f * u + stride * 0.6f * u)
+    drawLine(color, shoulder, hand, 1.3f * u, cap = StrokeCap.Round)
+    drawLine(color.copy(alpha = color.alpha * 0.8f), hand + Offset(0f, -1.5f * u), ground((6.2f + 1.2f * stride) * u), 0.8f * u, cap = StrokeCap.Round)
 }
 
 // ---- FUEL: a wheat field --------------------------------------------------------------------------------------------------

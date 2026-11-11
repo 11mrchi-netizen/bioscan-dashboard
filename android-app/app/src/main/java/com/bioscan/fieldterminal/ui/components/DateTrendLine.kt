@@ -307,6 +307,14 @@ fun DateTrendLine(
                             )
                         }
                     }
+                    // A short, unsmoothed series marks each reading, so a line between two draws is not read as data.
+                    if (!smoothIt && s.points.size in 2 until 12) {
+                        s.points.forEach { (day, value) ->
+                            val c = Offset(xFor(day, size.width), yFor(value, size.height))
+                            drawCircle(FT.Surface, radius = 6f, center = c)
+                            drawCircle(s.color, radius = 4f, center = c)
+                        }
+                    }
                     // Missing days stay visible: a dashed stretch on the baseline under each gap.
                     segments.zipWithNext().forEach { (before, after) ->
                         val x0 = xFor(before.last().first, size.width) + 6f

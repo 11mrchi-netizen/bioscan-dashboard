@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
@@ -168,16 +169,34 @@ private val TARGET_INPUTS = setOf(ScoreKeys.ENERGY_RATIO, ScoreKeys.PROTEIN_RATI
 private fun dayLabel(day: LocalDate): String = "${weekday(day).take(3).uppercase()} ${day.dayOfMonth} ${day.month.name.take(3)}"
 
 @Composable
-private fun RingHeader(
+internal fun RingHeader(
     score: Double?, change: Double?, state: RingState, capped: Boolean, words: String, sentence: String?, description: String,
     palette: GaugePalette = GaugePalette.Charge,
+    // The page's scene behind the ring (ScoreScenes.kt), following the score.
+    scene: com.bioscan.fieldterminal.ui.components.ScoreScene? = null,
 ) {
-    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth()) {
+    if (scene != null) {
+        com.bioscan.fieldterminal.ui.components.ScoreSceneBackdrop(
+            scene, score,
+            Modifier.matchParentSize().padding(horizontal = 0.dp).clip(RoundedCornerShape(FT.RadiusCard)),
+        )
+    }
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         ScoreRing(score = score, trend = trendOf(change), size = 176.dp, state = state, capped = capped, description = description,
             palette = palette, label = description.uppercase())
         Text(words, style = FTType.LabelCaps, color = FT.TextSecondary)
-        if (sentence != null) Text(sentence, style = FTType.Body, color = FT.TextPrimary, textAlign = TextAlign.Center)
+        if (sentence != null) Text(sentence, style = FTType.Body, color = FT.TextPrimary, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 8.dp))
     }
+    }
+}
+
+private fun sceneOf(key: DomainKey) = when (key) {
+    DomainKey.SLEEP -> com.bioscan.fieldterminal.ui.components.ScoreScene.SLEEP
+    DomainKey.RECOVERY -> com.bioscan.fieldterminal.ui.components.ScoreScene.RECOVERY
+    DomainKey.LOAD -> com.bioscan.fieldterminal.ui.components.ScoreScene.LOAD
+    DomainKey.FUEL -> com.bioscan.fieldterminal.ui.components.ScoreScene.FUEL
+    DomainKey.BALANCE -> com.bioscan.fieldterminal.ui.components.ScoreScene.BALANCE
 }
 
 // ---- level 2: CHARGE ----
@@ -196,6 +215,7 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
             charge.score, charge.change,
             if (view.status == ChargeStatus.PROVISIONAL) RingState.PROVISIONAL else if (charge.score == null) RingState.PARTIAL else RingState.SCORED,
             charge.cap != null || view.illness != null, words, sentence, "Charge",
+            scene = com.bioscan.fieldterminal.ui.components.ScoreScene.CHARGE,
         )
         if (view.status == ChargeStatus.PROVISIONAL) {
             Text("Final when you close ${weekday(view.day.minusDays(1))}, or at 12:00.", style = FTType.BodySmall, color = FT.TextSecondary)
@@ -334,7 +354,7 @@ fun DomainOverlay(
             if (domain.calibrating) "CALIBRATING" else null,
         ).joinToString(" · ")
         RingHeader(domain.score, domain.change, if (domain.partial) RingState.PARTIAL else RingState.SCORED, false, words, domainSentence(domain), key.label,
-            palette = GaugePalette.of(key))
+            palette = GaugePalette.of(key), scene = sceneOf(key))
         if (key == DomainKey.LOAD) view.series[ScoreKeys.TSB]?.let { TsbGauge(it, view.day) }
         if (key == DomainKey.BALANCE && view.scores.ansState == AnsState.SATURATED) {
             Text("SATURATED: HRV is high while the pattern looks like overreaching, so RECOVERY gets no points above 100 this morning.",

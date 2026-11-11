@@ -182,6 +182,10 @@ object FuturisticMaterialTokens {
         val ModeWaiting = Color(0xFF6B7178)
         val ModeUnknown = Color(0xFF3A3F45)
 
+        // score scenes: CHARGE's city at dusk (the five domain scenes draw in their domain hue)
+        val SceneCitySky = Color(0xFF2A3A55)
+        val SceneCityWindow = Color(0xFFFFCF7A)
+
         // routine
         val PhoneSleep = Color(0xFF9B6CFF)
         val NightScreen = Color(0xFF7A6CFF)

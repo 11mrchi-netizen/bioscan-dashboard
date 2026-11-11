@@ -122,6 +122,10 @@
   --m-mode-waiting:      #6b7178;
   --m-mode-unknown:      #3a3f45;
 
+  /* score scenes — CHARGE's city at dusk (the five domain scenes draw in their domain hue) */
+  --scene-city-sky:      #2a3a55;
+  --scene-city-window:   #ffcf7a;
+
   /* routine */
   --m-phone-sleep:       #9b6cff;
   --m-night-screen:      #7a6cff;

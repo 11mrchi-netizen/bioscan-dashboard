@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.draw.clipToBounds
 import com.bioscan.fieldterminal.domain.KmMarker
 import com.bioscan.fieldterminal.domain.RoutePoint
 import com.bioscan.fieldterminal.domain.routeKmMarkers
@@ -39,14 +40,10 @@ fun RouteMiniMap(points: List<RoutePoint>, cartoKey: String, modifier: Modifier 
     if (points.size < 2) return
 
     AndroidView(
-        modifier = modifier.fillMaxWidth().height(200.dp),
+        modifier = modifier.fillMaxWidth().height(200.dp).clipToBounds(),
+        onRelease = { it.onDetach() },
         factory = { ctx ->
-            Configuration.getInstance().apply {
-                userAgentValue = ctx.packageName
-                osmdroidBasePath = ctx.filesDir
-                osmdroidTileCache = ctx.cacheDir
-            }
-            MapView(ctx).apply {
+            stableMapView(ctx).apply {
                 setTileSource(
                     XYTileSource(
                         "CartoDarkMatter",
@@ -57,9 +54,6 @@ fun RouteMiniMap(points: List<RoutePoint>, cartoKey: String, modifier: Modifier 
                         arrayOf("https://basemaps.cartocdn.com/rastertiles/dark_all/"),
                     ),
                 )
-                setMultiTouchControls(true)
-                zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-
                 val geoPoints = points.map { GeoPoint(it.lat, it.lon) }
                 overlays.add(
                     Polyline(this).apply {
@@ -75,15 +69,7 @@ fun RouteMiniMap(points: List<RoutePoint>, cartoKey: String, modifier: Modifier 
                 overlays.add(dotMarker(this, geoPoints.first(), FT.Emerald.toArgb()))
                 overlays.add(dotMarker(this, geoPoints.last(), FT.Critical.toArgb()))
 
-                post {
-                    val box = BoundingBox.fromGeoPoints(geoPoints)
-                    val latPad = (box.latNorth - box.latSouth).coerceAtLeast(0.001) * 0.2
-                    val lonPad = (box.lonEast - box.lonWest).coerceAtLeast(0.001) * 0.2
-                    zoomToBoundingBox(
-                        BoundingBox(box.latNorth + latPad, box.lonEast + lonPad, box.latSouth - latPad, box.lonWest - lonPad),
-                        false,
-                    )
-                }
+                fitTo(geoPoints, pad = 0.2, minSpanDeg = 0.001)
             }
         },
     )

@@ -43,6 +43,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.draw.clipToBounds
+import com.bioscan.fieldterminal.ui.components.fitTo
 import com.bioscan.fieldterminal.auth.GoogleAuthorizationManager
 import com.bioscan.fieldterminal.data.AddEntryRepository
 import com.bioscan.fieldterminal.data.GeocodingRepository
@@ -367,14 +369,10 @@ private fun MultiPinMapView(
     modifier: Modifier = Modifier,
 ) {
     AndroidView(
-        modifier = modifier,
+        modifier = modifier.clipToBounds(),
+        onRelease = { it.onDetach() },
         factory = { ctx ->
-            Configuration.getInstance().apply {
-                userAgentValue = ctx.packageName
-                osmdroidBasePath = ctx.filesDir
-                osmdroidTileCache = ctx.cacheDir
-            }
-            MapView(ctx).apply {
+            com.bioscan.fieldterminal.ui.components.stableMapView(ctx).apply {
                 setTileSource(
                     XYTileSource(
                         "CartoDarkMatter",
@@ -385,9 +383,6 @@ private fun MultiPinMapView(
                         arrayOf("https://basemaps.cartocdn.com/rastertiles/dark_all/"),
                     ),
                 )
-                setMultiTouchControls(true)
-                zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-
                 pins.forEach { pin ->
                     val category = classifyMapEvent(pin.event.colorId, pin.event.title)
                     // Training pins use Training's own domain accent (Emerald) --
@@ -405,16 +400,7 @@ private fun MultiPinMapView(
                     overlays.add(pinMarker(this, GeoPoint(pin.lat, pin.lon), color) { onPinClick(pin) })
                 }
 
-                post {
-                    val geoPoints = pins.map { GeoPoint(it.lat, it.lon) }
-                    val box = BoundingBox.fromGeoPoints(geoPoints)
-                    val latPad = (box.latNorth - box.latSouth).coerceAtLeast(0.005) * 0.3
-                    val lonPad = (box.lonEast - box.lonWest).coerceAtLeast(0.005) * 0.3
-                    zoomToBoundingBox(
-                        BoundingBox(box.latNorth + latPad, box.lonEast + lonPad, box.latSouth - latPad, box.lonWest - lonPad),
-                        false,
-                    )
-                }
+                fitTo(pins.map { GeoPoint(it.lat, it.lon) }, pad = 0.3, minSpanDeg = 0.005)
             }
         },
         update = { mapView ->

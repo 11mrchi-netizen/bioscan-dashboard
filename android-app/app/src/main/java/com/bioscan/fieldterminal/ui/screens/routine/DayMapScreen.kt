@@ -42,6 +42,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.draw.clipToBounds
+import com.bioscan.fieldterminal.ui.components.fitTo
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.routine.DayFix
@@ -253,14 +255,10 @@ private fun DayMap(
 ) {
     val holder = remember { MapHolder() }
     AndroidView(
-        modifier = modifier,
+        modifier = modifier.clipToBounds(),
+        onRelease = { it.onDetach() },
         factory = { ctx ->
-            Configuration.getInstance().apply {
-                userAgentValue = ctx.packageName
-                osmdroidBasePath = ctx.filesDir
-                osmdroidTileCache = ctx.cacheDir
-            }
-            MapView(ctx).apply {
+            com.bioscan.fieldterminal.ui.components.stableMapView(ctx).apply {
                 // CARTO's dark tiles when a key is saved (Setup › Connected services), OpenStreetMap's own otherwise.
                 if (cartoKey != null) {
                     setTileSource(
@@ -269,8 +267,6 @@ private fun DayMap(
                 } else {
                     setTileSource(TileSourceFactory.MAPNIK)
                 }
-                setMultiTouchControls(true)
-                zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
                 controller.setZoom(13.0)
             }
         },
@@ -345,19 +341,13 @@ private fun DayMap(
                 } else {
                     record.visits.map { GeoPoint(it.lat, it.lon) } + record.fixes.map { GeoPoint(it.lat, it.lon) }
                 }.ifEmpty { places.firstOrNull { it.category == PlaceCategory.HOME.key }?.let { listOf(GeoPoint(it.lat, it.lon)) }.orEmpty() }
-                if (pts.isNotEmpty()) map.post { zoomTo(map, pts) }
+                if (pts.isNotEmpty()) map.fitTo(pts)
             }
             map.invalidate()
         },
     )
 }
 
-private fun zoomTo(map: MapView, pts: List<GeoPoint>) {
-    val box = BoundingBox.fromGeoPoints(pts)
-    val latPad = (box.latNorth - box.latSouth).coerceAtLeast(0.004) * 0.25
-    val lonPad = (box.lonEast - box.lonWest).coerceAtLeast(0.004) * 0.25
-    map.zoomToBoundingBox(BoundingBox(box.latNorth + latPad, box.lonEast + lonPad, box.latSouth - latPad, box.lonWest - lonPad), false)
-}
 
 private data class PathRun(val mode: ModeGroup, val points: List<GeoPoint>)
 

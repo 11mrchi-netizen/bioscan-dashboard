@@ -47,7 +47,7 @@ fun SettingsScreen(
             SettingsNavRow(title = "NOTIFICATIONS", subtitle = "Quiet hours", onClick = onOpenNotifications)
             SettingsNavRow(title = "CONNECTED SERVICES", subtitle = "AI nutrition, Map, Health Connect, Zepp", onClick = onOpenConnectedServices)
             // UX review P5 / P8: Setup keeps only true settings; the program library and import moved into PLAN A NEW BLOCK.
-            SettingsNavRow(title = "TRAINING SETUP", subtitle = "Equipment, session times", onClick = onOpenTraining)
+            SettingsNavRow(title = "TRAINING SETUP", subtitle = "Equipment, shoes, session times", onClick = onOpenTraining)
 
             Box(modifier = Modifier.fillMaxWidth().padding(top = 20.dp), contentAlignment = Alignment.Center) {
                 FTButton(label = "SIGN OUT") { scope.launch { GoogleAuthManager.signOut() } }

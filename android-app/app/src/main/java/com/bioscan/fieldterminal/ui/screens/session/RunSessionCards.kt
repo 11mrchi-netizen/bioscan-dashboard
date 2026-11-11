@@ -73,7 +73,7 @@ private fun Double.roundToLong(): Long = kotlin.math.round(this).toLong()
 // ---- SUMMARY --------------------------------------------------------------------------------------------------------
 
 @Composable
-fun RunSummaryCard(header: ExerciseSessionDetailRow, detail: SessionDetail?, zepp: ZeppWorkoutSummary?) {
+fun RunSummaryCard(header: ExerciseSessionDetailRow, detail: SessionDetail?, zepp: ZeppWorkoutSummary?, onOpenShoe: (Long) -> Unit = {}) {
     val paused = detail?.pauses.orEmpty().sumOf { it.durationSec }
     val line = listOfNotNull(
         header.durationMin?.let { formatDuration(it) + if (paused >= 60) " (+${paused / 60} min paused)" else "" },
@@ -83,15 +83,18 @@ fun RunSummaryCard(header: ExerciseSessionDetailRow, detail: SessionDetail?, zep
     ).joinToString(" · ")
     val active = header.caloriesActive ?: detail?.caloriesKcal?.lastOrNull()?.value
     FTCard(title = "SUMMARY") {
-        // Distance big and right-aligned, with its context line under it (owner's layout).
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-            header.distanceKm?.let { km ->
-                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("%.2f".format(km), style = FTType.DisplayMetric, color = FT.TextPrimary)
-                    Text("KM", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
+        // Distance big on the left with its context line under it; the run's shoes on the right (owner's layout).
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f)) {
+                header.distanceKm?.let { km ->
+                    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("%.2f".format(km), style = FTType.DisplayMetric, color = FT.TextPrimary)
+                        Text("KM", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
+                    }
                 }
+                if (line.isNotBlank()) Text(line, style = FTType.BodySmall, color = FT.TextSecondary)
             }
-            if (line.isNotBlank()) Text(line, style = FTType.BodySmall, color = FT.TextSecondary, textAlign = TextAlign.End)
+            com.bioscan.fieldterminal.ui.screens.shoes.RunShoeBadge(header.id, onOpenShoe)
         }
         TileGrid(
             listOfNotNull(

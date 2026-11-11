@@ -14,9 +14,16 @@
 
 ## Shoes
 
-- Each workout summary in `sport_history` carries `gearId`, the ID of the shoes picked on the watch or in the app.
+- Each workout summary in `sport_history` carries `gearId`, the code of the shoes picked on the watch or in the app.
   It is empty when no shoes were picked. Zepp sends **no shoe names** and has no gear endpoint (ZeppBridge says the
-  same). It keeps a local shoe list and matches shoes to Zepp gear IDs.
-- In our data: `3ff0ae27-…` on road runs (type 1) and `aafdf107-…` on trail runs (type 7). Walks have none.
-- To build: store `gear_id` on the workout, keep a shoe table (name, use, retire km, `zepp_gear_id`), and show km and
-  wear per shoe.
+  same). Bike rides (types 9, 10), walks and strength sessions carry no code. Runs (1), trail runs (7) and treadmill
+  runs (8) do.
+- `zepp_workout_detail.gear_id` stores the code. zepp-extract writes it, and a trigger fills it in from the stored
+  summary when the extractor does not (migrations `20261111043312_shoes`, `20261111043402_shoes_gear_trigger`).
+- `shoes`: name, use (road / trail / treadmill / any), the Zepp code, a small photo, km already on them when added,
+  and the km to retire them at. `exercise_sessions.shoe_id` is the person's own choice for one session.
+- A run's shoes (`domain/Shoes.kt`): the person's choice first, then the shoe holding its code. A code no shoe has is
+  "unknown" and gets matched once, from Setup › TRAINING SETUP › SHOES or from the run's SUMMARY.
+- The shoe page shows its km (the km when added plus its runs), wear against the retirement distance, its runs, and the
+  records set in it. A record is a run that beat the best of every run before it: longest and fastest of 5 km or more
+  on road; longest, biggest climb and fastest grade-adjusted of 10 km or more on trail.

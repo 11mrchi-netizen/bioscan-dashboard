@@ -308,7 +308,10 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             composable(SettingsRoute.Notifications.route) { NotificationsSettingsScreen(scope = scope, onBack = { navController.popBackStack() }) }
             composable(SettingsRoute.ConnectedServices.route) { ConnectedServicesScreen(scope = scope, onBack = { navController.popBackStack() }) }
             composable(SettingsRoute.Training.route) {
-                com.bioscan.fieldterminal.ui.screens.training.TrainingSettingsScreen(onBack = { navController.popBackStack() })
+                com.bioscan.fieldterminal.ui.screens.training.TrainingSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenShoe = { id -> navController.navigate("shoe/$id") },
+                )
             }
             // Phase G4: the app's first pushed detail route (every other
             // screen so far is a flat tab or a bottom sheet) -- a session's
@@ -339,7 +342,18 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             composable("session_detail/{sessionId}") { backStackEntry ->
                 val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull()
                 if (sessionId != null) {
-                    SessionDetailScreen(sessionId = sessionId, onBack = { navController.popBackStack() })
+                    SessionDetailScreen(sessionId = sessionId, onBack = { navController.popBackStack() }, onOpenShoe = { id -> navController.navigate("shoe/$id") })
+                }
+            }
+            // Shoes: one pair's page (from a run's SUMMARY and Setup › TRAINING SETUP › SHOES).
+            composable("shoe/{shoeId}") { backStackEntry ->
+                val shoeId = backStackEntry.arguments?.getString("shoeId")?.toLongOrNull()
+                if (shoeId != null) {
+                    com.bioscan.fieldterminal.ui.screens.shoes.ShoeScreen(
+                        shoeId = shoeId,
+                        onBack = { navController.popBackStack() },
+                        onOpenSession = { id -> navController.navigate("session_detail/$id") },
+                    )
                 }
             }
         }

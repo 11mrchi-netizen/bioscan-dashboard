@@ -48,19 +48,20 @@ private fun time(s: String) = runCatching { LocalTime.parse(s) }.getOrDefault(Lo
 // UX review P5 / P8: the program library and its import moved into PLAN A NEW BLOCK (TrainingPlannerScreen's first step),
 // so Setup keeps only true settings and a block is started, seen and edited in Training › Plan alone.
 @Composable
-fun TrainingSettingsScreen(onBack: () -> Unit) {
+fun TrainingSettingsScreen(onBack: () -> Unit, onOpenShoe: (Long) -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val state = remember { TrainingPlannerState(TrainingProgramRepository(SupabaseClientProvider.client), scope) }
     LaunchedEffect(Unit) { state.load() }
 
     Column(Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack, title = "TRAINING SETUP", subtitle = "EQUIPMENT · SESSION TIMES", accent = FT.DomainTraining)
+        TileHeader(onBack = onBack, title = "TRAINING SETUP", subtitle = "EQUIPMENT · SHOES · SESSION TIMES", accent = FT.DomainTraining)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (state.loading) {
                 Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.DomainTraining) }
             } else {
                 state.error?.let { Text(it, color = FT.Critical, style = FTType.BodySmall) }
                 EquipmentCard(state)
+                com.bioscan.fieldterminal.ui.screens.shoes.ShoesCard(onOpenShoe)
                 ScheduleCard(state)
                 HeartRateZonesCard(state)
                 Spacer(Modifier.height(24.dp))

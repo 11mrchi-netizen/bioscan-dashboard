@@ -63,6 +63,8 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'agent_memory',
   ),
   user_profile: { scope: 'shared', columns: ['sex'] },
+  // shoes and their distance; the photo stays out
+  shoes: { scope: 'shared', columns: ['id', 'name', 'use', 'zepp_gear_id', 'start_km', 'retire_km', 'started_on', 'retired_on'] },
   ...optIn('sexual_health', 'encounters', 'sexual_activity_daily', 'arousal_daily', 'masturbation_log'),
   ...optIn('health_concerns', 'health_concerns', 'health_observations', 'health_signals', 'health_episode_marks', 'intervention_concerns'),
   // v_health_events unions injuries, illnesses and health concerns, so it is as private as its most private part.

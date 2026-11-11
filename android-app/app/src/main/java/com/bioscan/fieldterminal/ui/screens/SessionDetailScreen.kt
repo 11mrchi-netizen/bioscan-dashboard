@@ -119,7 +119,7 @@ import java.time.format.DateTimeFormatter
 // "shared compact selector treatment" Fuel/Heart/Labs already use for their
 // own sub-tabs, rather than a new selector component.
 @Composable
-fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
+fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) -> Unit = {}) {
     val context = LocalContext.current
     var header by remember { mutableStateOf<ExerciseSessionDetailRow?>(null) }
     var headerError by remember { mutableStateOf<String?>(null) }
@@ -307,7 +307,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                     // A run: SUMMARY tiles, then RUN DYNAMICS with a collapsible section per signal (owner's structure,
                     // run session page). Every other type keeps SUMMARY with its combined chart.
                     if (isRun) {
-                        RunSummaryCard(h, d, zeppSummary)
+                        RunSummaryCard(h, d, zeppSummary, onOpenShoe)
                         RunDynamicsCard(h, d, zeppSummary, zones, loadingDetail, detailError, hasTimeSeries = h.healthConnectRecordId != null || d != null, marks = runMarks)
                     } else {
                         SummaryCard(h, d, loadingDetail, detailError, hasHealthConnectRecord = h.healthConnectRecordId != null, zones = zones)

@@ -66,6 +66,10 @@ data class TrendSeries(
     val maxGapDays: Int? = null,
     // Readings as dots, no line: the expected-band chart, where each morning is judged against its own band.
     val dotsOnly: Boolean = false,
+    // A series of 12 readings or more is drawn as its trend (ChartPaths.kt's local fit, about an eighteenth of the span
+    // wide) with the readings as faint dots, so day-to-day noise does not zigzag the line. False draws the line through
+    // every reading (a series that is already an average, or one whose every point matters).
+    val smooth: Boolean = true,
 )
 
 // A per-day range behind the series: the expected band (80%) with its centre.
@@ -181,6 +185,8 @@ fun DateTrendLine(
         gutter + padX + ChronoUnit.DAYS.between(dayMin, day).toFloat() / daySpan * (width - gutter - padX * 2)
     fun yFor(value: Double, height: Float): Float =
         padY + (1f - ((value - yLo) / (yHi - yLo)).toFloat()) * (height - padY * 2)
+    fun xForDays(d: Double, width: Float): Float = gutter + padX + d.toFloat() / daySpan * (width - gutter - padX * 2)
+    val trendBandwidth = maxOf(2.0, daySpan / 18.0)
 
     var selectedDay by remember { mutableStateOf<LocalDate?>(null) }
     // Series/points change when the caller switches timeframe -- a stale
@@ -267,8 +273,25 @@ fun DateTrendLine(
                     }
                 } else {
                     val segments = trendSegments(s.points, s.maxGapDays)
+                    val smoothIt = s.smooth && s.points.size >= 12
+                    if (smoothIt) {
+                        s.points.forEach { (day, value) -> drawCircle(s.color.copy(alpha = 0.35f), radius = 2.5f, center = Offset(xFor(day, size.width), yFor(value, size.height))) }
+                    }
                     segments.forEach { seg ->
-                        if (seg.size == 1) {
+                        if (smoothIt && seg.size >= 3) {
+                            val xs = seg.map { ChronoUnit.DAYS.between(dayMin, it.first).toDouble() }
+                            val curve = trendCurve(xs, seg.map { it.second }, trendBandwidth)
+                            drawPath(
+                                smoothedPath(curve.map { (d, v) -> Offset(xForDays(d, size.width), yFor(v, size.height)) }),
+                                color = s.color,
+                                style = Stroke(
+                                    width = 4f,
+                                    cap = if (s.dashed) StrokeCap.Butt else StrokeCap.Round,
+                                    join = StrokeJoin.Round,
+                                    pathEffect = if (s.dashed) PathEffect.dashPathEffect(floatArrayOf(14f, 9f)) else null,
+                                ),
+                            )
+                        } else if (seg.size == 1) {
                             drawCircle(s.color, radius = 3.5f, center = Offset(xFor(seg[0].first, size.width), yFor(seg[0].second, size.height)))
                         } else {
                             val line = smoothedPath(seg.map { (day, value) -> Offset(xFor(day, size.width), yFor(value, size.height)) })

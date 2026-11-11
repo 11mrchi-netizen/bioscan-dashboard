@@ -125,9 +125,9 @@ fun PerformanceTrend(
         }
         DateTrendLine(
             series = listOf(
-                TrendSeries(data.raw, FT.TextMuted, "RAW"),
-                TrendSeries(data.avg7d, FT.Info, "7D"),
-                TrendSeries(data.avg28d, FT.Emerald, "28D"),
+                TrendSeries(data.raw, FT.TextMuted, "RAW", dotsOnly = true),
+                TrendSeries(data.avg7d, FT.Info, "7D", smooth = false),
+                TrendSeries(data.avg28d, FT.Emerald, "28D", smooth = false),
             ),
             valueFormat = valueFormat,
             unit = unit,

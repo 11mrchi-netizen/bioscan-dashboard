@@ -32,3 +32,58 @@ fun smoothedPath(pts: List<Offset>, smoothing: Float = 0.18f): Path = Path().app
         cubicTo(c1x, c1y, c2x, c2y, p2.x, p2.y)
     }
 }
+
+// ---- Smoothing ------------------------------------------------------------------------------------------------------
+// A noisy daily series (weight, body fat from a scale, resting HR) curved through every reading still zigzags. The trend
+// line is instead a local linear fit (Gaussian weights over time, [bandwidth] days wide): it follows the readings without
+// lagging the way a trailing average does, and keeps its slope at the ends. Readings stay on the chart as faint dots.
+
+/**
+ * The trend of ([xs], [ys]) at [at], each x in days: a weighted straight-line fit around [at] with Gaussian weights of
+ * standard deviation [bandwidth] days. Falls back to the weighted mean when the weights sit on one day, and to the
+ * nearest reading when none carry any weight.
+ */
+fun localTrendAt(xs: List<Double>, ys: List<Double>, at: Double, bandwidth: Double): Double {
+    var sw = 0.0; var sx = 0.0; var sy = 0.0; var sxx = 0.0; var sxy = 0.0
+    for (k in xs.indices) {
+        val d = (xs[k] - at) / bandwidth
+        val w = kotlin.math.exp(-0.5 * d * d)
+        if (w < 1e-12) continue
+        val dx = xs[k] - at
+        sw += w; sx += w * dx; sy += w * ys[k]; sxx += w * dx * dx; sxy += w * dx * ys[k]
+    }
+    if (sw < 1e-9) return ys[xs.indices.minBy { kotlin.math.abs(xs[it] - at) }]
+    val mx = sx / sw
+    val my = sy / sw
+    val varX = sxx / sw - mx * mx
+    if (varX < 1e-9) return my
+    val slope = (sxy / sw - mx * my) / varX
+    return my - slope * mx // the fitted line at dx = 0
+}
+
+/**
+ * The trend through one run of readings ([xs] in days, ascending), sampled every [step] days from the first reading to
+ * the last, as (x, value) pairs ready for [smoothedPath]. One reading gives itself.
+ */
+fun trendCurve(xs: List<Double>, ys: List<Double>, bandwidth: Double, step: Double = (bandwidth / 3).coerceAtLeast(0.5)): List<Pair<Double, Double>> {
+    if (xs.isEmpty()) return emptyList()
+    if (xs.size == 1) return listOf(xs[0] to ys[0])
+    val out = mutableListOf<Pair<Double, Double>>()
+    var x = xs.first()
+    while (x < xs.last()) {
+        out += x to localTrendAt(xs, ys, x, bandwidth)
+        x += step
+    }
+    out += xs.last() to localTrendAt(xs, ys, xs.last(), bandwidth)
+    return out
+}
+
+/** Runs of readings split where more than [maxGap] days pass without one (a line never bridges a long silence). */
+fun <T> splitAtGaps(points: List<T>, day: (T) -> Double, maxGap: Double): List<List<T>> {
+    val runs = mutableListOf<MutableList<T>>()
+    for (p in points) {
+        val last = runs.lastOrNull()?.lastOrNull()
+        if (last == null || day(p) - day(last) > maxGap) runs += mutableListOf(p) else runs.last() += p
+    }
+    return runs
+}

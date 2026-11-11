@@ -46,6 +46,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.withStyle
+import com.bioscan.fieldterminal.ui.components.localTrendAt
+import com.bioscan.fieldterminal.ui.components.smoothedPath
+import com.bioscan.fieldterminal.ui.components.splitAtGaps
+import com.bioscan.fieldterminal.ui.components.trendCurve
 import com.bioscan.fieldterminal.domain.DayRange
 import com.bioscan.fieldterminal.domain.MetricReading
 import com.bioscan.fieldterminal.domain.readMetric
@@ -492,13 +496,23 @@ fun TrendChart(
         EmptyLine("Not enough readings in the last $days days.")
         return
     }
-    val span = if (days > 120) 14 else 7
-    val mean = remember(points, span) {
-        val byIndex = points.toMap()
-        points.mapNotNull { (i, _) ->
-            val w = (0 until span).mapNotNull { byIndex[i - it] }
-            if (w.size >= span / 2) i to w.average() else null
+    // The trend: a local linear fit over about [span] days (a Gaussian of span/1.6 days), drawn through runs of readings
+    // and broken where readings stop for a while (ChartPaths.kt). The readings themselves are the faint dots.
+    val span = when {
+        days > 400 -> 30
+        days > 120 -> 14
+        else -> 7
+    }
+    val bandwidth = span / 1.6
+    val runs = remember(points, span) {
+        splitAtGaps(points, { it.first.toDouble() }, maxGap = maxOf(3.0 * span, 21.0)).map { run ->
+            trendCurve(run.map { it.first.toDouble() }, run.map { it.second }, bandwidth)
         }
+    }
+    val mean = remember(points, span) {
+        val xs = points.map { it.first.toDouble() }
+        val ys = points.map { it.second }
+        points.map { (i, _) -> i to localTrendAt(xs, ys, i.toDouble(), bandwidth) }
     }
     val markers = LocalRegimenMarkers.current
     val inWindow = remember(markers, from, day) { markers.filter { !it.date.isBefore(from) && !it.date.isAfter(day) } }
@@ -537,13 +551,16 @@ fun TrendChart(
             val step = if (days > 120) 30 else 7
             var g = days - 1
             while (g >= 0) { drawLine(FT.GlassTrack, Offset(x(g), 0f), Offset(x(g), size.height), strokeWidth = 1f); g -= step }
-            val raw = Path()
-            points.forEachIndexed { k, (i, v) -> if (k == 0) raw.moveTo(x(i), y(v)) else raw.lineTo(x(i), y(v)) }
-            drawPath(raw, FT.TextSecondary.copy(alpha = 0.4f), style = Stroke(width = 1.2f))
-            val m = Path()
-            mean.forEachIndexed { k, (i, v) -> if (k == 0) m.moveTo(x(i), y(v)) else m.lineTo(x(i), y(v)) }
-            drawPath(m, color, style = Stroke(width = 3f))
-            if (days <= 90) points.forEach { (i, v) -> drawCircle(FT.TextSecondary, radius = 2.5f, center = Offset(x(i), y(v))) }
+            val dot = if (points.size > 120) 2f else 3f
+            points.forEach { (i, v) -> drawCircle(FT.TextSecondary.copy(alpha = 0.55f), radius = dot, center = Offset(x(i), y(v))) }
+            fun xf(d: Double) = (size.width * d / (days - 1).coerceAtLeast(1)).toFloat()
+            for (run in runs) {
+                if (run.size < 2) continue
+                drawPath(
+                    smoothedPath(run.map { (d, v) -> Offset(xf(d), y(v)) }), color,
+                    style = Stroke(width = 3.5f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round),
+                )
+            }
             points.last().let { (i, v) -> drawCircle(FT.EmeraldHighlight, radius = 6f, center = Offset(x(i), y(v))) }
             val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
             for (mk in inWindow) {
@@ -555,7 +572,7 @@ fun TrendChart(
                 val v = byIndex[i] ?: return@let
                 val rows = listOfNotNull(
                     InspectRow(null, format(v), FT.TextPrimary),
-                    meanByIndex[i]?.let { InspectRow("$span-day", format(it), color) },
+                    meanByIndex[i]?.let { InspectRow("trend", format(it), color) },
                     band?.let { (a, b) -> InspectRow(bandLabel, "${format(a)}–${format(b)}", color) },
                 )
                 drawInspectOverlay(measurer, x(i), listOf(Offset(x(i), y(v))), shortDate(from.plusDays(i.toLong())), rows)
@@ -565,7 +582,7 @@ fun TrendChart(
     Row(Modifier.fillMaxWidth().padding(start = 48.dp)) {
         Text(shortDate(from), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
         val key = listOfNotNull(
-            "line = ${span}-day mean",
+            "line = trend",
             band?.let { "shaded = $bandLabel" },
             targetLabel?.let { "dashed = $it" },
         ).joinToString(" · ")
@@ -629,13 +646,9 @@ fun MultiLineChart(lines: List<ChartLine>, day: LocalDate, days: Int, format: (D
             fun y(v: Double) = (size.height * (1 - (v - lo) / (hi - lo))).toFloat()
             if (zeroLine) drawLine(FT.TextMuted, Offset(0f, y(0.0)), Offset(size.width, y(0.0)), strokeWidth = 1f)
             for (l in lines) {
-                val p = Path()
-                var started = false
-                for (i in 0 until days) {
-                    val v = l.series[from.plusDays(i.toLong())] ?: continue
-                    if (!started) { p.moveTo(x(i), y(v)); started = true } else p.lineTo(x(i), y(v))
-                }
-                drawPath(p, l.color, style = Stroke(width = 2.5f, pathEffect = if (l.dashed) PathEffect.dashPathEffect(floatArrayOf(10f, 8f)) else null))
+                val pts = (0 until days).mapNotNull { i -> l.series[from.plusDays(i.toLong())]?.let { Offset(x(i), y(it)) } }
+                drawPath(smoothedPath(pts), l.color, style = Stroke(width = 2.5f, cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    join = androidx.compose.ui.graphics.StrokeJoin.Round, pathEffect = if (l.dashed) PathEffect.dashPathEffect(floatArrayOf(10f, 8f)) else null))
             }
             pick?.let { i ->
                 val d = from.plusDays(i.toLong())

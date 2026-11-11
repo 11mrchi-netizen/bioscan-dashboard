@@ -232,7 +232,7 @@ private fun RawAndMedianCard(
         DateTrendLine(
             series = listOf(
                 TrendSeries(raw, FT.TextMuted, "PER RUN", dotsOnly = true),
-                TrendSeries(line, skillColor(Skill.RUNNING), baseline.legend),
+                TrendSeries(line, skillColor(Skill.RUNNING), baseline.legend, smooth = false),
             ) + extra(all),
             valueFormat = valueFormat,
             unit = unit,
@@ -273,7 +273,7 @@ private fun PaceCard(history: RunningHistory, trail: Boolean, from: LocalDate, t
         baseline = baseline,
         extra = {
             val gap = baseline.line(runs.mapNotNull { r -> r.gapMinPerKm?.let { r.date to it } }).filter { !it.first.isBefore(from) }
-            listOf(TrendSeries(gap, FT.Info, "GAP ${baseline.legend}", dashed = true))
+            listOf(TrendSeries(gap, FT.Info, "GAP ${baseline.legend}", dashed = true, smooth = false))
         },
     )
 }
@@ -303,14 +303,14 @@ private fun CadenceStrideCard(form: List<RunFormPoint>, from: LocalDate, today: 
         DateTrendLine(
             series = listOf(
                 TrendSeries(cadence, FT.TextMuted, "PER RUN", dotsOnly = true),
-                TrendSeries(cadenceMedian, skillColor(Skill.RUNNING), baseline.legend),
+                TrendSeries(cadenceMedian, skillColor(Skill.RUNNING), baseline.legend, smooth = false),
             ),
             valueFormat = { "%.0f".format(it) }, unit = "cadence · spm", legend = true,
             dateRange = range, minGutter = 36.dp,
         )
         if (stride.size >= 2) {
             DateTrendLine(
-                series = listOf(TrendSeries(stride, FT.Info, "STRIDE ${baseline.legend}")),
+                series = listOf(TrendSeries(stride, FT.Info, "STRIDE ${baseline.legend}", smooth = false)),
                 valueFormat = { "%.0f".format(it) }, unit = "stride length · cm", legend = true,
                 dateRange = range, minGutter = 36.dp,
             )

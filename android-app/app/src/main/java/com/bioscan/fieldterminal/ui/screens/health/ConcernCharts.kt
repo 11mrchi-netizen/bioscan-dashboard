@@ -129,11 +129,7 @@ fun RecoveryOverlay(s: ConcernStateDto) {
         }
         curves.forEachIndexed { i, (_, pts) ->
             val alpha = 0.35f + 0.65f * (i + 1) / curves.size
-            val path = Path()
-            pts.forEachIndexed { k, (d, v) ->
-                val o = Offset(left + d / maxDay.toFloat() * w, 8f + h - v / 10f * h)
-                if (k == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
-            }
+            val path = com.bioscan.fieldterminal.ui.components.smoothedPath(pts.map { (d, v) -> Offset(left + d / maxDay.toFloat() * w, 8f + h - v / 10f * h) })
             drawPath(path, FT.DomainHeart.copy(alpha = alpha), style = Stroke(if (i == curves.lastIndex) 3.5f else 2f))
         }
         axisLabel("day 0", left, size.height - 4f, FT.TextMuted)

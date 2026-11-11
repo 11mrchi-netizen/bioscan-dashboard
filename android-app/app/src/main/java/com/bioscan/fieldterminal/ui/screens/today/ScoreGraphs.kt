@@ -379,9 +379,9 @@ fun MetricChart(series: Series, day: LocalDate, key: String, band: Pair<Double, 
     val values = points.map { it.second } + listOfNotNull(band?.first, band?.second)
     val lo = values.min()
     val hi = values.max().let { if (it - lo < 1e-9) lo + 1 else it }
-    val mean7 = (0..59).mapNotNull { i ->
-        val window = (0..6).mapNotNull { k -> series[from.plusDays((i - k).toLong())] }
-        if (window.size >= 4 && series[from.plusDays(i.toLong())] != null) i to window.average() else null
+    // The 7-day trend (a local linear fit, ChartPaths.kt), broken where readings stop for three weeks; readings are the dots.
+    val trendRuns = com.bioscan.fieldterminal.ui.components.splitAtGaps(points, { it.first.toDouble() }, 21.0).map { run ->
+        com.bioscan.fieldterminal.ui.components.trendCurve(run.map { it.first.toDouble() }, run.map { it.second }, 7 / 1.6)
     }
     Row(Modifier.fillMaxWidth()) {
         Box(Modifier.width(52.dp).height(140.dp)) {
@@ -398,17 +398,18 @@ fun MetricChart(series: Series, day: LocalDate, key: String, band: Pair<Double, 
             fun y(v: Double) = (size.height * (1 - (v - lo) / (hi - lo))).toFloat().coerceIn(4f, size.height - 4f)
             band?.let { (a, b) -> drawRect(metricInk(key).copy(alpha = 0.12f), Offset(0f, y(b)), Size(size.width, y(a) - y(b))) }
             for (week in 0..8) drawLine(FT.GlassTrack, Offset(x(59 - week * 7), 0f), Offset(x(59 - week * 7), size.height), strokeWidth = 1f)
-            val path = Path()
-            points.forEachIndexed { k, (i, v) -> if (k == 0) path.moveTo(x(i), y(v)) else path.lineTo(x(i), y(v)) }
-            drawPath(path, FT.TextSecondary.copy(alpha = 0.5f), style = Stroke(width = 1.5f))
-            val mean = com.bioscan.fieldterminal.ui.components.smoothedPath(mean7.map { (i, v) -> Offset(x(i), y(v)) })
-            drawPath(mean, metricInk(key), style = Stroke(width = 3f))
-            points.forEach { (i, v) -> drawCircle(if (i == 59) FT.TextPrimary else FT.TextSecondary, radius = if (i == 59) 7f else 3f, center = Offset(x(i), y(v))) }
+            points.forEach { (i, v) -> if (i != 59) drawCircle(FT.TextSecondary.copy(alpha = 0.55f), radius = 3f, center = Offset(x(i), y(v))) }
+            for (run in trendRuns) {
+                if (run.size < 2) continue
+                val mean = com.bioscan.fieldterminal.ui.components.smoothedPath(run.map { (d, v) -> Offset((size.width * d / 59.0).toFloat(), y(v)) })
+                drawPath(mean, metricInk(key), style = Stroke(width = 3.5f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+            }
+            points.firstOrNull { it.first == 59 }?.let { (i, v) -> drawCircle(FT.TextPrimary, radius = 7f, center = Offset(x(i), y(v))) }
         }
     }
     Row(Modifier.fillMaxWidth().padding(start = 52.dp)) {
         Text(dayLabel(from), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
-        Text("line = 7-day mean · shaded = $bandLabel", style = FTType.Micro, color = metricInk(key), modifier = Modifier.weight(3f), textAlign = TextAlign.Center)
+        Text("line = trend · shaded = $bandLabel", style = FTType.Micro, color = metricInk(key), modifier = Modifier.weight(3f), textAlign = TextAlign.Center)
         Text(dayLabel(day), style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
 }

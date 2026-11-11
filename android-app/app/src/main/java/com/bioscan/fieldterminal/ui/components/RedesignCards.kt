@@ -204,7 +204,7 @@ private fun gapFor(range: TimeRange): Int? = when (range.grain) {
     TimeRange.Grain.Month -> 31
 }
 
-/** Spec §1.3 Trend Card: header and the line chart (daily at a month or less, never averaged there). */
+/** Spec §1.3 Trend Card: header and the line chart (daily at a month or less, drawn as its trend with each day a dot). */
 @Composable
 fun TrendCard(
     title: String,

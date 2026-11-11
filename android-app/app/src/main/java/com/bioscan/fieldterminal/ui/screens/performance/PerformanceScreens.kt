@@ -48,6 +48,9 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import com.bioscan.fieldterminal.domain.levels.formatPace
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlin.math.roundToInt
 
 private val SPORT_COLORS = listOf(FT.Category.Activity.c500, FT.Emerald, FT.Info, FT.Analysis, FT.Category.Arousal.c300, FT.Warning, FT.TextSecondary)
@@ -65,38 +68,142 @@ private fun rememberSportSessions(): List<SportSession>? {
     return state
 }
 
+/** The window the page reads: the last weeks, or a training block. */
+private data class PerfWindow(val key: String, val chip: String, val name: String, val from: LocalDate, val to: LocalDate) {
+    val days: Int get() = (ChronoUnit.DAYS.between(from, to) + 1).toInt()
+}
+
+private val WEEK_CHOICES = listOf(4 to "4 W", 12 to "12 W", 26 to "6 M", 52 to "1 Y")
+
+private fun weeksWindow(weeks: Int, chip: String, today: LocalDate): PerfWindow {
+    val monday = today.minusDays((today.dayOfWeek.value - 1).toLong())
+    return PerfWindow("w$weeks", chip, if (weeks == 52) "the last year" else "the last $weeks weeks", monday.minusWeeks((weeks - 1).toLong()), today)
+}
+
+private fun blockName(c: com.bioscan.fieldterminal.domain.TrainingCycle): String =
+    c.tbTemplate?.takeIf { it.isNotBlank() }?.substringBefore(" (") ?: "Block"
+
+private fun blockWindow(c: com.bioscan.fieldterminal.domain.TrainingCycle, today: LocalDate): PerfWindow {
+    val end = listOfNotNull(c.endDate, today).min()
+    return PerfWindow("b${c.id}", blockName(c).uppercase(), "${blockName(c)} · ${shortDate(c.startDate)} – ${shortDate(end)}", c.startDate, end)
+}
+
 /**
- * ME › PERFORMANCE: one tile per sport (the three main ones first, then any other activity you record, newest first),
- * each with its last four weeks and twelve weeks of hours; a stacked chart of all of them on top.
+ * ME › PERFORMANCE: the window at the top (the last 4 / 12 weeks, 6 months, a year, or a training block), every sport's
+ * hours by week in it, VO2max and lactate threshold over it, then a tile per sport (the three main ones first, then any
+ * other activity you record, newest first) with its sessions, hours and weekly bars in the window.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun PerformanceHub(onOpenSport: (Sport) -> Unit) {
     val sessions = rememberSportSessions()
-    if (sessions == null) {
-        EmptyLine("Loading your sports…")
-        return
+    val today = remember { LocalDate.now() }
+    val cycles by produceState<List<com.bioscan.fieldterminal.domain.TrainingCycle>>(emptyList()) {
+        value = runCatching { com.bioscan.fieldterminal.data.TrainingCyclesRepository(SupabaseClientProvider.client).loadCycles() }.getOrDefault(emptyList())
+            .filter { !it.startDate.isAfter(today) }.sortedByDescending { it.startDate }
     }
-    val today = LocalDate.now()
-    val sports = remember(sessions) { summarizeSports(sessions, today) }
-    if (sports.isEmpty()) {
-        EmptyLine("No sessions recorded yet. Workouts from your watch and logged sessions show up here, one tile per sport.")
-        return
+    val running by produceState<com.bioscan.fieldterminal.data.RunningHistory?>(null) {
+        value = runCatching { com.bioscan.fieldterminal.ui.screens.user.UserDataCache.running() }.getOrNull()
     }
+    var key by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("w12") }
+    var picking by remember { mutableStateOf(false) }
+    val window = remember(key, cycles) {
+        WEEK_CHOICES.firstOrNull { "w${it.first}" == key }?.let { weeksWindow(it.first, it.second, today) }
+            ?: cycles.firstOrNull { "b${it.id}" == key }?.let { blockWindow(it, today) }
+            ?: weeksWindow(12, "12 W", today)
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Section("ALL SPORTS · 12 WEEKS", info = "Hours per week by sport. Tap a week to read it. Walking counts only walks your watch recorded as workouts.") {
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            for ((w, chip) in WEEK_CHOICES) com.bioscan.fieldterminal.ui.screens.detail.Chip(chip, key == "w$w") { key = "w$w" }
+            if (cycles.isNotEmpty()) {
+                val onBlock = key.startsWith("b")
+                com.bioscan.fieldterminal.ui.screens.detail.Chip(if (onBlock) "${window.chip} ▾" else "BLOCK ▾", onBlock) { picking = true }
+            }
+        }
+        if (sessions == null) {
+            EmptyLine("Loading your sports…")
+            return@Column
+        }
+        val weeks = remember(window) { com.bioscan.fieldterminal.domain.weekStarts(window.from, window.to) }
+        val sports = remember(sessions, window) { com.bioscan.fieldterminal.domain.summarizeSportsIn(sessions, window.from, window.to, weeks) }
+        if (sports.isEmpty()) {
+            EmptyLine("No sessions recorded yet. Workouts from your watch and logged sessions show up here, one tile per sport.")
+            return@Column
+        }
+        val title = if (window.key.startsWith("b")) window.chip else "${weeks.size} WEEKS"
+        Section("ALL SPORTS · $title", info = "Hours per week by sport. The top line totals ${window.name}; tap a week to read it, tap it again to go back to the total. Walking counts only walks your watch recorded as workouts.") {
             val shown = sports.take(SPORT_COLORS.size)
-            val thisMonday = today.minusDays((today.dayOfWeek.value - 1).toLong())
             StackedBars(
-                (0 until 12).map { i -> shortDate(thisMonday.minusWeeks((11 - i).toLong())) to shown.map { it.weeklyHours[i] } },
+                weeks.mapIndexed { i, start -> shortDate(start) to shown.map { it.weeklyHours[i] } },
                 shown.indices.map(::sportColor), shown.map { it.sport.label }, Fmt.one, "h",
+                rangeName = if (window.key.startsWith("b")) blockName(cycles.first { "b${it.id}" == window.key }) else "${weeks.size} weeks",
             )
         }
-        sports.forEachIndexed { i, s -> SportTile(s, sportColor(i)) { onOpenSport(s.sport) } }
+
+        androidx.compose.runtime.CompositionLocalProvider(com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays provides window.days) {
+            val r = running
+            if (r != null && r.vo2MaxSeries.isNotEmpty()) {
+                com.bioscan.fieldterminal.ui.screens.detail.MetricPanel(
+                    "VO2MAX", r.vo2MaxSeries.toMap(), "ml/kg/min", Fmt.one, minSd = 0.5, betterHigher = true, color = FT.Metric.Vo2max, today = window.to,
+                    info = "Your watch's estimate of maximal oxygen uptake, from Health Connect. A slow-moving wearable estimate, not a lab test: read months, not days.",
+                )
+            }
+            if (r != null && (r.ltPaceSeries.isNotEmpty() || r.ltHrSeries.isNotEmpty())) {
+                val pace = r.ltPaceSeries.toMap()
+                val hr = r.ltHrSeries.toMap()
+                val main = pace.ifEmpty { hr }
+                com.bioscan.fieldterminal.ui.screens.detail.MetricPanel(
+                    "LACTATE THRESHOLD", main, if (pace.isNotEmpty()) "/km" else "bpm", if (pace.isNotEmpty()) ::formatPace else Fmt.int,
+                    minSd = if (pace.isNotEmpty()) 0.05 else 1.0, betterHigher = pace.isEmpty(), color = if (pace.isNotEmpty()) FT.Metric.Pace else FT.Metric.HeartRate,
+                    today = window.to,
+                    info = "Zepp's lactate threshold, recomputed on qualifying runs: about the fastest pace you can hold for an hour (lower is faster), and the heart rate at it.",
+                ) {
+                    if (pace.isNotEmpty() && hr.isNotEmpty()) {
+                        MetricRow("Threshold heart rate", hr, "bpm", Fmt.int, minSd = 1.0, color = FT.Metric.HeartRate, today = window.to,
+                            info = "Zepp's heart rate at your lactate threshold.")
+                    }
+                }
+            }
+        }
+
+        sports.forEachIndexed { i, s -> SportTile(s, sportColor(i), window) { onOpenSport(s.sport) } }
+    }
+
+    if (picking) {
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { picking = false }, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("TRAINING BLOCK", style = FTType.SectionTitle, color = FT.TextPrimary)
+                androidx.compose.foundation.lazy.LazyColumn {
+                    items(cycles.size) { i ->
+                        val c = cycles[i]
+                        val on = key == "b${c.id}"
+                        Row(
+                            Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Show ${blockName(c)}") { key = "b${c.id}"; picking = false }.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(blockName(c), style = FTType.RowTitle, color = if (on) FT.PlatinumSolid else FT.TextPrimary)
+                                Text(
+                                    "${shortDate(c.startDate)} ${c.startDate.year} – " + (c.endDate?.let { "${shortDate(it)} ${it.year}" } ?: "open") +
+                                        if (c.isActiveOn(today)) " · now" else "",
+                                    style = FTType.Caption, color = FT.TextSecondary,
+                                )
+                            }
+                            if (on) Text("✓", style = FTType.RowTitle, color = FT.PlatinumSolid)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun SportTile(summary: SportSummary, color: Color, onClick: () -> Unit) {
+private fun SportTile(summary: SportSummary, color: Color, window: PerfWindow, onClick: () -> Unit) {
     val shape = RoundedCornerShape(FT.RadiusModule)
     Row(
         modifier = Modifier.fillMaxWidth()
@@ -109,14 +216,14 @@ private fun SportTile(summary: SportSummary, color: Color, onClick: () -> Unit) 
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(summary.sport.label, style = FTType.RowTitle, color = FT.TextPrimary)
-            val four = if (summary.sessions4w == 0) "nothing in the last 4 weeks"
-            else listOfNotNull("${summary.sessions4w} in 4 weeks", hours(summary.hours4w), summary.km4w?.let { "%.0f km".format(it) }).joinToString(" · ")
+            val four = if (summary.sessions4w == 0) "nothing in ${window.name.substringBefore(" · ")}"
+            else listOfNotNull("${summary.sessions4w} sessions", hours(summary.hours4w), summary.km4w?.let { "%.0f km".format(it) }).joinToString(" · ")
             Text(four, style = FTType.Caption, color = FT.TextSecondary)
             Text("last ${shortDate(summary.lastDate)} · ${summary.totalSessions} in all", style = FTType.Micro, color = FT.TextMuted)
         }
         Canvas(Modifier.width(84.dp).height(28.dp)) {
             val top = summary.weeklyHours.maxOrNull()?.takeIf { it > 0 } ?: 1.0
-            val layout = com.bioscan.fieldterminal.ui.components.BarLayout(size.width, summary.weeklyHours.size, 3.dp.toPx())
+            val layout = com.bioscan.fieldterminal.ui.components.BarLayout(size.width, summary.weeklyHours.size, (if (summary.weeklyHours.size > 16) 1 else 3).dp.toPx())
             summary.weeklyHours.forEachIndexed { i, h ->
                 val bh = (h / top).toFloat() * (size.height - 2.dp.toPx())
                 if (h > 0) drawBar(color, layout.left(i), size.height - bh, layout.barWidth, cap = i == summary.weeklyHours.lastIndex)

@@ -45,6 +45,7 @@ import com.bioscan.fieldterminal.ui.components.drawInspectOverlay
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.withStyle
 import com.bioscan.fieldterminal.domain.DayRange
 import com.bioscan.fieldterminal.domain.MetricReading
 import com.bioscan.fieldterminal.domain.readMetric
@@ -663,6 +664,9 @@ fun StackedBars(
     format: (Double) -> String,
     unit: String,
     height: Int = 120,
+    // The top line names each series in its own colour, so no legend is drawn under the chart. With nothing picked it
+    // reads the whole range ([rangeName]); a second tap on the picked column goes back to it.
+    rangeName: String? = null,
 ) {
     if (columns.isEmpty() || columns.all { it.second.sum() <= 0.0 }) {
         EmptyLine("Nothing logged in this range.")
@@ -670,15 +674,36 @@ fun StackedBars(
     }
     var selected by remember(columns) { mutableStateOf<Int?>(null) }
     val shown = (selected ?: columns.lastIndex).coerceIn(0, columns.lastIndex)
-    val (name, parts) = columns[shown]
-    Text(
-        "$name · " + labels.indices.joinToString(" · ") { "${labels[it]} ${format(parts.getOrElse(it) { 0.0 })}" } + " · total ${format(parts.sum())} $unit",
-        style = FTType.Caption, color = FT.TextSecondary,
-    )
+    if (rangeName != null) {
+        val pick = selected
+        val (name, parts) = if (pick == null) rangeName to labels.indices.map { i -> columns.sumOf { it.second.getOrElse(i) { 0.0 } } } else columns[pick]
+        val line = androidx.compose.ui.text.buildAnnotatedString {
+            if (pick == null) {
+                withStyle(androidx.compose.ui.text.SpanStyle(color = FT.TextPrimary)) { append("TOTAL ${format(parts.sum())} $unit") }
+            } else {
+                withStyle(androidx.compose.ui.text.SpanStyle(color = FT.TextPrimary)) { append(name.uppercase()) }
+                append(" · total ${format(parts.sum())} $unit")
+            }
+            labels.indices.filter { parts.getOrElse(it) { 0.0 } > 0.0 }.forEach { i ->
+                append("   ")
+                withStyle(androidx.compose.ui.text.SpanStyle(color = colors.getOrElse(i) { FT.TextSecondary })) {
+                    append("${labels[i]} ${format(parts[i])}")
+                }
+            }
+        }
+        Text(line, style = FTType.Caption, color = FT.TextSecondary)
+    } else {
+        val (name, parts) = columns[shown]
+        Text(
+            "$name · " + labels.indices.joinToString(" · ") { "${labels[it]} ${format(parts.getOrElse(it) { 0.0 })}" } + " · total ${format(parts.sum())} $unit",
+            style = FTType.Caption, color = FT.TextSecondary,
+        )
+    }
     val top = columns.maxOf { it.second.sum() }.coerceAtLeast(1e-9)
     Canvas(
-        Modifier.fillMaxWidth().height(height.dp).chartInspect(columns) { px, w, _ ->
-            selected = ((px / w) * columns.size).toInt().coerceIn(0, columns.lastIndex)
+        Modifier.fillMaxWidth().height(height.dp).chartInspect(columns) { px, w, isTap ->
+            val i = ((px / w) * columns.size).toInt().coerceIn(0, columns.lastIndex)
+            selected = if (rangeName != null && isTap && i == selected) null else i
         },
     ) {
         val layout = barLayout(columns.size)
@@ -686,7 +711,7 @@ fun StackedBars(
         columns.forEachIndexed { i, (_, values) ->
             if (values.sum() <= 0.0) drawBarStub(layout.left(i), layout.barWidth)
             else drawStackedBar(values, colors, layout.left(i), layout.barWidth, { v -> (v / top).toFloat() * usable },
-                alpha = barAlpha(i, selected), cap = i == shown)
+                alpha = barAlpha(i, selected), cap = if (rangeName != null) i == selected else i == shown)
         }
     }
     Row(Modifier.fillMaxWidth()) {
@@ -694,7 +719,7 @@ fun StackedBars(
         Text("0–${format(top)} $unit", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
         Text(columns.last().first, style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
-    Legend(labels.zip(colors))
+    if (rangeName == null) Legend(labels.zip(colors))
 }
 
 /** Each day's low-to-high span as a vertical bar (heart rate). */

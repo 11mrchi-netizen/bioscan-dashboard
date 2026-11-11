@@ -95,7 +95,7 @@ private fun blockWindow(c: com.bioscan.fieldterminal.domain.TrainingCycle, today
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun PerformanceHub(onOpenSport: (Sport) -> Unit) {
+fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {}) {
     val sessions = rememberSportSessions()
     val today = remember { LocalDate.now() }
     val cycles by produceState<List<com.bioscan.fieldterminal.domain.TrainingCycle>>(emptyList()) {
@@ -167,6 +167,8 @@ fun PerformanceHub(onOpenSport: (Sport) -> Unit) {
                 }
             }
         }
+
+        RecordsCard(onOpenRecords)
 
         sports.forEachIndexed { i, s -> SportTile(s, sportColor(i), window) { onOpenSport(s.sport) } }
     }

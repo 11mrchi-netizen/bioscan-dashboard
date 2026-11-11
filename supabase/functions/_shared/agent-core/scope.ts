@@ -45,7 +45,7 @@ export const TABLE_SCOPE: Record<string, TableScope> = {
     'exercise_sessions', 'zepp_workout_detail', 'runs', 'running_form_analyses', 'athlete_events', 'athlete_maxes',
     'exercise_library', 'planned_sessions', 'training_blocks', 'training_block_domains', 'training_cycles',
     'training_definitions', 'training_settings', 'v_training_block_metrics', 'training_plans', 'training_thresholds',
-    'planned_session_deviations', 'session_plan_links',
+    'planned_session_deviations', 'session_plan_links', 'run_best_efforts', 'v_personal_records',
     // nutrition, supplements, fuel
     'meals', 'meal_items', 'nutrient_intake', 'foods', 'food_nutrients', 'food_servings', 'food_sources',
     'breakfast_templates', 'meal_prep_weeks', 'fuel_plans', 'fuel_plan_reviews', 'fuel_schedules', 'fueling_intake_log',

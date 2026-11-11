@@ -54,7 +54,6 @@ import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.shoePhotoBitmap
 import com.bioscan.fieldterminal.data.shoePhotoFrom
 import com.bioscan.fieldterminal.domain.RecordEvent
-import com.bioscan.fieldterminal.domain.RecordInput
 import com.bioscan.fieldterminal.domain.Shoe
 import com.bioscan.fieldterminal.domain.ShoeAssignment
 import com.bioscan.fieldterminal.domain.ShoeRecord
@@ -65,7 +64,6 @@ import com.bioscan.fieldterminal.domain.ShoeWear
 import com.bioscan.fieldterminal.domain.UnknownGear
 import com.bioscan.fieldterminal.domain.assignShoe
 import com.bioscan.fieldterminal.domain.levels.formatPace
-import com.bioscan.fieldterminal.domain.recordEvents
 import com.bioscan.fieldterminal.domain.shoe
 import com.bioscan.fieldterminal.domain.shoeStats
 import com.bioscan.fieldterminal.domain.unknownGear
@@ -79,7 +77,6 @@ import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
-import com.bioscan.fieldterminal.ui.screens.user.UserDataCache
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.util.createCameraCaptureUri
@@ -104,8 +101,21 @@ suspend fun loadShoesData(): ShoesData {
     val repo = ShoesRepository(SupabaseClientProvider.client)
     val shoes = repo.loadShoes()
     val runs = repo.loadRuns()
+    // The personal records (v_personal_records): each time one moved, past its first. The last of each still stands.
     val records = runCatching {
-        recordEvents(UserDataCache.running().runs.map { RecordInput(it.id, it.date, it.distanceKm, it.paceMinPerKm, it.trail, it.elevationGainM, it.gapMinPerKm) })
+        val sets = com.bioscan.fieldterminal.data.PersonalRecordsRepository(SupabaseClientProvider.client).loadSets()
+        val lastOf = sets.groupBy { it.key }.mapValues { (_, v) -> v.maxBy { it.date } }
+        sets.mapNotNull { s ->
+            val key = com.bioscan.fieldterminal.domain.RecordKey.of(s.key) ?: return@mapNotNull null
+            val prev = s.previousValue ?: return@mapNotNull null
+            val sid = s.sessionId ?: return@mapNotNull null
+            val unit = when (key.kind) {
+                com.bioscan.fieldterminal.domain.RecordKind.TIME -> "time"
+                com.bioscan.fieldterminal.domain.RecordKind.KM -> "km"
+                com.bioscan.fieldterminal.domain.RecordKind.METRES -> "m"
+            }
+            RecordEvent(if (key.kind == com.bioscan.fieldterminal.domain.RecordKind.TIME) "Fastest ${key.label}" else key.label, sid, s.date, s.value, unit, prev, lastOf[s.key] === s)
+        }
     }.getOrDefault(emptyList())
     return ShoesData(shoes, runs, records)
 }
@@ -122,6 +132,7 @@ private fun recordValue(r: ShoeRecord): String = when (r.unit) {
     "km" -> "${km(r.value)} km"
     "m" -> "${r.value.roundToInt()} m"
     "min/km" -> "${formatPace(r.value)} /km"
+    "time" -> com.bioscan.fieldterminal.domain.formatRecordTime(r.value)
     else -> "%.1f %s".format(r.value, r.unit)
 }
 
@@ -129,6 +140,7 @@ private fun recordPrevious(r: ShoeRecord): String = when (r.unit) {
     "km" -> "${km(r.previous)} km"
     "m" -> "${r.previous.roundToInt()} m"
     "min/km" -> formatPace(r.previous)
+    "time" -> com.bioscan.fieldterminal.domain.formatRecordTime(r.previous)
     else -> "%.1f".format(r.previous)
 }
 
@@ -544,8 +556,8 @@ fun ShoeScreen(shoeId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit) 
 
         FTCard(
             title = "RECORDS SET IN THEM",
-            info = "A run in these shoes that beat your best of every run before it. Road: the longest run and the fastest run of " +
-                "5 km or more. Trail: the longest trail run, the biggest climb and the fastest grade-adjusted pace over 10 km or more.",
+            info = "A run in these shoes that set one of your personal records (ME › PERFORMANCE › RECORDS): the fastest 1K to 100K " +
+                "inside a run, the longest run, the longest trail run or the biggest climb.",
         ) {
             if (st.records.isEmpty()) com.bioscan.fieldterminal.ui.screens.detail.EmptyLine("No records set in these shoes yet.")
             st.records.forEach { r ->

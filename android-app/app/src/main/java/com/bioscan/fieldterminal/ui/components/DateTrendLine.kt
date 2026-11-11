@@ -70,6 +70,8 @@ data class TrendSeries(
     // wide) with the readings as faint dots, so day-to-day noise does not zigzag the line. False draws the line through
     // every reading (a series that is already an average, or one whose every point matters).
     val smooth: Boolean = true,
+    // Straight segments, corners kept: a record held until beaten is a step, and a rounded step reads as an S.
+    val straight: Boolean = false,
 )
 
 // A per-day range behind the series: the expected band (80%) with its centre.
@@ -139,6 +141,8 @@ fun DateTrendLine(
     // at the same x in both.
     dateRange: ClosedRange<LocalDate>? = null,
     minGutter: Dp = 0.dp,
+    // The y-axis labels in the series' own format (a time as 24:06, not 1446 seconds); null keeps plain numbers.
+    axisFormat: ((Double) -> String)? = null,
 ) {
     val sortedSeries = series
         // A line has one point a day (several on one date drew a vertical zigzag); dots keep every reading.
@@ -177,7 +181,7 @@ fun DateTrendLine(
     val ticks = remember(yLo, yHi) { niceTicks(yLo, yHi) }
     val tickLayouts = remember(ticks, measurer) {
         val decimals = tickDecimals(ticks)
-        ticks.map { measurer.measure("%.${decimals}f".format(it), FTType.Micro.copy(color = FT.TextMuted)) }
+        ticks.map { measurer.measure(axisFormat?.invoke(it) ?: "%.${decimals}f".format(it), FTType.Micro.copy(color = FT.TextMuted)) }
     }
     val gutter = maxOf((tickLayouts.maxOfOrNull { it.size.width } ?: 0) + 6f, with(LocalDensity.current) { minGutter.toPx() })
     val gutterDp = with(LocalDensity.current) { gutter.toDp() }
@@ -295,7 +299,8 @@ fun DateTrendLine(
                         } else if (seg.size == 1) {
                             drawCircle(s.color, radius = 3.5f, center = Offset(xFor(seg[0].first, size.width), yFor(seg[0].second, size.height)))
                         } else {
-                            val line = smoothedPath(seg.map { (day, value) -> Offset(xFor(day, size.width), yFor(value, size.height)) })
+                            val pts = seg.map { (day, value) -> Offset(xFor(day, size.width), yFor(value, size.height)) }
+                            val line = if (s.straight) Path().apply { pts.forEachIndexed { i, o -> if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) } } else smoothedPath(pts)
                             drawPath(
                                 line,
                                 color = s.color,
@@ -309,7 +314,7 @@ fun DateTrendLine(
                         }
                     }
                     // A short, unsmoothed series marks each reading, so a line between two draws is not read as data.
-                    if (!smoothIt && s.points.size in 2 until 12) {
+                    if (!smoothIt && !s.straight && s.points.size in 2 until 12) {
                         s.points.forEach { (day, value) ->
                             val c = Offset(xFor(day, size.width), yFor(value, size.height))
                             drawCircle(FT.Surface, radius = 6f, center = c)

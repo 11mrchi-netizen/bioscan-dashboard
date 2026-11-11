@@ -274,6 +274,14 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     requestedTab = meRequestedTab,
                     onRequestedTabConsumed = { meRequestedTab = null },
                     onOpenDayMap = { date -> navController.navigate("routine_day/$date") },
+                    onOpenRecords = { navController.navigate("records") },
+                )
+            }
+            // Personal records (ME › PERFORMANCE › RECORDS).
+            composable("records") {
+                com.bioscan.fieldterminal.ui.screens.performance.RecordsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenSession = { id -> navController.navigate("session_detail/$id") },
                 )
             }
             composable("aging_profile") { AgingProfileScreen(onBack = { navController.popBackStack() }) }

@@ -45,6 +45,7 @@ fun MeScreen(
     requestedTab: MeTab? = null,
     onRequestedTabConsumed: () -> Unit = {},
     onOpenDayMap: (java.time.LocalDate) -> Unit = {},
+    onOpenRecords: () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(requestedTab ?: MeTab.Healthspan) }
     LaunchedEffect(requestedTab) {
@@ -91,7 +92,7 @@ fun MeScreen(
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     when (tab) {
                         MeTab.Performance -> Column(Modifier.padding(16.dp)) {
-                            com.bioscan.fieldterminal.ui.screens.performance.PerformanceHub(onOpenSport)
+                            com.bioscan.fieldterminal.ui.screens.performance.PerformanceHub(onOpenSport, onOpenRecords)
                         }
                         MeTab.Body -> com.bioscan.fieldterminal.ui.screens.status.BodyTabContent()
                         MeTab.Health -> com.bioscan.fieldterminal.ui.screens.health.ConcernsTab(onOpenConcern = onOpenConcern)

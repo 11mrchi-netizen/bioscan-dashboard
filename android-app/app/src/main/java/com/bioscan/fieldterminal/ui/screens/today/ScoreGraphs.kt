@@ -350,15 +350,34 @@ fun AnsMap(points: List<AnsPoint>, size: Dp = 200.dp) {
 
 /** A small line of the last values (no axes), the last point marked. */
 @Composable
-fun Sparkline(values: List<Double>, modifier: Modifier = Modifier, color: Color = FT.Emerald) {
+fun Sparkline(values: List<Double>, modifier: Modifier = Modifier, color: Color = FT.Emerald) = SlotSparkline(values, modifier, color)
+
+/**
+ * A sparkline over day slots, oldest first: each slot one day, null where nothing was recorded. Days keep their place
+ * (a missing week is a gap, not squeezed out, so the slope is honest); the line breaks at a gap and a lone day is a dot.
+ */
+@Composable
+fun SlotSparkline(slots: List<Double?>, modifier: Modifier = Modifier, color: Color = FT.Emerald) {
     Canvas(modifier.width(84.dp).height(22.dp)) {
-        if (values.size < 2) return@Canvas
-        val lo = values.min()
-        val hi = values.max().let { if (it - lo < 1e-9) lo + 1 else it }
-        fun at(i: Int) = Offset(size.width * i / (values.size - 1), (size.height * (1 - (values[i] - lo) / (hi - lo))).toFloat().coerceIn(2f, size.height - 2f))
-        val path = com.bioscan.fieldterminal.ui.components.smoothedPath(values.indices.map { at(it) })
-        drawPath(path, color, style = Stroke(width = 2.5f))
-        drawCircle(FT.TextPrimary, 3.5f, at(values.lastIndex))
+        val present = slots.filterNotNull()
+        if (present.size < 2) return@Canvas
+        val lo = present.min()
+        val hi = present.max().let { if (it - lo < 1e-9) lo + 1 else it }
+        fun at(i: Int, v: Double) = Offset(size.width * i / (slots.size - 1).coerceAtLeast(1), (size.height * (1 - (v - lo) / (hi - lo))).toFloat().coerceIn(2f, size.height - 2f))
+        val runs = mutableListOf<MutableList<Offset>>()
+        var open = false
+        slots.forEachIndexed { i, v ->
+            if (v == null) { open = false } else {
+                if (!open) { runs += mutableListOf<Offset>(); open = true }
+                runs.last() += at(i, v)
+            }
+        }
+        for (r in runs) {
+            if (r.size == 1) drawCircle(color, 2.5f, r[0])
+            else drawPath(com.bioscan.fieldterminal.ui.components.smoothedPath(r), color, style = Stroke(width = 2.5f, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+        }
+        val last = slots.indexOfLast { it != null }
+        drawCircle(FT.TextPrimary, 3.5f, at(last, slots[last]!!))
     }
 }
 
@@ -386,8 +405,12 @@ fun MetricChart(series: Series, day: LocalDate, key: String, band: Pair<Double, 
     Row(Modifier.fillMaxWidth()) {
         Box(Modifier.width(52.dp).height(140.dp)) {
             fun frac(v: Double) = (1 - (v - lo) / (hi - lo)).toFloat()
-            val labels = listOfNotNull(hi, band?.second, band?.first, lo).distinct()
+            // At least three labelled values; a label too close to the one above is left out.
+            val labels = listOfNotNull(hi, band?.second, (hi + lo) / 2, band?.first, lo).distinct().sortedDescending()
+            var lastTop = -100f
             for (v in labels) {
+                if (128 * frac(v) - lastTop < 11f) continue
+                lastTop = 128 * frac(v)
                 val isBand = band != null && (v == band.first || v == band.second)
                 Text(formatInputValue(key, v), style = FTType.Micro, color = if (isBand) metricInk(key) else FT.TextMuted,
                     modifier = Modifier.align(Alignment.TopStart).padding(top = (128 * frac(v)).dp.coerceAtLeast(0.dp)))

@@ -482,7 +482,7 @@ private enum class ChartColorMode(val label: String) { Line("LINE"), Zones("ZONE
 
 @Composable
 private fun PerformanceChartSection(d: SessionDetail, zones: SessionZoneInputs?) {
-    val pace = remember(d.speedKmh) { d.speedKmh.mapNotNull { p -> if (p.value > 0) TimePoint(p.offsetSeconds, 60.0 / p.value) else null } }
+    val pace = remember(d.speedKmh) { com.bioscan.fieldterminal.domain.paceSeries(d.speedKmh) }
     val seriesBySignal = mapOf(
         PerfSignal.HR to d.heartRate,
         PerfSignal.PACE to pace,

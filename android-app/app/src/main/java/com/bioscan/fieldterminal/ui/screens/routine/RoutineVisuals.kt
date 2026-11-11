@@ -32,12 +32,12 @@ import java.time.format.DateTimeFormatter
 // ΔE 8.4, protan) and contrast all pass. Waiting and unknown are neutral greys: they are "not moving" and "not known",
 // not categories to tell apart by hue. A legend always sits beside the bars, so no mode is told by colour alone.
 val ModeColors: Map<ModeGroup, Color> = mapOf(
-    ModeGroup.ON_FOOT to Color(0xFF199E70),
-    ModeGroup.BICYCLE to Color(0xFFC98500),
-    ModeGroup.VEHICLE to Color(0xFF3987E5),
-    ModeGroup.STOP to Color(0xFFD95926),
-    ModeGroup.WAITING to Color(0xFF6B7178),
-    ModeGroup.UNKNOWN to Color(0xFF3A3F45),
+    ModeGroup.ON_FOOT to FT.Metric.ModeOnFoot,
+    ModeGroup.BICYCLE to FT.Metric.ModeBicycle,
+    ModeGroup.VEHICLE to FT.Metric.ModeVehicle,
+    ModeGroup.STOP to FT.Metric.ModeStop,
+    ModeGroup.WAITING to FT.Metric.ModeWaiting,
+    ModeGroup.UNKNOWN to FT.Metric.ModeUnknown,
 )
 
 // A place's colour by category. Unlabelled places use the warning amber: they need a name, and always carry the text

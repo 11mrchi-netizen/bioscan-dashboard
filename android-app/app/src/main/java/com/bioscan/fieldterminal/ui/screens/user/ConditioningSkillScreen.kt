@@ -94,8 +94,9 @@ private fun HeartRateCard(inWindow: List<com.bioscan.fieldterminal.data.Conditio
         }
         DateTrendLine(
             series = listOf(
-                TrendSeries(withHr.mapNotNull { e -> e.maxHr?.let { e.date to it } }, FT.TextMuted, "PEAK"),
-                TrendSeries(withHr.map { it.date to it.avgHr!! }, FT.DomainHeart, "AVG"),
+                // One point a day: two sessions on one day would draw a vertical zigzag.
+                TrendSeries(com.bioscan.fieldterminal.domain.oneADay(withHr.mapNotNull { e -> e.maxHr?.let { e.date to it } }, com.bioscan.fieldterminal.domain.DayReduce.MAX), FT.TextMuted, "PEAK"),
+                TrendSeries(com.bioscan.fieldterminal.domain.oneADay(withHr.map { it.date to it.avgHr!! }), FT.DomainHeart, "AVG"),
             ),
             valueFormat = { "%.0f".format(it) },
             unit = "bpm",

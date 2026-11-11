@@ -79,7 +79,13 @@ private fun SmallMultipleCell(item: SmallMultiple, modifier: Modifier) {
 
 @Composable
 private fun Sparkline(points: List<Pair<LocalDate, Double>>, color: Color) {
-    val sorted = points.sortedBy { it.first }
+    // One point a day, spaced by date, the line broken where readings stop for longer than three usual gaps (and at
+    // least a week), so a silence is not drawn as a straight trend.
+    val sorted = com.bioscan.fieldterminal.domain.oneADay(points)
+    if (sorted.isEmpty()) return
+    val gaps = sorted.zipWithNext { a, b -> ChronoUnit.DAYS.between(a.first, b.first).toDouble() }.sorted()
+    val maxGap = maxOf(7.0, 3 * (gaps.getOrNull(gaps.size / 2) ?: 1.0))
+    val runs = splitAtGaps(sorted, { it.first.toEpochDay().toDouble() }, maxGap)
     Canvas(modifier = Modifier.fillMaxWidth().height(36.dp)) {
         val minV = sorted.minOf { it.second }
         val maxV = sorted.maxOf { it.second }
@@ -91,9 +97,10 @@ private fun Sparkline(points: List<Pair<LocalDate, Double>>, color: Color) {
             pad + (ChronoUnit.DAYS.between(first, p.first).toFloat() / days) * (size.width - 2 * pad),
             pad + (1f - ((p.second - minV) / span).toFloat()) * (size.height - 2 * pad),
         )
-        val path = Path()
-        sorted.forEachIndexed { i, p -> at(p).let { if (i == 0) path.moveTo(it.x, it.y) else path.lineTo(it.x, it.y) } }
-        drawPath(path, color, style = Stroke(width = 1.75.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        for (run in runs) {
+            if (run.size == 1) drawCircle(color, 2.dp.toPx(), at(run[0]))
+            else drawPath(smoothedPath(run.map { at(it) }), color, style = Stroke(width = 1.75.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
         val end = at(sorted.last())
         drawCircle(FT.Surface, 4.5.dp.toPx(), end)
         drawCircle(color, 3.dp.toPx(), end)

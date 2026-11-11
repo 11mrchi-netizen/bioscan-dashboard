@@ -61,9 +61,9 @@ private val DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy")
 // The three kinds of run, stacked from the bottom in this order (palette checked with the dataviz validator against the
 // dark surface: lightness, chroma, contrast; orange and green, the closest pair under colour blindness, never touch).
 private val RUN_PARTS = listOf(
-    StackPart("TRAIL", Color(0xFF2E9E5B)),
-    StackPart("EASY", Color(0xFF3B86D6)),
-    StackPart("QUALITY", Color(0xFFE8692E)),
+    StackPart("TRAIL", FT.Metric.RunTrail),
+    StackPart("EASY", FT.Metric.RunEasy),
+    StackPart("QUALITY", FT.Metric.RunQuality),
 )
 
 private fun partIndex(category: RunCategory): Int = when (category) {

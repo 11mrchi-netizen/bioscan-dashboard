@@ -75,7 +75,11 @@ fun LineChart(
     invertY: Boolean = false,
     // Chart frame: unit header (see DateTrendLine).
     unit: String? = null,
+    // Per-second watch data is jittery (a GPS wobble, a missed beat): the line is the rolling median over this many
+    // seconds (centred) then a short mean, so it reads as the effort rather than the sensor. 0 draws the samples as they are.
+    smoothSeconds: Long = 30,
 ) {
+    val points = androidx.compose.runtime.remember(points, smoothSeconds) { com.bioscan.fieldterminal.domain.smoothForChart(points, smoothSeconds) }
     val stops = pauses.filter { (from, to) -> to > from }.sortedBy { it.first }
     // A sample inside a pause would sit on the mark; leave it out.
     val shown = if (stops.isEmpty()) points else points.filterNot { p -> stops.any { (from, to) -> p.offsetSeconds > from && p.offsetSeconds < to } }

@@ -109,6 +109,19 @@
   --m-stool-liquid:      #e0774d;
   --m-gut-comfort:       #8ce06b;
 
+  /* running — kinds of run (the Running page's stacked weeks) */
+  --m-run-trail:         #2e9e5b;
+  --m-run-easy:          #3b86d6;
+  --m-run-quality:       #e8692e;
+
+  /* routine — how a trip was travelled (the day map's path) */
+  --m-mode-on-foot:      #199e70;
+  --m-mode-bicycle:      #c98500;
+  --m-mode-vehicle:      #3987e5;
+  --m-mode-stop:         #d95926;
+  --m-mode-waiting:      #6b7178;
+  --m-mode-unknown:      #3a3f45;
+
   /* routine */
   --m-phone-sleep:       #9b6cff;
   --m-night-screen:      #7a6cff;

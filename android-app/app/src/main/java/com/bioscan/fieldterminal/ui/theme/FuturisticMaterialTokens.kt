@@ -169,6 +169,19 @@ object FuturisticMaterialTokens {
         val StoolLiquid = Color(0xFFE0774D)
         val GutComfort = Color(0xFF8CE06B)
 
+        // running: kinds of run (the Running page's stacked weeks)
+        val RunTrail = Color(0xFF2E9E5B)
+        val RunEasy = Color(0xFF3B86D6)
+        val RunQuality = Color(0xFFE8692E)
+
+        // routine: how a trip was travelled (the day map's path)
+        val ModeOnFoot = Color(0xFF199E70)
+        val ModeBicycle = Color(0xFFC98500)
+        val ModeVehicle = Color(0xFF3987E5)
+        val ModeStop = Color(0xFFD95926)
+        val ModeWaiting = Color(0xFF6B7178)
+        val ModeUnknown = Color(0xFF3A3F45)
+
         // routine
         val PhoneSleep = Color(0xFF9B6CFF)
         val NightScreen = Color(0xFF7A6CFF)

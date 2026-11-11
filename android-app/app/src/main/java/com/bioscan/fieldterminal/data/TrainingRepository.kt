@@ -119,18 +119,19 @@ class TrainingRepository(private val supabase: SupabaseClient) {
         // filtered out client-side rather than in the query since summary is
         // jsonb.
         val lactateRows = loadZeppWorkoutSummaries(supabase)
-        val lactateThresholdPaceSecPerKmSeries = lactateRows.mapNotNull { row ->
+        // One value a day (a day with two qualifying runs keeps the later estimate; rows come oldest first).
+        val lactateThresholdPaceSecPerKmSeries = com.bioscan.fieldterminal.domain.oneADay(lactateRows.mapNotNull { row ->
             row.summary?.lactateThresholdPaceSecPerKm?.let { pace ->
                 OffsetDateTime.parse(row.startTime).toLocalDate() to pace
             }
-        }
+        }, com.bioscan.fieldterminal.domain.DayReduce.LAST)
         val lactateThresholdPaceSeries = lactateThresholdPaceMinPerKmSeries(lactateThresholdPaceSecPerKmSeries)
-        val lactateThresholdHrSeries = lactateRows.mapNotNull { row ->
+        val lactateThresholdHrSeries = com.bioscan.fieldterminal.domain.oneADay(lactateRows.mapNotNull { row ->
             row.summary?.lactateThresholdHrBpm?.let { hr -> OffsetDateTime.parse(row.startTime).toLocalDate() to hr }
-        }
-        val efficiencyRuns = lactateRows.mapNotNull { row ->
+        }, com.bioscan.fieldterminal.domain.DayReduce.LAST)
+        val efficiencyRuns = com.bioscan.fieldterminal.domain.oneADay(lactateRows.mapNotNull { row ->
             row.summary?.efficiencyFactor?.let { OffsetDateTime.parse(row.startTime).toLocalDate() to it }
-        }
+        })
         val latestRunDynamics = lactateRows.lastOrNull { it.summary?.gapMinPerKm != null }?.summary
 
         val running = dedupeRunSessions(sessions.filter { it.type == "run" })

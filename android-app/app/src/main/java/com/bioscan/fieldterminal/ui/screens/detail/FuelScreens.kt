@@ -157,7 +157,7 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
         Section("MACROS", info = "Grams of protein, carbs and fat each day (weekly averages beyond two months). Tap a column to read it.") {
             StackedBars(
                 dayColumns(daily, today, days) { listOf(it.proteinG, it.carbsG, it.fatG) },
-                listOf(NutrientColor.Protein, NutrientColor.Carbs, NutrientColor.Fat), listOf("Protein", "Carbs", "Fat"), Fmt.int, "g",
+                listOf(NutrientColor.Protein, NutrientColor.Carbs, NutrientColor.Fat), listOf("Protein", "Carbs", "Fat"), Fmt.int, "g", lastPartial = days <= 60 && daily.any { it.first == today },
             )
         }
 
@@ -191,7 +191,7 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
             val slots = byDay.maxOfOrNull { it.second.size }?.coerceAtMost(6) ?: 0
             StackedBars(
                 dayColumns(byDay, today, days) { l -> (0 until slots).map { l.getOrElse(it) { 0.0 } } },
-                (0 until slots).map { NutrientColor.Protein.copy(alpha = 1f - it * 0.13f) }, (1..slots).map { "Meal $it" }, Fmt.int, "g",
+                (0 until slots).map { NutrientColor.Protein.copy(alpha = 1f - it * 0.13f) }, (1..slots).map { "Meal $it" }, Fmt.int, "g", lastPartial = days <= 60 && byDay.any { it.first == today },
             )
         }
 

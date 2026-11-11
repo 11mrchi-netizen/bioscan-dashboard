@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -391,3 +392,21 @@ fun FTDivergingScale(
 /** A legend dot for a bar or series colour. */
 @Composable
 fun FTLegendDot(color: Color, modifier: Modifier = Modifier) = Box(modifier.size(8.dp).background(color, CircleShape).padding(0.dp))
+
+/**
+ * A bar chart's y-axis: 0, half and the top of the scale, each at its height (the top under the bars' top pad), in a
+ * gutter of [width] left of the bars. Three labelled values, as the chart rules ask.
+ */
+@androidx.compose.runtime.Composable
+fun BarYAxis(top: Double, format: (Double) -> String, height: androidx.compose.ui.unit.Dp, width: androidx.compose.ui.unit.Dp = 40.dp) {
+    androidx.compose.foundation.layout.BoxWithConstraints(androidx.compose.ui.Modifier.width(width).height(height)) {
+        val usable = maxHeight - FTBarSpec.TopPad
+        for (f in listOf(1.0, 0.5, 0.0)) {
+            val y = (FTBarSpec.TopPad + usable * (1 - f).toFloat() - 7.dp).coerceIn(0.dp, maxHeight - 12.dp)
+            androidx.compose.material3.Text(
+                format(top * f), style = com.bioscan.fieldterminal.ui.theme.FTType.Micro, color = FT.TextMuted,
+                modifier = androidx.compose.ui.Modifier.padding(top = y),
+            )
+        }
+    }
+}

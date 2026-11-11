@@ -131,5 +131,9 @@ fun relatedInputs(
 }
 
 /** One series' last [days] mornings, oldest first (missing mornings left out), for a sparkline. */
+/** The last [days] days up to [day] as slots, oldest first, null where nothing was recorded (SlotSparkline). */
+fun sparkSlots(series: Series?, day: LocalDate, days: Int): List<Double?> =
+    (days - 1 downTo 0).map { i -> series?.get(day.minusDays(i.toLong())) }
+
 fun sparkline(series: Series?, day: LocalDate, days: Int): List<Pair<LocalDate, Double>> =
     (days - 1 downTo 0).mapNotNull { i -> day.minusDays(i.toLong()).let { d -> series?.get(d)?.let { d to it } } }

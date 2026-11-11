@@ -581,10 +581,12 @@ class PlacesRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("trips")
             .select(columns = Columns.list("start_at,end_at,from_place_id,to_place_id,distance_km,legs,active_min,is_commute")) {
                 filter { gte("start_at", since.toString()) }
-                order("start_at", Order.ASCENDING)
+                // Newest first, so a cap keeps the latest trips (an oldest-first cap dropped the recent days); oldest first again below.
+                order("start_at", Order.DESCENDING)
                 limit(1000)
             }
             .decodeList<TripRow>()
+            .reversed()
             .mapNotNull { it.toTrip() }
 
     // DELETE ALL in Setup's LOCATIONS card also removes what R3 derived.

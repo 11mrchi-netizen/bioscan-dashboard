@@ -110,10 +110,12 @@ class RoutineRepository(private val supabase: SupabaseClient) {
         return supabase.postgrest.from("place_visits")
             .select(columns = Columns.list("start_at,end_at,place_id")) {
                 filter { gte("start_at", since.toString()) }
-                order("start_at", Order.ASCENDING)
+                // Newest first, so a cap keeps the latest visits; oldest first again below.
+                order("start_at", Order.DESCENDING)
                 limit(1000)
             }
             .decodeList<VisitWithPlaceRow>()
+            .reversed()
             .mapNotNull { v ->
                 val s = parseTimestamp(v.startAt) ?: return@mapNotNull null
                 val e = parseTimestamp(v.endAt) ?: return@mapNotNull null

@@ -203,9 +203,10 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
         supabase.postgrest.from("supplement_log")
             .select(columns = Columns.list("taken_at,dose_value,dose_unit,serving_count")) {
                 filter { eq("supplement_id", supplementId); gte("taken_at", since.toString()) }
-                order("taken_at", Order.ASCENDING)
+                // Newest first, so a cap keeps the latest doses; oldest first again for the caller.
+                order("taken_at", Order.DESCENDING)
                 limit(2000)
-            }.decodeList<DoseLogRow>()
+            }.decodeList<DoseLogRow>().reversed()
 
     /** The history as dated changes with item names and doses (for the charts and the before/after readings). */
     suspend fun loadRegimenChanges(): List<com.bioscan.fieldterminal.domain.RegimenChange> {

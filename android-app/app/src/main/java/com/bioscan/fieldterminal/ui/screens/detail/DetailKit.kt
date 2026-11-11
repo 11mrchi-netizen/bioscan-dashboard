@@ -242,7 +242,9 @@ fun Headline(reading: MetricReading, format: (Double) -> String, unit: String, t
         (reading.position == InputDirection.ABOVE) == betterHigher -> FT.Emerald
         else -> FT.Warning
     }
-    val band = reading.normal?.let { " (${format(it.first)}–${format(it.second)})" } ?: ""
+    // Says which days the comparison reads, so it is not taken for the chart's range: the normal is the 60 days before
+    // the latest reading (domain/MetricReading.kt), the change the 7 days before it.
+    val band = reading.normal?.let { " (${format(it.first)}–${format(it.second)} over the 60 days before)" } ?: ""
     val change = reading.change?.let { c -> " · ${if (c >= 0) "+" else "−"}${format(abs(c))} vs the week before" } ?: ""
     Text("${positionGlyph(reading.position)} ${positionWords(reading.position)}$band$change", style = FTType.Caption, color = tint)
 }
@@ -300,7 +302,7 @@ fun MetricRow(
 ) {
     var open by remember { mutableStateOf(false) }
     val reading = remember(series, today) { readMetric(series, today, log = log, minSd = minSd) }
-    val spark = remember(series, today) { (29 downTo 0).mapNotNull { series[today.minusDays(it.toLong())] } }
+    val spark = remember(series, today) { (29 downTo 0).map { series[today.minusDays(it.toLong())] } }
     Row(
         modifier = Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Open $label") { open = true }.padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -312,7 +314,7 @@ fun MetricRow(
         }
         Text(reading.latest?.let { "${format(it)} $unit".trim() } ?: "—", style = FTType.Telemetry, color = FT.TextPrimary)
         Text(positionGlyph(reading.position), style = FTType.Telemetry, color = FT.TextSecondary)
-        Sparkline(spark, color = color)
+        com.bioscan.fieldterminal.ui.screens.today.SlotSparkline(spark, color = color)
         Text("›", style = FTType.RowTitle, color = FT.TextMuted)
     }
     if (open) MetricHistoryOverlay(HistorySpec(label, series, unit, format, color, log, minSd, betterHigher, info), today) { open = false }
@@ -346,7 +348,8 @@ fun MetricTiles(tiles: List<TileSpec>, today: LocalDate = LocalDate.now()) {
 private fun MetricTile(t: TileSpec, today: LocalDate, modifier: Modifier) {
     var open by remember { mutableStateOf(false) }
     val reading = remember(t.series, today) { readMetric(t.series, today, minSd = t.minSd, maxAgeDays = 60) }
-    val spark = remember(t.series) { t.series.entries.sortedBy { it.key }.takeLast(30).map { it.value } }
+    // The 30 days up to the latest reading, each in its place.
+    val spark = remember(t.series) { t.series.keys.maxOrNull()?.let { end -> (29 downTo 0).map { t.series[end.minusDays(it.toLong())] } }.orEmpty() }
     val shape = RoundedCornerShape(FT.RadiusModule)
     Column(
         modifier.background(FT.Glass, shape).ftClickable(shape = shape, role = Role.Button, onClickLabel = "Open ${t.label}") { open = true }.padding(10.dp),
@@ -358,7 +361,7 @@ private fun MetricTile(t: TileSpec, today: LocalDate, modifier: Modifier) {
             Text(t.unit, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
         }
         Text("${positionGlyph(reading.position)} ${positionWords(reading.position)}", style = FTType.Caption, color = FT.TextMuted)
-        Sparkline(spark, color = t.color)
+        com.bioscan.fieldterminal.ui.screens.today.SlotSparkline(spark, color = t.color)
     }
     if (open) MetricHistoryOverlay(HistorySpec(t.label, t.series, t.unit, t.format, t.color, minSd = t.minSd, betterHigher = t.betterHigher, info = t.info), today) { open = false }
 }
@@ -488,7 +491,7 @@ fun TrendChart(
     target: Pair<Double, Double>? = null,
     targetLabel: String? = null,
     height: Int = 140,
-    bandLabel: String = "your normal",
+    bandLabel: String = "your normal (60 days before)",
 ) {
     val from = day.minusDays((days - 1).toLong())
     val points = remember(series, day, days) { (0 until days).mapNotNull { i -> series[from.plusDays(i.toLong())]?.let { i to it } } }
@@ -522,7 +525,8 @@ fun TrendChart(
     Row(Modifier.fillMaxWidth()) {
         Box(Modifier.width(48.dp).height(height.dp)) {
             fun frac(v: Double) = (1 - (v - lo) / (hi - lo)).toFloat()
-            val labels = listOfNotNull(hi, band?.second, band?.first, lo).distinct()
+            // At least three labelled values (chart rules): the top, the bottom, the middle, and the normal band's edges.
+            val labels = listOfNotNull(hi, band?.second, (hi + lo) / 2, band?.first, lo).distinct()
             var lastTop = -100f
             for (v in labels.sortedByDescending { it }) {
                 val top = (height - 12) * frac(v)
@@ -633,6 +637,7 @@ fun MultiLineChart(lines: List<ChartLine>, day: LocalDate, days: Int, format: (D
     Row(Modifier.fillMaxWidth()) {
         Column(Modifier.width(40.dp).height(height.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Text(format(hi), style = FTType.Micro, color = FT.TextMuted)
+            Text(format((hi + lo) / 2), style = FTType.Micro, color = FT.TextMuted)
             Text(format(lo), style = FTType.Micro, color = FT.TextMuted)
         }
         val measurer = androidx.compose.ui.text.rememberTextMeasurer()
@@ -680,6 +685,8 @@ fun StackedBars(
     // The top line names each series in its own colour, so no legend is drawn under the chart. With nothing picked it
     // reads the whole range ([rangeName]); a second tap on the picked column goes back to it.
     rangeName: String? = null,
+    // The last column is still filling (this week, today): drawn faded and read as "so far", so it is not taken for a drop.
+    lastPartial: Boolean = false,
 ) {
     if (columns.isEmpty() || columns.all { it.second.sum() <= 0.0 }) {
         EmptyLine("Nothing logged in this range.")
@@ -694,7 +701,7 @@ fun StackedBars(
             if (pick == null) {
                 withStyle(androidx.compose.ui.text.SpanStyle(color = FT.TextPrimary)) { append("TOTAL ${format(parts.sum())} $unit") }
             } else {
-                withStyle(androidx.compose.ui.text.SpanStyle(color = FT.TextPrimary)) { append(name.uppercase()) }
+                withStyle(androidx.compose.ui.text.SpanStyle(color = FT.TextPrimary)) { append(name.uppercase() + if (lastPartial && pick == columns.lastIndex) " (SO FAR)" else "") }
                 append(" · total ${format(parts.sum())} $unit")
             }
             labels.indices.filter { parts.getOrElse(it) { 0.0 } > 0.0 }.forEach { i ->
@@ -708,28 +715,33 @@ fun StackedBars(
     } else {
         val (name, parts) = columns[shown]
         Text(
-            "$name · " + labels.indices.joinToString(" · ") { "${labels[it]} ${format(parts.getOrElse(it) { 0.0 })}" } + " · total ${format(parts.sum())} $unit",
+            "$name" + (if (lastPartial && shown == columns.lastIndex) " (so far)" else "") + " · " +
+                labels.indices.joinToString(" · ") { "${labels[it]} ${format(parts.getOrElse(it) { 0.0 })}" } + " · total ${format(parts.sum())} $unit",
             style = FTType.Caption, color = FT.TextSecondary,
         )
     }
     val top = columns.maxOf { it.second.sum() }.coerceAtLeast(1e-9)
-    Canvas(
-        Modifier.fillMaxWidth().height(height.dp).chartInspect(columns) { px, w, isTap ->
-            val i = ((px / w) * columns.size).toInt().coerceIn(0, columns.lastIndex)
-            selected = if (rangeName != null && isTap && i == selected) null else i
-        },
-    ) {
-        val layout = barLayout(columns.size)
-        val usable = size.height - FTBarSpec.TopPad.toPx()
-        columns.forEachIndexed { i, (_, values) ->
-            if (values.sum() <= 0.0) drawBarStub(layout.left(i), layout.barWidth)
-            else drawStackedBar(values, colors, layout.left(i), layout.barWidth, { v -> (v / top).toFloat() * usable },
-                alpha = barAlpha(i, selected), cap = if (rangeName != null) i == selected else i == shown)
+    Row(Modifier.fillMaxWidth()) {
+        com.bioscan.fieldterminal.ui.components.BarYAxis(top, format, height.dp)
+        Canvas(
+            Modifier.weight(1f).height(height.dp).chartInspect(columns) { px, w, isTap ->
+                val i = ((px / w) * columns.size).toInt().coerceIn(0, columns.lastIndex)
+                selected = if (rangeName != null && isTap && i == selected) null else i
+            },
+        ) {
+            val layout = barLayout(columns.size)
+            val usable = size.height - FTBarSpec.TopPad.toPx()
+            columns.forEachIndexed { i, (_, values) ->
+                if (values.sum() <= 0.0) drawBarStub(layout.left(i), layout.barWidth)
+                else drawStackedBar(values, colors, layout.left(i), layout.barWidth, { v -> (v / top).toFloat() * usable },
+                    alpha = barAlpha(i, selected, projected = lastPartial && i == columns.lastIndex && selected != i),
+                    cap = if (rangeName != null) i == selected else i == shown)
+            }
         }
     }
-    Row(Modifier.fillMaxWidth()) {
+    Row(Modifier.fillMaxWidth().padding(start = 40.dp)) {
         Text(columns.first().first, style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
-        Text("0–${format(top)} $unit", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+        Text(unit + if (lastPartial) " · faded = so far" else "", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(2.2f), textAlign = TextAlign.Center, maxLines = 1)
         Text(columns.last().first, style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
     if (rangeName == null) Legend(labels.zip(colors))

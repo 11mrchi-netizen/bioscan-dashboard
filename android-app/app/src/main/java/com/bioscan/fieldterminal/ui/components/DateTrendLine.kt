@@ -141,7 +141,8 @@ fun DateTrendLine(
     minGutter: Dp = 0.dp,
 ) {
     val sortedSeries = series
-        .map { it.copy(points = it.points.sortedBy { p -> p.first }) }
+        // A line has one point a day (several on one date drew a vertical zigzag); dots keep every reading.
+        .map { it.copy(points = if (it.dotsOnly) it.points.sortedBy { p -> p.first } else com.bioscan.fieldterminal.domain.oneADay(it.points)) }
         .filter { it.points.size >= if (it.dotsOnly || it.maxGapDays != null) 1 else 2 }
     val sortedBand = band.sortedBy { it.date }
     if (sortedSeries.isEmpty() && sortedBand.isEmpty()) return

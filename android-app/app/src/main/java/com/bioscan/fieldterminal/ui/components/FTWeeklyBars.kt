@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
@@ -52,15 +53,19 @@ fun FTWeeklyBars(
     var selected by remember(buckets) { mutableStateOf<Int?>(null) }
     val shown = selected ?: buckets.lastIndex
     val top = (maxOf(buckets.maxOf { it.value }, average?.maxOrNull() ?: 0.0)).takeIf { it > 0 } ?: 1.0
+    // This week is still filling: faded and read as "so far", so it is not taken for a drop.
+    val partial = !buckets.last().weekStart.plusDays(6).isBefore(java.time.LocalDate.now())
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("WEEK OF ${WEEK_FMT.format(buckets[shown].weekStart).uppercase()}", style = FTType.Label, color = FT.TextMuted, modifier = Modifier.weight(1f))
+            Text("WEEK OF ${WEEK_FMT.format(buckets[shown].weekStart).uppercase()}" + if (partial && shown == buckets.lastIndex) " · SO FAR" else "", style = FTType.Label, color = FT.TextMuted, modifier = Modifier.weight(1f))
             Text("${valueFormat(buckets[shown].value)} $unit", style = FTType.Telemetry, color = color)
         }
+        Row(Modifier.fillMaxWidth()) {
+        BarYAxis(top, valueFormat, height)
         Canvas(
             modifier = Modifier
-                .fillMaxWidth()
+                .weight(1f)
                 .height(height)
                 .pointerInput(buckets) {
                     detectTapGestures { selected = BarLayout(size.width.toFloat(), buckets.size, 0f).indexAt(it.x) }
@@ -75,7 +80,7 @@ fun FTWeeklyBars(
                 val x = layout.left(i)
                 val h = (b.value / top).toFloat() * (size.height - FTBarSpec.TopPad.toPx())
                 if (b.value > 0) {
-                    drawBar(color, x, base - h, layout.barWidth, alpha = barAlpha(i, selected), cap = i == shown)
+                    drawBar(color, x, base - h, layout.barWidth, alpha = barAlpha(i, selected, projected = partial && i == buckets.lastIndex && selected != i), cap = i == shown)
                 } else {
                     drawBarStub(x, layout.barWidth)
                 }
@@ -89,10 +94,11 @@ fun FTWeeklyBars(
                 drawPath(path, androidx.compose.ui.graphics.lerp(color, androidx.compose.ui.graphics.Color.White, 0.5f).copy(alpha = 0.8f), style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round))
             }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        }
+        Row(modifier = Modifier.fillMaxWidth().padding(start = 40.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(WEEK_FMT.format(buckets.first().weekStart).uppercase(), style = FTType.Micro, color = FT.TextMuted)
             Text(
-                "SCALE 0-${valueFormat(top)} $unit" + if (average != null) "  ·  LINE: ${averageLabel.uppercase()}" else "",
+                unit.uppercase() + (if (average != null) "  ·  LINE: ${averageLabel.uppercase()}" else "") + if (partial) "  ·  FADED: SO FAR" else "",
                 style = FTType.Micro, color = FT.TextMuted,
             )
             Text(WEEK_FMT.format(buckets.last().weekStart).uppercase(), style = FTType.Micro, color = FT.TextMuted)

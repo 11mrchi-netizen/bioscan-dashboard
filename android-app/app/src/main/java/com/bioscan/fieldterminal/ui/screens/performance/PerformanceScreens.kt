@@ -138,6 +138,7 @@ fun PerformanceHub(onOpenSport: (Sport) -> Unit) {
                 weeks.mapIndexed { i, start -> shortDate(start) to shown.map { it.weeklyHours[i] } },
                 shown.indices.map(::sportColor), shown.map { it.sport.label }, Fmt.one, "h",
                 rangeName = if (window.key.startsWith("b")) blockName(cycles.first { "b${it.id}" == window.key }) else "${weeks.size} weeks",
+                lastPartial = window.to == today,
             )
         }
 
@@ -226,7 +227,8 @@ private fun SportTile(summary: SportSummary, color: Color, window: PerfWindow, o
             val layout = com.bioscan.fieldterminal.ui.components.BarLayout(size.width, summary.weeklyHours.size, (if (summary.weeklyHours.size > 16) 1 else 3).dp.toPx())
             summary.weeklyHours.forEachIndexed { i, h ->
                 val bh = (h / top).toFloat() * (size.height - 2.dp.toPx())
-                if (h > 0) drawBar(color, layout.left(i), size.height - bh, layout.barWidth, cap = i == summary.weeklyHours.lastIndex)
+                val soFar = window.to == LocalDate.now() && i == summary.weeklyHours.lastIndex
+                if (h > 0) drawBar(color, layout.left(i), size.height - bh, layout.barWidth, alpha = if (soFar) com.bioscan.fieldterminal.ui.components.FTBarSpec.PROJECTED_ALPHA else 1f, cap = i == summary.weeklyHours.lastIndex)
                 else drawBarStub(layout.left(i), layout.barWidth)
             }
         }
@@ -295,7 +297,7 @@ fun SportScreen(sportKey: String, onBack: () -> Unit, onOpenSession: (Long) -> U
                     val start = thisMonday.minusWeeks(k.toLong())
                     shortDate(start) to listOf(mine.filter { !it.date.isBefore(start) && it.date.isBefore(start.plusWeeks(1)) }.sumOf { it.durationMin ?: 0.0 } / 60.0)
                 },
-                listOf(FT.Category.Activity.c500), listOf("Hours"), Fmt.one, "h",
+                listOf(FT.Category.Activity.c500), listOf("Hours"), Fmt.one, "h", lastPartial = true,
             )
         }
         Section("EACH SESSION") {

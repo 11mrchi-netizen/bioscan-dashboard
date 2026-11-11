@@ -135,7 +135,7 @@ fun RunDynamicsCard(
     fun isOpen(s: DynamicsSection) = s.name !in folded
 
     val d = detail
-    val pace = remember(d) { d?.speedKmh.orEmpty().mapNotNull { p -> if (p.value > 0.5) TimePoint(p.offsetSeconds, 60.0 / p.value) else null } }
+    val pace = remember(d) { com.bioscan.fieldterminal.domain.paceSeries(d?.speedKmh.orEmpty()) }
     val all = listOfNotNull(d?.heartRate, pace, d?.powerW, d?.cadenceSpm, d?.verticalRatioPct).filter { it.isNotEmpty() }
     val xRange = if (all.isNotEmpty()) all.minOf { it.first().offsetSeconds } to all.maxOf { it.last().offsetSeconds } else null
     val pauses = d?.pauses.orEmpty().map { it.startOffset to it.endOffset }

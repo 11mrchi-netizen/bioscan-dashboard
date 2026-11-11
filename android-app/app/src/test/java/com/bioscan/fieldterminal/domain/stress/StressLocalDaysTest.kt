@@ -33,6 +33,16 @@ class StressLocalDaysTest {
     }
 
     @Test
+    fun aDayWithFewReadingsHasNoSummaryYet() {
+        val few = (0 until 5).map { utc("2026-11-10T0$it:00:00Z", 40) }
+        val many = (0 until 12).map { PhysiologicalStressReading(Instant.parse("2026-11-08T02:00:00Z").plusSeconds(it * 300L), 40) }
+        val days = stressDaysByLocalDate(few + many, zone)
+        assertEquals(null, days.first { it.date == LocalDate.of(2026, 11, 10) }.summary.avg)
+        assertEquals(5, days.first { it.date == LocalDate.of(2026, 11, 10) }.samples.size)
+        assertEquals(40, days.first { it.date == LocalDate.of(2026, 11, 8) }.summary.avg)
+    }
+
+    @Test
     fun theSummaryIsTheLocalDaysOwn() {
         val s = summaryOf(listOf(20, 45, 65, 90).mapIndexed { i, v -> utc("2026-11-10T0$i:00:00Z", v) })
         assertEquals(55, s.avg)

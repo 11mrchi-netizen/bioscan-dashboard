@@ -288,17 +288,17 @@ fun StressCurve(
 fun PictureThumb(view: ScoresView, picture: FullPicture) {
     val about = view.day.minusDays(1)
     when (picture) {
-        FullPicture.LAST_NIGHT -> Sparkline(sparkline(view.series[ScoreKeys.SLEEP_HOURS], view.day, 7).map { it.second }, color = metricInk(ScoreKeys.SLEEP_HOURS))
-        FullPicture.SLEEP_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.SLEEP_HOURS], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.SLEEP_HOURS))
-        FullPicture.CARDIO_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.HRV], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.HRV))
-        FullPicture.SEXUAL_HEALTH -> Sparkline(sparkline(view.series[ScoreKeys.MORNING_ERECTION], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.MORNING_ERECTION))
-        FullPicture.LOAD_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.TSB], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.TSB))
+        FullPicture.LAST_NIGHT -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.SLEEP_HOURS], view.day, 7), color = metricInk(ScoreKeys.SLEEP_HOURS))
+        FullPicture.SLEEP_CHARTS -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.SLEEP_HOURS], view.day, 30), color = metricInk(ScoreKeys.SLEEP_HOURS))
+        FullPicture.CARDIO_CHARTS -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.HRV], view.day, 30), color = metricInk(ScoreKeys.HRV))
+        FullPicture.SEXUAL_HEALTH -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.MORNING_ERECTION], view.day, 30), color = metricInk(ScoreKeys.MORNING_ERECTION))
+        FullPicture.LOAD_CHARTS -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.TSB], view.day, 30), color = metricInk(ScoreKeys.TSB))
         FullPicture.INJURY -> Unit
         FullPicture.DIGESTION -> MiniStool(view.stoolWindow())
-        FullPicture.NUTRITION_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.ENERGY_RATIO], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.ENERGY_RATIO))
-        FullPicture.HYDRATION_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.WATER_RATIO], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.WATER_RATIO))
+        FullPicture.NUTRITION_CHARTS -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.ENERGY_RATIO], view.day, 30), color = metricInk(ScoreKeys.ENERGY_RATIO))
+        FullPicture.HYDRATION_CHARTS -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.WATER_RATIO], view.day, 30), color = metricInk(ScoreKeys.WATER_RATIO))
         FullPicture.STRESS_DAY -> Sparkline(view.stressDays.firstOrNull { it.date == about }?.samples?.sortedBy { it.timestamp }?.map { it.value.toDouble() }.orEmpty(), color = FT.Info)
-        FullPicture.WELLBEING_CHARTS -> Sparkline(sparkline(view.series[ScoreKeys.STRESSED_SHARE], view.day, 30).map { it.second }, color = metricInk(ScoreKeys.STRESSED_SHARE))
+        FullPicture.WELLBEING_CHARTS -> SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(view.series[ScoreKeys.STRESSED_SHARE], view.day, 30), color = metricInk(ScoreKeys.STRESSED_SHARE))
     }
 }
 
@@ -367,7 +367,7 @@ private fun NightTile(
                 (reading.normal?.let { " (${format(it.first)}–${format(it.second)})" } ?: ""),
             style = FTType.Caption, color = FT.TextSecondary,
         )
-        Sparkline(sparkline(series, day, 14).map { it.second }, color = color)
+        SlotSparkline(com.bioscan.fieldterminal.domain.score.sparkSlots(series, day, 14), color = color)
     }
 }
 

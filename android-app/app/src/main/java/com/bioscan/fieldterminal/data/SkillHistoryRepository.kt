@@ -211,8 +211,9 @@ class SkillHistoryRepository(private val supabase: SupabaseClient) {
         }
         // Zepp's lactate-threshold estimates come from every workout's summary.
         val zepp = loadZeppWorkoutSummaries(supabase)
-        val ltPace = zepp.mapNotNull { z -> z.summary?.lactateThresholdPaceSecPerKm?.let { OffsetDateTime.parse(z.startTime).toLocalDate() to it } }
-        val ltHr = zepp.mapNotNull { z -> z.summary?.lactateThresholdHrBpm?.let { OffsetDateTime.parse(z.startTime).toLocalDate() to it } }
+        // Zepp re-estimates on each qualifying run: a day with two keeps the later estimate (the summaries come oldest first).
+        val ltPace = com.bioscan.fieldterminal.domain.oneADay(zepp.mapNotNull { z -> z.summary?.lactateThresholdPaceSecPerKm?.let { OffsetDateTime.parse(z.startTime).toLocalDate() to it } }, com.bioscan.fieldterminal.domain.DayReduce.LAST)
+        val ltHr = com.bioscan.fieldterminal.domain.oneADay(zepp.mapNotNull { z -> z.summary?.lactateThresholdHrBpm?.let { OffsetDateTime.parse(z.startTime).toLocalDate() to it } }, com.bioscan.fieldterminal.domain.DayReduce.LAST)
 
         return RunningHistory(
             runs = runs,

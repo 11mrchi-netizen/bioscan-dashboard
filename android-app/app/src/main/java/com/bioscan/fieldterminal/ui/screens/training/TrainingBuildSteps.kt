@@ -65,11 +65,14 @@ private fun budgetSummary(p: ConditioningProtocolDef): String {
 }
 
 // ---------------- Strength program ----------------
+// Each program is one card; its versions open in a sheet (nothing expands in the list, so nothing moves under a tap).
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun StrengthStep(state: TrainingPlannerState) {
     val modules = state.catalog?.definitions.orEmpty().filterIsInstance<StrengthModuleDef>()
+    var picking by androidx.compose.runtime.remember { mutableStateOf<String?>(null) }
     Label("STRENGTH PROGRAM")
-    Body("Pick the main program. Its versions, days and options are fine-tuned afterwards.", muted = true)
+    Body("Pick the main program and its version. Options and exercises come later, in DETAILS.", muted = true)
     STRENGTH_GROUPS.forEach { g ->
         val versions = versionsOf(g, modules)
         if (versions.isEmpty()) return@forEach
@@ -77,13 +80,27 @@ internal fun StrengthStep(state: TrainingPlannerState) {
         val days = versions.map { it.sessionsPerWeek }.distinct().sorted().joinToString("-")
         ProgramCard(
             g.label.lowercase().replaceFirstChar { it.uppercase() },
-            "${versions.size} version" + (if (versions.size == 1) "" else "s") + " · $days days a week",
-            null, selected,
-        ) { if (!selected) state.pickStrength(versions.first().key) }
-        if (selected) {
-            Label("VERSION")
-            FTDropdown(versions.map { it.key to it.title }, state.strengthKey, "Pick a version") { state.pickStrength(it) }
-            state.strengthModule?.let { Body("${it.sessionsPerWeek} days a week · ${it.domain.replace('_', ' ')}", muted = true) }
+            if (selected) "${state.strengthModule?.title} · ${state.strengthModule?.sessionsPerWeek} days a week"
+            else "${versions.size} version" + (if (versions.size == 1) "" else "s") + " · $days days a week",
+            if (selected && versions.size > 1) "Tap to change the version" else null, selected,
+        ) { if (versions.size == 1) state.pickStrength(versions.first().key) else picking = g.id }
+    }
+    picking?.let { id ->
+        val g = STRENGTH_GROUPS.first { it.id == id }
+        val versions = versionsOf(g, modules)
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { picking = null },
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = FT.SheetShape, containerColor = FT.Surface, contentColor = FT.TextPrimary,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+                Text(g.label.uppercase() + " · VERSION", style = FTType.SectionTitle, color = FT.TextPrimary)
+                versions.forEach { v ->
+                    ProgramCard(v.title, "${v.sessionsPerWeek} days a week · ${v.domain.replace('_', ' ')}", null, v.key == state.strengthKey) {
+                        state.pickStrength(v.key); picking = null
+                    }
+                }
+            }
         }
     }
 }
@@ -166,11 +183,9 @@ private fun DayChip(label: String, active: Boolean, accent: Color, modifier: Mod
     ) { Text(label.take(22), style = FTType.Label, color = if (active) FT.TextPrimary else FT.TextMuted) }
 }
 
-// ---------------- Length and deloads ----------------
+// ---------------- The frame: an event to build toward, and the length (the first step) ----------------
 @Composable
-internal fun TimelineStep(state: TrainingPlannerState) {
-    val len = state.blockLength()
-    val t = state.timeline
+internal fun FrameFields(state: TrainingPlannerState) {
     val buildable = com.bioscan.fieldterminal.domain.events.buildableEvents(state.events, state.startDate)
     if (buildable.isNotEmpty()) {
         Label("BUILD TOWARD AN EVENT")
@@ -191,10 +206,24 @@ internal fun TimelineStep(state: TrainingPlannerState) {
     }
     Label("LENGTH")
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        FTButton("-", enabled = state.weeks > 1) { state.changeWeeks(state.weeks - 1) }
+        FTButton("-", enabled = state.weeks > 1) { state.setLength(state.weeks - 1) }
         Text("${state.weeks} WEEKS", style = FTType.MetricMedium, color = FT.TextPrimary)
-        FTButton("+", enabled = state.weeks < 52) { state.changeWeeks(state.weeks + 1) }
+        FTButton("+", enabled = state.weeks < 52) { state.setLength(state.weeks + 1) }
     }
+    Body(
+        "Ends ${state.startDate.plusWeeks(state.weeks.toLong()).minusDays(1).format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy"))}" +
+            if (state.targetEvent != null) ", in the week of ${state.targetEvent!!.name}." else ". Deload and test weeks are set in THE WEEKS.",
+        muted = true,
+    )
+}
+
+// ---------------- The weeks: blocks, test week, deloads ----------------
+@Composable
+internal fun TimelineStep(state: TrainingPlannerState) {
+    val len = state.blockLength()
+    val t = state.timeline
+    Body("${state.weeks} weeks from ${state.startDate.format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))}" +
+        (state.targetEvent?.let { ", toward ${it.name}" } ?: "") + ". The length is set in WHEN.", muted = true)
     if (state.strengthModule != null) {
         Label("OR BY BLOCKS OF $len WEEKS")
         Chips(listOf("1", "2", "3", "4"), emptySet(), { "$it BLOCK" + if (it != "1") "S" else "" }) { n ->

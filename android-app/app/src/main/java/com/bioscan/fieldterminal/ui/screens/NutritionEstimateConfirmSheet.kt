@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -76,8 +77,10 @@ fun NutritionEstimateConfirmSheet(
     source: MealItemSource = MealItemSource.AiImage,
     // Photo logging v3: rerun the estimate on the same photos with a tapped answer, or with what the meal really is.
     rerunning: Boolean = false,
-    onAnswer: ((com.bioscan.fieldterminal.data.PhotoAnswer) -> Unit)? = null,
-    onCorrect: ((String) -> Unit)? = null,
+    // Every answer picked, sent together (one rerun for all the questions, not one per tap).
+    onAnswer: ((List<com.bioscan.fieldterminal.data.PhotoAnswer>) -> Unit)? = null,
+    // What the meal really is, with any answers picked so far.
+    onCorrect: ((String, List<com.bioscan.fieldterminal.data.PhotoAnswer>) -> Unit)? = null,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
 ) {
@@ -527,17 +530,20 @@ private fun PhotoFoodNote(food: com.bioscan.fieldterminal.data.PhotoFood) {
 }
 
 /**
- * The photo estimate's own say: its confidence and what limits it, up to three questions with answers to tap (each
- * reruns the estimate with the answer), and a box to say what the meal really is (it reruns with that as the truth).
+ * The photo estimate's own say: its confidence and what limits it, up to three questions with answers to pick (a tap
+ * picks or changes an answer; UPDATE THE ESTIMATE reruns once with every answer picked), and a box to say what the meal
+ * really is (it reruns with that as the truth, and the answers picked).
  */
 @Composable
 private fun PhotoEstimatePanel(
     estimate: NutritionMealEstimate,
     rerunning: Boolean,
-    onAnswer: ((com.bioscan.fieldterminal.data.PhotoAnswer) -> Unit)?,
-    onCorrect: ((String) -> Unit)?,
+    onAnswer: ((List<com.bioscan.fieldterminal.data.PhotoAnswer>) -> Unit)?,
+    onCorrect: ((String, List<com.bioscan.fieldterminal.data.PhotoAnswer>) -> Unit)?,
 ) {
     var correction by remember(estimate) { mutableStateOf("") }
+    var picked by remember(estimate) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    val answers = picked.map { (q, a) -> com.bioscan.fieldterminal.data.PhotoAnswer(q, a) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         estimate.confidenceLevel?.let { level ->
             Text(
@@ -548,7 +554,10 @@ private fun PhotoEstimatePanel(
         if (rerunning) {
             Text("UPDATING THE ESTIMATE…", style = FTType.LabelCaps, color = FT.TextSecondary)
         } else if (onAnswer != null && estimate.questions.isNotEmpty()) {
-            Text("A QUICK ANSWER MAKES IT MORE ACCURATE", style = FTType.LabelCaps, color = FT.TextSecondary)
+            Text(
+                if (estimate.questions.size > 1) "A FEW QUICK ANSWERS MAKE IT MORE ACCURATE" else "A QUICK ANSWER MAKES IT MORE ACCURATE",
+                style = FTType.LabelCaps, color = FT.TextSecondary,
+            )
             estimate.questions.forEach { q ->
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(q.question, style = FTType.BodySmall, color = FT.TextPrimary)
@@ -557,14 +566,17 @@ private fun PhotoEstimatePanel(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         q.options.forEach { option ->
+                            val on = picked[q.question] == option
+                            val shape = androidx.compose.foundation.shape.RoundedCornerShape(50)
                             Text(
                                 option,
                                 style = FTType.Label,
-                                color = FT.Emerald,
+                                color = if (on) FT.PlatinumInk else FT.Emerald,
                                 modifier = Modifier
-                                    .border(FT.BorderWidth, FT.Emerald.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(50))
-                                    .ftClickable(shape = androidx.compose.foundation.shape.RoundedCornerShape(50)) {
-                                        onAnswer(com.bioscan.fieldterminal.data.PhotoAnswer(q.question, option))
+                                    .then(if (on) Modifier.background(FT.PlatinumSolid, shape) else Modifier.border(FT.BorderWidth, FT.Emerald.copy(alpha = 0.6f), shape))
+                                    // a tap picks the answer, a second tap clears it; nothing reruns until UPDATE
+                                    .ftClickable(shape = shape) {
+                                        picked = if (on) picked - q.question else picked + (q.question to option)
                                     }
                                     .padding(horizontal = 12.dp, vertical = 6.dp),
                             )
@@ -572,11 +584,19 @@ private fun PhotoEstimatePanel(
                     }
                 }
             }
+            if (picked.isNotEmpty()) {
+                val left = estimate.questions.count { it.question !in picked }
+                FTButton(
+                    "UPDATE THE ESTIMATE" + if (left > 0) " · $left UNANSWERED" else "",
+                    modifier = Modifier.fillMaxWidth(),
+                    emphasis = FTButtonEmphasis.Primary,
+                ) { onAnswer(answers) }
+            }
         }
         if (onCorrect != null && !rerunning) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FieldTextField(correction, { correction = it }, "Not right? Say what it is", modifier = Modifier.weight(1f))
-                if (correction.isNotBlank()) ActionLink("REDO") { onCorrect(correction.trim()) }
+                if (correction.isNotBlank()) ActionLink("REDO") { onCorrect(correction.trim(), answers) }
             }
         }
     }

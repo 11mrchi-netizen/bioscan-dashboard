@@ -1327,12 +1327,12 @@ private fun FoodForm(
             source = mealEstimateSource,
             // Photo logging v3: a tapped answer, or a correction of what the meal is, reruns the estimate on the same photos.
             rerunning = estimating,
-            onAnswer = if (mealEstimateSource == MealItemSource.AiImage && estimatedPhotos.isNotEmpty()) ({ answer ->
-                runImageEstimate(estimatedPhotos, photoAnswers.filter { it.question != answer.question } + answer)
+            onAnswer = if (mealEstimateSource == MealItemSource.AiImage && estimatedPhotos.isNotEmpty()) ({ answers ->
+                runImageEstimate(estimatedPhotos, photoAnswers.filter { a -> answers.none { it.question == a.question } } + answers)
             }) else null,
-            onCorrect = if (mealEstimateSource == MealItemSource.AiImage && estimatedPhotos.isNotEmpty()) ({ note ->
+            onCorrect = if (mealEstimateSource == MealItemSource.AiImage && estimatedPhotos.isNotEmpty()) ({ note, answers ->
                 photoNote = note
-                runImageEstimate(estimatedPhotos, photoAnswers)
+                runImageEstimate(estimatedPhotos, photoAnswers.filter { a -> answers.none { it.question == a.question } } + answers)
             }) else null,
             onDismiss = { mealEstimate = null; mealEstimateId = null; cronometerEnrichment = null },
             onSaved = {

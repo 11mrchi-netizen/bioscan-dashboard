@@ -33,6 +33,9 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.bioscan.fieldterminal.data.ScoresView
@@ -106,6 +109,10 @@ fun FullScreenOverlay(
     // v1 background wash: a domain hue (FT.Domain.*), CHARGE's own wash with [chargeWash], or the plain ground.
     wash: androidx.compose.ui.graphics.Color? = null,
     chargeWash: Boolean = false,
+    // A score page's scene (ScoreScenes.kt): edge to edge across the top of the page, behind the title and the score,
+    // fading into the page under them, and scrolling away with the content. [sceneScore] moves it.
+    scene: com.bioscan.fieldterminal.ui.components.ScoreScene? = null,
+    sceneScore: Double? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val page: @Composable () -> Unit = {
@@ -114,7 +121,18 @@ fun FullScreenOverlay(
             wash != null -> Modifier.ftDomainWash(wash)
             else -> Modifier
         }
-        Column(modifier = Modifier.fillMaxSize().background(FT.Base).then(washed).statusBarsPadding().navigationBarsPadding().imePadding()) {
+        val scroll = rememberScrollState()
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(FT.Base).then(washed)) {
+        if (scene != null) {
+            val top = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            com.bioscan.fieldterminal.ui.components.ScoreSceneBackdrop(
+                scene, sceneScore,
+                Modifier.fillMaxWidth().height(top + SCENE_HEIGHT).graphicsLayer { translationY = -scroll.value.toFloat() },
+                // the ring's centre: under the status bar, the title row (56), the page's top padding (8), the header's (12), half the ring (88)
+                ringCenterY = top + 164.dp,
+            )
+        }
+        Column(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -129,10 +147,11 @@ fun FullScreenOverlay(
                     modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Close") { onClose() }.padding(12.dp))
             }
             Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 content = content,
             )
+        }
         }
     }
     // The screenshot tour draws an overlay in place; the app shows it as a full-screen dialog.
@@ -172,24 +191,17 @@ private fun dayLabel(day: LocalDate): String = "${weekday(day).take(3).uppercase
 internal fun RingHeader(
     score: Double?, change: Double?, state: RingState, capped: Boolean, words: String, sentence: String?, description: String,
     palette: GaugePalette = GaugePalette.Charge,
-    // The page's scene behind the ring (ScoreScenes.kt), following the score.
-    scene: com.bioscan.fieldterminal.ui.components.ScoreScene? = null,
 ) {
-    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth()) {
-    if (scene != null) {
-        com.bioscan.fieldterminal.ui.components.ScoreSceneBackdrop(
-            scene, score,
-            Modifier.matchParentSize().padding(horizontal = 0.dp).clip(RoundedCornerShape(FT.RadiusCard)),
-        )
-    }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         ScoreRing(score = score, trend = trendOf(change), size = 176.dp, state = state, capped = capped, description = description,
             palette = palette, label = description.uppercase())
         Text(words, style = FTType.LabelCaps, color = FT.TextSecondary)
         if (sentence != null) Text(sentence, style = FTType.Body, color = FT.TextPrimary, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 8.dp))
     }
-    }
 }
+
+/** How tall a score page's scene is under the status bar: the title row and the score header, with room to fade out. */
+private val SCENE_HEIGHT = 390.dp
 
 private fun sceneOf(key: DomainKey) = when (key) {
     DomainKey.SLEEP -> com.bioscan.fieldterminal.ui.components.ScoreScene.SLEEP
@@ -204,7 +216,8 @@ private fun sceneOf(key: DomainKey) = when (key) {
 @Composable
 fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () -> Unit) {
     val charge = view.scores.charge
-    FullScreenOverlay(title = "CHARGE", trailing = dayLabel(view.day), onClose = onClose, chargeWash = true) {
+    FullScreenOverlay(title = "CHARGE", trailing = dayLabel(view.day), onClose = onClose, chargeWash = true,
+        scene = com.bioscan.fieldterminal.ui.components.ScoreScene.CHARGE, sceneScore = charge.score) {
         val status = if (view.status == ChargeStatus.FINAL) "FINAL ✓" else "PROVISIONAL"
         val words = listOfNotNull(charge.score?.let { bandWord(null, it) }, status).joinToString(" · ")
         val sentence = listOfNotNull(
@@ -215,7 +228,6 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
             charge.score, charge.change,
             if (view.status == ChargeStatus.PROVISIONAL) RingState.PROVISIONAL else if (charge.score == null) RingState.PARTIAL else RingState.SCORED,
             charge.cap != null || view.illness != null, words, sentence, "Charge",
-            scene = com.bioscan.fieldterminal.ui.components.ScoreScene.CHARGE,
         )
         if (view.status == ChargeStatus.PROVISIONAL) {
             Text("Final when you close ${weekday(view.day.minusDays(1))}, or at 12:00.", style = FTType.BodySmall, color = FT.TextSecondary)
@@ -346,7 +358,8 @@ fun DomainOverlay(
     val domain = view.scores.domains.getValue(key)
     val about = if (key == DomainKey.SLEEP || key == DomainKey.RECOVERY) "${weekday(view.day.minusDays(1)).uppercase().take(3)} NIGHT"
     else weekday(view.day.minusDays(1)).uppercase()
-    FullScreenOverlay(title = key.label, trailing = about, onClose = onClose, onBack = onBack, wash = FT.Domain.of(key)) {
+    FullScreenOverlay(title = key.label, trailing = about, onClose = onClose, onBack = onBack, wash = FT.Domain.of(key),
+        scene = sceneOf(key), sceneScore = domain.score) {
         val words = listOfNotNull(
             domain.score?.let { bandWord(key, it) } ?: "PARTIAL",
             if (key == DomainKey.LOAD) view.scores.loadDirection?.label else null,
@@ -354,7 +367,7 @@ fun DomainOverlay(
             if (domain.calibrating) "CALIBRATING" else null,
         ).joinToString(" · ")
         RingHeader(domain.score, domain.change, if (domain.partial) RingState.PARTIAL else RingState.SCORED, false, words, domainSentence(domain), key.label,
-            palette = GaugePalette.of(key), scene = sceneOf(key))
+            palette = GaugePalette.of(key))
         if (key == DomainKey.LOAD) view.series[ScoreKeys.TSB]?.let { TsbGauge(it, view.day) }
         if (key == DomainKey.BALANCE && view.scores.ansState == AnsState.SATURATED) {
             Text("SATURATED: HRV is high while the pattern looks like overreaching, so RECOVERY gets no points above 100 this morning.",

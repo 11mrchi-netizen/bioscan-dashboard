@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import kotlin.math.PI
 import kotlin.math.cos
@@ -63,7 +64,7 @@ private const val STRENGTH = 0.50f
 
 /** The scene behind a score's header. [score] 0-100, null when there is none yet. Size it to the header. */
 @Composable
-fun ScoreSceneBackdrop(scene: ScoreScene, score: Double?, modifier: Modifier = Modifier) {
+fun ScoreSceneBackdrop(scene: ScoreScene, score: Double?, modifier: Modifier = Modifier, ringCenterY: androidx.compose.ui.unit.Dp? = null) {
     val context = LocalContext.current
     val still = remember(score) {
         score == null || runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) == 0f
@@ -104,8 +105,8 @@ fun ScoreSceneBackdrop(scene: ScoreScene, score: Double?, modifier: Modifier = M
                         ScoreScene.CHARGE -> cityMoving(t, p)
                     }
                     // A soft dark disc behind the ring keeps the number clear of the scene.
-                    val c = Offset(size.width / 2, size.height * 0.40f)
-                    val r = size.minDimension * 0.44f
+                    val c = Offset(size.width / 2, ringCenterY?.toPx() ?: (size.height * 0.40f))
+                    val r = if (ringCenterY != null) 135.dp.toPx() else size.minDimension * 0.44f
                     drawCircle(Brush.radialGradient(0f to FT.Base.copy(alpha = 0.62f), 0.6f to FT.Base.copy(alpha = 0.35f), 1f to Color.Transparent, center = c, radius = r), r, c)
                     // The foot fades into the page.
                     drawRect(Brush.verticalGradient(0.68f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
@@ -355,7 +356,7 @@ private fun DrawScope.ridgesStill(t: Float) {
 
 private fun DrawScope.trailPoints(front: (Float) -> Float): List<Offset> {
     val pts = mutableListOf<Offset>()
-    var x = size.width * 0.70f
+    var x = size.width * 0.74f
     val end = size.width * 0.88f
     while (x <= end) { pts += Offset(x, front(x) + 7f * density); x += 4f * density }
     pts += Offset(end, front(end) + 2f * density)

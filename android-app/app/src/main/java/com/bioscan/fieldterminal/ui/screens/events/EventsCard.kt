@@ -80,7 +80,7 @@ fun EventsCard(onOpenEvent: (Long) -> Unit) {
                     Text(eventWhenLabel(e), style = FTType.MonoCaption, color = FT.DomainTraining)
                     Text(eventSummaryLine(e), style = FTType.MonoCaption, color = FT.TextSecondary)
                 }
-                Text("›", style = FTType.LabelCaps, color = FT.TextSecondary)
+                com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
             }
         }
         suggestions.take(3).forEach { s ->

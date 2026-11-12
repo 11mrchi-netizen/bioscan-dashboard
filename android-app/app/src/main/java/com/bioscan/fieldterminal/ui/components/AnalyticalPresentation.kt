@@ -3,6 +3,7 @@ package com.bioscan.fieldterminal.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import com.bioscan.fieldterminal.domain.helpText
@@ -83,7 +84,7 @@ fun FTStatePill(word: StateWord, modifier: Modifier = Modifier, onClick: (() -> 
         Text(treatment.symbol, color = treatment.color, style = FTType.Label)
         Spacer(Modifier.width(5.dp))
         Text(label, color = treatment.color, style = FTType.Label)
-        if (onClick != null) Text("  ›", color = treatment.color, style = FTType.Label)
+        if (onClick != null) FTChevron(Modifier.padding(start = 4.dp), tint = treatment.color)
     }
 }
 
@@ -239,7 +240,11 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
 }
 
 // Contract A3: Hero = the one lead card of a tab (strong glass, primary title); Supporting = every other card.
-enum class FTCardEmphasis { Hero, Supporting }
+// Polish brief, card hierarchy. Hero: the one lead card of a page (strong glass, radius 24, title in primary text).
+// Supporting: every analytical card (default glass, radius 18). Compact: a dense block inside an overlay or a page that is
+// already framed (radius 16, tighter padding). One header for all three: the title, an optional trailing note, then
+// WHY? and the "?" help button, each a 48 dp target.
+enum class FTCardEmphasis { Hero, Supporting, Compact }
 
 // Titled container matching Card.kt's exact shape/API (title bar + padded
 // content) for screens that have migrated to Futuristic Material -- Card.kt
@@ -269,9 +274,15 @@ fun FTCard(
     helpExtra: String? = null,
     // Personal health agent, phase 1: what the card shows, for WHY? in the title bar (the assistant explains the card).
     why: com.bioscan.fieldterminal.domain.WhyContext? = null,
+    // A short note at the end of the title row (a count, a date); [trailingChevron] marks a card whose [onClick] opens more.
+    trailing: String? = null,
+    trailingChevron: Boolean = false,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(if (emphasis == FTCardEmphasis.Hero) FT.RadiusCardLarge else FT.RadiusCard)
+    val shape = RoundedCornerShape(
+        when (emphasis) { FTCardEmphasis.Hero -> FT.RadiusCardLarge; FTCardEmphasis.Supporting -> FT.RadiusCard; FTCardEmphasis.Compact -> FT.RadiusModule },
+    )
+    val pad = if (emphasis == FTCardEmphasis.Compact) 14.dp else 16.dp
     val context = androidx.compose.ui.platform.LocalContext.current
     // remembered: the help text is a pure function of the key, so it is built once, not on every recomposition of the card
     val registryEntry = androidx.compose.runtime.remember(methodology) {
@@ -297,7 +308,9 @@ fun FTCard(
             .then(if (onClick != null) Modifier.ftClickable(shape = shape, onClick = onClick) else Modifier),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            // 48 dp tall so the help button's target fits without growing the header; the button's own target is the
+            // right-hand margin.
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(start = pad, end = if (helpBody != null || why != null) 4.dp else pad, top = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Card titles are neutral (A3): emerald stays a state signal, so a title never reads as "optimal".
@@ -307,10 +320,15 @@ fun FTCard(
                 style = FTType.CardTitle,
                 modifier = Modifier.weight(1f),
             )
-            why?.let { WhyButton(it, modifier = Modifier.padding(end = if (helpBody != null) 8.dp else 0.dp)) }
+            trailing?.let { Text(it, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(start = 8.dp)) }
+            if (trailingChevron) FTChevron(Modifier.padding(start = 4.dp))
+            why?.let { WhyButton(it, modifier = Modifier.padding(start = 8.dp, end = if (helpBody != null) 0.dp else 0.dp)) }
             helpBody?.let { InfoHelpButton(title = title, body = it, details = helpDetails) }
         }
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(start = pad, end = pad, top = 2.dp, bottom = pad),
+            verticalArrangement = Arrangement.spacedBy(if (emphasis == FTCardEmphasis.Compact) 8.dp else 10.dp),
+        ) {
             content()
         }
     }

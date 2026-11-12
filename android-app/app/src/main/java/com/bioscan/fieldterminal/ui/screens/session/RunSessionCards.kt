@@ -309,7 +309,7 @@ private fun Section(section: DynamicsSection, isOpen: Boolean, onToggle: (Dynami
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(section.title, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f))
-        Text(if (isOpen) "▴" else "▾", style = FTType.Label, color = FT.TextSecondary)
+        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary, expanded = isOpen)
     }
     tiles()
 }

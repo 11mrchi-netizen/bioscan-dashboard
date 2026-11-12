@@ -516,7 +516,7 @@ fun TodayContent(
                     Text("SO FAR", style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.width(72.dp))
                     Text(if (s.target != null) "${s.kcal.roundToInt()} / ${s.target.roundToInt()} kcal" else "${s.kcal.roundToInt()} kcal",
                         style = FTType.Value, color = FT.TextPrimary, modifier = Modifier.weight(1f))
-                    Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+                    com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
                 }
                 SoFarBar(s, now)
             }
@@ -562,19 +562,21 @@ private fun DayTimeline(rows: List<PlanRow>, now: LocalTime, onRow: (PlanRow) ->
 @Composable
 private fun NowLine(now: LocalTime) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("NOW", style = FTType.Label, color = FT.EmeraldHighlight, modifier = Modifier.width(48.dp))
+        // The present is a position, not a status: neutral primary ink (emerald is "optimal" everywhere else).
+        Text("NOW", style = FTType.Label, color = FT.TextPrimary, modifier = Modifier.width(48.dp))
         androidx.compose.foundation.Canvas(Modifier.weight(1f).height(10.dp)) {
-            drawLine(FT.EmeraldHighlight, androidx.compose.ui.geometry.Offset(0f, size.height / 2), androidx.compose.ui.geometry.Offset(size.width, size.height / 2), strokeWidth = 2f)
-            drawCircle(FT.EmeraldHighlight, 5f, androidx.compose.ui.geometry.Offset(14.dp.toPx(), size.height / 2))
+            drawLine(FT.TextPrimary.copy(alpha = 0.7f), androidx.compose.ui.geometry.Offset(0f, size.height / 2), androidx.compose.ui.geometry.Offset(size.width, size.height / 2), strokeWidth = 2f)
+            drawCircle(FT.TextPrimary, 5f, androidx.compose.ui.geometry.Offset(14.dp.toPx(), size.height / 2))
         }
-        Text(now.format(TIME), style = FTType.Micro, color = FT.EmeraldHighlight)
+        Text(now.format(TIME), style = FTType.Micro, color = FT.TextSecondary)
     }
 }
 
 @Composable
-private fun TimelineRow(row: PlanRow, first: Boolean, last: Boolean, onClick: () -> Unit) {
+internal fun TimelineRow(row: PlanRow, first: Boolean, last: Boolean, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().height(44.dp).ftClickable(role = Role.Button, onClickLabel = "Open ${row.title}") { onClick() },
+        // 48 dp: the whole row is the touch target (contract: interactive targets 48 dp).
+        modifier = Modifier.fillMaxWidth().height(48.dp).ftClickable(role = Role.Button, onClickLabel = "Open ${row.title}") { onClick() },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -583,9 +585,11 @@ private fun TimelineRow(row: PlanRow, first: Boolean, last: Boolean, onClick: ()
             val cx = size.width / 2
             val cy = size.height / 2
             drawLine(FT.GlassBorder, androidx.compose.ui.geometry.Offset(cx, if (first) cy else 0f), androidx.compose.ui.geometry.Offset(cx, if (last) cy else size.height), strokeWidth = 2f)
+            // The marker's hue names its kind by the Log's category palette (FT.Category: a meal is intake, a session activity); its shape says it too,
+            // and filled/outlined says done/planned. Status colours (emerald, amber, red) are never a kind.
             val color = when (row.kind) {
-                PlanKind.MEAL -> com.bioscan.fieldterminal.ui.components.NutrientColor.Calories
-                PlanKind.SESSION -> FT.Emerald
+                PlanKind.MEAL -> FT.Category.Intake.c500
+                PlanKind.SESSION -> FT.Category.Activity.c500
                 PlanKind.SUPPLEMENTS -> FT.DomainLabs
                 PlanKind.CLOSE -> FT.DomainLog
             }
@@ -612,7 +616,7 @@ private fun TimelineRow(row: PlanRow, first: Boolean, last: Boolean, onClick: ()
             Text(row.title, style = FTType.BodySmall, color = if (row.done) FT.TextSecondary else FT.TextPrimary, maxLines = 1)
             row.detail?.let { Text(it, style = FTType.MonoCaption, color = FT.TextSecondary, maxLines = 1) }
         }
-        Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+        com.bioscan.fieldterminal.ui.components.FTChevron()
     }
 }
 

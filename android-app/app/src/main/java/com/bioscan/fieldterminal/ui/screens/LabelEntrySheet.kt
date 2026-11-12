@@ -241,17 +241,8 @@ private val LABEL_FIELDS = listOf(
 private fun String.toAmount(): Double? = trim().replace(',', '.').toDoubleOrNull()?.takeIf { it >= 0 }
 
 @Composable
-private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        label,
-        style = FTType.LabelCaps,
-        color = if (selected) FT.Emerald else FT.TextSecondary,
-        modifier = Modifier
-            .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall), onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-    )
-}
+// Selection is platinum (it was emerald, the "optimal" status colour).
+private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) = com.bioscan.fieldterminal.ui.components.FTChoiceChip(label, selected, onClick)
 
 @Composable
 private fun LabelFormLabel(text: String) {

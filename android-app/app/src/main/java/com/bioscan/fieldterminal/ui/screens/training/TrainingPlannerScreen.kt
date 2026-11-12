@@ -344,7 +344,7 @@ private fun DetailRow(title: String, summary: String, warn: Boolean = false, onC
             Text(title, color = FT.TextPrimary, style = FTType.RowTitle)
             Text(summary, color = if (warn) FT.Warning else FT.TextSecondary, style = FTType.MonoCaption)
         }
-        Text("›", color = FT.TextSecondary, style = FTType.SectionTitle)
+        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
     }
 }
 

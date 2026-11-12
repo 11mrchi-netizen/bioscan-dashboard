@@ -113,15 +113,19 @@ fun BodyTabContent() {
         scaleSeries = runCatching { ScaleReadingRepository(SupabaseClientProvider.client).loadCompositionSeries() }.getOrElse { scaleSeries }
     }
 
-    var range by rememberSaveable { mutableStateOf(ChartRange.M3) }
+    var range by com.bioscan.fieldterminal.ui.components.rememberRange("me:body", ChartRange.M3)
     var showRegimen by rememberSaveable { mutableStateOf(true) }
     var markers by remember { mutableStateOf(emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>()) }
     LaunchedEffect(Unit) { markers = runCatching { com.bioscan.fieldterminal.ui.screens.detail.loadRegimenMarkers() }.getOrDefault(emptyList()) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (r in ChartRange.entries) Chip(r.label, r == range) { range = r }
-            if (markers.isNotEmpty()) Chip("REGIMEN", showRegimen) { showRegimen = !showRegimen }
-        }
+        com.bioscan.fieldterminal.ui.components.FTChipRow(
+            ChartRange.entries, range, { it.label }, { range = it },
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+            trailing = if (markers.isEmpty()) null else ({
+                androidx.compose.foundation.layout.Spacer(Modifier.padding(start = 6.dp))
+                com.bioscan.fieldterminal.ui.components.FTChip("REGIMEN", showRegimen, { showRegimen = !showRegimen }, role = androidx.compose.ui.semantics.Role.Switch)
+            }),
+        )
         val b = bodyMetrics
         if (b == null) {
             Loading(guard)

@@ -73,7 +73,9 @@ private data class PerfWindow(val key: String, val chip: String, val name: Strin
     val days: Int get() = (ChronoUnit.DAYS.between(from, to) + 1).toInt()
 }
 
-private val WEEK_CHOICES = listOf(4 to "4 W", 12 to "12 W", 26 to "6 M", 52 to "1 Y")
+// The standard ranges (FTRange 28D / 90D / 1Y), counted in whole weeks from a Monday because every chart here is weekly
+// bars: 28D is 4 weeks, 90D 13, 1Y 52. ALL is not offered (years of weekly bars do not read); a block is the long view.
+private val WEEK_CHOICES = listOf(4 to "28D", 13 to "90D", 52 to "1Y")
 
 private fun weeksWindow(weeks: Int, chip: String, today: LocalDate): PerfWindow {
     val monday = today.minusDays((today.dayOfWeek.value - 1).toLong())
@@ -105,22 +107,24 @@ fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {})
     val running by produceState<com.bioscan.fieldterminal.data.RunningHistory?>(null) {
         value = runCatching { com.bioscan.fieldterminal.ui.screens.user.UserDataCache.running() }.getOrNull()
     }
-    var key by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("w12") }
+    // Kept across navigation (RangeMemory): back from a sport's page, the hub is still on the window it was read in.
+    var key by com.bioscan.fieldterminal.ui.components.rememberRange("performance", "w13")
     var picking by remember { mutableStateOf(false) }
     val window = remember(key, cycles) {
         WEEK_CHOICES.firstOrNull { "w${it.first}" == key }?.let { weeksWindow(it.first, it.second, today) }
             ?: cycles.firstOrNull { "b${it.id}" == key }?.let { blockWindow(it, today) }
-            ?: weeksWindow(12, "12 W", today)
+            ?: weeksWindow(13, "90D", today)
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            for ((w, chip) in WEEK_CHOICES) com.bioscan.fieldterminal.ui.screens.detail.Chip(chip, key == "w$w") { key = "w$w" }
-            if (cycles.isNotEmpty()) {
+        com.bioscan.fieldterminal.ui.components.FTChipRow(
+            WEEK_CHOICES, WEEK_CHOICES.firstOrNull { key == "w${it.first}" }, { it.second }, { key = "w${it.first}" },
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+            trailing = if (cycles.isEmpty()) null else ({
                 val onBlock = key.startsWith("b")
-                com.bioscan.fieldterminal.ui.screens.detail.Chip(if (onBlock) "${window.chip} ▾" else "BLOCK ▾", onBlock) { picking = true }
-            }
-        }
+                com.bioscan.fieldterminal.ui.components.FTChip(if (onBlock) window.chip else "BLOCK", onBlock, { picking = true }, role = androidx.compose.ui.semantics.Role.Button, menu = true)
+            }),
+        )
         if (sessions == null) {
             EmptyLine("Loading your sports…")
             return@Column
@@ -196,7 +200,7 @@ fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {})
                                     style = FTType.Caption, color = FT.TextSecondary,
                                 )
                             }
-                            if (on) Text("✓", style = FTType.RowTitle, color = FT.PlatinumSolid)
+                            if (on) com.bioscan.fieldterminal.ui.components.FTIcon(com.bioscan.fieldterminal.ui.components.FTIcons.Check, null, tint = FT.PlatinumSolid, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Inline)
                         }
                     }
                 }
@@ -234,7 +238,7 @@ private fun SportTile(summary: SportSummary, color: Color, window: PerfWindow, o
                 else drawBarStub(layout.left(i), layout.barWidth)
             }
         }
-        Text("›", style = FTType.SectionTitle, color = FT.TextMuted)
+        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
     }
 }
 
@@ -256,7 +260,7 @@ fun RecentSessions(sportKey: String, onOpenSession: (Long) -> Unit, count: Int =
                         .joinToString(" · "),
                     style = FTType.Body, color = FT.TextPrimary, modifier = Modifier.weight(1f),
                 )
-                Text("›", style = FTType.RowTitle, color = FT.TextMuted)
+                com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
             }
         }
     }

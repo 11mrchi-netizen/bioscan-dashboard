@@ -161,6 +161,6 @@ private fun TrainingBlockLinkCard(cycle: TrainingCycle?, loaded: Boolean, onOpen
                 Text(currentBlockProgress(cycle), style = FTType.MonoCaption, color = FT.TextMuted)
             }
         }
-        Text("OPEN TRAINING › PLAN ›", style = FTType.LabelCaps, color = FT.EmeraldHighlight)
+        Text("OPEN TRAINING › PLAN ›", style = FTType.LabelCaps, color = FT.PlatinumSolid)
     }
 }

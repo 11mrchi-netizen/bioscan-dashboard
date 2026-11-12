@@ -42,7 +42,7 @@ fun Modifier.ftClickable(
     val focused by interactionSource.collectIsFocusedAsState()
     val pressAlpha by animateFloatAsState(
         targetValue = if (pressed && enabled) 1f else 0f,
-        animationSpec = if (pressed) snap() else tween(durationMillis = 120, easing = LinearEasing),
+        animationSpec = if (pressed || FTMotion.reduced) snap() else tween(durationMillis = FTMotion.FAST, easing = LinearEasing),
         label = "ftPress",
     )
     return this

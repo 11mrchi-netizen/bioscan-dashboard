@@ -16,10 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -43,9 +39,7 @@ fun TileHeader(onBack: (() -> Unit)?, title: String? = null, subtitle: String? =
     ) {
         // Scoring system rebuild: a top-level tab page (PLAN, LAB, ME) has no back arrow.
         if (onBack != null) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = FT.TextSecondary)
-            }
+            FTIconButton(FTIcons.Back, "Back", onBack)
         } else {
             Spacer(Modifier.width(10.dp))
         }

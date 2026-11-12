@@ -81,7 +81,8 @@ import kotlin.math.roundToInt
 // a back arrow, glass sections with a caps title, the number first and its chart under it, and every explanation one tap
 // away behind the section's ⓘ (never a collapsed card). Charts share one range (30 D · 90 D · 1 Y) chosen at the top.
 
-enum class ChartRange(val days: Int, val label: String) { M1(30, "30 D"), M3(90, "90 D"), Y1(365, "1 Y") }
+// The standard ranges (FTRange: 28D, 90D, 1Y); ALL is not offered here because these pages read a bounded window.
+enum class ChartRange(val days: Int, val label: String) { M1(28, "28D"), M3(90, "90D"), Y1(365, "1Y") }
 
 /** The chart window the page's range chips picked. */
 val LocalRangeDays = compositionLocalOf { ChartRange.M3.days }
@@ -100,7 +101,8 @@ fun DetailScreen(
     domain: Color? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    var range by rememberSaveable { mutableStateOf(defaultRange) }
+    // Kept per page across navigation (RangeMemory): the page opens again on the window it was last read in.
+    var range by com.bioscan.fieldterminal.ui.components.rememberRange("detail:$title", defaultRange)
     // Regimen changes on the charts: loaded once per page (the roster history is cached), shown unless switched off.
     var showRegimen by rememberSaveable { mutableStateOf(true) }
     var markers by remember { mutableStateOf(emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>()) }
@@ -109,16 +111,19 @@ fun DetailScreen(
     }
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).then(if (domain != null) Modifier.ftDomainWash(domain) else Modifier.ftPlatinumWash())) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("‹", style = FTType.SectionTitle, color = FT.TextSecondary,
-                modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Back") { onBack() }.padding(12.dp))
+            com.bioscan.fieldterminal.ui.components.FTIconButton(com.bioscan.fieldterminal.ui.components.FTIcons.Back, "Back", onBack)
             Text(title, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f).padding(start = 4.dp))
             if (eyebrow != null) Text(eyebrow, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(end = 12.dp))
         }
         if (ranged) {
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (r in ChartRange.entries) Chip(r.label, r == range) { range = r }
-                if (markers.isNotEmpty()) Chip("REGIMEN", showRegimen) { showRegimen = !showRegimen }
-            }
+            com.bioscan.fieldterminal.ui.components.FTChipRow(
+                ChartRange.entries, range, { it.label }, { range = it },
+                trailing = if (markers.isEmpty()) null else ({
+                    // A toggle, not a range: set apart by a gap.
+                    androidx.compose.foundation.layout.Spacer(Modifier.width(6.dp))
+                    com.bioscan.fieldterminal.ui.components.FTChip("REGIMEN", showRegimen, { showRegimen = !showRegimen }, role = Role.Switch)
+                }),
+            )
         }
         CompositionLocalProvider(LocalRangeDays provides range.days, LocalRegimenMarkers provides if (showRegimen) markers else emptyList()) {
             Column(
@@ -132,40 +137,32 @@ fun DetailScreen(
 
 // `.ft-chip`: a mono pill; the selected one is platinum with dark ink.
 @Composable
-fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(50)
-    Text(
-        label,
-        style = if (selected) FTType.LabelCaps.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) else FTType.LabelCaps,
-        color = if (selected) FT.PlatinumInk else FT.TextSecondary,
-        modifier = Modifier
-            .then(if (selected) Modifier.background(FT.Platinum, shape) else Modifier.border(FT.BorderWidth, FT.Line, shape).background(Color(0x08FFFFFF), shape))
-            .ftClickable(shape = shape, role = Role.Tab, onClickLabel = label) { onClick() }
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-    )
-}
+fun Chip(label: String, selected: Boolean, onClick: () -> Unit) = com.bioscan.fieldterminal.ui.components.FTChip(label, selected, onClick)
 
-/** A glass section: caps title, an ⓘ that opens [info] full screen, then the content. */
+/**
+ * A page's analytical card: since the polish pass an FTCard (Supporting by default, [emphasis] for a page's lead card),
+ * so every card has one header, one help affordance ("?", the info in the shared dialog) and one set of paddings.
+ * A [trailing] note ending in "›" draws the chevron icon instead of the glyph.
+ */
 @Composable
-fun Section(title: String, info: String? = null, trailing: String? = null, content: @Composable ColumnScope.() -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Column(
-        modifier = Modifier.fillMaxWidth()
-            .ftGlass(RoundedCornerShape(FT.RadiusCard))
-            .padding(start = 16.dp, end = 16.dp, top = 15.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.weight(1f))
-            if (trailing != null) Text(trailing, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(end = 6.dp))
-            if (info != null) {
-                Text("ⓘ", style = FTType.RowTitle, color = FT.TextSecondary,
-                    modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "What is $title") { open = true }.padding(horizontal = 6.dp))
-            }
-        }
-        content()
-    }
-    if (open && info != null) InfoOverlay(title, info) { open = false }
+fun Section(
+    title: String,
+    info: String? = null,
+    trailing: String? = null,
+    emphasis: com.bioscan.fieldterminal.ui.components.FTCardEmphasis = com.bioscan.fieldterminal.ui.components.FTCardEmphasis.Supporting,
+    onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val chevron = trailing?.trimEnd()?.endsWith("›") == true
+    com.bioscan.fieldterminal.ui.components.FTCard(
+        title = title,
+        info = info,
+        emphasis = emphasis,
+        onClick = onClick,
+        trailing = trailing?.trimEnd()?.removeSuffix("›")?.trimEnd()?.ifBlank { null },
+        trailingChevron = chevron,
+        content = content,
+    )
 }
 
 @Composable
@@ -189,7 +186,7 @@ fun LinkRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
             Text(title, style = FTType.RowTitle, color = FT.TextPrimary)
             if (subtitle != null) Text(subtitle, style = FTType.Caption, color = FT.TextMuted)
         }
-        Text("›", style = FTType.SectionTitle, color = FT.TextMuted)
+        com.bioscan.fieldterminal.ui.components.FTChevron()
     }
 }
 
@@ -315,7 +312,7 @@ fun MetricRow(
         Text(reading.latest?.let { "${format(it)} $unit".trim() } ?: "—", style = FTType.Telemetry, color = FT.TextPrimary)
         Text(positionGlyph(reading.position), style = FTType.Telemetry, color = FT.TextSecondary)
         com.bioscan.fieldterminal.ui.screens.today.SlotSparkline(spark, color = color)
-        Text("›", style = FTType.RowTitle, color = FT.TextMuted)
+        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
     }
     if (open) MetricHistoryOverlay(HistorySpec(label, series, unit, format, color, log, minSd, betterHigher, info), today) { open = false }
 }
@@ -391,7 +388,7 @@ fun StatTileGrid(tiles: List<Stat>, today: LocalDate = LocalDate.now()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             t.history?.let { com.bioscan.fieldterminal.ui.components.FTMetricDot(it.color, Modifier.padding(end = 6.dp), size = 6.dp) }
                             Text(t.label, style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.weight(1f))
-                            if (t.history != null) Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+                            if (t.history != null) com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
                         }
                         Text(t.value, style = FTType.MetricMedium, color = FT.TextPrimary)
                         if (t.sub != null) Text(t.sub, style = FTType.Caption, color = FT.TextMuted)
@@ -461,18 +458,10 @@ fun MetricHistoryOverlay(spec: HistorySpec, today: LocalDate = LocalDate.now(), 
 }
 
 @Composable
-fun Legend(items: List<Pair<String, Color>>) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        for ((label, color) in items) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                Box(Modifier.size(9.dp).background(color, CircleShape))
-                Text(label, style = FTType.Caption, color = FT.TextSecondary)
-            }
-        }
-    }
-}
+fun Legend(items: List<Pair<String, Color>>) = com.bioscan.fieldterminal.ui.components.FTLegend(items)
 
-fun shortDate(d: LocalDate): String = "${d.dayOfMonth} ${d.month.name.take(3)}"
+/** One date format for every chart and label (ChartDates): "14 Aug". */
+fun shortDate(d: LocalDate): String = com.bioscan.fieldterminal.ui.components.ChartDates.short(d)
 
 // ---- charts ----
 

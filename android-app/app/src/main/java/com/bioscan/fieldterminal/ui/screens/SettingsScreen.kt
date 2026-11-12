@@ -72,6 +72,6 @@ private fun SettingsNavRow(title: String, subtitle: String, onClick: () -> Unit)
             Text(title, style = FTType.RowTitle, color = FT.TextPrimary)
             Text(subtitle, style = FTType.Caption, color = FT.TextSecondary, modifier = Modifier.padding(top = 2.dp))
         }
-        Text("›", style = FTType.SectionTitle, color = FT.TextSecondary)
+        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
     }
 }

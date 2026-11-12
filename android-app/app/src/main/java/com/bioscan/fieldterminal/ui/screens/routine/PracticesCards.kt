@@ -327,17 +327,7 @@ private fun WeekTimeCard(lines: List<TimeLine>) {
 }
 
 @Composable
-private fun Chip(text: String, on: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(FT.RadiusSmall)
-    Text(
-        text, style = FTType.LabelCaps, color = if (on) FT.PlatinumInk else FT.TextSecondary,
-        modifier = Modifier
-            .border(FT.BorderWidth, if (on) Color.Transparent else FT.GlassBorder, shape)
-            .background(if (on) FT.PlatinumSolid else Color.Transparent, shape)
-            .ftClickable(shape = shape, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    )
-}
+private fun Chip(text: String, on: Boolean, onClick: () -> Unit) = com.bioscan.fieldterminal.ui.components.FTChoiceChip(text, on, onClick)
 
 @Composable
 private fun Label(text: String) = Text(text, color = FT.TextMuted, style = FTType.LabelCaps, modifier = Modifier.padding(bottom = 6.dp))

@@ -298,7 +298,7 @@ private fun LineRow(l: DailyLine, through: LocalDate, onOpen: (DailyLine) -> Uni
             Text("${l.source.label} · $days OF 28 DAYS", style = FTType.MonoCaption, color = FT.TextSecondary)
         }
         Text(avg?.let(f.format) ?: "—", style = FTType.Telemetry, color = lineColor(l.key))
-        Text("›", style = FTType.LabelCaps, color = FT.TextSecondary)
+        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
     }
 }
 
@@ -355,7 +355,7 @@ private fun PracticesCard(activities: List<RoutineActivity>, logs: List<RoutineL
                     if (kept.scheduled > 0) "${kept.done}/${kept.scheduled}" else "${logs.count { it.activityId == a.id && it.status == LogStatus.DONE && it.date.isAfter(today.minusDays(28)) }}×",
                     style = FTType.Telemetry, color = FT.Metric.TimeLogged,
                 )
-                Text("›", style = FTType.LabelCaps, color = FT.TextSecondary)
+                com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
             }
         }
     }

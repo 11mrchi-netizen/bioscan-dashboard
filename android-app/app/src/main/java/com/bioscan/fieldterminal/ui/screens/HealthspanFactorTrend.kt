@@ -20,6 +20,7 @@ import com.bioscan.fieldterminal.domain.aging.HealthspanFactor
 import com.bioscan.fieldterminal.domain.aging.HealthspanFactorId
 import com.bioscan.fieldterminal.domain.vo2MaxSeries
 import com.bioscan.fieldterminal.ui.components.DateTrendLine
+import com.bioscan.fieldterminal.ui.components.FTRange
 import com.bioscan.fieldterminal.ui.screens.today.FullScreenOverlay
 import com.bioscan.fieldterminal.ui.screens.today.OverlaySection
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -105,12 +106,12 @@ suspend fun loadHealthspanFactorMetrics(supabase: SupabaseClient, factorId: Heal
             ).filter { it.points.isNotEmpty() }
         }
         HealthspanFactorId.METABOLIC -> listOf(
-            FactorMetric("TRIGLYCERIDES", "mg/dL", FT.Metric.BloodPressure, labSeries(analysis, listOf("Triglyceride", "Triglycerides"))),
-            FactorMetric("HDL", "mg/dL", FT.Metric.Spo2, labSeries(analysis, listOf("HDL Cholesterol", "HDL"))),
+            FactorMetric("TRIGLYCERIDES", "mg/dL", FT.Metric.Triglycerides, labSeries(analysis, listOf("Triglyceride", "Triglycerides"))),
+            FactorMetric("HDL", "mg/dL", FT.Metric.Hdl, labSeries(analysis, listOf("HDL Cholesterol", "HDL"))),
         ).filter { it.points.isNotEmpty() }
         HealthspanFactorId.GLYCAEMIC -> listOf(
-            FactorMetric("FASTING GLUCOSE", "mg/dL", FT.Metric.MealTiming, labSeries(analysis, listOf("Fasting blood sugar", "Fasting glucose"))),
-            FactorMetric("HBA1C", "%", FT.Metric.SkinTemp, labSeries(analysis, listOf("HbA1c", "Hemoglobin A1c"))),
+            FactorMetric("FASTING GLUCOSE", "mg/dL", FT.Metric.FastingGlucose, labSeries(analysis, listOf("Fasting blood sugar", "Fasting glucose"))),
+            FactorMetric("HBA1C", "%", FT.Metric.Hba1c, labSeries(analysis, listOf("HbA1c", "Hemoglobin A1c"))),
         ).filter { it.points.isNotEmpty() }
         HealthspanFactorId.STRENGTH -> {
             // Grip is logged per hand: one line each (a single line through both zigzagged between the hands on every
@@ -148,7 +149,7 @@ private suspend fun labSeries(analysis: AnalysisRepository, names: List<String>)
 }
 
 // Best estimated 1RM (Epley) per day for the two most-logged lifts of the last year.
-private val LIFT_COLORS = listOf(FT.Metric.Power, FT.Metric.MusclePotential)
+private val LIFT_COLORS = listOf(FT.Metric.LiftPrimary, FT.Metric.LiftSecondary)
 
 private suspend fun liftOneRepMaxSeries(supabase: SupabaseClient): List<FactorMetric> {
     val rows = runCatching {
@@ -175,14 +176,8 @@ private suspend fun liftOneRepMaxSeries(supabase: SupabaseClient): List<FactorMe
         .filter { it.points.size >= 2 }
 }
 
-private fun FactorStatus.pair(): Pair<String, Color> = when (this) {
-    FactorStatus.FAVORABLE -> "FAVORABLE" to FT.Emerald
-    FactorStatus.NEUTRAL -> "NEUTRAL" to FT.TextSecondary
-    FactorStatus.OPPORTUNITY -> "OPPORTUNITY" to FT.Warning
-    FactorStatus.UNASSESSED -> "NOT ASSESSED" to FT.TextMuted
-}
 
-internal enum class FactorRange(val label: String, val days: Long?) { D28("28 D", 28), D90("90 D", 90), Y1("1 Y", 365), ALL("ALL", null) }
+private fun rangeWords(r: FTRange) = when (r) { FTRange.D28 -> "28 days"; FTRange.D90 -> "90 days"; FTRange.Y1 -> "the year"; FTRange.ALL -> "all of it" }
 
 private fun fmt(v: Double): String = if (kotlin.math.abs(v) >= 100) "%.0f".format(v) else "%.1f".format(v)
 private val DAY = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy")
@@ -198,14 +193,14 @@ fun HealthspanFactorOverlay(factor: HealthspanFactor, onClose: () -> Unit) {
         value = runCatching { loadHealthspanFactorMetrics(SupabaseClientProvider.client, factor.id) }.getOrDefault(emptyList())
     }
     val labBased = factor.id == HealthspanFactorId.METABOLIC || factor.id == HealthspanFactorId.GLYCAEMIC
-    var range by androidx.compose.runtime.saveable.rememberSaveable(factor.id) { androidx.compose.runtime.mutableStateOf(if (labBased) FactorRange.ALL else FactorRange.D28) }
+    var range by com.bioscan.fieldterminal.ui.components.rememberRange("factor:${factor.id}", if (labBased) FTRange.ALL else FTRange.D28)
     val today = androidx.compose.runtime.remember { LocalDate.now() }
     FullScreenOverlay(title = factor.id.label.uppercase(), onClose = onClose) {
-        androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
-            for (r in FactorRange.entries) com.bioscan.fieldterminal.ui.screens.detail.Chip(r.label, r == range) { range = r }
+        com.bioscan.fieldterminal.ui.components.FTRangeSelector(range, { range = it })
+        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+            Text(factor.score?.let { "$it / 100" } ?: "—", style = FTType.MetricMedium, color = if (factor.score != null) FT.TextPrimary else FT.TextMuted)
+            com.bioscan.fieldterminal.ui.components.FTStatePill(com.bioscan.fieldterminal.domain.healthspanStateWord(factor.status))
         }
-        val (tag, color) = factor.status.pair()
-        Text(factor.score?.let { "$it / 100 · $tag" } ?: tag, style = FTType.LabelCaps, color = color)
         factor.reading?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
         factor.basis?.let { Text("Scored against ${it.label}.", style = FTType.Caption, color = FT.TextMuted) }
         if (factor.missingInputs.isNotEmpty()) Text("Needs: " + factor.missingInputs.joinToString("; "), style = FTType.Caption, color = FT.TextMuted)
@@ -223,33 +218,38 @@ fun HealthspanFactorOverlay(factor: HealthspanFactor, onClose: () -> Unit) {
 }
 
 @Composable
-internal fun FactorMetricSection(fm: FactorMetric, range: FactorRange, today: LocalDate) {
+internal fun FactorMetricSection(fm: FactorMetric, range: FTRange, today: LocalDate) {
     val from = range.days?.let { today.minusDays(it - 1) } ?: fm.points.minOfOrNull { it.first } ?: today
     fun clip(p: List<Pair<LocalDate, Double>>) = p.filter { !it.first.isBefore(from) && !it.first.isAfter(today) }
     val shown = clip(fm.points)
     val latest = fm.points.maxByOrNull { it.first }
     OverlaySection(fm.label) {
-        latest?.let { (d, v) ->
-            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.Bottom, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
-                Text(fmt(v), style = FTType.MetricMedium, color = FT.TextPrimary)
-                Text(fm.unit, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
-                Text("· ${d.format(DAY)}", style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(bottom = 4.dp))
-            }
-        }
+        latest?.let { (d, v) -> com.bioscan.fieldterminal.ui.components.FTLatestReading(fmt(v), fm.unit, d, ink = fm.color) }
         if (shown.size >= 2) {
             Text(
-                "${range.label.lowercase().replace(" d", " days").replace("1 y", "the year").replace("all", "all of it")}: average ${fmt(shown.map { it.second }.average())}, " +
+                "${rangeWords(range)}: average ${fmt(shown.map { it.second }.average())}, " +
                     "${fmt(shown.minOf { it.second })}–${fmt(shown.maxOf { it.second })} ${fm.unit} · ${shown.size} readings",
                 style = FTType.Caption, color = FT.TextSecondary,
             )
         }
         val lines = (fm.lines ?: listOf(FactorLine(fm.label, fm.color, fm.points))).map { it.copy(points = clip(it.points)) }.filter { it.points.isNotEmpty() }
         if (lines.isEmpty()) {
-            Text("No readings in this range.", style = FTType.Caption, color = FT.TextMuted)
+            com.bioscan.fieldterminal.ui.components.FTChartNote("No readings in this range. The latest is above.")
         } else {
+            val count = lines.sumOf { it.points.size }
+            if (!fm.daily && count < 3) {
+                com.bioscan.fieldterminal.ui.components.FTChartNote("Only $count reading${if (count == 1) "" else "s"} in this range: shown as dots, not a trend.")
+            }
             DateTrendLine(
-                series = lines.map { l ->
-                    com.bioscan.fieldterminal.ui.components.TrendSeries(l.points, l.color, label = l.label, dashed = l.label == "LEFT", maxGapDays = if (fm.daily) 3 else 400)
+                // A daily series is a line broken where days are missing. An occasional one (labs, grip, lifts) is its
+                // readings as dots, joined by a straight segment only where two are within 60 days, so months between
+                // two blood draws never read as a measured curve.
+                series = lines.flatMap { l ->
+                    if (fm.daily) listOf(com.bioscan.fieldterminal.ui.components.TrendSeries(l.points, l.color, label = l.label, dashed = l.label == "LEFT", maxGapDays = 3))
+                    else listOf(
+                        com.bioscan.fieldterminal.ui.components.TrendSeries(l.points, l.color, label = l.label, dashed = l.label == "LEFT", maxGapDays = 60, smooth = false, straight = true),
+                        com.bioscan.fieldterminal.ui.components.TrendSeries(l.points, l.color, dotsOnly = true),
+                    )
                 },
                 valueFormat = ::fmt,
                 unit = fm.unit,

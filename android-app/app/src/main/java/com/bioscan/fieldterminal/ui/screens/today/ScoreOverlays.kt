@@ -122,7 +122,11 @@ fun FullScreenOverlay(
             else -> Modifier
         }
         val scroll = rememberScrollState()
-        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(FT.Base).then(washed)) {
+        // Shared motion: an overlay fades in over 240 ms (none with reduced motion, or when drawn in place for screenshots).
+        val inline = LocalInlineOverlays.current
+        val fade = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(if (inline || com.bioscan.fieldterminal.ui.components.FTMotion.reduced) 1f else 0f) }
+        androidx.compose.runtime.LaunchedEffect(Unit) { fade.animateTo(1f, com.bioscan.fieldterminal.ui.components.FTMotion.tweenSlow()) }
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade.value }.background(FT.Base).then(washed)) {
         if (scene != null) {
             val top = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
             com.bioscan.fieldterminal.ui.components.ScoreSceneBackdrop(
@@ -137,14 +141,10 @@ fun FullScreenOverlay(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (onBack != null) {
-                    Text("‹", style = FTType.SectionTitle, color = FT.TextSecondary,
-                        modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Back") { onBack() }.padding(12.dp))
-                }
-                Text(title, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                if (trailing != null) Text(trailing, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(end = 8.dp))
-                Text("✕", style = FTType.RowTitle, color = FT.TextSecondary,
-                    modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Close") { onClose() }.padding(12.dp))
+                if (onBack != null) com.bioscan.fieldterminal.ui.components.FTIconButton(com.bioscan.fieldterminal.ui.components.FTIcons.Back, "Back", onBack)
+                Text(title, style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f).padding(start = if (onBack != null) 4.dp else 8.dp))
+                if (trailing != null) Text(trailing, style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(end = 4.dp))
+                com.bioscan.fieldterminal.ui.components.FTIconButton(com.bioscan.fieldterminal.ui.components.FTIcons.Close, "Close", onClose)
             }
             Column(
                 modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 8.dp),
@@ -161,26 +161,9 @@ fun FullScreenOverlay(
 }
 
 @Composable
-fun OverlaySection(title: String, info: String? = null, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-            .background(FT.Glass, RoundedCornerShape(FT.RadiusModule))
-            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        // The title; when [info] is set, a "?" opens the method/limits as a disclaimer popup so the card stays clean.
-        if (info != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.weight(1f))
-                InfoHelpButton(title = title, body = info)
-            }
-        } else {
-            Text(title, style = FTType.LabelCaps, color = FT.TextMuted)
-        }
-        content()
-    }
-}
+fun OverlaySection(title: String, info: String? = null, content: @Composable ColumnScope.() -> Unit) =
+    // A block inside a full-screen overlay: the shared card at its Compact level (one header, the "?" help button).
+    com.bioscan.fieldterminal.ui.components.FTCard(title = title, info = info, emphasis = com.bioscan.fieldterminal.ui.components.FTCardEmphasis.Compact, content = content)
 
 /** FUEL inputs scored against the saved daily targets (water falls back to a generic range, so it is never missing for this). */
 private val TARGET_INPUTS = setOf(ScoreKeys.ENERGY_RATIO, ScoreKeys.PROTEIN_RATIO, ScoreKeys.CARB_RATIO)
@@ -340,7 +323,7 @@ private fun DriverBar(label: String, points: Double, max: Double, color: android
         Text("${if (points >= 0) "+" else ""}${points.roundToInt()}", style = FTType.Telemetry,
             color = when { points >= 1 -> FT.Ok; points <= -1 -> FT.Bad; else -> FT.TextMuted },
             modifier = Modifier.width(36.dp), textAlign = TextAlign.End)
-        Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
     }
 }
 
@@ -427,7 +410,7 @@ private fun PictureTile(title: String, headline: String, thumb: @Composable () -
             if (headline.isNotEmpty()) Text(headline, style = FTType.MonoCaption, color = FT.TextSecondary, maxLines = 2)
         }
         thumb()
-        Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
     }
 }
 
@@ -559,7 +542,7 @@ private fun RelationRow(r: com.bioscan.fieldterminal.domain.score.Relation, onCl
             if (r.r >= 0) drawRoundRect(ink, Offset(mid, 2f), Size(w, size.height - 4f), cr) else drawRoundRect(ink, Offset(mid - w, 2f), Size(w, size.height - 4f), cr)
         }
         Text(if (r.r >= 0) "together" else "opposite", style = FTType.Micro, color = FT.TextSecondary, modifier = Modifier.width(56.dp), textAlign = TextAlign.End)
-        if (onClick != null) Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+        if (onClick != null) com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
     }
 }
 

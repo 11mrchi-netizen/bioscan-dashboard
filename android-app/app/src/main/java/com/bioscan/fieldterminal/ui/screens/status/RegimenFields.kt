@@ -292,7 +292,7 @@ fun RegimenFields(state: RegimenEditorState) {
                         }
                         Spacer(Modifier.weight(1f))
                         if (state.steps.size > 1) {
-                            Text("✕", style = FTType.MonoCaption, color = FT.Critical, modifier = Modifier.ftClickable { state.steps.removeAt(i) }.padding(6.dp))
+                            com.bioscan.fieldterminal.ui.components.FTIconButton(com.bioscan.fieldterminal.ui.components.FTIcons.Close, "Remove this step", { state.steps.removeAt(i) }, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Row)
                         }
                     }
                 }

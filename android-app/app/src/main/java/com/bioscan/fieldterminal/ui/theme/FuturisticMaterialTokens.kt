@@ -182,6 +182,14 @@ object FuturisticMaterialTokens {
         val ModeWaiting = Color(0xFF6B7178)
         val ModeUnknown = Color(0xFF3A3F45)
 
+        // lab markers and lifts on the Healthspan factor pages (occasional readings, drawn as dots)
+        val Triglycerides = Color(0xFFE8B04B)
+        val Hdl = Color(0xFF5CC8E8)
+        val FastingGlucose = Color(0xFFF0846B)
+        val Hba1c = Color(0xFFD46BE0)
+        val LiftPrimary = Color(0xFFFFB86B)
+        val LiftSecondary = Color(0xFF7FD4FF)
+
         // score scenes: CHARGE's city at dusk (the five domain scenes draw in their domain hue)
         val SceneCitySky = Color(0xFF2A3A55)
         val SceneCityWindow = Color(0xFFFFCF7A)
@@ -250,6 +258,8 @@ object FuturisticMaterialTokens {
     /** Where the glass gradient ends, 60% of the way across (white 2.8%). */
     val GlassFillEnd = Color(0x07FFFFFF)
     val GlassStrongFill = Color(0x1FFFFFFF)
+    /** An unselected chip's faint fill (white 3%, --ft-chip-idle). */
+    val ChipIdle = Color(0x08FFFFFF)
     val GlassBorder = Color(0x1FFFFFFF)
     /** The inset top highlight of a glass card (white 15%). */
     val GlassHighlight = Color(0x26FFFFFF)

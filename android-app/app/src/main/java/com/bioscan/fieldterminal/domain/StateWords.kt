@@ -78,3 +78,20 @@ fun gateStateWord(state: EvalState): StateWord = when (state) {
     EvalState.Building -> StateWord(MetricState.Building)
     else -> StateWord(MetricState.Neutral, "TRACKED")
 }
+
+// A Healthspan factor (domain/aging): the factor's own verdict, in the shared state language, so the radar, the
+// factor list and the factor page say it the same way. No new thresholds: the status is the scorer's.
+fun healthspanStateWord(status: com.bioscan.fieldterminal.domain.aging.FactorStatus): StateWord = when (status) {
+    com.bioscan.fieldterminal.domain.aging.FactorStatus.FAVORABLE -> StateWord(MetricState.Optimal, "FAVORABLE")
+    com.bioscan.fieldterminal.domain.aging.FactorStatus.NEUTRAL -> StateWord(MetricState.Neutral, "NEUTRAL")
+    com.bioscan.fieldterminal.domain.aging.FactorStatus.OPPORTUNITY -> StateWord(MetricState.Warning, "OPPORTUNITY")
+    com.bioscan.fieldterminal.domain.aging.FactorStatus.UNASSESSED -> StateWord(MetricState.Unavailable, "NOT ASSESSED")
+}
+
+// How much data stands behind a view, in the shared state language (availability is not a verdict, so never Optimal).
+fun availabilityStateWord(availability: DataAvailability): StateWord = when (availability) {
+    DataAvailability.Available -> StateWord(MetricState.Neutral, "AVAILABLE")
+    DataAvailability.Sparse -> StateWord(MetricState.Neutral, "SPARSE")
+    DataAvailability.Building -> StateWord(MetricState.Building)
+    DataAvailability.Unavailable -> StateWord(MetricState.Unavailable)
+}

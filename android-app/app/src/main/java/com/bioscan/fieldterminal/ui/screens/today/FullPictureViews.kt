@@ -355,7 +355,7 @@ private fun NightTile(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.weight(1f))
-            Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+            com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(reading.latest?.let(format) ?: "—", style = FTType.MetricMedium, color = FT.TextPrimary)

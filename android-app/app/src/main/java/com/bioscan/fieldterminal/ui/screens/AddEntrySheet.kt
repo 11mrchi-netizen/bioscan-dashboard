@@ -46,6 +46,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -1670,7 +1673,7 @@ private fun CheckboxGlyph(checked: Boolean) {
         contentAlignment = Alignment.Center,
     ) {
         if (checked) {
-            Text("✓", style = FTType.CaptionStrong, color = FT.Base)
+            com.bioscan.fieldterminal.ui.components.FTIcon(com.bioscan.fieldterminal.ui.components.FTIcons.Check, null, tint = FT.Base, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Inline)
         }
     }
 }
@@ -2293,9 +2296,12 @@ internal fun TextChipRow(options: List<String>, selected: String?, perRow: Int =
                     Box(
                         modifier = Modifier
                             .weight(1f)
+                            // a 48 dp target, and the choice announced as selected (polish: touch targets, accessibility)
+                            .heightIn(min = 48.dp)
+                            .semantics { this.selected = isSelected }
                             .border(FT.BorderWidth, if (isSelected) Color.Transparent else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                             .background(if (isSelected) FT.PlatinumSolid else FT.GlassFill, RoundedCornerShape(FT.RadiusSmall))
-                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) { onSelect(if (isSelected) null else option) }
+                            .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall), role = androidx.compose.ui.semantics.Role.RadioButton, onClickLabel = option) { onSelect(if (isSelected) null else option) }
                             .padding(vertical = 10.dp, horizontal = 2.dp),
                         contentAlignment = Alignment.Center,
                     ) {

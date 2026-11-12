@@ -116,7 +116,7 @@ object Toasts {
 fun ToastHost(modifier: Modifier = Modifier) {
     val toast by Toasts.current.collectAsState()
     Box(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.BottomCenter) {
-        AnimatedVisibility(toast != null, enter = fadeIn() + slideInVertically { it / 2 }, exit = fadeOut() + slideOutVertically { it / 2 }) {
+        AnimatedVisibility(toast != null, enter = if (FTMotion.reduced) androidx.compose.animation.EnterTransition.None else fadeIn(FTMotion.tweenBase()) + slideInVertically(FTMotion.tweenBase()) { it / 2 }, exit = if (FTMotion.reduced) androidx.compose.animation.ExitTransition.None else fadeOut(FTMotion.tweenFast()) + slideOutVertically(FTMotion.tweenFast()) { it / 2 }) {
             val t = toast ?: return@AnimatedVisibility
             val shape = RoundedCornerShape(FT.RadiusModule)
             Row(

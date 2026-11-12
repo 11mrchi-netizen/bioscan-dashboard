@@ -385,16 +385,12 @@ private fun MultiPinMapView(
                 )
                 pins.forEach { pin ->
                     val category = classifyMapEvent(pin.event.colorId, pin.event.title)
-                    // Training pins use Training's own domain accent (Emerald) --
-                    // the same color that section's own screens/nav-tab use, not
-                    // an arbitrary map-only hue. Encounter/Social reuse the same
-                    // red the Log feed's own TypeChip already uses for that
-                    // category, so the two screens read as the same category
-                    // consistently. Other/uncategorized defaults to Map's own
-                    // domain accent (Blue) -- a generic pin belongs to Map itself.
+                    // A pin's hue is its kind, from the same category palette the Log's type chips use
+                    // (FT.Category): training is activity, an encounter or a social event is arousal. Red is a
+                    // status ("critical") and never a kind. Other/uncategorized takes Map's own domain accent.
                     val color = when (category) {
-                        MapEventCategory.Training -> FT.DomainTraining.toArgb()
-                        MapEventCategory.Encounter, MapEventCategory.Social -> FT.Critical.toArgb()
+                        MapEventCategory.Training -> FT.Category.Activity.c500.toArgb()
+                        MapEventCategory.Encounter, MapEventCategory.Social -> FT.Category.Arousal.c500.toArgb()
                         MapEventCategory.Other -> FT.DomainMap.toArgb()
                     }
                     overlays.add(pinMarker(this, GeoPoint(pin.lat, pin.lon), color) { onPinClick(pin) })
@@ -724,7 +720,7 @@ private fun WeatherRow(state: WeatherUiState, onClick: () -> Unit) {
                 Text("%.0f°".format(state.weather.temperatureC), style = sheetActionLabelStyle, color = FT.TextPrimary)
             }
             WeatherUiState.Loading -> Text("···", style = sheetActionLabelStyle, color = FT.TextSecondary)
-            is WeatherUiState.Failed -> Text("⚠", style = sheetActionLabelStyle, color = FT.Critical)
+            is WeatherUiState.Failed -> com.bioscan.fieldterminal.ui.components.FTIcon(com.bioscan.fieldterminal.ui.components.FTIcons.Warning, "Weather unavailable", tint = FT.Critical, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Inline)
             WeatherUiState.Idle -> Text("VIEW", style = sheetActionLabelStyle, color = FT.DomainMap)
         }
     }

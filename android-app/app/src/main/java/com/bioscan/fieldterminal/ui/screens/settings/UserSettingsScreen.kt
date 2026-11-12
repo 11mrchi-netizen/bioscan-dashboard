@@ -166,19 +166,4 @@ private fun ProfileCard(scope: CoroutineScope) {
 // null (matches AddEntrySheet.kt's TextChipRow, an optional field, not a
 // forced either/or).
 @Composable
-private fun SexChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .border(FT.BorderWidth, if (selected) Color.Transparent else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
-            .background(if (selected) FT.PlatinumSolid else Color.Transparent, RoundedCornerShape(FT.RadiusSmall))
-            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label.uppercase(),
-            style = FTType.LabelCaps,
-            color = if (selected) FT.PlatinumInk else FT.TextSecondary,
-        )
-    }
-}
+private fun SexChip(label: String, selected: Boolean, onClick: () -> Unit) = com.bioscan.fieldterminal.ui.components.FTChoiceChip(label.uppercase(), selected, onClick)

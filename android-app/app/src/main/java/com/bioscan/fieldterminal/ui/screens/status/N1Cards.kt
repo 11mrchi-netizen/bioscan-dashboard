@@ -99,7 +99,7 @@ fun N1ExperimentsCard(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(e.name, style = FTType.Label, color = FT.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Text(word, style = FTType.Micro, color = if (word.startsWith("CLEAR")) FT.TextPrimary else FT.TextSecondary)
-                    Text(if (open == e.id) "▴" else "▾", style = FTType.Label, color = FT.TextMuted)
+                    com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted, expanded = open == e.id)
                 }
                 progress?.let { f ->
                     Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(FT.GlassBorder)) {

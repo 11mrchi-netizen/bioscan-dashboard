@@ -238,7 +238,7 @@ internal fun DrinkLogForm(
                 ) {
                     DrinkLabel("USUALS (${usual.size})")
                     Spacer(Modifier.weight(1f))
-                    Text(if (usualOpen) "−" else "+", style = FTType.LabelCaps, color = FT.TextSecondary)
+                    com.bioscan.fieldterminal.ui.components.FTIcon(if (usualOpen) com.bioscan.fieldterminal.ui.components.FTIcons.Minus else com.bioscan.fieldterminal.ui.components.FTIcons.Plus, null, tint = FT.TextSecondary, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Inline)
                 }
                 if (usualOpen) usual.forEach { (u, match) ->
                     DrinkRow(

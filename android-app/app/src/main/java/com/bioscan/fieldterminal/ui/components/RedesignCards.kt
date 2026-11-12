@@ -68,7 +68,7 @@ fun TimeRangeDropdown(modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(GlobalTimeRange.selected.label, style = FTType.LabelCaps, color = FT.TextPrimary)
-            Text("▾", style = FTType.Label, color = FT.TextSecondary)
+            com.bioscan.fieldterminal.ui.components.FTIcon(com.bioscan.fieldterminal.ui.components.FTIcons.ChevronDown, null, tint = FT.TextSecondary, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Inline)
         }
         androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = FT.Elevated) {
             TimeRange.entries.forEach { r ->

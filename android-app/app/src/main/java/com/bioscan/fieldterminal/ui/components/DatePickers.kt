@@ -210,8 +210,8 @@ private fun CalendarPanel(date: LocalDate, onPick: (LocalDate) -> Unit) {
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            NavGlyph("«") { shown = shown.minusYears(1) }
-            NavGlyph("‹") { shown = shown.minusMonths(1) }
+            FTIconButton(FTIcons.DoubleBack, "Previous year", { shown = shown.minusYears(1) })
+            FTIconButton(FTIcons.Back, "Previous month", { shown = shown.minusMonths(1) })
             Text(
                 shown.format(MONTH_TITLE).uppercase(),
                 style = FTType.Telemetry,
@@ -219,8 +219,8 @@ private fun CalendarPanel(date: LocalDate, onPick: (LocalDate) -> Unit) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f),
             )
-            NavGlyph("›") { shown = shown.plusMonths(1) }
-            NavGlyph("»") { shown = shown.plusYears(1) }
+            FTIconButton(FTIcons.ChevronRight, "Next month", { shown = shown.plusMonths(1) })
+            FTIconButton(FTIcons.DoubleForward, "Next year", { shown = shown.plusYears(1) })
         }
         Row(modifier = Modifier.fillMaxWidth()) {
             for (name in listOf("MO", "TU", "WE", "TH", "FR", "SA", "SU")) {
@@ -248,17 +248,6 @@ private fun CalendarPanel(date: LocalDate, onPick: (LocalDate) -> Unit) {
     }
 }
 
-@Composable
-private fun NavGlyph(glyph: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .ftClickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(glyph, style = FTType.MetricMedium, color = FT.TextSecondary)
-    }
-}
 
 @Composable
 private fun DayCell(day: Int, selected: Boolean, isToday: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {

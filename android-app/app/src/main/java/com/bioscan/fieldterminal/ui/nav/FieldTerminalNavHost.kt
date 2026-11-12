@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.nav
 
+import com.bioscan.fieldterminal.ui.components.FTMotion
+
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
@@ -179,10 +181,13 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding).imePadding(),
             // Between dock tabs: a quick crossfade. A pushed page slides in from the right over a short fade and slides
             // back out on back; with predictive back (manifest) the swipe previews the page behind.
-            enterTransition = { if (isTabSwitch()) fadeIn(tween(TAB_FADE_MS)) else slideInHorizontally(tween(PUSH_MS)) { it / 4 } + fadeIn(tween(PUSH_MS)) },
-            exitTransition = { if (isTabSwitch()) fadeOut(tween(TAB_FADE_MS)) else fadeOut(tween(PUSH_MS)) },
-            popEnterTransition = { if (isTabSwitch()) fadeIn(tween(TAB_FADE_MS)) else fadeIn(tween(PUSH_MS)) },
-            popExitTransition = { if (isTabSwitch()) fadeOut(tween(TAB_FADE_MS)) else slideOutHorizontally(tween(PUSH_MS)) { it / 4 } + fadeOut(tween(PUSH_MS)) },
+            // Shared motion (ui/components/FTMotion.kt): between dock tabs a crossfade; a pushed page fades in with a short
+            // slide from the right and slides back out on back. With predictive back (manifest) the swipe previews the page
+            // behind. Reduced motion (animations removed in the system settings) snaps.
+            enterTransition = { if (isTabSwitch()) FTMotion.tabEnter() else FTMotion.pushEnter() },
+            exitTransition = { if (isTabSwitch()) FTMotion.tabExit() else FTMotion.pushExit() },
+            popEnterTransition = { if (isTabSwitch()) FTMotion.tabEnter() else FTMotion.popEnter() },
+            popExitTransition = { if (isTabSwitch()) FTMotion.tabExit() else FTMotion.popExit() },
         ) {
             // Scoring system rebuild (docs/scoring-system): the opening page is TODAY -- CHARGE, the five domain rings and
             // today's plan.
@@ -442,8 +447,6 @@ private val TopLevelTab.iconRes
         TopLevelTab.User -> R.drawable.ic_tab_user
     }
 
-private const val TAB_FADE_MS = 150
-private const val PUSH_MS = 220
 private val TAB_ROUTES = TopLevelTab.entries.map { it.route }.toSet()
 
 /** Both ends are dock tabs. */

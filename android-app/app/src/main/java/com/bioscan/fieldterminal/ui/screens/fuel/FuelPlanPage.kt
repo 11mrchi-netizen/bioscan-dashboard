@@ -205,7 +205,7 @@ private fun DayRow(d: HorizonDay, open: Boolean, onToggle: () -> Unit) {
                 main?.let { "${it.title.uppercase()} · ${it.durationMin.roundToInt()} MIN" } ?: "REST",
                 style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.weight(1f), maxLines = 1,
             )
-            Text(if (open) "−" else "+", style = FTType.LabelCaps, color = FT.TextSecondary)
+            com.bioscan.fieldterminal.ui.components.FTIcon(if (open) com.bioscan.fieldterminal.ui.components.FTIcons.Minus else com.bioscan.fieldterminal.ui.components.FTIcons.Plus, null, tint = FT.TextSecondary, size = com.bioscan.fieldterminal.ui.components.FTIconSize.Inline)
         }
         Text(
             listOfNotNull(

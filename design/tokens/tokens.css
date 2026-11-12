@@ -14,6 +14,12 @@
   --ft-glass-bg:      linear-gradient(135deg, rgba(255,255,255,.085), rgba(255,255,255,.028) 60%);
   --ft-glass-border:  rgba(255,255,255,.12);
   --ft-glass-blur:    blur(18px) saturate(1.1);
+  --ft-chip-idle:     rgba(255,255,255,.03);   /* an unselected chip's faint fill */
+
+  /* motion (contract section 12): soft 120-240 ms, no bounce; reduced motion snaps */
+  --ft-motion-fast:   120ms;   /* press release, chip selection, small state changes */
+  --ft-motion-base:   180ms;   /* tab switches, expanding a row, chart selection */
+  --ft-motion-slow:   240ms;   /* pushed pages, overlays and sheets */
 
   /* ---- domain framing hues (background wash + hero gauge only) ---- */
   --ft-domain-sleep:     #8b7cff;
@@ -121,6 +127,14 @@
   --m-mode-stop:         #d95926;
   --m-mode-waiting:      #6b7178;
   --m-mode-unknown:      #3a3f45;
+
+  /* lab markers and lifts on the Healthspan factor pages (occasional readings, drawn as dots) */
+  --m-triglycerides:     #e8b04b;
+  --m-hdl:               #5cc8e8;
+  --m-fasting-glucose:   #f0846b;
+  --m-hba1c:             #d46be0;
+  --m-lift-primary:      #ffb86b;
+  --m-lift-secondary:    #7fd4ff;
 
   /* score scenes — CHARGE's city at dusk (the five domain scenes draw in their domain hue) */
   --scene-city-sky:      #2a3a55;

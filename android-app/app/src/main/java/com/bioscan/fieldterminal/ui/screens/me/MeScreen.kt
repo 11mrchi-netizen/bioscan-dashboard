@@ -68,13 +68,19 @@ fun MeScreen(
             },
             accent = FT.DomainUser,
             action = {
-                Text("⚙", style = FTType.SectionTitle, color = FT.TextSecondary,
-                    modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Settings") { onOpenSettings() }.padding(8.dp))
+                com.bioscan.fieldterminal.ui.components.FTIconButton(com.bioscan.fieldterminal.ui.components.FTIcons.Settings, "Settings", onOpenSettings)
             },
         )
         SubTabRow(items = MeTab.entries, selected = tab, label = { it.label }, onSelect = { tab = it })
         Box(Modifier.fillMaxWidth().height(FT.BorderWidth).background(FT.GlassBorder))
-        Box(Modifier.fillMaxWidth().weight(1f)) {
+        // Sub-tab switch: a short slide toward the tab's side with a fade (FTMotion; snaps with reduced motion).
+        androidx.compose.animation.AnimatedContent(
+            targetState = tab,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            transitionSpec = { com.bioscan.fieldterminal.ui.components.FTMotion.subTab(this, targetState.ordinal > initialState.ordinal) },
+            label = "me-tab",
+        ) { tab ->
+        Box(Modifier.fillMaxSize()) {
             when (tab) {
                 // The healthspan page scrolls itself.
                 MeTab.Healthspan -> UserProfileScreen(
@@ -102,6 +108,7 @@ fun MeScreen(
                     }
                 }
             }
+        }
         }
     }
 }

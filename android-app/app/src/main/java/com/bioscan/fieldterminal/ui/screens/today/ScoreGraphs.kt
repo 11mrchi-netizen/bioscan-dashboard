@@ -147,7 +147,7 @@ fun BulletRow(input: InputScore, points: Double?, onClick: () -> Unit) {
                 color = when { points >= 1 -> FT.EmeraldHighlight; points <= -1 -> FT.Critical; else -> FT.TextMuted },
                 modifier = Modifier.width(30.dp), textAlign = TextAlign.End)
         }
-        Text("›", style = FTType.Telemetry, color = FT.TextMuted)
+        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
     }
 }
 

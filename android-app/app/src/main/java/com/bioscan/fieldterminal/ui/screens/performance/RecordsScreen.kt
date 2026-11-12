@@ -3,7 +3,9 @@ package com.bioscan.fieldterminal.ui.screens.performance
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -105,9 +107,10 @@ fun RecordsScreen(onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
 @Composable
 internal fun RecordRow(r: RecordHistory, expanded: Boolean, today: LocalDate, onToggle: () -> Unit, onOpenSession: (Long) -> Unit) {
     val cur = r.current
-    Column(Modifier.fillMaxWidth()) {
+    // Expanding a record: the row grows over 180 ms (FTMotion; snaps with reduced motion).
+    Column(Modifier.fillMaxWidth().animateContentSize(com.bioscan.fieldterminal.ui.components.FTMotion.tweenBase())) {
         Row(
-            Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Open ${r.key.label}", enabled = cur != null) { onToggle() }.padding(vertical = 8.dp),
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).ftClickable(role = Role.Button, onClickLabel = "Open ${r.key.label}", enabled = cur != null) { onToggle() }.padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -119,7 +122,7 @@ internal fun RecordRow(r: RecordHistory, expanded: Boolean, today: LocalDate, on
                 )
             }
             Text(cur?.let { formatRecordValue(r.key, it.value) } ?: "—", style = FTType.MetricMedium, color = if (cur != null) ink(r.key) else FT.TextMuted)
-            if (cur != null) Text(if (expanded) "⌄" else "›", style = FTType.SectionTitle, color = FT.TextSecondary)
+            if (cur != null) com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary, expanded = expanded)
         }
         if (expanded && cur != null) RecordProgress(r, today, onOpenSession)
     }
@@ -157,13 +160,13 @@ private fun RecordProgress(r: RecordHistory, today: LocalDate, onOpenSession: (L
         Text("EACH TIME IT MOVED", style = FTType.Micro, color = FT.TextMuted)
         r.sets.asReversed().forEach { s ->
             Row(
-                Modifier.fillMaxWidth().ftClickable(role = Role.Button, onClickLabel = "Open the run", enabled = s.sessionId != null) { s.sessionId?.let(onOpenSession) }.padding(vertical = 4.dp),
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).ftClickable(role = Role.Button, onClickLabel = "Open the run", enabled = s.sessionId != null) { s.sessionId?.let(onOpenSession) }.padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(s.date.format(DAY), style = FTType.Telemetry, color = FT.TextSecondary, modifier = Modifier.weight(1f))
                 Text(improvementWords(r.key, s), style = FTType.Caption, color = FT.TextMuted)
                 Text(formatRecordValue(r.key, s.value), style = FTType.Body, color = FT.TextPrimary)
-                if (s.sessionId != null) Text("›", style = FTType.RowTitle, color = FT.TextMuted)
+                if (s.sessionId != null) com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
             }
         }
     }

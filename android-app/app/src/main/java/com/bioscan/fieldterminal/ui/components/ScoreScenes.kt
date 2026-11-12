@@ -67,7 +67,7 @@ private const val STRENGTH = 0.50f
 fun ScoreSceneBackdrop(scene: ScoreScene, score: Double?, modifier: Modifier = Modifier, ringCenterY: androidx.compose.ui.unit.Dp? = null) {
     val context = LocalContext.current
     val still = remember(score) {
-        score == null || runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) == 0f
+        score == null || FTMotion.reduced || runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) == 0f
     }
     val period = if (scene == ScoreScene.SLEEP || scene == ScoreScene.CHARGE) 24_000 else 16_000
     val phase: State<Float> = if (still) remember { mutableFloatStateOf(0.15f) } else {

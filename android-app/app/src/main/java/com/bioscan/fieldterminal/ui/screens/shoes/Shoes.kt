@@ -270,7 +270,7 @@ private fun ShoeRow(stats: ShoeStats, onClick: () -> Unit) {
             )
             if (!s.retired) WearBar(stats)
         }
-        Text("›", style = FTType.SectionTitle, color = FT.TextSecondary)
+        com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
     }
 }
 
@@ -573,7 +573,7 @@ fun ShoeScreen(shoeId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit) 
                         )
                     }
                     Text(recordValue(r), style = FTType.MetricMedium, color = FT.TextPrimary)
-                    Text("›", style = FTType.SectionTitle, color = FT.TextSecondary)
+                    com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
                 }
             }
         }
@@ -588,7 +588,7 @@ fun ShoeScreen(shoeId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit) 
                     Text(r.date.format(DAY), style = FTType.Body, color = FT.TextPrimary, modifier = Modifier.weight(1f))
                     if (r.trail) Text("TRAIL", style = FTType.Micro, color = FT.TextMuted)
                     Text("${km(r.distanceKm)} km", style = FTType.Body, color = FT.TextSecondary)
-                    Text("›", style = FTType.SectionTitle, color = FT.TextSecondary)
+                    com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextSecondary)
                 }
             }
             if (st.runs.size > 30) Text("and ${st.runs.size - 30} earlier runs", style = FTType.Caption, color = FT.TextMuted)

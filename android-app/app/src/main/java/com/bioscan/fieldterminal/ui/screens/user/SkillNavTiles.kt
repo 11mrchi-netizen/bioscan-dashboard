@@ -60,7 +60,7 @@ private fun SkillTile(skill: Skill, level: SkillLevel?, onClick: () -> Unit, mod
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(skill.title, style = FTType.Label, color = color, maxLines = 1, modifier = Modifier.weight(1f))
-            Text("›", style = FTType.Value, color = FT.TextMuted)
+            com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted)
         }
         when {
             level == null -> Text("…", style = FTType.RowTitle, color = FT.TextMuted)

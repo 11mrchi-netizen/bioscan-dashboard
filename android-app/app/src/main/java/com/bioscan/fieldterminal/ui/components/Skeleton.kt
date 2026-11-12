@@ -29,10 +29,11 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 @Composable
 fun SkeletonSections(count: Int = 3) {
-    val pulse by rememberInfiniteTransition(label = "skeleton").animateFloat(
+    // With reduced motion the placeholder holds still at its middle value.
+    val pulse = if (FTMotion.reduced) 0.65f else rememberInfiniteTransition(label = "skeleton").animateFloat(
         initialValue = 0.45f, targetValue = 0.9f,
         animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse), label = "pulse",
-    )
+    ).value
     Column(Modifier.fillMaxWidth().semantics { contentDescription = "Loading" }, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         repeat(count) { i ->
             val shape = RoundedCornerShape(FT.RadiusModule)

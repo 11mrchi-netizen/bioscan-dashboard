@@ -29,6 +29,11 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTMetricValue
 import com.bioscan.fieldterminal.ui.components.FTRadarChart
 import com.bioscan.fieldterminal.ui.components.RadarAxis
+import com.bioscan.fieldterminal.ui.components.RadarRing
+import com.bioscan.fieldterminal.ui.components.FTChevron
+import com.bioscan.fieldterminal.ui.components.FTStatePill
+import com.bioscan.fieldterminal.ui.components.stateTreatment
+import com.bioscan.fieldterminal.domain.healthspanStateWord
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -71,13 +76,19 @@ fun HealthspanCard(summary: HealthspanSummary?, failed: Boolean = false, onOpenA
         val open: (HealthspanFactor) -> Unit = { f ->
             if (f.id == HealthspanFactorId.BIOLOGICAL_AGE) onOpenAging() else openFactor = f
         }
+        // The chart and the list below share one order (the scorer's) and one state language (healthspanStateWord):
+        // the vertex's colour and shape and the row's pill both come from the factor's status.
         FTRadarChart(
             axes = summary.factors.map { f ->
-                val (tag, color) = f.status.tag()
-                RadarAxis(f.id.short(), f.score?.toDouble(), color)
+                val word = healthspanStateWord(f.status)
+                RadarAxis(
+                    f.id.short(), f.score?.toDouble(), stateTreatment(word.state).color, state = word.state,
+                    description = "${f.id.label}, " + (f.score?.let { "$it of 100, " } ?: "") + word.word!!.lowercase(),
+                )
             },
             selectedIndex = null,
             onSelect = { i -> summary.factors.getOrNull(i)?.let(open) },
+            markedRings = listOf(RadarRing(com.bioscan.fieldterminal.domain.aging.SCORE_FAVORABLE.toDouble(), "${com.bioscan.fieldterminal.domain.aging.SCORE_FAVORABLE}"), RadarRing(com.bioscan.fieldterminal.domain.aging.SCORE_NEUTRAL.toDouble(), "${com.bioscan.fieldterminal.domain.aging.SCORE_NEUTRAL}")),
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -86,13 +97,6 @@ fun HealthspanCard(summary: HealthspanSummary?, failed: Boolean = false, onOpenA
         Text("PRODUCT-DEFINED · PROVISIONAL · NOT CLINICALLY VALIDATED", style = FTType.Micro, color = FT.TextMuted)
     }
     openFactor?.let { f -> HealthspanFactorOverlay(f) { openFactor = null } }
-}
-
-private fun FactorStatus.tag(): Pair<String, Color> = when (this) {
-    FactorStatus.FAVORABLE -> "FAVORABLE" to FT.Emerald
-    FactorStatus.NEUTRAL -> "NEUTRAL" to FT.TextSecondary
-    FactorStatus.OPPORTUNITY -> "OPPORTUNITY" to FT.Warning
-    FactorStatus.UNASSESSED -> "NOT ASSESSED" to FT.TextMuted
 }
 
 private fun HealthspanFactorId.short(): String = when (this) {
@@ -110,20 +114,20 @@ private fun HealthspanFactorId.short(): String = when (this) {
 // each metric behind it). An unassessed factor shows what it is waiting for.
 @Composable
 private fun FactorRow(f: HealthspanFactor, onClick: () -> Unit) {
-    val (tag, color) = f.status.tag()
     // The whole row is the touch target, at least 48 dp tall.
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall))
+            .ftClickable(onClick = onClick, shape = RoundedCornerShape(FT.RadiusSmall), role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Open ${f.id.label}")
             .padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(f.id.label, style = FTType.Body, color = FT.TextSecondary, modifier = Modifier.weight(1f))
-            Text(f.score?.let { "$it · $tag" } ?: tag, style = FTType.MonoCaption, color = color)
-            Text("›", style = FTType.MonoCaption, color = FT.TextMuted, modifier = Modifier.padding(start = 6.dp))
+            Text(f.score?.toString() ?: "—", style = FTType.Telemetry, color = if (f.score != null) FT.TextPrimary else FT.TextMuted)
+            FTStatePill(healthspanStateWord(f.status))
+            FTChevron()
         }
         if (f.status == FactorStatus.UNASSESSED && f.missingInputs.isNotEmpty()) {
             Text("Needs: " + f.missingInputs.first(), style = FTType.Caption, color = FT.TextMuted, maxLines = 1)

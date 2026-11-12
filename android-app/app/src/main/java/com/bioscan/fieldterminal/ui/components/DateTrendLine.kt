@@ -46,8 +46,6 @@ import java.time.temporal.ChronoUnit
 // three labelled values; a caller can fix the scale to the person's usual range (`scale`), break a daily series at
 // missing days (`TrendSeries.maxGapDays`, the gap is marked on the axis), draw a per-day expected band (`band`), ring
 // flagged points (`marks`) and date illness, device changes and the like (`annotations`).
-private val TREND_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM")
-private val INSPECT_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy")
 
 // `label` names the series in the tap-to-inspect box; null = value only.
 // `highlightLast` draws a permanent state-colored dot on the series' latest
@@ -354,7 +352,7 @@ fun DateTrendLine(
                         measurer = measurer,
                         x = x,
                         dots = hits.map { (_, v) -> Offset(x, yFor(v, size.height)) },
-                        header = day.format(INSPECT_DATE_FORMAT),
+                        header = ChartDates.full(day),
                         rows = hits.map { (s, v) -> InspectRow(s.label, valueFormat(v), s.color) } +
                             listOfNotNull(bandDay?.let { InspectRow(bandLabel ?: "BAND", valueFormat(it.low) + "–" + valueFormat(it.high), FT.TextSecondary) }),
                     )
@@ -362,8 +360,8 @@ fun DateTrendLine(
             }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(start = gutterDp, top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(dayMin.format(TREND_DATE_FORMAT), style = FTType.MonoCaption, color = FT.TextSecondary)
-            Text(dayMax.format(TREND_DATE_FORMAT), style = FTType.MonoCaption, color = FT.TextSecondary)
+            Text(ChartDates.short(dayMin), style = FTType.MonoCaption, color = FT.TextSecondary)
+            Text(ChartDates.short(dayMax), style = FTType.MonoCaption, color = FT.TextSecondary)
         }
         if (legend) {
             Row(modifier = Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {

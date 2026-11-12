@@ -404,7 +404,7 @@ private fun ZeppCard(scope: CoroutineScope) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("DIAGNOSTICS", style = FTType.LabelCaps, color = FT.TextMuted, modifier = Modifier.weight(1f))
-            Text(if (showDiagnostics) "▾" else "▸", style = FTType.LabelCaps, color = FT.TextMuted)
+            com.bioscan.fieldterminal.ui.components.FTChevron(tint = FT.TextMuted, expanded = showDiagnostics)
         }
         if (showDiagnostics) {
             Text(

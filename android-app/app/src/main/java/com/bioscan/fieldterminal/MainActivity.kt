@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
+        com.bioscan.fieldterminal.ui.components.FTMotion.init(this)
         Perf.enabled = BuildConfig.DEBUG // logcat tag "perf"; see util/Perf.kt
         // Notification channels, the Supabase client and the metric registry are warmed on a background thread by FieldTerminalApp.
         // Only on a fresh launch: after process restore the same intent is redelivered and would re-navigate.

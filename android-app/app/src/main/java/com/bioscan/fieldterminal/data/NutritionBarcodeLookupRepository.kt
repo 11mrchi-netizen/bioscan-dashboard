@@ -1,23 +1,18 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import android.util.Base64
 import io.github.jan.supabase.SupabaseClient
-import io.ktor.client.request.header
 import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 
 // DAV-165, plus label scans. Calls the nutrition-barcode-lookup Edge Function: the app catalog first (a label you
 // scanned wins), else Open Food Facts, cached into the catalog server-side (catalog writes stay behind the service-role
 // key; foods/food_nutrients are SELECT-only for users). Products no database knows -- most Taiwanese ones -- are added by
 // photographing their nutrition label (readLabel), confirming the numbers, and saving them under the barcode (saveLabel).
-private const val FUNCTIONS_BASE_URL = "https://ugfrglbcoivkprjqvjzz.supabase.co/functions/v1"
 
 class BarcodeLookupException(message: String) : Exception(message)
 
@@ -112,15 +107,15 @@ private data class BarcodeLookupResponse(
 private data class ErrorResponse(val error: String? = null, val message: String? = null, val checks: List<LabelCheck>? = null)
 
 class NutritionBarcodeLookupRepository(private val supabase: SupabaseClient) {
-    companion object {
-        private val client = functionsClient(20_000)
+    private companion object {
+        const val LOOKUP_TIMEOUT_MS = 20_000L
         // Reading a label photo is a Gemini vision call (and its fallback tier).
-        private val labelClient = functionsClient(75_000)
+        const val LABEL_TIMEOUT_MS = 75_000L
     }
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     suspend fun lookup(barcode: String): BarcodeLookupResult {
-        val parsed = json.decodeFromString<BarcodeLookupResponse>(post(client, json.encodeToString(BarcodeLookupRequest(barcode))))
+        val parsed = json.decodeFromString<BarcodeLookupResponse>(post(LOOKUP_TIMEOUT_MS, json.encodeToString(BarcodeLookupRequest(barcode))))
         if (parsed.error != null) throw BarcodeLookupException(parsed.message ?: parsed.error)
         return BarcodeLookupResult(parsed.food.takeIf { parsed.found }, parsed.needsLabel || !parsed.found, parsed.source)
     }
@@ -129,7 +124,7 @@ class NutritionBarcodeLookupRepository(private val supabase: SupabaseClient) {
     suspend fun readLabel(images: List<ByteArray>, mimeType: String = "image/jpeg"): LabelReadResult {
         require(images.isNotEmpty()) { "At least one photo is required" }
         val body = json.encodeToString(ReadLabelRequest(ReadLabelBody(images.map { Base64.encodeToString(it, Base64.NO_WRAP) }, mimeType)))
-        val text = post(labelClient, body)
+        val text = post(LABEL_TIMEOUT_MS, body)
         val failure = json.decodeFromString<ErrorResponse>(text)
         if (failure.error != null) throw BarcodeLookupException(failure.message ?: failure.error)
         return json.decodeFromString<LabelReadResult>(text)
@@ -138,7 +133,7 @@ class NutritionBarcodeLookupRepository(private val supabase: SupabaseClient) {
     // Stores the confirmed label as this barcode's product; the next scan of it is instant.
     suspend fun saveLabel(barcode: String, name: String, brand: String?, label: ScannedLabel): BarcodeLookupResult {
         val parsed = json.decodeFromString<BarcodeLookupResponse>(
-            post(client, json.encodeToString(SaveLabelRequest(SaveLabelBody(barcode, name, brand, label)))),
+            post(LOOKUP_TIMEOUT_MS, json.encodeToString(SaveLabelRequest(SaveLabelBody(barcode, name, brand, label)))),
         )
         if (parsed.error != null) {
             val detail = parsed.checks?.joinToString("; ") { it.message }?.takeIf { it.isNotBlank() }
@@ -147,14 +142,8 @@ class NutritionBarcodeLookupRepository(private val supabase: SupabaseClient) {
         return BarcodeLookupResult(parsed.food, false, parsed.source)
     }
 
-    private suspend fun post(httpClient: io.ktor.client.HttpClient, body: String): String {
-        val token = supabase.sessionToken() ?: throw BarcodeLookupException("Not signed in")
-        return httpClient.post("$FUNCTIONS_BASE_URL/nutrition-barcode-lookup") {
-            header("Authorization", "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(body)
-        }.bodyAsText()
-    }
+    private suspend fun post(timeoutMs: Long, body: String): String =
+        supabase.postFunction("nutrition-barcode-lookup", body, timeoutMs).bodyAsText()
 }
 
 // A barcode product is a catalog item (label numbers, its servings and package size). A good Cronometer match for the

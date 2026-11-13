@@ -1,24 +1,16 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import io.github.jan.supabase.SupabaseClient
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonPrimitive
 
-private const val FUNCTIONS_BASE_URL = "https://ugfrglbcoivkprjqvjzz.supabase.co/functions/v1"
 
 class NutritionCronometerLookupException(message: String) : Exception(message)
 
@@ -289,11 +281,7 @@ fun emptyEnrichment(): CronometerEnrichment = CronometerEnrichment(
 )
 
 class NutritionCronometerLookupRepository(private val supabase: SupabaseClient) {
-    companion object {
-        private val client = functionsClient(90_000)
-    }
-
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     suspend fun enrich(mealDescription: String): CronometerEnrichment =
         callLookup(json.encodeToString(CronometerRequest(mealDescription)))
@@ -307,11 +295,7 @@ class NutritionCronometerLookupRepository(private val supabase: SupabaseClient) 
 
     // Foods matching what the user is typing. Throws on a failed call (the caller keeps the previous suggestions).
     suspend fun suggest(query: String, limit: Int = 8): List<FoodSuggestion> {
-        val response = client.post("$FUNCTIONS_BASE_URL/nutrition-cronometer-lookup") {
-            header("Authorization", "Bearer ${token()}")
-            contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(SuggestRequest(SuggestQuery(query, limit))))
-        }
+        val response = supabase.postFunction("nutrition-cronometer-lookup", json.encodeToString(SuggestRequest(SuggestQuery(query, limit))), 90_000)
         val parsed = json.decodeFromString<SuggestResponse>(response.bodyAsText())
         if (parsed.error != null) throw NutritionCronometerLookupException(parsed.message ?: parsed.error)
         return parsed.suggestions ?: emptyList()
@@ -329,16 +313,8 @@ class NutritionCronometerLookupRepository(private val supabase: SupabaseClient) 
                 ),
             ),
         )
-
-    private suspend fun token(): String = supabase.sessionToken()
-        ?: throw NutritionCronometerLookupException("Not signed in")
-
     private suspend fun callLookup(requestBody: String): CronometerEnrichment {
-        val response = client.post("$FUNCTIONS_BASE_URL/nutrition-cronometer-lookup") {
-            header("Authorization", "Bearer ${token()}")
-            contentType(ContentType.Application.Json)
-            setBody(requestBody)
-        }
+        val response = supabase.postFunction("nutrition-cronometer-lookup", requestBody, 90_000)
 
         val body = response.bodyAsText()
         val parsed = json.decodeFromString<CronometerResponse>(body)

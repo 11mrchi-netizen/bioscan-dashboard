@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.LogProposal
 import com.bioscan.fieldterminal.domain.UnparsedEntry
 import com.bioscan.fieldterminal.domain.isReady
@@ -7,24 +8,16 @@ import com.bioscan.fieldterminal.domain.localDate
 import com.bioscan.fieldterminal.domain.toAppIso
 import com.bioscan.fieldterminal.domain.whenLocal
 import io.github.jan.supabase.SupabaseClient
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.request.header
 import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.time.OffsetDateTime
 import kotlin.math.roundToInt
 
 // Analysis Layer 3 / R2. Client for the `log-agent` Edge Function (propose-only: it never writes a health row) and the commit
 // dispatch that writes a CONFIRMED proposal through the same repositories the forms use. Food is not committed here: a meal
 // proposal hands its text to the existing food form, which owns resolution and review.
-private const val FUNCTIONS_BASE_URL = "https://ugfrglbcoivkprjqvjzz.supabase.co/functions/v1"
 
 class LogAgentException(message: String) : Exception(message)
 
@@ -51,8 +44,7 @@ private data class LogAgentResponse(
 data class LogAgentResult(val runId: String, val proposals: List<LogProposal>, val unparsed: List<UnparsedEntry>)
 
 class LogAgentRepository(private val supabase: SupabaseClient) {
-    companion object { private val client = functionsClient(45_000) }
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     // One clientTurnId per typed message: a retry of the same turn returns the stored proposals instead of calling the model again.
     suspend fun propose(text: String, clientTurnId: String): LogAgentResult {
@@ -68,12 +60,7 @@ class LogAgentRepository(private val supabase: SupabaseClient) {
     }
 
     private suspend fun post(requestBody: String): LogAgentResponse {
-        val token = supabase.sessionToken() ?: throw LogAgentException("Not signed in")
-        val response = client.post("$FUNCTIONS_BASE_URL/log-agent") {
-            header("Authorization", "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(requestBody)
-        }
+        val response = supabase.postFunction("log-agent", requestBody)
         val parsed = try {
             json.decodeFromString<LogAgentResponse>(response.bodyAsText())
         } catch (e: Exception) {

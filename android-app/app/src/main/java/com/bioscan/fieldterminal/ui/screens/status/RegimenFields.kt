@@ -332,7 +332,7 @@ private fun changeDay(ts: String): String = runCatching {
 /** A snapshot (supplement_snapshot() in the migration) read back as a spec, for the words. */
 internal fun snapshotSpec(o: JsonObject): RegimenSpec {
     fun str(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
-    val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+    val json = com.bioscan.fieldterminal.domain.LenientJson
     return regimenSpec(
         timeOfDay = str("time_of_day") ?: "morning",
         everyNDays = (o["every_n_days"] as? JsonPrimitive)?.intOrNull,

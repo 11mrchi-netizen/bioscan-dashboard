@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.ExperimentProtocol
 import com.bioscan.fieldterminal.domain.MdePreviewRow
 import com.bioscan.fieldterminal.domain.PROTOCOL_VERSION_RANDOMISED
@@ -7,21 +8,12 @@ import com.bioscan.fieldterminal.domain.scheduleSpan
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.time.Instant
 
 // Analysis Layer 3 / Phase 5. Registers supplement N-of-1 experiments and reads their published results.
-private const val FUNCTIONS_BASE_URL = "https://ugfrglbcoivkprjqvjzz.supabase.co/functions/v1"
 
 class ExperimentException(message: String) : Exception(message)
 
@@ -90,17 +82,11 @@ data class ExperimentPayload(val stage: String = "before", val adherence: Experi
 data class ExperimentResultRow(val key: String, val state: String = "before", val payload: ExperimentPayload = ExperimentPayload())
 
 class ExperimentsRepository(private val supabase: SupabaseClient) {
-    companion object { private val client = HttpClient(OkHttp) }
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     // The smallest difference a design with these phase lengths could detect on this person's own data, per outcome.
     suspend fun previewMde(plannedA: Int, plannedB: Int): List<MdePreviewRow> {
-        val token = supabase.sessionToken() ?: throw ExperimentException("Not signed in")
-        val response = client.post("$FUNCTIONS_BASE_URL/analysis-run") {
-            header("Authorization", "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(PreviewRequest.serializer(), PreviewRequest("experiment_preview", plannedA, plannedB)))
-        }
+        val response = supabase.postFunction("analysis-run", json.encodeToString(PreviewRequest.serializer(), PreviewRequest("experiment_preview", plannedA, plannedB)))
         val parsed = try {
             json.decodeFromString<PreviewResponse>(response.bodyAsText())
         } catch (e: Exception) {

@@ -1,12 +1,12 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.CaffeineWindowResult
 import com.bioscan.fieldterminal.domain.HydrationIntelligenceResult
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -16,7 +16,7 @@ import kotlinx.serialization.json.put
 // own rule: "not raw model guessing") -- Gemini interprets the numbers,
 // never derives them. Low-stakes, cheap model same as SupplementImpact.
 private const val MODEL = "gemini-3.5-flash-lite"
-private val json = Json { ignoreUnknownKeys = true }
+private val json = LenientJson
 
 class HydrationExplanationException(message: String) : Exception(message)
 

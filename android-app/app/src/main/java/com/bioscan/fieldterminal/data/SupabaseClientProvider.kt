@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.BuildConfig
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.annotations.SupabaseInternal
 import io.github.jan.supabase.auth.Auth
@@ -9,13 +10,10 @@ import io.github.jan.supabase.postgrest.Postgrest
 import kotlin.time.Duration.Companion.seconds
 import com.bioscan.fieldterminal.util.PerfHttpLog
 
-// Same Supabase project the web dashboard (index.html) already talks to --
-// ugfrglbcoivkprjqvjzz. URL + anon/publishable key are not secrets (same
-// values already embedded client-side in index.html); nothing here is new
-// exposure. See ROADMAP.md's Foundation section for the credential-handling
-// rules this project follows for anything that IS secret.
-private const val SUPABASE_URL = "https://ugfrglbcoivkprjqvjzz.supabase.co"
-private const val SUPABASE_ANON_KEY = "sb_publishable_GyandyvuVbF0RxZLnugz4A_GlNIstPc"
+// The same Supabase project the web dashboard (index.html) talks to. Its URL and publishable key are defined once for
+// both Android apps in android-app/gradle.properties, and are not secrets.
+internal const val SUPABASE_URL = BuildConfig.SUPABASE_URL
+private const val SUPABASE_ANON_KEY = BuildConfig.SUPABASE_PUBLISHABLE_KEY
 
 @OptIn(SupabaseInternal::class) // httpConfig: only to install the debug request log
 object SupabaseClientProvider {

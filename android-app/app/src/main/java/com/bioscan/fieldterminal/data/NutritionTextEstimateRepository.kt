@@ -1,17 +1,10 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import io.github.jan.supabase.SupabaseClient
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 // DAV-166. Calls the nutrition-estimate-text Edge Function, which holds the
 // Gemini key server-side and returns structured logging *candidates* only --
@@ -22,7 +15,6 @@ import kotlinx.serialization.json.Json
 // ticket replaces for the new canonical-model logging path; AddEntrySheet's
 // existing flat-macro Food form is untouched until DAV-168 builds the real
 // review UX on top of these candidates.
-private const val FUNCTIONS_BASE_URL = "https://ugfrglbcoivkprjqvjzz.supabase.co/functions/v1"
 
 class NutritionEstimateException(message: String) : Exception(message)
 
@@ -56,18 +48,11 @@ private data class TextEstimateResponse(
 data class NutritionEstimateResult(val estimateId: Long, val candidates: List<NutritionCandidate>)
 
 class NutritionTextEstimateRepository(private val supabase: SupabaseClient) {
-    companion object { private val client = functionsClient(45_000) }
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     suspend fun estimate(description: String): NutritionEstimateResult {
-        val token = supabase.sessionToken()
-            ?: throw NutritionEstimateException("Not signed in")
 
-        val response = client.post("$FUNCTIONS_BASE_URL/nutrition-estimate-text") {
-            header("Authorization", "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(TextEstimateRequest(description)))
-        }
+        val response = supabase.postFunction("nutrition-estimate-text", json.encodeToString(TextEstimateRequest(description)))
 
         val parsed = json.decodeFromString<TextEstimateResponse>(response.bodyAsText())
         if (parsed.error != null) throw NutritionEstimateException(parsed.message ?: parsed.error)

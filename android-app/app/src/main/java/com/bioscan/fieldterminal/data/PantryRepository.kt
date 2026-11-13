@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.dosesPerDay
 import com.bioscan.fieldterminal.data.model.SuppcoProduct
 import com.bioscan.fieldterminal.data.model.flagTexts
@@ -17,7 +18,6 @@ import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -110,7 +110,7 @@ data class PantryItem(
 // stock). Stock is derived (domain/SupplementPantry.kt); this class only gathers
 // the inputs and writes stock events.
 class PantryRepository(private val supabase: SupabaseClient) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     suspend fun load(today: LocalDate = LocalDate.now()): List<PantryItem> {
         val roster = supabase.postgrest.from("supplements")

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.data.model.CalendarEventRow
 import com.bioscan.fieldterminal.data.model.NewPlannedRouteRow
 import com.bioscan.fieldterminal.data.model.PlannedRouteFailureUpdate
@@ -19,7 +20,6 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.time.Instant
 
 // DAV-151's cache-freshness cutoff: a preview for an event more than this
@@ -27,7 +27,7 @@ import java.time.Instant
 // was long since skipped) -- matches HealthConnectWriteBackRepository's own
 // 7-day lookback convention rather than inventing a new number.
 private const val STALE_PREVIEW_MAX_AGE_DAYS = 7L
-private val json = Json { ignoreUnknownKeys = true }
+private val json = LenientJson
 
 // DAV-148. The end-to-end pipeline: a synced calendar_events row (DAV-145)
 // -> resolved Drive file (DAV-146) -> downloaded GPX -> domain/trail's pure

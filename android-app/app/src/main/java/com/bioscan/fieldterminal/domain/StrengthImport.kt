@@ -3,7 +3,6 @@ package com.bioscan.fieldterminal.domain
 import com.bioscan.fieldterminal.data.ZeppStrengthData
 import com.bioscan.fieldterminal.data.model.ExerciseSessionDetails
 import com.bioscan.fieldterminal.data.model.StrengthExerciseDto
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 
 // The phone's half of the strength import rules (the server's half is supabase/functions/zepp-extract/strengthImport.ts).
@@ -28,7 +27,7 @@ fun exercisesSource(details: ExerciseSessionDetails): ExercisesSource {
     }
 }
 
-private val lenientJson = Json { ignoreUnknownKeys = true }
+private val lenientJson = LenientJson
 
 /** Zepp's current version of the exercises, or null when there is none or it cannot be read. */
 fun ZeppStrengthData.zeppExercises(): List<StrengthExerciseDto>? =

@@ -1,9 +1,9 @@
 package com.bioscan.fieldterminal.data.routine
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import android.content.Context
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.io.File
 
 // Routine intelligence R2: what the collector recorded and has not synced yet, as JSON lines in the app's own storage.
@@ -20,7 +20,7 @@ data class OutboxTransition(val ts: Long, val activity: String, val transition: 
 data class OutboxHeartbeat(val stream: String, val ts: Long)
 
 object RoutineOutbox {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
     private val lock = Any()
 
     private fun dir(context: Context) = File(context.filesDir, "routine").apply { mkdirs() }

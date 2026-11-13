@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import android.util.Base64
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -7,7 +8,6 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -19,7 +19,7 @@ import kotlinx.serialization.json.put
 // high-frequency, low-stakes call.
 private const val MODEL = "gemini-3.8-flash"
 
-private val json = Json { ignoreUnknownKeys = true }
+private val json = LenientJson
 
 class LabExtractionException(message: String) : Exception(message)
 

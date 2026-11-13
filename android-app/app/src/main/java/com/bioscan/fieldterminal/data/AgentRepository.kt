@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.WhyContext
 import com.bioscan.fieldterminal.domain.agentErrorMessage
 import com.bioscan.fieldterminal.domain.question
@@ -7,22 +8,16 @@ import com.bioscan.fieldterminal.domain.toJson
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
-import io.ktor.client.request.header
 import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import java.time.OffsetDateTime
 
 // Personal health agent, phase 1 (docs/personal-health-agent): the client for the `health-agent` Edge Function (WHY? on
 // a card) and the assistant's settings (agent_settings, own row). The function reads with the caller's JWT and writes
 // nothing but its own audit row; the assistant answers only once the person turned it on here.
-private const val FUNCTIONS_BASE_URL = "https://ugfrglbcoivkprjqvjzz.supabase.co/functions/v1"
 
 class AgentException(message: String) : Exception(message)
 
@@ -68,8 +63,7 @@ data class AgentReply(val turnId: String, val shown: String, val refs: List<Stri
 
 class AgentRepository(private val supabase: SupabaseClient) {
     // Ling 3.1 Flash took 10 to 25 s a turn in the golden-set runs; the function itself stops a model call at 40 s.
-    companion object { private val client = functionsClient(90_000) }
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     suspend fun loadSettings(): AgentSettingsRow =
         supabase.postgrest.from("agent_settings").select(columns = Columns.list("enabled,opt_in")).decodeSingleOrNull<AgentSettingsRow>()
@@ -98,12 +92,7 @@ class AgentRepository(private val supabase: SupabaseClient) {
     }
 
     private suspend fun post(requestBody: String): AgentResponse {
-        val token = supabase.sessionToken() ?: throw AgentException("Not signed in")
-        val response = client.post("$FUNCTIONS_BASE_URL/health-agent") {
-            header("Authorization", "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(requestBody)
-        }
+        val response = supabase.postFunction("health-agent", requestBody, 90_000)
         val parsed = try {
             json.decodeFromString<AgentResponse>(response.bodyAsText())
         } catch (e: Exception) {

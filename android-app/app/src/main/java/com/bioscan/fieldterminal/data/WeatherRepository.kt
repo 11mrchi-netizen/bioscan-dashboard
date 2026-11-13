@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.SessionWeather
 import com.bioscan.fieldterminal.domain.fuel.FORECAST_DAYS
 import com.bioscan.fieldterminal.domain.fuel.HourWeather
@@ -12,7 +13,6 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.time.LocalDateTime
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
@@ -28,7 +28,7 @@ class WeatherFetchException(message: String) : Exception(message)
 // since this is a forecast for a session that may be up to a week out.
 class WeatherRepository {
     companion object { private val client = HttpClient(OkHttp) }
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     suspend fun fetchAt(lat: Double, lon: Double, at: ZonedDateTime): SessionWeather {
         val response = client.get("https://api.open-meteo.com/v1/forecast") {

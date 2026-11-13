@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data.routine
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.domain.routine.BikeDock
 import com.bioscan.fieldterminal.domain.routine.MetroHop
 import com.bioscan.fieldterminal.domain.routine.MetroStation
@@ -16,7 +17,6 @@ import io.github.jan.supabase.postgrest.query.Order
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.time.LocalDate
 
@@ -61,7 +61,7 @@ sealed interface TransitResult {
 }
 
 class RoutineRepository(private val supabase: SupabaseClient) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     // Kept on disk with the read cache (data/ReadCache.kt): the page opens from the last copy while this loads.
     suspend fun mobilitySince(from: LocalDate): List<MobilityDailyRow> =

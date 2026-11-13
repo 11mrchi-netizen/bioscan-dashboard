@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.data.model.AthleteMaxRow
 import com.bioscan.fieldterminal.data.model.IdRow
 import com.bioscan.fieldterminal.data.model.LoggedStrengthSessionRow
@@ -40,7 +41,6 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -73,7 +73,7 @@ data class BlockPlan(
     val generated: GeneratedBlock,
 )
 
-private val json = Json { ignoreUnknownKeys = true }
+private val json = LenientJson
 
 private val STRENGTH_DOMAINS = setOf("max_strength", "hypertrophy", "strength_endurance", "power")
 

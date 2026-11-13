@@ -1,21 +1,14 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import com.bioscan.fieldterminal.data.model.DsldLookupResponse
 import com.bioscan.fieldterminal.data.model.SuppcoLookupResponse
 import io.github.jan.supabase.SupabaseClient
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.DeserializationStrategy
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -23,7 +16,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import java.util.concurrent.ConcurrentHashMap
 
-private const val FUNCTIONS_BASE_URL = "https://ugfrglbcoivkprjqvjzz.supabase.co/functions/v1"
 private const val CACHE_TTL_MS = 5 * 60 * 1000L // matches SuppCo's own max-age=300
 
 class ProviderResult<T>(val value: T?, val error: String?, val raw: JsonObject? = null)
@@ -40,11 +32,10 @@ data class ProductLookup(
 // memory so a double tap does not hit them twice. Successful results only.
 class SupplementLookupRepository(private val supabase: SupabaseClient) {
     companion object {
-        private val client = HttpClient(OkHttp)
         private val cache = ConcurrentHashMap<String, Pair<Long, ProviderResult<*>>>()
     }
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     suspend fun lookupBarcode(barcode: String): ProductLookup = both(buildJsonObject { put("barcode", barcode) })
 
@@ -66,12 +57,7 @@ class SupplementLookupRepository(private val supabase: SupabaseClient) {
             if (System.currentTimeMillis() - at < CACHE_TTL_MS) return result as ProviderResult<T>
         }
         return try {
-            val token = supabase.sessionToken() ?: throw IllegalStateException("Not signed in")
-            val response = client.post("$FUNCTIONS_BASE_URL/$function") {
-                header("Authorization", "Bearer $token")
-                contentType(ContentType.Application.Json)
-                setBody(body.toString())
-            }
+            val response = supabase.postFunction("$function", body.toString())
             val root: JsonElement = json.parseToJsonElement(response.bodyAsText())
             val obj = root.jsonObject
             val error = obj["error"]?.let { (obj["message"] ?: it).toString().trim('"') }

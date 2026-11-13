@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data
 
+import com.bioscan.fieldterminal.domain.LenientJson
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
@@ -7,7 +8,6 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 // Phase M1 (Map tab rework). Nominatim (OpenStreetMap's free public
 // geocoder) -- same "free tier, no Google billing" choice this app already
@@ -17,7 +17,7 @@ import kotlinx.serialization.json.Json
 // addresses per screen load, on demand, nothing cached/scheduled).
 class GeocodingRepository {
     companion object { private val client = HttpClient(OkHttp) }
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     // Null on no match or any failure, deliberately not a thrown exception --
     // callers fall back to the user's home coordinates rather than dropping

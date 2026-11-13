@@ -36,7 +36,7 @@ import java.time.ZonedDateTime
 // when that copy went stale; a rebuild that fails leaves what was on screen.
 
 @Stable
-internal class TodayPage(kept: TodaySnapshot?) {
+internal class TodayState(kept: TodaySnapshot?) {
     /** TODAY decides itself when to rebuild (TodayStore), so it does not reload on every cache refresh. */
     val guard = LoadGuard()
 
@@ -131,9 +131,9 @@ internal class TodayPage(kept: TodaySnapshot?) {
 }
 
 @Composable
-internal fun rememberTodayPage(): TodayPage {
+internal fun rememberTodayState(): TodayState {
     val context = LocalContext.current
-    val page = remember { TodayPage(TodayStore.forDay(LocalDate.now())) }
+    val page = remember { TodayState(TodayStore.forDay(LocalDate.now())) }
     val view = page.view
     // Once TODAY has its scores, the reads behind the pages most opened from it (Sleep, Cardio, Load, Body) are warmed
     // in the background, so those pages open from memory. Each read is cached (data/ReadCache.kt); a failure is ignored.

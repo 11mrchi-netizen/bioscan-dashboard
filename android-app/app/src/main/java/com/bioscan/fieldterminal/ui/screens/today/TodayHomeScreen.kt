@@ -207,8 +207,8 @@ fun TodayHomeScreen(
     onSupplementsHandled: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    // What the page shows and how it stays current is TodayPage's; this screen holds only what is open on it.
-    val page = rememberTodayPage()
+    // What the page shows and how it stays current is TodayState's; this screen holds only what is open on it.
+    val page = rememberTodayState()
     val guard = page.guard
     val view = page.view
     val nut = page.nut

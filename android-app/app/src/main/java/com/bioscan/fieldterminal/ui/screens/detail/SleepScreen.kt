@@ -9,7 +9,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -17,16 +16,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.AnalysisRepository
-import com.bioscan.fieldterminal.data.NutritionRepository
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.model.MealRow
 import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
-import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
 import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
-import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
-import com.bioscan.fieldterminal.domain.LoadSpans
-import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.SleepNight
 import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.compositeInputs
@@ -35,8 +26,7 @@ import com.bioscan.fieldterminal.domain.demotes
 import com.bioscan.fieldterminal.domain.evaluateSri
 import com.bioscan.fieldterminal.domain.score.Series
 import com.bioscan.fieldterminal.domain.sleepIndex
-import com.bioscan.fieldterminal.ui.components.parallel
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import com.bioscan.fieldterminal.ui.screens.status.rememberScorecards
 import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.Instant
@@ -88,34 +78,16 @@ private const val SLEEP_INFO_CIRCADIAN =
 
 @Composable
 fun SleepScreen(onBack: () -> Unit) {
-    var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
-    var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
-    var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
-    var sessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
-    var meals by remember { mutableStateOf<List<MealRow>>(emptyList()) }
-    var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
-    var loadSpans by remember { mutableStateOf(LoadSpans.STANDARD) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        guard.run {
-            val repo = AnalysisRepository(SupabaseClientProvider.client)
-            parallel(
-                { sleep = repo.loadSleepDaily() },
-                { wearable = repo.loadWearableDaily() },
-                { wellbeing = repo.loadWellbeingDaily() },
-                { sessions = repo.loadExerciseSessionsForTrainingLoad() },
-                { meals = NutritionRepository(SupabaseClientProvider.client).loadRecentMeals(limit = 200) },
-                { breakStarts = repo.loadSeriesBreakStarts() },
-                { loadSpans = repo.loadLoadSpans() },
-            )
-        }
-    }
-    val scorecards by rememberScorecards(wearable, sleep, wellbeing, sessions, breakStarts, loadSpans)
+    val page = remember { SleepState() }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load() }
+    val scorecards by rememberScorecards(page.wearable, page.sleep, page.wellbeing, page.sessions, page.breakStarts, page.loadSpans)
     DetailScreen("SLEEP", onBack, eyebrow = "SLEEP", domain = FT.Domain.Sleep) {
-        val s = sleep
-        val w = wearable
-        val wb = wellbeing
-        val ses = sessions
+        val s = page.sleep
+        val w = page.wearable
+        val wb = page.wellbeing
+        val ses = page.sessions
         if (s == null || w == null || wb == null || ses == null) {
             Loading(guard)
             return@DetailScreen
@@ -147,7 +119,7 @@ fun SleepScreen(onBack: () -> Unit) {
                 info = "Breaths per minute asleep. It is very steady night to night, so a jump of more than one breath a minute is worth noticing (illness, alcohol, a hard day).")
         }
 
-        val index = remember(s, w, wb, ses, breakStarts, loadSpans) { compositeInputs(w, s, wb, ses, breakStarts, loadSpans).sleepIndex() }
+        val index = remember(s, w, wb, ses, page.breakStarts, page.loadSpans) { compositeInputs(w, s, wb, ses, page.breakStarts, page.loadSpans).sleepIndex() }
         val demoted = scorecards?.sleepIndex.demotes()
         Section("SLEEP INDEX", info = SLEEP_INFO_INDEX, trailing = if (demoted) "INPUTS ONLY" else index.score?.let { "${it.roundToInt()} / 100" }) {
             if (index.score == null) {
@@ -157,7 +129,7 @@ fun SleepScreen(onBack: () -> Unit) {
             }
         }
 
-        val circadian = remember(s, meals, ses) {
+        val circadian = remember(s, page.meals, ses) {
             val sri = evaluateSri(s.mapNotNull { row ->
                 val bed = row.bedtime?.let { runCatching { Instant.parse(it) }.getOrNull() }
                 val wake = row.wakeTime?.let { runCatching { Instant.parse(it) }.getOrNull() }
@@ -165,7 +137,7 @@ fun SleepScreen(onBack: () -> Unit) {
             })
             computeCircadianAlignment(
                 sri,
-                meals.mapNotNull { WallClock.zoned(it.loggedAt, zone)?.toOffsetDateTime() },
+                page.meals.mapNotNull { WallClock.zoned(it.loggedAt, zone)?.toOffsetDateTime() },
                 ses.mapNotNull { WallClock.zoned(it.startTime, zone)?.toOffsetDateTime() },
             )
         }

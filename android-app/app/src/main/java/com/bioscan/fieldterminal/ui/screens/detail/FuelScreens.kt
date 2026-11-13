@@ -8,8 +8,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -18,21 +16,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.GeminiApiKeyStore
 import com.bioscan.fieldterminal.data.HydrationAccountingRepository
 import com.bioscan.fieldterminal.data.HydrationExplanationRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.NutrientBreakdownRepository
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
-import com.bioscan.fieldterminal.data.NutritionOverview
-import com.bioscan.fieldterminal.data.NutritionRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.TodaySweat
 import com.bioscan.fieldterminal.data.catching
-import com.bioscan.fieldterminal.data.model.StoolAnalysisRow
-import com.bioscan.fieldterminal.data.softLoad
-import com.bioscan.fieldterminal.data.todaySweatRate
 import com.bioscan.fieldterminal.domain.CaffeineEvent
 import com.bioscan.fieldterminal.domain.DailyNutrition
 import com.bioscan.fieldterminal.domain.EvalState
@@ -60,6 +51,7 @@ import com.bioscan.fieldterminal.ui.components.DivergingPoles
 import com.bioscan.fieldterminal.ui.components.FTDivergingScale
 import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.NutrientColor
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import com.bioscan.fieldterminal.ui.components.produceGuarded
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.status.GLUCOSE_INFO
@@ -103,17 +95,13 @@ private const val CAL_INFO =
 
 @Composable
 fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
-    var overview by remember { mutableStateOf<NutritionOverview?>(null) }
-    var weights by remember { mutableStateOf<List<Pair<LocalDate, Double>>>(emptyList()) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        guard.run { overview = NutritionRepository(SupabaseClientProvider.client).loadOverview() }
-        weights = softLoad { AnalysisRepository(SupabaseClientProvider.client).loadBodyMetrics() }
-            ?.mapNotNull { r -> r.weightKg?.let { LocalDate.parse(r.date) to it } }.orEmpty()
-    }
+    val page = remember { NutritionState() }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load() }
     val goals = NutritionGoalsStore.getGoals(LocalContext.current)
     DetailScreen("NUTRITION", onBack, eyebrow = "FUEL", domain = FT.Domain.Fuel) {
-        val o = overview
+        val o = page.overview
         if (o == null) {
             Loading(guard)
             return@DetailScreen
@@ -121,8 +109,8 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
         val today = LocalDate.now()
         val days = LocalRangeDays.current
         val daily = remember(o) { o.allDays.map { LocalDate.parse(it.date) to it } }
-        val tdee: TdeeEvaluation? = remember(o, weights) {
-            if (weights.isEmpty()) null else evaluateTdee(evaluateNutrition(o.allDays), evaluateWeightTrend(weights))
+        val tdee: TdeeEvaluation? = remember(o, page.weights) {
+            if (page.weights.isEmpty()) null else evaluateTdee(evaluateNutrition(o.allDays), evaluateWeightTrend(page.weights))
         }
         val calories = remember(daily) { daily.associate { it.first to it.second.calories } }
         Section("CALORIES", info = CAL_INFO) {
@@ -165,15 +153,15 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
         }
 
         Section("PER KG OF BODY WEIGHT", info = "The last 7 logged days' average grams per kilogram of your latest weight, and whether each macro grew or shrank across the range (second half against first half, beyond 5 %).") {
-            if (weights.isEmpty()) EmptyLine("Needs a weigh-in.") else {
+            if (page.weights.isEmpty()) EmptyLine("Needs a weigh-in.") else {
                 val from = today.minusDays((days - 1).toLong())
-                fun perKgSeries(pick: (DailyNutrition) -> Double) = perKg(o.allDays, weights, pick).filter { !it.first.isBefore(from) }
+                fun perKgSeries(pick: (DailyNutrition) -> Double) = perKg(o.allDays, page.weights, pick).filter { !it.first.isBefore(from) }
                 val p = perKgSeries { it.proteinG }
                 val c = perKgSeries { it.carbsG }
                 val f = perKgSeries { it.fatG }
                 fun last7(s: List<Pair<LocalDate, Double>>) = s.takeLast(7).map { it.second }.takeIf { it.isNotEmpty() }?.average()
                 // Each tile opens that macro's grams per kilogram over time (all logged days, not just this range).
-                fun allPerKg(pick: (DailyNutrition) -> Double) = perKg(o.allDays, weights, pick).toMap()
+                fun allPerKg(pick: (DailyNutrition) -> Double) = perKg(o.allDays, page.weights, pick).toMap()
                 val one: (Double) -> String = { "%.1f".format(it) }
                 StatTileGrid(
                     listOf(
@@ -233,19 +221,12 @@ private const val NEED_INFO =
 @Composable
 fun HydrationScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    var overview by remember { mutableStateOf<NutritionOverview?>(null) }
-    var exerciseMinutes by remember { mutableDoubleStateOf(0.0) }
-    var sweat by remember { mutableStateOf<TodaySweat?>(null) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        guard.run { overview = NutritionRepository(SupabaseClientProvider.client).loadOverview() }
-        val today = LocalDate.now()
-        exerciseMinutes = softLoad { AnalysisRepository(SupabaseClientProvider.client).loadExerciseSessionsForTrainingLoad() }
-            ?.filter { WallClock.date(it.startTime) == today }?.sumOf { it.durationMin ?: 0.0 } ?: 0.0
-        if (exerciseMinutes > 0) sweat = softLoad { todaySweatRate(SupabaseClientProvider.client, MapSettingsStore.getHome(context)) }
-    }
+    val page = remember { HydrationState() }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load(context) }
     DetailScreen("HYDRATION", onBack, eyebrow = "FUEL", domain = FT.Domain.Fuel) {
-        val o = overview
+        val o = page.overview
         if (o == null) {
             Loading(guard)
             return@DetailScreen
@@ -255,16 +236,16 @@ fun HydrationScreen(onBack: () -> Unit) {
         val intel = computeHydrationIntelligence(
             measuredIntakeMl = o.todayHydrationMl?.toDouble(),
             effectiveHydrationMl = beverages.takeIf { o.todayBeverageItems.isNotEmpty() },
-            exerciseDurationMinutesToday = exerciseMinutes,
-            sweatRateMlPerHour = sweat?.mlPerHour,
-            environmentKnown = sweat?.environmentKnown ?: false,
+            exerciseDurationMinutesToday = page.exerciseMinutes,
+            sweatRateMlPerHour = page.sweat?.mlPerHour,
+            environmentKnown = page.sweat?.environmentKnown ?: false,
         )
         Section("TODAY", info = "Water logged plus the effective hydration of logged drinks, and the extra your sessions today probably cost." +
             if (!intel.environmentalContextAvailable) " Today's temperature is not known (set a home location in Setup › Connected services), so a mild day is assumed." else "") {
             StatTiles(
                 listOf(
                     Triple("SO FAR", "%.1f L".format(total / 1000), "water + drinks"),
-                    Triple("SESSIONS COST", intel.inferredDemandMl?.let { "%.1f L".format(it / 1000) } ?: "—", if (exerciseMinutes > 0) "${exerciseMinutes.roundToInt()} min today" else "no session today"),
+                    Triple("SESSIONS COST", intel.inferredDemandMl?.let { "%.1f L".format(it / 1000) } ?: "—", if (page.exerciseMinutes > 0) "${page.exerciseMinutes.roundToInt()} min today" else "no session today"),
                 ),
             )
         }
@@ -326,11 +307,12 @@ fun HydrationScreen(onBack: () -> Unit) {
 
 @Composable
 fun DigestionScreen(onBack: () -> Unit) {
-    var stool by remember { mutableStateOf<List<StoolAnalysisRow>?>(null) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) { guard.run { stool = AnalysisRepository(SupabaseClientProvider.client).loadStoolLog() } }
+    val page = remember { DigestionState() }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load() }
     DetailScreen("DIGESTION", onBack, eyebrow = "FUEL", domain = FT.Domain.Fuel, defaultRange = ChartRange.M1) {
-        val rows = stool
+        val rows = page.stool
         if (rows == null) {
             Loading(guard)
             return@DetailScreen

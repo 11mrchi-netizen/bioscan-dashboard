@@ -3,21 +3,12 @@ package com.bioscan.fieldterminal.ui.screens.detail
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.bioscan.fieldterminal.data.AnalysisRepository
-import com.bioscan.fieldterminal.data.BenchmarkArtifactRepository
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
-import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
-import com.bioscan.fieldterminal.domain.DayRange
-import com.bioscan.fieldterminal.domain.comparison.BenchmarkArtifact
 import com.bioscan.fieldterminal.domain.comparison.PopulationContext
 import com.bioscan.fieldterminal.domain.comparison.comparePopulation
 import com.bioscan.fieldterminal.domain.evaluateRespiratoryAnomaly
-import com.bioscan.fieldterminal.ui.components.parallel
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
@@ -31,32 +22,20 @@ private const val HR_INFO =
 
 @Composable
 fun CardioScreen(onBack: () -> Unit) {
-    var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
-    var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
-    var ranges by remember { mutableStateOf<List<Pair<LocalDate, DayRange>>>(emptyList()) }
-    var steps by remember { mutableStateOf<List<BenchmarkArtifact>>(emptyList()) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        guard.run {
-            val repo = AnalysisRepository(SupabaseClientProvider.client)
-            parallel(
-                { wearable = repo.loadWearableDaily() },
-                { sleep = repo.loadSleepDaily() },
-                { ranges = repo.loadHeartRateRanges() },
-                { steps = BenchmarkArtifactRepository(SupabaseClientProvider.client).loadArtifacts("steps") },
-            )
-        }
-    }
+    val page = remember { CardioState() }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load() }
     DetailScreen("HEART", onBack, eyebrow = "RECOVERY", domain = FT.Domain.Cardio) {
-        val w = wearable
-        val s = sleep
+        val w = page.wearable
+        val s = page.sleep
         if (w == null || s == null) {
             Loading(guard)
             return@DetailScreen
         }
         val today = LocalDate.now()
         MetricPanel("HRV", remember(w) { w.wSeries { it.hrv } }, "ms", Fmt.int, info = HRV_INFO, log = true, minSd = 0.03, color = FT.Metric.Hrv, betterHigher = true)
-        Section("HEART RATE · DAY RANGE", info = HR_INFO) { RangeBars(ranges, today, LocalRangeDays.current, "bpm") }
+        Section("HEART RATE · DAY RANGE", info = HR_INFO) { RangeBars(page.ranges, today, LocalRangeDays.current, "bpm") }
         Section("MORE") {
             MetricRow("Resting HR", w.wSeries { it.rhr }, "bpm", Fmt.int, minSd = 1.0, color = FT.Metric.RestingHr, betterHigher = false,
                 info = "Your lowest steady heart rate, overnight. A rise of a few beats over your normal for several days often means fatigue, heat, alcohol or an illness coming.")
@@ -65,7 +44,7 @@ fun CardioScreen(onBack: () -> Unit) {
             val stepSeries = w.wSeries { it.steps }
             val recent = stepSeries.filterKeys { !it.isBefore(today.minusDays(15)) }.values
             val band = if (recent.size >= 2) runCatching {
-                comparePopulation("steps", recent.average(), PopulationContext(ageYears = null, sex = null, geography = null), steps).bandLabel
+                comparePopulation("steps", recent.average(), PopulationContext(ageYears = null, sex = null, geography = null), page.steps).bandLabel
             }.getOrNull()?.replace('_', ' ')?.lowercase() else null
             MetricRow("Steps", stepSeries, "", Fmt.kSteps, minSd = 500.0, color = FT.Metric.Steps, betterHigher = true,
                 note = band?.let { "15-day average: $it" },

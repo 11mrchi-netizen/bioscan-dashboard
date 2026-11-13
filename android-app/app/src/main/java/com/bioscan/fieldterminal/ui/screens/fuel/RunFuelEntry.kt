@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.fuel
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,10 +46,10 @@ internal fun RunFuelEntry(onSaved: () -> Unit) {
     var picked by remember { mutableStateOf<FuelingSessionRow?>(null) }
     var single by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        sessions = runCatching { FuelingRepository(SupabaseClientProvider.client).recentSessions() }.getOrDefault(emptyList()).also { if (picked == null) picked = it.firstOrNull() }
+        sessions = catching { FuelingRepository(SupabaseClientProvider.client).recentSessions() }.getOrDefault(emptyList()).also { if (picked == null) picked = it.firstOrNull() }
     }
     val target by produceState<DebriefTarget?>(initialValue = null, picked?.id) {
-        value = picked?.let { runCatching { repo.targetForSession(it) }.getOrNull() }
+        value = picked?.let { catching { repo.targetForSession(it) }.getOrNull() }
     }
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         when {

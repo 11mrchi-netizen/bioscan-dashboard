@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.events
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -48,9 +49,9 @@ fun EventsCard(onOpenEvent: (Long) -> Unit) {
     LaunchedEffect(attempt, cacheVersion) {
         error = null
         try {
-            runCatching { repo.linkCompletedEvents() }
+            catching { repo.linkCompletedEvents() }
             events = repo.loadUpcoming(LocalDate.now())
-            suggestions = runCatching { repo.loadSuggestions() }.getOrDefault(emptyList())
+            suggestions = catching { repo.loadSuggestions() }.getOrDefault(emptyList())
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

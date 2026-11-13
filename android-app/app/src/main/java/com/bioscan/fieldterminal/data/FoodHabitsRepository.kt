@@ -58,7 +58,7 @@ class FoodHabitsRepository(private val supabase: SupabaseClient) {
     /** The foods to suggest from, the person's first. Falls back to the plain staples when nothing can be read. */
     suspend fun foods(times: MealTimes, zone: ZoneId = ZoneId.systemDefault()): List<FoodOption> =
         ReadCache.kept("fuel.food_habits.$times", ttlMs = 60 * 60_000L, tables = setOf("meals", "meal_items", "foods", "food_nutrients")) {
-            runCatching { load(times, zone) }.getOrDefault(STAPLE_FOODS)
+            catching { load(times, zone) }.getOrDefault(STAPLE_FOODS)
         }
 
     private suspend fun load(times: MealTimes, zone: ZoneId): List<FoodOption> {

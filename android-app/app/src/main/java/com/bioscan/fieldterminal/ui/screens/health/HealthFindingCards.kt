@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.health
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -180,8 +181,8 @@ fun HealthN1Section() {
     var trials by remember { mutableStateOf<List<TrialReadDto>>(emptyList()) }
     var reload by remember { mutableStateOf(0) }
     androidx.compose.runtime.LaunchedEffect(reload) {
-        findings = runCatching { repo.loadAllFindings() }.getOrDefault(emptyList()).filter { it.status == "possible" || it.status == "persistent" }
-        trials = runCatching { repo.loadTrialReads() }.getOrDefault(emptyList())
+        findings = catching { repo.loadAllFindings() }.getOrDefault(emptyList()).filter { it.status == "possible" || it.status == "persistent" }
+        trials = catching { repo.loadTrialReads() }.getOrDefault(emptyList())
     }
     if (findings.isEmpty() && trials.isEmpty()) return
     Text("HEALTH PATTERNS AND TRIALS", style = FTType.LabelCaps, color = FT.DomainHeart)

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.training
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -152,13 +153,13 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
         scope.launch {
             loading = true
             error = null
-            runCatching {
+            catching {
                 catalog = repo.loadCatalog()
                 settings = repo.loadSettings()
                 zoneMethod = repo.loadZoneMethod()
                 maxes = repo.loadMaxes()
             }.onFailure { error = it.message ?: "Could not load" }
-            events = runCatching { com.bioscan.fieldterminal.data.AthleteEventsRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).loadUpcoming(LocalDate.now()) }
+            events = catching { com.bioscan.fieldterminal.data.AthleteEventsRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).loadUpcoming(LocalDate.now()) }
                 .getOrDefault(emptyList())
             loading = false
         }
@@ -166,7 +167,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
 
     fun saveSettings(new: TrainingSettingsRow) {
         scope.launch {
-            runCatching { repo.saveSettings(new) }
+            catching { repo.saveSettings(new) }
                 .onSuccess { settings = new; settingsMessage = "Saved" }
                 .onFailure { settingsMessage = "Could not save: ${it.message}" }
         }
@@ -176,7 +177,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
         val before = zoneMethod
         zoneMethod = method
         scope.launch {
-            runCatching { repo.saveZoneMethod(method) }
+            catching { repo.saveZoneMethod(method) }
                 .onSuccess { zoneMessage = "Saved" }
                 .onFailure { zoneMethod = before; zoneMessage = "Could not save: ${it.message}" }
         }
@@ -185,7 +186,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
     fun import(files: List<ImportFile>) {
         scope.launch {
             importMessage = "Importing ${files.size} files..."
-            runCatching { repo.importDefinitions(files) }
+            catching { repo.importDefinitions(files) }
                 .onSuccess { r ->
                     importMessage = "Imported ${r.imported}; rejected ${r.rejected.size}" + (r.rejected.firstOrNull()?.let { " (first: $it)" } ?: "") +
                         (if (r.setErrors.isNotEmpty()) "; ${r.setErrors.size} cross-reference problems" else "")
@@ -361,7 +362,7 @@ class TrainingPlannerState(private val repo: TrainingProgramRepository, private 
         scope.launch {
             creating = true
             error = null
-            runCatching {
+            catching {
                 manualMaxes.forEach { (key, kg) ->
                     val label = maxes[key]?.name ?: key
                     repo.saveMax(label, "1rm", kg, "kg", "manual")

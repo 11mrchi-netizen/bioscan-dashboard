@@ -76,7 +76,7 @@ class DrinksRepository(private val supabase: SupabaseClient) {
         estimated: Boolean,
         source: String,
     ): Long = withContext(Dispatchers.IO) {
-        val retention = runCatching {
+        val retention = catching {
             supabase.postgrest.from("hydration_factor_models")
                 .select(columns = Columns.list("model_version,beverage_class,retention_factor")) { filter { eq("model_version", "v1") } }
                 .decodeList<HydrationFactorModelRow>()

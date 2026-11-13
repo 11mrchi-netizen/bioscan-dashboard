@@ -50,16 +50,6 @@ fun estimatedOneRepMax(set: StrengthSetDto): Double? =
 fun bestEstimatedOneRepMax(exercise: StrengthExerciseDto): Double? =
     exercise.sets.mapNotNull { estimatedOneRepMax(it) }.maxOrNull()
 
-// Relative intensity as %1RM. A logged percent_1rm is the user's own
-// recorded value (raw, per DAV-53) and always wins over a modeled Epley
-// estimate computed from the exercise's own best set -- never blended.
-fun relativeIntensityPercent(set: StrengthSetDto, exercise: StrengthExerciseDto): Double? {
-    set.percentOneRm?.let { return it }
-    val oneRm = bestEstimatedOneRepMax(exercise) ?: return null
-    if (oneRm <= 0) return null
-    return set.weightKg / oneRm * 100.0
-}
-
 // Session-level RPE/RIR -- mean of whatever was actually logged, per
 // DAV-66's "sparse RPE: do not impute as if observed": a set with no RPE
 // contributes nothing, not a filled-in average, and the average itself is
@@ -69,21 +59,6 @@ fun sessionAverageRpe(exercises: List<StrengthExerciseDto>): Double? =
 
 fun sessionAverageRir(exercises: List<StrengthExerciseDto>): Double? =
     exercises.flatMap { it.sets }.mapNotNull { it.rir }.let { if (it.isEmpty()) null else it.average() }
-
-// Movement-pattern load: each resolved exercise's volume load attributed to
-// its DAV-65 movement pattern. An unresolved exercise name contributes
-// nothing here -- a real data-availability gap, distinct from
-// `MovementPattern.Unclassified` (which is a real classification outcome
-// for an exercise that *did* resolve).
-fun movementPatternLoad(exercises: List<StrengthExerciseDto>, library: List<ExerciseLibraryRow>): Map<MovementPattern, Double> {
-    val totals = mutableMapOf<MovementPattern, Double>()
-    for (exercise in exercises) {
-        val resolved = resolveExercise(exercise.name, library) ?: continue
-        val pattern = classifyMovementPattern(resolved)
-        totals[pattern] = (totals[pattern] ?: 0.0) + exerciseVolumeLoad(exercise)
-    }
-    return totals
-}
 
 // Regional (anatomical) load: DAV-65's regionalLoadVector() applied per
 // exercise and merged across the whole session.

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data.routine
 
+import com.bioscan.fieldterminal.data.catching
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -45,7 +46,7 @@ class RoutineActionReceiver : BroadcastReceiver() {
                     ACTION_TIMER_STOP -> RoutineTimerStore.stop(app)
                 }
                 if (action != ACTION_TIMER_STOP) {
-                    runCatching { NotificationRulesRepository(SupabaseClientProvider.client).appendLog(NotificationKind.PRACTICE_DUE, NotificationOutcome.ACTIONED, action = action.substringAfterLast('.').lowercase()) }
+                    catching { NotificationRulesRepository(SupabaseClientProvider.client).appendLog(NotificationKind.PRACTICE_DUE, NotificationOutcome.ACTIONED, action = action.substringAfterLast('.').lowercase()) }
                 }
             } catch (e: Exception) {
                 // Nothing to show: the practice stays due on Lab › ROUTINE, and a timer stays running there.

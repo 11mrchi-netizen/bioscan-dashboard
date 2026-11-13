@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Text
@@ -38,7 +39,7 @@ fun MealSlotChips(dateTime: LocalDateTime, selected: MealSlotKind?, onSelect: (M
     var picked by remember { mutableStateOf(selected != null) }
     val date = dateTime.toLocalDate()
     LaunchedEffect(date, exceptMealId) {
-        logged = runCatching { AddEntryRepository(SupabaseClientProvider.client).mealSlotsOn(date, exceptMealId) }.getOrDefault(emptySet())
+        logged = catching { AddEntryRepository(SupabaseClientProvider.client).mealSlotsOn(date, exceptMealId) }.getOrDefault(emptySet())
     }
     val suggestion = suggestMealSlot(dateTime.toLocalTime(), times, logged)
     LaunchedEffect(suggestion, picked) { if (!picked) onSelect(suggestion) }

@@ -42,7 +42,7 @@ class InteractionRepository(private val supabase: SupabaseClient) {
     // The owner's verdicts (registry_reviews) decide "reviewed": confirmed counts, disputed keeps the flag and adds the
     // owner's note to the caveats.
     suspend fun loadRecords(): List<InteractionRecord> {
-        val reviews = runCatching { RegistryReviewRepository(supabase).loadReviews() }.getOrDefault(emptyMap())
+        val reviews = catching { RegistryReviewRepository(supabase).loadReviews() }.getOrDefault(emptyMap())
         return supabase.postgrest.from("interaction_records")
             .select(columns = Columns.list(COLUMNS)) { order("id", Order.ASCENDING) }
             .decodeList<InteractionRecordRow>()

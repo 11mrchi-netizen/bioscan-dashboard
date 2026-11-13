@@ -69,7 +69,7 @@ class NutritionRepository(private val supabase: SupabaseClient) {
             .decodeList<HydrationDailyRow>()
             .firstOrNull()
 
-        val hydrationHistory = runCatching {
+        val hydrationHistory = catching {
             supabase.postgrest.from("hydration_daily")
                 .select(columns = Columns.list("date,ml")) {
                     order("date", Order.DESCENDING)

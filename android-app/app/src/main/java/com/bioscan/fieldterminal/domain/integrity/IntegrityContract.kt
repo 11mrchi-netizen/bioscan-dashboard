@@ -32,12 +32,3 @@ data class IntegrityIssue(
     val details: Map<String, String> = emptyMap(),
 )
 
-data class IntegrityReport(
-    val checkedAt: Instant = Instant.now(),
-    val issues: List<IntegrityIssue>,
-) {
-    val isValid: Boolean get() = issues.none { it.severity == IntegritySeverity.ERROR }
-    val hasWarnings: Boolean get() = issues.any { it.severity == IntegritySeverity.WARNING }
-    val errors: List<IntegrityIssue> get() = issues.filter { it.severity == IntegritySeverity.ERROR }
-    val warnings: List<IntegrityIssue> get() = issues.filter { it.severity == IntegritySeverity.WARNING }
-}

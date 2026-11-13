@@ -29,17 +29,6 @@ data class IllnessRow(
     val medications: List<MedicationEntry> = emptyList(),
 )
 
-@Serializable
-data class NewIllnessRow(
-    val name: String,
-    val symptoms: String? = null,
-    val status: String,
-    @SerialName("start_date") val startDate: String,
-    @SerialName("doctor_seen") val doctorSeen: Boolean,
-    val medications: List<MedicationEntry>,
-    val notes: String? = null,
-)
-
 // DAV-88
 @Serializable
 data class NewInjuryRow(

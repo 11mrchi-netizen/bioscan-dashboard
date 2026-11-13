@@ -175,8 +175,8 @@ class SkillHistoryRepository(private val supabase: SupabaseClient) {
             .associateBy { it.sessionId }
         // Zone 4's floor on each run's date, in the person's own zones (a soft read: without it, runs are grouped by
         // their tags and climb only).
-        val anchors = runCatching { ZoneAnchorsRepository(supabase).load() }.getOrNull()
-        val method = runCatching { TrainingProgramRepository(supabase).loadZoneMethod() }.getOrDefault(ZoneMethod.AUTO)
+        val anchors = catching { ZoneAnchorsRepository(supabase).load() }.getOrNull()
+        val method = catching { TrainingProgramRepository(supabase).loadZoneMethod() }.getOrDefault(ZoneMethod.AUTO)
         fun z4Floor(date: LocalDate): Double? = anchors?.anchorsFor(date)?.let { a ->
             initialZoneMethod(method, a, "run")?.let { zoneBounds(it, a, "run") }?.lowerBpm?.get(HeartRateZone.Z4.ordinal - 1)
         }
@@ -275,7 +275,7 @@ class SkillHistoryRepository(private val supabase: SupabaseClient) {
             )
         }.sortedBy { it.date }
 
-        val blocks = runCatching { TrainingCyclesRepository(supabase).loadBlockSummaries() }.getOrDefault(emptyList())
+        val blocks = catching { TrainingCyclesRepository(supabase).loadBlockSummaries() }.getOrDefault(emptyList())
         return ConditioningHistory(entries, blocks)
     }
 }

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.events
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -160,7 +161,7 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
     if (reviewing && e != null) {
         // The debrief: the event's fuel schedule (or the planned run it was linked to) checked against what was taken.
         val debrief by androidx.compose.runtime.produceState<com.bioscan.fieldterminal.data.DebriefTarget?>(initialValue = null, e.id) {
-            value = runCatching { com.bioscan.fieldterminal.data.FuelDebriefRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).targetForEvent(e) }.getOrNull()
+            value = catching { com.bioscan.fieldterminal.data.FuelDebriefRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).targetForEvent(e) }.getOrNull()
         }
         debrief?.let { com.bioscan.fieldterminal.ui.screens.fuel.FuelDebriefSheet(it, onDismiss = { reviewing = false }, onSaved = { reviewing = false; guard.retry() }) }
     }

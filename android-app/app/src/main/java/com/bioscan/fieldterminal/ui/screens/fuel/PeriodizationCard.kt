@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.fuel
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,7 +27,7 @@ import kotlin.math.roundToInt
 fun PeriodizationCard(overview: NutritionOverview, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var view by remember { mutableStateOf<PeriodizationView?>(null) }
-    LaunchedEffect(overview) { view = runCatching { FuelPlanRepository(SupabaseClientProvider.client).loadPeriodization(context, overview) }.getOrNull() }
+    LaunchedEffect(overview) { view = catching { FuelPlanRepository(SupabaseClientProvider.client).loadPeriodization(context, overview) }.getOrNull() }
     val v = view ?: return
     FTCard(
         title = "PERIODISATION · LAST 4 WEEKS",

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
@@ -99,15 +100,15 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
             val loaded = SupplementsRepository(SupabaseClientProvider.client).loadOverview()
             overview = loaded
             // Evidence is enrichment: a failed lookup must not hide the roster.
-            outcomes = runCatching { EvidenceRepository(SupabaseClientProvider.client).outcomeTextBySupplement(loaded.active) }
+            outcomes = catching { EvidenceRepository(SupabaseClientProvider.client).outcomeTextBySupplement(loaded.active) }
                 .getOrDefault(emptyMap())
             // Enrichment too: no registry or a failed lookup just hides the card.
-            runCatching {
+            catching {
                 val interactionRepo = InteractionRepository(SupabaseClientProvider.client)
                 interactionRecords = interactionRepo.loadRecords()
                 rosterItems = interactionRepo.rosterItems(loaded.active)
             }.onFailure { interactionRecords = emptyList(); rosterItems = emptyList() }
-            labelNotes = runCatching {
+            labelNotes = catching {
                 val refs = com.bioscan.fieldterminal.data.RegimenReferenceRepository(SupabaseClientProvider.client).loadAll()
                 val active = loaded.active.associateBy { it.id }
                 refs.flatMap { ref ->
@@ -143,7 +144,7 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
             experimentResults = experimentResults,
             onDeleteExperiment = { e ->
                 scope.launch {
-                    runCatching { ExperimentsRepository(SupabaseClientProvider.client).delete(e.id) }
+                    catching { ExperimentsRepository(SupabaseClientProvider.client).delete(e.id) }
                         .onSuccess { reloadKey++ }
                         .onFailure { error = it.message ?: "Could not delete the experiment" }
                 }

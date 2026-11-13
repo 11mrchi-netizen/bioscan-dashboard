@@ -8,13 +8,6 @@ import kotlinx.serialization.Serializable
 // owner RLS) rather than a shared catalog -- see migration comment.
 
 @Serializable
-data class SupplementSourceRow(
-    val id: Long,
-    val name: String,
-    val url: String? = null,
-)
-
-@Serializable
 data class SupplementIngredientRow(
     val id: Long,
     val name: String,
@@ -27,18 +20,6 @@ data class NewSupplementIngredientRow(
     val name: String,
     val category: String? = null,
     @SerialName("nutrient_key") val nutrientKey: String? = null,
-)
-
-@Serializable
-data class SupplementProductRow(
-    val id: Long,
-    val name: String,
-    val brand: String? = null,
-    val barcode: String? = null,
-    @SerialName("serving_size") val servingSize: Double? = null,
-    @SerialName("serving_unit") val servingUnit: String? = null,
-    @SerialName("serving_form") val servingForm: String? = null,
-    @SerialName("match_confidence") val matchConfidence: String? = null,
 )
 
 @Serializable

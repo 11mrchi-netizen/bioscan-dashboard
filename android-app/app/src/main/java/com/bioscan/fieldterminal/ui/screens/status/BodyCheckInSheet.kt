@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -82,8 +83,8 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     // Wrist and ankle (frame size for muscle potential): on until both are recorded once, then only when asked.
     var frame by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
-        history = runCatching { repo.loadHistory() }.getOrElse { emptyList() }
-        knownHeight = runCatching { repo.latestHeightCm() }.getOrNull()
+        history = catching { repo.loadHistory() }.getOrElse { emptyList() }
+        knownHeight = catching { repo.latestHeightCm() }.getOrNull()
         // Last time's caliper, unless the person already typed one.
         if (caliper.isEmpty()) caliper = history.lastOrNull()?.caliper.orEmpty()
         frame = com.bioscan.fieldterminal.domain.latestFrame(history) == null

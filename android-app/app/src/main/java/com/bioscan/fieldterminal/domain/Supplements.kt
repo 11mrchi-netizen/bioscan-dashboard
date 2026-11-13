@@ -18,15 +18,5 @@ import java.time.temporal.ChronoUnit
 fun isSupplementActive(status: String, endDate: LocalDate?, today: LocalDate): Boolean =
     isStatusCurrentlyRelevant(status, endDate, setOf("active"), setOf("ended"), today)
 
-// True when the supplement should appear in today's logging form. Daily
-// supplements (everyNDays null or <= 1) are always due. Interval supplements
-// are due when enough days have elapsed since the last take, or have never
-// been logged (lastTakenDate null).
-fun isSupplementDueToday(everyNDays: Int?, lastTakenDate: LocalDate?, today: LocalDate): Boolean {
-    if (everyNDays == null || everyNDays <= 1) return true
-    if (lastTakenDate == null) return true
-    return ChronoUnit.DAYS.between(lastTakenDate, today) >= everyNDays
-}
-
 fun supplementNextDueDate(everyNDays: Int, lastTakenDate: LocalDate): LocalDate =
     lastTakenDate.plusDays(everyNDays.toLong())

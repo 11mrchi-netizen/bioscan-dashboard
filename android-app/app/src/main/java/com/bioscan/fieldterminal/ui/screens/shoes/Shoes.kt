@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.shoes
 
+import com.bioscan.fieldterminal.data.catching
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -102,7 +103,7 @@ suspend fun loadShoesData(): ShoesData {
     val shoes = repo.loadShoes()
     val runs = repo.loadRuns()
     // The personal records (v_personal_records): each time one moved, past its first. The last of each still stands.
-    val records = runCatching {
+    val records = catching {
         val sets = com.bioscan.fieldterminal.data.PersonalRecordsRepository(SupabaseClientProvider.client).loadSets()
         val lastOf = sets.groupBy { it.key }.mapValues { (_, v) -> v.maxBy { it.date } }
         sets.mapNotNull { s ->

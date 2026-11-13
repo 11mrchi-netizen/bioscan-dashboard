@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.health
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,7 +90,7 @@ fun ConcernsTab(onOpenConcern: (String) -> Unit, anatomicalOnly: Boolean = false
                 { concerns = repo.loadConcerns() },
                 { overview = repo.loadOverview() },
                 { findings = repo.loadAllFindings() },
-                { checks = runCatching { repo.loadChecks() }.getOrDefault(emptyList()) },
+                { checks = catching { repo.loadChecks() }.getOrDefault(emptyList()) },
             )
         }
     }

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.data.catching
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -365,7 +366,7 @@ internal fun DrinkLogForm(
                 labelBarcode = null
                 labelPhotos = emptyList()
                 scope.launch {
-                    val match = runCatching { repo.byIds(listOf(food.id)).firstOrNull() }.getOrNull()
+                    val match = catching { repo.byIds(listOf(food.id)).firstOrNull() }.getOrNull()
                     if (match != null) pick(match, match.beverageClass, scanned = true) else error = "Saved the label, but could not read it back."
                 }
             },

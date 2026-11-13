@@ -86,13 +86,6 @@ private fun DrawScope.glow(hue: Color, alpha: Float, center: Offset, rx: Float, 
     }
 }
 
-/** `.ft-card--holo`: the holographic hairline, reserved for CHARGE and premium surfaces. */
-fun Modifier.ftHoloHairline(shape: Shape): Modifier = border(
-    FT.BorderWidth,
-    Brush.linearGradient(listOf(Color(0x8C6D5EFC), Color(0x4019C7E0), Color(0x73FF6EC7))),
-    shape,
-)
-
 /** `.ft-row__dot`: a metric's dot with its glow. */
 @Composable
 fun FTMetricDot(color: Color, modifier: Modifier = Modifier, size: Dp = 9.dp) {
@@ -102,29 +95,6 @@ fun FTMetricDot(color: Color, modifier: Modifier = Modifier, size: Dp = 9.dp) {
             .drawBehind { drawCircle(Brush.radialGradient(listOf(color.copy(alpha = 0.55f), Color.Transparent)), radius = this.size.minDimension) }
             .background(color, CircleShape),
     )
-}
-
-enum class FTBadgeKind { Neutral, Primed, Ok, Bad }
-
-/** `.ft-badge`: a mono pill. PRIMED is the holographic CHARGE state; OK / BAD carry status. */
-@Composable
-fun FTBadge(text: String, kind: FTBadgeKind = FTBadgeKind.Neutral, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(50)
-    val base = when (kind) {
-        FTBadgeKind.Primed -> modifier.background(
-            Brush.linearGradient(listOf(Color(0xFF6D5EFC), Color(0xFF19C7E0), Color(0xFF8BF0A6), Color(0xFFFFD36E), Color(0xFFFF6EC7))), shape,
-        )
-        FTBadgeKind.Ok -> modifier.border(FT.BorderWidth, FT.Ok.copy(alpha = 0.4f), shape)
-        FTBadgeKind.Bad -> modifier.border(FT.BorderWidth, FT.Bad.copy(alpha = 0.4f), shape)
-        FTBadgeKind.Neutral -> modifier.border(FT.BorderWidth, FT.Line, shape)
-    }
-    val ink = when (kind) {
-        FTBadgeKind.Primed -> Color(0xFF06110F)
-        FTBadgeKind.Ok -> FT.Ok
-        FTBadgeKind.Bad -> FT.Bad
-        FTBadgeKind.Neutral -> FT.TextSecondary
-    }
-    Text(text, style = FTType.LabelCaps, color = ink, modifier = base.padding(horizontal = 11.dp, vertical = 5.dp))
 }
 
 /** `.ft-switch`: off = faint glass, on = platinum with the knob to the right. */

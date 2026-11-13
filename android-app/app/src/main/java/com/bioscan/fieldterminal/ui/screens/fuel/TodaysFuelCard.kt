@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.fuel
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -284,13 +285,3 @@ fun TodayFuelSummary(fuel: TodayFuel, onOpen: () -> Unit, modifier: Modifier = M
     }
 }
 
-/** Today's fuel plan for the Today page, or null while it loads, without a weight, or when the read fails. */
-@Composable
-fun rememberTodayFuel(overview: NutritionOverview?): TodayFuel? {
-    val context = LocalContext.current
-    var result by remember { mutableStateOf<TodayFuelResult?>(null) }
-    LaunchedEffect(overview) {
-        result = runCatching { FuelPlanRepository(SupabaseClientProvider.client).loadToday(context, overview) }.getOrNull()
-    }
-    return (result as? TodayFuelResult.Ready)?.fuel
-}

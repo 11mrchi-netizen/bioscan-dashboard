@@ -101,5 +101,3 @@ fun reviewedRate(carbsG: Double, durationMin: Double): Double = if (durationMin 
 /** A finished race's time against the plan: positive when slower, as a share. */
 fun durationMiss(plannedMin: Double, actualMin: Double): Double = if (plannedMin <= 0) 0.0 else (actualMin - plannedMin) / plannedMin
 
-@Suppress("unused")
-private fun clampShare(v: Double) = max(-1.0, min(1.0, v)).let { if (abs(it) < 1e-9) 0.0 else it }

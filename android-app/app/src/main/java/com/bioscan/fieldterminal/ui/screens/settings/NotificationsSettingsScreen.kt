@@ -1,5 +1,8 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
+import com.bioscan.fieldterminal.ui.components.LoadingOrError
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.data.catching
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -83,15 +86,18 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
         notifPermissionGranted = granted
     }
 
-    LaunchedEffect(Unit) {
+    // The stored settings are the page: when they cannot be read it says so, instead of showing defaults that SAVE would
+    // then write over the real ones.
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(guard.attempt) {
         val zone = ZoneId.systemDefault().id
-        notifPrefs = runCatching {
-            notificationsRepository.loadPrefs() ?: run {
+        guard.run {
+            notifPrefs = notificationsRepository.loadPrefs() ?: run {
                 notificationsRepository.ensureDefaults(zone)
                 notificationsRepository.loadPrefs()
-            }
-        }.getOrNull() ?: NotificationPrefsRow(timezone = zone)
-        rules = runCatching { notificationsRepository.loadRules() }.getOrElse { emptyList() }
+            } ?: NotificationPrefsRow(timezone = zone)
+            rules = notificationsRepository.loadRules()
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notifPermissionGranted) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -105,7 +111,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
         ) {
             val prefs = notifPrefs
             if (prefs == null) {
-                Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
+                LoadingOrError(guard, "Loading…")
             } else {
                 FTCard(title = "NOTIFICATIONS") {
                     Text(
@@ -152,7 +158,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                         val toSave = notifPrefs ?: return@FTButton
                         scope.launch {
                             notifSaving = true
-                            notifError = runCatching { notificationsRepository.savePrefs(toSave) }.isFailure
+                            notifError = catching { notificationsRepository.savePrefs(toSave) }.isFailure
                             if (!notifError) notifSavedAt = java.time.LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                             notifSaving = false
                         }
@@ -187,7 +193,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                                     checked = rule?.enabled ?: true,
                                     onCheckedChange = { enabled ->
                                         rules = rules.map { if (it.kind == kind) it.copy(enabled = enabled) else it }
-                                        scope.launch { runCatching { notificationsRepository.setRuleEnabled(kind, enabled) } }
+                                        scope.launch { catching { notificationsRepository.setRuleEnabled(kind, enabled) } }
                                     },
                                 )
                             }

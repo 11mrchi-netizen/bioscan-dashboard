@@ -235,7 +235,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         if (items.isEmpty()) return
         // product_id is optional provenance: a failed roster lookup must never
         // block recording that the supplement was taken.
-        val links = runCatching { loadProductLinks(items.map { it.first }) }.getOrDefault(emptyMap())
+        val links = catching { loadProductLinks(items.map { it.first }) }.getOrDefault(emptyMap())
         val productIdBySupp = links.mapNotNull { (id, l) -> l.productId?.let { id to it } }.toMap()
         // Label servings consumed per dose (DAV-361): feeds pantry consumption and
         // scales the ingredient contribution. Missing link row = the default of 1.

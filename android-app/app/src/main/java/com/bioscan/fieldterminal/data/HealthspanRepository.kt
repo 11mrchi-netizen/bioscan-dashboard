@@ -166,12 +166,12 @@ class HealthspanRepository(private val supabase: SupabaseClient) {
         // height from Health Connect or the check-in when no lab has it (an adult height does not age out, so it is dated
         // today for the freshness gate).
         val checkins = BodyCheckinRepository(supabase)
-        val tapeWaist = runCatching { checkins.loadHistory() }.getOrElse { emptyList() }
+        val tapeWaist = catching { checkins.loadHistory() }.getOrElse { emptyList() }
             .lastOrNull { ratioWaist(it) != null }
             ?.let { DatedValue(ratioWaist(it)!!, it.date, "cm") }
         val labWaist = lab("Waistline")
         val waist = listOfNotNull(labWaist, tapeWaist).maxByOrNull { it.date }
-        val height = lab("Body Height") ?: runCatching { checkins.latestHeightCm() }.getOrNull()?.let { DatedValue(it, asOf, "cm") }
+        val height = lab("Body Height") ?: catching { checkins.latestHeightCm() }.getOrNull()?.let { DatedValue(it, asOf, "cm") }
         return HealthspanBundle(
             summary = healthspanSummary(
                 HealthspanInputs(

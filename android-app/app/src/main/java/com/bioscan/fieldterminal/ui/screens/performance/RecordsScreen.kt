@@ -1,5 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.performance
 
+import com.bioscan.fieldterminal.ui.components.LoadingOrError
+import com.bioscan.fieldterminal.ui.components.rememberGuarded
+import com.bioscan.fieldterminal.ui.components.LoadGuard
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,18 +60,13 @@ private fun ink(key: RecordKey) = when (key.kind) {
 }
 
 @Composable
-private fun rememberRecords(): List<RecordHistory>? {
-    val version = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
-    val state by produceState<List<RecordHistory>?>(null, version) {
-        value = runCatching { recordHistories(PersonalRecordsRepository(SupabaseClientProvider.client).loadSets()) }.getOrNull() ?: value ?: emptyList()
-    }
-    return state
-}
+private fun rememberRecords(): Pair<List<RecordHistory>?, LoadGuard> =
+    rememberGuarded { recordHistories(PersonalRecordsRepository(SupabaseClientProvider.client).loadSets()) }
 
 /** Performance hub card: the headline records, each a tile; the whole card opens the Records page. */
 @Composable
 fun RecordsCard(onOpen: () -> Unit) {
-    val records = rememberRecords() ?: return
+    val records = rememberRecords().first ?: return
     val shown = listOf(RecordKey.K5, RecordKey.K10, RecordKey.HALF, RecordKey.LONGEST, RecordKey.LONGEST_TRAIL, RecordKey.CLIMB)
         .mapNotNull { k -> records.firstOrNull { it.key == k }?.current?.let { k to it } }
     if (shown.isEmpty()) return
@@ -80,12 +79,12 @@ fun RecordsCard(onOpen: () -> Unit) {
 
 @Composable
 fun RecordsScreen(onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
-    val records = rememberRecords()
+    val (records, guard) = rememberRecords()
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     val today = remember { LocalDate.now() }
     DetailScreen("RECORDS", onBack, eyebrow = "PERFORMANCE", ranged = false, domain = FT.Domain.Load) {
         if (records == null) {
-            EmptyLine("Loading your records…")
+            LoadingOrError(guard, "Loading your records…")
             return@DetailScreen
         }
         Section(

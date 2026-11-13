@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.plan
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -87,7 +88,7 @@ private fun FoodPlan() {
     var overview by remember { mutableStateOf<NutritionOverview?>(null) }
     // The food plan reads better with today's intake; without it (a failed read) the plan still shows.
     val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
-    LaunchedEffect(cacheVersion) { overview = runCatching { NutritionRepository(SupabaseClientProvider.client).loadOverview() }.getOrNull() ?: overview }
+    LaunchedEffect(cacheVersion) { overview = catching { NutritionRepository(SupabaseClientProvider.client).loadOverview() }.getOrNull() ?: overview }
     Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(top = 12.dp)) {
         SegmentedToggle(options = FoodPlanView.entries, selected = view, labelOf = { it.label }, onSelect = { view = it }, accentColor = FT.DomainFuel)
     }

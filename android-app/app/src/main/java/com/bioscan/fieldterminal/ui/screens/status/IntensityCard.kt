@@ -36,7 +36,7 @@ import com.bioscan.fieldterminal.domain.WeekIntensity
 import com.bioscan.fieldterminal.domain.ZoneMethod
 import com.bioscan.fieldterminal.domain.weeklyIntensity
 import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
-import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.components.drawBarStub
 import com.bioscan.fieldterminal.ui.components.drawStackedBar
 import com.bioscan.fieldterminal.ui.theme.FTType

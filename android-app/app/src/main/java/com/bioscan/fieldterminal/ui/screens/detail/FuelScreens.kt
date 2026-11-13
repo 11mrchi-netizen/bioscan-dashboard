@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.detail
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -60,7 +61,7 @@ import com.bioscan.fieldterminal.domain.score.stoolPattern
 import com.bioscan.fieldterminal.domain.score.stoolPatternHeadline
 import com.bioscan.fieldterminal.ui.components.NutrientColor
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.screens.today.BowelTimingChart
 import com.bioscan.fieldterminal.ui.screens.today.StoolHypnogram
 import com.bioscan.fieldterminal.ui.screens.today.laneColor
@@ -309,7 +310,7 @@ fun HydrationScreen(onBack: () -> Unit) {
 
         val key = remember { GeminiApiKeyStore.get(context) }
         if (key != null) {
-            val text by produceState<String?>(null, intel) { value = runCatching { HydrationExplanationRepository(key).explain(intel, null) }.getOrNull() }
+            val text by produceState<String?>(null, intel) { value = catching { HydrationExplanationRepository(key).explain(intel, null) }.getOrNull() }
             Section("IN WORDS", info = "An AI summary of the numbers above. Validated data only; not medical advice.") {
                 Text(text ?: "Writing a summary…", style = FTType.BodySmall, color = if (text == null) FT.TextMuted else FT.TextPrimary)
             }

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,13 +43,13 @@ fun RegimenEffectsSection(itemId: Long) {
     val context = LocalContext.current
     var view by remember(itemId) { mutableStateOf<EffectView?>(null) }
     LaunchedEffect(itemId) {
-        view = runCatching {
+        view = catching {
             val today = LocalDate.now()
-            val series = (TodayStore.forDay(today)?.view ?: TodayStore.readDisk(context, today)?.view)?.series ?: return@runCatching null
+            val series = (TodayStore.forDay(today)?.view ?: TodayStore.readDisk(context, today)?.view)?.series ?: return@catching null
             val all = SupplementsRepository(SupabaseClientProvider.client).loadRegimenChanges()
             val change = all.filter { it.itemId == itemId && ("started" in it.changes || "restarted" in it.changes || "dose" in it.changes) }
                 .filter { ChronoUnit.DAYS.between(it.date, today) in (EFFECT_MIN_READINGS + EFFECT_SETTLE_DAYS).toLong()..180L }
-                .maxByOrNull { it.date } ?: return@runCatching null
+                .maxByOrNull { it.date } ?: return@catching null
             EffectView(change, changeReadings(change.date, series, today), nearbyChanges(all, change.date, change.itemName))
         }.getOrNull()
     }

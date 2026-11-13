@@ -5,7 +5,7 @@ import com.bioscan.fieldterminal.data.GeocodingRepository
 import com.bioscan.fieldterminal.data.MapSettingsStore
 import com.bioscan.fieldterminal.data.WeatherRepository
 import com.bioscan.fieldterminal.data.keysetPagesDescending
-import com.bioscan.fieldterminal.data.orNullUnlessCancelled
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.routine.DayVisit
 import com.bioscan.fieldterminal.domain.routine.Fix
 import com.bioscan.fieldterminal.domain.routine.Place
@@ -321,7 +321,7 @@ class PlacesRepository(private val supabase: SupabaseClient) {
     // those two columns as they were.
     private suspend fun recordDayContext(date: LocalDate, zone: ZoneId, at: Pair<Double, Double>?, daylightHours: Double?) {
         val hours = at?.let { (lat, lon) ->
-            orNullUnlessCancelled {
+            softLoad {
                 WeatherRepository().fetchHourly(lat, lon, date.atStartOfDay(zone), date.atTime(23, 0).atZone(zone)).hours
             }
         }.orEmpty()

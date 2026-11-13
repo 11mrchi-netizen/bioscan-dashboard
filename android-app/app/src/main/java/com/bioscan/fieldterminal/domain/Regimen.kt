@@ -28,12 +28,6 @@ enum class RegimenKind(val key: String, val label: String) {
     }
 }
 
-/** Forms and routes as stored; the labels are what the form shows. */
-val REGIMEN_FORMS: List<Pair<String, String>> = listOf(
-    "capsule" to "Capsule", "tablet" to "Tablet", "softgel" to "Softgel", "powder" to "Powder", "liquid" to "Liquid",
-    "gummy" to "Gummy", "injection" to "Injection", "nasal_spray" to "Nasal spray", "cream" to "Cream", "patch" to "Patch",
-    "other" to "Other",
-)
 val REGIMEN_ROUTES: List<Pair<String, String>> = listOf(
     "oral" to "Oral", "sublingual" to "Under the tongue", "subcutaneous" to "Under the skin", "intramuscular" to "Into muscle",
     "nasal" to "Nasal", "topical" to "On the skin", "other" to "Other",

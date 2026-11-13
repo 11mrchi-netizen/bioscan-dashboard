@@ -27,7 +27,7 @@ import com.bioscan.fieldterminal.domain.trainingLoadSeries
 import com.bioscan.fieldterminal.domain.weeklyRestCadenceHistory
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.screens.health.ConcernsTab
 import com.bioscan.fieldterminal.ui.screens.status.ActiveTravelCard
 import com.bioscan.fieldterminal.ui.screens.status.IntensityCard

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.components
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -110,7 +111,7 @@ private fun WhySheet(why: WhyContext, onDismiss: () -> Unit) {
                         (1..5).forEach { n ->
                             RatingDot(n, selected = rated == n) {
                                 rated = n
-                                scope.launch { runCatching { repo.rate(r.turnId, n) } }
+                                scope.launch { catching { repo.rate(r.turnId, n) } }
                             }
                         }
                     }

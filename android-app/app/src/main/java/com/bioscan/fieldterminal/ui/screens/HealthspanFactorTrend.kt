@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.ui.components.LoadingOrError
+import com.bioscan.fieldterminal.ui.components.rememberGuarded
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
@@ -64,14 +66,14 @@ suspend fun loadHealthspanFactorMetrics(supabase: SupabaseClient, factorId: Heal
     val analysis = AnalysisRepository(supabase)
     return when (factorId) {
         HealthspanFactorId.CARDIO_FITNESS -> {
-            val vo2 = runCatching {
+            val vo2 = run {
                 // The newest 800 days (an ascending query with a limit read the oldest ones).
                 supabase.postgrest.from("wearable_daily").select(Columns.list("date,vo2max")) {
                     filter { filterNot("vo2max", io.github.jan.supabase.postgrest.query.filter.FilterOperator.IS, "null") }
                     order("date", Order.DESCENDING); limit(800)
                 }.decodeList<Vo2MaxRow>().sortedBy { it.date }
-            }.getOrDefault(emptyList())
-            val wd = runCatching { analysis.loadWearableDaily() }.getOrDefault(emptyList())
+            }
+            val wd = analysis.loadWearableDaily()
             val rhr = wd.mapNotNull { r -> parseDay(r.date)?.let { d -> r.rhr?.let { d to it } } }.sortedBy { it.first }
             listOf(
                 FactorMetric("VO2MAX", "ml/kg/min", FT.Metric.Vo2max, vo2MaxSeries(vo2), daily = true),
@@ -79,13 +81,13 @@ suspend fun loadHealthspanFactorMetrics(supabase: SupabaseClient, factorId: Heal
             ).filter { it.points.isNotEmpty() }
         }
         HealthspanFactorId.ACTIVITY -> {
-            val wd = runCatching { analysis.loadWearableDaily() }.getOrDefault(emptyList())
+            val wd = analysis.loadWearableDaily()
             // A 0-step day is the band not worn, not a day of no movement.
             val steps = wd.mapNotNull { r -> parseDay(r.date)?.let { d -> r.steps?.takeIf { it > 0 }?.let { d to it } } }.sortedBy { it.first }
             listOf(FactorMetric("STEPS", "per day", FT.Metric.Steps, steps, daily = true)).filter { it.points.isNotEmpty() }
         }
         HealthspanFactorId.SLEEP -> {
-            val sd = runCatching { analysis.loadSleepDaily() }.getOrDefault(emptyList())
+            val sd = analysis.loadSleepDaily()
             val hours = sd.mapNotNull { r -> parseDay(r.date)?.let { d -> r.hours?.takeIf { it > 0 }?.let { d to it } } }.sortedBy { it.first }
             val restorative = sd.mapNotNull { r ->
                 val deep = r.deepMin; val rem = r.remMin
@@ -97,7 +99,7 @@ suspend fun loadHealthspanFactorMetrics(supabase: SupabaseClient, factorId: Heal
             ).filter { it.points.isNotEmpty() }
         }
         HealthspanFactorId.BODY_COMPOSITION -> {
-            val bm = runCatching { analysis.loadBodyMetrics() }.getOrDefault(emptyList())
+            val bm = analysis.loadBodyMetrics()
             val fat = bm.mapNotNull { r -> parseDay(r.date)?.let { d -> r.bodyFatPct?.let { d to it } } }.sortedBy { it.first }
             val wt = bm.mapNotNull { r -> parseDay(r.date)?.let { d -> r.weightKg?.let { d to it } } }.sortedBy { it.first }
             listOf(
@@ -116,10 +118,10 @@ suspend fun loadHealthspanFactorMetrics(supabase: SupabaseClient, factorId: Heal
         HealthspanFactorId.STRENGTH -> {
             // Grip is logged per hand: one line each (a single line through both zigzagged between the hands on every
             // day), the day's best squeeze per hand. occurred_at is a logged time: its digits are the local day.
-            val rows = runCatching {
+            val rows = run {
                 supabase.postgrest.from("grip_strength_log").select(Columns.list("occurred_at,kg,hand")) { order("occurred_at", Order.DESCENDING); limit(500) }
                     .decodeList<GripLogRow>()
-            }.getOrDefault(emptyList())
+            }
             fun perDay(hand: String?) = rows.filter { it.hand == hand }
                 .mapNotNull { r -> com.bioscan.fieldterminal.domain.WallClock.date(r.occurredAt)?.let { it to r.kg } }
                 .groupBy({ it.first }, { it.second }).mapValues { it.value.max() }.toList().sortedBy { it.first }
@@ -140,9 +142,9 @@ suspend fun loadHealthspanFactorMetrics(supabase: SupabaseClient, factorId: Heal
 }
 
 private suspend fun labSeries(analysis: AnalysisRepository, names: List<String>): List<Pair<LocalDate, Double>> {
-    val draws = runCatching { analysis.loadLabDraws() }.getOrDefault(emptyList())
+    val draws = analysis.loadLabDraws()
         .mapNotNull { d -> parseDay(d.drawDate)?.let { d.id to it } }.toMap()
-    return runCatching { analysis.loadLabResults() }.getOrDefault(emptyList())
+    return analysis.loadLabResults()
         .filter { r -> names.any { r.markerName.equals(it, ignoreCase = true) } }
         .mapNotNull { r -> val d = draws[r.drawId]; val v = r.value; if (d != null && v != null) d to v else null }
         .sortedBy { it.first }
@@ -152,12 +154,12 @@ private suspend fun labSeries(analysis: AnalysisRepository, names: List<String>)
 private val LIFT_COLORS = listOf(FT.Metric.LiftPrimary, FT.Metric.LiftSecondary)
 
 private suspend fun liftOneRepMaxSeries(supabase: SupabaseClient): List<FactorMetric> {
-    val rows = runCatching {
+    val rows = run {
         supabase.postgrest.from("exercise_sessions").select(Columns.list("id,type,start_time,source,details")) {
             filter { eq("type", "strength"); gte("start_time", LocalDate.now().minusDays(365).toString()) }
             limit(1000)
         }.decodeList<ExerciseSessionRow>()
-    }.getOrDefault(emptyList())
+    }
     data class SetE(val lift: String, val day: LocalDate, val oneRm: Double)
     val sets = rows.flatMap { s ->
         val day = com.bioscan.fieldterminal.domain.WallClock.date(s.startTime) ?: return@flatMap emptyList<SetE>()
@@ -189,9 +191,7 @@ private val DAY = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy")
  */
 @Composable
 fun HealthspanFactorOverlay(factor: HealthspanFactor, onClose: () -> Unit) {
-    val metrics by produceState<List<FactorMetric>?>(null, factor.id) {
-        value = runCatching { loadHealthspanFactorMetrics(SupabaseClientProvider.client, factor.id) }.getOrDefault(emptyList())
-    }
+    val (metrics, guard) = rememberGuarded(factor.id) { loadHealthspanFactorMetrics(SupabaseClientProvider.client, factor.id) }
     val labBased = factor.id == HealthspanFactorId.METABOLIC || factor.id == HealthspanFactorId.GLYCAEMIC
     var range by com.bioscan.fieldterminal.ui.components.rememberRange("factor:${factor.id}", if (labBased) FTRange.ALL else FTRange.D28)
     val today = androidx.compose.runtime.remember { LocalDate.now() }
@@ -209,7 +209,7 @@ fun HealthspanFactorOverlay(factor: HealthspanFactor, onClose: () -> Unit) {
 
         val m = metrics
         when {
-            m == null -> Text("Loading the trends…", style = FTType.BodySmall, color = FT.TextMuted)
+            m == null -> LoadingOrError(guard, "Loading the trends…")
             m.isEmpty() -> Text("No history to chart yet for this factor.", style = FTType.BodySmall, color = FT.TextMuted)
             else -> m.forEach { fm -> FactorMetricSection(fm, range, today) }
         }

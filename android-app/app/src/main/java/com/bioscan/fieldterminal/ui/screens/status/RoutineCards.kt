@@ -26,58 +26,13 @@ import com.bioscan.fieldterminal.domain.routine.localDateOf
 import com.bioscan.fieldterminal.domain.routine.routineLines
 import com.bioscan.fieldterminal.domain.routine.unloggedExerciseVisits
 import com.bioscan.fieldterminal.ui.components.FTCard
-import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-
-// Routine intelligence R5: yesterday's routine on Today, in up to three sentences; the full view is Lab › ROUTINE. Shown
-// only once a routine stream is on, and only when yesterday has something to say.
-@Composable
-fun RoutineTodayCard() {
-    val context = LocalContext.current
-    val on = remember {
-        RoutineSettingsStore.isEnabled(context, RoutineStream.LOCATION) || RoutineSettingsStore.isEnabled(context, RoutineStream.PHONE_USAGE)
-    }
-    if (!on) return
-    val lines by produceState<List<String>>(initialValue = emptyList()) {
-        value = softLoad {
-            val zone = ZoneId.systemDefault()
-            val yesterday = LocalDate.now(zone).minusDays(1)
-            val repo = RoutineRepository(SupabaseClientProvider.client)
-            val mobility = repo.mobilitySince(yesterday).firstOrNull { it.date == yesterday.toString() }
-            val homeIds = PlacesRepository(SupabaseClientProvider.client).loadPlaces()
-                .filter { it.category == PlaceCategory.HOME.key }.map { it.id }.toSet()
-            val toWork = repo.commutesSince(Instant.now().minusSeconds(28 * 86_400)).filter { it.fromPlaceId in homeIds }
-            val yesterdays = toWork.filter { localDateOf(it.startMs, zone) == yesterday }
-            val earlier = toWork.filter { localDateOf(it.startMs, zone) < yesterday }.map { it.minutes }.sorted()
-            val phone = repo.phoneSince(yesterday).firstOrNull { it.date == yesterday }
-            routineLines(
-                RoutineYesterday(
-                    date = yesterday,
-                    coveragePct = mobility?.coveragePct,
-                    homeMin = mobility?.minutesByCategory?.get(PlaceCategory.HOME.key),
-                    workMin = mobility?.minutesByCategory?.get(PlaceCategory.WORK.key),
-                    transitMin = mobility?.minutesByCategory?.get("transit"),
-                    commuteMin = yesterdays.takeIf { it.isNotEmpty() }?.sumOf { it.minutes },
-                    usualCommuteMin = earlier.takeIf { it.size >= 3 }?.let { it[it.size / 2] },
-                    bedWindowMin = phone?.bedWindowMin,
-                ),
-            )
-        } ?: emptyList()
-    }
-    if (lines.isEmpty()) return
-    FTCard(
-        title = "YESTERDAY'S ROUTINE",
-        info = "Where the day went, the commute against its usual (the median of the last four weeks, from three commutes) " +
-            "and the phone in the hour before sleep. Lab › ROUTINE has the week.",
-    ) {
-        lines.forEach { Text(it, style = FTType.Body, color = FT.TextPrimary) }
-    }
-}
 
 private val visitFmt = DateTimeFormatter.ofPattern("EEE d MMM · HH:mm")
 

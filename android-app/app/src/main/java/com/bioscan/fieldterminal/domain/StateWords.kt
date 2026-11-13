@@ -88,10 +88,3 @@ fun healthspanStateWord(status: com.bioscan.fieldterminal.domain.aging.FactorSta
     com.bioscan.fieldterminal.domain.aging.FactorStatus.UNASSESSED -> StateWord(MetricState.Unavailable, "NOT ASSESSED")
 }
 
-// How much data stands behind a view, in the shared state language (availability is not a verdict, so never Optimal).
-fun availabilityStateWord(availability: DataAvailability): StateWord = when (availability) {
-    DataAvailability.Available -> StateWord(MetricState.Neutral, "AVAILABLE")
-    DataAvailability.Sparse -> StateWord(MetricState.Neutral, "SPARSE")
-    DataAvailability.Building -> StateWord(MetricState.Building)
-    DataAvailability.Unavailable -> StateWord(MetricState.Unavailable)
-}

@@ -203,11 +203,11 @@ class HealthConcernsRepository(private val supabase: SupabaseClient) {
 
     /** What the symptom check prefills from: last night's sleep and the last three days' recorded training. */
     suspend fun loadCheckContext(today: LocalDate = LocalDate.now()): com.bioscan.fieldterminal.domain.health.CheckContext {
-        val sleep = runCatching {
+        val sleep = catching {
             supabase.postgrest.from("sleep_daily").select(columns = Columns.list("date,hours")) { filter { eq("date", today.toString()) } }
                 .decodeList<CheckSleepRow>().mapNotNull { it.hours }.maxOrNull()
         }.getOrNull()
-        val sessions = runCatching {
+        val sessions = catching {
             // Session starts are logged times (local digits, zero offset): the local day string compares as a date.
             supabase.postgrest.from("exercise_sessions").select(columns = Columns.list("type,duration_min")) {
                 filter { gte("start_time", today.minusDays(3).toString()); neq("type", "walk") }

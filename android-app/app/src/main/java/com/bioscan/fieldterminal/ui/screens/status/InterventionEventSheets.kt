@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -214,7 +215,7 @@ fun LogEventSheet(intervention: EpisodicIntervention, expectations: List<Expecta
                             assignedBy = if (drawId != null) "drawn" else "self",
                         )
                         // the draw keeps pointing at what it led to; a failed link doesn't undo a logged event
-                        if (drawId != null) runCatching { repo.linkDrawEvent(drawId, eventId) }
+                        if (drawId != null) catching { repo.linkDrawEvent(drawId, eventId) }
                         onLogged()
                     } catch (e: CancellationException) {
                         throw e

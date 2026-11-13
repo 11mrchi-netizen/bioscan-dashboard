@@ -54,7 +54,7 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
-import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.LocalDate

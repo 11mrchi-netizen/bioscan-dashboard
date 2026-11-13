@@ -49,9 +49,6 @@ val EveningCheckin.isComplete: Boolean
 // The 22:25 reminder is skipped once tonight's exposures are answered.
 fun eveningCheckinNeeded(saved: EveningCheckin?): Boolean = saved == null || !saved.isComplete
 
-// The morning card asks about last evening until it is answered.
-fun lastEveningDate(today: LocalDate): LocalDate = today.minusDays(1)
-
 // One line for the Today card: "2 drinks · no caffeine after 14:00 · no late meal · stress 3".
 fun EveningCheckin.summary(): String = listOfNotNull(
     drinks?.let { if (it == 0) "no drinks" else if (it == 1) "1 drink" else "$it drinks" },

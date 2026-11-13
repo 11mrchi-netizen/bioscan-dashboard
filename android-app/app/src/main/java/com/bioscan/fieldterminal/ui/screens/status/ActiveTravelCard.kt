@@ -17,7 +17,7 @@ import com.bioscan.fieldterminal.data.routine.RoutineSettingsStore
 import com.bioscan.fieldterminal.data.routine.RoutineStream
 import com.bioscan.fieldterminal.domain.routine.ActiveTravelWeek
 import com.bioscan.fieldterminal.domain.routine.activeTravel
-import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import java.time.Instant

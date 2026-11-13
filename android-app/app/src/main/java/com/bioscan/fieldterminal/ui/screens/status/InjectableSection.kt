@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,13 +53,13 @@ fun InjectableSection(supplementId: Long, spec: RegimenSpec, prescribedUnits: Do
     var reload by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(supplementId, reload) {
-        history = runCatching { repo.siteHistory(listOf(supplementId))[supplementId].orEmpty() }.getOrDefault(emptyList())
-        vial = runCatching { repo.openVial(supplementId) }.getOrNull()
-        used = vial?.let { v -> runCatching { repo.usedSince(supplementId, LocalDate.parse(v.openedOn)) }.getOrDefault(0.0) } ?: 0.0
+        history = catching { repo.siteHistory(listOf(supplementId))[supplementId].orEmpty() }.getOrDefault(emptyList())
+        vial = catching { repo.openVial(supplementId) }.getOrNull()
+        used = vial?.let { v -> catching { repo.usedSince(supplementId, LocalDate.parse(v.openedOn)) }.getOrDefault(0.0) } ?: 0.0
     }
     fun act(block: suspend () -> Unit) = scope.launch {
         error = null
-        runCatching { block() }.onSuccess { editing = false; reload++ }.onFailure { error = it.message ?: "Couldn't save" }
+        catching { block() }.onSuccess { editing = false; reload++ }.onFailure { error = it.message ?: "Couldn't save" }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

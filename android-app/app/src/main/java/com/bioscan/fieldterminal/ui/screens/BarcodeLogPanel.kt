@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -68,7 +69,7 @@ fun BarcodeLogPanel(roster: List<SupplementRow>, onMatched: (List<SupplementRow>
                     onMatched(hits)
                     message = "Matched ${hits.joinToString { it.name }}. Check it below, then save."
                 } else {
-                    val lookup = runCatching { SupplementLookupRepository(SupabaseClientProvider.client).lookupBarcode(code) }.getOrNull()
+                    val lookup = catching { SupplementLookupRepository(SupabaseClientProvider.client).lookupBarcode(code) }.getOrNull()
                     val lines = buildList {
                         lookup?.suppco?.value?.products?.firstOrNull()?.let { add("SuppCo: ${it.name ?: "unnamed"}${it.brand?.let { b -> " · $b" } ?: ""}") }
                         lookup?.dsld?.value?.labels?.firstOrNull()?.let { add("NIH DSLD: ${it.fullName ?: "unnamed"}${it.brandName?.let { b -> " · $b" } ?: ""}") }

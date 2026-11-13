@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -51,34 +52,6 @@ import com.bioscan.fieldterminal.ui.components.FTStatePill
 
 // Redesign (spec §4): the intraday cards that left the Health page now live on Today.
 
-private const val INTRADAY_HR_INFO =
-    "Your band's heart rate minute by minute for the newest day it has synced, from midnight to midnight. Minutes " +
-        "without a reading (band off the wrist, or no measurement) are left out: the line breaks there. Tap or drag the " +
-        "chart to read a minute."
-
-/** Trend Card: the newest day's minute-by-minute heart rate (moved from Health › Cardio). */
-@Composable
-internal fun IntradayHeartRateCard(day: HeartRateDay?) {
-    if (day == null) return
-    val summary = minuteHrSummary(day.points)
-    RedesignCard {
-        MetricCardHeader(
-            title = "HEART RATE · ${day.date.format(DateTimeFormatter.ofPattern("d MMM")).uppercase()}",
-            latest = day.points.lastOrNull()?.bpm?.toString(),
-            unit = "bpm",
-            helpBody = INTRADAY_HR_INFO,
-        )
-        MinuteHeartRateChart(points = day.points, color = FT.DomainHeart)
-        summary?.let {
-            Text(
-                "Worn ${it.wornMinutes / 60} h ${it.wornMinutes % 60} min · ${it.low}–${it.high} bpm · average ${it.average} bpm",
-                style = FTType.Caption,
-                color = FT.TextSecondary,
-            )
-        }
-    }
-}
-
 private const val HYPNOGRAM_INFO =
     "Last night through the night: which stage you were in minute by minute (awake, REM, light, deep), when you woke, and the sleep " +
         "cycles (estimated: the band does not report cycles, so each is taken to end where a REM period ends). Switch on heart rate to " +
@@ -94,7 +67,7 @@ private enum class HypnogramOverlay(val label: String) { None("STAGES"), HeartRa
 internal fun HypnogramCard(latest: SleepAnalysisRow?) {
     val date = latest?.date?.let { LocalDate.parse(it) }
     val night by produceState<HypnogramNight?>(initialValue = null, date) {
-        value = date?.let { runCatching { AnalysisRepository(SupabaseClientProvider.client).loadHypnogramNight(it) }.getOrNull() }
+        value = date?.let { catching { AnalysisRepository(SupabaseClientProvider.client).loadHypnogramNight(it) }.getOrNull() }
     }
     var overlay by rememberSaveable { mutableStateOf(HypnogramOverlay.None.name) }
     RedesignCard {

@@ -75,14 +75,14 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
     suspend fun load(from: LocalDate = LocalDate.now(), days: Int = 3, now: ZonedDateTime = ZonedDateTime.now()): List<PlannedDay> = coroutineScope {
         val zone = now.zone
         val to = from.plusDays(days.toLong())
-        val eventsD = async { runCatching { AthleteEventsRepository(supabase).loadAll().filter { !it.date.isBefore(from) && it.date.isBefore(to) } }.getOrDefault(emptyList()) }
-        val plannedD = async { runCatching { planned(from, to) }.getOrDefault(emptyList()) }
-        val calendarD = async { runCatching { calendar(from, to, zone) }.getOrDefault(emptyList()) }
+        val eventsD = async { catching { AthleteEventsRepository(supabase).loadAll().filter { !it.date.isBefore(from) && it.date.isBefore(to) } }.getOrDefault(emptyList()) }
+        val plannedD = async { catching { planned(from, to) }.getOrDefault(emptyList()) }
+        val calendarD = async { catching { calendar(from, to, zone) }.getOrDefault(emptyList()) }
         val recordedD = async { recorded(from.minusDays(HISTORY_DAYS), zone) }
-        val anchorsD = async { runCatching { ZoneAnchorsRepository(supabase).load().anchorsFor(from) }.getOrNull() }
-        val weightD = async { runCatching { latestWeight() }.getOrNull() }
+        val anchorsD = async { catching { ZoneAnchorsRepository(supabase).load().anchorsFor(from) }.getOrNull() }
+        val weightD = async { catching { latestWeight() }.getOrNull() }
         // Before the migration that adds it, the table is missing: no overrides.
-        val overridesD = async { runCatching { CalendarOverridesRepository(supabase).load() }.getOrDefault(emptyMap()) }
+        val overridesD = async { catching { CalendarOverridesRepository(supabase).load() }.getOrDefault(emptyMap()) }
         val linksRepo = SessionPlanLinksRepository(supabase)
         val storedD = async { linksRepo.load() }
 
@@ -99,7 +99,7 @@ class PlannedDayRepository(private val supabase: SupabaseClient) {
             from, days, events, planned, calendarD.await(),
             recorded.filter { !it.start.toLocalDate().isBefore(from) }, history, now, overridesD.await(), links,
         )
-        runCatching { linksRepo.keepFinished(resolved, now.toLocalDate()) }
+        catching { linksRepo.keepFinished(resolved, now.toLocalDate()) }
         resolved
     }
 

@@ -26,9 +26,6 @@ data class RegionShape(
     }
 }
 
-const val BODY_MAP_WIDTH = 100f
-const val BODY_MAP_HEIGHT = 200f
-
 private class ShapeBuilder {
     val out = mutableListOf<RegionShape>()
 
@@ -84,6 +81,3 @@ val BODY_MAP_SHAPES: List<RegionShape> = ShapeBuilder().apply {
 fun hitRegion(view: BodyView, x: Float, y: Float, shapes: List<RegionShape> = BODY_MAP_SHAPES): RegionShape? =
     shapes.filter { it.view == view && it.contains(x, y) }.minByOrNull { it.area }
 
-/** The shapes to light for a region and side ("both" or null lights both sides). */
-fun shapesFor(code: String, side: String?, shapes: List<RegionShape> = BODY_MAP_SHAPES): List<RegionShape> =
-    shapes.filter { it.code == code && (side == null || side == "both" || it.side == null || it.side == side) }

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -107,16 +108,16 @@ fun BodyTabContent() {
     LaunchedEffect(guard.attempt) {
         guard.run { bodyMetrics = AnalysisRepository(SupabaseClientProvider.client).loadBodyMetrics() }
         val repo = BodyCheckinRepository(SupabaseClientProvider.client)
-        checkins = runCatching { repo.loadHistory() }.getOrElse { checkins }
-        heightCm = runCatching { repo.latestHeightCm() }.getOrNull() ?: heightCm
-        profile = runCatching { UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull() ?: profile
-        scaleSeries = runCatching { ScaleReadingRepository(SupabaseClientProvider.client).loadCompositionSeries() }.getOrElse { scaleSeries }
+        checkins = catching { repo.loadHistory() }.getOrElse { checkins }
+        heightCm = catching { repo.latestHeightCm() }.getOrNull() ?: heightCm
+        profile = catching { UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull() ?: profile
+        scaleSeries = catching { ScaleReadingRepository(SupabaseClientProvider.client).loadCompositionSeries() }.getOrElse { scaleSeries }
     }
 
     var range by com.bioscan.fieldterminal.ui.components.rememberRange("me:body", ChartRange.M3)
     var showRegimen by rememberSaveable { mutableStateOf(true) }
     var markers by remember { mutableStateOf(emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>()) }
-    LaunchedEffect(Unit) { markers = runCatching { com.bioscan.fieldterminal.ui.screens.detail.loadRegimenMarkers() }.getOrDefault(emptyList()) }
+    LaunchedEffect(Unit) { markers = catching { com.bioscan.fieldterminal.ui.screens.detail.loadRegimenMarkers() }.getOrDefault(emptyList()) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         com.bioscan.fieldterminal.ui.components.FTChipRow(
             ChartRange.entries, range, { it.label }, { range = it },

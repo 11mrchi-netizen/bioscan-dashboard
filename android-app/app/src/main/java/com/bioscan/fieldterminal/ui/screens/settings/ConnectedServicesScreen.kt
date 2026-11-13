@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Arrangement
@@ -349,7 +350,7 @@ private fun ZeppCard(scope: CoroutineScope) {
         var historyError by remember { mutableStateOf<String?>(null) }
         LaunchedEffect(Unit) {
             while (true) {
-                runCatching { zeppRepository.loadHistoryPull() }.onSuccess { historyPull = it }
+                catching { zeppRepository.loadHistoryPull() }.onSuccess { historyPull = it }
                 kotlinx.coroutines.delay(10_000)
             }
         }

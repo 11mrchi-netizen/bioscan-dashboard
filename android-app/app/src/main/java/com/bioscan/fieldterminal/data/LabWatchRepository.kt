@@ -52,7 +52,7 @@ private data class WatchDrawRow(val id: Long, @SerialName("draw_date") val drawD
 class LabWatchRepository(private val supabase: SupabaseClient) {
 
     suspend fun loadRules(): List<LabWatchRule> {
-        val reviews = runCatching { RegistryReviewRepository(supabase).loadReviews() }.getOrDefault(emptyMap())
+        val reviews = catching { RegistryReviewRepository(supabase).loadReviews() }.getOrDefault(emptyMap())
         return ReadCache.kept("labwatch.rules", tables = setOf("registry_reviews")) {
             supabase.postgrest.from("lab_watch_rules").select(
                 Columns.list("id,version,substance_keys,substance_aliases,min_daily_amount,amount_unit,marker_label,marker_aliases,reason,advice,source,pmid_doi,source_url,caveats,review_status"),
@@ -84,8 +84,8 @@ class LabWatchRepository(private val supabase: SupabaseClient) {
     /** Every rule that applies to an active item, with the latest results of its markers. */
     suspend fun watches(today: LocalDate = LocalDate.now()): List<LabWatch> {
         val active = SupplementsRepository(supabase).loadOverview().active.filter { it.status == "active" }
-        val roster = runCatching { InteractionRepository(supabase).rosterItems(active) }.getOrDefault(emptyList()).associateBy { it.id }
-        val doses = runCatching { SupplementsRepository(supabase).loadDoseIngredients(active) }.getOrDefault(emptyMap())
+        val roster = catching { InteractionRepository(supabase).rosterItems(active) }.getOrDefault(emptyList()).associateBy { it.id }
+        val doses = catching { SupplementsRepository(supabase).loadDoseIngredients(active) }.getOrDefault(emptyMap())
         val items = active.map { WatchItem(it.id, it.name, roster[it.id]?.ingredientKeys.orEmpty(), it.spec(), doses[it.id].orEmpty()) }
         return matchLabWatch(loadRules(), items, loadReadings(), today)
     }

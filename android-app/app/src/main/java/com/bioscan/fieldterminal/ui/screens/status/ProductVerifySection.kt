@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -68,7 +69,7 @@ fun ProductVerifySection(productId: Long) {
     var info by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(productId) {
-        own = runCatching { repo.ownProduct(productId) }.getOrNull()
+        own = catching { repo.ownProduct(productId) }.getOrNull()
         own?.barcode?.let { if (barcode.isEmpty()) barcode = it }
     }
 

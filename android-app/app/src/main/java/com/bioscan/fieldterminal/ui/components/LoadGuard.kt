@@ -76,6 +76,27 @@ fun rememberLoadGuard(refreshOnUpdates: Boolean = true): LoadGuard {
     return guard
 }
 
+/**
+ * A page's main data: null while it loads; a failed load is on the guard (shown with [LoadErrorCard], RETRY loads again)
+ * and the value already on screen stays. Loads again when [keys] change and when the read cache brings different data.
+ *
+ *   val (sessions, guard) = rememberGuarded { repo.loadSessions() }
+ *   if (sessions == null) { LoadingOrError(guard, "Loading…"); return }
+ */
+@Composable
+fun <T : Any> rememberGuarded(vararg keys: Any?, load: suspend () -> T): Pair<T?, LoadGuard> {
+    val guard = rememberLoadGuard()
+    var value by remember { mutableStateOf<T?>(null) }
+    androidx.compose.runtime.LaunchedEffect(guard.attempt, *keys) { guard.run { value = load() } }
+    return value to guard
+}
+
+/** What a page shows before its main data is there: the failure with RETRY, or the loading line. */
+@Composable
+fun LoadingOrError(guard: LoadGuard, loading: String) {
+    if (guard.error != null) LoadErrorCard(guard) else Text(loading, style = FTType.BodySmall, color = FT.TextMuted)
+}
+
 /** A number that grows each time a background refresh brings different data: a key for loads outside a LoadGuard. */
 @Composable
 fun rememberCacheVersion(): Int {
@@ -136,14 +157,4 @@ fun kotlinx.coroutines.CoroutineScope.launchSafe(
     } finally {
         onDone()
     }
-}
-
-// Optional enrichment (a max-HR ceiling, a static library): a failure yields null, never a crash or a stuck screen.
-suspend fun <T> softLoad(block: suspend () -> T): T? = try {
-    block()
-} catch (e: CancellationException) {
-    throw e
-} catch (e: Exception) {
-    android.util.Log.w("softLoad", "optional load failed: ${e.message}")
-    null
 }

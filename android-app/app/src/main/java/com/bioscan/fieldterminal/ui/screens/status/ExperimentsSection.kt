@@ -55,24 +55,6 @@ fun ExperimentsSection(
     }
 }
 
-// The Today page's line for each running randomised experiment: what today's draw asks for (never a blinded arm).
-@Composable
-fun TodaysDrawCard(experiments: List<ExperimentRow>, today: LocalDate) {
-    val draws = experiments.filter { it.status != "abandoned" }.mapNotNull { e -> e.protocol?.let { todayAssignment(it, today) }?.let { e to it } }
-    if (draws.isEmpty()) return
-    FTCard(title = "TODAY'S DRAW", info = "What each running randomised experiment asks of today. The order was drawn when you registered; a day you don't follow still counts as drawn, so just log what you did.") {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            draws.forEach { (e, a) ->
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(e.name, style = FTType.Label, color = FT.TextSecondary)
-                    Text(a.headline, style = FTType.BodySmall, color = FT.TextPrimary)
-                    a.detail?.let { Text(it, style = FTType.Caption, color = FT.TextMuted) }
-                }
-            }
-        }
-    }
-}
-
 @Composable
 internal fun ExperimentEntry(e: ExperimentRow, res: ExperimentResultRow?, today: LocalDate, onDelete: ((ExperimentRow) -> Unit)?) {
     var confirming by remember { mutableStateOf(false) }

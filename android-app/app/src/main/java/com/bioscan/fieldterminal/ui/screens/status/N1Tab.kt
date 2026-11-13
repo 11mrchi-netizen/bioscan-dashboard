@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -80,8 +81,8 @@ fun N1Tab() {
     val cacheVersion = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
     LaunchedEffect(experimentsKey, cacheVersion) {
         val repo = ExperimentsRepository(SupabaseClientProvider.client)
-        runCatching { experiments = repo.loadExperiments() }
-        runCatching { experimentResults = repo.loadResults() }
+        catching { experiments = repo.loadExperiments() }
+        catching { experimentResults = repo.loadResults() }
     }
 
     val guard = rememberLoadGuard()
@@ -94,10 +95,10 @@ fun N1Tab() {
                     { wearable = repo.loadWearableDaily() },
                     { sleep = repo.loadSleepDaily() },
                     { wellbeing = repo.loadWellbeingDaily() },
-                    { sexualActivity = runCatching { repo.loadSexualActivityDaily() }.getOrDefault(emptyList()) },
+                    { sexualActivity = catching { repo.loadSexualActivityDaily() }.getOrDefault(emptyList()) },
                     { breakStarts = repo.loadSeriesBreakStarts() },
                     { loadSpans = repo.loadLoadSpans() },
-                    { planned = runCatching { repo.loadPlannedOutcomes() }.getOrNull() },
+                    { planned = catching { repo.loadPlannedOutcomes() }.getOrNull() },
                     { relationships = repo.loadRelationships() },
                     { typicality = repo.loadTypicality() },
                     { evidence = repo.loadEvidence() },

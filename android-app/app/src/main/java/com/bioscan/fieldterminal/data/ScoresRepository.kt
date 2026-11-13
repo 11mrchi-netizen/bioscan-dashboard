@@ -109,25 +109,25 @@ class ScoresRepository(private val supabase: SupabaseClient) {
         val analysis = AnalysisRepository(supabase)
         val wearable = async { analysis.loadWearableDaily() }
         val sleep = async { analysis.loadSleepDaily() }
-        val wellbeing = async { runCatching { analysis.loadWellbeingDaily() }.getOrDefault(emptyList()) }
+        val wellbeing = async { catching { analysis.loadWellbeingDaily() }.getOrDefault(emptyList()) }
         val sessions = async { analysis.loadExerciseSessionsForTrainingLoad() }
-        val spans = async { runCatching { analysis.loadLoadSpans() }.getOrDefault(com.bioscan.fieldterminal.domain.LoadSpans.STANDARD) }
-        val planned = async { runCatching { analysis.loadPlannedOutcomes() }.getOrDefault(emptyList()) }
-        val stool = async { runCatching { analysis.loadStoolLog() }.getOrDefault(emptyList()) }
-        val stress = async { runCatching { ZeppStressRepository(supabase).loadStressDays(limit = 240) }.getOrDefault(emptyList()) }
+        val spans = async { catching { analysis.loadLoadSpans() }.getOrDefault(com.bioscan.fieldterminal.domain.LoadSpans.STANDARD) }
+        val planned = async { catching { analysis.loadPlannedOutcomes() }.getOrDefault(emptyList()) }
+        val stool = async { catching { analysis.loadStoolLog() }.getOrDefault(emptyList()) }
+        val stress = async { catching { ZeppStressRepository(supabase).loadStressDays(limit = 240) }.getOrDefault(emptyList()) }
         // The night HR dip is enrichment: a failed or slow read leaves that one input out, never the scores.
-        val hrDip = async { runCatching { analysis.loadHrDip() }.getOrDefault(emptyMap()) }
+        val hrDip = async { catching { analysis.loadHrDip() }.getOrDefault(emptyMap()) }
         // Phone before sleep (Rhythm): read softly, like the HR dip; without it Rhythm is meal timing alone.
-        val phoneBed = async { runCatching { loadPhoneBedMinutes() }.getOrDefault(emptyMap()) }
-        val checkins = async { runCatching { EveningCheckinRepository(supabase).loadSince(today.minusDays(400)) }.getOrDefault(emptyList()) }
+        val phoneBed = async { catching { loadPhoneBedMinutes() }.getOrDefault(emptyMap()) }
+        val checkins = async { catching { EveningCheckinRepository(supabase).loadSince(today.minusDays(400)) }.getOrDefault(emptyList()) }
         // Logged drinks: read softly; without them alcohol and late caffeine fall back to the evening check-in.
-        val drinks = async { runCatching { DrinksRepository(supabase).logged(days = 400, zone = zone) }.getOrDefault(emptyList()) }
+        val drinks = async { catching { DrinksRepository(supabase).logged(days = 400, zone = zone) }.getOrDefault(emptyList()) }
         // The open illness and its check-ins: the ceiling follows how much it limits the person, not a flat 40.
-        val illnessEpisode = async { runCatching { loadIllnessEpisode(healthFlag) }.getOrNull() }
-        val nut = nutrition ?: runCatching { NutritionRepository(supabase).loadOverview() }.getOrNull()
+        val illnessEpisode = async { catching { loadIllnessEpisode(healthFlag) }.getOrNull() }
+        val nut = nutrition ?: catching { NutritionRepository(supabase).loadOverview() }.getOrNull()
         val goals = NutritionGoalsStore.getGoals(context)
         // FINAL mornings already kept stand unless rebuilt with something new (domain/score/ScoreSnapshots.kt).
-        val keptD = async { runCatching { loadKept(today.minusDays(SCORE_STRIP_DAYS)) }.getOrDefault(emptyMap()) }
+        val keptD = async { catching { loadKept(today.minusDays(SCORE_STRIP_DAYS)) }.getOrDefault(emptyMap()) }
 
         val w = wearable.await()
         val sessionRows = sessions.await()
@@ -212,9 +212,9 @@ class ScoresRepository(private val supabase: SupabaseClient) {
             val weights = fitChargeWeights(defaultHistory.chargeInputs, series[ScoreKeys.HRV].orEmpty(), today)
             val engine = if (weights.personal) ScoreEngine(series, caps = caps, weights = weights.weights) else defaultEngine
             val history = if (weights.personal) engine.history(historyFrom, today) else defaultHistory
-            val quality = runCatching { scoreQuality(history, series, plannedDone, weights) }.getOrNull()
+            val quality = catching { scoreQuality(history, series, plannedDone, weights) }.getOrNull()
             // The scoring history for the nightly relationship engine (score_history): once a day per model version.
-            runCatching { uploadHistory(context, history, today) }
+            catching { uploadHistory(context, history, today) }
             val from = today.minusDays(SCORE_STRIP_DAYS - 1)
             val status = chargeStatus(today, closedYesterday, now)
             val kept = keptD.await()
@@ -229,7 +229,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
                 charge = fresh.charge.copy(previous = yesterday.charge.score),
                 domains = fresh.domains.mapValues { (k, d) -> d.copy(previous = yesterday.domains[k]?.score) },
             )
-            if (toKeep.isNotEmpty()) runCatching { supabase.postgrest.from("score_snapshots").upsert(toKeep) { onConflict = "user_id,day" } }
+            if (toKeep.isNotEmpty()) catching { supabase.postgrest.from("score_snapshots").upsert(toKeep) { onConflict = "user_id,day" } }
             val shown = past + (today to scores)
             val tonight = series[ScoreKeys.SLEEP_DEBT]?.get(today)?.let { debt ->
                 val hours = sources.sleep.mapNotNull { r -> r.hours?.let { h -> runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { it to h } } }.toMap()
@@ -297,7 +297,7 @@ class ScoresRepository(private val supabase: SupabaseClient) {
     /** The open illness: the newest open systemic concern and its check-ins, else a legacy open illness without them. */
     private suspend fun loadIllnessEpisode(flag: HealthFlag?): com.bioscan.fieldterminal.domain.score.IllnessEpisode? {
         val health = HealthConcernsRepository(supabase)
-        val overview = runCatching { health.loadOverview() }.getOrNull()
+        val overview = catching { health.loadOverview() }.getOrNull()
         if (overview == null) {
             val since = flag?.takeIf { !it.isInjury }?.since ?: return null
             return com.bioscan.fieldterminal.domain.score.IllnessEpisode(flag.label, since, emptyList())

@@ -38,7 +38,7 @@ suspend fun SupabaseClient.sessionToken(): String? {
     }
     val session = (status as? SessionStatus.Authenticated)?.session ?: return null
     // Past its expiry (the phone slept through the scheduled refresh): refresh now rather than send a token the server refuses.
-    if (session.expiresAt <= Clock.System.now()) orNullUnlessCancelled { auth.refreshCurrentSession() }
+    if (session.expiresAt <= Clock.System.now()) softLoad { auth.refreshCurrentSession() }
     return auth.currentAccessTokenOrNull() ?: session.accessToken
 }
 

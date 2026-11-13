@@ -1,5 +1,9 @@
 package com.bioscan.fieldterminal.ui.screens.performance
 
+import com.bioscan.fieldterminal.ui.components.LoadingOrError
+import com.bioscan.fieldterminal.ui.components.rememberGuarded
+import com.bioscan.fieldterminal.ui.components.LoadGuard
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -60,13 +64,8 @@ fun sportColor(index: Int): Color = SPORT_COLORS[index % SPORT_COLORS.size]
 private fun hours(h: Double): String = if (h < 1) "${(h * 60).roundToInt()} min" else "%.1f h".format(h)
 
 @Composable
-private fun rememberSportSessions(): List<SportSession>? {
-    val version = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
-    val state by produceState<List<SportSession>?>(null, version) {
-        value = runCatching { AnalysisRepository(SupabaseClientProvider.client).loadSportSessions() }.getOrNull() ?: value ?: emptyList()
-    }
-    return state
-}
+private fun rememberSportSessions(): Pair<List<SportSession>?, LoadGuard> =
+    rememberGuarded { AnalysisRepository(SupabaseClientProvider.client).loadSportSessions() }
 
 /** The window the page reads: the last weeks, or a training block. */
 private data class PerfWindow(val key: String, val chip: String, val name: String, val from: LocalDate, val to: LocalDate) {
@@ -98,14 +97,14 @@ private fun blockWindow(c: com.bioscan.fieldterminal.domain.TrainingCycle, today
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {}) {
-    val sessions = rememberSportSessions()
+    val (sessions, sessionsGuard) = rememberSportSessions()
     val today = remember { LocalDate.now() }
     val cycles by produceState<List<com.bioscan.fieldterminal.domain.TrainingCycle>>(emptyList()) {
-        value = runCatching { com.bioscan.fieldterminal.data.TrainingCyclesRepository(SupabaseClientProvider.client).loadCycles() }.getOrDefault(emptyList())
+        value = catching { com.bioscan.fieldterminal.data.TrainingCyclesRepository(SupabaseClientProvider.client).loadCycles() }.getOrDefault(emptyList())
             .filter { !it.startDate.isAfter(today) }.sortedByDescending { it.startDate }
     }
     val running by produceState<com.bioscan.fieldterminal.data.RunningHistory?>(null) {
-        value = runCatching { com.bioscan.fieldterminal.ui.screens.user.UserDataCache.running() }.getOrNull()
+        value = catching { com.bioscan.fieldterminal.ui.screens.user.UserDataCache.running() }.getOrNull()
     }
     // Kept across navigation (RangeMemory): back from a sport's page, the hub is still on the window it was read in.
     var key by com.bioscan.fieldterminal.ui.components.rememberRange("performance", "w13")
@@ -126,7 +125,7 @@ fun PerformanceHub(onOpenSport: (Sport) -> Unit, onOpenRecords: () -> Unit = {})
             }),
         )
         if (sessions == null) {
-            EmptyLine("Loading your sports…")
+            LoadingOrError(sessionsGuard, "Loading your sports…")
             return@Column
         }
         val weeks = remember(window) { com.bioscan.fieldterminal.domain.weekStarts(window.from, window.to) }
@@ -245,7 +244,7 @@ private fun SportTile(summary: SportSummary, color: Color, window: PerfWindow, o
 /** A sport's sessions, newest first, as rows that open the session's own page. */
 @Composable
 fun RecentSessions(sportKey: String, onOpenSession: (Long) -> Unit, count: Int = 12) {
-    val sessions = rememberSportSessions() ?: return
+    val sessions = rememberSportSessions().first ?: return
     val mine = remember(sessions, sportKey) { sessions.filter { sportOf(it.type, it.source).key == sportKey }.sortedByDescending { it.date }.take(count) }
     if (mine.isEmpty()) return
     Section("LATEST SESSIONS") {
@@ -269,11 +268,11 @@ fun RecentSessions(sportKey: String, onOpenSession: (Long) -> Unit, count: Int =
 /** The page of a sport without its own (cycling, hiking, walking, yoga...): volume, effort, records and sessions. */
 @Composable
 fun SportScreen(sportKey: String, onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
-    val sessions = rememberSportSessions()
+    val (sessions, sessionsGuard) = rememberSportSessions()
     val label = sportOf(sportKey, null).label
     DetailScreen(label.uppercase(), onBack, eyebrow = "PERFORMANCE", domain = FT.Domain.Load) {
         if (sessions == null) {
-            EmptyLine("Loading…")
+            LoadingOrError(sessionsGuard, "Loading…")
             return@DetailScreen
         }
         val today = LocalDate.now()

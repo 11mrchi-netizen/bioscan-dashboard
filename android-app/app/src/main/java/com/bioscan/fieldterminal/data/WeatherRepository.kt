@@ -113,7 +113,7 @@ class WeatherRepository {
                 for (y in 1..years) {
                     val start = from.toLocalDate().minusYears(y.toLong()).minusDays(3)
                     val end = to.toLocalDate().minusYears(y.toLong()).plusDays(3)
-                    samples += runCatching { hourly("https://archive-api.open-meteo.com/v1/archive", lat, lon, start, end, from.zone) }.getOrDefault(emptyList())
+                    samples += catching { hourly("https://archive-api.open-meteo.com/v1/archive", lat, lon, start, end, from.zone) }.getOrDefault(emptyList())
                 }
                 if (samples.isEmpty()) WeatherSeries.NONE else climatology(samples, targetHours, years)
             }

@@ -51,8 +51,8 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
         val supabase = SupabaseClientProvider.client
         val repo = NotificationRulesRepository(supabase)
 
-        val rules = runCatching { repo.loadRules() }.getOrElse { return Result.retry() }
-        val prefs = runCatching { repo.loadPrefs() }.getOrElse { return Result.retry() }
+        val rules = catching { repo.loadRules() }.getOrElse { return Result.retry() }
+        val prefs = catching { repo.loadPrefs() }.getOrElse { return Result.retry() }
             ?: return Result.success()
 
         val now = LocalDateTime.now()
@@ -63,7 +63,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
         val zone = java.time.ZoneId.systemDefault()
         val dayStart = today.atStartOfDay(zone).toInstant()
 
-        val shownToday = runCatching { repo.loadShownSince(dayStart) }
+        val shownToday = catching { repo.loadShownSince(dayStart) }
             .getOrElse { emptyList() }
             .mapNotNull { e -> firedAtLocal(e.firedAt, zone)?.let { ShownEntry(e.ruleKind, it) } }
 
@@ -87,9 +87,9 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                         }?.key ?: continue
 
                     val suppRepo = SupplementsRepository(supabase)
-                    val overview = runCatching { suppRepo.loadOverview() }.getOrElse { continue }
+                    val overview = catching { suppRepo.loadOverview() }.getOrElse { continue }
                     val activeIds = overview.active.mapNotNull { it.id }.toList()
-                    val takes = runCatching { suppRepo.loadRecentTakes(activeIds, today) }.getOrElse { com.bioscan.fieldterminal.data.RecentTakes(emptyMap(), emptyMap()) }
+                    val takes = catching { suppRepo.loadRecentTakes(activeIds, today) }.getOrElse { com.bioscan.fieldterminal.data.RecentTakes(emptyMap(), emptyMap()) }
                     val lastTaken = takes.lastTaken
                     val takenToday = lastTaken.entries
                         .filter { (_, d) -> d == today }
@@ -121,35 +121,35 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
 
                 NotificationKind.WELLBEING_CHECKIN -> {
                     // A failed lookup must not suppress or invent a prompt: skip this run and try again at the next window.
-                    val row = runCatching { repo.loadWellbeingForDate(today.toString()) }.getOrElse { continue }
+                    val row = catching { repo.loadWellbeingForDate(today.toString()) }.getOrElse { continue }
                     if (rule.conditions.skipIfLogged && !wellbeingCheckinNeeded(row?.energy, row?.mood, row?.stress, row?.soreness)) continue
                     "Wellbeing check-in" to "Energy, mood, stress, soreness: 0-10"
                 }
 
                 NotificationKind.EVENING_LOG -> {
                     val startOfLocalDay = today.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
-                    val saved = runCatching { repo.countSavedAgentMessagesSince(startOfLocalDay) }.getOrElse { continue }
+                    val saved = catching { repo.countSavedAgentMessagesSince(startOfLocalDay) }.getOrElse { continue }
                     if (rule.conditions.skipIfLogged && !eveningLogNeeded(saved)) continue
                     "Anything to log today?" to "Drinks, supplements, recovery: say it in one message"
                 }
 
                 // Analysis review phase B: the structured check-in. A failed lookup skips this window rather than nagging.
                 NotificationKind.EVENING_CHECKIN -> {
-                    val saved = runCatching { EveningCheckinRepository(supabase).load(checkinDateFor(now)) }.getOrElse { continue }
+                    val saved = catching { EveningCheckinRepository(supabase).load(checkinDateFor(now)) }.getOrElse { continue }
                     if (rule.conditions.skipIfLogged && !eveningCheckinNeeded(saved)) continue
                     "Evening check-in" to "Drinks, caffeine after 14:00, a late meal: one tap each"
                 }
 
                 // The monthly body check-in: a failed lookup skips this window rather than nagging.
                 NotificationKind.BODY_CHECKIN -> {
-                    val last = runCatching { BodyCheckinRepository(supabase).lastCheckinDate() }.getOrElse { continue }
+                    val last = catching { BodyCheckinRepository(supabase).lastCheckinDate() }.getOrElse { continue }
                     if (rule.conditions.skipIfLogged && !bodyCheckinNeeded(last, today)) continue
                     "Monthly body check-in" to "Grip, tape and skinfolds: before breakfast, about 15 minutes"
                 }
 
                 // Health concerns: a failed lookup skips this window rather than nagging.
                 NotificationKind.HEALTH_CHECKIN -> {
-                    val last = runCatching { HealthConcernsRepository(supabase).lastCheckinDate() }.getOrElse { continue }
+                    val last = catching { HealthConcernsRepository(supabase).lastCheckinDate() }.getOrElse { continue }
                     if (rule.conditions.skipIfLogged && !com.bioscan.fieldterminal.domain.health.healthCheckinNeeded(last, today)) continue
                     "Health check-in" to "Anything bothering you today? NOTHING is one tap, and it counts."
                 }
@@ -203,15 +203,15 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
             val notification = builder.build()
 
             nm.notify(rule.kind.hashCode(), notification)
-            runCatching { repo.appendLog(rule.kind, NotificationOutcome.SHOWN) }
+            catching { repo.appendLog(rule.kind, NotificationOutcome.SHOWN) }
         }
 
         // Fuel planning: reminders relative to planned sessions and races, not to clock times.
         val fuelRules = rules.filter { it.enabled && it.kind in NotificationKind.FUEL }.associateBy { it.kind }
         if (fuelRules.isNotEmpty() && prefs.masterEnabled) {
-            val days = runCatching { PlannedDayRepository(supabase).load(today, days = 3) }.getOrNull()
+            val days = catching { PlannedDayRepository(supabase).load(today, days = 3) }.getOrNull()
             if (days != null) {
-                val shownKeys = runCatching { repo.loadShownSince(dayStart.minusSeconds(3 * 86_400L)) }.getOrElse { emptyList() }
+                val shownKeys = catching { repo.loadShownSince(dayStart.minusSeconds(3 * 86_400L)) }.getOrElse { emptyList() }
                     .mapNotNull { it.dedupeKey }.toSet()
                 val due = dueFuelPrompts(
                     fuelPrompts(days, NotificationKind.FUEL_SESSION, NotificationKind.FUEL_EVENT),
@@ -231,7 +231,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                         .setContentIntent(NotificationActionReceiver.contentIntent(applicationContext, p.kind))
                         .build()
                     nm.notify(p.key.hashCode(), n)
-                    runCatching { repo.appendLog(p.kind, NotificationOutcome.SHOWN, dedupeKey = p.key) }
+                    catching { repo.appendLog(p.kind, NotificationOutcome.SHOWN, dedupeKey = p.key) }
                     shown += ShownEntry(p.kind, now)
                 }
             }
@@ -241,11 +241,11 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
         // The window is 30 min, wider than the run's 15, because a late run must not miss one; the key keeps it to one.
         val practiceRule = rules.firstOrNull { it.enabled && it.kind == NotificationKind.PRACTICE_DUE }
         if (practiceRule != null && prefs.masterEnabled) {
-            runCatching {
+            catching {
                 val practices = com.bioscan.fieldterminal.data.routine.PracticesRepository(supabase)
                 val due = com.bioscan.fieldterminal.domain.routine.practicesDue(practices.activities(), practices.logsSince(today), now.minusMinutes(30), now)
                 if (due.isNotEmpty()) {
-                    val shownKeys = runCatching { repo.loadShownSince(dayStart) }.getOrElse { emptyList() }.mapNotNull { it.dedupeKey }.toSet()
+                    val shownKeys = catching { repo.loadShownSince(dayStart) }.getOrElse { emptyList() }.mapNotNull { it.dedupeKey }.toSet()
                     val shown = shownToday.toMutableList()
                     for (a in due) {
                         val key = com.bioscan.fieldterminal.domain.routine.practiceReminderKey(a.id, today)
@@ -263,7 +263,7 @@ class NotificationDispatchWorker(context: Context, params: WorkerParameters) : C
                             .addAction(0, "SKIP", R.intent(applicationContext, R.ACTION_SKIP, a.id, a.name, a.targetMin))
                             .build()
                         nm.notify(R.reminderNotificationId(a.id), n)
-                        runCatching { repo.appendLog(NotificationKind.PRACTICE_DUE, NotificationOutcome.SHOWN, dedupeKey = key) }
+                        catching { repo.appendLog(NotificationKind.PRACTICE_DUE, NotificationOutcome.SHOWN, dedupeKey = key) }
                         shown += ShownEntry(NotificationKind.PRACTICE_DUE, now)
                     }
                 }

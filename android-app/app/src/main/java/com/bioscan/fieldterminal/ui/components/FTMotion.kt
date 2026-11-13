@@ -73,14 +73,3 @@ object FTMotion {
         }
 }
 
-/** True when the system asks for no animation. */
-@Composable
-@ReadOnlyComposable
-fun reducedMotion(): Boolean = FTMotion.reduced
-
-/** Reads the system setting once for the composition (the activity calls [FTMotion.init] too). */
-@Composable
-fun rememberMotionSetting() {
-    val context = LocalContext.current
-    remember(context) { FTMotion.init(context); Unit }
-}

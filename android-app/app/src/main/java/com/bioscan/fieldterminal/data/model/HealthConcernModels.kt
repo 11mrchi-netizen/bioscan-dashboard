@@ -267,9 +267,6 @@ data class ConcernStateDto(
 )
 
 @Serializable
-data class ConcernStateRow(val key: String = "", val state: String = "", val payload: ConcernStateDto = ConcernStateDto())
-
-@Serializable
 data class FindingLinksDto(val episodes: List<String> = emptyList(), val sessions: List<Long> = emptyList(), val dates: List<String> = emptyList())
 
 @Serializable
@@ -351,9 +348,6 @@ data class TrialReadDto(
     val summary: String = "",
     val evaluateOn: String = "",
 )
-
-@Serializable
-data class TrialReadRow(val key: String = "", val state: String = "", val payload: TrialReadDto = TrialReadDto())
 
 @Serializable
 data class NewTrialIntervention(

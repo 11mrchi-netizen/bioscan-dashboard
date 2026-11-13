@@ -24,7 +24,7 @@ private data class WeightOnlyRow(@SerialName("weight_kg") val weightKg: Double? 
 
 private const val FALLBACK_TEMP_C = 18.0
 
-suspend fun todaySweatRate(supabase: SupabaseClient, home: Pair<Double, Double>?): TodaySweat? = runCatching {
+suspend fun todaySweatRate(supabase: SupabaseClient, home: Pair<Double, Double>?): TodaySweat? = catching {
     val weight = ReadCache.kept("fuel.latest_weight", tables = setOf("body_metrics")) {
         supabase.postgrest.from("body_metrics").select(Columns.list("weight_kg")) {
             filter { filterNot("weight_kg", FilterOperator.IS, "null") }
@@ -34,7 +34,7 @@ suspend fun todaySweatRate(supabase: SupabaseClient, home: Pair<Double, Double>?
     } ?: 70.0
     val profile = SweatTestsRepository(supabase).profile(weight)
     val temp = home?.let { (lat, lon) ->
-        runCatching {
+        catching {
             val day = LocalDate.now()
             val zone = ZonedDateTime.now().zone
             val series = WeatherRepository().fetchHourly(lat, lon, day.atTime(9, 0).atZone(zone), day.atTime(19, 0).atZone(zone))

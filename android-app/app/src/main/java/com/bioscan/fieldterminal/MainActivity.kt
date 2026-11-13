@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.runtime.remember
 import io.github.jan.supabase.auth.status.RefreshFailureCause
 import com.bioscan.fieldterminal.ui.theme.FTType
@@ -139,7 +140,7 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
             RoutineCaptureWorker.schedule(context)
             LocationCollector.registerAll(context)
             // Daily targets live with the account too (FUEL scores intake against them).
-            runCatching { com.bioscan.fieldterminal.data.NutritionGoalsStore.sync(context, SupabaseClientProvider.client) }
+            catching { com.bioscan.fieldterminal.data.NutritionGoalsStore.sync(context, SupabaseClientProvider.client) }
         }
     }
 

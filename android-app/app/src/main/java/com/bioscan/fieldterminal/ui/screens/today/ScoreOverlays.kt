@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.today
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -249,7 +250,7 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
         // What the nightly relationship engine found about evenings and the next morning's RECOVERY and SLEEP scores
         // (supabase/functions/_shared/analysis-core/hypotheses.ts, catalogue 2.2.0). Settled answers only.
         val effects by androidx.compose.runtime.produceState<List<com.bioscan.fieldterminal.data.model.RelationshipResultRow>?>(null) {
-            value = runCatching { com.bioscan.fieldterminal.data.AnalysisRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).loadRelationships() }
+            value = catching { com.bioscan.fieldterminal.data.AnalysisRepository(com.bioscan.fieldterminal.data.SupabaseClientProvider.client).loadRelationships() }
                 .getOrDefault(emptyList())
                 .filter { it.payload.outcome == "recovery_score" || it.payload.outcome == "sleep_score" }
         }

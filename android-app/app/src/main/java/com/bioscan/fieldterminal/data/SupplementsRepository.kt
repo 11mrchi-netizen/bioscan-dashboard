@@ -231,7 +231,7 @@ class SupplementsRepository(private val supabase: SupabaseClient) {
             if (spec.steps == null) continue
             val now = spec.doseTextOn(today)
             if (now == row.dose) continue
-            runCatching {
+            catching {
                 supabase.postgrest.from("supplements").update(buildJsonObject { put("dose", now) }) { filter { eq("id", row.id) } }
             }
         }

@@ -105,7 +105,7 @@ class FuelDebriefRepository(private val supabase: SupabaseClient) {
         if (eventId != null) schedules.load("event", eventId.toString())?.let { return it }
         planRef?.takeIf { !it.startsWith("event:") }?.let { ref -> schedules.load("planned", planKey(ref))?.let { return it } }
         if (sessionId != null) {
-            val planned = runCatching {
+            val planned = catching {
                 supabase.postgrest.from("planned_sessions").select(Columns.list("id")) { filter { eq("exercise_session_id", sessionId) }; limit(1) }
                     .decodeList<PlannedLinkRow>().firstOrNull()
             }.getOrNull()
@@ -120,7 +120,7 @@ class FuelDebriefRepository(private val supabase: SupabaseClient) {
      */
     private suspend fun planRefFor(sessionId: Long, date: LocalDate): String? {
         links.linkFor(sessionId)?.let { return it.planRef }
-        return runCatching {
+        return catching {
             PlannedDayRepository(supabase).load(date, days = 1).flatMap { it.items }.firstOrNull { it.sessionId == sessionId }?.planRef
         }.getOrNull()
     }
@@ -134,14 +134,14 @@ class FuelDebriefRepository(private val supabase: SupabaseClient) {
         )
     }
 
-    private suspend fun existingReview(sessionId: Long?, eventId: Long?): FuelReviewRow? = runCatching {
+    private suspend fun existingReview(sessionId: Long?, eventId: Long?): FuelReviewRow? = catching {
         supabase.postgrest.from("fuel_plan_reviews").select {
             filter { if (eventId != null) eq("event_id", eventId) else eq("exercise_session_id", sessionId ?: -1L) }
         }.decodeList<FuelReviewRow>().firstOrNull()
     }.getOrNull()
 
     suspend fun targetForSession(s: FuelingSessionRow): DebriefTarget {
-        val event = runCatching {
+        val event = catching {
             supabase.postgrest.from("athlete_events").select(Columns.list("id,name,event_date")) { filter { eq("exercise_session_id", s.id) }; limit(1) }
                 .decodeList<SessionLinkRow>().firstOrNull()
         }.getOrNull()
@@ -159,7 +159,7 @@ class FuelDebriefRepository(private val supabase: SupabaseClient) {
     suspend fun targetForEvent(event: AthleteEvent): DebriefTarget {
         val sid = event.exerciseSessionId
         val duration = sid?.let { id ->
-            runCatching {
+            catching {
                 supabase.postgrest.from("exercise_sessions").select(Columns.list("id,duration_min")) { filter { eq("id", id) } }
                     .decodeList<DurationRow>().firstOrNull()?.durationMin
             }.getOrNull()
@@ -214,7 +214,7 @@ class FuelDebriefRepository(private val supabase: SupabaseClient) {
             ),
         ) { this.onConflict = onConflict }
         if (answers.weightBeforeKg != null && answers.weightAfterKg != null && answers.durationMin >= 30) {
-            runCatching {
+            catching {
                 SweatTestsRepository(supabase).add(
                     SweatTest(
                         target.date, target.type.let { if (it in setOf("run", "ride", "hike", "swim")) it else "other" },

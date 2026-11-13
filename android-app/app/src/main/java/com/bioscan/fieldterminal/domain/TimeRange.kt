@@ -61,5 +61,3 @@ fun aggregateRanges(points: List<Pair<LocalDate, DayRange>>, range: TimeRange, a
         .map { (d, v) -> d to DayRange(v.map { it.second.low }.average(), v.map { it.second.high }.average()) }
 }
 
-/** Days of history a fetch must cover so the range is not silently cut short. */
-fun TimeRange.fetchDays(): Long = days ?: ChronoUnit.DAYS.between(LocalDate.of(2015, 1, 1), LocalDate.now())

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.fuel
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -220,8 +221,8 @@ internal fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () ->
     var supplements by remember { mutableStateOf<List<SupplementFuelOption>>(emptyList()) }
 
     LaunchedEffect(Unit) {
-        catalog = runCatching { FuelingRepository(SupabaseClientProvider.client).loadProducts() }.getOrDefault(emptyList())
-        supplements = runCatching { FuelScheduleRepository(SupabaseClientProvider.client).supplementOptions() }.getOrDefault(emptyList())
+        catalog = catching { FuelingRepository(SupabaseClientProvider.client).loadProducts() }.getOrDefault(emptyList())
+        supplements = catching { FuelScheduleRepository(SupabaseClientProvider.client).supplementOptions() }.getOrDefault(emptyList())
     }
 
     // A form's usual shape, applied when the form is picked on a block with nothing entered yet.

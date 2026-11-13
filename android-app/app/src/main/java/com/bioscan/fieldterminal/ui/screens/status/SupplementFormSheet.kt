@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -276,7 +277,7 @@ fun SupplementFormSheet(
                             // (capsules, tablets...) or the dose itself (measured forms).
                             val wholeUnits = com.bioscan.fieldterminal.domain.formRule(draft.form)?.splitting != com.bioscan.fieldterminal.domain.Splitting.MEASURED
                             val pid = existing?.productId
-                            val (labelSize, labelUnit) = pid?.let { runCatching { repo.loadProductServing(it) }.getOrDefault(null to null) } ?: (null to null)
+                            val (labelSize, labelUnit) = pid?.let { catching { repo.loadProductServing(it) }.getOrDefault(null to null) } ?: (null to null)
                             val known = com.bioscan.fieldterminal.domain.servingsPerDose(draft.amount, draft.unit, labelSize, labelUnit)
                             val spd = known ?: if (wholeUnits) draft.amount else 1.0
                             val servingSize = if (known != null) labelSize!! else if (wholeUnits) 1.0 else draft.amount
@@ -375,7 +376,7 @@ fun SupplementFormSheet(
             if (existing != null) {
                 var itemWatches by remember(existing.id) { mutableStateOf<List<com.bioscan.fieldterminal.domain.LabWatch>>(emptyList()) }
                 LaunchedEffect(existing.id) {
-                    itemWatches = runCatching { com.bioscan.fieldterminal.data.LabWatchRepository(SupabaseClientProvider.client).watches() }
+                    itemWatches = catching { com.bioscan.fieldterminal.data.LabWatchRepository(SupabaseClientProvider.client).watches() }
                         .getOrDefault(emptyList()).filter { it.itemId == existing.id }
                 }
                 LabWatchSection(itemWatches, title = "LABS TO WATCH", showItem = false)

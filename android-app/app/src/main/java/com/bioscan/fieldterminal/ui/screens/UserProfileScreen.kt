@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -69,7 +70,7 @@ fun UserProfileScreen(
     LaunchedEffect(agingOverview) {
         val overview = agingOverview ?: return@LaunchedEffect
         healthspanFailed = false
-        healthspan = runCatching { HealthspanRepository(SupabaseClientProvider.client).load(overview) }
+        healthspan = catching { HealthspanRepository(SupabaseClientProvider.client).load(overview) }
             .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it else healthspanFailed = true }
             .getOrNull()
     }

@@ -115,6 +115,3 @@ fun compatibleTypes(plannedType: String, recordedType: String): Boolean = when (
     else -> false
 }
 
-/** The plan a recording could be, for the person to pick from: the day's plans, then those of the days around it. */
-@Serializable
-data class MatchOption(val planRef: String, val title: String, val date: java.time.LocalDate, val durationMin: Double, val distanceKm: Double?)

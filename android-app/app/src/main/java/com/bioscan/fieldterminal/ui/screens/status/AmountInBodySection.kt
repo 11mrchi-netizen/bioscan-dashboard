@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -42,16 +43,16 @@ fun AmountInBodySection(supplementId: Long, halfLifeHours: Double, ingredientNam
     var unit by remember { mutableStateOf<String?>(null) }
     val days = curveWindowDays(halfLifeHours)
     LaunchedEffect(supplementId, halfLifeHours, ingredientName) {
-        curve = runCatching {
+        curve = catching {
             // The active amount per dose: an injection's dose is its active amount; anything else reads it from the dose's
             // ingredients (the one the reference names, else the only or first one).
             val repo = SupplementsRepository(SupabaseClientProvider.client)
             val overview = repo.loadOverview()
-            val row = (overview.active + overview.ended).firstOrNull { it.id == supplementId } ?: return@runCatching emptyList()
+            val row = (overview.active + overview.ended).firstOrNull { it.id == supplementId } ?: return@catching emptyList()
             val spec = row.spec()
             val active = if (spec.form == "injection") spec.amount?.let { a -> spec.unit?.let { u -> a to u } }
             else activeIngredient(repo.loadDoseIngredients(listOf(row))[row.id].orEmpty(), ingredientName, row.name)?.let { it.amount to it.unit }
-            val (perDose, activeUnit) = active ?: return@runCatching emptyList()
+            val (perDose, activeUnit) = active ?: return@catching emptyList()
             unit = activeUnit
             val now = Instant.now()
             val from = now.minus(Duration.ofDays(days))

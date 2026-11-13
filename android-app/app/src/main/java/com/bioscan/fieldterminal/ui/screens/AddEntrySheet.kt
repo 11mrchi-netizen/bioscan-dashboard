@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.data.catching
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -130,7 +131,7 @@ import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
-import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 import com.bioscan.fieldterminal.ui.theme.Inter
@@ -1424,7 +1425,7 @@ private fun SupplementsForm(
             takesToday = takes.takesToday
             val injectableIds = active.filter { it.spec().injectable }.map { it.id }
             if (injectableIds.isNotEmpty()) {
-                siteHistory = runCatching { com.bioscan.fieldterminal.data.InjectablesRepository(SupabaseClientProvider.client).siteHistory(injectableIds) }
+                siteHistory = catching { com.bioscan.fieldterminal.data.InjectablesRepository(SupabaseClientProvider.client).siteHistory(injectableIds) }
                     .getOrDefault(emptyMap())
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -2403,7 +2404,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
             suppressSearch = false
         } else if (exercise.name.trim().length >= 3) {
             delay(250)
-            suggestions = runCatching { libraryRepo.matchExerciseName(exercise.name) }.getOrDefault(emptyList())
+            suggestions = catching { libraryRepo.matchExerciseName(exercise.name) }.getOrDefault(emptyList())
         } else {
             suggestions = emptyList()
         }

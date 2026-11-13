@@ -1,5 +1,8 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -70,8 +73,10 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
     var error by remember { mutableStateOf<String?>(null) }
 
     // Answers already saved for this evening (the reminder, then the morning card) are shown, not asked again.
-    LaunchedEffect(date) {
-        runCatching { repo.load(date) }.getOrNull()?.let { draft = it }
+    // If they cannot be read, saving is held back: a save writes the whole evening and would replace them with blanks.
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(date, guard.attempt) {
+        guard.run { repo.load(date)?.let { draft = it } }
     }
 
     fun save(checkin: EveningCheckin) {
@@ -121,18 +126,19 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
             }
             BowelMovements(date)
 
+            LoadErrorCard(guard)
             error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FTButton(
                     label = "NOTHING ELSE",
                     emphasis = FTButtonEmphasis.Secondary,
-                    enabled = !saving,
+                    enabled = !saving && guard.error == null,
                     modifier = Modifier.weight(1f),
                 ) { save(draft.withNothingElse()) }
                 FTButton(
                     label = if (saving) "SAVING..." else "SAVE",
                     emphasis = FTButtonEmphasis.Primary,
-                    enabled = !saving,
+                    enabled = !saving && guard.error == null,
                     modifier = Modifier.weight(1f),
                 ) { save(draft) }
             }
@@ -182,7 +188,7 @@ private fun BowelMovements(date: LocalDate) {
     var error by remember { mutableStateOf<String?>(null) }
     val zone = ZoneId.systemDefault()
     suspend fun reload() {
-        entries = runCatching { AnalysisRepository(SupabaseClientProvider.client).loadStoolLog() }.getOrNull()
+        entries = catching { AnalysisRepository(SupabaseClientProvider.client).loadStoolLog() }.getOrNull()
             ?.filter { row -> com.bioscan.fieldterminal.domain.WallClock.date(row.occurredAt) == date }
     }
     LaunchedEffect(date) { reload() }

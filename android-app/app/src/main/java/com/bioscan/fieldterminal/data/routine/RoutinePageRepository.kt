@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data.routine
 
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.routine.CommuteWay
@@ -77,21 +78,21 @@ class RoutinePageRepository(private val supabase: SupabaseClient) {
         val from = today.minusDays(YEAR)
         val ribbonFrom = today.minusDays(RIBBON_DAYS.toLong() - 1)
 
-        val activitiesD = async { runCatching { practices.activities(includeArchived = true) }.getOrDefault(emptyList()) }
-        val logsD = async { runCatching { practices.logsSince(from) }.getOrDefault(emptyList()) }
+        val activitiesD = async { catching { practices.activities(includeArchived = true) }.getOrDefault(emptyList()) }
+        val logsD = async { catching { practices.logsSince(from) }.getOrDefault(emptyList()) }
         val inferredD = async { practices.inferred(from, zone) }
-        val mobilityD = async { runCatching { routine.mobilitySince(from) }.getOrDefault(emptyList()) }
-        val phoneD = async { runCatching { routine.phoneSince(from) }.getOrDefault(emptyList()) }
-        val appsD = async { runCatching { routine.appsSince(today.minusDays(28), top = 8) }.getOrDefault(emptyList()) }
-        val placesD = async { runCatching { placesRepo.loadPlaces() }.getOrDefault(emptyList()) }
-        val tripsD = async { runCatching { placesRepo.tripsSince(from.atStartOfDay(zone).toInstant()) }.getOrDefault(emptyList()) }
-        val sleepD = async { runCatching { sleepTimes(from) }.getOrDefault(emptyList()) }
-        val sessionsD = async { runCatching { sessionSpans(ribbonFrom.minusDays(1)) }.getOrDefault(emptyList()) }
+        val mobilityD = async { catching { routine.mobilitySince(from) }.getOrDefault(emptyList()) }
+        val phoneD = async { catching { routine.phoneSince(from) }.getOrDefault(emptyList()) }
+        val appsD = async { catching { routine.appsSince(today.minusDays(28), top = 8) }.getOrDefault(emptyList()) }
+        val placesD = async { catching { placesRepo.loadPlaces() }.getOrDefault(emptyList()) }
+        val tripsD = async { catching { placesRepo.tripsSince(from.atStartOfDay(zone).toInstant()) }.getOrDefault(emptyList()) }
+        val sleepD = async { catching { sleepTimes(from) }.getOrDefault(emptyList()) }
+        val sessionsD = async { catching { sessionSpans(ribbonFrom.minusDays(1)) }.getOrDefault(emptyList()) }
 
         val places = placesD.await()
         val categoryOf = places.associate { it.id to PlaceCategory.of(it.category) }
         val trips = tripsD.await()
-        val visitsD = async { runCatching { routine.visitsSince(ribbonFrom.minusDays(1).atStartOfDay(zone).toInstant(), places) }.getOrDefault(emptyList()) }
+        val visitsD = async { catching { routine.visitsSince(ribbonFrom.minusDays(1).atStartOfDay(zone).toInstant(), places) }.getOrDefault(emptyList()) }
 
         // Commuting, door to door, by the day it left.
         val commute = commuteJourneys(trips, categoryOf = { categoryOf[it] })

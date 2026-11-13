@@ -214,7 +214,6 @@ private fun MetricRow(label: String, value: String, note: String = "") {
 }
 
 private val FMT_MONTH_DAY = DateTimeFormatter.ofPattern("MMM d")
-private val FMT_YEAR = DateTimeFormatter.ofPattern("yyyy")
 
 private fun formatBlockDateRange(start: String, end: String): String {
     val s = runCatching { LocalDate.parse(start) }.getOrNull() ?: return "$start → $end"

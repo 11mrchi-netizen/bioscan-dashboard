@@ -44,7 +44,6 @@ import com.bioscan.fieldterminal.domain.TrendState
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-
 @Composable
 fun FTMetricValue(value: DisplayValue, modifier: Modifier = Modifier) {
     Column(modifier) {
@@ -86,23 +85,6 @@ fun FTStatePill(word: StateWord, modifier: Modifier = Modifier, onClick: (() -> 
         Text(label, color = treatment.color, style = FTType.Label)
         if (onClick != null) FTChevron(Modifier.padding(start = 4.dp), tint = treatment.color)
     }
-}
-
-@Composable
-fun FTTrendIndicator(trend: TrendState, modifier: Modifier = Modifier) {
-    val treatment = when (trend) {
-        TrendState.Improving -> "↑" to "IMPROVING"
-        TrendState.Declining -> "↓" to "DECLINING"
-        TrendState.Stable -> "→" to "STABLE"
-        TrendState.InsufficientData -> "·" to "NOT ENOUGH HISTORY"
-        TrendState.Unavailable -> "—" to "TREND UNAVAILABLE"
-    }
-    Text(
-        text = treatment.first + " " + treatment.second,
-        modifier = modifier.semantics { contentDescription = treatment.second.lowercase() },
-        color = FT.TextSecondary,
-        style = FTType.Label,
-    )
 }
 
 // Analysis review A7. Most evaluations carry an observation count against what their gate needs (Confidence(have,
@@ -154,20 +136,6 @@ fun FTConfidenceChip(level: ConfidenceLevel, modifier: Modifier = Modifier) {
             .padding(horizontal = 8.dp, vertical = 5.dp),
         color = color,
         style = FTType.Label,
-    )
-}
-
-@Composable
-fun FTProvenanceCue(provenance: List<Provenance>, modifier: Modifier = Modifier) {
-    if (provenance.isEmpty()) return
-    val label = provenance.joinToString(" + ") { it.displayName() }
-    Text(
-        text = label,
-        modifier = modifier.semantics { contentDescription = "Source: " + label },
-        color = FT.TextMuted,
-        style = FTType.Micro,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
     )
 }
 
@@ -351,68 +319,6 @@ fun FTDataState(availability: DataAvailability, reason: String?, modifier: Modif
     ) {
         Text(label, color = if (availability == DataAvailability.Building) FT.Analysis else FT.TextSecondary, style = FTType.Label)
         reason?.let { Text(it, color = FT.TextSecondary, style = FTType.BodySmall) }
-    }
-}
-
-@Composable
-fun FTChartFrame(chart: ChartPresentation, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusModule))
-            .background(FT.Glass, RoundedCornerShape(FT.RadiusModule))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(chart.timeWindow ?: "CURRENT WINDOW", color = FT.TextSecondary, style = FTType.Label)
-            Spacer(Modifier.weight(1f))
-            chart.unit?.let { Text(it, color = FT.TextMuted, style = FTType.MonoCaption) }
-        }
-        content()
-        if (chart.missingness.name != "None") {
-            Text("DATA: " + chart.missingness.name.uppercase(), color = FT.TextMuted, style = FTType.Micro)
-        }
-    }
-}
-
-@Composable
-fun FTAnalyticalCard(
-    presentation: MetricPresentation,
-    modifier: Modifier = Modifier,
-    chartContent: (@Composable () -> Unit)? = null,
-) {
-    if (presentation.availability == DataAvailability.Unavailable) {
-        FTDataState(DataAvailability.Unavailable, presentation.context, modifier)
-        return
-    }
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .semantics { contentDescription = presentation.accessibilitySummary }
-            .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusCard))
-            .background(FT.Glass, RoundedCornerShape(FT.RadiusCard))
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text(presentation.label.uppercase(), color = FT.TextPrimary, style = FTType.SectionTitle)
-                presentation.context?.let { Text(it, color = FT.TextSecondary, style = FTType.BodySmall) }
-            }
-            FTStatePill(presentation.semanticState)
-        }
-        presentation.value?.let { FTMetricValue(it) }
-        FTTrendIndicator(presentation.trend)
-        presentation.confidence?.let { FTConfidenceChip(it) }
-        FTProvenanceCue(presentation.provenance)
-        presentation.range?.let { FTRangeIndicator(it) }
-        if (presentation.availability == DataAvailability.Sparse || presentation.availability == DataAvailability.Building) {
-            FTDataState(presentation.availability, presentation.context)
-        }
-        presentation.chart?.let { chart ->
-            chartContent?.let { content -> FTChartFrame(chart, content = content) }
-        }
     }
 }
 

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,8 +59,8 @@ fun AgingProfileScreen(onBack: () -> Unit) {
     var profile by remember { mutableStateOf<com.bioscan.fieldterminal.data.model.UserProfileRow?>(null) }
     var checkins by remember { mutableStateOf<List<com.bioscan.fieldterminal.domain.BodyCheckinRecord>>(emptyList()) }
     LaunchedEffect(Unit) {
-        profile = runCatching { com.bioscan.fieldterminal.data.UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull()
-        checkins = runCatching { com.bioscan.fieldterminal.data.BodyCheckinRepository(SupabaseClientProvider.client).loadHistory() }.getOrElse { emptyList() }
+        profile = catching { com.bioscan.fieldterminal.data.UserProfileRepository(SupabaseClientProvider.client).loadProfile() }.getOrNull()
+        checkins = catching { com.bioscan.fieldterminal.data.BodyCheckinRepository(SupabaseClientProvider.client).loadHistory() }.getOrElse { emptyList() }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).ftPlatinumWash()) {

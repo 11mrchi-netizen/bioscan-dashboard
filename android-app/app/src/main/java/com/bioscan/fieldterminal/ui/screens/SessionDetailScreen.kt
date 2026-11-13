@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.movingMinutes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
@@ -80,7 +81,7 @@ import com.bioscan.fieldterminal.ui.components.SegmentedToggle
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TileHeader
 import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
-import com.bioscan.fieldterminal.ui.components.softLoad
+import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.ui.screens.session.EF_SESSION_HELP
 import com.bioscan.fieldterminal.ui.screens.session.GAP_HELP
 import com.bioscan.fieldterminal.ui.screens.session.GROUND_CONTACT_HELP
@@ -180,7 +181,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) 
         }
         // What the training block planned for this workout, if anything (DAV-346).
         if (row != null) {
-            planned = runCatching {
+            planned = catching {
                 com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client)
                     .loadPlannedFor(sessionId, OffsetDateTime.parse(row.startTime).toLocalDate(), row.type == "strength")
             }.getOrNull()
@@ -319,7 +320,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) 
                     planned?.let { pm ->
                         com.bioscan.fieldterminal.ui.screens.training.PlannedSessionCard(pm, h.details.exercises.orEmpty(), h.durationMin) {
                             sessionScope.launch {
-                                runCatching { com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client).linkPlanned(pm.row.id, sessionId) }
+                                catching { com.bioscan.fieldterminal.data.TrainingProgramRepository(SupabaseClientProvider.client).linkPlanned(pm.row.id, sessionId) }
                                     .onSuccess { planned = pm.copy(linked = true) }
                             }
                         }

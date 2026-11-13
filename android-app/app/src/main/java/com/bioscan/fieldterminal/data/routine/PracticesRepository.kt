@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.data.routine
 
+import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.ReadCache
 import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.routine.ActivityCategory
@@ -191,7 +192,7 @@ class PracticesRepository(private val supabase: SupabaseClient) {
      */
     suspend fun inferred(from: LocalDate, zone: ZoneId = ZoneId.systemDefault()): InferredInputs = coroutineScope {
         val sessions = async {
-            runCatching {
+            catching {
                 supabase.postgrest.from("exercise_sessions").select(Columns.list("type,start_time,duration_min")) {
                     filter { gte("start_time", from.toString()) }
                 }.decodeList<SessionTimeRow>().mapNotNull { r ->
@@ -202,7 +203,7 @@ class PracticesRepository(private val supabase: SupabaseClient) {
             }.getOrDefault(emptyList())
         }
         val legs = async {
-            runCatching {
+            catching {
                 supabase.postgrest.from("trips").select(Columns.list("start_at,legs")) {
                     filter { gte("start_at", from.atStartOfDay(zone).toInstant().toString()) }
                 }.decodeList<TripLegsRow>().flatMap { t ->
@@ -217,13 +218,13 @@ class PracticesRepository(private val supabase: SupabaseClient) {
             }.getOrDefault(emptyList())
         }
         val mobility = async {
-            runCatching {
+            catching {
                 supabase.postgrest.from("mobility_daily").select(Columns.list("date,outdoor_daylight_min")) { filter { gte("date", from.toString()) } }
                     .decodeList<MobilityLightRow>().mapNotNull { r -> r.outdoorDaylightMin?.let { LocalDate.parse(r.date) to it } }.toMap()
             }.getOrDefault(emptyMap())
         }
         val phone = async {
-            runCatching {
+            catching {
                 supabase.postgrest.from("phone_usage_daily").select(Columns.list("date,by_category")) { filter { gte("date", from.toString()) } }
                     .decodeList<PhoneCategoryRow>().associate { r ->
                         LocalDate.parse(r.date) to r.byCategory.orEmpty().mapNotNull { (k, v) -> runCatching { v.jsonPrimitive.doubleOrNull }.getOrNull()?.let { k to it } }.toMap()
@@ -231,7 +232,7 @@ class PracticesRepository(private val supabase: SupabaseClient) {
             }.getOrDefault(emptyMap())
         }
         val sleep = async {
-            runCatching {
+            catching {
                 supabase.postgrest.from("sleep_daily").select(Columns.list("date,hours")) { filter { gte("date", from.toString()) } }
                     .decodeList<SleepHoursRow>().mapNotNull { r -> r.hours?.let { LocalDate.parse(r.date) to it } }
                     .groupBy({ it.first }, { it.second }).mapValues { (_, v) -> v.max() }

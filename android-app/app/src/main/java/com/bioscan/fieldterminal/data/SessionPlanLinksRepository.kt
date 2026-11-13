@@ -41,7 +41,7 @@ private data class EventSessionWrite(@SerialName("exercise_session_id") val sess
 class SessionPlanLinksRepository(private val supabase: SupabaseClient) {
 
     /** Every stored link, by recording. Empty before the migration is applied. */
-    suspend fun load(): Map<Long, StoredLink> = runCatching {
+    suspend fun load(): Map<Long, StoredLink> = catching {
         ReadCache.kept("fuel.session_plan_links", tables = setOf(TABLE)) {
             supabase.postgrest.from(TABLE).select(Columns.list("exercise_session_id,plan_ref,plan_title,source,confidence"))
                 .decodeList<LinkRow>()
@@ -80,7 +80,7 @@ class SessionPlanLinksRepository(private val supabase: SupabaseClient) {
             .forEach { (date, item) ->
                 val id = item.sessionId ?: return@forEach
                 if (tried.putIfAbsent(id, true) != null) return@forEach
-                runCatching {
+                catching {
                     supabase.postgrest.from(TABLE).upsert(
                         LinkWrite(id, item.planRef, item.planTitle?.take(300), date.toString(), "auto", item.matchConfidence, Instant.now().toString()),
                     ) { onConflict = "user_id,exercise_session_id"; ignoreDuplicates = true }
@@ -92,7 +92,7 @@ class SessionPlanLinksRepository(private val supabase: SupabaseClient) {
     /** An event matched to a recording gets it as its session when it has none yet (the event's debrief reads it). */
     private suspend fun linkEvent(sessionId: Long, planRef: String) {
         val eventId = planRef.removePrefix("event:").takeIf { planRef.startsWith("event:") }?.toLongOrNull() ?: return
-        runCatching {
+        catching {
             supabase.postgrest.from("athlete_events").update(EventSessionWrite(sessionId)) {
                 filter { eq("id", eventId); exact("exercise_session_id", null) }
             }

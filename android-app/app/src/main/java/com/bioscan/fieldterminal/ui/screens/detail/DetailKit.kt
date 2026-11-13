@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.detail
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -107,7 +108,7 @@ fun DetailScreen(
     var showRegimen by rememberSaveable { mutableStateOf(true) }
     var markers by remember { mutableStateOf(emptyList<com.bioscan.fieldterminal.domain.RegimenMarker>()) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        markers = runCatching { loadRegimenMarkers() }.getOrDefault(emptyList())
+        markers = catching { loadRegimenMarkers() }.getOrDefault(emptyList())
     }
     Column(modifier = Modifier.fillMaxSize().background(FT.Base).then(if (domain != null) Modifier.ftDomainWash(domain) else Modifier.ftPlatinumWash())) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -163,13 +164,6 @@ fun Section(
         trailingChevron = chevron,
         content = content,
     )
-}
-
-@Composable
-fun InfoOverlay(title: String, body: String, onClose: () -> Unit) {
-    FullScreenOverlay(title = title.uppercase(), onClose = onClose) {
-        Text(body, style = FTType.Body, color = FT.TextSecondary)
-    }
 }
 
 /** A row that opens another page. */

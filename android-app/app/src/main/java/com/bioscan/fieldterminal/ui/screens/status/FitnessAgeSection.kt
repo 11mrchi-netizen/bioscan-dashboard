@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,9 +50,9 @@ internal fun FitnessAgeSection(sex: String?, birth: LocalDate?, checkins: List<B
         if (sex == null || birth == null) { value = FitnessAgeData(emptyList(), null); return@produceState }
         val analysis = AnalysisRepository(SupabaseClientProvider.client)
         val zone = ZoneId.systemDefault()
-        val rhr = runCatching { analysis.loadWearableDaily() }.getOrDefault(emptyList())
+        val rhr = catching { analysis.loadWearableDaily() }.getOrDefault(emptyList())
             .mapNotNull { r -> r.rhr?.let { v -> runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { it to v } } }.toMap()
-        val rows = runCatching { analysis.loadExerciseSessionsForTrainingLoad() }.getOrDefault(emptyList())
+        val rows = catching { analysis.loadExerciseSessionsForTrainingLoad() }.getOrDefault(emptyList())
         val sessions = rows.mapNotNull { s ->
             // Session starts are logged times (local digits with a zero offset, domain/WallClock.kt).
             val day = WallClock.zoned(s.startTime, zone)?.toLocalDate() ?: return@mapNotNull null
@@ -60,7 +61,7 @@ internal fun FitnessAgeSection(sex: String?, birth: LocalDate?, checkins: List<B
         val today = LocalDate.now()
         val maxHr = rows.filter { s -> WallClock.zoned(s.startTime, zone)?.toLocalDate()?.isAfter(today.minusYears(1)) == true }.mapNotNull { it.maxHr }.maxOrNull()
         val weekly = fitnessAgeWeeks(today, 52).mapNotNull { fitnessAgeOn(it, sex == "male", birth, rhr, sessions, maxHr, waist) }
-        val vo2 = runCatching {
+        val vo2 = catching {
             SupabaseClientProvider.client.postgrest.from("wearable_daily").select(Columns.list("date,vo2max")) {
                 order("date", Order.DESCENDING); limit(60)
             }.decodeList<Vo2MaxRow>()

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.settings
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -106,7 +107,7 @@ fun PlacesCard(showDay: Boolean = true) {
                     scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { adding = false; reload++ }) {
                         repo.addPlace(label, category, lat, lon, radius)
                         // Commute flags follow the new place's category on the trips the worker rebuilds (the last 48 h).
-                        runCatching { repo.refreshTrips() }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                        catching { repo.refreshTrips() }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
                     }
                 },
             )

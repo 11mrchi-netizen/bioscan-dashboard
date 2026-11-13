@@ -17,7 +17,7 @@ object SyncHeartbeat {
 
     // Best effort: a heartbeat must never fail the sync it reports on.
     suspend fun record(client: SupabaseClient, stream: String, now: Instant = Instant.now()) {
-        val done = orNullUnlessCancelled {
+        val done = softLoad {
             client.postgrest.from("collector_heartbeats").upsert(listOf(Row(stream, now.toString()))) {
                 onConflict = "user_id,stream,ts"
                 ignoreDuplicates = true

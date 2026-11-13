@@ -90,7 +90,7 @@ class InterventionEventsRepository(private val supabase: SupabaseClient) {
                 },
             )
         } catch (e: Exception) {
-            runCatching { supabase.postgrest.from("interventions").delete { filter { eq("id", id) } } }
+            catching { supabase.postgrest.from("interventions").delete { filter { eq("id", id) } } }
             throw e
         }
         return id

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.fuel
 
+import com.bioscan.fieldterminal.data.catching
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
@@ -104,8 +105,8 @@ fun MealPrepPage(overview: NutritionOverview?, modifier: Modifier = Modifier) {
         if (plan == null) loaded = false
         try {
             plan = FuelPlanRepository(SupabaseClientProvider.client).loadWeekPlan(context, overview, weekStart)
-            week = runCatching { repo.loadWeek(weekStart) }.getOrNull()
-            breakfast = runCatching { repo.loadBreakfast() }.getOrDefault(emptyList())
+            week = catching { repo.loadWeek(weekStart) }.getOrNull()
+            breakfast = catching { repo.loadBreakfast() }.getOrDefault(emptyList())
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

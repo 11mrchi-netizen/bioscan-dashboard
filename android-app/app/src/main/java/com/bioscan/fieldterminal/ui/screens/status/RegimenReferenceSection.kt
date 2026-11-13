@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,7 +47,7 @@ fun RegimenReferenceSection(supplementId: Long?, name: String, others: List<Pair
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(supplementId) {
-        if (supplementId != null) card = runCatching { repo.load(supplementId) }.getOrNull()
+        if (supplementId != null) card = catching { repo.load(supplementId) }.getOrNull()
     }
 
     fun run(block: suspend () -> Unit) {

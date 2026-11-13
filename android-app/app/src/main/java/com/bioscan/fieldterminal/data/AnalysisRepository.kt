@@ -241,7 +241,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Redesign: each day's lowest and highest heart rate for the Range Trend card, from the wearable_hr_daily_range view
     // (migration 20261104). Empty until that view exists, so the card says "no readings" instead of failing the page.
     suspend fun loadHeartRateRanges(): List<Pair<LocalDate, com.bioscan.fieldterminal.domain.DayRange>> =
-        orNullUnlessCancelled {
+        softLoad {
             ReadCache.get("analysis.hr_ranges", tables = setOf("wearable_daily"), serializer = kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.PairSerializer(com.bioscan.fieldterminal.domain.LocalDateSerializer, com.bioscan.fieldterminal.domain.DayRange.serializer()))) {
                 pagedByDate<HrRangeRow>("wearable_hr_daily_range", "date,hr_min,hr_max") { it.date }
                     .map { LocalDate.parse(it.date) to com.bioscan.fieldterminal.domain.DayRange(it.low, it.high) }
@@ -263,7 +263,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         val blocks = com.bioscan.fieldterminal.domain.parseStageBlocks(raw)
         if (blocks.isEmpty()) return null
         val tz = row.tzOffsetMin ?: 0
-        val hrRows = orNullUnlessCancelled {
+        val hrRows = softLoad {
             supabase.postgrest.from("wearable_daily")
                 .select(columns = Columns.list("date,hr_timeseries")) {
                     filter { isIn("date", listOf(date.minusDays(1).toString(), date.toString())) }
@@ -345,7 +345,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     // Analysis review phase G: the personal fitness-fatigue result, and the spans every load chart uses (the standard 42 and
     // 7 unless the personal pair was adopted; standard too when nothing is published or the read fails).
     suspend fun loadFitnessFatigue(): FitnessFatigueRow? = ReadCache.get("analysis.FitnessFatigue", tables = setOf("analysis_results"), serializer = (com.bioscan.fieldterminal.data.model.FitnessFatigueRow.serializer().nullable)) {
-        orNullUnlessCancelled {
+        softLoad {
             supabase.postgrest.from("analysis_results")
                 .select(columns = Columns.list("key,state,payload")) { filter { eq("kind", "fitness_fatigue"); eq("key", "hrv") }; newestFirst() }
                 .decodeList<FitnessFatigueRow>()

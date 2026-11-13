@@ -96,7 +96,7 @@ class ScaleReadingRepository(private val supabase: SupabaseClient) {
     suspend fun loadCompositionSeries(): List<ScaleCompositionPoint> {
         val readings = loadReadings()
         val profile = profiles.loadProfile()
-        val heightCm = profile?.heightCm ?: runCatching { checkins.latestHeightCm() }.getOrNull()
+        val heightCm = profile?.heightCm ?: catching { checkins.latestHeightCm() }.getOrNull()
         return readings.map { r ->
             val at = OffsetDateTime.parse(r.occurredAt).toLocalDateTime()
             val input = r.impedanceOhm?.let { z -> inputFrom(r.weightKg, z, at.toLocalDate(), heightCm, profile?.dateOfBirth, profile?.sex) }
@@ -120,8 +120,8 @@ class ScaleReadingRepository(private val supabase: SupabaseClient) {
     }
 
     private suspend fun profileInput(weightKg: Double, impedanceOhm: Double, on: LocalDate): BodyCompositionInput? {
-        val profile = runCatching { profiles.loadProfile() }.getOrNull()
-        val heightCm = profile?.heightCm ?: runCatching { checkins.latestHeightCm() }.getOrNull()
+        val profile = catching { profiles.loadProfile() }.getOrNull()
+        val heightCm = profile?.heightCm ?: catching { checkins.latestHeightCm() }.getOrNull()
         return inputFrom(weightKg, impedanceOhm, on, heightCm, profile?.dateOfBirth, profile?.sex)
     }
 

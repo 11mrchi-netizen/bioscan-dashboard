@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.training
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -71,7 +72,7 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
                 { cycles = cyclesRepo.loadCycles() },
                 { history = cyclesRepo.loadBlockSummaries() },
                 {
-                    eventDays = runCatching {
+                    eventDays = catching {
                         com.bioscan.fieldterminal.data.AthleteEventsRepository(SupabaseClientProvider.client).loadUpcoming(LocalDate.now(), days = 120)
                             .associate { it.date to it.name }
                     }.getOrDefault(emptyMap())

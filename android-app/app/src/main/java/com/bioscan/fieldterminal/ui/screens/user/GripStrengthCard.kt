@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.user
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,7 +19,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 @Composable
 fun GripStrengthCard() {
     var history by remember { mutableStateOf<List<BodyCheckinRecord>>(emptyList()) }
-    LaunchedEffect(Unit) { history = runCatching { BodyCheckinRepository(SupabaseClientProvider.client).loadHistory() }.getOrElse { emptyList() } }
+    LaunchedEffect(Unit) { history = catching { BodyCheckinRepository(SupabaseClientProvider.client).loadHistory() }.getOrElse { emptyList() } }
     val points = history.mapNotNull { c -> c.grip.values.maxOrNull()?.let { c.date to it } }
     if (points.isEmpty()) return
     val latest = history.filter { it.grip.isNotEmpty() }.maxByOrNull { it.occurredAt }

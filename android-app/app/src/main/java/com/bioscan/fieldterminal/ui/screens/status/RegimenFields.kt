@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -309,7 +310,7 @@ fun RegimenFields(state: RegimenEditorState) {
 fun RegimenHistory(supplementId: Long) {
     var rows by remember { mutableStateOf<List<SupplementChangeRow>?>(null) }
     LaunchedEffect(supplementId) {
-        rows = runCatching { SupplementsRepository(SupabaseClientProvider.client).loadChanges(supplementId) }.getOrElse { emptyList() }
+        rows = catching { SupplementsRepository(SupabaseClientProvider.client).loadChanges(supplementId) }.getOrElse { emptyList() }
     }
     val list = rows ?: return
     if (list.isEmpty()) return

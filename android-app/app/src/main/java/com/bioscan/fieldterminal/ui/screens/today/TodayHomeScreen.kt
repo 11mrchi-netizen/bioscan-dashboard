@@ -2,6 +2,7 @@
 
 package com.bioscan.fieldterminal.ui.screens.today
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
@@ -206,7 +207,7 @@ fun TodayHomeScreen(
             listOf<suspend () -> Unit>(
                 { repo.loadExpectedBands() }, { repo.loadHeartRateDay() }, { repo.loadHeartRateRanges() },
                 { repo.loadBodyMetrics() }, { repo.loadFitnessFatigue() },
-            ).forEach { runCatching { it() } }
+            ).forEach { catching { it() } }
         }
     }
     var nut by remember { mutableStateOf(kept?.nut) }
@@ -240,7 +241,7 @@ fun TodayHomeScreen(
         }
     }
 
-    LaunchedEffect(Unit) { runCatching { EveningCheckinRepository(SupabaseClientProvider.client).recordDailyContext() } }
+    LaunchedEffect(Unit) { catching { EveningCheckinRepository(SupabaseClientProvider.client).recordDailyContext() } }
 
     // While TODAY is on screen: once a minute, rebuild in the background if the kept page went stale (a sync landed, the
     // day changed, or 15 minutes passed). The page on screen stays until the new one is ready.
@@ -270,18 +271,25 @@ fun TodayHomeScreen(
         }
         loading = true
         guard.run {
+            var partFailed = false
             // Its rebuild must see what was just written (a sync, a log): reads wait for the network, never an old copy.
             kotlinx.coroutines.withContext(com.bioscan.fieldterminal.data.ReadCache.RequireFresh) { coroutineScope {
                 val client = SupabaseClientProvider.client
                 val status = StatusRepository(client)
+                // The parts around the scores (plan, fuel, nutrition, check-ins) each load on their own. One that fails keeps
+                // what the page already showed for this day instead of going blank, and leaves the page marked stale so the
+                // next minute tries again.
+                val sameDay = TodayStore.snapshot?.day == day
+                suspend fun <T : Any> part(shown: T?, load: suspend () -> T?): T? =
+                    catching { load() }.getOrElse { partFailed = true; shown.takeIf { sameDay } }
                 // The overview only supplies the open illness / injury that caps CHARGE: without it the scores still load.
-                val overviewD = async { runCatching { status.loadOverview() }.getOrNull() }
-                val previewsD = async { runCatching { status.loadTodayPreviews() }.getOrNull() }
-                val n = runCatching { NutritionRepository(client).loadOverview() }.getOrNull()
+                val overviewD = async { part(null) { status.loadOverview() } }
+                val previewsD = async { part(previews) { status.loadTodayPreviews() } }
+                val n = part(nut) { NutritionRepository(client).loadOverview() }
                 nut = n
-                val fuelD = async { runCatching { (FuelPlanRepository(client).loadToday(context, n, ZonedDateTime.now()) as? TodayFuelResult.Ready)?.fuel }.getOrNull() }
+                val fuelD = async { part(fuel) { (FuelPlanRepository(client).loadToday(context, n, ZonedDateTime.now()) as? TodayFuelResult.Ready)?.fuel } }
                 val closedD = async {
-                    runCatching { EveningCheckinRepository(client).loadSince(LocalDate.now().minusDays(1)).map(EveningCheckin::date).toSet() }.getOrDefault(emptySet())
+                    part(closed) { EveningCheckinRepository(client).loadSince(LocalDate.now().minusDays(1)).map(EveningCheckin::date).toSet() } ?: emptySet()
                 }
                 val o = overviewD.await()
                 // The score engine only runs again when what it reads changed (equal key: the kept scores stand).
@@ -299,10 +307,10 @@ fun TodayHomeScreen(
             val sf = soFarOf(nut, fuel)
             keptRows = rows
             keptSoFar = sf
-            TodayStore.snapshot = TodaySnapshot(day, view, nut, fuel, previews, closed, System.currentTimeMillis(), com.bioscan.fieldterminal.data.ReadCache.writeStamp(TodayStore.TABLES), scoresKey, rows, sf)
+            TodayStore.snapshot = TodaySnapshot(day, view, nut, fuel, previews, closed, if (partFailed) 0L else System.currentTimeMillis(), com.bioscan.fieldterminal.data.ReadCache.writeStamp(TodayStore.TABLES), scoresKey, rows, sf)
             val v = view
             val k = scoresKey
-            if (v != null && k != null) TodayStore.writeDisk(context, KeptToday(TodayStore.FORMAT, day, System.currentTimeMillis(), k, v, rows, sf, closed))
+            if (v != null && k != null && !partFailed) TodayStore.writeDisk(context, KeptToday(TodayStore.FORMAT, day, System.currentTimeMillis(), k, v, rows, sf, closed))
         }
         loading = false
     }

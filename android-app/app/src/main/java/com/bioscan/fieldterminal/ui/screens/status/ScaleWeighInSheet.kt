@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -107,7 +108,7 @@ fun ScaleWeighInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     LaunchedEffect(reading) {
         preview = null
         previewLoaded = false
-        reading?.let { preview = runCatching { repo.preview(it) }.getOrNull(); previewLoaded = true }
+        reading?.let { preview = catching { repo.preview(it) }.getOrNull(); previewLoaded = true }
     }
 
     ModalBottomSheet(

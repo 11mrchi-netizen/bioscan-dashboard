@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.health
 
+import com.bioscan.fieldterminal.data.catching
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -86,7 +87,7 @@ fun SymptomCheckSheet(onDismiss: () -> Unit, onSaved: () -> Unit, onTrackIllness
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) { ctx = runCatching { repo.loadCheckContext() }.getOrNull() }
+    LaunchedEffect(Unit) { ctx = catching { repo.loadCheckContext() }.getOrNull() }
     val a = area
     val questions = if (a == null || symptoms.isEmpty()) emptyList() else questionsFor(a, symptoms)
     // Prefill from the data each time the questions change, never over an answer given.

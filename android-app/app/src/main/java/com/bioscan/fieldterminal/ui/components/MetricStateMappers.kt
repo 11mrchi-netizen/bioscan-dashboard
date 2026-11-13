@@ -30,16 +30,6 @@ fun confidenceLevel(score: Double): ConfidenceLevel = when {
     else -> ConfidenceLevel.Low
 }
 
-// A percentile band is a position in a population, not a health verdict:
-// only the top decile reads as Optimal; a low band is "Building", never
-// Warning/Critical (low percentile != something is wrong).
-fun percentileBandState(band: PercentileBand?): MetricState = when (band) {
-    PercentileBand.TOP_DECILE -> MetricState.Optimal
-    PercentileBand.ABOVE_AVERAGE, PercentileBand.AVERAGE -> MetricState.Neutral
-    PercentileBand.BELOW_AVERAGE, PercentileBand.BOTTOM_DECILE -> MetricState.Building
-    null -> MetricState.Unavailable
-}
-
 // Biological age minus chronological age, in years: <= -2 clearly younger
 // (Optimal), within +/-2 Neutral, > +2 Warning. The +/-2 year band is a
 // pragmatic noise margin for the PhenoAge/Cardio-Age estimates, not a

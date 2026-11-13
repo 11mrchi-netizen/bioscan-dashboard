@@ -211,8 +211,8 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         // Three days back for the intake check; ahead, the horizon plus the six days the last block's week needs.
         val daysD = async { PlannedDayRepository(supabase).load(today.minusDays(3), days = 3 + 14 + 3, now = now) }
         val foodsD = async { FoodHabitsRepository(supabase).foods(settings.meals, zone) }
-        val inputsD = async { runCatching { NutritionTargetsRepository(supabase).loadMaintenanceInputs(today) }.getOrDefault(MaintenanceInputs()) }
-        val bodyD = async { runCatching { bodyComposition() }.getOrDefault(emptyList()) }
+        val inputsD = async { catching { NutritionTargetsRepository(supabase).loadMaintenanceInputs(today) }.getOrDefault(MaintenanceInputs()) }
+        val bodyD = async { catching { bodyComposition() }.getOrDefault(emptyList()) }
         val inputs = inputsD.await()
         val body = bodyD.await()
         val kg = inputs.weightKg ?: body.firstNotNullOfOrNull { it.weightKg } ?: return@coroutineScope TodayFuelResult.NeedsWeight
@@ -260,20 +260,20 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         val adherenceMap = todayCoded.meals.associate { meal -> meal.kind.name to ((bySlot[meal.kind.name] ?: 0.0) to adherence(meal, bySlot[meal.kind.name])) }
 
         // Long sessions in the next three days (events have their own page).
-        val sweat = runCatching { SweatTestsRepository(supabase).profile(kg) }.getOrNull() ?: com.bioscan.fieldterminal.domain.fuel.sweatProfile(emptyList(), kg)
+        val sweat = catching { SweatTestsRepository(supabase).profile(kg) }.getOrNull() ?: com.bioscan.fieldterminal.domain.fuel.sweatProfile(emptyList(), kg)
         val home = MapSettingsStore.getHome(context)
         val longSessions = days.filter { !it.date.isBefore(today) && it.date.isBefore(today.plusDays(3)) }
             .flatMap { it.items }
             .filter { it.durationMin >= 90 && it.eventId == null && !it.recorded && it.start != null }
             .map { item ->
                 val weather = home?.let { (lat, lon) ->
-                    runCatching { WeatherRepository().fetchHourly(lat, lon, item.start!!.minusHours(1), item.start.plusMinutes(item.durationMin.toLong() + 60)) }.getOrNull()
+                    catching { WeatherRepository().fetchHourly(lat, lon, item.start!!.minusHours(1), item.start.plusMinutes(item.durationMin.toLong() + 60)) }.getOrNull()
                 } ?: WeatherSeries.NONE
                 item to planRaceFuel(
                     RaceFuelInput(
                         item.title, item.type, item.intensity, item.start!!, item.durationMin, item.durationMin * 0.9, item.durationMin * 1.1,
                         "the planned session length", weather = weather, sweat = sweat, weightKg = kg, settings = settings.race,
-                        products = runCatching { products() }.getOrDefault(emptyList()),
+                        products = catching { products() }.getOrDefault(emptyList()),
                     ),
                 )
             }
@@ -291,10 +291,10 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         // fall in with the fixed breakfast (none before the meal-prep migration is applied).
         val foods = foodsD.await()
         val prepRepo = MealPrepRepository(supabase)
-        val weeks = runCatching {
+        val weeks = catching {
             prepRepo.loadWeeks(listOf(com.bioscan.fieldterminal.domain.fuel.currentPrepWeek(today), com.bioscan.fieldterminal.domain.fuel.upcomingPrepWeek(today)).distinct())
         }.getOrDefault(emptyList())
-        val breakfast = runCatching { prepRepo.loadBreakfast() }.getOrDefault(emptyList())
+        val breakfast = catching { prepRepo.loadBreakfast() }.getOrDefault(emptyList())
         val horizon = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             (0 until FUEL_HORIZON_DAYS).mapNotNull { k ->
                 val i = todayIdx + k
@@ -358,8 +358,8 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         val settings = FuelSettingsStore.get(context)
         val daysD = async { PlannedDayRepository(supabase).load(weekStart, days = 7 + 3, now = now) }
         val foodsD = async { FoodHabitsRepository(supabase).foods(settings.meals, zone) }
-        val inputs = runCatching { NutritionTargetsRepository(supabase).loadMaintenanceInputs(now.toLocalDate()) }.getOrDefault(MaintenanceInputs())
-        val body = runCatching { bodyComposition() }.getOrDefault(emptyList())
+        val inputs = catching { NutritionTargetsRepository(supabase).loadMaintenanceInputs(now.toLocalDate()) }.getOrDefault(MaintenanceInputs())
+        val body = catching { bodyComposition() }.getOrDefault(emptyList())
         val kg = inputs.weightKg ?: body.firstNotNullOfOrNull { it.weightKg } ?: return@coroutineScope null
         val latest = body.firstOrNull { it.leanMassKg != null || it.bodyFatPct != null }
         val ffm = fatFreeMass(kg, latest?.leanMassKg, latest?.bodyFatPct)
@@ -378,18 +378,18 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
      */
     suspend fun seedSchedule(context: Context, item: PlannedItem): List<com.bioscan.fieldterminal.domain.fuel.FuelBlock> {
         val settings = FuelSettingsStore.get(context)
-        val inputs = runCatching { NutritionTargetsRepository(supabase).loadMaintenanceInputs() }.getOrDefault(MaintenanceInputs())
-        val kg = inputs.weightKg ?: runCatching { bodyComposition() }.getOrDefault(emptyList()).firstNotNullOfOrNull { it.weightKg } ?: 70.0
+        val inputs = catching { NutritionTargetsRepository(supabase).loadMaintenanceInputs() }.getOrDefault(MaintenanceInputs())
+        val kg = inputs.weightKg ?: catching { bodyComposition() }.getOrDefault(emptyList()).firstNotNullOfOrNull { it.weightKg } ?: 70.0
         val start = item.start ?: ZonedDateTime.now()
         val weather = MapSettingsStore.getHome(context)?.let { (lat, lon) ->
-            runCatching { WeatherRepository().fetchHourly(lat, lon, start.minusHours(1), start.plusMinutes(item.durationMin.toLong() + 60)) }.getOrNull()
+            catching { WeatherRepository().fetchHourly(lat, lon, start.minusHours(1), start.plusMinutes(item.durationMin.toLong() + 60)) }.getOrNull()
         } ?: WeatherSeries.NONE
-        val sweat = runCatching { SweatTestsRepository(supabase).profile(kg) }.getOrNull() ?: com.bioscan.fieldterminal.domain.fuel.sweatProfile(emptyList(), kg)
+        val sweat = catching { SweatTestsRepository(supabase).profile(kg) }.getOrNull() ?: com.bioscan.fieldterminal.domain.fuel.sweatProfile(emptyList(), kg)
         val plan = planRaceFuel(
             RaceFuelInput(
                 item.title, item.type, item.intensity, start, item.durationMin, item.durationMin * 0.9, item.durationMin * 1.1,
                 "the planned session length", distanceKm = item.distanceKm, weather = weather, sweat = sweat, weightKg = kg,
-                settings = settings.race, products = runCatching { products() }.getOrDefault(emptyList()),
+                settings = settings.race, products = catching { products() }.getOrDefault(emptyList()),
             ),
         )
         return com.bioscan.fieldterminal.domain.fuel.seedBlocks(plan)
@@ -400,18 +400,18 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         val event = AthleteEventsRepository(supabase).load(eventId) ?: return@coroutineScope null
         val settings = FuelSettingsStore.get(context)
         val zone = now.zone
-        val inputs = runCatching { NutritionTargetsRepository(supabase).loadMaintenanceInputs() }.getOrDefault(MaintenanceInputs())
-        val body = runCatching { bodyComposition() }.getOrDefault(emptyList())
+        val inputs = catching { NutritionTargetsRepository(supabase).loadMaintenanceInputs() }.getOrDefault(MaintenanceInputs())
+        val body = catching { bodyComposition() }.getOrDefault(emptyList())
         val kg = inputs.weightKg ?: body.firstNotNullOfOrNull { it.weightKg } ?: 70.0
         val start = (event.start ?: event.date.atTime(9, 0).atZone(zone)).withZoneSameInstant(zone)
-        val runs = if (event.sport == EventSport.RUN || event.sport == EventSport.TRAIL_RUN) runCatching { recentRuns() }.getOrDefault(emptyList()) else emptyList()
+        val runs = if (event.sport == EventSport.RUN || event.sport == EventSport.TRAIL_RUN) catching { recentRuns() }.getOrDefault(emptyList()) else emptyList()
         val estimate = event.distanceKm?.let { estimateRunTime(it, event.ascentM ?: 0.0, runs) }
         val (duration, range, basis) = durationRange(event.targetTimeMin, event.expectedDurationMin, estimate) ?: return@coroutineScope null
         val place = event.startLat?.let { lat -> event.startLon?.let { lat to it } } ?: MapSettingsStore.getHome(context)
         val weather = place?.let { (lat, lon) ->
-            runCatching { WeatherRepository().fetchHourly(lat, lon, start.minusHours(1), start.plusMinutes(duration.toLong() + 60)) }.getOrNull()
+            catching { WeatherRepository().fetchHourly(lat, lon, start.minusHours(1), start.plusMinutes(duration.toLong() + 60)) }.getOrNull()
         } ?: WeatherSeries.NONE
-        val sweat = runCatching { SweatTestsRepository(supabase).profile(kg) }.getOrNull() ?: com.bioscan.fieldterminal.domain.fuel.sweatProfile(emptyList(), kg)
+        val sweat = catching { SweatTestsRepository(supabase).profile(kg) }.getOrNull() ?: com.bioscan.fieldterminal.domain.fuel.sweatProfile(emptyList(), kg)
         val intensity = when {
             event.kind == com.bioscan.fieldterminal.domain.events.EventKind.RACE && event.priority != EventPriority.C -> Intensity.RACE
             duration > 90 -> Intensity.LONG
@@ -420,7 +420,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
         // The days before, when the event is today or tomorrow.
         val daysToGo = java.time.temporal.ChronoUnit.DAYS.between(now.toLocalDate(), event.date)
         val history = if (daysToGo in 0..1) {
-            runCatching { (loadToday(context, NutritionRepository(supabase).loadOverview(), now) as? TodayFuelResult.Ready)?.fuel?.history }.getOrNull()
+            catching { (loadToday(context, NutritionRepository(supabase).loadOverview(), now) as? TodayFuelResult.Ready)?.fuel?.history }.getOrNull()
         } else {
             null
         }
@@ -429,7 +429,7 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
                 title = event.name, type = event.sport.sessionTypes.first(), intensity = intensity, start = start,
                 durationMin = duration, durationLowMin = range.first, durationHighMin = range.second, durationBasis = basis,
                 course = event.course, distanceKm = event.distanceKm, aidStations = event.aidStations, weather = weather,
-                sweat = sweat, weightKg = kg, settings = settings.race, products = runCatching { products() }.getOrDefault(emptyList()),
+                sweat = sweat, weightKg = kg, settings = settings.race, products = catching { products() }.getOrDefault(emptyList()),
                 history = history, loadingDays = intensity == Intensity.RACE && duration > 90,
             ),
         )
@@ -447,13 +447,13 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
     suspend fun loadPeriodization(context: Context, overview: NutritionOverview, now: ZonedDateTime = ZonedDateTime.now()): PeriodizationView? = coroutineScope {
         val today = now.toLocalDate()
         val zone = now.zone
-        val inputs = runCatching { NutritionTargetsRepository(supabase).loadMaintenanceInputs(today) }.getOrDefault(MaintenanceInputs())
-        val body = runCatching { bodyComposition() }.getOrDefault(emptyList())
+        val inputs = catching { NutritionTargetsRepository(supabase).loadMaintenanceInputs(today) }.getOrDefault(MaintenanceInputs())
+        val body = catching { bodyComposition() }.getOrDefault(emptyList())
         val kg = inputs.weightKg ?: body.firstNotNullOfOrNull { it.weightKg } ?: return@coroutineScope null
         val dayRepo = PlannedDayRepository(supabase)
-        val recordedD = async { runCatching { dayRepo.recordedSince(today.minusDays(28), zone) }.getOrDefault(emptyList()) }
-        val pastD = async { runCatching { dayRepo.load(today.minusDays(14), days = 14, now = now) }.getOrNull() }
-        val mealsD = async { runCatching { mealsSince(today.minusDays(14), zone) }.getOrDefault(emptyList()) }
+        val recordedD = async { catching { dayRepo.recordedSince(today.minusDays(28), zone) }.getOrDefault(emptyList()) }
+        val pastD = async { catching { dayRepo.load(today.minusDays(14), days = 14, now = now) }.getOrNull() }
+        val mealsD = async { catching { mealsSince(today.minusDays(14), zone) }.getOrDefault(emptyList()) }
 
         val loadByDay = recordedD.await().filter { com.bioscan.fieldterminal.domain.fuel.isTrainingSession(it.type, it.durationMin) }
             .groupBy { it.start.withZoneSameInstant(zone).toLocalDate() }
@@ -527,8 +527,8 @@ class FuelPlanRepository(private val supabase: SupabaseClient) {
 
     private suspend fun changesSince(kind: String, ref: String, plan: JsonObject, describe: (JsonObject) -> List<String>): List<String> {
         val key = "$kind:$ref"
-        val result = runCatching { remember(kind, ref, plan) }.getOrNull() ?: return lastChanges[key].orEmpty()
-        val lines = if (result.second != null) runCatching { describe(result.second!!) }.getOrDefault(emptyList()) else emptyList()
+        val result = catching { remember(kind, ref, plan) }.getOrNull() ?: return lastChanges[key].orEmpty()
+        val lines = if (result.second != null) catching { describe(result.second!!) }.getOrDefault(emptyList()) else emptyList()
         if (result.first) lastChanges[key] = lines
         return lastChanges[key].orEmpty()
     }

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.health
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -99,10 +100,10 @@ fun HealthCheckInSheet(
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        runCatching { concerns = repo.loadConcerns() }
-        runCatching { overview = repo.loadOverview()?.concerns?.associateBy { it.concernId } ?: emptyMap() }
-        runCatching { lastCheckin = repo.lastCheckinDate() }
-        runCatching { sessions = repo.loadRecentSessions() }
+        catching { concerns = repo.loadConcerns() }
+        catching { overview = repo.loadOverview()?.concerns?.associateBy { it.concernId } ?: emptyMap() }
+        catching { lastCheckin = repo.lastCheckinDate() }
+        catching { sessions = repo.loadRecentSessions() }
     }
 
     // Concerns asked about: open ones, the focused one, and new ones without a published state yet.

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -238,7 +239,7 @@ private fun EvidenceDetailSheet(row: EvidenceRowView, curve: EventCurvePayload?,
             // Phase E: the question's verdicts over time, from the append-only ledger.
             var history by remember(row.id) { mutableStateOf<String?>(null) }
             LaunchedEffect(row.id) {
-                history = runCatching { verdictHistoryLine(verdictRuns(AnalysisRepository(SupabaseClientProvider.client).loadLedger(row.id))) }.getOrNull()
+                history = catching { verdictHistoryLine(verdictRuns(AnalysisRepository(SupabaseClientProvider.client).loadLedger(row.id))) }.getOrNull()
             }
             history?.let {
                 Text("VERDICT HISTORY", style = FTType.LabelCaps, color = FT.TextSecondary)

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.user
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -87,8 +88,8 @@ fun RunningScreen(onBack: () -> Unit, onOpenSession: (Long) -> Unit) {
 private fun RunningContent(history: RunningHistory) {
     var surfaceName by rememberSaveable { mutableStateOf(RunSurface.ROAD.name) }
     val surface = RunSurface.valueOf(surfaceName)
-    val aging by produceState<AgingProfileOverview?>(initialValue = null) { value = runCatching { UserDataCache.aging() }.getOrNull() }
-    val vo2Percentile by produceState<Double?>(initialValue = null) { value = runCatching { UserDataCache.vo2Percentile() }.getOrNull() }
+    val aging by produceState<AgingProfileOverview?>(initialValue = null) { value = catching { UserDataCache.aging() }.getOrNull() }
+    val vo2Percentile by produceState<Double?>(initialValue = null) { value = catching { UserDataCache.vo2Percentile() }.getOrNull() }
     val level = remember(history, vo2Percentile) { runningLevelOf(history, vo2Percentile) }
     val today = remember { LocalDate.now() }
     val from = today.minusDays(com.bioscan.fieldterminal.ui.screens.detail.LocalRangeDays.current - 1L)

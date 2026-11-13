@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.user
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,24 +42,13 @@ import java.time.LocalDate
 // Shared scaffolding for the three skill pages (Running / Strength / Conditioning): header, scrolling column,
 // async loading from UserDataCache, the level hero, section labels and the common trend chart.
 
-@Composable
-fun SkillPage(title: String, subtitle: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().background(FT.Base)) {
-        TileHeader(onBack = onBack, title = title, subtitle = subtitle, accent = FT.DomainUser)
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) { content() }
-    }
-}
-
 // Runs `load` once; shows a spinner, the content, or an honest failure -- never a blank page.
 @Composable
 fun <T : Any> LoadedContent(load: suspend () -> T, content: @Composable (T) -> Unit) {
     // Keyed on the cache version: when a background refresh brings newer data, the content loads again (from memory).
     val version = com.bioscan.fieldterminal.ui.components.rememberCacheVersion()
     val state: State<Result<T>?> = produceState<Result<T>?>(initialValue = null, version) {
-        val result = runCatching { load() }
+        val result = catching { load() }
         if (result.isSuccess || value == null) value = result
     }
     val result = state.value
@@ -105,37 +95,3 @@ fun LegendDot(label: String, color: Color) {
     }
 }
 
-// RAW / 7D / 28D trend for any slow-moving (date, value) series -- the chart the Training tile used for VO2max and
-// lactate threshold, now shared by the Running page.
-@Composable
-fun PerformanceTrend(
-    series: List<Pair<LocalDate, Double>>,
-    timeframe: PerformanceTimeframe,
-    valueFormat: (Double) -> String,
-    unit: String,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val data = preparePerformanceTrendData(series, timeframe)
-        if (series.size < 2 || data.raw.size < 2) {
-            Text(
-                if (series.size < 2) "Not enough readings yet to plot a trend." else "Not enough readings in the last ${timeframe.label.lowercase()} to plot a trend.",
-                style = FTType.Caption, color = FT.TextSecondary,
-            )
-            return@Column
-        }
-        DateTrendLine(
-            series = listOf(
-                TrendSeries(data.raw, FT.TextMuted, "RAW", dotsOnly = true),
-                TrendSeries(data.avg7d, FT.Info, "7D", smooth = false),
-                TrendSeries(data.avg28d, FT.Emerald, "28D", smooth = false),
-            ),
-            valueFormat = valueFormat,
-            unit = unit,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            LegendDot("RAW", FT.TextMuted)
-            LegendDot("7D AVG", FT.Info)
-            LegendDot("28D AVG", FT.Emerald)
-        }
-    }
-}

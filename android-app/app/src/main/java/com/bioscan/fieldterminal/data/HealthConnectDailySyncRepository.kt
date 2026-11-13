@@ -153,7 +153,7 @@ class HealthConnectDailySyncRepository(
 
         // A day with a scale weigh-in keeps the body fat derived from that weigh-in (ScaleReadingRepository, source = scale_bia);
         // Health Connect's value for the same day would overwrite it. Lookup failure falls back to writing as before.
-        val scaleDays = runCatching {
+        val scaleDays = catching {
             supabase.postgrest.from("body_metrics")
                 .select(io.github.jan.supabase.postgrest.query.Columns.list("date")) { filter { eq("source", SCALE_BIA_SOURCE) } }
                 .decodeList<ScaleDayRow>().map { it.date }.toSet()

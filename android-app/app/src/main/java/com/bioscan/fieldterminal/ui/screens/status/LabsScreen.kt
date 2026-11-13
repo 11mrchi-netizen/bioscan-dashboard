@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -73,8 +74,8 @@ fun LabsScreen() {
         error = null
         try {
             overview = LabsRepository(SupabaseClientProvider.client).loadOverview()
-            rcv = runCatching { loadRcv() }.getOrDefault(emptyMap())
-            watches = runCatching { com.bioscan.fieldterminal.data.LabWatchRepository(SupabaseClientProvider.client).watches() }.getOrDefault(watches)
+            rcv = catching { loadRcv() }.getOrDefault(emptyMap())
+            watches = catching { com.bioscan.fieldterminal.data.LabWatchRepository(SupabaseClientProvider.client).watches() }.getOrDefault(watches)
         } catch (e: Exception) {
             error = e.message ?: "Unknown error"
         }

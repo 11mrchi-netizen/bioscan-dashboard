@@ -2,6 +2,7 @@
 
 package com.bioscan.fieldterminal.ui.screens.today
 
+import com.bioscan.fieldterminal.data.catching
 import android.content.Context
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.ReadCache
@@ -107,7 +108,7 @@ object TodayStore {
 
     /** Writes the page to disk (to a temporary file first, so a crash mid-write never leaves half a page). Never throws. */
     suspend fun writeDisk(context: Context, kept: KeptToday) = withContext(Dispatchers.IO) {
-        runCatching {
+        catching {
             val tmp = File(context.filesDir, "$FILE.tmp")
             tmp.writeText(encode(kept))
             tmp.renameTo(File(context.filesDir, FILE))

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.components
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -59,7 +60,7 @@ object Toasts {
         flush()
         val id = ++nextId
         pending = id to {
-            runCatching { commit() }.onFailure { e ->
+            catching { commit() }.onFailure { e ->
                 onFailed(e)
                 notice("Couldn't finish: ${e.message ?: "try again"}")
             }
@@ -89,7 +90,7 @@ object Toasts {
     fun optimistic(apply: () -> Unit, save: suspend () -> Unit, revert: () -> Unit, what: String = "Couldn't save") {
         apply()
         scope.launch {
-            runCatching { save() }.onFailure {
+            catching { save() }.onFailure {
                 revert()
                 notice(what, "RETRY") { optimistic(apply, save, revert, what) }
             }

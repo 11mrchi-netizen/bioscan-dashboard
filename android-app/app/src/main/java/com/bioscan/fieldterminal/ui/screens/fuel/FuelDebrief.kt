@@ -60,8 +60,6 @@ import kotlin.math.roundToInt
 // schedule is one tap (as planned, less, more, none), the totals and whether the schedule held are worked out, then the
 // discomfort ticked, how the gut, energy, tiredness and thirst were, and the optional weigh-ins.
 
-private val SCORES = (0..10).map { it.toString() to it.toString() }
-
 private enum class Took(val label: String) { AsPlanned("AS PLANNED"), Less("LESS"), More("MORE"), None("NONE") }
 
 @OptIn(ExperimentalMaterial3Api::class)

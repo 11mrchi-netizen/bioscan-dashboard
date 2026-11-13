@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -134,12 +135,12 @@ fun RegistryReviewScreen(onClose: () -> Unit) {
                 ReviewCard(e, stateOf(e), reviews[e.registry to e.id],
                     onVerdict = { verdict, note ->
                         scope.launch {
-                            runCatching { repo.setVerdict(e.registry, e.id, e.version, verdict, note) }
+                            catching { repo.setVerdict(e.registry, e.id, e.version, verdict, note) }
                                 .onSuccess { reload++ }.onFailure { error = it.message }
                         }
                     },
                     onClear = {
-                        scope.launch { runCatching { repo.clear(e.registry, e.id) }.onSuccess { reload++ }.onFailure { error = it.message } }
+                        scope.launch { catching { repo.clear(e.registry, e.id) }.onSuccess { reload++ }.onFailure { error = it.message } }
                     })
             }
         }

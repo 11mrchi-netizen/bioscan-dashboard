@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens.status
 
+import com.bioscan.fieldterminal.data.catching
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -83,7 +84,7 @@ fun InterventionEventsSection() {
         evidence = repo.loadEvidence()
         draws = repo.loadDraws()
         tracked = repo.loadTrackedOutcomes()
-        tested = runCatching { ExperimentsRepository(SupabaseClientProvider.client).loadExperiments().mapNotNull { it.interventionId }.toSet() }.getOrDefault(emptySet())
+        tested = catching { ExperimentsRepository(SupabaseClientProvider.client).loadExperiments().mapNotNull { it.interventionId }.toSet() }.getOrDefault(emptySet())
     }
 
     val seriesLabels = series.associate { it.id to it.label }
@@ -168,7 +169,7 @@ fun InterventionEventsSection() {
                                     error = null
                                     scope.launchSafe(onError = { e -> error = e.message ?: "Could not draw" }) {
                                         // stored first; a second tap (or a second phone) hits the one-per-day rule and just reloads
-                                        runCatching { repo.saveDraw(iv.id, today, drawCoin()) }
+                                        catching { repo.saveDraw(iv.id, today, drawCoin()) }
                                         draws = repo.loadDraws()
                                     }
                                 }

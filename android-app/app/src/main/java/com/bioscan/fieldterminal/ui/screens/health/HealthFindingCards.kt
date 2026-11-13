@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.HealthConcernsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.FindingDto
 import com.bioscan.fieldterminal.data.model.TrialReadDto
 import com.bioscan.fieldterminal.domain.health.findingStatusWord
@@ -35,9 +34,11 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.FieldTextField
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.LocalDate
@@ -183,10 +184,14 @@ fun HealthN1Section() {
     var findings by remember { mutableStateOf<List<FindingDto>>(emptyList()) }
     var trials by remember { mutableStateOf<List<TrialReadDto>>(emptyList()) }
     var reload by remember { mutableStateOf(0) }
-    LaunchedEffect(reload) {
-        findings = catching { repo.loadAllFindings() }.getOrDefault(emptyList()).filter { it.status == "possible" || it.status == "persistent" }
-        trials = catching { repo.loadTrialReads() }.getOrDefault(emptyList())
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(reload, guard.attempt) {
+        guard.run {
+            findings = repo.loadAllFindings().filter { it.status == "possible" || it.status == "persistent" }
+            trials = repo.loadTrialReads()
+        }
     }
+    LoadErrorLine(guard, "health patterns and trials")
     if (findings.isEmpty() && trials.isEmpty()) return
     Text("HEALTH PATTERNS AND TRIALS", style = FTType.LabelCaps, color = FT.DomainHeart)
     findings.forEach { FindingCard(it) }

@@ -28,7 +28,6 @@ import com.bioscan.fieldterminal.data.RegimenDraft
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementChangeRow
 import com.bioscan.fieldterminal.data.SupplementsRepository
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.CycleJson
 import com.bioscan.fieldterminal.domain.DoseStepJson
@@ -56,7 +55,9 @@ import com.bioscan.fieldterminal.ui.components.FTIconSize
 import com.bioscan.fieldterminal.ui.components.FTIcons
 import com.bioscan.fieldterminal.ui.components.FTSwitch
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -313,9 +314,11 @@ fun RegimenFields(state: RegimenEditorState) {
 @Composable
 fun RegimenHistory(supplementId: Long) {
     var rows by remember { mutableStateOf<List<SupplementChangeRow>?>(null) }
-    LaunchedEffect(supplementId) {
-        rows = catching { SupplementsRepository(SupabaseClientProvider.client).loadChanges(supplementId) }.getOrElse { emptyList() }
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(supplementId, guard.attempt) {
+        guard.run { rows = SupplementsRepository(SupabaseClientProvider.client).loadChanges(supplementId) }
     }
+    LoadErrorLine(guard, "this item's history")
     val list = rows ?: return
     if (list.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

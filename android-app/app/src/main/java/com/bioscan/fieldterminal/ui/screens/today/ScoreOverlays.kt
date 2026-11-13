@@ -27,7 +27,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -48,7 +47,6 @@ import com.bioscan.fieldterminal.data.AnalysisRepository
 import com.bioscan.fieldterminal.data.NutritionGoalsStore
 import com.bioscan.fieldterminal.data.ScoresView
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.RelationshipResultRow
 import com.bioscan.fieldterminal.domain.ScorecardResult
 import com.bioscan.fieldterminal.domain.ScorecardVerdict
@@ -93,6 +91,7 @@ import com.bioscan.fieldterminal.ui.components.FTIcons
 import com.bioscan.fieldterminal.ui.components.FTMetricDot
 import com.bioscan.fieldterminal.ui.components.FTMotion
 import com.bioscan.fieldterminal.ui.components.GaugePalette
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.RingState
 import com.bioscan.fieldterminal.ui.components.ScoreRing
 import com.bioscan.fieldterminal.ui.components.ScoreScene
@@ -100,6 +99,8 @@ import com.bioscan.fieldterminal.ui.components.ScoreSceneBackdrop
 import com.bioscan.fieldterminal.ui.components.ftChargeWash
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.ftDomainWash
+import com.bioscan.fieldterminal.ui.components.produceGuarded
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.detail.HistorySpec
 import com.bioscan.fieldterminal.ui.screens.detail.LinkRow
 import com.bioscan.fieldterminal.ui.screens.detail.MetricHistoryOverlay
@@ -273,9 +274,9 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
 
         // What the nightly relationship engine found about evenings and the next morning's RECOVERY and SLEEP scores
         // (supabase/functions/_shared/analysis-core/hypotheses.ts, catalogue 2.2.0). Settled answers only.
-        val effects by produceState<List<RelationshipResultRow>?>(null) {
-            value = catching { AnalysisRepository(SupabaseClientProvider.client).loadRelationships() }
-                .getOrDefault(emptyList())
+        val effectsGuard = rememberLoadGuard(refreshOnUpdates = false)
+        val effects by produceGuarded<List<RelationshipResultRow>?>(effectsGuard, null) {
+            AnalysisRepository(SupabaseClientProvider.client).loadRelationships()
                 .filter { it.payload.outcome == "recovery_score" || it.payload.outcome == "sleep_score" }
         }
         OverlaySection("WHAT GOES WITH YOUR MORNINGS", info = MORNINGS_INFO) {
@@ -283,6 +284,7 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
             val settled = rows.orEmpty().filter { it.state == "clear" || it.state == "negligible" }
                 .sortedWith(compareBy({ if (it.state == "clear") 0 else 1 }, { -(abs(it.payload.effect?.value ?: 0.0)) }))
             when {
+                effectsGuard.error != null -> LoadErrorLine(effectsGuard, "what goes with your mornings")
                 rows == null -> Text("Loading…", style = FTType.Caption, color = FT.TextMuted)
                 settled.isEmpty() -> Text(
                     "Nothing settled yet. Each night the analysis compares evenings with alcohol, late caffeine, a meal after 21:00, " +

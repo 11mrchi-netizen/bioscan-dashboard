@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.HealthConcernsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SymptomCheckRow
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.ConcernOverviewDto
 import com.bioscan.fieldterminal.data.model.FindingDto
 import com.bioscan.fieldterminal.data.model.HealthConcernRow
@@ -46,6 +45,7 @@ import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
 import com.bioscan.fieldterminal.ui.components.FTStatePill
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.components.metricStateColor
@@ -88,14 +88,16 @@ fun ConcernsTab(onOpenConcern: (String) -> Unit, anatomicalOnly: Boolean = false
     var showResolved by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     val guard = rememberLoadGuard()
+    val checksGuard = rememberLoadGuard(refreshOnUpdates = false)
 
-    LaunchedEffect(guard.attempt) {
+    LaunchedEffect(guard.attempt, checksGuard.attempt) {
         guard.run {
             parallel(
                 { concerns = repo.loadConcerns() },
                 { overview = repo.loadOverview() },
                 { findings = repo.loadAllFindings() },
-                { checks = catching { repo.loadChecks() }.getOrDefault(emptyList()) },
+                // The small things are their own card: failing to read them must not take the concerns down with it.
+                { checksGuard.run { checks = repo.loadChecks() } },
             )
         }
     }
@@ -175,6 +177,7 @@ fun ConcernsTab(onOpenConcern: (String) -> Unit, anatomicalOnly: Boolean = false
         if (illnessesOpen.isNotEmpty()) Text("ILLNESSES & INFECTIONS", style = FTType.LabelCaps, color = FT.TextMuted)
         illnessesOpen.forEach { c -> ConcernRow(c, byId[c.id], vocab) { onOpenConcern(c.id) } }
 
+        if (!anatomicalOnly) LoadErrorLine(checksGuard, "the recent symptom checks")
         if (!anatomicalOnly && checks.isNotEmpty()) SmallThingsCard(checks, vocab)
 
         val patterns = findings.filter { (it.status == "possible" || it.status == "persistent") && shown.any { c -> c.id == it.concernId } }

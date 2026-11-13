@@ -45,7 +45,6 @@ import com.bioscan.fieldterminal.data.model.LogSleepDetailRow
 import com.bioscan.fieldterminal.data.model.LogStoolRow
 import com.bioscan.fieldterminal.data.model.LogSupplementTakenRow
 import com.bioscan.fieldterminal.data.model.LogWellbeingRow
-import com.bioscan.fieldterminal.data.softLoad
 import com.bioscan.fieldterminal.domain.AddEntryChoice
 import com.bioscan.fieldterminal.domain.AddEntryGroup
 import com.bioscan.fieldterminal.domain.AddEntryStart
@@ -63,8 +62,10 @@ import com.bioscan.fieldterminal.ui.components.AddEntryStartSaver
 import com.bioscan.fieldterminal.ui.components.AddEntryTargetSaver
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.Toasts
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.events.EventFormSheet
 import com.bioscan.fieldterminal.ui.screens.events.SweatTestSheet
 import com.bioscan.fieldterminal.ui.screens.health.HealthCheckInSheet
@@ -472,8 +473,9 @@ fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var row by remember { mutableStateOf<LogSleepDetailRow?>(null) }
 
-    LaunchedEffect(entryId) {
-        row = softLoad { AddEntryRepository(SupabaseClientProvider.client).fetchSleepDetail(entryId) }
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(entryId, guard.attempt) {
+        guard.run { row = AddEntryRepository(SupabaseClientProvider.client).fetchSleepDetail(entryId) }
     }
 
     ModalBottomSheet(
@@ -487,7 +489,9 @@ fun SleepDetailSheet(entryId: Long, onDismiss: () -> Unit) {
             SheetBackHeader(label = "SLEEP DETAIL", onBack = onDismiss)
             Spacer(Modifier.height(16.dp))
             val r = row
-            if (r == null) {
+            if (guard.error != null) {
+                LoadErrorLine(guard, "this night")
+            } else if (r == null) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = FT.DomainLog)
                 }

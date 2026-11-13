@@ -58,7 +58,9 @@ import com.bioscan.fieldterminal.domain.score.stoolPattern
 import com.bioscan.fieldterminal.domain.score.stoolPatternHeadline
 import com.bioscan.fieldterminal.ui.components.DivergingPoles
 import com.bioscan.fieldterminal.ui.components.FTDivergingScale
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.NutrientColor
+import com.bioscan.fieldterminal.ui.components.produceGuarded
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.status.GLUCOSE_INFO
 import com.bioscan.fieldterminal.ui.screens.status.GlucoseSpikingRows
@@ -200,8 +202,9 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
             GlucoseSpikingRows(o.todaysMeals)
         }
 
-        val lowest by produceState<List<Pair<String, Double>>?>(null, days) {
-            value = softLoad {
+        val lowestGuard = rememberLoadGuard(refreshOnUpdates = false)
+        val lowest by produceGuarded<List<Pair<String, Double>>?>(lowestGuard, null, days) {
+            run {
                 val data = NutrientBreakdownRepository(SupabaseClientProvider.client).loadNutrients(days.coerceAtMost(365))
                 NUTRIENT_REFERENCE.values
                     .filter { (it.category == NutrientCategory.Vitamin || it.category == NutrientCategory.Mineral) && it.rda != null }
@@ -212,6 +215,7 @@ fun NutritionScreen(onBack: () -> Unit, onOpenNutrientBreakdown: () -> Unit) {
         Section("MICRONUTRIENTS · LOWEST", info = "The eight vitamins and minerals furthest below their reference intake, as a daily average over the range (100 % = the adult reference intake, a general guide, not a personal target).") {
             val l = lowest
             when {
+                lowestGuard.error != null -> LoadErrorLine(lowestGuard, "your micronutrients")
                 l == null -> EmptyLine("Working it out…")
                 l.isEmpty() -> EmptyLine("No micronutrient data logged in this range.")
                 else -> ShareBars(l.map { (n, pct) -> Triple(n, pct.coerceAtMost(100.0), "${pct.roundToInt()} %") }, 100.0, NutrientColor.Carbs)
@@ -270,12 +274,14 @@ fun HydrationScreen(onBack: () -> Unit) {
             info = "Water logged each day, in litres. Drinks logged as meals count towards today's total above but are not in this history yet.")
 
         val goals = remember { NutritionGoalsStore.getGoals(context) }
-        val accounting by produceState<List<DayHydration>?>(null, o) {
-            value = softLoad { HydrationAccountingRepository(SupabaseClientProvider.client).load(o, MapSettingsStore.getHome(context), goals) }
+        val needGuard = rememberLoadGuard(refreshOnUpdates = false)
+        val accounting by produceGuarded<List<DayHydration>?>(needGuard, null, o) {
+            HydrationAccountingRepository(SupabaseClientProvider.client).load(o, MapSettingsStore.getHome(context), goals)
         }
         Section("INTAKE AGAINST NEED", info = NEED_INFO) {
             val days = accounting?.takeLast(LocalRangeDays.current.coerceAtMost(60))
             when {
+                needGuard.error != null -> LoadErrorLine(needGuard, "your water need")
                 days == null -> EmptyLine("Working out demand from your sessions and the weather…")
                 days.none { it.intakeMl != null } -> EmptyLine("No water or drinks logged in this period.")
                 else -> {

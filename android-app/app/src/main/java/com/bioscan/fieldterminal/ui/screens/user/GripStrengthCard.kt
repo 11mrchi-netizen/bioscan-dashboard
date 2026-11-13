@@ -8,10 +8,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.bioscan.fieldterminal.data.BodyCheckinRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.BodyCheckinRecord
 import com.bioscan.fieldterminal.ui.components.FTMetricRow
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.TrendCard
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // Redesign (spec §3.3): grip strength moved here from the Body measurements. It is still taken during the monthly body
@@ -19,7 +20,9 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 @Composable
 fun GripStrengthCard() {
     var history by remember { mutableStateOf<List<BodyCheckinRecord>>(emptyList()) }
-    LaunchedEffect(Unit) { history = catching { BodyCheckinRepository(SupabaseClientProvider.client).loadHistory() }.getOrElse { emptyList() } }
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(guard.attempt) { guard.run { history = BodyCheckinRepository(SupabaseClientProvider.client).loadHistory() } }
+    LoadErrorLine(guard, "grip strength")
     val points = history.mapNotNull { c -> c.grip.values.maxOrNull()?.let { c.date to it } }
     if (points.isEmpty()) return
     val latest = history.filter { it.grip.isNotEmpty() }.maxByOrNull { it.occurredAt }

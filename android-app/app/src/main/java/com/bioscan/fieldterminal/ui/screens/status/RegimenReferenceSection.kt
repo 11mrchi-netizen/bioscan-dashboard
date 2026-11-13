@@ -20,12 +20,13 @@ import com.bioscan.fieldterminal.data.ReferenceSearchDto
 import com.bioscan.fieldterminal.data.RegimenReferenceRepository
 import com.bioscan.fieldterminal.data.RegimenReferenceRow
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.LABEL_SECTION_TITLES
 import com.bioscan.fieldterminal.domain.LabelMention
 import com.bioscan.fieldterminal.domain.halfLifeWords
 import com.bioscan.fieldterminal.domain.labelMentions
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
@@ -46,8 +47,9 @@ fun RegimenReferenceSection(supplementId: Long?, name: String, others: List<Pair
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(supplementId) {
-        if (supplementId != null) card = catching { repo.load(supplementId) }.getOrNull()
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(supplementId, guard.attempt) {
+        if (supplementId != null) guard.run { card = repo.load(supplementId) }
     }
 
     fun run(block: suspend () -> Unit) {
@@ -60,6 +62,11 @@ fun RegimenReferenceSection(supplementId: Long?, name: String, others: List<Pair
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("REFERENCE", style = FTType.LabelCaps, color = FT.TextSecondary)
+        // Without this the section would offer a new lookup as if nothing had been kept.
+        if (guard.error != null) {
+            LoadErrorLine(guard, "the reference kept for this item")
+            return@Column
+        }
         if (supplementId == null) {
             Caption("Save it first: then its FDA label (or, without one, PubMed studies) can be looked up and kept here.")
             return@Column

@@ -21,7 +21,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsRepository
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.LoggedDose
 import com.bioscan.fieldterminal.domain.WallClock
 import com.bioscan.fieldterminal.domain.activeIngredient
@@ -30,6 +29,8 @@ import com.bioscan.fieldterminal.domain.curveWindowDays
 import com.bioscan.fieldterminal.domain.formatAmount
 import com.bioscan.fieldterminal.domain.halfLifeWords
 import com.bioscan.fieldterminal.domain.spec
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.Duration
 import java.time.Instant
@@ -44,17 +45,18 @@ fun AmountInBodySection(supplementId: Long, halfLifeHours: Double, ingredientNam
     var curve by remember(supplementId, halfLifeHours) { mutableStateOf<List<Pair<Instant, Double>>?>(null) }
     var unit by remember { mutableStateOf<String?>(null) }
     val days = curveWindowDays(halfLifeHours)
-    LaunchedEffect(supplementId, halfLifeHours, ingredientName) {
-        curve = catching {
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(supplementId, halfLifeHours, ingredientName, guard.attempt) {
+        guard.run { curve = run {
             // The active amount per dose: an injection's dose is its active amount; anything else reads it from the dose's
             // ingredients (the one the reference names, else the only or first one).
             val repo = SupplementsRepository(SupabaseClientProvider.client)
             val overview = repo.loadOverview()
-            val row = (overview.active + overview.ended).firstOrNull { it.id == supplementId } ?: return@catching emptyList()
+            val row = (overview.active + overview.ended).firstOrNull { it.id == supplementId } ?: return@run emptyList()
             val spec = row.spec()
             val active = if (spec.form == "injection") spec.amount?.let { a -> spec.unit?.let { u -> a to u } }
             else activeIngredient(repo.loadDoseIngredients(listOf(row))[row.id].orEmpty(), ingredientName, row.name)?.let { it.amount to it.unit }
-            val (perDose, activeUnit) = active ?: return@catching emptyList()
+            val (perDose, activeUnit) = active ?: return@run emptyList()
             unit = activeUnit
             val now = Instant.now()
             val from = now.minus(Duration.ofDays(days))
@@ -71,8 +73,9 @@ fun AmountInBodySection(supplementId: Long, halfLifeHours: Double, ingredientNam
                 LoggedDose(at, perDose * qty)
             }
             if (doses.isEmpty()) emptyList() else amountCurve(doses, halfLifeHours, from, now)
-        }.getOrNull()
+        } }
     }
+    LoadErrorLine(guard, "the amount in the body")
     val points = curve ?: return
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("IN YOUR BODY · ESTIMATE", style = FTType.Micro, color = FT.TextMuted)

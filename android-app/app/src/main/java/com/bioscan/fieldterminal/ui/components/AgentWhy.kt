@@ -73,6 +73,7 @@ private fun WhySheet(why: WhyContext, onDismiss: () -> Unit) {
     var reply by remember { mutableStateOf<AgentReply?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var rated by remember { mutableStateOf<Int?>(null) }
+    var ratingFailed by remember { mutableStateOf(false) }
 
     LaunchedEffect(attempt) {
         error = null
@@ -107,11 +108,13 @@ private fun WhySheet(why: WhyContext, onDismiss: () -> Unit) {
                         color = FT.TextMuted,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(if (rated == null) "USEFUL?" else "THANKS", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(end = 4.dp))
+                        Text(if (ratingFailed) "NOT SAVED · TAP AGAIN" else if (rated == null) "USEFUL?" else "THANKS", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.padding(end = 4.dp))
                         (1..5).forEach { n ->
                             RatingDot(n, selected = rated == n) {
+                                val before = rated
                                 rated = n
-                                scope.launch { catching { repo.rate(r.turnId, n) } }
+                                ratingFailed = false
+                                scope.launch { catching { repo.rate(r.turnId, n) }.onFailure { rated = before; ratingFailed = true } }
                             }
                         }
                     }

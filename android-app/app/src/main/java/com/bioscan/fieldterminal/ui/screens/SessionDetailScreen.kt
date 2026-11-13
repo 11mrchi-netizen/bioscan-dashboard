@@ -109,6 +109,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) 
     var zoneSeries by remember { mutableStateOf<ZoneAnchorSeries?>(null) }
     var zoneDefault by remember { mutableStateOf(ZoneMethod.AUTO) }
     var planned by remember { mutableStateOf<PlannedMatch?>(null) }
+    var linkError by remember { mutableStateOf(false) }
     var runMarks by remember { mutableStateOf<RunDynamicsMarks?>(null) }
     val sessionScope = rememberCoroutineScope()
 
@@ -296,10 +297,13 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) 
                     planned?.let { pm ->
                         PlannedSessionCard(pm, h.details.exercises.orEmpty(), h.durationMin) {
                             sessionScope.launch {
+                                linkError = false
                                 catching { TrainingProgramRepository(SupabaseClientProvider.client).linkPlanned(pm.row.id, sessionId) }
                                     .onSuccess { planned = pm.copy(linked = true) }
+                                    .onFailure { linkError = true }
                             }
                         }
+                        if (linkError) Text("Couldn't link this session to the plan. Try again.", style = FTType.Caption, color = FT.Bad)
                     }
                     if (isStrength) {
                         h.details.exercises?.takeIf { it.isNotEmpty() }?.let { exercises ->

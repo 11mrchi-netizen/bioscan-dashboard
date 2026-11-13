@@ -30,7 +30,9 @@ import com.bioscan.fieldterminal.domain.siteLabel
 import com.bioscan.fieldterminal.domain.sitesFor
 import com.bioscan.fieldterminal.domain.vialState
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
 import kotlinx.coroutines.launch
@@ -52,10 +54,19 @@ fun InjectableSection(supplementId: Long, spec: RegimenSpec, prescribedUnits: Do
     var editing by remember { mutableStateOf(false) }
     var reload by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(supplementId, reload) {
-        history = catching { repo.siteHistory(listOf(supplementId))[supplementId].orEmpty() }.getOrDefault(emptyList())
-        vial = catching { repo.openVial(supplementId) }.getOrNull()
-        used = vial?.let { v -> catching { repo.usedSince(supplementId, LocalDate.parse(v.openedOn)) }.getOrDefault(0.0) } ?: 0.0
+    // Read together or not at all: a next site worked out from a history that failed to load, or a "new vial" form over
+    // a vial that is open, would both be wrong.
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(supplementId, reload, guard.attempt) {
+        guard.run {
+            history = repo.siteHistory(listOf(supplementId))[supplementId].orEmpty()
+            vial = repo.openVial(supplementId)
+            used = vial?.let { v -> repo.usedSince(supplementId, LocalDate.parse(v.openedOn)) } ?: 0.0
+        }
+    }
+    if (guard.error != null) {
+        LoadErrorLine(guard, "the injection sites and vial")
+        return
     }
     fun act(block: suspend () -> Unit) = scope.launch {
         error = null

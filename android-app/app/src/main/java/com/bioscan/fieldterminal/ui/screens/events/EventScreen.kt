@@ -11,7 +11,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,7 +21,6 @@ import com.bioscan.fieldterminal.data.AthleteEventsRepository
 import com.bioscan.fieldterminal.data.DebriefTarget
 import com.bioscan.fieldterminal.data.FuelDebriefRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.events.AthleteEvent
 import com.bioscan.fieldterminal.domain.events.EventStatus
 import com.bioscan.fieldterminal.domain.events.formatHoursMinutes
@@ -32,11 +30,13 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTCardEmphasis
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.PinnedPage
 import com.bioscan.fieldterminal.ui.components.SubTabRow
 import com.bioscan.fieldterminal.ui.components.TrailElevationChart
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
+import com.bioscan.fieldterminal.ui.components.produceGuarded
 import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.fuel.EventFuelTab
 import com.bioscan.fieldterminal.ui.screens.fuel.FuelDebriefSheet
@@ -168,9 +168,11 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
     }
     if (reviewing && e != null) {
         // The debrief: the event's fuel schedule (or the planned run it was linked to) checked against what was taken.
-        val debrief by produceState<DebriefTarget?>(initialValue = null, e.id) {
-            value = catching { FuelDebriefRepository(SupabaseClientProvider.client).targetForEvent(e) }.getOrNull()
+        val debriefGuard = rememberLoadGuard(refreshOnUpdates = false)
+        val debrief by produceGuarded<DebriefTarget?>(debriefGuard, null, e.id) {
+            FuelDebriefRepository(SupabaseClientProvider.client).targetForEvent(e)
         }
+        LoadErrorLine(debriefGuard, "the debrief for this event", Modifier.padding(horizontal = 22.dp))
         debrief?.let { FuelDebriefSheet(it, onDismiss = { reviewing = false }, onSaved = { reviewing = false; guard.retry() }) }
     }
     if (editing && e != null) {

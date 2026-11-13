@@ -16,7 +16,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsRepository
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.ChangeReading
 import com.bioscan.fieldterminal.domain.EFFECT_MIN_READINGS
 import com.bioscan.fieldterminal.domain.EFFECT_SETTLE_DAYS
@@ -26,6 +25,8 @@ import com.bioscan.fieldterminal.domain.changeReadings
 import com.bioscan.fieldterminal.domain.nearbyChanges
 import com.bioscan.fieldterminal.domain.shortItemName
 import com.bioscan.fieldterminal.ui.components.InfoHelpButton
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.today.TodayStore
 import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.LocalDate
@@ -42,17 +43,19 @@ private data class EffectView(val change: RegimenChange, val readings: List<Chan
 fun RegimenEffectsSection(itemId: Long) {
     val context = LocalContext.current
     var view by remember(itemId) { mutableStateOf<EffectView?>(null) }
-    LaunchedEffect(itemId) {
-        view = catching {
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(itemId, guard.attempt) {
+        guard.run { view = run {
             val today = LocalDate.now()
-            val series = (TodayStore.forDay(today)?.view ?: TodayStore.readDisk(context, today)?.view)?.series ?: return@catching null
+            val series = (TodayStore.forDay(today)?.view ?: TodayStore.readDisk(context, today)?.view)?.series ?: return@run null
             val all = SupplementsRepository(SupabaseClientProvider.client).loadRegimenChanges()
             val change = all.filter { it.itemId == itemId && ("started" in it.changes || "restarted" in it.changes || "dose" in it.changes) }
                 .filter { ChronoUnit.DAYS.between(it.date, today) in (EFFECT_MIN_READINGS + EFFECT_SETTLE_DAYS).toLong()..180L }
-                .maxByOrNull { it.date } ?: return@catching null
+                .maxByOrNull { it.date } ?: return@run null
             EffectView(change, changeReadings(change.date, series, today), nearbyChanges(all, change.date, change.itemName))
-        }.getOrNull()
+        } }
     }
+    LoadErrorLine(guard, "what moved since the change")
     val v = view ?: return
     val what = when {
         "dose" in v.change.changes && v.change.doseBefore != null -> "you changed the dose (${v.change.doseBefore} → ${v.change.doseAfter})"

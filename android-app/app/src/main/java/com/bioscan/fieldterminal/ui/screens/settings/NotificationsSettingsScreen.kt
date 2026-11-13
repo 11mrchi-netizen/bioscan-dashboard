@@ -75,6 +75,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
     var notifPrefs by remember { mutableStateOf<NotificationPrefsRow?>(null) }
     var notifSaving by remember { mutableStateOf(false) }
     var notifError by remember { mutableStateOf(false) }
+    var ruleError by remember { mutableStateOf(false) }
     var notifSavedAt by remember { mutableStateOf<String?>(null) }
     var rules by remember { mutableStateOf<List<NotificationRuleRow>>(emptyList()) }
     var notifPermissionGranted by remember {
@@ -194,11 +195,19 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                                     checked = rule?.enabled ?: true,
                                     onCheckedChange = { enabled ->
                                         rules = rules.map { if (it.kind == kind) it.copy(enabled = enabled) else it }
-                                        scope.launch { catching { notificationsRepository.setRuleEnabled(kind, enabled) } }
+                                        ruleError = false
+                                        scope.launch {
+                                            // Not saved: the switch goes back, so it never shows what the server does not have.
+                                            catching { notificationsRepository.setRuleEnabled(kind, enabled) }.onFailure {
+                                                rules = rules.map { if (it.kind == kind) it.copy(enabled = !enabled) else it }
+                                                ruleError = true
+                                            }
+                                        }
                                     },
                                 )
                             }
                         }
+                        if (ruleError) Text("Couldn't save that switch. Check your connection and try again.", style = FTType.Caption, color = FT.Bad)
                         if (!notifPermissionGranted) {
                             Text(
                                 "Allow notifications in system settings to receive reminders.",

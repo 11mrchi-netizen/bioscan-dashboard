@@ -3,18 +3,23 @@ package com.bioscan.fieldterminal.ui.components
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.NoSessionException
 import com.bioscan.fieldterminal.data.ReadCache
@@ -106,6 +111,24 @@ fun <T : Any> rememberGuarded(vararg keys: Any?, load: suspend () -> T): Pair<T?
 fun LoadingOrError(guard: LoadGuard, loading: String) {
     if (guard.error != null) LoadErrorCard(guard) else Text(loading, style = FTType.BodySmall, color = FT.TextMuted)
 }
+
+/**
+ * One line for a card whose own data could not be loaded: it says what, and RETRY loads it again. Draws nothing when the
+ * load worked, so a card that hides itself when it has nothing to show still says when it could not find out.
+ */
+@Composable
+fun LoadErrorLine(guard: LoadGuard, what: String, modifier: Modifier = Modifier) {
+    if (guard.error == null) return
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Couldn't load $what.", style = FTType.Caption, color = FT.TextMuted, modifier = Modifier.weight(1f))
+        Text("RETRY", style = FTType.LabelCaps, color = FT.TextPrimary, modifier = Modifier.ftClickable(role = Role.Button, onClickLabel = "Retry") { guard.retry() })
+    }
+}
+
+/** produceState for a card's own data: a failure goes to [guard] (see [LoadErrorLine]) and the value stays as it was. */
+@Composable
+fun <T> produceGuarded(guard: LoadGuard, initial: T, vararg keys: Any?, load: suspend () -> T): State<T> =
+    produceState(initial, guard.attempt, *keys) { guard.run { value = load() } }
 
 /** A number that grows each time a background refresh brings different data: a key for loads outside a LoadGuard. */
 @Composable

@@ -35,9 +35,11 @@ import com.bioscan.fieldterminal.domain.ZoneMethod
 import com.bioscan.fieldterminal.domain.weeklyIntensity
 import com.bioscan.fieldterminal.ui.components.BarLayout
 import com.bioscan.fieldterminal.ui.components.FTBarSpec
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.drawBarStub
 import com.bioscan.fieldterminal.ui.components.drawStackedBar
 import com.bioscan.fieldterminal.ui.components.heartRateZoneColor
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.detail.Section
 import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.LocalDate
@@ -72,13 +74,17 @@ private const val INFO_DETAILS =
 fun IntensityCard(modifier: Modifier = Modifier) {
     var weeks by remember { mutableStateOf<List<WeekIntensity>?>(null) }
     var method by remember { mutableStateOf(ZoneMethod.AUTO) }
-    LaunchedEffect(Unit) {
-        val client = SupabaseClientProvider.client
-        val sessions = softLoad { AnalysisRepository(client).loadIntensitySessions() } ?: return@LaunchedEffect
-        val anchors = softLoad { ZoneAnchorsRepository(client).load() } ?: return@LaunchedEffect
-        method = softLoad { TrainingProgramRepository(client).loadZoneMethod() } ?: ZoneMethod.AUTO
-        weeks = weeklyIntensity(sessions, anchors::anchorsFor, method, LocalDate.now())
+    val guard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(guard.attempt) {
+        guard.run {
+            val client = SupabaseClientProvider.client
+            val sessions = AnalysisRepository(client).loadIntensitySessions()
+            val anchors = ZoneAnchorsRepository(client).load()
+            method = softLoad { TrainingProgramRepository(client).loadZoneMethod() } ?: ZoneMethod.AUTO
+            weeks = weeklyIntensity(sessions, anchors::anchorsFor, method, LocalDate.now())
+        }
     }
+    LoadErrorLine(guard, "the intensity card", modifier)
     val w = weeks ?: return
     if (w.none { it.totalSeconds > 0 }) return
 

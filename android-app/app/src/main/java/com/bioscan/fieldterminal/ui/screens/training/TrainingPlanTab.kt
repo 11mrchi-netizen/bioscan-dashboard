@@ -16,24 +16,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.AthleteEventsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
-import com.bioscan.fieldterminal.data.TrainingCyclesRepository
 import com.bioscan.fieldterminal.data.TrainingProgramRepository
-import com.bioscan.fieldterminal.data.catching
-import com.bioscan.fieldterminal.data.model.GeneratedBlockRow
-import com.bioscan.fieldterminal.data.model.TrainingBlockSummaryRow
-import com.bioscan.fieldterminal.data.model.UpcomingSessionRow
 import com.bioscan.fieldterminal.domain.TrainingCycle
 import com.bioscan.fieldterminal.ui.components.FTButton
 import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTConfirmDestructive
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
-import com.bioscan.fieldterminal.ui.components.parallel
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.TrainingBlockFormSheet
 import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.LocalDate
@@ -51,37 +44,17 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 @Composable
 fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {}) {
     val repo = remember { TrainingProgramRepository(SupabaseClientProvider.client) }
-    val cyclesRepo = remember { TrainingCyclesRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
-    var blocks by remember { mutableStateOf<List<GeneratedBlockRow>?>(null) }
-    var upcoming by remember { mutableStateOf<List<UpcomingSessionRow>>(emptyList()) }
-    // Fuel planning phase 9: a planned session on an event's day is shown as such (the event is the day's real work).
-    var eventDays by remember { mutableStateOf<Map<LocalDate, String>>(emptyMap()) }
-    var cycles by remember { mutableStateOf<List<TrainingCycle>?>(null) }
-    var history by remember { mutableStateOf<List<TrainingBlockSummaryRow>?>(null) }
+    val page = remember { TrainingPlanState() }
     var confirmingDelete by remember { mutableStateOf<Long?>(null) }
     var deleting by remember { mutableStateOf(false) }
     var deleteError by remember { mutableStateOf<String?>(null) }
     var editingCycle by remember { mutableStateOf<TrainingCycle?>(null) }
     var addingCycle by remember { mutableStateOf(false) }
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        guard.run {
-            parallel(
-                { blocks = repo.loadGeneratedBlocks() },
-                { upcoming = repo.loadUpcoming(LocalDate.now()) },
-                { cycles = cyclesRepo.loadCycles() },
-                { history = cyclesRepo.loadBlockSummaries() },
-                {
-                    eventDays = catching {
-                        AthleteEventsRepository(SupabaseClientProvider.client).loadUpcoming(LocalDate.now(), days = 120)
-                            .associate { it.date to it.name }
-                    }.getOrDefault(emptyMap())
-                },
-            )
-        }
-    }
-    val activeCycle = cycles?.firstOrNull { it.isActiveOn(LocalDate.now()) }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load() }
+    val activeCycle = page.cycles?.firstOrNull { it.isActiveOn(LocalDate.now()) }
 
     Column(Modifier.padding(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (guard.error != null) {
@@ -89,7 +62,7 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
             LoadErrorCard(guard)
             return@Column
         }
-        if (cycles != null) {
+        if (page.cycles != null) {
             CurrentBlockCard(
                 cycle = activeCycle,
                 currentValue = null,
@@ -99,8 +72,8 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
         }
         FTButton("PLAN A NEW BLOCK", onClick = onOpenPlanner, emphasis = FTButtonEmphasis.Primary)
         FTCard(title = "UPCOMING") {
-            if (upcoming.isEmpty()) Text("No planned sessions yet.", color = FT.TextSecondary, style = FTType.BodySmall)
-            upcoming.forEach { s ->
+            if (page.upcoming.isEmpty()) Text("No planned sessions yet.", color = FT.TextSecondary, style = FTType.BodySmall)
+            page.upcoming.forEach { s ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
                     Text(
                         LocalDate.parse(s.scheduledDate).format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)).uppercase(),
@@ -108,7 +81,7 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
                     )
                     Column {
                         Text(s.title, color = FT.TextPrimary, style = FTType.BodySmall)
-                        eventDays[LocalDate.parse(s.scheduledDate)]?.let { name ->
+                        page.eventDays[LocalDate.parse(s.scheduledDate)]?.let { name ->
                             Text("EVENT DAY: ${name.uppercase()} · move or drop this session", color = FT.Warn, style = FTType.MonoCaption)
                         }
                     }
@@ -116,8 +89,8 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
             }
         }
         FTCard(title = "PLANNED BLOCKS") {
-            val b = blocks.orEmpty()
-            if (blocks != null && b.isEmpty()) Text("No generated blocks yet.", color = FT.TextSecondary, style = FTType.BodySmall)
+            val b = page.blocks.orEmpty()
+            if (page.blocks != null && b.isEmpty()) Text("No generated blocks yet.", color = FT.TextSecondary, style = FTType.BodySmall)
             deleteError?.let { Text("Couldn't delete: $it", color = FT.Bad, style = FTType.BodySmall) }
             b.forEach { blk ->
                 Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -151,7 +124,7 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
                 }
             }
         }
-        BlockHistoryCard(history, onViewAll = onOpenAllBlocks)
+        BlockHistoryCard(page.history, onViewAll = onOpenAllBlocks)
     }
 
     if (addingCycle || editingCycle != null) {

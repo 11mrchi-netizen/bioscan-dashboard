@@ -28,13 +28,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.FuelPlanRepository
 import com.bioscan.fieldterminal.data.MealPrepRepository
 import com.bioscan.fieldterminal.data.MealPrepWeek
 import com.bioscan.fieldterminal.data.NutritionOverview
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.WeekPlan
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.fuel.BreakfastItem
 import com.bioscan.fieldterminal.domain.fuel.Container
 import com.bioscan.fieldterminal.domain.fuel.FoodOption
@@ -73,7 +71,6 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.components.launchSafe
 import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
 import com.bioscan.fieldterminal.ui.theme.FTType
-import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -96,32 +93,15 @@ fun MealPrepPage(overview: NutritionOverview?, modifier: Modifier = Modifier) {
     val nextWeek = remember { upcomingPrepWeek(today) }
     // From Monday to Friday the week being eaten is the one shown first; on the weekend, the coming one.
     var weekStart by remember { mutableStateOf(if (today.dayOfWeek.value <= PREP_DAYS) thisWeek else nextWeek) }
-    var plan by remember { mutableStateOf<WeekPlan?>(null) }
-    var week by remember { mutableStateOf<MealPrepWeek?>(null) }
-    var breakfast by remember { mutableStateOf<List<BreakfastItem>>(emptyList()) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var loaded by remember { mutableStateOf(false) }
+    val page = remember { MealPrepPageState() }
     var attempt by remember { mutableIntStateOf(0) }
 
     val cacheVersion = rememberCacheVersion()
-    LaunchedEffect(weekStart, attempt, overview, cacheVersion) {
-        error = null
-        if (plan == null) loaded = false
-        try {
-            plan = FuelPlanRepository(SupabaseClientProvider.client).loadWeekPlan(context, overview, weekStart)
-            week = catching { repo.loadWeek(weekStart) }.getOrNull()
-            breakfast = catching { repo.loadBreakfast() }.getOrDefault(emptyList())
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = describeLoadFailure(e)
-        }
-        loaded = true
-    }
+    LaunchedEffect(weekStart, attempt, overview, cacheVersion) { page.load(context, overview, weekStart) }
 
     fun save(w: MealPrepWeek) {
-        week = w
-        scope.launchSafe(onError = { error = describeLoadFailure(it) }) { repo.saveWeek(w) }
+        page.week = w
+        scope.launchSafe(onError = { page.error = describeLoadFailure(it) }) { repo.saveWeek(w) }
     }
 
     Column(modifier.padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -129,29 +109,29 @@ fun MealPrepPage(overview: NutritionOverview?, modifier: Modifier = Modifier) {
             listOf(thisWeek, nextWeek).distinct(), weekStart,
             { if (it == thisWeek) "THIS WEEK" else "NEXT WEEK" }, { weekStart = it }, accentColor = FT.DomainFuel,
         )
-        error?.let {
+        page.error?.let {
             Text("Couldn't load or save: $it", style = FTType.BodySmall, color = FT.Bad)
             FTButton("RETRY", emphasis = FTButtonEmphasis.Tertiary) { attempt++ }
         }
-        val p = plan
-        if (!loaded) Text("Planning the week…", style = FTType.BodySmall, color = FT.TextSecondary)
-        if (loaded && p == null && error == null) Text("Log a body weight (Fuel › Body) to portion the week.", style = FTType.BodySmall, color = FT.TextSecondary)
+        val p = page.plan
+        if (!page.loaded) Text("Planning the week…", style = FTType.BodySmall, color = FT.TextSecondary)
+        if (page.loaded && p == null && page.error == null) Text("Log a body weight (Fuel › Body) to portion the week.", style = FTType.BodySmall, color = FT.TextSecondary)
         if (p == null) return@Column
         val foods = remember(p) { p.foods.associateBy { it.id } }
-        val w = week ?: MealPrepWeek(weekStart, PrepPicks(emptyList(), emptyList(), emptyList()), emptyList(), emptySet(), null)
+        val w = page.week ?: MealPrepWeek(weekStart, PrepPicks(emptyList(), emptyList(), emptyList()), emptyList(), emptySet(), null)
 
         PickCard(p.foods, w.picks, enabled = !w.cooked) { picks -> save(w.copy(picks = picks, recipes = if (picks.ready) buildRecipes(picks) else emptyList())) }
         if (w.recipes.isNotEmpty()) {
             RecipesCard(w, foods, enabled = !w.cooked) { save(w.copy(recipes = it)) }
             WeekCard(w, foods, enabled = !w.cooked) { save(w.copy(skipped = it)) }
             val containers = remember(w, p) { containersFor(w, p, foods) }
-            ShopCookCard(context, w, containers, breakfastPlates(breakfast, p, foods), foods, onCooked = { cooked ->
+            ShopCookCard(context, w, containers, breakfastPlates(page.breakfast, p, foods), foods, onCooked = { cooked ->
                 save(w.copy(containers = if (cooked) containers.map { c -> StoredContainer(c.date, c.slot, c.letter, c.plate.portions.associate { it.food.id to it.grams }) } else null))
             })
         }
-        BreakfastCard(p.foods, breakfast, onSave = { items ->
-            breakfast = items
-            scope.launchSafe(onError = { error = describeLoadFailure(it) }) { repo.saveBreakfast(items) }
+        BreakfastCard(p.foods, page.breakfast, onSave = { items ->
+            page.breakfast = items
+            scope.launchSafe(onError = { page.error = describeLoadFailure(it) }) { repo.saveBreakfast(items) }
         })
     }
 }

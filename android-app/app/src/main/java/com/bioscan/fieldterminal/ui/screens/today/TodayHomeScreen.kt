@@ -38,23 +38,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.AnalysisRepository
-import com.bioscan.fieldterminal.data.EveningCheckinRepository
-import com.bioscan.fieldterminal.data.FuelPlanRepository
 import com.bioscan.fieldterminal.data.NutritionOverview
-import com.bioscan.fieldterminal.data.NutritionRepository
-import com.bioscan.fieldterminal.data.ReadCache
-import com.bioscan.fieldterminal.data.ScoresRepository
 import com.bioscan.fieldterminal.data.ScoresView
-import com.bioscan.fieldterminal.data.StatusRepository
-import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.TodayFuel
-import com.bioscan.fieldterminal.data.TodayFuelResult
 import com.bioscan.fieldterminal.data.TodayPreviews
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.AddEntryStart
 import com.bioscan.fieldterminal.domain.EVENING_CHECKIN_TIME
-import com.bioscan.fieldterminal.domain.EveningCheckin
 import com.bioscan.fieldterminal.domain.FuelSubType
 import com.bioscan.fieldterminal.domain.checkinDateFor
 import com.bioscan.fieldterminal.domain.expectedShareAt
@@ -79,23 +68,16 @@ import com.bioscan.fieldterminal.ui.components.RingState
 import com.bioscan.fieldterminal.ui.components.ScoreRing
 import com.bioscan.fieldterminal.ui.components.ftChargeWash
 import com.bioscan.fieldterminal.ui.components.ftClickable
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.nav.TopLevelTab
 import com.bioscan.fieldterminal.ui.screens.AddEntrySheet
 import com.bioscan.fieldterminal.ui.screens.status.EveningCheckInSheet
 import com.bioscan.fieldterminal.ui.screens.status.NutritionTodayCard
 import com.bioscan.fieldterminal.ui.theme.FTType
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
@@ -225,32 +207,17 @@ fun TodayHomeScreen(
     onSupplementsHandled: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    // TODAY keeps its own page and decides when to rebuild it (TodayStore): no reload on every cache refresh.
-    val guard = rememberLoadGuard(refreshOnUpdates = false)
-    // Shown at once from the kept page (TodayStore), when it is today's; rebuilt below only if it went stale.
-    val kept = remember { TodayStore.forDay(LocalDate.now()) }
-    var view by remember { mutableStateOf(kept?.view) }
-    // Once TODAY has its scores, the reads behind the pages most opened from it (Sleep, Cardio, Load, Body) are warmed
-    // in the background, so those pages open from memory. Each read is cached (data/ReadCache.kt); a failure is ignored.
-    LaunchedEffect(view?.day) {
-        if (view == null) return@LaunchedEffect
-        delay(1_500)
-        val repo = AnalysisRepository(SupabaseClientProvider.client)
-        withContext(Dispatchers.IO) {
-            listOf<suspend () -> Unit>(
-                { repo.loadExpectedBands() }, { repo.loadHeartRateDay() }, { repo.loadHeartRateRanges() },
-                { repo.loadBodyMetrics() }, { repo.loadFitnessFatigue() },
-            ).forEach { catching { it() } }
-        }
-    }
-    var nut by remember { mutableStateOf(kept?.nut) }
-    var fuel by remember { mutableStateOf(kept?.fuel) }
-    var previews by remember { mutableStateOf(kept?.previews) }
-    var closed by remember { mutableStateOf(kept?.closed ?: emptySet()) }
-    var scoresKey by remember { mutableStateOf(kept?.key) }
-    // The plan and SO FAR as last drawn: shown (from disk, after Android closed the app) until the fuel plan has loaded.
-    var keptRows by remember { mutableStateOf(kept?.rows) }
-    var keptSoFar by remember { mutableStateOf(kept?.soFar) }
+    // What the page shows and how it stays current is TodayPage's; this screen holds only what is open on it.
+    val page = rememberTodayPage()
+    val guard = page.guard
+    val view = page.view
+    val nut = page.nut
+    val fuel = page.fuel
+    val previews = page.previews
+    val closed = page.closed
+    val keptRows = page.keptRows
+    val keptSoFar = page.keptSoFar
+    val loading = page.loading
     var stack by remember { mutableStateOf<List<ScoreOverlay>>(emptyList()) }
     var soFar by remember { mutableStateOf(false) }
     var mealKind by remember { mutableStateOf<MealSlotKind?>(null) }
@@ -259,7 +226,6 @@ fun TodayHomeScreen(
     var supplementBucket by remember { mutableStateOf<String?>(null) }
     // A voice already done: tapping it shows a read-only card instead of the log flow.
     var doneRow by remember { mutableStateOf<PlanRow?>(null) }
-    var loading by remember { mutableStateOf(kept == null) }
 
     LaunchedEffect(openCheckIn) {
         if (openCheckIn) {
@@ -272,80 +238,6 @@ fun TodayHomeScreen(
             supplementBucket = requestedSupplements.ifBlank { previews?.supplements?.suggestedBucket ?: "" }
             onSupplementsHandled()
         }
-    }
-
-    LaunchedEffect(Unit) { catching { EveningCheckinRepository(SupabaseClientProvider.client).recordDailyContext() } }
-
-    // While TODAY is on screen: once a minute, rebuild in the background if the kept page went stale (a sync landed, the
-    // day changed, or 15 minutes passed). The page on screen stays until the new one is ready.
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(60_000L)
-            if (!loading && !TodayStore.isFresh(TodayStore.snapshot, LocalDate.now())) guard.retry()
-        }
-    }
-
-    LaunchedEffect(guard.attempt) {
-        // First open of the tab with a fresh kept page: nothing to load.
-        if (guard.attempt == 0 && TodayStore.isFresh(TodayStore.snapshot, LocalDate.now())) {
-            loading = false
-            return@LaunchedEffect
-        }
-        val day = LocalDate.now()
-        // After Android closed the app: the page kept on disk for today goes on screen at once.
-        if (view == null) {
-            TodayStore.readDisk(context, day)?.let { k ->
-                view = k.view
-                scoresKey = k.key
-                keptRows = k.rows
-                keptSoFar = k.soFar
-                closed = k.closed
-            }
-        }
-        loading = true
-        guard.run {
-            var partFailed = false
-            // Its rebuild must see what was just written (a sync, a log): reads wait for the network, never an old copy.
-            withContext(ReadCache.RequireFresh) { coroutineScope {
-                val client = SupabaseClientProvider.client
-                val status = StatusRepository(client)
-                // The parts around the scores (plan, fuel, nutrition, check-ins) each load on their own. One that fails keeps
-                // what the page already showed for this day instead of going blank, and leaves the page marked stale so the
-                // next minute tries again.
-                val sameDay = TodayStore.snapshot?.day == day
-                suspend fun <T : Any> part(shown: T?, load: suspend () -> T?): T? =
-                    catching { load() }.getOrElse { partFailed = true; shown.takeIf { sameDay } }
-                // The overview only supplies the open illness / injury that caps CHARGE: without it the scores still load.
-                val overviewD = async { part(null) { status.loadOverview() } }
-                val previewsD = async { part(previews) { status.loadTodayPreviews() } }
-                val n = part(nut) { NutritionRepository(client).loadOverview() }
-                nut = n
-                val fuelD = async { part(fuel) { (FuelPlanRepository(client).loadToday(context, n, ZonedDateTime.now()) as? TodayFuelResult.Ready)?.fuel } }
-                val closedD = async {
-                    part(closed) { EveningCheckinRepository(client).loadSince(LocalDate.now().minusDays(1)).map(EveningCheckin::date).toSet() } ?: emptySet()
-                }
-                val o = overviewD.await()
-                // The score engine only runs again when what it reads changed (equal key: the kept scores stand).
-                val keyed = ScoresRepository(client).loadKeyed(context, n, o?.healthFlag, previous = view, previousKey = scoresKey)
-                view = keyed.view
-                scoresKey = keyed.key
-                previews = previewsD.await()
-                fuel = fuelD.await()
-                closed = closedD.await()
-            } }
-            // Keep the finished page, stamped after the load so the load's own bookkeeping writes don't count: in memory,
-            // and on disk for the next time the app is opened today.
-            val drawnAt = LocalDateTime.now()
-            val rows = planRows(drawnAt, fuel, previews, view?.scores?.charge?.score, day.minusDays(1) in closed, day in closed, view?.sleepTarget)
-            val sf = soFarOf(nut, fuel)
-            keptRows = rows
-            keptSoFar = sf
-            TodayStore.snapshot = TodaySnapshot(day, view, nut, fuel, previews, closed, if (partFailed) 0L else System.currentTimeMillis(), ReadCache.writeStamp(TodayStore.TABLES), scoresKey, rows, sf)
-            val v = view
-            val k = scoresKey
-            if (v != null && k != null && !partFailed) TodayStore.writeDisk(context, KeptToday(TodayStore.FORMAT, day, System.currentTimeMillis(), k, v, rows, sf, closed))
-        }
-        loading = false
     }
 
     // What a voice's action opens (the log/detail flow); reused by a not-done tap and by the completed card's button.

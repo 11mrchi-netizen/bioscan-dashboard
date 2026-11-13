@@ -81,6 +81,7 @@ fun ScaleWeighInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var preview by remember { mutableStateOf<BodyComposition?>(null) }
     var previewLoaded by remember { mutableStateOf(false) }
+    var previewFailed by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         asking = false
@@ -111,7 +112,8 @@ fun ScaleWeighInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
     LaunchedEffect(reading) {
         preview = null
         previewLoaded = false
-        reading?.let { preview = catching { repo.preview(it) }.getOrNull(); previewLoaded = true }
+        previewFailed = false
+        reading?.let { r -> catching { repo.preview(r) }.onSuccess { preview = it }.onFailure { previewFailed = true }; previewLoaded = true }
     }
 
     ModalBottomSheet(
@@ -155,6 +157,9 @@ fun ScaleWeighInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                         if (!p.qualityOk) {
                             Text("This reading looks off (hydration or contact). It will be saved, but not used for body fat.", style = FTType.Caption, color = FT.Warn)
                         }
+                    } else if (previewFailed) {
+                        // The weight and impedance are what is stored; composition is worked out from them again later.
+                        Text("Couldn't work out body composition right now. The reading can still be saved.", style = FTType.Caption, color = FT.TextSecondary)
                     } else if (previewLoaded) {
                         Text("Add height, date of birth and sex in Setup › Profile to see body composition.", style = FTType.Caption, color = FT.TextSecondary)
                     }

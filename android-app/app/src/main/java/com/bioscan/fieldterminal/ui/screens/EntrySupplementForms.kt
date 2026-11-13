@@ -71,6 +71,8 @@ internal fun SupplementsForm(
     var supplements by remember { mutableStateOf<List<SupplementRow>?>(null) }
     // Injectables: each injected dose's site, defaulting to the one rested longest (domain/Injectables.kt).
     var siteHistory by remember { mutableStateOf<Map<Long, List<Pair<String, Instant>>>>(emptyMap()) }
+    // The history could not be read: no site is suggested or pre-picked, since "rested longest" would be a guess.
+    var siteHistoryFailed by remember { mutableStateOf(false) }
     var sites by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
     var checkedBundles by remember { mutableStateOf(setOfNotNull(preselectBundle)) }
     var checkedAsNeeded by remember { mutableStateOf(setOf<Long>()) }
@@ -91,8 +93,8 @@ internal fun SupplementsForm(
             takesToday = takes.takesToday
             val injectableIds = active.filter { it.spec().injectable }.map { it.id }
             if (injectableIds.isNotEmpty()) {
-                siteHistory = catching { InjectablesRepository(SupabaseClientProvider.client).siteHistory(injectableIds) }
-                    .getOrDefault(emptyMap())
+                catching { InjectablesRepository(SupabaseClientProvider.client).siteHistory(injectableIds) }
+                    .onSuccess { siteHistory = it }.onFailure { siteHistoryFailed = true }
             }
         } catch (e: CancellationException) {
             throw e
@@ -241,7 +243,7 @@ internal fun SupplementsForm(
             specs[id]?.takeIf { it.injectable }?.let { Triple(id, name, it) }
         }
         val chosenSites = injected.associate { (id, _, spec) ->
-            id to (sites[id] ?: nextSite(sitesFor(spec), siteHistory[id].orEmpty())?.key)
+            id to (sites[id] ?: nextSite(sitesFor(spec), siteHistory[id].orEmpty())?.key?.takeIf { !siteHistoryFailed })
         }.filterValues { it != null }.mapValues { it.value!! }
         if (injected.isNotEmpty()) {
             FormLabel("INJECTION SITE")
@@ -249,7 +251,8 @@ internal fun SupplementsForm(
                 val options = sitesFor(spec)
                 val suggested = nextSite(options, siteHistory[id].orEmpty())
                 val units = list.firstOrNull { it.id == id }?.syringeUnits?.let { " · ${com.bioscan.fieldterminal.domain.formatAmount(it)} units as prescribed" } ?: ""
-                Text("$name$units · suggested: ${suggested?.label ?: "—"} (rested longest)", style = FTType.Caption, color = FT.TextSecondary)
+                if (siteHistoryFailed) Text("$name$units · your site history couldn't be read: pick the site yourself.", style = FTType.Caption, color = FT.Warn)
+                else Text("$name$units · suggested: ${suggested?.label ?: "—"} (rested longest)", style = FTType.Caption, color = FT.TextSecondary)
                 TextChipRow(options.map { it.label }, options.firstOrNull { it.key == chosenSites[id] }?.label, perRow = 2) { picked ->
                     options.firstOrNull { it.label == picked }?.let { sites = sites + (id to it.key) }
                 }

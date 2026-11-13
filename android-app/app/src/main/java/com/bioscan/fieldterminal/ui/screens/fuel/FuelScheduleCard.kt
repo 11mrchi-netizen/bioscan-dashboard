@@ -29,7 +29,6 @@ import com.bioscan.fieldterminal.data.FuelingProduct
 import com.bioscan.fieldterminal.data.FuelingRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementFuelOption
-import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.domain.fuel.FuelBlock
 import com.bioscan.fieldterminal.domain.fuel.FuelForm
 import com.bioscan.fieldterminal.domain.fuel.expandSchedule
@@ -40,8 +39,10 @@ import com.bioscan.fieldterminal.ui.components.FTButtonEmphasis
 import com.bioscan.fieldterminal.ui.components.FTCard
 import com.bioscan.fieldterminal.ui.components.FTDropdown
 import com.bioscan.fieldterminal.ui.components.FieldTextField
+import com.bioscan.fieldterminal.ui.components.LoadErrorLine
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.ftClickable
+import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.TextChipRow
 import com.bioscan.fieldterminal.ui.theme.FTType
 import kotlinx.coroutines.CancellationException
@@ -219,9 +220,12 @@ internal fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () ->
     var catalog by remember { mutableStateOf<List<FuelingProduct>>(emptyList()) }
     var supplements by remember { mutableStateOf<List<SupplementFuelOption>>(emptyList()) }
 
-    LaunchedEffect(Unit) {
-        catalog = catching { FuelingRepository(SupabaseClientProvider.client).loadProducts() }.getOrDefault(emptyList())
-        supplements = catching { FuelScheduleRepository(SupabaseClientProvider.client).supplementOptions() }.getOrDefault(emptyList())
+    val catalogGuard = rememberLoadGuard(refreshOnUpdates = false)
+    LaunchedEffect(catalogGuard.attempt) {
+        catalogGuard.run {
+            catalog = FuelingRepository(SupabaseClientProvider.client).loadProducts()
+            supplements = FuelScheduleRepository(SupabaseClientProvider.client).supplementOptions()
+        }
     }
 
     // A form's usual shape, applied when the form is picked on a block with nothing entered yet.
@@ -282,6 +286,7 @@ internal fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () ->
                     FuelForm.entries.firstOrNull { it.label == picked }?.let { form = it; applyDefaults(it) }
                 }
             }
+            LoadErrorLine(catalogGuard, "your products")
             if (options.isNotEmpty()) {
                 Column {
                     SheetLabel("FROM YOUR CATALOG (OPTIONAL)")

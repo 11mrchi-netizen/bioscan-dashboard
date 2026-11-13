@@ -16,38 +16,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.AnalysisRepository
-import com.bioscan.fieldterminal.data.EvidenceRows
 import com.bioscan.fieldterminal.data.ExperimentResultRow
 import com.bioscan.fieldterminal.data.ExperimentRow
 import com.bioscan.fieldterminal.data.ExperimentsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.catching
-import com.bioscan.fieldterminal.data.model.LogSexualActivityRow
 import com.bioscan.fieldterminal.data.model.NewRegisteredQuestion
-import com.bioscan.fieldterminal.data.model.PlannedOutcomeRow
-import com.bioscan.fieldterminal.data.model.RegisteredQuestion
-import com.bioscan.fieldterminal.data.model.RelationshipResultRow
-import com.bioscan.fieldterminal.data.model.SleepAnalysisRow
-import com.bioscan.fieldterminal.data.model.TrainingLoadSessionRow
-import com.bioscan.fieldterminal.data.model.TypicalityResultRow
-import com.bioscan.fieldterminal.data.model.WearableAnalysisRow
-import com.bioscan.fieldterminal.data.model.WellbeingAnalysisRow
 import com.bioscan.fieldterminal.domain.DailyChoice
-import com.bioscan.fieldterminal.domain.LoadSpans
-import com.bioscan.fieldterminal.domain.SeriesBreakStarts
 import com.bioscan.fieldterminal.domain.defaultZone
 import com.bioscan.fieldterminal.domain.evidenceBoard
 import com.bioscan.fieldterminal.domain.typicalityView
 import com.bioscan.fieldterminal.ui.components.LoadErrorCard
+import com.bioscan.fieldterminal.ui.components.RefreshOnCacheUpdates
 import com.bioscan.fieldterminal.ui.components.SkeletonSections
 import com.bioscan.fieldterminal.ui.components.describeLoadFailure
 import com.bioscan.fieldterminal.ui.components.launchSafe
-import com.bioscan.fieldterminal.ui.components.parallel
 import com.bioscan.fieldterminal.ui.components.rememberCacheVersion
-import com.bioscan.fieldterminal.ui.components.rememberLoadGuard
 import com.bioscan.fieldterminal.ui.screens.health.HealthN1Section
 import com.bioscan.fieldterminal.ui.theme.FTType
-import com.bioscan.fieldterminal.util.Perf
 import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
@@ -56,19 +42,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 // (were on Health › Sexual health). One load for the tab, the same reads Today made for them.
 @Composable
 fun N1Tab() {
-    var sessions by remember { mutableStateOf<List<TrainingLoadSessionRow>?>(null) }
-    var wearable by remember { mutableStateOf<List<WearableAnalysisRow>?>(null) }
-    var sleep by remember { mutableStateOf<List<SleepAnalysisRow>?>(null) }
-    var wellbeing by remember { mutableStateOf<List<WellbeingAnalysisRow>?>(null) }
-    var sexualActivity by remember { mutableStateOf<List<LogSexualActivityRow>>(emptyList()) }
-    var breakStarts by remember { mutableStateOf(SeriesBreakStarts.NONE) }
-    var loadSpans by remember { mutableStateOf(LoadSpans.STANDARD) }
-    var planned by remember { mutableStateOf<List<PlannedOutcomeRow>?>(null) }
-    var relationships by remember { mutableStateOf<List<RelationshipResultRow>>(emptyList()) }
-    var typicality by remember { mutableStateOf<TypicalityResultRow?>(null) }
-    var evidence by remember { mutableStateOf(EvidenceRows()) }
-    var registeredResults by remember { mutableStateOf<List<RelationshipResultRow>>(emptyList()) }
-    var registeredQuestions by remember { mutableStateOf<List<RegisteredQuestion>>(emptyList()) }
+    val page = remember { N1State() }
     var registerError by remember { mutableStateOf<String?>(null) }
     var experiments by remember { mutableStateOf<List<ExperimentRow>>(emptyList()) }
     var experimentResults by remember { mutableStateOf<Map<String, ExperimentResultRow>>(emptyMap()) }
@@ -85,34 +59,14 @@ fun N1Tab() {
         catching { experimentResults = repo.loadResults() }
     }
 
-    val guard = rememberLoadGuard()
-    LaunchedEffect(guard.attempt) {
-        Perf.timed("N1.load") {
-            guard.run {
-                val repo = AnalysisRepository(SupabaseClientProvider.client)
-                parallel(
-                    { sessions = repo.loadExerciseSessionsForTrainingLoad() },
-                    { wearable = repo.loadWearableDaily() },
-                    { sleep = repo.loadSleepDaily() },
-                    { wellbeing = repo.loadWellbeingDaily() },
-                    { sexualActivity = catching { repo.loadSexualActivityDaily() }.getOrDefault(emptyList()) },
-                    { breakStarts = repo.loadSeriesBreakStarts() },
-                    { loadSpans = repo.loadLoadSpans() },
-                    { planned = catching { repo.loadPlannedOutcomes() }.getOrNull() },
-                    { relationships = repo.loadRelationships() },
-                    { typicality = repo.loadTypicality() },
-                    { evidence = repo.loadEvidence() },
-                    { registeredResults = repo.loadRegisteredResults() },
-                    { registeredQuestions = repo.loadRegisteredQuestions() },
-                )
-            }
-        }
-    }
+    val guard = page.guard
+    RefreshOnCacheUpdates(guard)
+    LaunchedEffect(guard.attempt) { page.load() }
 
-    val s = sessions
-    val w = wearable
-    val sl = sleep
-    val wb = wellbeing
+    val s = page.sessions
+    val w = page.wearable
+    val sl = page.sleep
+    val wb = page.wellbeing
     if (s == null || w == null || sl == null || wb == null) {
         if (guard.error != null) {
             LoadErrorCard(guard)
@@ -122,16 +76,16 @@ fun N1Tab() {
         return
     }
     // Each composite's scorecard on this history, worked out off the main thread (null until ready).
-    val scorecards by rememberScorecards(w, sl, wb, s, breakStarts, loadSpans, planned)
+    val scorecards by rememberScorecards(w, sl, wb, s, page.breakStarts, page.loadSpans, page.planned)
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        EvidenceBoardCard(evidenceBoard(relationships, registeredResults), evidence, onTest = { testing = it })
+        EvidenceBoardCard(evidenceBoard(page.relationships, page.registeredResults), page.evidence, onTest = { testing = it })
         CaseCrossoverCard(
-            evidence.crossover,
-            registered = registeredQuestions,
+            page.evidence.crossover,
+            registered = page.registeredQuestions,
             registerError = registerError,
             onRegister = { exposure, outcome ->
                 registerError = null
@@ -140,7 +94,7 @@ fun N1Tab() {
                     repo.registerQuestion(
                         NewRegisteredQuestion(exposure = exposure, outcome = outcome, noEffect = defaultZone(outcome), registeredOn = LocalDate.now().toString()),
                     )
-                    registeredQuestions = repo.loadRegisteredQuestions()
+                    page.registeredQuestions = repo.loadRegisteredQuestions()
                 }
             },
         )
@@ -162,10 +116,10 @@ fun N1Tab() {
         InterventionEventsSection()
         // Bundles of those around one objective (docs/intervention-protocol-intelligence).
         ProtocolsSection()
-        N1ScorecardsCard(scorecards, typicality = typicalityView(typicality).scorecard)
+        N1ScorecardsCard(scorecards, typicality = typicalityView(page.typicality).scorecard)
         // Health concerns (docs/health-concerns): patterns found in check-ins and the trials testing them.
         HealthN1Section()
-        if (sexualActivity.isNotEmpty()) SexualHealthCorrelationsCard(wb, sexualActivity, w, sl)
+        if (page.sexualActivity.isNotEmpty()) SexualHealthCorrelationsCard(wb, page.sexualActivity, w, sl)
     }
 
     testing?.let { choice ->

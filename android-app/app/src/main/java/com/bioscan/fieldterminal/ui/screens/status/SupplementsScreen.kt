@@ -24,26 +24,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.bioscan.fieldterminal.data.EvidenceRepository
 import com.bioscan.fieldterminal.data.ExperimentResultRow
 import com.bioscan.fieldterminal.data.ExperimentRow
 import com.bioscan.fieldterminal.data.ExperimentsRepository
-import com.bioscan.fieldterminal.data.InteractionRepository
-import com.bioscan.fieldterminal.data.RegimenReferenceRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.SupplementsOverview
-import com.bioscan.fieldterminal.data.SupplementsRepository
 import com.bioscan.fieldterminal.data.catching
 import com.bioscan.fieldterminal.data.model.SupplementRow
 import com.bioscan.fieldterminal.domain.DetectedInteraction
-import com.bioscan.fieldterminal.domain.InteractionRecord
 import com.bioscan.fieldterminal.domain.LabelMention
 import com.bioscan.fieldterminal.domain.RegimenKind
-import com.bioscan.fieldterminal.domain.RosterItem
 import com.bioscan.fieldterminal.domain.amountOn
 import com.bioscan.fieldterminal.domain.detectInteractions
 import com.bioscan.fieldterminal.domain.doseTextOn
-import com.bioscan.fieldterminal.domain.labelMentions
 import com.bioscan.fieldterminal.domain.scheduleWords
 import com.bioscan.fieldterminal.domain.spec
 import com.bioscan.fieldterminal.domain.stateWords
@@ -71,9 +64,7 @@ private val sectionLabelStyle = FTType.LabelCaps
 
 @Composable
 fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
-    var overview by remember { mutableStateOf<SupplementsOverview?>(null) }
-    var outcomes by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
-    var isLoading by remember { mutableStateOf(true) }
+    val page = remember { SupplementsState() }
     // DAV-81: bumping this re-runs the LaunchedEffect below to reload the
     // roster after add/edit/end -- simpler than threading a repository
     // callback through the sheet just to mutate `overview` in place.
@@ -83,80 +74,38 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     var reviewing by remember { mutableStateOf(false) }
     // Supplement N-of-1 experiments.
     var experimenting by remember { mutableStateOf<SupplementRow?>(null) }
-    var experiments by remember { mutableStateOf<List<ExperimentRow>>(emptyList()) }
-    var experimentResults by remember { mutableStateOf<Map<String, ExperimentResultRow>>(emptyMap()) }
 
-    // Curated interaction registry checked against the active roster.
-    var interactionRecords by remember { mutableStateOf<List<InteractionRecord>>(emptyList()) }
-    var rosterItems by remember { mutableStateOf<List<RosterItem>>(emptyList()) }
-    val detections = remember(interactionRecords, rosterItems) { detectInteractions(rosterItems, interactionRecords) }
+    val detections = remember(page.interactionRecords, page.rosterItems) { detectInteractions(page.rosterItems, page.interactionRecords) }
 
-    // Reference cards: the other active items each FDA label names (owner's name, mention).
-    var labelNotes by remember { mutableStateOf<List<Pair<String, LabelMention>>>(emptyList()) }
 
-    var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     val cacheVersion = rememberCacheVersion()
-    LaunchedEffect(reloadKey, cacheVersion) {
-        // The kept roster stays on screen while a fresher one loads.
-        isLoading = overview == null
-        error = null
-        try {
-            val loaded = SupplementsRepository(SupabaseClientProvider.client).loadOverview()
-            overview = loaded
-            // Evidence is enrichment: a failed lookup must not hide the roster.
-            outcomes = catching { EvidenceRepository(SupabaseClientProvider.client).outcomeTextBySupplement(loaded.active) }
-                .getOrDefault(emptyMap())
-            // Enrichment too: no registry or a failed lookup just hides the card.
-            catching {
-                val interactionRepo = InteractionRepository(SupabaseClientProvider.client)
-                interactionRecords = interactionRepo.loadRecords()
-                rosterItems = interactionRepo.rosterItems(loaded.active)
-            }.onFailure { interactionRecords = emptyList(); rosterItems = emptyList() }
-            labelNotes = catching {
-                val refs = RegimenReferenceRepository(SupabaseClientProvider.client).loadAll()
-                val active = loaded.active.associateBy { it.id }
-                refs.flatMap { ref ->
-                    val owner = active[ref.supplementId] ?: return@flatMap emptyList()
-                    val label = ref.label ?: return@flatMap emptyList()
-                    labelMentions(label.sections, loaded.active.filter { it.id != owner.id }.map { it.id to it.name })
-                        .map { owner.name to it }
-                }
-            }.getOrDefault(emptyList())
-            val expRepo = ExperimentsRepository(SupabaseClientProvider.client)
-            // Daily tests of a behaviour live on the Today page; supplements and fueling products here.
-            experiments = expRepo.loadExperiments().filter { it.protocol?.behaviour == null }
-            experimentResults = expRepo.loadResults()
-        } catch (e: Exception) {
-            error = e.message ?: "Unknown error"
-        }
-        isLoading = false
-    }
+    LaunchedEffect(reloadKey, cacheVersion) { page.load() }
 
     when {
-        isLoading -> SkeletonSections()
-        error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Bad)
+        page.isLoading -> SkeletonSections()
+        page.error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
+            Text("Failed to load: ${page.error}", style = FTType.BodySmall, color = FT.Bad)
         }
         else -> SupplementsContent(
-            overview = overview!!,
-            outcomes = outcomes,
+            overview = page.overview!!,
+            outcomes = page.outcomes,
             onAddClick = { showAddSheet = true },
             onOpenPantry = onOpenPantry,
             onSupplementClick = { editing = it },
             onExperiment = { experimenting = it },
-            experiments = experiments,
-            experimentResults = experimentResults,
+            experiments = page.experiments,
+            experimentResults = page.experimentResults,
             onDeleteExperiment = { e ->
                 scope.launch {
                     catching { ExperimentsRepository(SupabaseClientProvider.client).delete(e.id) }
                         .onSuccess { reloadKey++ }
-                        .onFailure { error = it.message ?: "Could not delete the experiment" }
+                        .onFailure { page.error = it.message ?: "Could not delete the experiment" }
                 }
             },
             detections = detections,
-            labelNotes = labelNotes,
+            labelNotes = page.labelNotes,
             onOpenReview = { reviewing = true },
         )
     }
@@ -165,8 +114,8 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     if (showAddSheet) {
         SupplementFormSheet(
             existing = null,
-            roster = rosterItems,
-            interactions = interactionRecords,
+            roster = page.rosterItems,
+            interactions = page.interactionRecords,
             onDismiss = { showAddSheet = false },
             onSaved = { showAddSheet = false; reloadKey++ },
         )
@@ -184,8 +133,8 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     editing?.let { row ->
         SupplementFormSheet(
             existing = row,
-            roster = rosterItems,
-            interactions = interactionRecords,
+            roster = page.rosterItems,
+            interactions = page.interactionRecords,
             onDismiss = { editing = null },
             onSaved = { editing = null; reloadKey++ },
         )

@@ -25,8 +25,6 @@ import androidx.compose.ui.unit.dp
 import com.bioscan.fieldterminal.data.ProtocolsRepository
 import com.bioscan.fieldterminal.data.SupabaseClientProvider
 import com.bioscan.fieldterminal.data.model.InterventionNameRow
-import com.bioscan.fieldterminal.data.model.ProtocolMemberRow
-import com.bioscan.fieldterminal.data.model.ProtocolRow
 import com.bioscan.fieldterminal.data.model.ProtocolTemplateRow
 import com.bioscan.fieldterminal.domain.ProtocolLifecycleState
 import com.bioscan.fieldterminal.domain.isValidProtocolTransition
@@ -54,32 +52,24 @@ fun ProtocolsSection() {
     val repo = remember { ProtocolsRepository(SupabaseClientProvider.client) }
     val scope = rememberCoroutineScope()
     var key by remember { mutableIntStateOf(0) }
-    var protocols by remember { mutableStateOf<List<ProtocolRow>>(emptyList()) }
-    var members by remember { mutableStateOf<List<ProtocolMemberRow>>(emptyList()) }
-    var interventions by remember { mutableStateOf<List<InterventionNameRow>>(emptyList()) }
-    var templates by remember { mutableStateOf<List<ProtocolTemplateRow>>(emptyList()) }
+    val page = remember { ProtocolsState() }
     var creating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(key) {
-        protocols = repo.loadProtocols()
-        members = repo.loadMembers()
-        interventions = repo.loadInterventionNames()
-        templates = repo.loadTemplates()
-    }
-    val names = interventions.associate { it.id to it.name }
+    LaunchedEffect(key) { page.load() }
+    val names = page.interventions.associate { it.id to it.name }
 
     FTCard(title = "PROTOCOLS", info = PROTOCOLS_INFO) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (protocols.isEmpty()) {
+            if (page.protocols.isEmpty()) {
                 Text("No protocols yet. Start from a template or from scratch, then add the interventions that belong to it.", style = FTType.BodySmall, color = FT.TextSecondary)
             }
-            protocols.forEach { p ->
+            page.protocols.forEach { p ->
                 val state = ProtocolLifecycleState.fromKey(p.lifecycleState)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(p.name, style = FTType.Label, color = FT.TextPrimary)
                     Text("aiming at ${p.objectiveOutcomeKey} · ${p.lifecycleState}", style = FTType.Caption, color = FT.TextMuted)
-                    members.filter { it.protocolId == p.id }.sortedBy { it.sequenceOrder }.forEach { m ->
+                    page.members.filter { it.protocolId == p.id }.sortedBy { it.sequenceOrder }.forEach { m ->
                         Text("${if (m.role == "primary") "●" else "○"} ${names[m.interventionId] ?: "an intervention"}", style = FTType.BodySmall, color = FT.TextSecondary)
                     }
                     if (state != null) {
@@ -99,7 +89,7 @@ fun ProtocolsSection() {
         }
     }
 
-    if (creating) ProtocolSheet(templates, interventions, onDismiss = { creating = false }, onCreated = { creating = false; key++ })
+    if (creating) ProtocolSheet(page.templates, page.interventions, onDismiss = { creating = false }, onCreated = { creating = false; key++ })
 }
 
 private val DIRECTIONS = listOf("Increase" to "increase", "Decrease" to "decrease", "Stabilise" to "stabilize")

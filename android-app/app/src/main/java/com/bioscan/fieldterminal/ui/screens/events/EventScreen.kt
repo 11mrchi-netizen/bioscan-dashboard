@@ -147,7 +147,7 @@ fun EventScreen(eventId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit
                     }
                 }
             }
-            actionError?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+            actionError?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
             // After the event: what of the fuel schedule was taken, any discomfort, how it felt, the weigh-ins (race fuel rework).
             if (!e.date.isAfter(LocalDate.now()) && e.status != EventStatus.CANCELLED && e.status != EventStatus.DNS) {
                 FTButton("FUEL DEBRIEF", emphasis = FTButtonEmphasis.Primary) { reviewing = true }

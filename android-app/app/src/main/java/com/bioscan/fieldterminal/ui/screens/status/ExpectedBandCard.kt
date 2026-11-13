@@ -34,6 +34,6 @@ private fun flagColor(p: ExpectedBandPayload, low: Boolean, value: Double): Colo
         "lower" -> !low
         else -> p.metric == "sleep_hours" && value !in SLEEP_HOURS_RANGE
     }
-    return if (unfavorable) FT.Warning else FT.TextPrimary
+    return if (unfavorable) FT.Warn else FT.TextPrimary
 }
 

@@ -8,7 +8,7 @@ import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
-// Phase G3: generalized from run-only (the old `runs` table, one RunRow per
+// Generalized from run-only (the old `runs` table, one RunRow per
 // row) to any exercise type (`exercise_sessions`). These functions only
 // ever cared about distance/duration, never "is this specifically a run" --
 // the endurance-vs-strength type filtering now happens once in

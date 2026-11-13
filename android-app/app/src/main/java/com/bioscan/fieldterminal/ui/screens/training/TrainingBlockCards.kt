@@ -83,7 +83,7 @@ internal fun CurrentBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
                     value = elapsedDays,
                     max = totalDays,
                     watchBelow = null,
-                    color = FT.Emerald,
+                    color = FT.Ok,
                 )
                 val weeksElapsed = (elapsedDays / 7).toInt() + 1
                 val totalWeeks = (totalDays / 7).toInt()
@@ -123,7 +123,7 @@ internal fun CurrentBlockCard(cycle: TrainingCycle?, currentValue: Double?, onEd
                     value = entry.weight,
                     max = 1.0,
                     watchBelow = null,
-                    color = if (entry.role == FocusRole.Primary) FT.Emerald else FT.Info,
+                    color = if (entry.role == FocusRole.Primary) FT.Ok else FT.Info,
                     height = 6.dp,
                     topPadding = 2.dp,
                 )

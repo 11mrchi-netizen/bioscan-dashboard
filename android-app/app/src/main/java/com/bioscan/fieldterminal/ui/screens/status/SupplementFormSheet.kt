@@ -75,7 +75,7 @@ fun SupplementFormSheet(
     existing: SupplementRow?,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
-    // Phase 6: the active roster and the interaction registry, to check this item against while it is edited.
+    // The active roster and the interaction registry, to check this item against while it is edited.
     roster: List<RosterItem> = emptyList(),
     interactions: List<InteractionRecord> = emptyList(),
 ) {
@@ -134,7 +134,7 @@ fun SupplementFormSheet(
             Text(
                 if (existing == null) "ADD TO YOUR REGIMEN" else "EDIT ${regimen.kind.label.uppercase()}",
                 style = sheetHeaderTitleStyle,
-                color = FT.Emerald,
+                color = FT.Ok,
             )
 
             Column { FormFieldLabel("NAME"); FieldTextField(name, { name = it }, "e.g. Vitamin D3 (NOW Foods)") }
@@ -165,7 +165,7 @@ fun SupplementFormSheet(
                 Text(
                     if (scanningBarcode) "SCANNING..." else "SCAN BARCODE TO IMPORT INGREDIENTS",
                     style = FTType.LabelCaps,
-                    color = if (scanningBarcode) FT.TextMuted else FT.Emerald,
+                    color = if (scanningBarcode) FT.TextMuted else FT.Ok,
                     modifier = Modifier.ftClickable(enabled = !scanningBarcode) {
                         scanningBarcode = true
                         scanError = null
@@ -218,7 +218,7 @@ fun SupplementFormSheet(
                     },
                 )
                 scanError?.let {
-                    Text(it, style = FTType.Caption, color = FT.Critical)
+                    Text(it, style = FTType.Caption, color = FT.Bad)
                 }
             }
 
@@ -235,7 +235,7 @@ fun SupplementFormSheet(
                             }
                             showEnrichConfirm = false
                             enrichPending = null
-                        }) { Text("REPLACE", style = FTType.LabelCaps, color = FT.Emerald) }
+                        }) { Text("REPLACE", style = FTType.LabelCaps, color = FT.Ok) }
                     },
                     dismissButton = {
                         TextButton(onClick = { showEnrichConfirm = false; enrichPending = null }) {
@@ -258,7 +258,7 @@ fun SupplementFormSheet(
             existing?.productId?.let { ProductVerifySection(it) }
 
             error?.let {
-                Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical)
+                Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad)
             }
 
             val (draft, missing) = regimen.draft(name)
@@ -333,7 +333,7 @@ fun SupplementFormSheet(
                 Text(
                     if (ending) "ENDING..." else "STOP TAKING IT",
                     style = FTType.BodySmall,
-                    color = FT.Critical,
+                    color = FT.Bad,
                     modifier = Modifier
                         .fillMaxWidth()
                         .ftClickable {
@@ -357,7 +357,7 @@ fun SupplementFormSheet(
                 Text(
                     if (ending) "RESTARTING..." else "START TAKING IT AGAIN",
                     style = FTType.LabelCaps,
-                    color = FT.Emerald,
+                    color = FT.Ok,
                     modifier = Modifier.fillMaxWidth().ftClickable {
                         if (!ending) {
                             ending = true
@@ -437,7 +437,7 @@ private fun IngredientsSection(ingredients: SnapshotStateList<EditableIngredient
         Text(
             "+ ADD INGREDIENT",
             style = FTType.MonoCaption,
-            color = FT.Emerald,
+            color = FT.Ok,
             modifier = Modifier.ftClickable { ingredients.add(EditableIngredient()) },
         )
     }
@@ -454,7 +454,7 @@ private fun IngredientEditor(ingredient: EditableIngredient, onRemove: () -> Uni
             Text(
                 "REMOVE",
                 style = FTType.MonoCaption,
-                color = FT.Critical,
+                color = FT.Bad,
                 modifier = Modifier
                     .padding(start = 10.dp)
                     .ftClickable(onClick = onRemove),

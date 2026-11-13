@@ -27,7 +27,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
 
-// Phase G3. Reads ExerciseSessionRecord, then every metric type Health
+// Reads ExerciseSessionRecord, then every metric type Health
 // Connect associates with a session by time-overlap rather than a foreign
 // key (Distance/ElevationGained/ActiveCalories/TotalCalories -- interval
 // records, summed; Power/Speed/HeartRate -- series records with samples,

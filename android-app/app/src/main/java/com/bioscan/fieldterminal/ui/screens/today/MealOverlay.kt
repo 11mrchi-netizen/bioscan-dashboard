@@ -75,7 +75,7 @@ fun MealOverlay(fuel: TodayFuel, kind: MealSlotKind, onClose: () -> Unit, onLogg
         Text(mealTargetLine(meal), style = FTType.RowTitle, color = FT.TextPrimary)
         Text(meal.reason, style = FTType.BodySmall, color = FT.TextSecondary)
         fuel.adherence[meal.kind.name]?.let { (g, a) ->
-            if (a != MealAdherence.NOT_LOGGED) Text("Logged ${g.roundToInt()} g carbs · ${a.label}", style = FTType.LabelCaps, color = FT.Emerald)
+            if (a != MealAdherence.NOT_LOGGED) Text("Logged ${g.roundToInt()} g carbs · ${a.label}", style = FTType.LabelCaps, color = FT.Ok)
         }
         // The glucose-spiking band of what was logged for this meal (FUEL › Nutrition has the detail).
         fuel.glycaemic[meal.kind.name]?.let { band ->
@@ -102,7 +102,7 @@ fun MealOverlay(fuel: TodayFuel, kind: MealSlotKind, onClose: () -> Unit, onLogg
                 FTButton(label = if (saving) "SAVING..." else "LOG THIS", emphasis = FTButtonEmphasis.Primary, enabled = !saving, modifier = Modifier.fillMaxWidth()) { log(choice.plate) }
             }
         }
-        error?.let { Text("Couldn't log: $it", style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text("Couldn't log: $it", style = FTType.BodySmall, color = FT.Bad) }
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             FTButton(label = "LOG SOMETHING ELSE", emphasis = FTButtonEmphasis.Secondary, enabled = !saving, modifier = Modifier.fillMaxWidth()) { onLogOther() }
             Text("Logged now, or at ${meal.time.format(HM)} if now is outside this meal's slot.", style = FTType.Caption, color = FT.TextMuted)

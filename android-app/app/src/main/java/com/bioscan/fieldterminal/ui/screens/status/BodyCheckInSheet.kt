@@ -262,7 +262,7 @@ fun BodyCheckInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     }
                     Label("NOTES (OPTIONAL)")
                     FieldTextField(notes, { notes = it }, "e.g. new tape, late night before", singleLine = false)
-                    error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+                    error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         FTButton("BACK", modifier = Modifier.weight(1f)) { back() }
                         FTButton(
@@ -326,7 +326,7 @@ private fun MeasureStep(
     } else {
         FieldTextField(text, { text = it }, "${unit.uppercase()} (${"%.0f".format(slot.site.range.start)}–${"%.0f".format(slot.site.range.endInclusive)})", keyboardType = KeyboardType.Decimal)
         if (text.isNotBlank() && parsed == null) {
-            Text("Outside ${"%.0f".format(slot.site.range.start)}–${"%.0f".format(slot.site.range.endInclusive)} $unit for this site: check the reading.", style = FTType.Caption, color = FT.Warning)
+            Text("Outside ${"%.0f".format(slot.site.range.start)}–${"%.0f".format(slot.site.range.endInclusive)} $unit for this site: check the reading.", style = FTType.Caption, color = FT.Warn)
         }
         FTButton("ENTER READING", enabled = parsed != null, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) { parsed?.let(onReading) }
     }

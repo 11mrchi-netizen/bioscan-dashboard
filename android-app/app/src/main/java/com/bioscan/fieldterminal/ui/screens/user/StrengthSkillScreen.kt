@@ -195,7 +195,7 @@ private fun PrCard(series: List<LiftSeries>, from: LocalDate) {
                     Text("${"%.1f".format(pr.e1rmKg)} kg", style = FTType.Telemetry, color = FT.TextPrimary)
                     Text(
                         "  " + (pr.previousKg?.let { "%+.1f".format(pr.e1rmKg - it) } ?: "first"),
-                        style = FTType.MonoCaption, color = if (pr.previousKg != null) FT.Emerald else FT.TextMuted,
+                        style = FTType.MonoCaption, color = if (pr.previousKg != null) FT.Ok else FT.TextMuted,
                     )
                 }
             }

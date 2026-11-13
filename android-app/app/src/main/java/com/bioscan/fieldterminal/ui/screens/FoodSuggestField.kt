@@ -84,7 +84,7 @@ fun FoodSuggestField(
         }
         when {
             searching -> Text("Searching...", style = FTType.Caption, color = FT.TextMuted)
-            failed -> Text("Couldn't search right now -- try again in a moment.", style = FTType.Caption, color = FT.Warning)
+            failed -> Text("Couldn't search right now -- try again in a moment.", style = FTType.Caption, color = FT.Warn)
             typed && query.trim().length >= 2 && suggestions.isEmpty() -> Text("No foods found.", style = FTType.Caption, color = FT.TextMuted)
         }
         if (suggestions.isNotEmpty()) {
@@ -100,7 +100,7 @@ fun FoodSuggestField(
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                     ) {
                         Text(s.name, style = FTType.BodySmall, color = FT.TextPrimary)
-                        Text(suggestionDetail(s), style = FTType.Caption, color = if (s.remembered) FT.Emerald else FT.TextMuted)
+                        Text(suggestionDetail(s), style = FTType.Caption, color = if (s.remembered) FT.Ok else FT.TextMuted)
                     }
                 }
             }

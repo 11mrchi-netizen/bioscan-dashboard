@@ -195,7 +195,7 @@ fun InterventionEventsSection() {
                     }
                 }
             }
-            error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FTButton(label = "NEW") { creating = true }
                 FTButton(label = "NEW OUTCOME") { creatingTracked = true }

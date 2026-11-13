@@ -152,7 +152,7 @@ private fun ProfileCard(scope: CoroutineScope) {
             Text(
                 "Enter the date as YYYY-MM-DD (e.g. 1990-05-14) and height in cm (100–230).",
                 style = FTType.Caption,
-                color = FT.Critical,
+                color = FT.Bad,
             )
         }
         profileSavedAt?.let {

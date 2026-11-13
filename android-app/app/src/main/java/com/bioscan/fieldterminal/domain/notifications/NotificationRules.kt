@@ -127,7 +127,7 @@ fun supplementsDueForBucket(
 // True when the check-in still has something to ask. Mirrors the web cron's
 // "skip if today's row is already filled" test: morning asks about morning
 // wood, evening about arousal.
-// Analysis Layer 3 / R2. The wellbeing check-in asks for energy, mood, stress and soreness; any score already logged today
+// The wellbeing check-in asks for energy, mood, stress and soreness; any score already logged today
 // means the person has done their check-in, so it is skipped (same "skip if logged" rule as the other kinds).
 fun wellbeingCheckinNeeded(energy: Int?, mood: Int?, stress: Int?, soreness: Int?): Boolean =
     listOf(energy, mood, stress, soreness).all { it == null }

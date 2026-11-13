@@ -370,7 +370,7 @@ private fun DemandRangeChart(days: List<DayHydration>) {
                 val cx = i * slot + slot / 2f
                 drawRect(NutrientColor.Water.copy(alpha = 0.22f), Offset(cx - w / 2f, y(d.demandHighMl)), Size(w, y(d.demandLowMl) - y(d.demandHighMl)))
                 d.intakeMl?.let { ml ->
-                    val color = when (d.status) { HydrationStatus.Within -> FT.Emerald; else -> FT.Warning }
+                    val color = when (d.status) { HydrationStatus.Within -> FT.Ok; else -> FT.Warn }
                     drawCircle(color, 3.5.dp.toPx(), Offset(cx, y(ml)))
                 }
                 if (d.workoutMinutes > 0) drawCircle(FT.TextMuted, 1.5.dp.toPx(), Offset(cx, size.height - 2.dp.toPx()))

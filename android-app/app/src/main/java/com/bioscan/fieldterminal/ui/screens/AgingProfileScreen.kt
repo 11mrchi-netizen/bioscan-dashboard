@@ -76,7 +76,7 @@ fun AgingProfileScreen(onBack: () -> Unit) {
         when {
             current == null && guard.error != null -> LoadErrorCard(guard)
             current == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FT.Emerald)
+                CircularProgressIndicator(color = FT.Ok)
             }
             current.chronologicalAgeYears == null -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
                 FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile & goals to see your Aging Profile.")
@@ -136,7 +136,7 @@ private fun BioAgeHeroCell(result: BiologicalAgeResult, help: String, modifier: 
                 Text(
                     "%+.1f yrs vs. real age".format(it),
                     style = FTType.Label,
-                    color = if (it <= 0) FT.Emerald else FT.Warning,
+                    color = if (it <= 0) FT.Ok else FT.Warn,
                 )
             }
         } else {
@@ -182,7 +182,7 @@ private fun HistoryCard(overview: AgingProfileOverview) {
                 points = available.map { it.observedAt to it.biologicalAge!! },
                 refLow = null,
                 refHigh = null,
-                dotColor = { FT.Emerald },
+                dotColor = { FT.Ok },
             )
         }
         overview.phenoAgeHistory.filter { !it.isAvailable }.forEach { incomplete ->
@@ -216,7 +216,7 @@ private fun ResultLine(result: BiologicalAgeResult, help: String) {
                 Text(
                     "%+.1f yr vs. chronological".format(result.ageAcceleration),
                     style = FTType.MonoCaption,
-                    color = if (result.ageAcceleration!! < 0) FT.Emerald else FT.Warning,
+                    color = if (result.ageAcceleration!! < 0) FT.Ok else FT.Warn,
                 )
             } else {
                 Text(

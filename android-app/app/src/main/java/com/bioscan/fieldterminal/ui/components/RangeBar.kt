@@ -24,7 +24,7 @@ fun RangeBar(
     showThumb: Boolean = true,
 ) {
     val fraction = (value / max).coerceIn(0.0, 1.0).toFloat()
-    val fillColor = if (watchBelow != null && value < watchBelow) FT.Critical else color
+    val fillColor = if (watchBelow != null && value < watchBelow) FT.Bad else color
     FTBar(
         fraction = fraction,
         color = fillColor,

@@ -129,7 +129,7 @@ fun EveningCheckInSheet(date: LocalDate, onDismiss: () -> Unit, onSaved: (Evenin
             BowelMovements(date)
 
             LoadErrorCard(guard)
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FTButton(
                     label = "NOTHING ELSE",
@@ -226,5 +226,5 @@ private fun BowelMovements(date: LocalDate) {
     } else {
         Text("Missed one? Add it in + LOG with its time.", style = FTType.Caption, color = FT.TextMuted)
     }
-    error?.let { Text("Couldn't log: $it", style = FTType.Caption, color = FT.Critical) }
+    error?.let { Text("Couldn't log: $it", style = FTType.Caption, color = FT.Bad) }
 }

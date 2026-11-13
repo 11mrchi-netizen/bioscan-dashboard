@@ -61,7 +61,7 @@ private fun TrainingOverviewLoaded(content: @Composable (TrainingOverview) -> Un
     when {
         isLoading -> SkeletonSections()
         error != null || o == null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: ${error ?: "no data"}", style = FTType.BodySmall, color = FT.Critical)
+            Text("Failed to load: ${error ?: "no data"}", style = FTType.BodySmall, color = FT.Bad)
         }
         else -> content(o)
     }

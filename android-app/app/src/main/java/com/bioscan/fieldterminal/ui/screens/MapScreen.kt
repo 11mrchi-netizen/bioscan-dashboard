@@ -98,7 +98,7 @@ import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 private val sheetHeaderTitleStyle = FTType.SectionTitle
 private val sheetActionLabelStyle = FTType.LabelCaps
 
-// Phase M1/M2 (Map tab rework, see ROADMAP.md). Replaces Step 14's single
+// Replaces Step 14's single
 // "next training session" view with a real multi-pin map of every calendar
 // event in the next 24h -- events with a real address are geocoded (see
 // data/GeocodingRepository.kt); events with none, or whose address fails to
@@ -202,7 +202,7 @@ fun MapScreen(focusEventId: String? = null) {
                     }
                 }
                 is MapState.Error -> Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
-                    Text(s.message, style = FTType.Body, color = FT.Critical)
+                    Text(s.message, style = FTType.Body, color = FT.Bad)
                 }
                 is MapState.Ready -> MapReadyContent(s, focusEventId)
             }
@@ -506,7 +506,7 @@ private fun PinDetailSheet(
                                 Text(
                                     "CONFIDENCE: ${tier.uppercase()}$staleSuffix",
                                     style = FTType.MonoCaption,
-                                    color = if (plannedPreview.isStale) FT.Warning else FT.TextSecondary,
+                                    color = if (plannedPreview.isStale) FT.Warn else FT.TextSecondary,
                                 )
                             }
                         }
@@ -542,7 +542,7 @@ private fun PinDetailSheet(
     }
 }
 
-// Phase M2. NoMatch shows a search field over the 168-row `people` table
+// NoMatch shows a search field over the 168-row `people` table
 // plus a create-new action -- per the user's own choice, not create-only,
 // since a typo or nickname in the calendar title shouldn't force a
 // duplicate partner record. Deliberately no "change match" action once
@@ -644,7 +644,7 @@ private fun PartnerSection(event: MapEvent) {
     }
 }
 
-// Phase M3. Minimal by the user's own choice -- date (from the event) +
+// Minimal by the user's own choice -- date (from the event) +
 // optional type/notes, same 3 real fields the Log tab's own EncounterForm
 // collects (see AddEntrySheet.kt), just with person_id and the real
 // calendar title threaded through too. The encounters table's richer unused
@@ -664,7 +664,7 @@ private fun EncounterLogRow(event: MapEvent, personId: Long) {
         Text(
             "Encounter logged.",
             style = FTType.RowTitle,
-            color = FT.Emerald,
+            color = FT.Ok,
         )
         return
     }
@@ -720,7 +720,7 @@ private fun WeatherRow(state: WeatherUiState, onClick: () -> Unit) {
                 Text("%.0f°".format(state.weather.temperatureC), style = sheetActionLabelStyle, color = FT.TextPrimary)
             }
             WeatherUiState.Loading -> Text("···", style = sheetActionLabelStyle, color = FT.TextSecondary)
-            is WeatherUiState.Failed -> FTIcon(FTIcons.Warning, "Weather unavailable", tint = FT.Critical, size = FTIconSize.Inline)
+            is WeatherUiState.Failed -> FTIcon(FTIcons.Warning, "Weather unavailable", tint = FT.Bad, size = FTIconSize.Inline)
             WeatherUiState.Idle -> Text("VIEW", style = sheetActionLabelStyle, color = FT.DomainMap)
         }
     }

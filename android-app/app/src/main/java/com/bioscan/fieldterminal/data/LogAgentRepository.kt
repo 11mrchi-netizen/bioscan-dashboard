@@ -15,7 +15,7 @@ import kotlinx.serialization.Serializable
 import java.time.OffsetDateTime
 import kotlin.math.roundToInt
 
-// Analysis Layer 3 / R2. Client for the `log-agent` Edge Function (propose-only: it never writes a health row) and the commit
+// Client for the `log-agent` Edge Function (propose-only: it never writes a health row) and the commit
 // dispatch that writes a CONFIRMED proposal through the same repositories the forms use. Food is not committed here: a meal
 // proposal hands its text to the existing food form, which owns resolution and review.
 

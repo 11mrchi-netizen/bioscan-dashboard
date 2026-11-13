@@ -155,7 +155,7 @@ fun ExperimentSheet(
             Text(BLINDING_HELP, style = FTType.Caption, color = FT.TextMuted)
 
             problems.forEach { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
-            error?.takeIf { preview.isNotEmpty() }?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.takeIf { preview.isNotEmpty() }?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
 
             FTButton(label = if (saving) "REGISTERING..." else "REGISTER AND DRAW THE ORDER", enabled = problems.isEmpty() && !saving && !loading, emphasis = FTButtonEmphasis.Primary) {
                 saving = true

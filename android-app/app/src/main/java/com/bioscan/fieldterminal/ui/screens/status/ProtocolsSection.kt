@@ -94,7 +94,7 @@ fun ProtocolsSection() {
                     }
                 }
             }
-            error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
             FTButton(label = "NEW PROTOCOL") { creating = true }
         }
     }
@@ -150,7 +150,7 @@ private fun ProtocolSheet(templates: List<ProtocolTemplateRow>, interventions: L
                 val on = iv.id in chosen
                 FTButton(label = (if (on) "✓ " else "") + iv.name.uppercase(), modifier = Modifier.fillMaxWidth()) { if (on) chosen.remove(iv.id) else chosen.add(iv.id) }
             }
-            error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
             FTButton(label = if (saving) "SAVING..." else "SAVE PROTOCOL", enabled = name.trim().length >= 2 && objective != null && !saving, emphasis = FTButtonEmphasis.Primary) {
                 saving = true
                 scope.launch {

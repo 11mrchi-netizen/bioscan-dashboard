@@ -31,7 +31,7 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import kotlin.math.abs
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Phase G5. This app's first general-purpose line/area chart primitive --
+// This app's first general-purpose line/area chart primitive --
 // generalizes the old Step-14 RouteCanvas's bounding-box -> single-scale ->
 // local xFor/yFor-closure pattern (previously specific to lat/lon) to a
 // plain (offsetSeconds, value) domain, so any Health Connect time series can

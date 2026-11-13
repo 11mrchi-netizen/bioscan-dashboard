@@ -159,7 +159,7 @@ fun TrialSheet(concernId: String, concernTitle: String, onDismiss: () -> Unit, o
                     body = "Compared with the same number of weeks before it starts (at least four). Check in on good days too, or the read will say there is not enough to compare.")
             }
             TextChipRow(listOf("4 WEEKS", "6 WEEKS", "8 WEEKS"), "$weeks WEEKS", perRow = 3) { picked -> picked?.let { weeks = it.substringBefore(' ').toInt() } }
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FTButton(label = "CANCEL", modifier = Modifier.weight(1f)) { onDismiss() }
                 FTButton(label = if (saving) "SAVING..." else "START TODAY", emphasis = FTButtonEmphasis.Primary, enabled = !saving && name.isNotBlank() && hypothesis.length >= 3, modifier = Modifier.weight(1f)) {

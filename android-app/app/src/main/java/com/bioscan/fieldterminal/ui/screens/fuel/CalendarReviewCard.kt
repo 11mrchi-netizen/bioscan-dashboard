@@ -103,6 +103,6 @@ private fun ReviewRow(r: CalendarReview, onMakeEvent: () -> Unit, onAnswered: ()
                 FTButton("BACK", emphasis = FTButtonEmphasis.Tertiary, modifier = Modifier.weight(1f)) { counting = false }
             }
         }
-        error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
     }
 }

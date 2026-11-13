@@ -5,7 +5,7 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.pow
 
-// Phase A2 (Analysis Layer). Evaluation Method Spec, Category 5 (Body
+// Evaluation Method Spec, Category 5 (Body
 // composition): two different treatments for two different noise profiles.
 // Weight -- signal is real, noise is water -- gets a time-aware EMA so a
 // skipped day doesn't distort the trend. Body fat % (BIA) -- noise can

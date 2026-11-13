@@ -115,7 +115,7 @@ fun LoadScreen(onBack: () -> Unit, onOpenSessions: () -> Unit) {
             val weeks = remember(loads, days) { weeklyRestCadenceHistory(loads, weeks = (days / 7).coerceIn(8, 52)) }
             StackedBars(
                 weeks.sortedByDescending { it.weekIndex }.map { wk -> shortDate(wk.weekEndDate.minusDays(6)) to if (wk.isDeload) listOf(0.0, wk.load) else listOf(wk.load, 0.0) },
-                listOf(FT.Category.Activity.c500, FT.Emerald), listOf("Training", "Deload"), Fmt.int, "AU",
+                listOf(FT.Category.Activity.c500, FT.Ok), listOf("Training", "Deload"), Fmt.int, "AU",
             )
         }
 
@@ -190,7 +190,7 @@ fun InjuryScreen(onBack: () -> Unit, onOpenConcern: (String) -> Unit) {
         for ((area, entries) in byArea) {
             val latest = entries.maxBy { it.first }
             Section("OSTRC · ${area.uppercase()}", info = OSTRC_INFO, trailing = shortDate(latest.first)) {
-                Text("${latest.second.toInt()} / 100", style = FTType.MetricMedium, color = if (latest.second >= 25) FT.Warning else FT.TextPrimary)
+                Text("${latest.second.toInt()} / 100", style = FTType.MetricMedium, color = if (latest.second >= 25) FT.Warn else FT.TextPrimary)
                 TrendChart(entries.toMap(), today, LocalRangeDays.current, null, Fmt.int, FT.Metric.Soreness)
             }
         }
@@ -206,7 +206,7 @@ fun InjuryScreen(onBack: () -> Unit, onOpenConcern: (String) -> Unit) {
             val weeks = remember(loads) { weeklyRestCadenceHistory(loads, weeks = 8) }
             StackedBars(
                 weeks.sortedByDescending { it.weekIndex }.map { wk -> shortDate(wk.weekEndDate.minusDays(6)) to if (wk.isDeload) listOf(0.0, wk.load) else listOf(wk.load, 0.0) },
-                listOf(FT.Category.Activity.c500, FT.Emerald), listOf("Training", "Deload"), Fmt.int, "AU", height = 70,
+                listOf(FT.Category.Activity.c500, FT.Ok), listOf("Training", "Deload"), Fmt.int, "AU", height = 70,
             )
         }
     }

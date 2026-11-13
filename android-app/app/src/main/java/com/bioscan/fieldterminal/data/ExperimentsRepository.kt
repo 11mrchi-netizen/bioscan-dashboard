@@ -15,7 +15,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import java.time.Instant
 
-// Analysis Layer 3 / Phase 5. Registers supplement N-of-1 experiments and reads their published results.
+// Registers supplement N-of-1 experiments and reads their published results.
 
 class ExperimentException(message: String) : Exception(message)
 

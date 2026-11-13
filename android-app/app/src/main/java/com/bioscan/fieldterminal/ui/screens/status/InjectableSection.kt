@@ -65,7 +65,7 @@ fun InjectableSection(supplementId: Long, spec: RegimenSpec, prescribedUnits: Do
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("INJECTION SITES", style = FTType.LabelCaps, color = FT.TextSecondary)
         val next = nextSite(sitesFor(spec), history)
-        Text("Next: ${next?.label ?: "—"} (rested longest)", style = FTType.BodySmall, color = FT.Emerald)
+        Text("Next: ${next?.label ?: "—"} (rested longest)", style = FTType.BodySmall, color = FT.Ok)
         if (history.isEmpty()) Text("No sites logged yet: the logging sheet asks for one with each dose.", style = FTType.Caption, color = FT.TextMuted)
         history.take(5).forEach { (site, at) ->
             val d = at.atZone(ZoneId.systemDefault()).toLocalDate()
@@ -86,7 +86,7 @@ fun InjectableSection(supplementId: Long, spec: RegimenSpec, prescribedUnits: Do
                 (st.dosesLeft?.let { " · $it of your doses" } ?: ""), style = FTType.Caption, color = FT.TextSecondary)
             daysToDiscard(st, LocalDate.now())?.let { d ->
                 Text(if (d < 0) "Past its discard date (${st.discardOn})" else "Discard by ${st.discardOn} ($d days)",
-                    style = FTType.Caption, color = if (d <= 3) FT.Warning else FT.TextSecondary)
+                    style = FTType.Caption, color = if (d <= 3) FT.Warn else FT.TextSecondary)
             }
             if (v.spares > 0) Text("${v.spares} unopened spare${if (v.spares == 1) "" else "s"}", style = FTType.Caption, color = FT.TextSecondary)
             st.doseUnits?.let { units ->
@@ -95,16 +95,16 @@ fun InjectableSection(supplementId: Long, spec: RegimenSpec, prescribedUnits: Do
                         "Check it against your prescriber's instructions.", style = FTType.Caption, color = FT.TextMuted)
                     st.unitsMismatch -> Text("Check before the next dose: your prescribed ${formatAmount(prescribedUnits)} units and this mix give " +
                         "${formatAmount(round1(units))} units for your ${formatAmount(spec.amount ?: 0.0)} ${spec.unit} dose. Ask your prescriber or pharmacist.",
-                        style = FTType.BodySmall, color = FT.Critical)
+                        style = FTType.BodySmall, color = FT.Bad)
                     else -> Text("Your prescribed ${formatAmount(prescribedUnits)} units match this mix.", style = FTType.Caption, color = FT.TextMuted)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Text("START THE NEXT VIAL", style = FTType.LabelCaps, color = FT.Emerald, modifier = Modifier.ftClickable { act { repo.startNextVial(v) } })
+                Text("START THE NEXT VIAL", style = FTType.LabelCaps, color = FT.Ok, modifier = Modifier.ftClickable { act { repo.startNextVial(v) } })
                 Text("EDIT", style = FTType.LabelCaps, color = FT.TextSecondary, modifier = Modifier.ftClickable { editing = true })
             }
         }
-        error?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
     }
 }
 
@@ -137,7 +137,7 @@ private fun VialForm(existing: VialRow?, spec: RegimenSpec, onSave: (Vial) -> Un
     val day = runCatching { LocalDate.parse(opened.trim()) }.getOrNull()
     val ok = a != null && (w != null || vol != null) && day != null
     Text(if (ok) "SAVE THE VIAL" else "Needs what it holds, the water added (or its volume) and the day it was opened",
-        style = if (ok) FTType.LabelCaps else FTType.Caption, color = if (ok) FT.Emerald else FT.TextMuted,
+        style = if (ok) FTType.LabelCaps else FTType.Caption, color = if (ok) FT.Ok else FT.TextMuted,
         modifier = Modifier.ftClickable(enabled = ok) {
             onSave(Vial(a!!, unit, w, if (w == null) vol else null, day!!, keep.toIntOrNull()?.takeIf { it in 1..365 }, spares.toIntOrNull()?.coerceIn(0, 999) ?: 0))
         })

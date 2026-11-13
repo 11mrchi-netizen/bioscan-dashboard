@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 import java.io.IOException
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Performance pass, Stage 1 (error recovery). An exception that escapes a LaunchedEffect takes the whole app down, so an
+// An exception that escapes a LaunchedEffect takes the whole app down, so an
 // offline phone or a timed-out request used to crash the app or leave a spinner forever. Every screen load goes through
 // a LoadGuard instead:
 //
@@ -138,7 +138,7 @@ fun describeLoadFailure(e: Throwable): String {
 fun LoadErrorCard(guard: LoadGuard, modifier: Modifier = Modifier, onRetry: () -> Unit = { guard.retry() }) {
     val message = guard.error ?: return
     Column(modifier = modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("COULDN'T LOAD", style = FTType.LabelCaps, color = FT.Critical)
+        Text("COULDN'T LOAD", style = FTType.LabelCaps, color = FT.Bad)
         Text(message, style = FTType.BodySmall, color = FT.TextSecondary)
         FTButton(label = "RETRY", onClick = onRetry)
     }

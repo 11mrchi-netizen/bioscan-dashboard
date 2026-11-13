@@ -10,7 +10,7 @@ import com.bioscan.fieldterminal.data.model.NotificationKind
 import com.bioscan.fieldterminal.data.routine.RoutineTimerStore
 import com.bioscan.fieldterminal.util.Perf
 
-// Performance pass, Stage 3. Everything that used to run on the main thread before the first frame (building the Supabase
+// Everything that used to run on the main thread before the first frame (building the Supabase
 // client, five notification-channel IPC calls, parsing the 37 kB metric registry on the first help button) now starts here,
 // on one background thread, while the Activity is being created. All of it is idempotent and lazy-safe: if a screen asks for
 // the client or the registry first, it simply takes the same lock and gets the same instance.

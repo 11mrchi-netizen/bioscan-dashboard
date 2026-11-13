@@ -158,7 +158,7 @@ fun RunDynamicsCard(
     FTCard(title = "RUN DYNAMICS") {
         when {
             !hasTimeSeries && d == null -> Text("No time series for this session (logged before Health Connect and without a Zepp workout).", style = FTType.BodySmall, color = FT.TextSecondary)
-            loading -> Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.Emerald) }
+            loading -> Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.Ok) }
             error != null -> Text("Couldn't load the time series ($error).", style = FTType.BodySmall, color = FT.TextSecondary)
         }
 
@@ -283,8 +283,8 @@ fun RunDynamicsCard(
 private fun tileMark(mark: RunMark?, kind: String? = null, format: (Double) -> String): TileMark? {
     mark ?: return null
     val color = when (mark.tone) {
-        MarkTone.IMPROVED -> FT.Emerald
-        MarkTone.REGRESSED, MarkTone.CAUTION -> FT.Warning
+        MarkTone.IMPROVED -> FT.Ok
+        MarkTone.REGRESSED, MarkTone.CAUTION -> FT.Warn
         MarkTone.NEUTRAL -> FT.TextSecondary
         MarkTone.BUILDING -> FT.TextMuted
     }
@@ -435,7 +435,7 @@ fun RunSplitsCard(splits: List<SessionSplit>) {
                 Text(
                     formatSplitPace(s.durationSec) + (s.avgHr?.let { "  ·  %.0f bpm".format(it) } ?: "") + (if (isFastest) "  ★" else ""),
                     style = if (isFastest) FTType.Telemetry else FTType.Value,
-                    color = if (isFastest) FT.Emerald else FT.TextPrimary,
+                    color = if (isFastest) FT.Ok else FT.TextPrimary,
                 )
             }
         }

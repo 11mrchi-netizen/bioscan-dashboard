@@ -43,10 +43,10 @@ val ModeColors: Map<ModeGroup, Color> = mapOf(
 // A place's colour by category. Unlabelled places use the warning amber: they need a name, and always carry the text
 // "Unlabelled" beside the colour.
 fun placeColor(category: PlaceCategory?, labelled: Boolean): Color = when {
-    category == PlaceCategory.HOME -> FT.Emerald
+    category == PlaceCategory.HOME -> FT.Ok
     category == PlaceCategory.WORK -> FT.DomainMap
     category != null || labelled -> FT.DomainLabs
-    else -> FT.Warning
+    else -> FT.Warn
 }
 
 private val clockFmt = DateTimeFormatter.ofPattern("HH:mm")

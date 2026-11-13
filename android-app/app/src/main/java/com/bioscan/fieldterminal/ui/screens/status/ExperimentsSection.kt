@@ -28,7 +28,7 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Analysis Layer 3 / Phase 5, randomised in analysis review phase F. The person's registered experiments, what today asks
+// The person's registered experiments, what today asks
 // for, and the latest published result of each. While an experiment runs the numbers are interim and carry no verdict; when
 // the last period or day ends, a randomised design answers in four words against the zone set at registration (CLEAR
 // BENEFIT, CLEAR HARM, NO MEANINGFUL EFFECT, UNCLEAR) -- the TESTED rung of the evidence ladder. Deleting is soft.

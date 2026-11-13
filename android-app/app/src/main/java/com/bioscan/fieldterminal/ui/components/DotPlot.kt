@@ -20,12 +20,12 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Phase A5, Part 1 (Category 9). Isolated real draws plotted against a
+// Isolated real draws plotted against a
 // reference band -- deliberately NOT a line chart. The spec is explicit
 // that ~1 draw/year doesn't support the continuity a connecting line would
 // imply, so points never connect here, however many real draws exist.
 // Shares LineChart.kt's own Canvas + bounding-box + local xFor/yFor-closure
-// technique (Phase G5), adapted to a calendar-date x-axis instead of
+// technique, adapted to a calendar-date x-axis instead of
 // elapsed-session-seconds -- a genuinely different domain, not a
 // generalization of that file.
 private val DOT_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM")

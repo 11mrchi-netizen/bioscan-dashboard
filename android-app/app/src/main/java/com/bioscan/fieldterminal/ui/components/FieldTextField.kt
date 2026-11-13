@@ -39,7 +39,7 @@ fun FieldTextField(
         textStyle = textStyle,
         singleLine = singleLine,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        cursorBrush = SolidColor(FT.Emerald),
+        cursorBrush = SolidColor(FT.Ok),
         modifier = modifier
             .fillMaxWidth()
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))

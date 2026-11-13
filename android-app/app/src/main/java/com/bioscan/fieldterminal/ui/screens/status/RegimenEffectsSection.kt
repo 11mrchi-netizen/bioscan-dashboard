@@ -72,12 +72,12 @@ fun RegimenEffectsSection(itemId: Long) {
         } else {
             v.readings.forEach { r ->
                 Text(changeReadingWords(r), style = FTType.BodySmall,
-                    color = when (r.better) { true -> FT.Emerald; false -> FT.Warning; null -> FT.TextPrimary })
+                    color = when (r.better) { true -> FT.Ok; false -> FT.Warn; null -> FT.TextPrimary })
             }
         }
         if (v.nearby.isNotEmpty()) {
             Text("Also changed within two weeks: " + v.nearby.map { shortItemName(it.itemName) }.distinct().joinToString(", ") + ".",
-                style = FTType.Caption, color = FT.Warning)
+                style = FTType.Caption, color = FT.Warn)
         }
     }
 }

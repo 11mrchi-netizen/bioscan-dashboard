@@ -87,9 +87,9 @@ fun PlacesCard(showDay: Boolean = true) {
             "around the place (a point rounded to about 100 m). ADD PLACE names a place from its coordinates: it takes over " +
             "the visits already recorded inside its circle.",
     ) {
-        error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
         homeWorkProblem(places.map { it.toPlace() }, places.firstOrNull { it.source == "home_setting" }?.id)
-            ?.let { Text("$it Tap a place below to label it, or use Lab › ROUTINE › OPEN DAY MAP to see where each one is.", style = FTType.BodySmall, color = FT.Warning) }
+            ?.let { Text("$it Tap a place below to label it, or use Lab › ROUTINE › OPEN DAY MAP to see where each one is.", style = FTType.BodySmall, color = FT.Warn) }
 
         if (showDay) {
             mobility?.let { m -> MobilitySummary(m) }
@@ -152,7 +152,7 @@ fun PlacesCard(showDay: Boolean = true) {
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(p.label ?: "Unlabelled place", style = FTType.Body, color = if (p.label == null) FT.Warning else FT.TextPrimary)
+                        Text(p.label ?: "Unlabelled place", style = FTType.Body, color = if (p.label == null) FT.Warn else FT.TextPrimary)
                         Text("%.1f h · %d×".format(hours, visits), style = FTType.Telemetry, color = FT.TextSecondary)
                     }
                     val line = listOfNotNull(
@@ -195,7 +195,7 @@ private fun CommuteRow(label: String, trips: List<TripRow>) {
 private fun StatusLine(label: String, value: String, ok: Boolean? = null) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = FTType.Body, color = FT.TextPrimary)
-        Text(value, style = FTType.Telemetry, color = when (ok) { true -> FT.Emerald; false -> FT.Warning; null -> FT.TextSecondary })
+        Text(value, style = FTType.Telemetry, color = when (ok) { true -> FT.Ok; false -> FT.Warn; null -> FT.TextSecondary })
     }
 }
 
@@ -285,7 +285,7 @@ private fun AddPlaceEditor(
                 else -> "No coordinates found in that text."
             },
             style = FTType.BodySmall,
-            color = if (coords.isNotBlank() && point == null && note == null) FT.Warning else FT.TextSecondary,
+            color = if (coords.isNotBlank() && point == null && note == null) FT.Warn else FT.TextSecondary,
         )
         FTButton(if (locating) "LOCATING…" else "USE CURRENT LOCATION", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Tertiary) {
             if (locating) return@FTButton

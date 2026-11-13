@@ -235,14 +235,14 @@ private fun ScaleTiles(lastPerDay: Map<LocalDate, ScaleCompositionPoint>, athlet
         fun series(pick: (ScaleCompositionPoint, BodyComposition) -> Double?): Series =
             lastPerDay.mapNotNull { (d, p) -> p.composition?.let { pick(p, it) }?.let { d to it } }.toMap()
         val tiles = listOf(
-            TileSpec("Fat-free mass", series { _, c -> c.split?.fatFreeKg }, "kg", Fmt.one, "Everything that is not fat: muscle, water, organs and bone (Sun 2003).", 0.3, FT.Emerald, betterHigher = true),
+            TileSpec("Fat-free mass", series { _, c -> c.split?.fatFreeKg }, "kg", Fmt.one, "Everything that is not fat: muscle, water, organs and bone (Sun 2003).", 0.3, FT.Ok, betterHigher = true),
             TileSpec("Fat mass", series { _, c -> c.split?.fatKg }, "kg", Fmt.one, "Weight minus fat-free mass.", 0.3, FT.DomainFuel, betterHigher = false),
-            TileSpec("Skeletal muscle", series { _, c -> c.skeletalMuscleKg }, "kg", Fmt.one, "Muscle attached to the skeleton (Janssen 2000), a part of fat-free mass.", 0.3, FT.Emerald, betterHigher = true),
+            TileSpec("Skeletal muscle", series { _, c -> c.skeletalMuscleKg }, "kg", Fmt.one, "Muscle attached to the skeleton (Janssen 2000), a part of fat-free mass.", 0.3, FT.Ok, betterHigher = true),
             TileSpec("Body water", series { p, c -> c.totalBodyWaterL?.let { it / p.weightKg * 100 } }, "%", Fmt.one, "Total body water as a share of weight (Sun 2003). Mostly hydration and leanness; a day-to-day swing is hydration, not tissue.", 0.5, FT.DomainFuel),
             TileSpec("Resting energy", series { _, c -> c.bmrKcal }, "kcal", Fmt.int, "Energy burned at complete rest from fat-free mass (Katch-McArdle).", 15.0, FT.DomainFuel),
             TileSpec("Impedance index", series { _, c -> c.impedanceIndex }, "cm²/Ω", Fmt.one, "Height² ÷ impedance. No population equation involved, so it is the cleanest trend: it rises with more water-rich, lean tissue and falls when you are dehydrated. Compare like with like (same time of day).", 0.5, FT.DomainFuel),
             TileSpec("BMI", series { _, c -> c.bmi }, "kg/m²", Fmt.one, "Weight ÷ height². Says nothing about what the weight is made of; 18.5–25 is the general adult range.", 0.1, FT.DomainFuel),
-            TileSpec("FFMI", series { _, c -> c.split?.ffmi }, "kg/m²", Fmt.one, "Fat-free mass ÷ height²: how much lean mass you carry for your height. Feeds muscle potential below.", 0.1, FT.Emerald, betterHigher = true),
+            TileSpec("FFMI", series { _, c -> c.split?.ffmi }, "kg/m²", Fmt.one, "Fat-free mass ÷ height²: how much lean mass you carry for your height. Feeds muscle potential below.", 0.1, FT.Ok, betterHigher = true),
         ).filter { it.series.isNotEmpty() }
         MetricTiles(tiles, today)
 
@@ -271,7 +271,7 @@ private fun MusclePotentialSection(p: MusclePotential?, askFrame: Boolean, missi
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Box(Modifier.size(112.dp), contentAlignment = Alignment.Center) {
                 val track = FT.GlassBorder
-                val fill = FT.Emerald
+                val fill = FT.Ok
                 Canvas(Modifier.size(112.dp)) {
                     val stroke = 10.dp.toPx()
                     val inset = stroke / 2

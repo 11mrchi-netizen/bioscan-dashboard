@@ -14,8 +14,8 @@ import com.bioscan.fieldterminal.domain.score.DomainKey
  *  - surface = neutral: faint-platinum frosted glass, never tinted by a domain or metric ([GlassFill] .. [GlassBorder]);
  *  - ink = metric: every metric keeps one fixed hue app-wide ([Metric]).
  *
- * The older names (Emerald, Warning, DomainFuel, Category...) are kept as aliases onto the v1 values so every screen
- * moved to the new palette at once; new code uses [Domain], [Metric], [Zone] and the semantic [Ok] / [Warn] / [Bad].
+ * Status is [Ok] / [Warn] / [Bad] and nothing else; the primary action is platinum ([Platinum]). The section accents
+ * (DomainFuel, DomainLog...) and [Category] are older names kept as aliases onto the v1 values.
  */
 object FuturisticMaterialTokens {
     // ---- surfaces (--ft-bg, --ft-fg, --ft-muted, --ft-dim, --ft-line) ----
@@ -35,11 +35,7 @@ object FuturisticMaterialTokens {
     val Warn = Color(0xFFFFC24B)
     val Bad = Color(0xFFFF5D6C)
 
-    // Legacy semantic names, now the v1 semantic values. Emerald was the "primary signal"; in v1 the primary action is
-    // platinum ([Platinum]) and green means ok.
-    val Emerald = Ok
     val EmeraldHighlight = Color(0xFF9BF0C2)
-    val EmeraldAtmosphere = Color(0xFF0E3B2A)
     val Info = Color(0xFF5AB0FF)
     val Warning = Warn
     val Critical = Bad

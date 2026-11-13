@@ -159,7 +159,7 @@ fun BulletRow(input: InputScore, points: Double?, onClick: () -> Unit) {
         Text(formatJudgedValue(input), style = FTType.Value, color = FT.TextPrimary, modifier = Modifier.width(84.dp), textAlign = TextAlign.End, maxLines = 1)
         if (points != null) {
             Text("${if (points >= 0.5) "+" else ""}${points.roundToInt()}", style = FTType.Telemetry,
-                color = when { points >= 1 -> FT.EmeraldHighlight; points <= -1 -> FT.Critical; else -> FT.TextMuted },
+                color = when { points >= 1 -> FT.EmeraldHighlight; points <= -1 -> FT.Bad; else -> FT.TextMuted },
                 modifier = Modifier.width(30.dp), textAlign = TextAlign.End)
         }
         FTChevron(tint = FT.TextMuted)
@@ -244,7 +244,7 @@ fun SkillChart(result: ScorecardResult, scoreLabel: String) {
                     val scale = (size.width - zero) / span.toFloat()
                     drawLine(FT.TextMuted, Offset(zero, 0f), Offset(zero, size.height), strokeWidth = 1.5f)
                     val w = (v * scale).toFloat()
-                    val color = if (i == 0) FT.Emerald else FT.TextSecondary.copy(alpha = 0.6f)
+                    val color = if (i == 0) FT.Ok else FT.TextSecondary.copy(alpha = 0.6f)
                     if (w >= 0) drawRect(color, Offset(zero, 2f), Size(w, size.height - 4f)) else drawRect(color, Offset(zero + w, 2f), Size(-w, size.height - 4f))
                     if (i == 0 && result.lo != null && result.hi != null) {
                         val bestX = zero + ((best - base) * scale).toFloat()
@@ -339,9 +339,9 @@ fun AnsMap(points: List<AnsPoint>, size: Dp = 200.dp) {
                 val c = Offset(this.size.width / 2, this.size.height / 2)
                 val r = this.size.width / 2
                 fun at(p: AnsPoint) = Offset(c.x + (p.rhrZ.coerceIn(-3.0, 3.0) / 3.0 * r * 0.9).toFloat(), c.y - (p.hrvZ.coerceIn(-3.0, 3.0) / 3.0 * r * 0.9).toFloat())
-                drawRect(FT.Emerald.copy(alpha = 0.10f), Offset(0f, 0f), Size(c.x, c.y)) // HRV up, RHR down: balanced
-                drawRect(FT.Critical.copy(alpha = 0.08f), Offset(c.x, c.y), Size(c.x, c.y)) // HRV down, RHR up: sympathetic
-                drawRect(FT.Warning.copy(alpha = 0.08f), Offset(0f, c.y), Size(c.x, c.y)) // both down: saturated
+                drawRect(FT.Ok.copy(alpha = 0.10f), Offset(0f, 0f), Size(c.x, c.y)) // HRV up, RHR down: balanced
+                drawRect(FT.Bad.copy(alpha = 0.08f), Offset(c.x, c.y), Size(c.x, c.y)) // HRV down, RHR up: sympathetic
+                drawRect(FT.Warn.copy(alpha = 0.08f), Offset(0f, c.y), Size(c.x, c.y)) // both down: saturated
                 drawLine(FT.TextMuted, Offset(0f, c.y), Offset(this.size.width, c.y), strokeWidth = 1.5f)
                 drawLine(FT.TextMuted, Offset(c.x, 0f), Offset(c.x, this.size.height), strokeWidth = 1.5f)
                 points.zipWithNext().forEach { (a, b) -> drawLine(FT.GlassBorder, at(a), at(b), strokeWidth = 1.5f) }
@@ -351,10 +351,10 @@ fun AnsMap(points: List<AnsPoint>, size: Dp = 200.dp) {
                     if (today) drawCircle(FT.EmeraldHighlight, radius = 14f, center = at(p), style = Stroke(width = 2.5f))
                 }
             }
-            Text("BALANCED", style = FTType.Micro, color = FT.Emerald, modifier = Modifier.align(Alignment.TopStart).padding(4.dp))
+            Text("BALANCED", style = FTType.Micro, color = FT.Ok, modifier = Modifier.align(Alignment.TopStart).padding(4.dp))
             Text("UNUSUAL", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp))
-            Text("SATURATED", style = FTType.Micro, color = FT.Warning, modifier = Modifier.align(Alignment.BottomStart).padding(4.dp))
-            Text("SYMPATHETIC", style = FTType.Micro, color = FT.Critical, modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp))
+            Text("SATURATED", style = FTType.Micro, color = FT.Warn, modifier = Modifier.align(Alignment.BottomStart).padding(4.dp))
+            Text("SYMPATHETIC", style = FTType.Micro, color = FT.Bad, modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp))
         }
     }
     Text("↑ HRV above your normal · → resting HR above your normal · 14 mornings, today ringed", style = FTType.Micro, color = FT.TextMuted,
@@ -365,14 +365,14 @@ fun AnsMap(points: List<AnsPoint>, size: Dp = 200.dp) {
 
 /** A small line of the last values (no axes), the last point marked. */
 @Composable
-fun Sparkline(values: List<Double>, modifier: Modifier = Modifier, color: Color = FT.Emerald) = SlotSparkline(values, modifier, color)
+fun Sparkline(values: List<Double>, modifier: Modifier = Modifier, color: Color = FT.Ok) = SlotSparkline(values, modifier, color)
 
 /**
  * A sparkline over day slots, oldest first: each slot one day, null where nothing was recorded. Days keep their place
  * (a missing week is a gap, not squeezed out, so the slope is honest); the line breaks at a gap and a lone day is a dot.
  */
 @Composable
-fun SlotSparkline(slots: List<Double?>, modifier: Modifier = Modifier, color: Color = FT.Emerald) {
+fun SlotSparkline(slots: List<Double?>, modifier: Modifier = Modifier, color: Color = FT.Ok) {
     Canvas(modifier.width(84.dp).height(22.dp)) {
         val present = slots.filterNotNull()
         if (present.size < 2) return@Canvas

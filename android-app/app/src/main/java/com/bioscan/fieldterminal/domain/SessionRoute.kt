@@ -1,6 +1,6 @@
 package com.bioscan.fieldterminal.domain
 
-// Phase G5. Plain, framework-free shape for one point of a session's route --
+// Plain, framework-free shape for one point of a session's route --
 // see data/SessionDetailRepository.kt for where this gets built from Health
 // Connect's ExerciseRoute.
 // elevationM is nullable -- Health Connect's own ExerciseRoute.Location
@@ -11,7 +11,7 @@ data class RoutePoint(val offsetSeconds: Long, val lat: Double, val lon: Double,
 
 // A session's route needs a separate per-session consent grant beyond this
 // app's bulk Health Connect permissions -- flagged as an open question in
-// Phase G4, resolved here: Health Connect reports which of these three
+// Health Connect reports which of these three
 // states a given session is in directly on the record itself, no guessing
 // needed. ConsentRequired means SessionDetailScreen must show a real "view
 // route" action that launches Health Connect's own consent screen -- this

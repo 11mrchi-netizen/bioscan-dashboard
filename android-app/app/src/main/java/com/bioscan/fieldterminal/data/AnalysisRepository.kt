@@ -64,7 +64,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
-// Phase A2 (Analysis Layer). Backs the Status tab's new ANALYSIS sub-tab --
+// Backs the Status tab's new ANALYSIS sub-tab --
 // separate from StatusRepository, which caps at limit(10)/limit(1) for the
 // BodyConsole readiness display. The Evaluation Method Spec's Category 1/2/5
 // formulas need a real 60-day lookback (Category 1's SWC baseline, Category
@@ -82,7 +82,7 @@ private const val PAGE_ROWS = 1000L
 
 class AnalysisRepository(private val supabase: SupabaseClient) {
 
-    // Analysis Layer 3 / R1. The start of each metric's current regime = its last CONFIRMED series break, published by the
+    // The start of each metric's current regime = its last CONFIRMED series break, published by the
     // analysis-run Edge Function into analysis_results. Optional by design: before the first run, with no confirmed break,
     // or if the read fails, every baseline behaves exactly as before (NONE), never blocks a screen.
     suspend fun loadSeriesBreakStarts(): SeriesBreakStarts =
@@ -100,7 +100,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             SeriesBreakStarts.NONE
         }
 
-    // Analysis Layer 3 / Phase 3. The latest published relationship results; empty before the first run or if the read fails.
+    // The latest published relationship results; empty before the first run or if the read fails.
     suspend fun loadRelationships(): List<RelationshipResultRow> =
         try {
             ReadCache.get("analysis.relationships", tables = setOf("analysis_results"), serializer = ListSerializer(RelationshipResultRow.serializer())) {
@@ -115,7 +115,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             emptyList()
         }
 
-    // Analysis Layer 3 / Phase 4. The latest "is today typical for you" result, or null before the first run / on failure.
+    // The latest "is today typical for you" result, or null before the first run / on failure.
     suspend fun loadTypicality(): TypicalityResultRow? =
         try {
             ReadCache.get("analysis.typicality", tables = setOf("analysis_results"), serializer = TypicalityResultRow.serializer().nullable) {
@@ -302,7 +302,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
     private suspend fun fetchBodyMetrics(): List<BodyMetricsAnalysisRow> =
         pagedByDate<BodyMetricsAnalysisRow>("body_metrics", "date,weight_kg,body_fat_pct") { it.date }
 
-    // Phase A4 (Category 6). CTL/ATL's 42-day EWMA needs the same generous
+    // CTL/ATL's 42-day EWMA needs the same generous
     // margin as everything else here -- exercise_sessions is smaller today
     // (19 real rows) than the other tables, but this stays consistent with
     // this repository's own "don't special-case the query, let the domain
@@ -390,15 +390,15 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<PlannedOutcomeRow>()
     }
 
-    // Phase A4 (Category 3). 30-day baseline gate, same margin reasoning as
+    // 30-day baseline gate, same margin reasoning as
     // everything else here.
     suspend fun loadWellbeingDaily(): List<WellbeingAnalysisRow> = ReadCache.get("analysis.WellbeingDaily", tables = setOf("wellbeing_daily"), serializer = ListSerializer(WellbeingAnalysisRow.serializer())) { fetchWellbeingDaily() }
 
     private suspend fun fetchWellbeingDaily(): List<WellbeingAnalysisRow> =
         pagedByDate<WellbeingAnalysisRow>("wellbeing_daily", "date,energy,mood,stress,soreness,morning_erection_quality,arousal_level") { it.date }
 
-    // Phase A4 (Category 4). Reuses domain/Nutrition.kt's own
-    // aggregateMealsByDay() (Step 6) rather than re-deriving daily totals a
+    // Reuses domain/Nutrition.kt's own
+    // aggregateMealsByDay() rather than re-deriving daily totals a
     // second way -- same MealRow model NutritionRepository already reads,
     // just fetched here for the Evaluation Method Spec's own consumer.
     suspend fun loadDailyNutrition(): List<DailyNutrition> {
@@ -411,7 +411,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
         return aggregateMealsByDay(meals)
     }
 
-    // Phase A4 (Category 8, Bristol half). Same generous margin as every
+    // Same generous margin as every
     // other read here.
     suspend fun loadStoolLog(): List<StoolAnalysisRow> = ReadCache.get("analysis.StoolLog", tables = setOf("stool_log"), serializer = ListSerializer(StoolAnalysisRow.serializer())) { fetchStoolLog() }
 
@@ -449,7 +449,7 @@ class AnalysisRepository(private val supabase: SupabaseClient) {
             .decodeList<OstrcAnalysisRow>()
             .reversed()
 
-    // Phase A4 (Category 9). Two small real tables (2 draws, 77 results
+    // Two small real tables (2 draws, 77 results
     // today) -- no server-side date filtering needed at this account's real
     // volume, same "generous margin" reasoning as everywhere else here.
     suspend fun loadLabDraws(): List<LabDrawAnalysisRow> = ReadCache.get("analysis.LabDraws", tables = setOf("lab_draws"), serializer = ListSerializer(LabDrawAnalysisRow.serializer())) { fetchLabDraws() }

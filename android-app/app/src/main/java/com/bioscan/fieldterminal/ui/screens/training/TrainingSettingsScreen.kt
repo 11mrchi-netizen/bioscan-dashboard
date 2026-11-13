@@ -60,7 +60,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenShoe: (Long) -> Unit = {}) 
             if (state.loading) {
                 Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = FT.DomainTraining) }
             } else {
-                state.error?.let { Text(it, color = FT.Critical, style = FTType.BodySmall) }
+                state.error?.let { Text(it, color = FT.Bad, style = FTType.BodySmall) }
                 EquipmentCard(state)
                 ShoesCard(onOpenShoe)
                 ScheduleCard(state)

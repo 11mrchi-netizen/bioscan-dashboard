@@ -2,7 +2,7 @@ package com.bioscan.fieldterminal.domain
 
 import kotlinx.serialization.Serializable
 
-// Analysis Layer 3 / Phase 7: methodology as data. The single source is supabase/functions/_shared/metric-registry/
+// Methodology as data. The single source is supabase/functions/_shared/metric-registry/
 // metric-registry.json (validated by Node tests against docs/analysis-layer-2/02-metric-registry.md); the Gradle build
 // packages that file as an asset so the app shows exactly the text the console shows.
 @Serializable

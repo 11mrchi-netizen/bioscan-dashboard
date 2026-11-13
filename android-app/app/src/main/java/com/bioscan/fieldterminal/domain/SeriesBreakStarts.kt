@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 
-// Analysis Layer 3 / R1 (docs/analysis-layer-3). A baseline restarts only after a CONFIRMED series break: a statistical
+// A baseline restarts only after a CONFIRMED series break: a statistical
 // break alone is a candidate, because a real physiological change looks identical to a device or classifier change.
 // The analysis-run Edge Function publishes the breaks and marks one confirmed when the recorded origin of the field
 // changed within 3 days of it, or when the user said "source changed" (series_break_decisions). This holds, per

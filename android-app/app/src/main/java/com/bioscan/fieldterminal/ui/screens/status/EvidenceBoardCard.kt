@@ -238,12 +238,12 @@ private fun EvidenceDetailSheet(row: EvidenceRowView, curve: EventCurvePayload?,
             Text(row.summary, style = FTType.Body, color = FT.TextPrimary)
             if (row.verdict != Verdict.NotYet) ForestRow(row, row.zone?.let { maxOf(it * 3, abs(row.lo ?: 0.0), abs(row.hi ?: 0.0)) * 1.1 } ?: 1.0)
             row.sizeLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
-            row.warning?.let { Text(it, style = FTType.BodySmall, color = FT.Warning) }
+            row.warning?.let { Text(it, style = FTType.BodySmall, color = FT.Warn) }
             row.registeredLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
             row.verdictIntervalLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
             if (row.adjustments.isNotEmpty()) Text("Adjusted for ${row.adjustments.joinToString(", ")}.", style = FTType.BodySmall, color = FT.TextSecondary)
             row.pooledLine?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
-            // Phase E: the question's verdicts over time, from the append-only ledger.
+            // The question's verdicts over time, from the append-only ledger.
             var history by remember(row.id) { mutableStateOf<String?>(null) }
             LaunchedEffect(row.id) {
                 history = catching { verdictHistoryLine(verdictRuns(AnalysisRepository(SupabaseClientProvider.client).loadLedger(row.id))) }.getOrNull()
@@ -288,7 +288,7 @@ private fun EvidenceDetailSheet(row: EvidenceRowView, curve: EventCurvePayload?,
                 }
             }
             row.notes.forEach { Text(it, style = FTType.Micro, color = FT.TextMuted) }
-            // Phase F: a same-day choice can be tested -- the step from ASSOCIATED to TESTED.
+            // A same-day choice can be tested -- the step from ASSOCIATED to TESTED.
             onTest?.let { test ->
                 Text("TEST IT", style = FTType.LabelCaps, color = FT.TextSecondary)
                 Text(
@@ -369,7 +369,7 @@ private fun OffsetCurveChart(points: List<OffsetPoint>, unit: String, xLabel: (I
 @Composable
 internal fun CaseCrossoverCard(
     rows: List<CaseCrossoverResultRow>,
-    // Phase E: a hint can be registered as a question of its own, tested only on days after today.
+    // A hint can be registered as a question of its own, tested only on days after today.
     registered: List<RegisteredQuestion> = emptyList(),
     onRegister: ((exposure: String, outcome: String) -> Unit)? = null,
     registerError: String? = null,
@@ -382,7 +382,7 @@ internal fun CaseCrossoverCard(
         methodology = "case_crossover",
     ) {
         Text("EXPLORATORY · TAP A LINE FOR ITS NUMBERS", style = FTType.Micro, color = FT.TextMuted)
-        registerError?.let { Text("Couldn't register: $it", style = FTType.Caption, color = FT.Critical) }
+        registerError?.let { Text("Couldn't register: $it", style = FTType.Caption, color = FT.Bad) }
         if (registered.isNotEmpty()) Text("${registered.size} registered to test on new days", style = FTType.Caption, color = FT.TextSecondary)
         rows.sortedBy { listOf("hrv", "rhr", "sleep_hours").indexOf(it.key) }.forEach { r ->
             val p = r.payload

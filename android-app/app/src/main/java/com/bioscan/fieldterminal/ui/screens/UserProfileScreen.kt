@@ -56,7 +56,7 @@ fun UserProfileScreen(
     // UX review P5: opens Training › Plan, the one home of the training block.
     onOpenTrainingPlan: () -> Unit = {},
     onOpenSkill: (Skill) -> Unit = {},
-    // Scoring system rebuild: inside ME the page has ME's header, so its own is left out.
+    // Inside ME the page has ME's header, so its own is left out.
     showHeader: Boolean = true,
 ) {
     var agingOverview by remember { mutableStateOf<AgingProfileOverview?>(null) }
@@ -66,7 +66,7 @@ fun UserProfileScreen(
         agingGuard.run { agingOverview = UserDataCache.aging() }
     }
 
-    // Analysis Layer 3 / Phase 8: the Healthspan score (loaded once aging is known).
+    // The Healthspan score (loaded once aging is known).
     var healthspan by remember { mutableStateOf<HealthspanBundle?>(null) }
     var healthspanFailed by remember { mutableStateOf(false) }
     LaunchedEffect(agingOverview) {
@@ -137,7 +137,7 @@ private fun AgingCard(overview: AgingProfileOverview?, onOpen: () -> Unit) {
         onClick = onOpen,
     ) {
         when {
-            overview == null -> CircularProgressIndicator(color = FT.Emerald)
+            overview == null -> CircularProgressIndicator(color = FT.Ok)
             overview.chronologicalAgeYears == null -> FTDataState(DataAvailability.Unavailable, "Set your date of birth in Setup › Profile & goals to see this.")
             else -> {
                 BioAgeHero(overview)

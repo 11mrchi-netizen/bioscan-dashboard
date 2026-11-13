@@ -8,7 +8,7 @@ import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.sqrt
 
-// Phase A2 (Analysis Layer). Evaluation Method Spec, Category 1 (HRV & RHR):
+// Evaluation Method Spec, Category 1 (HRV & RHR):
 // 7-day rolling Ln rMSSD + Smallest Worthwhile Change band, with 7-day CV as
 // a parallel instability signal (Plews/Laursen/Buchheit method). The same
 // SWC-band structure is reused verbatim for untransformed RHR (per the
@@ -55,7 +55,7 @@ private const val MAX_CARRY_OVER = 0.8
 // Generic over any daily-value stream needing the SWC treatment -- takes
 // values already in whatever space they should be compared in (log-space
 // for HRV, raw for RHR and sleep duration).
-// Analysis Layer 3 / R1: `windowStart` (when given) drops every reading before it, so a baseline restarts after a
+// `windowStart` (when given) drops every reading before it, so a baseline restarts after a
 // CONFIRMED series break (a device/source/classifier change, see domain/SeriesBreakStarts.kt) instead of mixing two
 // regimes. The existing 60-day span gate below then reports Building until a new baseline exists. Null = unchanged.
 fun evaluateSwcStream(
@@ -147,7 +147,7 @@ fun SwcEvaluation.toExpSpace(): SwcEvaluation = copy(
     bandHigh = expValue(bandHigh),
 )
 
-// windowEndingAt() moved to domain/Stats.kt (Phase A3) -- Category 3 needs
+// windowEndingAt() moved to domain/Stats.kt -- Category 3 needs
 // the identical "last N calendar days ending here" logic, so this is no
 // longer HRV-specific.
 private fun cv7dAt(values: List<Pair<LocalDate, Double>>, date: LocalDate): Double? {

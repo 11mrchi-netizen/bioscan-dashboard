@@ -115,7 +115,7 @@ fun TrainingPlannerScreen(onBack: () -> Unit, onCreated: () -> Unit, preset: Tra
                     PlannerStep.Review -> ReviewStep(state)
                 }
             }
-            state.error?.let { Text(it, color = FT.Critical, style = FTType.BodySmall, modifier = Modifier.padding(vertical = 8.dp)) }
+            state.error?.let { Text(it, color = FT.Bad, style = FTType.BodySmall, modifier = Modifier.padding(vertical = 8.dp)) }
             Spacer(Modifier.height(24.dp))
         }
         if (!state.loading) BottomBar(state, onCreated)
@@ -351,7 +351,7 @@ private fun DetailRow(title: String, summary: String, warn: Boolean = false, onC
     ) {
         Column(Modifier.weight(1f)) {
             Text(title, color = FT.TextPrimary, style = FTType.RowTitle)
-            Text(summary, color = if (warn) FT.Warning else FT.TextSecondary, style = FTType.MonoCaption)
+            Text(summary, color = if (warn) FT.Warn else FT.TextSecondary, style = FTType.MonoCaption)
         }
         FTChevron(tint = FT.TextSecondary)
     }
@@ -497,7 +497,7 @@ private fun MaxRow(state: TrainingPlannerState, exercise: String) {
         Column(Modifier.weight(1f)) {
             Text(
                 if (kg != null) "MAX ${"%.1f".format(kg)} kg" else "NO MAX YET",
-                color = if (kg != null) FT.TextPrimary else FT.Warning, style = FTType.Value,
+                color = if (kg != null) FT.TextPrimary else FT.Warn, style = FTType.Value,
             )
             Text(if (manual != null) "entered here" else resolved?.basedOn ?: "enter a tested or estimated max", color = FT.TextMuted, style = FTType.Caption)
         }
@@ -569,7 +569,7 @@ private fun ReviewStep(state: TrainingPlannerState) {
     }
     if (block.warnings.isNotEmpty()) {
         FTCard(title = "NEEDS ATTENTION", modifier = Modifier.padding(top = 12.dp)) {
-            block.warnings.take(12).forEach { Text("! $it", color = FT.Warning, style = FTType.Caption) }
+            block.warnings.take(12).forEach { Text("! $it", color = FT.Warn, style = FTType.Caption) }
             if (block.warnings.size > 12) Body("and ${block.warnings.size - 12} more", muted = true)
         }
     }
@@ -588,7 +588,7 @@ private fun ReviewLine(label: String, value: String, warn: Boolean = false, onEd
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(label, color = FT.TextMuted, style = FTType.Micro)
-            Text(value, color = if (warn) FT.Warning else FT.TextPrimary, style = FTType.BodySmall)
+            Text(value, color = if (warn) FT.Warn else FT.TextPrimary, style = FTType.BodySmall)
         }
         Text("EDIT", color = FT.TextSecondary, style = FTType.LabelCaps, modifier = Modifier.ftClickable(onClick = onEdit).padding(8.dp))
     }
@@ -619,7 +619,7 @@ private fun CompactCalendar(state: TrainingPlannerState, block: GeneratedBlock) 
             Modifier.fillMaxWidth().padding(vertical = 2.dp).ftClickable(enabled = list.isNotEmpty()) { openWeek = w },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("$w" + if (deload) " D" else if (test) " T" else "", style = FTType.Micro, color = if (deload) FT.Warning else if (test) FT.Info else FT.TextSecondary, modifier = Modifier.width(34.dp))
+            Text("$w" + if (deload) " D" else if (test) " T" else "", style = FTType.Micro, color = if (deload) FT.Warn else if (test) FT.Info else FT.TextSecondary, modifier = Modifier.width(34.dp))
             (0 until 7).forEach { di ->
                 val date = weekStart.plusDays(di.toLong())
                 val here = list.filter { it.date == date }

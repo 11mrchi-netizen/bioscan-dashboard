@@ -2,7 +2,7 @@ package com.bioscan.fieldterminal.healthconnect
 
 import androidx.health.connect.client.records.ExerciseSessionRecord
 
-// Phase G3. Health Connect's ExerciseSessionRecord.exerciseType has 50+
+// Health Connect's ExerciseSessionRecord.exerciseType has 50+
 // EXERCISE_TYPE_* constants and grows over time -- collapsed here into the
 // small closed vocabulary exercise_sessions.type actually uses. Kept in the
 // healthconnect package (not domain/) since it directly references Health

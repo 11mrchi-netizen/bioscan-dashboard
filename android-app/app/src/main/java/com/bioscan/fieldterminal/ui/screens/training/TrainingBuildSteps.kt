@@ -168,7 +168,7 @@ internal fun LayoutStep(state: TrainingPlannerState) {
         FTMetricRow("Conditioning days", "${l.count { it.conditioning != null }} (${l.count { it.conditioning?.kind == "lic" }} LIC, ${l.count { it.conditioning?.kind == "hic" }} HIC, ${l.count { it.conditioning?.kind == "wc" }} WC)")
         FTMetricRow("Rest days", "${l.count { it.isRest }}")
         protocol?.let { Text(budgetSummary(it), style = FTType.Caption, color = FT.TextMuted) }
-        state.layoutWarnings.forEach { Text("! $it", style = FTType.BodySmall, color = FT.Warning) }
+        state.layoutWarnings.forEach { Text("! $it", style = FTType.BodySmall, color = FT.Warn) }
         if (state.layoutWarnings.isEmpty()) Text("No clashes found.", style = FTType.BodySmall, color = FT.TextSecondary)
         Spacer(Modifier.height(4.dp))
         FTButton("RESET TO SUGGESTION") { state.resetLayout() }
@@ -242,7 +242,7 @@ internal fun TimelineStep(state: TrainingPlannerState) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             kinds.forEachIndexed { j, k ->
                 val i = row * 6 + j
-                val accent = when (k) { WeekKind.Normal -> FT.DomainTraining; WeekKind.Deload -> FT.Warning; WeekKind.Test -> FT.Info }
+                val accent = when (k) { WeekKind.Normal -> FT.DomainTraining; WeekKind.Deload -> FT.Warn; WeekKind.Test -> FT.Info }
                 DayChip("${i + 1} ${k.label.take(1)}", k != WeekKind.Normal, accent, Modifier.weight(1f)) { state.toggleWeek(i) }
             }
             repeat(6 - kinds.size) { Spacer(Modifier.weight(1f)) }

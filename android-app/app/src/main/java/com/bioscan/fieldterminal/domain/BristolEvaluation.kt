@@ -1,6 +1,6 @@
 package com.bioscan.fieldterminal.domain
 
-// Phase A4 (Analysis Layer). Evaluation Method Spec, Category 8 (digestive/
+// Evaluation Method Spec, Category 8 (digestive/
 // Bristol half): a rolling 14-day distribution, not a daily value -- a
 // single BSFS reading is nearly meaningless per the spec; the pattern
 // across days is the signal (Lewis & Heaton 1997: change in stool form

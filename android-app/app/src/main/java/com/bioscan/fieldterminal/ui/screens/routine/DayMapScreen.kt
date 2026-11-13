@@ -157,11 +157,11 @@ fun DayMapScreen(initialDate: LocalDate, onBack: () -> Unit) {
         },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp)) {
-            error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
             problem?.let { msg ->
                 val setup = places.firstOrNull { it.source == "home_setting" }
                 FTCard(title = "HOME AND WORK") {
-                    Text(msg, style = FTType.BodySmall, color = FT.Warning)
+                    Text(msg, style = FTType.BodySmall, color = FT.Warn)
                     if (setup != null && setup.category != PlaceCategory.HOME.key && places.none { it.category == PlaceCategory.HOME.key }) {
                         FTButton("MAKE THE SETUP PLACE HOME", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Primary) {
                             scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { reload++ }) {
@@ -492,7 +492,7 @@ private fun Timeline(items: List<TimelineItem>, byId: Map<String, PlaceRow>, zon
                     ) {
                         Dot(placeColor(cat, p?.label != null))
                         Column(Modifier.weight(1f)) {
-                            Text(name, style = FTType.Body, color = if (p?.label == null) FT.Warning else FT.TextPrimary)
+                            Text(name, style = FTType.Body, color = if (p?.label == null) FT.Warn else FT.TextPrimary)
                             val more = listOfNotNull(
                                 cat?.label,
                                 p?.osmName?.takeIf { p.label == null }?.let { "near $it" },
@@ -601,7 +601,7 @@ private fun PlaceSheet(
                 Text(
                     "Its visits stay, as unlabelled time. If you stay here again, a new place starts. Merge is usually what you want.",
                     style = FTType.BodySmall,
-                    color = FT.Warning,
+                    color = FT.Warn,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     FTButton("KEEP", modifier = Modifier.weight(1f)) { confirmDelete = false }

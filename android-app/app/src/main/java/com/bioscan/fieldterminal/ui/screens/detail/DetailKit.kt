@@ -250,8 +250,8 @@ fun Headline(reading: MetricReading, format: (Double) -> String, unit: String, t
     }
     val tint = when {
         reading.position == null || reading.position == InputDirection.NORMAL || betterHigher == null -> FT.TextSecondary
-        (reading.position == InputDirection.ABOVE) == betterHigher -> FT.Emerald
-        else -> FT.Warning
+        (reading.position == InputDirection.ABOVE) == betterHigher -> FT.Ok
+        else -> FT.Warn
     }
     // Says which days the comparison reads, so it is not taken for the chart's range: the normal is the 60 days before
     // the latest reading (domain/MetricReading.kt), the change the 7 days before it.
@@ -321,7 +321,7 @@ fun MetricRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(label, style = FTType.RowTitle, color = FT.TextPrimary)
-            Text(flag ?: note ?: positionWords(reading.position), style = FTType.Caption, color = if (flag != null) FT.Warning else FT.TextMuted)
+            Text(flag ?: note ?: positionWords(reading.position), style = FTType.Caption, color = if (flag != null) FT.Warn else FT.TextMuted)
         }
         Text(reading.latest?.let { "${format(it)} $unit".trim() } ?: "—", style = FTType.Telemetry, color = FT.TextPrimary)
         Text(positionGlyph(reading.position), style = FTType.Telemetry, color = FT.TextSecondary)
@@ -572,8 +572,8 @@ fun TrendChart(
             val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
             for (mk in inWindow) {
                 val i = ChronoUnit.DAYS.between(from, mk.date).toInt()
-                drawLine(FT.Warning.copy(alpha = 0.8f), Offset(x(i), 0f), Offset(x(i), size.height), strokeWidth = 1.5f, pathEffect = dash)
-                drawCircle(FT.Warning, radius = 4f, center = Offset(x(i), 4f))
+                drawLine(FT.Warn.copy(alpha = 0.8f), Offset(x(i), 0f), Offset(x(i), size.height), strokeWidth = 1.5f, pathEffect = dash)
+                drawCircle(FT.Warn, radius = 4f, center = Offset(x(i), 4f))
             }
             pick?.let { i ->
                 val v = byIndex[i] ?: return@let
@@ -600,7 +600,7 @@ fun TrendChart(
         // The newest changes in words; the dashed lines mark when, not that they caused anything.
         Column(Modifier.fillMaxWidth().padding(start = 48.dp, top = 2.dp)) {
             inWindow.takeLast(3).reversed().forEach { mk ->
-                Text("┆ ${shortDate(mk.date)} ${mk.label}", style = FTType.Micro, color = FT.Warning, maxLines = 2)
+                Text("┆ ${shortDate(mk.date)} ${mk.label}", style = FTType.Micro, color = FT.Warn, maxLines = 2)
             }
             if (inWindow.size > 3) Text("+${inWindow.size - 3} earlier regimen changes in this range", style = FTType.Micro, color = FT.TextMuted)
         }

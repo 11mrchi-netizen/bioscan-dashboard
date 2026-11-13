@@ -154,7 +154,7 @@ fun RoutinePage(onOpenDay: (LocalDate) -> Unit) {
 
     Column(Modifier.padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         error?.let {
-            Text("Couldn't load: $it", style = FTType.BodySmall, color = FT.Critical)
+            Text("Couldn't load: $it", style = FTType.BodySmall, color = FT.Bad)
             FTButton("RETRY") { reload++ }
         }
         val d = data

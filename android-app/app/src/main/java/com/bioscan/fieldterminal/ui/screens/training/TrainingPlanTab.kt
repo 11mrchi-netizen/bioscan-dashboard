@@ -109,7 +109,7 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
                     Column {
                         Text(s.title, color = FT.TextPrimary, style = FTType.BodySmall)
                         eventDays[LocalDate.parse(s.scheduledDate)]?.let { name ->
-                            Text("EVENT DAY: ${name.uppercase()} · move or drop this session", color = FT.Warning, style = FTType.MonoCaption)
+                            Text("EVENT DAY: ${name.uppercase()} · move or drop this session", color = FT.Warn, style = FTType.MonoCaption)
                         }
                     }
                 }
@@ -118,7 +118,7 @@ fun TrainingPlanTab(onOpenPlanner: () -> Unit, onOpenAllBlocks: () -> Unit = {})
         FTCard(title = "PLANNED BLOCKS") {
             val b = blocks.orEmpty()
             if (blocks != null && b.isEmpty()) Text("No generated blocks yet.", color = FT.TextSecondary, style = FTType.BodySmall)
-            deleteError?.let { Text("Couldn't delete: $it", color = FT.Critical, style = FTType.BodySmall) }
+            deleteError?.let { Text("Couldn't delete: $it", color = FT.Bad, style = FTType.BodySmall) }
             b.forEach { blk ->
                 Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

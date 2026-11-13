@@ -15,7 +15,7 @@ package com.bioscan.fieldterminal.ui.nav
 // FieldTerminalNavHost's routing -- see
 // docs/user-profile-milestone/01-canonical-contracts-audit.md section 10.
 enum class TopLevelTab(val route: String, val label: String) {
-    // Scoring system rebuild (docs/scoring-system/02-page-mockups.md): TODAY · PLAN · + LOG · LAB · ME. Reading starts on
+    // TODAY · PLAN · + LOG · LAB · ME. Reading starts on
     // TODAY; doing lives in PLAN, LOG and LAB; slow-moving things and settings in ME. The status and user routes are kept
     // so a saved back stack still resolves; Setup is a pushed page from ME's gear now (SETUP_ROUTE).
     Status("status", "TODAY"),
@@ -59,7 +59,7 @@ enum class TileRoute(val route: String) {
 enum class LabTab(val label: String) {
     N1("N=1"),
     Supplements("SUPPLEMENTS"),
-    // Scoring system rebuild: PLANNING moved to the PLAN tab.
+    // PLANNING moved to the PLAN tab.
     Tests("TESTS"),
     // Routine intelligence R5: the week by place, the commute and the phone (docs/routine-intelligence).
     Routine("ROUTINE"),

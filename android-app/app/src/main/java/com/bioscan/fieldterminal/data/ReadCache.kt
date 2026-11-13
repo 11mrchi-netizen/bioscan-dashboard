@@ -22,7 +22,7 @@ import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 
-// Performance pass, Stage 2. One person, a few thousand rows: the same wearable_daily / sleep_daily / session lists were
+// One person, a few thousand rows: the same wearable_daily / sleep_daily / session lists were
 // fetched again by every screen (wearable_daily by six of them). This is a small process-wide read cache with two rules
 // that keep it honest:
 //
@@ -225,7 +225,7 @@ object ReadCache {
         if (table !in SYNC_TABLES) keyTables.forEach { (k, t) -> if (ANY_TABLE in t || table in t) dirty.add(k) }
     }
 
-    // Scoring system rebuild: a screen that keeps its own finished result (TODAY) asks whether anything it reads was
+    // A screen that keeps its own finished result (TODAY) asks whether anything it reads was
     // written since. The stamp grows with every write to one of [tables] and with every write that names no table.
     private val writeCounts = ConcurrentHashMap<String, AtomicLong>()
     private val unattributedWrites = AtomicLong()

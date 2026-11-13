@@ -69,7 +69,7 @@ fun EventsCard(onOpenEvent: (Long) -> Unit) {
             "around them, and a finished event is linked to the session that recorded it.",
     ) {
         error?.let {
-            Text("Couldn't load events: $it", style = FTType.BodySmall, color = FT.Critical)
+            Text("Couldn't load events: $it", style = FTType.BodySmall, color = FT.Bad)
             FTButton("RETRY", emphasis = FTButtonEmphasis.Tertiary) { attempt++ }
         }
         val list = events.orEmpty()

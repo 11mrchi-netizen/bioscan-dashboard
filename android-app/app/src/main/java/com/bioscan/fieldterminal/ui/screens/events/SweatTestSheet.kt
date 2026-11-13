@@ -131,7 +131,7 @@ fun SweatTestSheet(
                     style = FTType.Caption, color = FT.TextSecondary,
                 )
             }
-            (error ?: problems.firstOrNull())?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+            (error ?: problems.firstOrNull())?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
             FTButton(if (saving) "SAVING…" else "SAVE", enabled = test != null && problems.isEmpty() && !saving, emphasis = FTButtonEmphasis.Primary) {
                 saving = true
                 scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) {

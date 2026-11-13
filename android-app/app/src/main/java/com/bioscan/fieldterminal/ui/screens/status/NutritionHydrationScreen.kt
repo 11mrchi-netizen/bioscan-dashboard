@@ -19,7 +19,7 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Step 6 (Phase C). Real data from `meals`/`hydration_daily`. "Today" means
+// Real data from `meals`/`hydration_daily`. "Today" means
 // the real calendar-today's totals -- null (rendered as "No meals logged
 // yet.") when nothing's been logged yet today, not silently carrying over
 // yesterday's full totals (the original "most recent day with data"

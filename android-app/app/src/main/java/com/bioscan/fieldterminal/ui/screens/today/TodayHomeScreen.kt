@@ -433,7 +433,7 @@ fun TodayHomeScreen(
 private fun CompletedVoiceCard(row: PlanRow, fuel: TodayFuel?, onClose: () -> Unit, onEdit: () -> Unit) {
     FullScreenOverlay(title = row.title, trailing = row.time?.format(TIME), onClose = onClose) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("DONE ✓", style = FTType.LabelCaps, color = FT.Emerald)
+            Text("DONE ✓", style = FTType.LabelCaps, color = FT.Ok)
             row.detail?.let { Text(it, style = FTType.BodySmall, color = FT.TextSecondary) }
         }
         when (val action = row.action) {
@@ -443,7 +443,7 @@ private fun CompletedVoiceCard(row: PlanRow, fuel: TodayFuel?, onClose: () -> Un
                 }
                 fuel?.adherence?.get(action.kind.name)?.let { (g, adh) ->
                     if (adh != MealAdherence.NOT_LOGGED)
-                        Text("Logged ${g.roundToInt()} g carbs · ${adh.label}", style = FTType.LabelCaps, color = FT.Emerald)
+                        Text("Logged ${g.roundToInt()} g carbs · ${adh.label}", style = FTType.LabelCaps, color = FT.Ok)
                 }
                 FTButton(label = "VIEW OR CHANGE WHAT YOU LOGGED",
                     emphasis = FTButtonEmphasis.Secondary, modifier = Modifier.fillMaxWidth()) { onEdit() }
@@ -454,7 +454,7 @@ private fun CompletedVoiceCard(row: PlanRow, fuel: TodayFuel?, onClose: () -> Un
                     emphasis = FTButtonEmphasis.Secondary, modifier = Modifier.fillMaxWidth()) { onEdit() }
             }
             is PlanAction.Tab -> {
-                Text("Recorded ✓", style = FTType.LabelCaps, color = FT.Emerald)
+                Text("Recorded ✓", style = FTType.LabelCaps, color = FT.Ok)
                 FTButton(label = "OPEN IN PLAN",
                     emphasis = FTButtonEmphasis.Secondary, modifier = Modifier.fillMaxWidth()) { onEdit() }
             }
@@ -514,7 +514,7 @@ fun TodayContent(
                 GaugeStateWord(band.label, band, holo = true)
             }
             // The open illness and what the body's signals say, or an early heads-up (domain/score/IllnessRead.kt).
-            v?.illness?.let { Text("⚠ ${it.reason}", style = FTType.Caption, color = FT.Warning, textAlign = TextAlign.Center) }
+            v?.illness?.let { Text("⚠ ${it.reason}", style = FTType.Caption, color = FT.Warn, textAlign = TextAlign.Center) }
             v?.signals?.takeIf { it.verdict == SignalsVerdict.HEADS_UP || v.illness != null }?.let {
                 Text(it.line, style = FTType.Caption, color = FT.TextSecondary, textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 24.dp))

@@ -116,12 +116,12 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Phase G4/G5. The app's first pushed detail route (see ui/nav/
+// The app's first pushed detail route (see ui/nav/
 // FieldTerminalNavHost.kt) -- reached from a Log tab Exercise entry's
 // DETAIL action. loadHeader() reads real aggregates from Supabase;
 // loadTimeSeries() reads fresh from Health Connect on demand, only when
 // this screen actually opens, nothing persisted (same principle as Step
-// 14's GPX route). Route/elevation (Phase G5) load separately from the other
+// 14's GPX route). Route/elevation load separately from the other
 // series since a route needs its own per-session Health Connect consent --
 // see routeLauncher below and domain/SessionRoute.kt.
 //
@@ -441,7 +441,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit, onOpenShoe: (Long) 
                                 }
                             }
                             loadingRoute -> Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = FT.Emerald)
+                                CircularProgressIndicator(color = FT.Ok)
                             }
                             routeAvailability is RouteAvailability.ConsentRequired -> FTCard(title = "ROUTE") {
                                 Text(
@@ -581,7 +581,7 @@ private fun SplitsCard(splits: List<SessionSplit>) {
                 Text(
                     formatSplitPace(split.durationSec) + (split.avgHr?.let { "  ·  %.0f bpm".format(it) } ?: "") + (if (isFastest) "  ★" else ""),
                     style = if (isFastest) FTType.Telemetry else FTType.Value,
-                    color = if (isFastest) FT.Emerald else FT.TextPrimary,
+                    color = if (isFastest) FT.Ok else FT.TextPrimary,
                 )
             }
         }
@@ -640,11 +640,11 @@ private fun StrengthHrCard(heartRate: List<TimePoint>, strengthData: ZeppStrengt
         val values = heartRate.map { it.value }
         MinMaxAverageBar(
             min = values.min(), average = values.average(), max = values.max(),
-            color = FT.Critical, format = { v -> "%.0f bpm".format(v) },
+            color = FT.Bad, format = { v -> "%.0f bpm".format(v) },
         )
         LineChart(
             points = heartRate,
-            color = FT.Critical,
+            color = FT.Bad,
             xRange = sessionStart to sessionEnd,
             segmentColor = { _ ->
                 // colour the current x-position (not the HR value) by work/rest.
@@ -654,10 +654,10 @@ private fun StrengthHrCard(heartRate: List<TimePoint>, strengthData: ZeppStrengt
                 // segmentColor that keys off the point's offsetSeconds.
                 // Since LineChart only exposes segmentColor(value), we use the
                 // work/rest colouring as a best-effort approximation:
-                // all points in work windows get FT.Warning tint, others dimmer.
+                // all points in work windows get FT.Warn tint, others dimmer.
                 // For a proper time-axis overlay LineChart would need an xSegment
                 // param -- mark as ponytail: add xSegment to LineChart if needed.
-                FT.Critical
+                FT.Bad
             },
             modifier = Modifier.padding(top = 4.dp),
         )
@@ -704,9 +704,9 @@ private fun MovementEvaluationCard(strengthData: ZeppStrengthData) {
         ) {
             avg.forEach { (label, score) ->
                 val color = when {
-                    score < 60f -> FT.Critical
-                    score < 80f -> FT.Warning
-                    else -> FT.Emerald
+                    score < 60f -> FT.Bad
+                    score < 80f -> FT.Warn
+                    else -> FT.Ok
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("%.0f".format(score), style = FTType.Value, color = color)
@@ -835,9 +835,9 @@ private fun SetMovementScoreRow(scores: ZeppMovementScores) {
         items.forEach { (label, score) ->
             val color = when {
                 score < 0 -> FT.TextMuted
-                score < 60 -> FT.Critical
-                score < 80 -> FT.Warning
-                else -> FT.Emerald
+                score < 60 -> FT.Bad
+                score < 80 -> FT.Warn
+                else -> FT.Ok
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -927,7 +927,7 @@ private fun SummaryCard(
                     color = FT.TextSecondary,
                 )
                 loadingDetail -> Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FT.Emerald)
+                    CircularProgressIndicator(color = FT.Ok)
                 }
                 detailError != null -> Text(
                     "Couldn't load time-series detail (${detailError}).",

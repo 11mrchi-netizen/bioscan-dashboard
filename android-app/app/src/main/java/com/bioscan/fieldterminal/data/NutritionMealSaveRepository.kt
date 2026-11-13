@@ -424,7 +424,7 @@ class NutritionMealSaveRepository(
     // factor for that class. caffeine_mg stays null unless a food match is
     // provided (use saveMeal for that richer path).
     //
-    // Analysis Layer 3 / R2: an alcohol drink must carry its strength. `abvPercent` is turned into grams of ethanol
+    // An alcohol drink must carry its strength. `abvPercent` is turned into grams of ethanol
     // (meal_items.alcohol_g) and shown in the description; an alcohol row without a usable strength is refused rather than
     // stored without grams, because a drink with no grams is invisible to every alcohol analysis.
     suspend fun saveBeverageDrink(loggedAt: String, beverageClass: String, volumeMl: Double, abvPercent: Double? = null): Long {

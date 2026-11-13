@@ -152,7 +152,7 @@ fun SymptomCheckSheet(onDismiss: () -> Unit, onSaved: () -> Unit, onTrackIllness
                 }
             }
 
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
             val ready = intensity != null && since != null
             FTButton(if (saving) "SAVING…" else "SEE WHAT FITS", enabled = ready && !saving, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
                 val answered = CheckAnswers(a, symptoms, intensity!!, since!!, course, answers.toMap(), region?.code, region?.side)

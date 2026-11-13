@@ -33,7 +33,7 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Scoring system rebuild (docs/scoring-system/02-page-mockups.md §5): PLAN, a dock tab. What is planned and what was done:
+// PLAN, a dock tab. What is planned and what was done:
 // the training block, the food plan with meal prep, events with their race fuel, and the sessions. The content is the
 // existing screens' (was Lab › Planning and Training › Sessions), hosted here unchanged.
 

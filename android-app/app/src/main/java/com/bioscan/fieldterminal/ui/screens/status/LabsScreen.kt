@@ -49,7 +49,7 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Step 9 (Phase C). Real data from `lab_draws`/`lab_results` -- NOT a port of
+// Real data from `lab_draws`/`lab_results` -- NOT a port of
 // index.html's Labs panel, which is entirely hardcoded prose with an empty
 // draw() (same pattern as Step 7's Training panel). Merges markers across
 // the earliest and latest draw by name (domain/Labs.kt); a marker tested in
@@ -92,7 +92,7 @@ fun LabsScreen() {
     when {
         isLoading -> SkeletonSections()
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
+            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Bad)
         }
         overview?.latestDraw == null -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
             AddResultButtons(onAddClick = { showAddSheet = true }, onUploadClick = { showUploadSheet = true })
@@ -152,7 +152,7 @@ private fun LabsContent(overview: LabsOverview, rcv: Map<String, BloodworkMarker
                 shortDate(overview.latestDraw!!.drawDate)
             },
             style = FTType.LabelCaps,
-            color = FT.Emerald,
+            color = FT.Ok,
             modifier = Modifier.padding(bottom = 10.dp),
         )
         Box(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder))
@@ -187,12 +187,12 @@ private fun ThemeGroupHeader(theme: LabMarkerTheme, count: Int, collapsed: Boole
         Text(
             "${theme.label} ($count)",
             style = FTType.RowTitle,
-            color = FT.Emerald,
+            color = FT.Ok,
         )
         Text(
             if (collapsed) "▸" else "▾",
             style = FTType.Value,
-            color = FT.Emerald,
+            color = FT.Ok,
         )
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(FT.GlassBorder))
@@ -318,8 +318,8 @@ private suspend fun loadRcv(): Map<String, BloodworkMarkerEvaluation> {
 }
 
 private fun flagColor(flag: String?): Color = when (flag) {
-    "high", "low" -> FT.Critical
-    "watch" -> FT.Warning
+    "high", "low" -> FT.Bad
+    "watch" -> FT.Warn
     else -> FT.TextPrimary
 }
 

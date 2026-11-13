@@ -300,7 +300,7 @@ fun EventFormSheet(
 
             val draft = build()
             val problems = validateEvent(draft)
-            (error ?: problems.firstOrNull()?.takeIf { name.isNotBlank() })?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+            (error ?: problems.firstOrNull()?.takeIf { name.isNotBlank() })?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
             FTButton(if (saving) "SAVING…" else "SAVE", enabled = problems.isEmpty() && !saving, emphasis = FTButtonEmphasis.Primary) {
                 saving = true
                 error = null

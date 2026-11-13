@@ -130,7 +130,7 @@ fun ToastHost(modifier: Modifier = Modifier) {
             ) {
                 Text(t.message, style = FTType.BodySmall, color = FT.TextPrimary, modifier = Modifier.weight(1f))
                 if (t.action != null && t.onAction != null) {
-                    Text(t.action, style = FTType.LabelCaps, color = FT.Emerald,
+                    Text(t.action, style = FTType.LabelCaps, color = FT.Ok,
                         modifier = Modifier.ftClickable(onClickLabel = t.action) { t.onAction.invoke() }.padding(4.dp))
                 }
             }

@@ -120,10 +120,10 @@ fun LabExtractionSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("UPLOAD LAB REPORT", style = sheetHeaderTitleStyle, color = FT.Emerald)
+            Text("UPLOAD LAB REPORT", style = sheetHeaderTitleStyle, color = FT.Ok)
 
             error?.let {
-                Text(it, style = FTType.BodySmall, color = FT.Critical)
+                Text(it, style = FTType.BodySmall, color = FT.Bad)
             }
 
             when (phase) {
@@ -149,7 +149,7 @@ fun LabExtractionSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                 ExtractionPhase.Extracting -> {
                     Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = FT.Emerald)
+                            CircularProgressIndicator(color = FT.Ok)
                             Text(
                                 "Extracting markers...",
                                 style = FTType.BodySmall,
@@ -213,7 +213,7 @@ private fun EditableMarkerCard(row: EditableMarkerRow, onRemove: () -> Unit) {
             Text(
                 "REMOVE",
                 style = FTType.Caption,
-                color = FT.Critical,
+                color = FT.Bad,
                 modifier = Modifier
                     .padding(start = 10.dp)
                     .ftClickable(onClick = onRemove),

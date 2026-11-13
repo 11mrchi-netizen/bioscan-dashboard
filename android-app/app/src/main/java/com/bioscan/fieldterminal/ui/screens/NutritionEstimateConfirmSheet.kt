@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.domain.toAppIso
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -58,7 +59,6 @@ import com.bioscan.fieldterminal.ui.components.ftClickable
 import com.bioscan.fieldterminal.ui.theme.FTType
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
-import java.time.ZoneOffset
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
@@ -185,11 +185,11 @@ fun NutritionEstimateConfirmSheet(
                 MealItemSource.Barcode -> "BARCODE LOOKUP"
                 else -> "MEAL ESTIMATE"
             }
-            Text(headerTitle, style = sheetHeaderTitleStyle, color = FT.Emerald)
+            Text(headerTitle, style = sheetHeaderTitleStyle, color = FT.Ok)
             if (source == MealItemSource.AiImage) PhotoEstimatePanel(estimate, rerunning, onAnswer, onCorrect)
             val e = current
             if (e != null) {
-                Text("FOODS", style = FTType.LabelCaps, color = FT.Emerald)
+                Text("FOODS", style = FTType.LabelCaps, color = FT.Ok)
                 Text(
                     "From ${sourceLabel(e.primarySource) ?: "the food database"} (${e.itemsIncluded} of ${e.items.size} items counted, " +
                         "confidence ${(e.confidence * 100).roundToInt()}%). Check each food and portion; replace or add anything that's off.",
@@ -253,7 +253,7 @@ fun NutritionEstimateConfirmSheet(
                     else -> ActionLink("+ ADD INGREDIENT") { editing = ADDING }
                 }
             }
-            pickError?.let { Text("Couldn't load that food ($it).", style = FTType.Caption, color = FT.Critical) }
+            pickError?.let { Text("Couldn't load that food ($it).", style = FTType.Caption, color = FT.Bad) }
 
             Column { FormFieldLabel("DESCRIPTION"); FieldTextField(description, { description = it }, "Meal description") }
             Column { FormFieldLabel("CALORIES"); FieldTextField(calories, { calories = it }, "0", keyboardType = KeyboardType.Number) }
@@ -269,7 +269,7 @@ fun NutritionEstimateConfirmSheet(
             }
 
             error?.let {
-                Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical)
+                Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad)
             }
 
             val caloriesValue = calories.toDoubleOrNull()
@@ -327,7 +327,7 @@ fun NutritionEstimateConfirmSheet(
                                 } else e
                             }
                             NutritionMealSaveRepository(SupabaseClientProvider.client)
-                                .saveEstimatedMeal(mealDateTime.toIsoWithOffset(), finalEstimate, aiEstimateId, scaledEnrichment, source, mealSlot)
+                                .saveEstimatedMeal(mealDateTime.toAppIso(), finalEstimate, aiEstimateId, scaledEnrichment, source, mealSlot)
                             onSaved()
                         } catch (e: Exception) {
                             error = e.message ?: "Unknown error"
@@ -352,7 +352,7 @@ private fun CrossCheckNote(e: CronometerEnrichment) {
         if (far) "Database total ${db.roundToInt()} kcal vs AI estimate ~${ai.roundToInt()} kcal -- check the foods and portions below."
         else "AI cross-check: ~${ai.roundToInt()} kcal.",
         style = FTType.Caption,
-        color = if (far) FT.Warning else FT.TextMuted,
+        color = if (far) FT.Warn else FT.TextMuted,
     )
 }
 
@@ -379,7 +379,7 @@ private fun MatchedItemRow(
             color = FT.TextMuted,
         )
         statusLine(item)?.let { (text, warn) ->
-            Text(text, style = FTType.CaptionStrong, color = if (warn) FT.Warning else FT.Emerald)
+            Text(text, style = FTType.CaptionStrong, color = if (warn) FT.Warn else FT.Ok)
         }
         if (item.rejected.isNotEmpty()) {
             Text("Passed over: ${item.rejected.joinToString("; ")}", style = FTType.Caption, color = FT.TextMuted)
@@ -420,9 +420,9 @@ private fun PortionEditor(item: CronometerItemResult, onPortion: (CronometerItem
                     Text(
                         "${m.name} · ${formatAmount(m.grams)} g",
                         style = FTType.Caption,
-                        color = if (selected) FT.Emerald else FT.TextSecondary,
+                        color = if (selected) FT.Ok else FT.TextSecondary,
                         modifier = Modifier
-                            .border(FT.BorderWidth, if (selected) FT.Emerald else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
+                            .border(FT.BorderWidth, if (selected) FT.Ok else FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
                             .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall)) {
                                 measure = m
                                 onPortion(item.withMeasure(m, count))
@@ -467,7 +467,7 @@ private fun StepButton(label: String, onClick: () -> Unit) {
     Text(
         label,
         style = FTType.Value,
-        color = FT.Emerald,
+        color = FT.Ok,
         modifier = Modifier
             .border(FT.BorderWidth, FT.GlassBorder, RoundedCornerShape(FT.RadiusSmall))
             .ftClickable(shape = RoundedCornerShape(FT.RadiusSmall), onClick = onClick)
@@ -491,7 +491,7 @@ private fun ActionLink(label: String, onClick: () -> Unit) {
     Text(
         label,
         style = FTType.LabelCaps,
-        color = FT.Emerald,
+        color = FT.Ok,
         modifier = Modifier.ftClickable(onClick = onClick),
     )
 }
@@ -504,7 +504,6 @@ private fun FormFieldLabel(text: String) {
     Text(text, style = sheetActionLabelStyle, color = FT.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
 }
 
-private fun LocalDateTime.toIsoWithOffset(): String = this.atOffset(ZoneOffset.UTC).toString()
 
 // ---- Photo logging v3 ----
 
@@ -513,8 +512,8 @@ private fun photoFoodFor(estimate: NutritionMealEstimate, query: String): PhotoF
     estimate.items.firstOrNull { it.canonicalName.equals(query, ignoreCase = true) || it.name.equals(query, ignoreCase = true) }
 
 private fun levelColor(level: String) = when (level) {
-    "high" -> FT.Emerald
-    "low" -> FT.Warning
+    "high" -> FT.Ok
+    "low" -> FT.Warn
     else -> FT.TextSecondary
 }
 
@@ -575,9 +574,9 @@ private fun PhotoEstimatePanel(
                             Text(
                                 option,
                                 style = FTType.Label,
-                                color = if (on) FT.PlatinumInk else FT.Emerald,
+                                color = if (on) FT.PlatinumInk else FT.Ok,
                                 modifier = Modifier
-                                    .then(if (on) Modifier.background(FT.PlatinumSolid, shape) else Modifier.border(FT.BorderWidth, FT.Emerald.copy(alpha = 0.6f), shape))
+                                    .then(if (on) Modifier.background(FT.PlatinumSolid, shape) else Modifier.border(FT.BorderWidth, FT.Ok.copy(alpha = 0.6f), shape))
                                     // a tap picks the answer, a second tap clears it; nothing reruns until UPDATE
                                     .ftClickable(shape = shape) {
                                         picked = if (on) picked - q.question else picked + (q.question to option)

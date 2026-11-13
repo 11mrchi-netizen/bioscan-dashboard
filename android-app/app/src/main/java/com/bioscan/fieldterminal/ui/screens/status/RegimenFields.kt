@@ -301,7 +301,7 @@ fun RegimenFields(state: RegimenEditorState) {
                         }
                     }
                 }
-                Text("+ ADD A STEP", style = FTType.MonoCaption, color = FT.Emerald,
+                Text("+ ADD A STEP", style = FTType.MonoCaption, color = FT.Ok,
                     modifier = Modifier.ftClickable { state.steps.add(state.steps.size - 1, EditableStep("", "4")) })
                 Hint("Starting ${state.stepsStart}. Each day's reminder and log carry that day's dose; the history records each change.")
             }
@@ -440,6 +440,6 @@ fun DoseCountField(state: RegimenEditorState) {
         }
         // Said as it is typed, not only on SAVE.
         val wrong = state.amount.replace(',', '.').toDoubleOrNull()?.let(state::splitsWrong) == true
-        hint?.let { if (wrong) Text(it, style = FTType.Caption, color = FT.Warning) else Hint(it) }
+        hint?.let { if (wrong) Text(it, style = FTType.Caption, color = FT.Warn) else Hint(it) }
     }
 }

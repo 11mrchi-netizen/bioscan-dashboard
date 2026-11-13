@@ -215,7 +215,7 @@ fun DualAxisChart(
             fun x(d: LocalDate) = ChronoUnit.DAYS.between(d0, d).toFloat() / span * size.width
             fun y(v: Double, b: Pair<Double, Double>) = size.height - ((v - b.first) / (b.second - b.first)).toFloat() * size.height
             if (leftBand != null && lb != null) {
-                drawRect(FT.Emerald.copy(alpha = 0.14f), Offset(0f, y(leftBand.endInclusive, lb)), Size(size.width, y(leftBand.start, lb) - y(leftBand.endInclusive, lb)))
+                drawRect(FT.Ok.copy(alpha = 0.14f), Offset(0f, y(leftBand.endInclusive, lb)), Size(size.width, y(leftBand.start, lb) - y(leftBand.endInclusive, lb)))
             }
             fun draw(lines: List<AxisLine>, b: Pair<Double, Double>?) {
                 if (b == null) return
@@ -237,7 +237,7 @@ fun DualAxisChart(
                     Text(l.label, style = FTType.Micro, color = FT.TextSecondary)
                 }
             }
-            if (leftBand != null) Text(bandLabel, style = FTType.Micro, color = FT.Emerald)
+            if (leftBand != null) Text(bandLabel, style = FTType.Micro, color = FT.Ok)
         }
     }
 }

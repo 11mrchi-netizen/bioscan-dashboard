@@ -15,7 +15,7 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FieldTerminalTheme
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Phase G1: Health Connect requires an activity answering
+// Health Connect requires an activity answering
 // androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE (reachable from Health
 // Connect's own permission screen, and from this app's own Play Store
 // listing if it's ever published) -- a real platform requirement even for a
@@ -30,7 +30,7 @@ class PermissionsRationaleActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize().background(FT.Base).padding(22.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    Text("HEALTH CONNECT DATA USE", style = FTType.SectionTitle, color = FT.Emerald)
+                    Text("HEALTH CONNECT DATA USE", style = FTType.SectionTitle, color = FT.Ok)
                     Text(
                         "Field Terminal reads activity, body measurement, sleep, and vitals records from " +
                             "Health Connect to show them in the Status and Training tabs, and reads/writes " +

@@ -121,7 +121,7 @@ fun RoutineTimeSection(modifier: Modifier = Modifier) {
     fun act(block: suspend () -> Unit) = scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { timer = RoutineTimerStore.current(context); reload++ }) { block() }
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        error?.let { Text("Couldn't load or save: $it", style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text("Couldn't load or save: $it", style = FTType.BodySmall, color = FT.Bad) }
         val list = activities
         PracticesCard(
             list, logs,

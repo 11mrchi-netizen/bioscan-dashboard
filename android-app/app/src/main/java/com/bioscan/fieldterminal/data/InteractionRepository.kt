@@ -31,7 +31,7 @@ private data class InteractionRecordRow(
     val version: Int? = null,
 )
 
-// Analysis Layer 3 / Phase 6. The curated interaction registry (read-only,
+// The curated interaction registry (read-only,
 // shared) plus the roster reduced to what the pure detector needs.
 class InteractionRepository(private val supabase: SupabaseClient) {
     private companion object {

@@ -117,7 +117,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { onConflict = "user_id,date" }
     }
 
-    // personId/calendarEventTitle (Phase M3) are only ever passed by the Map
+    // personId/calendarEventTitle are only ever passed by the Map
     // tab's "LOG ENCOUNTER" action -- defaulted null so that call site
     // (date/encounterType/notes only) is unchanged. occurredAt/locationType/
     // durationMin/activities/myRating (DAV-158/159) default null too, for
@@ -176,7 +176,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         ) { onConflict = "user_id,date" }
     }
 
-    // Analysis Layer 3 / R2 (log agent). Partial write: only the scores that were stated go to the row, so "energy 7" cannot
+    // Partial write: only the scores that were stated go to the row, so "energy 7" cannot
     // null out the mood or arousal already logged for the day (addWellbeing upserts the whole row).
     suspend fun mergeWellbeing(date: String, energy: Int?, mood: Int?, stress: Int?, soreness: Int?) {
         val fields = buildJsonObject {
@@ -212,7 +212,7 @@ class AddEntryRepository(private val supabase: SupabaseClient) {
         addSupplementsTaken(takenAt, listOf(Triple(row.id, row.name, row.dose)), quantities = mapOf(row.id to quantity))
     }
 
-    // Phase A4 (Category 8). severity_score is a stored generated column --
+    // severity_score is a stored generated column --
     // never written here, matching NewOstrcRow's own shape (q1-q4 + notes
     // only).
     suspend fun addOstrc(checkDate: String, bodyArea: String, q1: Int, q2: Int, q3: Int, q4: Int, notes: String?) {

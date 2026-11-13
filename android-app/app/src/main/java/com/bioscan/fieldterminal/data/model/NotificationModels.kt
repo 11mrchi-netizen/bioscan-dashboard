@@ -7,7 +7,7 @@ object NotificationKind {
     const val SUPPLEMENT_DUE = "supplement_due"
     const val CHECKIN_MORNING = "checkin_morning"
     const val CHECKIN_EVENING = "checkin_evening"
-    // Analysis Layer 3 / R2: prompts that feed the sparsest capture streams (wellbeing scores; drinks, supplements, recovery).
+    // Prompts that feed the sparsest capture streams (wellbeing scores; drinks, supplements, recovery).
     const val WELLBEING_CHECKIN = "wellbeing_checkin"
     const val EVENING_LOG = "evening_log"
     // Analysis review phase B: the structured evening check-in (drinks, caffeine after 14:00, late meal, stress) at 22:25.

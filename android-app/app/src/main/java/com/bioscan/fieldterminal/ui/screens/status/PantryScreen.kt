@@ -88,7 +88,7 @@ fun PantryScreen(onBack: () -> Unit) {
             )
             val list = items
             when {
-                error != null && list == null -> Text("Failed to load: $error", style = body, color = FT.Critical)
+                error != null && list == null -> Text("Failed to load: $error", style = body, color = FT.Bad)
                 list == null -> SkeletonSections()
                 list.isEmpty() -> Text("No supplements with a linked product yet. Add ingredients to a supplement (or verify it by barcode) to track its stock here.", style = body, color = FT.TextSecondary)
                 else -> {
@@ -162,7 +162,7 @@ private fun StockLines(item: PantryItem) {
             PantryFindingKind.ProviderFlag -> "SOURCE FLAG"
             PantryFindingKind.NoStock -> ""
         }
-        Text("! $name: ${it.reason}", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.Warning)
+        Text("! $name: ${it.reason}", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.Warn)
     }
 }
 
@@ -256,7 +256,7 @@ private fun PantryDetailSheet(item: PantryItem, repo: PantryRepository, onDismis
                             repo.addEvent(item.productId, StockEventKind.Purchase, n!! * per!!, exp, price.toDoubleOrNull())
                         }
                     }
-                    if (!expOk) Text("Use the format YYYY-MM-DD for the expiry date.", style = body, color = FT.Warning)
+                    if (!expOk) Text("Use the format YYYY-MM-DD for the expiry date.", style = body, color = FT.Warn)
                 }
                 StockMode.Count -> {
                     val remaining = item.assessment.remainingServings
@@ -281,7 +281,7 @@ private fun PantryDetailSheet(item: PantryItem, repo: PantryRepository, onDismis
                 }
                 null -> {}
             }
-            error?.let { Text("Couldn't save ($it).", style = body, color = FT.Critical) }
+            error?.let { Text("Couldn't save ($it).", style = body, color = FT.Bad) }
 
             if (item.events.isNotEmpty()) {
                 Text("STOCK HISTORY", style = label, color = FT.TextSecondary)
@@ -325,7 +325,7 @@ private fun ProviderFactsCard(item: PantryItem) {
         return
     }
     val p = f.product
-    Text("SuppCo · retrieved ${f.retrievedAt.take(10)} · data: supp.co", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.TextPrimary)
+    Text("SuppCo · retrieved ${retrievedDay(f.retrievedAt)} · data: supp.co", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.TextPrimary)
     listOfNotNull(
         p.format?.let { "Format: $it" },
         p.servingSize.raw?.let { "Serving size: $it" },
@@ -338,6 +338,6 @@ private fun ProviderFactsCard(item: PantryItem) {
     ).forEach { Text(it, style = body, color = FT.TextSecondary) }
     val flags = p.flagTexts()
     if (flags.isEmpty()) Text("No recall, warning letter, failed test or off-market flag reported at that date.", style = body, color = FT.TextSecondary)
-    else flags.forEach { Text("! $it", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.Warning) }
+    else flags.forEach { Text("! $it", style = body.copy(fontWeight = FontWeight.SemiBold), color = FT.Warn) }
     Text("To refresh, open this supplement in the editor and verify it by barcode.", style = body, color = FT.TextSecondary)
 }

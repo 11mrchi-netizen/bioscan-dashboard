@@ -21,7 +21,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.time.LocalDate
 
-// Phase A3 (Analysis Layer). A cycle with a malformed quality/role value is
+// A cycle with a malformed quality/role value is
 // dropped from its own focus list rather than crashing the whole read --
 // defensive parsing, same convention this app already uses for timestamp
 // parsing elsewhere (domain/Log.kt's parseTimestamp()).

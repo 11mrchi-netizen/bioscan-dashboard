@@ -184,7 +184,7 @@ fun RunningFormSheet(onDismiss: () -> Unit) {
                 is Stage.Reading -> ReadingStage(s) { job?.cancel(); stage = Stage.Setup }
                 is Stage.Report -> ReportStage(s, repo, history, onSaved = { historyKey++ }, onAnother = { stage = Stage.Setup }, onDone = onDismiss)
                 is Stage.Failed -> {
-                    Text("The clip could not be read: ${s.message}", style = FTType.BodySmall, color = FT.Critical)
+                    Text("The clip could not be read: ${s.message}", style = FTType.BodySmall, color = FT.Bad)
                     FTButton("TRY ANOTHER CLIP", emphasis = FTButtonEmphasis.Primary) { stage = Stage.Setup }
                 }
             }
@@ -241,9 +241,9 @@ private fun ReadingStage(s: Stage.Reading, onCancel: () -> Unit) {
 }
 
 private fun qualityColor(q: ClipQuality) = when (q) {
-    ClipQuality.GOOD -> FT.Emerald
-    ClipQuality.USABLE -> FT.Warning
-    ClipQuality.POOR -> FT.Critical
+    ClipQuality.GOOD -> FT.Ok
+    ClipQuality.USABLE -> FT.Warn
+    ClipQuality.POOR -> FT.Bad
 }
 
 @Composable
@@ -291,7 +291,7 @@ private fun ReportStage(
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(q.level.name, style = FTType.LabelCaps, color = qualityColor(q.level))
             if (q.issues.isEmpty()) Text("Runner in view, near leg clear, enough steps.", style = FTType.BodySmall, color = FT.TextSecondary)
-            q.issues.forEach { Text("· ${it.text}", style = FTType.BodySmall, color = if (it.blocking) FT.Critical else FT.TextSecondary) }
+            q.issues.forEach { Text("· ${it.text}", style = FTType.BodySmall, color = if (it.blocking) FT.Bad else FT.TextSecondary) }
         }
     }
 
@@ -348,7 +348,7 @@ private fun ReportStage(
             }
         }
     }
-    error?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+    error?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         if (r.metrics != null) {
             FTButton(
@@ -425,8 +425,8 @@ private fun FindingRow(f: FormFinding, since: String?) {
             Text(f.value, style = FTType.Value, color = FT.TextPrimary)
         }
         when (f.state) {
-            FindingState.WORTH_A_LOOK -> Text("WORTH A LOOK", style = FTType.LabelCaps, color = FT.Warning)
-            FindingState.TYPICAL -> Text("TYPICAL", style = FTType.LabelCaps, color = FT.Emerald)
+            FindingState.WORTH_A_LOOK -> Text("WORTH A LOOK", style = FTType.LabelCaps, color = FT.Warn)
+            FindingState.TYPICAL -> Text("TYPICAL", style = FTType.LabelCaps, color = FT.Ok)
             FindingState.INFO -> Unit
         }
         Text(f.reason, style = FTType.BodySmall, color = FT.TextSecondary)

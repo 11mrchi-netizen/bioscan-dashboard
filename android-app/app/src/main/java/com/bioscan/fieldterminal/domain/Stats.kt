@@ -5,7 +5,7 @@ import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.sqrt
 
-// Phase A2 (Analysis Layer). This project's own domain layer had no generic
+// This project's own domain layer had no generic
 // mean/SD/median helper before this. These three are deliberately the first, kept
 // minimal (population SD, dividing by n rather than n-1, the convention of the
 // HRV z-score band they were written beside, since retired) rather than a
@@ -49,7 +49,7 @@ fun windowEndingAt(values: List<Pair<LocalDate, Double>>, end: LocalDate, days: 
     return values.filter { !it.first.isBefore(start) && !it.first.isAfter(end) }
 }
 
-// Phase A3 (Category 3). Mann-Kendall trend test -- chosen by the spec
+// Mann-Kendall trend test -- chosen by the spec
 // specifically because it's non-parametric, tolerates the ties an 0-10
 // ordinal scale is full of (hence the tie-corrected variance below, not the
 // simpler untied formula), and needs no imputation for missing days.

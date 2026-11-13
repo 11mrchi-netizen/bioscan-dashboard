@@ -170,7 +170,7 @@ fun FuelScheduleCard(
                         style = FTType.LabelCaps, color = FT.TextPrimary,
                     )
                     Text("${expandSchedule(blocks.toList()).size} intakes over ${clock(durationMin)}", style = FTType.MonoCaption, color = FT.TextSecondary)
-                    scheduleWarnings(blocks.toList(), durationMin, toleratedGPerHour).forEach { Text("· $it", style = FTType.Caption, color = FT.Warning) }
+                    scheduleWarnings(blocks.toList(), durationMin, toleratedGPerHour).forEach { Text("· $it", style = FTType.Caption, color = FT.Warn) }
                 }
                 FTButton("ADD A BLOCK", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
                     editing = FuelBlock(UUID.randomUUID().toString().take(8), "", FuelForm.GEL.key, startMin = 30, intervalMin = 30, count = 1)
@@ -178,7 +178,7 @@ fun FuelScheduleCard(
                 }
             }
         }
-        error?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
     }
 
     editing?.let { b ->
@@ -308,7 +308,7 @@ internal fun FuelBlockSheet(initial: FuelBlock, isNew: Boolean, onDismiss: () ->
                 val preview = FuelBlock(initial.id, name, form.key, startMin!!, intervalMin ?: 0, n!!, num(carbs) ?: 0.0, num(fluid) ?: 0.0, num(sodium) ?: 0.0, num(caffeine) ?: 0.0)
                 Text("${n} intake${if (n == 1) "" else "s"}, ${amount(preview.carbsG * n)} g carbs, ${amount(preview.fluidMl * n)} ml, last at ${clock(preview.endMin)}", style = FTType.LabelCaps, color = FT.TextPrimary)
             }
-            problem?.let { Text(it, style = FTType.Caption, color = FT.Warning) }
+            problem?.let { Text(it, style = FTType.Caption, color = FT.Warn) }
             FTButton("SAVE BLOCK", enabled = valid, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.fillMaxWidth()) {
                 onSave(
                     FuelBlock(

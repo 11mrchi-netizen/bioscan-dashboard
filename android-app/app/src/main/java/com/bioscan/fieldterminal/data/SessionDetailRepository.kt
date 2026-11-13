@@ -135,7 +135,7 @@ suspend fun loadZeppWorkoutSummaries(supabase: SupabaseClient): List<ZeppWorkout
             .decodeList<ZeppWorkoutDetailSummaryRow>()
     }
 
-// Phase G4/G5. loadHeader() reads the session's real aggregates from Supabase
+// loadHeader() reads the session's real aggregates from Supabase
 // (same source Training/Log already use); loadTimeSeries() reads fresh from
 // Health Connect on demand, every time this screen opens, nothing persisted
 // -- the same fetch-on-demand principle Step 14's GPX route already
@@ -145,7 +145,7 @@ suspend fun loadZeppWorkoutSummaries(supabase: SupabaseClient): List<ZeppWorkout
 //
 // Elevation-over-time isn't part of loadTimeSeries(): ElevationGainedRecord
 // only gives interval deltas, not a continuous profile -- a real profile
-// needs the session's ExerciseRoute, which (Phase G5) checkRouteAvailability()
+// needs the session's ExerciseRoute, which checkRouteAvailability()
 // reads separately, since it needs its own per-session consent flow rather
 // than this app's bulk Health Connect grant.
 class SessionDetailRepository(
@@ -269,7 +269,7 @@ class SessionDetailRepository(
         return pts.map { RoutePoint(it.offsetSeconds, it.lat, it.lon, altMap[it.offsetSeconds]) }
     }
 
-    // Phase G5. A session's exercise route isn't covered by this app's bulk
+    // A session's exercise route isn't covered by this app's bulk
     // Health Connect grant -- ExerciseSessionRecord.exerciseRouteResult tells
     // us directly which of Health Connect's three states this session is in
     // (real data already attached, a one-time consent screen is needed, or

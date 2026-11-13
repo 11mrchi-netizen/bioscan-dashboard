@@ -130,7 +130,7 @@ fun MealPrepPage(overview: NutritionOverview?, modifier: Modifier = Modifier) {
             { if (it == thisWeek) "THIS WEEK" else "NEXT WEEK" }, { weekStart = it }, accentColor = FT.DomainFuel,
         )
         error?.let {
-            Text("Couldn't load or save: $it", style = FTType.BodySmall, color = FT.Critical)
+            Text("Couldn't load or save: $it", style = FTType.BodySmall, color = FT.Bad)
             FTButton("RETRY", emphasis = FTButtonEmphasis.Tertiary) { attempt++ }
         }
         val p = plan

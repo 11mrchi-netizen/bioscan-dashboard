@@ -65,8 +65,8 @@ private const val CONCERNS_INFO = "A concern is anything that keeps bothering yo
     "This is personal tracking, not a diagnosis."
 
 fun concernColor(state: String): Color = when (state) {
-    "worsening" -> FT.Warning
-    "improving" -> FT.Emerald
+    "worsening" -> FT.Warn
+    "improving" -> FT.Ok
     "unobserved", "resolved" -> FT.TextMuted
     else -> FT.DomainHeart
 }
@@ -148,7 +148,7 @@ fun ConcernsTab(onOpenConcern: (String) -> Unit, anatomicalOnly: Boolean = false
         val prompts = (overview?.concerns ?: emptyList()).filter { !it.archived }.flatMap { o -> o.safety.map { o.title to it.text } }
         if (prompts.isNotEmpty()) {
             FTCard(title = "WORTH A CLINICIAN'S VIEW", info = "Shown whenever a check-in meets a fixed rule (very high severity, fever of 39 °C or more, numbness, chest symptoms, pain at night, an illness over ten days). Not a diagnosis.") {
-                prompts.forEach { (title, text) -> Text("$title — $text", style = FTType.BodySmall, color = FT.Warning) }
+                prompts.forEach { (title, text) -> Text("$title — $text", style = FTType.BodySmall, color = FT.Warn) }
             }
         }
 
@@ -265,7 +265,7 @@ private fun SmallThingsCard(checks: List<SymptomCheckRow>, vocab: HealthVocab) {
                         when (level) { "urgent" -> "red flag"; "clinician" -> "worth a clinician's view"; else -> null },
                         "tracked".takeIf { c.signals.any { it.concernId != null } },
                     ).joinToString(" · ").ifBlank { "Nothing pointed one way" },
-                    style = FTType.Caption, color = if (level == "urgent" || level == "clinician") FT.Warning else FT.TextSecondary,
+                    style = FTType.Caption, color = if (level == "urgent" || level == "clinician") FT.Warn else FT.TextSecondary,
                 )
             }
         }

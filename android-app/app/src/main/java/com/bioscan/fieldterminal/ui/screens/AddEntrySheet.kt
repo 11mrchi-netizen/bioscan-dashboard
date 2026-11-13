@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.domain.toAppIso
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -171,7 +172,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
@@ -209,7 +209,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
     var healthForm by rememberSaveable(stateSaver = AddEntryTargetSaver) { mutableStateOf<AddEntryTarget?>(null) }
     // A symptom check's symptoms and signals, carried into the illness it is tracked as.
     var illnessPrefill by remember { mutableStateOf<Pair<Set<String>, List<Long>>>(emptySet<String>() to emptyList()) }
-    // Analysis Layer 3 / R2: "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
+    // "say it" (LogAgentForm) and its hand-off of a food proposal to the normal food form.
     var sayIt by rememberSaveable { mutableStateOf(start is AddEntryStart.SayIt) }
     var foodPrefill by rememberSaveable { mutableStateOf<Pair<String, LocalDateTime>?>(null) }
     val repo = remember { AddEntryRepository(SupabaseClientProvider.client) }
@@ -280,7 +280,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                     )
                 } else if (type == null) {
                     Text("LOG NEW ENTRY", style = sheetHeaderTitleStyle, color = FT.DomainLog)
-                    // Scoring system rebuild: SAY IT is no longer offered here (the menu goes straight to the types).
+                    // SAY IT is no longer offered here (the menu goes straight to the types).
                     Spacer(Modifier.height(16.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         if (recent.isNotEmpty()) ChoiceSection("RECENT", recent, pick)
@@ -303,7 +303,7 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
                             what = "Couldn't save the entry",
                         )
                     }
-                    saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
+                    saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad) }
                     when (type) {
                         AddEntryType.Fuel -> FuelForm(
                             saving, onSubmit, onCanonicalSaved = onSaved, externalActivityActive = externalActivityActive, foodPrefill = foodPrefill,
@@ -334,8 +334,8 @@ fun AddEntrySheet(onDismiss: () -> Unit, onSaved: () -> Unit, start: AddEntrySta
 // DETAIL / EDIT / DELETE. It used to open a bare action menu. EDIT appears when the source has a corresponding form;
 // Sleep has no add-entry form and no editable fields, so it stays delete-only. Supplement (DAV-156) is editable -- dose
 // is a real field, even though which supplement was taken still isn't (that's "delete and re-log," not "edit").
-// Exercise (Phase G3) IS editable -- not its Health-Connect-sourced fields, just rpe/notes via ExerciseDetailsForm.
-// DETAIL (Phase G4) pushes SessionDetailScreen for exercise and opens the sleep detail for sleep. DELETE asks first
+// Exercise IS editable -- not its Health-Connect-sourced fields, just rpe/notes via ExerciseDetailsForm.
+// DETAIL pushes SessionDetailScreen for exercise and opens the sleep detail for sleep. DELETE asks first
 // (contract A2) and says when it failed.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -370,7 +370,7 @@ fun EntrySheet(
                 if (editable) FTButton(label = "EDIT", modifier = Modifier.weight(1f), onClick = onEdit)
                 FTButton(label = "DELETE", emphasis = FTButtonEmphasis.Destructive, modifier = Modifier.weight(1f)) { onDeleted() }
             }
-            deleteError?.let { Text("Couldn't delete: $it", style = FTType.BodySmall, color = FT.Critical) }
+            deleteError?.let { Text("Couldn't delete: $it", style = FTType.BodySmall, color = FT.Bad) }
             Spacer(Modifier.height(4.dp))
         }
     }
@@ -445,7 +445,7 @@ fun EditEntrySheet(entry: LogEntry, onDismiss: () -> Unit, onSaved: () -> Unit) 
                     }
                 }
             }
-            saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
+            saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad) }
 
             if (row == null) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) {
@@ -656,7 +656,6 @@ private fun parseIsoToLocalDateTime(iso: String): LocalDateTime =
         LocalDateTime.parse(iso)
     }
 
-private fun LocalDateTime.toIsoWithOffset(): String = this.atOffset(ZoneOffset.UTC).toString()
 
 @Composable
 private fun SheetBackHeader(label: String, onBack: () -> Unit) {
@@ -741,7 +740,7 @@ private fun QtyRow(qty: Double, step: Double = SUPPLEMENT_QTY_STEP, words: ((Dou
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("QTY", style = FTType.LabelCaps, color = if (qty > 0.0) FT.TextMuted else FT.Warning)
+        Text("QTY", style = FTType.LabelCaps, color = if (qty > 0.0) FT.TextMuted else FT.Warn)
         for (delta in listOf(-step, step)) {
             Box(
                 modifier = Modifier
@@ -762,7 +761,7 @@ private fun QtyRow(qty: Double, step: Double = SUPPLEMENT_QTY_STEP, words: ((Dou
             // A fixed width, so the steppers of every row line up whatever the amount reads.
             if (delta < 0) Text(
                 if (qty > 0.0) (words?.invoke(qty) ?: formatSupplementQty(qty)) else "NOT TAKEN",
-                style = FTType.Telemetry, color = if (qty > 0.0) FT.TextPrimary else FT.Warning,
+                style = FTType.Telemetry, color = if (qty > 0.0) FT.TextPrimary else FT.Warn,
                 maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.width(112.dp),
             )
         }
@@ -1170,7 +1169,7 @@ private fun FoodForm(
                     Text(
                         "CLEAR",
                         style = sheetActionLabelStyle,
-                        color = FT.Critical,
+                        color = FT.Bad,
                         modifier = Modifier.ftClickable {
                             pendingPhotos = emptyList()
                         },
@@ -1199,7 +1198,7 @@ private fun FoodForm(
                 }
             }
             estimationError?.let {
-                Text(it, style = FTType.BodySmall, color = FT.Critical, modifier = Modifier.padding(top = 10.dp))
+                Text(it, style = FTType.BodySmall, color = FT.Bad, modifier = Modifier.padding(top = 10.dp))
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 14.dp)) {
@@ -1224,7 +1223,7 @@ private fun FoodForm(
                 }
             }
             barcodeError?.let {
-                Text(it, style = FTType.BodySmall, color = FT.Critical, modifier = Modifier.padding(top = 8.dp))
+                Text(it, style = FTType.BodySmall, color = FT.Bad, modifier = Modifier.padding(top = 8.dp))
             }
 
             Text(
@@ -1262,7 +1261,7 @@ private fun FoodForm(
                                         cloning = true
                                         scope.launch {
                                             try {
-                                                NutritionMealSaveRepository(SupabaseClientProvider.client).cloneMeal(id, dateTime.toIsoWithOffset(), mealSlot)
+                                                NutritionMealSaveRepository(SupabaseClientProvider.client).cloneMeal(id, dateTime.toAppIso(), mealSlot)
                                                 onCanonicalSaved()
                                             } catch (e: Exception) {
                                                 barcodeError = e.message ?: "Could not repeat this meal"
@@ -1295,7 +1294,7 @@ private fun FoodForm(
         }
         SaveButton(saving, description.isNotBlank()) {
             onSave(
-                dateTime.toIsoWithOffset(),
+                dateTime.toAppIso(),
                 description.trim(),
                 calories.toDoubleOrNull(),
                 protein.toDoubleOrNull(),
@@ -1619,7 +1618,7 @@ private fun SupplementsForm(
             }
         }
         SaveButton(saving, selectedItems.any { (quantities[it.first] ?: 1.0) > 0.0 }) {
-            onSave(dateTime.toIsoWithOffset(), selectedItems.filter { (quantities[it.first] ?: 1.0) > 0.0 }, source, quantities, chosenSites)
+            onSave(dateTime.toAppIso(), selectedItems.filter { (quantities[it.first] ?: 1.0) > 0.0 }, source, quantities, chosenSites)
         }
     }
 }
@@ -1651,7 +1650,7 @@ private fun SupplementEditForm(
             Column(Modifier.weight(1f)) { FormLabel("UNIT (OPTIONAL)"); FieldTextField(doseUnit, { doseUnit = it }, "e.g. mg") }
         }
         SaveButton(saving, true) {
-            onSave(dateTime.toIsoWithOffset(), doseValue.toDoubleOrNull(), doseUnit.trim().ifBlank { null })
+            onSave(dateTime.toAppIso(), doseValue.toDoubleOrNull(), doseUnit.trim().ifBlank { null })
         }
     }
 }
@@ -1698,8 +1697,8 @@ private fun CheckboxGlyph(checked: Boolean) {
     Box(
         modifier = Modifier
             .size(18.dp)
-            .border(1.dp, if (checked) FT.Emerald else FT.GlassBorder)
-            .background(if (checked) FT.Emerald else Color.Transparent),
+            .border(1.dp, if (checked) FT.Ok else FT.GlassBorder)
+            .background(if (checked) FT.Ok else Color.Transparent),
         contentAlignment = Alignment.Center,
     ) {
         if (checked) {
@@ -1771,7 +1770,7 @@ private fun EncounterForm(
         SaveButton(saving, true) {
             onSave(
                 dateTime.toLocalDate().toString(),
-                dateTime.toIsoWithOffset(),
+                dateTime.toAppIso(),
                 encounterType.trim().ifBlank { null },
                 locationType.trim().ifBlank { null },
                 durationMin.toIntOrNull(),
@@ -1803,7 +1802,7 @@ private fun GripForm(
         Column { FormLabel("HAND"); TextChipRow(listOf("right", "left"), hand, perRow = 2) { hand = it } }
         Column { FormLabel("BEST OF 3, KG (DYNAMOMETER, 5-120)"); FieldTextField(kg, { kg = it }, "e.g. 46.5", keyboardType = KeyboardType.Decimal) }
         SaveButton(saving, hand != null && value != null) {
-            onSave(dateTime.toIsoWithOffset(), hand!!, value!!)
+            onSave(dateTime.toAppIso(), hand!!, value!!)
         }
     }
 }
@@ -1837,7 +1836,7 @@ private fun StoolForm(
             }
         }
         SaveButton(saving, bristolType != null) {
-            onSave(dateTime.toIsoWithOffset(), bristolType!!, discomfort.toIntOrNull(), empty)
+            onSave(dateTime.toAppIso(), bristolType!!, discomfort.toIntOrNull(), empty)
         }
     }
 }
@@ -1997,7 +1996,7 @@ private fun SexualActivityInstanceEditor(
                 Text(
                     "REMOVE",
                     style = FTType.MonoCaption,
-                    color = FT.Critical,
+                    color = FT.Bad,
                     modifier = Modifier.ftClickable { onRemove() },
                 )
             }
@@ -2030,7 +2029,7 @@ private fun SexualActivityInstanceEditor(
                         Text(
                             "CLEAR",
                             style = FTType.Micro,
-                            color = FT.Critical,
+                            color = FT.Bad,
                             modifier = Modifier.ftClickable {
                                 instance.partnerId = null
                                 instance.partnerName = ""
@@ -2060,7 +2059,7 @@ private fun SexualActivityInstanceEditor(
                         Text(
                             "+ ADD \"$trimmedQuery\"",
                             style = FTType.LabelCaps,
-                            color = FT.Emerald,
+                            color = FT.Ok,
                             modifier = Modifier.ftClickable {
                                 newPartnerInitialName = trimmedQuery
                                 showNewPartnerSheet = true
@@ -2135,7 +2134,7 @@ private fun NewPartnerSheet(
                 TextChipRow(listOf("1", "2", "3", "4", "5"), score?.toString(), perRow = 5) { score = it?.toIntOrNull() }
             }
             Column { FormLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "", singleLine = false) }
-            error?.let { Text("Couldn't create ($it).", style = FTType.Caption, color = FT.Critical) }
+            error?.let { Text("Couldn't create ($it).", style = FTType.Caption, color = FT.Bad) }
             SaveButton(saving, name.isNotBlank()) {
                 if (!saving && name.isNotBlank()) {
                     saving = true
@@ -2164,10 +2163,10 @@ private fun NewPartnerSheet(
     }
 }
 
-// Phase A4 (Category 8). OSTRC-H2's own four-question weekly prompt per body
+// OSTRC-H2's own four-question weekly prompt per body
 // area -- q1/q4 (participation/performance) share one value set, q2/q3
 // (training volume/performance reduction) share a different, five-value
-// set. severity_score is a stored generated column (Phase A1) -- computed
+// set. severity_score is a stored generated column -- computed
 // server-side, never sent from here. body_area stays free text (the schema
 // has no fixed list -- see the A1 migration's own column definition).
 @Composable
@@ -2449,7 +2448,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                 Text(
                     "REMOVE",
                     style = FTType.MonoCaption,
-                    color = FT.Critical,
+                    color = FT.Bad,
                     modifier = Modifier.ftClickable { onRemove() },
                 )
             }
@@ -2491,7 +2490,7 @@ private fun ExerciseEditor(exercise: EditableExercise, canRemove: Boolean, onRem
                         Text(
                             "REMOVE",
                             style = FTType.MonoCaption,
-                            color = FT.Critical,
+                            color = FT.Bad,
                             modifier = Modifier.ftClickable { exercise.sets.removeAt(i) },
                         )
                     }
@@ -2529,7 +2528,7 @@ private fun NoteForm(saving: Boolean, initialDateTime: LocalDateTime = LocalDate
         DateTimeField("WHEN", dateTime, { dateTime = it })
         Column { FormLabel("NOTE"); FieldTextField(text, { text = it }, "Write a note...", singleLine = false) }
         SaveButton(saving, text.isNotBlank()) {
-            onSave(dateTime.toIsoWithOffset(), text.trim())
+            onSave(dateTime.toAppIso(), text.trim())
         }
     }
 }

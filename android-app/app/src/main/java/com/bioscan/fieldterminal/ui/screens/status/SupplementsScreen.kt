@@ -59,7 +59,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Step 8 (Phase C). Real data from `supplements`. Ports index.html's
+// Real data from `supplements`. Ports index.html's
 // isSupplementActive()/supplementOutcome() 1:1 (domain/Supplements.kt) --
 // same active-or-ended-within-7-days display filter, same outcome-by-name
 // keyword map. Shows every supplement in one condensed list (not distributed
@@ -81,12 +81,12 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     var editing by remember { mutableStateOf<SupplementRow?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
     var reviewing by remember { mutableStateOf(false) }
-    // Analysis Layer 3 / Phase 5: supplement N-of-1 experiments.
+    // Supplement N-of-1 experiments.
     var experimenting by remember { mutableStateOf<SupplementRow?>(null) }
     var experiments by remember { mutableStateOf<List<ExperimentRow>>(emptyList()) }
     var experimentResults by remember { mutableStateOf<Map<String, ExperimentResultRow>>(emptyMap()) }
 
-    // Phase 6: curated interaction registry checked against the active roster.
+    // Curated interaction registry checked against the active roster.
     var interactionRecords by remember { mutableStateOf<List<InteractionRecord>>(emptyList()) }
     var rosterItems by remember { mutableStateOf<List<RosterItem>>(emptyList()) }
     val detections = remember(interactionRecords, rosterItems) { detectInteractions(rosterItems, interactionRecords) }
@@ -137,7 +137,7 @@ fun SupplementsScreen(onOpenPantry: () -> Unit = {}) {
     when {
         isLoading -> SkeletonSections()
         error != null -> Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), contentAlignment = Alignment.Center) {
-            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
+            Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Bad)
         }
         else -> SupplementsContent(
             overview = overview!!,
@@ -229,7 +229,7 @@ private fun SupplementsContent(
         }
 
         if (overview.active.isNotEmpty()) {
-            SectionLabel("ACTIVE", FT.Emerald)
+            SectionLabel("ACTIVE", FT.Ok)
             // DAV-82: same morning/afternoon/night/as-needed grouping
             // AddEntrySheet.kt's SupplementsForm already uses for the "log as
             // taken" bundles -- this roster view and that logging view now
@@ -260,13 +260,13 @@ private fun SupplementsContent(
         Text(
             "REVIEW THE SOURCES BEHIND THESE ›",
             style = FTType.MonoCaption,
-            color = FT.Emerald,
+            color = FT.Ok,
             modifier = Modifier.ftClickable(onClick = onOpenReview).padding(vertical = 4.dp),
         )
 
         if (labelNotes.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("FROM THE LABELS", FT.Warning,
+                SectionLabel("FROM THE LABELS", FT.Warn,
                     info = "What an FDA label says about something else you take, in its own words. Read it; it is not a verdict.")
                 labelNotes.forEach { (owner, m) ->
                     Column {
@@ -348,7 +348,7 @@ private fun ActiveRow(s: SupplementRow, registryOutcome: String, showDivider: Bo
                     modifier = Modifier.padding(top = 3.dp),
                 )
                 (spec.stateWords(today) ?: spec.stepsWords()?.takeIf { spec.steps != null })?.let {
-                    Text(it, style = FTType.Caption, color = FT.Warning, modifier = Modifier.padding(top = 3.dp))
+                    Text(it, style = FTType.Caption, color = FT.Warn, modifier = Modifier.padding(top = 3.dp))
                 }
             }
         }

@@ -243,7 +243,7 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
 
         view.illness?.let { ill ->
             OverlaySection("ILLNESS", info = ILLNESS_INFO) {
-                Text("⚠ ${ill.reason}", style = FTType.BodySmall, color = FT.Warning)
+                Text("⚠ ${ill.reason}", style = FTType.BodySmall, color = FT.Warn)
                 Text(
                     ill.ceiling?.let { c ->
                         "CHARGE goes no higher than ${c.roundToInt()} today" + (charge.uncapped?.takeIf { it > c }?.let { " (it would be ${it.roundToInt()})" } ?: "") + "."
@@ -255,7 +255,7 @@ fun ChargeOverlay(view: ScoresView, onOpen: (ScoreOverlay) -> Unit, onClose: () 
         }
         view.signals?.takeIf { view.illness == null }?.let { s ->
             OverlaySection(if (s.verdict == SignalsVerdict.HEADS_UP) "HEADS-UP" else "BODY SIGNALS", info = SIGNALS_INFO) {
-                Text(s.line, style = FTType.BodySmall, color = if (s.verdict == SignalsVerdict.HEADS_UP) FT.Warning else FT.TextSecondary)
+                Text(s.line, style = FTType.BodySmall, color = if (s.verdict == SignalsVerdict.HEADS_UP) FT.Warn else FT.TextSecondary)
             }
         }
 
@@ -379,7 +379,7 @@ fun DomainOverlay(
         if (key == DomainKey.LOAD) view.series[ScoreKeys.TSB]?.let { TsbGauge(it, view.day) }
         if (key == DomainKey.BALANCE && view.scores.ansState == AnsState.SATURATED) {
             Text("SATURATED: HRV is high while the pattern looks like overreaching, so RECOVERY gets no points above 100 this morning.",
-                style = FTType.Caption, color = FT.Warning)
+                style = FTType.Caption, color = FT.Warn)
         }
         val groups = domain.raw.groups
         if (groups.size > 1) GroupRings(groups.map { it.group.label to it.score }, GaugePalette.of(key))
@@ -392,7 +392,7 @@ fun DomainOverlay(
                 // Intake is scored against the daily targets: without them those inputs are missing although meals are logged.
                 val goalsSet = NutritionGoalsStore.getGoals(LocalContext.current).isSet
                 val (noTarget, noData) = missing.partition { !goalsSet && it.key in TARGET_INPUTS }
-                if (noTarget.isNotEmpty()) Text("No target set: ${noTarget.joinToString { inSentence(it.label) }}. Set daily targets in ME › ⚙ › NUTRITION GOALS.", style = FTType.Caption, color = FT.Warning)
+                if (noTarget.isNotEmpty()) Text("No target set: ${noTarget.joinToString { inSentence(it.label) }}. Set daily targets in ME › ⚙ › NUTRITION GOALS.", style = FTType.Caption, color = FT.Warn)
                 if (noData.isNotEmpty()) Text("No data: ${noData.joinToString { inSentence(it.label) }}", style = FTType.Caption, color = FT.TextMuted)
             }
         }
@@ -450,8 +450,8 @@ private fun ScorecardBlock(result: ScorecardResult?, label: String, isCharge: Bo
         "${com.bioscan.fieldterminal.domain.scorecardWord(result.verdict)} · against ${result.targetText}",
         style = FTType.Label,
         color = when (result.verdict) {
-            ScorecardVerdict.EARNS_ITS_PLACE -> FT.Emerald
-            ScorecardVerdict.NO_BETTER -> FT.Warning
+            ScorecardVerdict.EARNS_ITS_PLACE -> FT.Ok
+            ScorecardVerdict.NO_BETTER -> FT.Warn
             else -> FT.TextSecondary
         },
     )

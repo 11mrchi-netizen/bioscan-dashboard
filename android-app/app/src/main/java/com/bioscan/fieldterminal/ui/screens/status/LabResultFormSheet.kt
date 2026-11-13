@@ -69,7 +69,7 @@ fun LabResultFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("ADD LAB RESULT", style = sheetHeaderTitleStyle, color = FT.Emerald)
+            Text("ADD LAB RESULT", style = sheetHeaderTitleStyle, color = FT.Ok)
 
             DateField("DRAW DATE", date, { date = it })
             Column { FormFieldLabel("MARKER"); FieldTextField(markerName, { markerName = it }, "e.g. Ferritin") }
@@ -81,7 +81,7 @@ fun LabResultFormSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
             }
 
             error?.let {
-                Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical)
+                Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad)
             }
 
             val valid = markerName.isNotBlank() && value.toDoubleOrNull() != null

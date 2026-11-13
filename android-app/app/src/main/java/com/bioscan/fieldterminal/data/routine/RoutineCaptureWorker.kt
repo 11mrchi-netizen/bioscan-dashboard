@@ -51,7 +51,7 @@ class RoutineCaptureWorker(context: Context, params: WorkerParameters) : Corouti
         val uploaded = stage("upload") { repo.uploadOutbox(ctx) }
         if (uploaded) RoutineSettingsStore.putLong(ctx, RoutineSettingsStore.KEY_LAST_UPLOAD, System.currentTimeMillis())
         if (uploaded && RoutineSettingsStore.isEnabled(ctx, RoutineStream.LOCATION)) {
-            // R3: each visit gets its place, then the trips between visits are rebuilt.
+            // Each visit gets its place, then the trips between visits are rebuilt.
             val visits = stage("visits") { repo.refreshVisits(placeIdsFor = { stays -> places.assign(ctx, stays) }) }
             val repair = RoutineSettingsStore.getLong(ctx, RoutineSettingsStore.KEY_TRIPS_REPAIRED) == 0L
             val tripsOk = visits && stage("trips") {

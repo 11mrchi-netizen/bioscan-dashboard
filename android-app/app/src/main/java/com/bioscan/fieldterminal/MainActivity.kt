@@ -114,7 +114,7 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
     var signInError by remember { mutableStateOf<String?>(null) }
     val isAuthenticated = sessionStatus is SessionStatus.Authenticated
 
-    // Phase G2: auto-sync once per app open, replacing the old manual/
+    // Auto-sync once per app open, replacing the old manual/
     // chat-triggered Wellness Project sync for the metrics Health Connect
     // now covers. Enqueued as WorkManager background work (HealthConnectSyncWorker)
     // rather than run inline here -- a real on-device sync got killed
@@ -190,12 +190,12 @@ private fun AuthGate(pendingNotificationKind: String?, onNotificationHandled: ()
                     scope.launch { signInError = GoogleAuthManager.signIn(context).exceptionOrNull()?.message }
                 }
             }
-            GateView.LOADING -> CircularProgressIndicator(color = FT.Emerald)
+            GateView.LOADING -> CircularProgressIndicator(color = FT.Ok)
             // supabase-kt keeps retrying the refresh by itself when the cause is the network, so an offline phone with an
             // expired access token is not a lost session: say so instead of demanding a sign-in. Only a real auth failure
             // (revoked or dead refresh token, mirrors the web dashboard's own handling) asks to sign in.
             GateView.OFFLINE -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                CircularProgressIndicator(color = FT.Emerald)
+                CircularProgressIndicator(color = FT.Ok)
                 Text("Offline. Reconnecting when the network is back.", style = FTType.BodySmall, color = FT.TextSecondary)
             }
             GateView.SESSION_EXPIRED -> {
@@ -214,7 +214,7 @@ private fun SignInPrompt(label: String, emphasis: FTButtonEmphasis, error: Strin
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         FTButton(label = label, emphasis = emphasis, onClick = onClick)
         Box(Modifier.widthIn(max = 300.dp).height(52.dp), contentAlignment = Alignment.TopCenter) {
-            error?.let { Text(it, style = FTType.Caption, color = FT.Critical, textAlign = TextAlign.Center, maxLines = 3) }
+            error?.let { Text(it, style = FTType.Caption, color = FT.Bad, textAlign = TextAlign.Center, maxLines = 3) }
         }
     }
 }

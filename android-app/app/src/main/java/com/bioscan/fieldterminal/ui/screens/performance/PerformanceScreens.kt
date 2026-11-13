@@ -76,7 +76,7 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-private val SPORT_COLORS = listOf(FT.Category.Activity.c500, FT.Emerald, FT.Info, FT.Analysis, FT.Category.Arousal.c300, FT.Warning, FT.TextSecondary)
+private val SPORT_COLORS = listOf(FT.Category.Activity.c500, FT.Ok, FT.Info, FT.Analysis, FT.Category.Arousal.c300, FT.Warn, FT.TextSecondary)
 
 fun sportColor(index: Int): Color = SPORT_COLORS[index % SPORT_COLORS.size]
 

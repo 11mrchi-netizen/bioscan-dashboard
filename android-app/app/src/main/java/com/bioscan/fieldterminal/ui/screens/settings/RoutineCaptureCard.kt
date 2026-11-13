@@ -99,8 +99,8 @@ private fun StatusRow(label: String, value: String, ok: Boolean? = null) {
             value,
             style = FTType.Telemetry,
             color = when (ok) {
-                true -> FT.Emerald
-                false -> FT.Warning
+                true -> FT.Ok
+                false -> FT.Warn
                 null -> FT.TextSecondary
             },
         )
@@ -126,7 +126,7 @@ private fun StreamControls(
     var error by remember { mutableStateOf<String?>(null) }
 
     if (enabled && pausedUntil > System.currentTimeMillis()) {
-        Text("Paused until midnight.", style = FTType.BodySmall, color = FT.Warning)
+        Text("Paused until midnight.", style = FTType.BodySmall, color = FT.Warn)
     }
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         if (enabled) {
@@ -159,7 +159,7 @@ private fun StreamControls(
     } else {
         FTButton("DELETE ALL", emphasis = FTButtonEmphasis.Destructive, modifier = Modifier.fillMaxWidth()) { confirmDelete = true }
     }
-    error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+    error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
 }
 
 @Composable
@@ -202,7 +202,7 @@ private fun PhoneUsageSection(context: Context, tick: Int, reload: Int, onChange
             onChanged = onChanged,
             scope = scope,
         )
-        loadError?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+        loadError?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
         latest?.let { day ->
             Text("LATEST DAY · ${day.date}", style = FTType.Label, color = FT.TextSecondary)
             StatusRow("Screen time", minutes(day.screenMin))
@@ -289,7 +289,7 @@ private fun LocationSection(context: Context, tick: Int, reload: Int, onChanged:
             onChanged = onChanged,
             scope = scope,
         )
-        loadError?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+        loadError?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
         if (visits.isNotEmpty()) {
             Text("VISITS, LAST 24 H", style = FTType.Label, color = FT.TextSecondary)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

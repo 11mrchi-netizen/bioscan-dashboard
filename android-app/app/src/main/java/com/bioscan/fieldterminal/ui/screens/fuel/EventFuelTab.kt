@@ -94,7 +94,7 @@ fun EventFuelTab(eventId: Long, modifier: Modifier = Modifier) {
                 val cached = cache(context).getString("event:$eventId", null)
                 Text(
                     error?.let { "Couldn't build the plan now: $it" } ?: "Set a target time or an expected duration on the event to plan it.",
-                    style = FTType.BodySmall, color = if (error != null) FT.Critical else FT.TextSecondary,
+                    style = FTType.BodySmall, color = if (error != null) FT.Bad else FT.TextSecondary,
                 )
                 if (cached != null) {
                     val at = Instant.ofEpochMilli(cache(context).getLong("event:$eventId:at", 0L)).atZone(ZoneId.systemDefault())
@@ -145,7 +145,7 @@ private fun PlanView(f: EventFuel) {
         FTCard(title = "CHANGED SINCE LAST SHOWN") { f.changes.forEach { Text("· $it", style = FTType.BodySmall, color = FT.TextPrimary) } }
     }
     if (p.warnings.isNotEmpty()) {
-        FTCard(title = "WATCH") { p.warnings.forEach { Text("· $it", style = FTType.BodySmall, color = FT.Warning) } }
+        FTCard(title = "WATCH") { p.warnings.forEach { Text("· $it", style = FTType.BodySmall, color = FT.Warn) } }
     }
     if (f.event.course.size >= 2) {
         FTCard(title = "ON THE COURSE") {

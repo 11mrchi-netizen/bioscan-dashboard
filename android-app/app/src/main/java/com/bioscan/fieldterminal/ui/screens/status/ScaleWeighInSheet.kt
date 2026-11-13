@@ -153,7 +153,7 @@ fun ScaleWeighInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                         }
                         p.skeletalMuscleKg?.let { Text("Skeletal muscle ~%.1f kg".format(it), style = FTType.Caption, color = FT.TextSecondary) }
                         if (!p.qualityOk) {
-                            Text("This reading looks off (hydration or contact). It will be saved, but not used for body fat.", style = FTType.Caption, color = FT.Warning)
+                            Text("This reading looks off (hydration or contact). It will be saved, but not used for body fat.", style = FTType.Caption, color = FT.Warn)
                         }
                     } else if (previewLoaded) {
                         Text("Add height, date of birth and sex in Setup › Profile to see body composition.", style = FTType.Caption, color = FT.TextSecondary)
@@ -162,7 +162,7 @@ fun ScaleWeighInSheet(onDismiss: () -> Unit, onSaved: () -> Unit) {
                         "If this is the previous weigh-in left on the scale, discard it and step on again.",
                         style = FTType.Caption, color = FT.TextSecondary,
                     )
-                    error?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+                    error?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
                     FTButton(if (saving) "SAVING…" else "SAVE", enabled = !saving, emphasis = FTButtonEmphasis.Primary) {
                         saving = true
                         scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) {

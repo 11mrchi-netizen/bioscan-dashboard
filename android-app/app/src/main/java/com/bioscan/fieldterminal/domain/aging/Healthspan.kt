@@ -17,7 +17,7 @@ import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.round
 
-// Analysis Layer 3 / Phase 8. A general "healthspan" score, product-defined and not clinically validated. It exists ONLY for
+// A general "healthspan" score, product-defined and not clinically validated. It exists ONLY for
 // the User profile page (a unit test fails if any other screen imports it): everywhere else this app deliberately shows no
 // cross-metric score.
 //

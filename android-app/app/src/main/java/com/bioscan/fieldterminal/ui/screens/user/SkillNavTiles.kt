@@ -76,7 +76,7 @@ private fun SkillTile(skill: Skill, level: SkillLevel?, onClick: () -> Unit, mod
                 Text(
                     (level.basis?.chip ?: "") + if (level.provisional) " · PROVISIONAL" else "",
                     style = FTType.Micro,
-                    color = if (level.provisional) FT.Warning else FT.TextMuted,
+                    color = if (level.provisional) FT.Warn else FT.TextMuted,
                     maxLines = 2,
                 )
             }

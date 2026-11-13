@@ -118,7 +118,7 @@ private fun Options(options: List<Pair<String, String>>, selected: String, onPic
 
 @Composable
 private fun Scatter(points: List<Pair<Double, Double>>) {
-    val dot = FT.Emerald
+    val dot = FT.Ok
     val axis = FT.GlassBorder
     Canvas(Modifier.fillMaxWidth().height(180.dp)) {
         val xs = points.map { it.first }

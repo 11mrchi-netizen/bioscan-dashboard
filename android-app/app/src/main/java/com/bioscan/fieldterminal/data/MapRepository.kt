@@ -25,7 +25,7 @@ private val json = LenientJson
 class MapRepository(private val accessToken: String) {
     companion object { private val client = HttpClient(OkHttp) }
 
-    // Phase M1: every event in a rolling 24h window, not just the first
+    // Every event in a rolling 24h window, not just the first
     // training-colored one -- replaces the old fetchNextSession(), which is
     // unused anywhere else in this app (confirmed by a project-wide search
     // before removing it, not assumed safe to drop).

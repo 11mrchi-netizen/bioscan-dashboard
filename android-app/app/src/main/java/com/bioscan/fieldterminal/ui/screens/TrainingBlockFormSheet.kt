@@ -87,7 +87,7 @@ fun TrainingBlockFormSheet(cycle: TrainingCycle?, onDismiss: () -> Unit, onSaved
             Text(
                 if (cycle == null) "ADD TRAINING BLOCK" else "EDIT TRAINING BLOCK",
                 style = sheetHeaderStyle,
-                color = FT.Emerald,
+                color = FT.Ok,
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -159,7 +159,7 @@ fun TrainingBlockFormSheet(cycle: TrainingCycle?, onDismiss: () -> Unit, onSaved
             }
 
             error?.let {
-                Text(it, style = FTType.Caption, color = FT.Critical)
+                Text(it, style = FTType.Caption, color = FT.Bad)
             }
 
             val hasGoal = goalMetric.isNotBlank()

@@ -19,7 +19,7 @@ data class LogMealRow(
     @SerialName("meal_slot") val mealSlot: String? = null,
 )
 
-// Phase G3: replaces LogRunRow -- `exercise_sessions` covers any activity
+// Replaces LogRunRow -- `exercise_sessions` covers any activity
 // type, always with a real start_time (even migrated pre-Health-Connect
 // rows carry a nominal-but-real timestamp), so this needs no separate
 // nominal-time handling in domain/Log.kt the way the old date-only `runs`

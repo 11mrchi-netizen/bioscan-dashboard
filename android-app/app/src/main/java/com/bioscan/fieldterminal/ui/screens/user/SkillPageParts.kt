@@ -65,7 +65,7 @@ fun SkillHeroCard(skill: Skill, level: SkillLevel, info: String, extra: @Composa
             FTBar(fraction = (position / 100.0).toFloat(), color = skillColor(skill), showThumb = true)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(level.basis?.chip ?: "", style = FTType.Micro, color = FT.TextMuted)
-                if (level.provisional) Text("PROVISIONAL", style = FTType.Micro, color = FT.Warning)
+                if (level.provisional) Text("PROVISIONAL", style = FTType.Micro, color = FT.Warn)
             }
         }
         extra()

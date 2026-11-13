@@ -168,7 +168,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                         Text(
                             "Couldn't save. Check your connection and try again.",
                             style = FTType.Caption,
-                            color = FT.Critical,
+                            color = FT.Bad,
                         )
                     }
                     notifSavedAt?.let {
@@ -203,7 +203,7 @@ fun NotificationsSettingsScreen(scope: CoroutineScope, onBack: () -> Unit) {
                             Text(
                                 "Allow notifications in system settings to receive reminders.",
                                 style = FTType.Caption,
-                                color = FT.Critical,
+                                color = FT.Bad,
                             )
                         }
                     }

@@ -37,7 +37,7 @@ fun TileHeader(onBack: (() -> Unit)?, title: String? = null, subtitle: String? =
         modifier = Modifier.fillMaxWidth().background(FT.Surface).padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Scoring system rebuild: a top-level tab page (PLAN, LAB, ME) has no back arrow.
+        // A top-level tab page (PLAN, LAB, ME) has no back arrow.
         if (onBack != null) {
             FTIconButton(FTIcons.Back, "Back", onBack)
         } else {

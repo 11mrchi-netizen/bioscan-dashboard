@@ -128,7 +128,7 @@ fun ConcernScreen(concernId: String, onBack: () -> Unit, onOpenSession: (Long) -
                         s?.stateReason?.let { Text(it, style = FTType.Body, color = FT.TextPrimary, modifier = Modifier.padding(top = 6.dp)) }
                         s?.lastObserved?.let { Text("Last check-in ${shortDate(it)}", style = FTType.Caption, color = FT.TextMuted) }
                         if (c.regions.isNotEmpty()) BodyMap(marks = c.regions.map { BodyMark(it.code, it.side, concernColor(s?.state ?: "active")) }, height = 160.dp)
-                        s?.safety?.forEach { Text(it.text, style = FTType.BodySmall, color = FT.Warning, modifier = Modifier.padding(top = 4.dp)) }
+                        s?.safety?.forEach { Text(it.text, style = FTType.BodySmall, color = FT.Warn, modifier = Modifier.padding(top = 4.dp)) }
                         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             FTButton(label = "CHECK IN", emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) { checkIn = true }
                         }

@@ -124,7 +124,7 @@ fun RegistryReviewScreen(onClose: () -> Unit) {
                 "Confirm it if the source says what the claim says; dispute it with a note if not.",
             style = FTType.Caption, color = FT.TextMuted,
         )
-        error?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
         if (list == null) return@FullScreenOverlay
         val sorted = list.sortedBy { stateOf(it) != ReviewState.UNREVIEWED }
         for ((title, reg) in listOf("INTERACTIONS" to "interaction", "LABS TO WATCH" to "lab_watch", "EXPECTED EFFECTS" to "evidence")) {
@@ -163,11 +163,11 @@ private fun ReviewCard(e: Entry, state: ReviewState, review: RegistryReviewRow?,
         e.citation?.let { c ->
             Text(
                 "Source: $c" + if (e.url != null) "  ›" else "",
-                style = FTType.Caption, color = if (e.url != null) FT.Emerald else FT.TextMuted,
+                style = FTType.Caption, color = if (e.url != null) FT.Ok else FT.TextMuted,
                 modifier = Modifier.ftClickable(enabled = e.url != null) { e.url?.let { runCatching { uri.openUri(it) } } },
             )
         }
-        if (state == ReviewState.DISPUTED) review?.note?.let { Text("Your note: $it", style = FTType.Caption, color = FT.Warning) }
+        if (state == ReviewState.DISPUTED) review?.note?.let { Text("Your note: $it", style = FTType.Caption, color = FT.Warn) }
         if (disputing) {
             FieldTextField(note, { note = it }, "What the source actually says", singleLine = false)
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -186,7 +186,7 @@ private fun ReviewCard(e: Entry, state: ReviewState, review: RegistryReviewRow?,
 
 @Composable
 private fun Act(text: String, muted: Boolean = false, onClick: () -> Unit) =
-    Text(text, style = FTType.LabelCaps, color = if (muted) FT.TextSecondary else FT.Emerald,
+    Text(text, style = FTType.LabelCaps, color = if (muted) FT.TextSecondary else FT.Ok,
         modifier = Modifier.ftClickable(onClick = onClick).padding(vertical = 6.dp))
 
 private fun reviewDay(ts: String): String = runCatching {

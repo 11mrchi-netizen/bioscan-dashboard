@@ -71,7 +71,7 @@ fun TodaysFuelCard(
             "(USDA FoodData Central and your food catalogue), never by a language model.",
     ) {
         when (result) {
-            null -> Text(error?.let { "Couldn't plan today: $it" } ?: "Planning today…", style = FTType.BodySmall, color = if (error != null) FT.Critical else FT.TextSecondary)
+            null -> Text(error?.let { "Couldn't plan today: $it" } ?: "Planning today…", style = FTType.BodySmall, color = if (error != null) FT.Bad else FT.TextSecondary)
             TodayFuelResult.NeedsWeight -> Text("Log a body weight (Fuel › Body) to plan carbohydrate per kilogram.", style = FTType.BodySmall, color = FT.TextSecondary)
             is TodayFuelResult.Ready -> FuelContent(result.fuel)
         }

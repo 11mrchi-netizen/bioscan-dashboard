@@ -24,7 +24,7 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import kotlinx.coroutines.CancellationException
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Analysis Layer 3 / R2 (2e): days logged per capture stream over the last 28 days.
+// Days logged per capture stream over the last 28 days.
 @Composable
 fun CaptureCoverageCard() {
     val repo = remember { CaptureCoverageRepository(SupabaseClientProvider.client) }
@@ -46,7 +46,7 @@ fun CaptureCoverageCard() {
         info = "Days in the last 28 with at least one entry. Relationship and experiment analyses can only use the days you logged. " +
             "A day without a drink has no row, so alcohol shows days with a drink logged, not coverage.",
     ) {
-        error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
         if (rows == null && error == null) Text("Loading…", style = FTType.BodySmall, color = FT.TextSecondary)
         rows?.forEach { row ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -60,7 +60,7 @@ fun CaptureCoverageCard() {
                 }
                 if (!row.informational) {
                     Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(FT.GlassBorder)) {
-                        Box(modifier = Modifier.fillMaxWidth(row.fraction.toFloat().coerceIn(0f, 1f)).height(4.dp).background(FT.Emerald))
+                        Box(modifier = Modifier.fillMaxWidth(row.fraction.toFloat().coerceIn(0f, 1f)).height(4.dp).background(FT.Ok))
                     }
                 }
             }

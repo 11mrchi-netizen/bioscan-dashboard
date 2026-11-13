@@ -217,7 +217,7 @@ fun HealthspanFactorOverlay(factor: HealthspanFactor, onClose: () -> Unit) {
         factor.basis?.let { Text("Scored against ${it.label}.", style = FTType.Caption, color = FT.TextMuted) }
         if (factor.missingInputs.isNotEmpty()) Text("Needs: " + factor.missingInputs.joinToString("; "), style = FTType.Caption, color = FT.TextMuted)
         factor.notes.forEach { Text(it, style = FTType.Caption, color = FT.TextMuted) }
-        factor.action?.let { Text(it, style = FTType.Caption, color = if (factor.status == FactorStatus.OPPORTUNITY) FT.Warning else FT.TextMuted) }
+        factor.action?.let { Text(it, style = FTType.Caption, color = if (factor.status == FactorStatus.OPPORTUNITY) FT.Warn else FT.TextMuted) }
 
         val m = metrics
         when {

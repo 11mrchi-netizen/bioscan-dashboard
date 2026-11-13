@@ -144,19 +144,19 @@ private fun NutrientBar(amount: Double, rda: Double?, upperLimit: Double?) {
     val edges = zoneEdges(rda, upperLimit)
     val fraction = zonedFraction(amount, rda, upperLimit)
     val barColor = when {
-        upperLimit != null && amount > upperLimit -> FT.Warning
-        rda != null && amount >= rda -> FT.Emerald
-        rda != null && amount >= rda * 0.7 -> FT.Emerald.copy(alpha = 0.7f)
+        upperLimit != null && amount > upperLimit -> FT.Warn
+        rda != null && amount >= rda -> FT.Ok
+        rda != null && amount >= rda * 0.7 -> FT.Ok.copy(alpha = 0.7f)
         else -> FT.TextSecondary
     }
     Canvas(Modifier.fillMaxWidth().height(12.dp)) {
         val barH = 8.dp.toPx()
         val cy = size.height / 2f
         if (edges == null || fraction == null) {
-            drawZonedTrack(cy, barH, 1f to 1f, FT.Emerald)
+            drawZonedTrack(cy, barH, 1f to 1f, FT.Ok)
             return@Canvas
         }
-        drawZonedTrack(cy, barH, edges, FT.Emerald)
+        drawZonedTrack(cy, barH, edges, FT.Ok)
         drawZonedValue(cy, barH, fraction, barColor, 4.dp.toPx())
     }
 }

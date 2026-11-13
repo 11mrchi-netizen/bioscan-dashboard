@@ -2,7 +2,7 @@ package com.bioscan.fieldterminal.domain
 
 import kotlin.math.round
 
-// Analysis Layer 3 / R2 (docs/analysis-layer-3). Alcohol is recorded as GRAMS OF ETHANOL, computed from what a person
+// Alcohol is recorded as GRAMS OF ETHANOL, computed from what a person
 // actually knows -- the volume and the strength on the label -- and never from kcal (the competitor's `alcoholG` field held
 // alcohol kcal under a grams name, which silently skews every alcohol statistic).
 const val ETHANOL_DENSITY_G_PER_ML = 0.789

@@ -111,7 +111,7 @@ fun DailyExperimentSheet(choice: DailyChoice, onDismiss: () -> Unit, onRegistere
                 }
             }
             if (zone == null) Text("Choose the smallest change that would matter.", style = FTType.BodySmall, color = FT.TextSecondary)
-            error?.takeIf { preview.isNotEmpty() }?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+            error?.takeIf { preview.isNotEmpty() }?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
 
             FTButton(label = if (saving) "REGISTERING..." else "REGISTER AND DRAW THE DAYS", enabled = zone != null && !saving && !loading, emphasis = FTButtonEmphasis.Primary) {
                 saving = true

@@ -161,7 +161,7 @@ fun IllnessSheet(
             Label("NOTE (OPTIONAL)")
             FieldTextField(note, { note = it }, "", singleLine = false)
 
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FTButton("CANCEL", modifier = Modifier.weight(1f), onClick = onDismiss)
                 FTButton(if (saving) "SAVING…" else "SAVE", enabled = ready && !saving, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) {

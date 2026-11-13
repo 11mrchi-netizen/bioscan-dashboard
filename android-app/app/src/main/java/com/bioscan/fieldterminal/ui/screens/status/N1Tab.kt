@@ -121,7 +121,7 @@ fun N1Tab() {
         }
         return
     }
-    // Phase G: each composite's scorecard on this history, worked out off the main thread (null until ready).
+    // Each composite's scorecard on this history, worked out off the main thread (null until ready).
     val scorecards by rememberScorecards(w, sl, wb, s, breakStarts, loadSpans, planned)
 
     Column(
@@ -157,7 +157,7 @@ fun N1Tab() {
                 }
             },
         )
-        experimentError?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+        experimentError?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
         // Interventions repeated now and then (nasal strips, a lactose meal): events, how each felt, and the evidence so far.
         InterventionEventsSection()
         // Bundles of those around one objective (docs/intervention-protocol-intelligence).

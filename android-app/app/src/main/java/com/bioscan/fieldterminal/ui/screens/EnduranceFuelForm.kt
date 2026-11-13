@@ -114,7 +114,7 @@ internal fun EnduranceFuelForm(onSaved: () -> Unit) {
         when {
             loading -> Text("Loading...", style = FTType.BodySmall, color = FT.TextSecondary)
             loadError != null -> {
-                Text("Could not load ($loadError).", style = FTType.BodySmall, color = FT.Critical)
+                Text("Could not load ($loadError).", style = FTType.BodySmall, color = FT.Bad)
                 FTButton(label = "RETRY") { reload++ }
             }
             sessions.isEmpty() -> Text("No run, hike or ride in the last three weeks to attach fueling to. Sync your watch or log the activity first.", style = FTType.BodySmall, color = FT.TextSecondary)
@@ -237,7 +237,7 @@ internal fun EnduranceFuelForm(onSaved: () -> Unit) {
                     }
                     FTButton(label = "TEST THIS PRODUCT (N-OF-1)") { experimenting = true }
                 }
-                error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+                error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
             }
         }
     }

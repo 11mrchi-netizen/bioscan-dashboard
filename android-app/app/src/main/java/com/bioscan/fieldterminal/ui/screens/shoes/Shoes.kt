@@ -206,7 +206,7 @@ fun ShoesCard(onOpenShoe: (Long) -> Unit) {
             "it had when you added it plus every run in it; it's due once it reaches its retirement distance. Bike " +
             "rides carry no code.",
     ) {
-        error?.let { Text("Couldn't load shoes: $it", style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text("Couldn't load shoes: $it", style = FTType.BodySmall, color = FT.Bad) }
         val d = data
         if (d == null) {
             if (error == null) Text("Loading…", style = FTType.BodySmall, color = FT.TextMuted)
@@ -380,7 +380,7 @@ fun ShoeFormSheet(req: ShoeFormRequest, onDismiss: () -> Unit, onSaved: () -> Un
             Label("NOTE (OPTIONAL)")
             FieldTextField(notes, { notes = it }, "", singleLine = false)
 
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FTButton("CANCEL", modifier = Modifier.weight(1f), onClick = onDismiss)
                 FTButton(if (saving) "SAVING…" else "SAVE", enabled = ready && !saving, emphasis = FTButtonEmphasis.Primary, modifier = Modifier.weight(1f)) {
@@ -396,7 +396,7 @@ fun ShoeFormSheet(req: ShoeFormRequest, onDismiss: () -> Unit, onSaved: () -> Un
             }
             if (s != null) {
                 if (!confirmDelete) {
-                    Text("DELETE", style = FTType.LabelCaps, color = FT.Critical, modifier = Modifier.ftClickable { confirmDelete = true }.padding(vertical = 6.dp))
+                    Text("DELETE", style = FTType.LabelCaps, color = FT.Bad, modifier = Modifier.ftClickable { confirmDelete = true }.padding(vertical = 6.dp))
                 } else {
                     Text("Delete ${s.name}? Its runs stay; they lose these shoes.", style = FTType.BodySmall, color = FT.TextSecondary)
                     FTButton("DELETE FOR GOOD", modifier = Modifier.fillMaxWidth()) {
@@ -500,7 +500,7 @@ private fun RunShoesSheet(run: ShoeRun, data: ShoesData, onDismiss: () -> Unit, 
             if (run.chosenShoeId != null) {
                 FTButton(if (code != null) "USE ZEPP'S SHOES" else "NO SHOES", modifier = Modifier.fillMaxWidth()) { act { repo.choose(run.sessionId, null) } }
             }
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -520,7 +520,7 @@ fun ShoeScreen(shoeId: Long, onBack: () -> Unit, onOpenSession: (Long) -> Unit) 
     val shoe = data?.shoes?.firstOrNull { it.id == shoeId }
 
     com.bioscan.fieldterminal.ui.screens.detail.DetailScreen(shoe?.name?.uppercase() ?: "SHOES", onBack, eyebrow = "SHOES", ranged = false, domain = FT.Domain.Load) {
-        error?.let { Text("Couldn't load: $it", style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text("Couldn't load: $it", style = FTType.BodySmall, color = FT.Bad) }
         val d = data
         if (d == null) return@DetailScreen
         if (shoe == null) {

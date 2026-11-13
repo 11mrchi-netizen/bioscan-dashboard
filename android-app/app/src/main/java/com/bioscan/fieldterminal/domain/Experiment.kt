@@ -4,7 +4,7 @@ import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
-// Analysis Layer 3 / Phase 5. The stored protocol of an N-of-1 experiment (supabase/functions/_shared/analysis-core/
+// The stored protocol of an N-of-1 experiment (supabase/functions/_shared/analysis-core/
 // experiment.ts does the analysis). It is stored once and the database refuses later changes, so what is compared and
 // which outcome is primary cannot be re-chosen after seeing the data. Since analysis review phase F every new experiment
 // is randomised (RandomisedExperiment.kt builds the protocol); the fixed A-then-B builder is gone.

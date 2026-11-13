@@ -36,7 +36,7 @@ import com.bioscan.fieldterminal.ui.screens.user.Skill
 import java.time.LocalDate
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Scoring system rebuild (docs/scoring-system/02-page-mockups.md §8): ME, a dock tab. The slow-moving picture:
+// ME, a dock tab. The slow-moving picture:
 // healthspan and biological age (the old User page), performance levels (Training's Running and Strength), body
 // composition, health concerns and bloodwork (Health's tabs). Settings sit behind the gear (Setup was a dock tab).
 // The content is the existing screens', hosted here unchanged.

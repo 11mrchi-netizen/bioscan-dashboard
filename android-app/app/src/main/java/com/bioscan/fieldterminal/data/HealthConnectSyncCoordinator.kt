@@ -24,7 +24,7 @@ sealed interface HealthConnectSyncResult {
     data class Failed(val message: String) : HealthConnectSyncResult
 }
 
-// Phase G2. Orchestrates every HealthConnectDailySyncRepository.sync*() call
+// Orchestrates every HealthConnectDailySyncRepository.sync*() call
 // and tracks progress via the existing `sync_log` table (sync_source =
 // 'health_connect') rather than a new table -- that table already exists
 // for exactly this purpose (the old Wellness Project sync logged its runs

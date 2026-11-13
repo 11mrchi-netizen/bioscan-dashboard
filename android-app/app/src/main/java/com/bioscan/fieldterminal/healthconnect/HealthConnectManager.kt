@@ -26,7 +26,7 @@ import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
 
 /**
- * Phase G1 (see ROADMAP.md). Thin wrapper around the Health Connect client --
+ * Thin wrapper around the Health Connect client --
  * availability check, the permission set this app actually requests, and a
  * grant check. No sync logic here yet; that's Phase G2 onward, once this
  * foundation is verified end to end.

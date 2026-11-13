@@ -259,8 +259,8 @@ private fun DayCell(day: Int, selected: Boolean, isToday: Boolean, modifier: Mod
             .then(
                 when {
                     selected -> Modifier
-                        .background(FT.Emerald.copy(alpha = 0.14f), shape)
-                        .border(FT.BorderWidth, FT.Emerald, shape)
+                        .background(FT.Ok.copy(alpha = 0.14f), shape)
+                        .border(FT.BorderWidth, FT.Ok, shape)
                     isToday -> Modifier.border(FT.BorderWidth, FT.TextSecondary.copy(alpha = 0.6f), shape)
                     else -> Modifier
                 },
@@ -271,7 +271,7 @@ private fun DayCell(day: Int, selected: Boolean, isToday: Boolean, modifier: Mod
         Text(
             "$day",
             style = if (selected) FTType.Telemetry else FTType.Value,
-            color = if (selected) FT.Emerald else FT.TextPrimary,
+            color = if (selected) FT.Ok else FT.TextPrimary,
         )
     }
 }

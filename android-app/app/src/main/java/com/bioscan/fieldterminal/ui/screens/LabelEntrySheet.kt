@@ -118,7 +118,7 @@ fun LabelEntrySheet(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("NEW PRODUCT", style = FTType.SectionTitle, color = FT.Emerald)
+            Text("NEW PRODUCT", style = FTType.SectionTitle, color = FT.Ok)
             Text(
                 "Barcode $barcode isn't in any food database yet. Take a photo of its nutrition label (營養標示) and check the " +
                     "numbers -- or type them in. It's saved under this barcode, so next time the scan is instant.",
@@ -131,12 +131,12 @@ fun LabelEntrySheet(
             }
             when {
                 reading -> Text("Reading the label...", style = FTType.Caption, color = FT.TextSecondary)
-                readError != null -> Text("$readError -- you can type the numbers in.", style = FTType.Caption, color = FT.Warning)
+                readError != null -> Text("$readError -- you can type the numbers in.", style = FTType.Caption, color = FT.Warn)
             }
             if (checks.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("CHECK THESE", style = FTType.LabelCaps, color = FT.Warning)
-                    checks.forEach { Text("• ${it.message}", style = FTType.Caption, color = FT.Warning) }
+                    Text("CHECK THESE", style = FTType.LabelCaps, color = FT.Warn)
+                    checks.forEach { Text("• ${it.message}", style = FTType.Caption, color = FT.Warn) }
                 }
             }
 
@@ -173,7 +173,7 @@ fun LabelEntrySheet(
                 }
             }
 
-            saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Critical) }
+            saveError?.let { Text("Couldn't save ($it).", style = FTType.Caption, color = FT.Bad) }
 
             val size = servingSize.toAmount()
             val calories = values.getValue("calories").value.toAmount()

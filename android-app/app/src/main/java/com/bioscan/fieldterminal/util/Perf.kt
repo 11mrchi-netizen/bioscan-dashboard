@@ -6,7 +6,7 @@ import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.http.contentLength
 import io.ktor.util.AttributeKey
 
-// Performance pass: the cheapest possible measurement. Everything logs to logcat under the tag "perf" and only in debug
+// The cheapest possible measurement. Everything logs to logcat under the tag "perf" and only in debug
 // builds (MainActivity switches it on from BuildConfig.DEBUG), so release builds pay nothing.
 //
 //   adb logcat -s perf

@@ -127,8 +127,8 @@ internal fun NutritionGoalsCard() {
         }
 
         when {
-            enteredBad -> Text("Enter numbers only, or leave a field blank.", style = FTType.Caption, color = FT.Critical)
-            result is MacroPlanResult.Invalid -> Text(result.message, style = FTType.Caption, color = FT.Critical)
+            enteredBad -> Text("Enter numbers only, or leave a field blank.", style = FTType.Caption, color = FT.Bad)
+            result is MacroPlanResult.Invalid -> Text(result.message, style = FTType.Caption, color = FT.Bad)
             result is MacroPlanResult.Ok -> GoalSummary(result, maintenance, i?.weightKg)
             else -> Text("No calorie goal: the views show your intake without a target.", style = FTType.Caption, color = FT.TextMuted)
         }
@@ -141,7 +141,7 @@ internal fun NutritionGoalsCard() {
         Text(
             if (waterBad) "Water needs both a min and a max, min below max." else "A range; leave both blank for the 2,500–3,500 ml reference.",
             style = FTType.Caption,
-            color = if (waterBad) FT.Critical else FT.TextMuted,
+            color = if (waterBad) FT.Bad else FT.TextMuted,
         )
 
         val canSave = !enteredBad && !waterBad && result !is MacroPlanResult.Invalid

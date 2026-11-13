@@ -207,7 +207,7 @@ private fun MapCard(context: Context) {
             Text(
                 "Enter valid decimal coordinates (lat −90 to 90, lon −180 to 180).",
                 style = FTType.Caption,
-                color = FT.Critical,
+                color = FT.Bad,
             )
         }
         Text(
@@ -247,7 +247,7 @@ private fun HealthConnectCard(context: Context) {
                 else -> "Not connected yet."
             },
             style = FTType.BodySmall,
-            color = if (hcGranted) FT.Emerald else FT.TextSecondary,
+            color = if (hcGranted) FT.Ok else FT.TextSecondary,
         )
         if (hcAvailable && hcChecked && !hcGranted) {
             FTButton(label = "CONNECT HEALTH CONNECT") {
@@ -288,7 +288,7 @@ private fun HealthConnectCard(context: Context) {
                 Text(
                     text = wbText,
                     style = FTType.Caption,
-                    color = if (wbResult is HealthConnectWriteBackResult.Success) FT.TextSecondary else FT.Warning,
+                    color = if (wbResult is HealthConnectWriteBackResult.Success) FT.TextSecondary else FT.Warn,
                 )
             }
         }
@@ -330,7 +330,7 @@ private fun ZeppCard(scope: CoroutineScope) {
                 else -> "Not synced yet."
             },
             style = FTType.BodySmall,
-            color = if (zeppStatus?.lastError != null) FT.Warning else FT.TextSecondary,
+            color = if (zeppStatus?.lastError != null) FT.Warn else FT.TextSecondary,
         )
         if (zeppStatus?.lastError != null) {
             Text(
@@ -369,8 +369,8 @@ private fun ZeppCard(scope: CoroutineScope) {
             style = FTType.Caption,
             color = FT.TextSecondary,
         )
-        historyPull?.let { Text(it.describe(), style = FTType.Caption, color = if (it.error != null) FT.Warning else FT.TextMuted) }
-        historyError?.let { Text("Couldn't reach the server: $it", style = FTType.Caption, color = FT.Warning) }
+        historyPull?.let { Text(it.describe(), style = FTType.Caption, color = if (it.error != null) FT.Warn else FT.TextMuted) }
+        historyError?.let { Text("Couldn't reach the server: $it", style = FTType.Caption, color = FT.Warn) }
         val pull = historyPull
         fun act(block: suspend () -> Unit) {
             scope.launchSafe(onError = { e -> historyError = e.message }, onDone = { historyBusy = false }) {

@@ -54,7 +54,7 @@ import java.time.Period
 import java.time.ZoneId
 import kotlin.reflect.KClass
 
-// Phase G2. Reads raw Health Connect records over [since, until], groups
+// Reads raw Health Connect records over [since, until], groups
 // them by local calendar date (domain/DailyAggregation.kt), and upserts one
 // column at a time into the existing wearable_daily/body_metrics/sleep_daily
 // tables -- all three already have a real unique(user_id, date) index
@@ -301,7 +301,7 @@ class HealthConnectDailySyncRepository(
         return mainSessionByDate.size
     }
 
-    // Analysis Layer 3 / R1: record which origin wrote each daily field, in the side table daily_field_provenance (a column on
+    // Record which origin wrote each daily field, in the side table daily_field_provenance (a column on
     // wearable_daily/sleep_daily would be overwritten by whichever of the concurrent single-column upserts ran last).
     // Best effort: provenance must never fail the data sync it describes.
     private suspend fun recordProvenance(field: String, originByDate: Map<LocalDate, String>) {

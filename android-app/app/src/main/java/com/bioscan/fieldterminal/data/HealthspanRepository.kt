@@ -82,7 +82,7 @@ private suspend fun vo2Table(supabase: SupabaseClient, aging: AgingProfileOvervi
     return strictPlacement(supabase, "vo2max", aging.latestVo2Max?.second, aging.chronologicalAgeYears, sex)
 }
 
-// Analysis Layer 3 / Phase 8. Gathers what the Healthspan factors need and hands it, unmodified, to the pure domain
+// Gathers what the Healthspan factors need and hands it, unmodified, to the pure domain
 // function. This class decides nothing about cut-offs; it only refuses to pass a value it cannot vouch for.
 class HealthspanRepository(private val supabase: SupabaseClient) {
 

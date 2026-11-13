@@ -39,7 +39,7 @@ import com.bioscan.fieldterminal.ui.components.stateTreatment
 import com.bioscan.fieldterminal.ui.theme.FTType
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Analysis Layer 3 / Phase 8. The one place in the app that shows a cross-metric score: the User profile page. Product-defined,
+// The one place in the app that shows a cross-metric score: the User profile page. Product-defined,
 // not clinically validated; the factor rows show what it rests on and what is missing.
 //
 // Every factor is a 1-100 score on one scale: favorable from 50, neutral from 25, an opportunity below. The radar plots each
@@ -54,8 +54,8 @@ fun HealthspanCard(summary: HealthspanSummary?, failed: Boolean = false, onOpenA
         methodology = "healthspan",
     ) {
         if (summary == null) {
-            if (failed) Text("Couldn't load the inputs.", style = FTType.BodySmall, color = FT.Critical)
-            else CircularProgressIndicator(color = FT.Emerald)
+            if (failed) Text("Couldn't load the inputs.", style = FTType.BodySmall, color = FT.Bad)
+            else CircularProgressIndicator(color = FT.Ok)
             return@FTCard
         }
         FTMetricValue(

@@ -141,10 +141,10 @@ fun PictureOverlay(view: ScoresView, picture: FullPicture, onBack: () -> Unit, o
 }
 
 fun laneColor(lane: StoolLane): Color = when (lane) {
-    StoolLane.LIQUID -> FT.Critical
-    StoolLane.LOOSE -> FT.Warning
-    StoolLane.HEALTHY -> FT.Emerald
-    StoolLane.HARD -> FT.Warning
+    StoolLane.LIQUID -> FT.Bad
+    StoolLane.LOOSE -> FT.Warn
+    StoolLane.HEALTHY -> FT.Ok
+    StoolLane.HARD -> FT.Warn
 }
 
 /** The stool hypnogram: lanes top to bottom LIQUID, LOOSE, HEALTHY, HARD; marks at their time, joined in order. */
@@ -169,7 +169,7 @@ fun StoolHypnogram(pattern: StoolPattern, zone: ZoneId = ZoneId.systemDefault())
                 drawLine(FT.GlassTrack, Offset(xd, 0f), Offset(xd, size.height), strokeWidth = 1f)
             }
             // The healthy lane is the reference band.
-            drawRect(FT.Emerald.copy(alpha = 0.08f), Offset(0f, lanes.indexOf(StoolLane.HEALTHY) * laneH), Size(size.width, laneH))
+            drawRect(FT.Ok.copy(alpha = 0.08f), Offset(0f, lanes.indexOf(StoolLane.HEALTHY) * laneH), Size(size.width, laneH))
             typed.zipWithNext().forEach { (a, b) ->
                 drawLine(FT.GlassBorder, Offset(x(a.at), yMid(a.lane!!)), Offset(x(b.at), yMid(b.lane!!)), strokeWidth = 1.5f)
             }
@@ -204,7 +204,7 @@ fun BowelTimingChart(timing: BowelTiming) {
             val h = size.height / timing.days.size.coerceAtLeast(1)
             fun x(minute: Int) = size.width * minute / (24f * 60f)
             if (timing.usualStart != null && timing.usualEnd != null) {
-                drawRect(FT.Emerald.copy(alpha = 0.12f), Offset(x(timing.usualStart), 0f), Size(x(timing.usualEnd) - x(timing.usualStart), size.height))
+                drawRect(FT.Ok.copy(alpha = 0.12f), Offset(x(timing.usualStart), 0f), Size(x(timing.usualEnd) - x(timing.usualStart), size.height))
             }
             for (hour in listOf(0, 6, 12, 18, 24)) drawLine(FT.GlassTrack, Offset(x(hour * 60), 0f), Offset(x(hour * 60), size.height), strokeWidth = 1f)
             timing.days.forEachIndexed { i, (_, minutes) ->
@@ -213,8 +213,8 @@ fun BowelTimingChart(timing: BowelTiming) {
                     val inside = timing.inWindow(m)
                     val color = when {
                         !first -> FT.TextSecondary
-                        inside == false -> FT.Warning
-                        else -> FT.Emerald
+                        inside == false -> FT.Warn
+                        else -> FT.Ok
                     }
                     drawCircle(color, radius = if (first) 5f else 3.5f, center = Offset(x(m), i * h + h / 2))
                 }
@@ -254,7 +254,7 @@ fun StressCurve(
             fun y(v: Double) = (size.height * (1 - v / 100.0)).toFloat()
             // Stress levels as faint bands (Zepp's relaxed / normal / medium / high cut-offs).
             for ((lo, hi, a) in listOf(Triple(0.0, 25.0, 0.0f), Triple(60.0, 80.0, 0.06f), Triple(80.0, 100.0, 0.10f))) {
-                if (a > 0f) drawRect(FT.Critical.copy(alpha = a), Offset(0f, y(hi)), Size(size.width, y(lo) - y(hi)))
+                if (a > 0f) drawRect(FT.Bad.copy(alpha = a), Offset(0f, y(hi)), Size(size.width, y(lo) - y(hi)))
             }
             // Evening wind-down: the last three hours before midnight.
             val eve = day.date.atTime(21, 0).atZone(zone).toInstant()
@@ -274,7 +274,7 @@ fun StressCurve(
                 if (!open) { path.moveTo(p.x, p.y); open = true } else path.lineTo(p.x, p.y)
             }
             drawPath(path, FT.Info, style = Stroke(width = 3f))
-            peak?.let { drawCircle(FT.Critical, 7f, Offset(x(it.timestamp), y(it.value.toDouble()))) }
+            peak?.let { drawCircle(FT.Bad, 7f, Offset(x(it.timestamp), y(it.value.toDouble()))) }
             for (h in listOf(6, 9, 12, 15, 18, 21)) {
                 val t = day.date.atTime(h, 0).atZone(zone).toInstant()
                 drawLine(FT.GlassTrack, Offset(x(t), size.height - 6f), Offset(x(t), size.height), strokeWidth = 1.5f)
@@ -283,7 +283,7 @@ fun StressCurve(
         result.baseline?.let { Text("baseline ${it.toInt()}", style = FTType.Micro, color = FT.TextMuted, modifier = Modifier.padding(start = 4.dp, top = (150 * (1 - it / 100.0) - 14).coerceAtLeast(0.0).dp)) }
         peak?.let { p ->
             val above = result.baseline?.let { " · +${(p.value - it).toInt()} over baseline" } ?: ""
-            Text("peak ${p.value} outside exercise$above", style = FTType.Micro, color = FT.Critical, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp))
+            Text("peak ${p.value} outside exercise$above", style = FTType.Micro, color = FT.Bad, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp))
         }
     }
     // The chart runs 06:00 to midnight, so evenly spread labels land on their hours.
@@ -327,7 +327,7 @@ private fun MiniStool(pattern: StoolPattern, zone: ZoneId = ZoneId.systemDefault
     Canvas(Modifier.width(84.dp).height(24.dp)) {
         val laneH = size.height / 4
         val lanes = StoolLane.DRAWN
-        drawRect(FT.Emerald.copy(alpha = 0.12f), Offset(0f, lanes.indexOf(StoolLane.HEALTHY) * laneH), Size(size.width, laneH))
+        drawRect(FT.Ok.copy(alpha = 0.12f), Offset(0f, lanes.indexOf(StoolLane.HEALTHY) * laneH), Size(size.width, laneH))
         pattern.marks.filter { it.lane != null }.forEach { m ->
             val x = size.width * Duration.between(start, m.at).toMinutes() / spanMin
             drawRect(laneColor(m.lane!!), Offset(x - 1.5f, lanes.indexOf(m.lane) * laneH + 1f), Size(3f, laneH - 2f))

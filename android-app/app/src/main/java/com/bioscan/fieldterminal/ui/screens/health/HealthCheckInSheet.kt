@@ -1,5 +1,7 @@
 package com.bioscan.fieldterminal.ui.screens.health
 
+import java.time.ZoneId
+import com.bioscan.fieldterminal.domain.localDateIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -110,7 +112,7 @@ fun HealthCheckInSheet(
     // Concerns asked about: open ones, the focused one, and new ones without a published state yet.
     val active = concerns.filter { c ->
         c.archivedAt == null && (c.id == focusConcernId || overview[c.id]?.let { isConcernOpen(it.state) || (it.state == "unobserved" && it.currentEpisode != null) }
-            ?: (c.legacySource == null && c.createdAt?.take(10)?.let { LocalDate.parse(it) >= today.minusDays(14) } == true))
+            ?: (c.legacySource == null && c.createdAt?.let { localDateIn(it, ZoneId.systemDefault()) }?.let { it >= today.minusDays(14) } == true))
     }
 
     fun save(draft: CheckInDraft) {
@@ -196,7 +198,7 @@ fun HealthCheckInSheet(
                 TextChipRow(listOf("THAT'S EVERYTHING"), if (nothingElse) "THAT'S EVERYTHING" else null, perRow = 1) { picked -> nothingElse = picked != null }
             }
 
-            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Critical) }
+            error?.let { Text("Couldn't save: $it", style = FTType.BodySmall, color = FT.Bad) }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (answers.isEmpty() && problems.isEmpty()) {
                     FTButton(label = if (saving) "SAVING..." else "NOTHING", emphasis = FTButtonEmphasis.Primary, enabled = !saving, modifier = Modifier.weight(1f)) {

@@ -1,5 +1,6 @@
 package com.bioscan.fieldterminal.ui.screens
 
+import com.bioscan.fieldterminal.domain.toAppIso
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -47,7 +48,6 @@ import com.bioscan.fieldterminal.ui.theme.FTType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
-import java.time.ZoneOffset
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
 // DAV-168. The single review/correction step every candidate source
@@ -162,7 +162,7 @@ fun NutritionCandidateReviewSheet(
             }
 
             saveError?.let {
-                Text(it, style = FTType.BodySmall, color = FT.Critical)
+                Text(it, style = FTType.BodySmall, color = FT.Bad)
             }
 
             val allResolved = rows.isNotEmpty() && rows.all { confirmed.containsKey(it.first) }
@@ -178,7 +178,7 @@ fun NutritionCandidateReviewSheet(
                 saveError = null
                 scope.launch {
                     try {
-                        saveRepo.saveMeal(mealDateTime.toIsoWithOffset(), description.trim(), rows.mapNotNull { confirmed[it.first] }, mealSlot)
+                        saveRepo.saveMeal(mealDateTime.toAppIso(), description.trim(), rows.mapNotNull { confirmed[it.first] }, mealSlot)
                         saving = false
                         onSaved()
                     } catch (e: Exception) {
@@ -293,7 +293,7 @@ private fun ReviewItemCard(
                     Text(
                         "NEEDS CONFIRMATION",
                         style = FTType.LabelCaps,
-                        color = FT.Warning,
+                        color = FT.Warn,
                     )
                 }
             }
@@ -385,14 +385,14 @@ private fun ReviewItemCard(
                 CircularProgressIndicator(color = FT.DomainLog, modifier = Modifier.padding(2.dp))
                 Text("Calculating...", style = FTType.Caption, color = FT.TextSecondary)
             }
-            resolveError != null -> Text(resolveError!!, style = FTType.Caption, color = FT.Critical)
+            resolveError != null -> Text(resolveError!!, style = FTType.Caption, color = FT.Bad)
             resolved != null -> ResolvedTotalsRow(resolved!!)
         }
 
         Text(
             "REMOVE",
             style = sheetActionLabelStyle,
-            color = FT.Critical,
+            color = FT.Bad,
             modifier = Modifier.ftClickable(onClick = onRemove),
         )
     }
@@ -437,9 +437,9 @@ private fun StatChip(label: String, value: String) {
 @Composable
 private fun ConfidenceBadge(label: String, confidence: Double) {
     val color = when {
-        confidence >= 0.75 -> FT.Emerald
-        confidence >= 0.4 -> FT.Warning
-        else -> FT.Critical
+        confidence >= 0.75 -> FT.Ok
+        confidence >= 0.4 -> FT.Warn
+        else -> FT.Bad
     }
     Text(
         "$label ${(confidence * 100).toInt()}%",
@@ -448,4 +448,3 @@ private fun ConfidenceBadge(label: String, confidence: Double) {
     )
 }
 
-private fun LocalDateTime.toIsoWithOffset(): String = this.atOffset(ZoneOffset.UTC).toString()

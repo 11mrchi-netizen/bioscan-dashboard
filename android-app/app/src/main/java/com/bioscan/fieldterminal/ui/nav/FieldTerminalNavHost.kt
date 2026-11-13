@@ -99,7 +99,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     // supplement reminder -> SUPPLEMENTS, the fuel reminder and the User block card -> PLANNING), Training's (the injury
     // flag -> INJURY, the User level buttons -> RUNNING / STRENGTH), Nutrition's (Today's fuel line -> PLAN) and Health's.
     var labsRequestedTab by rememberSaveable { mutableStateOf<LabTab?>(null) }
-    // Scoring system rebuild: PLAN's and ME's sub-tab, for a link that should land on one (the fuel reminder -> FOOD).
+    // PLAN's and ME's sub-tab, for a link that should land on one (the fuel reminder -> FOOD).
     var planRequestedTab by rememberSaveable { mutableStateOf<PlanTab?>(null) }
     var meRequestedTab by rememberSaveable { mutableStateOf<MeTab?>(null) }
     // Analysis review phase B: the 22:25 evening check-in reminder opens TODAY with the check-in sheet up.
@@ -112,7 +112,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
     // pages), which used to light nothing. Set whenever a top-level destination is shown and when a dock tab is tapped,
     // so a deep link pushed onto the current stack keeps that stack's tab.
     var dockTab by rememberSaveable { mutableStateOf(TopLevelTab.Status) }
-    // Scoring system rebuild: tapping + LOG in the dock opens the logging menu straight away. Each tap bumps this, and
+    // Tapping + LOG in the dock opens the logging menu straight away. Each tap bumps this, and
     // the Log screen opens its add sheet when it changes.
     var logMenuRequest by rememberSaveable { mutableStateOf(0) }
 
@@ -211,7 +211,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
             popEnterTransition = { if (isTabSwitch()) FTMotion.tabEnter() else FTMotion.popEnter() },
             popExitTransition = { if (isTabSwitch()) FTMotion.tabExit() else FTMotion.popExit() },
         ) {
-            // Scoring system rebuild (docs/scoring-system): the opening page is TODAY -- CHARGE, the five domain rings and
+            // The opening page is TODAY -- CHARGE, the five domain rings and
             // today's plan.
             composable(TopLevelTab.Status.route) {
                 TodayHomeScreen(
@@ -254,7 +254,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                 TrainingPlannerScreen(onBack = { navController.popBackStack() }, onCreated = { navController.popBackStack() })
             }
             composable("nutrient_breakdown") { NutrientBreakdownScreen(onBack = { navController.popBackStack() }) }
-            // Scoring system rebuild: LAB is a dock tab; the old pushed route still resolves to the same page.
+            // LAB is a dock tab; the old pushed route still resolves to the same page.
             for (route in listOf(TopLevelTab.Lab.route, TileRoute.Lab.route)) {
                 composable(route) {
                     LabTileScreen(
@@ -348,7 +348,7 @@ fun FieldTerminalNavHost(pendingNotificationKind: String? = null, onNotification
                     onOpenShoe = { id -> navController.navigate("shoe/$id") },
                 )
             }
-            // Phase G4: the app's first pushed detail route (every other
+            // The app's first pushed detail route (every other
             // screen so far is a flat tab or a bottom sheet) -- a session's
             // on-demand Health Connect time-series detail, reached by
             // tapping an Exercise entry's DETAIL action in the Log tab.

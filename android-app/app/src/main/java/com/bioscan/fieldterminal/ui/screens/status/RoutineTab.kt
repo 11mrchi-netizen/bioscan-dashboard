@@ -99,7 +99,7 @@ fun RoutineTab(onOpenDay: (LocalDate) -> Unit = {}) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp)) {
-        error?.let { Text(it, style = FTType.BodySmall, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.BodySmall, color = FT.Bad) }
         // Routine R7: practices, logged time and the week's time (ui/screens/routine/PracticesCards.kt).
         RoutineTimeSection()
         FTButton("OPEN DAY MAP", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Primary) { onOpenDay(LocalDate.now()) }
@@ -116,9 +116,9 @@ fun RoutineTab(onOpenDay: (LocalDate) -> Unit = {}) {
 }
 
 private fun groupColor(g: StripGroup): Color = when (g) {
-    StripGroup.HOME -> FT.Emerald
+    StripGroup.HOME -> FT.Ok
     StripGroup.WORK -> FT.DomainMap // was DomainTraining, which is Emerald: Home and Work looked the same
-    StripGroup.TRANSIT -> FT.Warning
+    StripGroup.TRANSIT -> FT.Warn
     StripGroup.OTHER -> FT.DomainLabs
     StripGroup.UNKNOWN -> FT.GlassBorder
 }
@@ -224,7 +224,7 @@ private fun CommuteCard(
     ) {
         val problem = homeWorkProblem(places.map { it.toPlace() }, places.firstOrNull { it.source == "home_setting" }?.id)
         if (problem != null) {
-            Text(problem, style = FTType.BodySmall, color = FT.Warning)
+            Text(problem, style = FTType.BodySmall, color = FT.Warn)
             val setup = places.firstOrNull { it.source == "home_setting" }
             if (home == null && setup != null) {
                 FTButton("MAKE THE SETUP PLACE HOME", modifier = Modifier.fillMaxWidth(), emphasis = FTButtonEmphasis.Primary) { onFixHome(setup) }

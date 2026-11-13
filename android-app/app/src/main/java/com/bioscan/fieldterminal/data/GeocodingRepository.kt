@@ -11,7 +11,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import java.util.Locale
 
-// Phase M1 (Map tab rework). Nominatim (OpenStreetMap's free public
+// Nominatim (OpenStreetMap's free public
 // geocoder) -- same "free tier, no Google billing" choice this app already
 // made for CARTO tiles and Open-Meteo weather, and needs no signup/API key
 // at all. Its usage policy asks for a real identifying User-Agent and caps

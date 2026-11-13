@@ -26,7 +26,7 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import com.bioscan.fieldterminal.ui.theme.FuturisticMaterialTokens as FT
 
-// Phase G5. Same osmdroid + CARTO Dark Matter setup as MapScreen.kt's
+// Same osmdroid + CARTO Dark Matter setup as MapScreen.kt's
 // OsmMapView (Step 14 follow-up), kept as its own small component rather
 // than generalizing that one: this view takes a session's plain RoutePoint
 // lat/lon list, not the Map tab's GpxPoint/weather/directions concerns, and
@@ -63,8 +63,8 @@ fun RouteMiniMap(points: List<RoutePoint>, cartoKey: String, modifier: Modifier 
                 val kms = routeKmMarkers(points)
                 val every = if (kms.size > 20) 5 else 1
                 kms.filter { it.km % every == 0 }.forEach { overlays.add(kmMarker(this, it)) }
-                overlays.add(dotMarker(this, geoPoints.first(), FT.Emerald.toArgb()))
-                overlays.add(dotMarker(this, geoPoints.last(), FT.Critical.toArgb()))
+                overlays.add(dotMarker(this, geoPoints.first(), FT.Ok.toArgb()))
+                overlays.add(dotMarker(this, geoPoints.last(), FT.Bad.toArgb()))
 
                 fitTo(geoPoints, pad = 0.2, minSpanDeg = 0.001)
             }

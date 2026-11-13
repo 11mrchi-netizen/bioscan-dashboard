@@ -3,7 +3,7 @@ package com.bioscan.fieldterminal.domain
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
-// Phase A4 (Analysis Layer). Evaluation Method Spec, Category 4 (Nutrition):
+// Evaluation Method Spec, Category 4 (Nutrition):
 // MacroFactor's classify-then-exclude pattern, plus variance (energy CV) as
 // its own first-class displayed metric, not a diagnostic. Reuses this
 // project's existing `DailyNutrition`/`aggregateMealsByDay` (domain/

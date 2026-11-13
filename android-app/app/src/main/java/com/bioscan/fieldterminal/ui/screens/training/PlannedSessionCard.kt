@@ -76,8 +76,8 @@ fun PlannedSessionCard(match: PlannedMatch, logged: List<StrengthExerciseDto>, a
 }
 
 private fun verdictColor(v: PlanVerdict) = when (v) {
-    PlanVerdict.Done -> FT.Emerald
+    PlanVerdict.Done -> FT.Ok
     PlanVerdict.Above -> FT.Info
-    PlanVerdict.Below, PlanVerdict.Short -> FT.Warning
+    PlanVerdict.Below, PlanVerdict.Short -> FT.Warn
     PlanVerdict.NotLogged, PlanVerdict.Open -> FT.TextMuted
 }

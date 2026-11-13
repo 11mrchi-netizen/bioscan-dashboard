@@ -88,7 +88,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
     var loadingOlder by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
-    // Scoring system rebuild: + LOG in the dock opens the menu straight away. The request is remembered across a restore,
+    // + LOG in the dock opens the menu straight away. The request is remembered across a restore,
     // so the sheet is not opened again for a tap that was already handled.
     var handledMenuRequest by rememberSaveable { mutableStateOf(0) }
     LaunchedEffect(openMenuRequest) {
@@ -161,7 +161,7 @@ fun LogScreen(onOpenSessionDetail: (Long) -> Unit, openMenuRequest: Int = 0) {
 
             when {
                 error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Critical)
+                    Text("Failed to load: $error", style = FTType.BodySmall, color = FT.Bad)
                 }
                 current == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = FT.DomainLog)
@@ -343,7 +343,7 @@ private fun LogDayCard(day: LogDay, open: Boolean, onToggle: () -> Unit, onEntry
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(dayLabel(day.date), style = FTType.LabelCaps, color = if (day.hasGap) FT.Warning else FT.TextPrimary, modifier = Modifier.weight(1f))
+                Text(dayLabel(day.date), style = FTType.LabelCaps, color = if (day.hasGap) FT.Warn else FT.TextPrimary, modifier = Modifier.weight(1f))
                 Text("${day.entries.size}", style = FTType.Value, color = FT.TextSecondary)
                 Text(if (open) "  ▾" else "  ▸", style = FTType.Value, color = FT.TextMuted)
             }
@@ -392,7 +392,7 @@ private fun DayMarkCell(m: DayMark, modifier: Modifier = Modifier) {
                     drawRoundRect(color, Offset.Zero, size, corner, style = Stroke(1.5.dp.toPx()))
                 }
                 MarkState.MISSING -> drawRoundRect(
-                    FT.Warning, Offset.Zero, size, corner,
+                    FT.Warn, Offset.Zero, size, corner,
                     style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 3.dp.toPx()))),
                 )
                 MarkState.NONE -> drawRoundRect(FT.GlassTrack, Offset.Zero, size, corner, style = Stroke(1.dp.toPx()))
@@ -406,7 +406,7 @@ private fun DayMarkCell(m: DayMark, modifier: Modifier = Modifier) {
                 MarkState.PRESENT -> "${m.count}"
             },
             style = FTType.Micro,
-            color = if (m.state == MarkState.MISSING) FT.Warning else FT.TextSecondary,
+            color = if (m.state == MarkState.MISSING) FT.Warn else FT.TextSecondary,
             maxLines = 1,
         )
         Text(

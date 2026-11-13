@@ -98,7 +98,7 @@ fun FTDataChip(confidence: Confidence, modifier: Modifier = Modifier) {
     val (word, color) = when {
         ratio >= 0.8 -> "GOOD" to FT.TextSecondary
         ratio >= 0.5 -> "PARTIAL" to FT.Info
-        else -> "THIN" to FT.Warning
+        else -> "THIN" to FT.Warn
     }
     Text(
         text = "DATA: $word",
@@ -128,7 +128,7 @@ fun FTConfidenceChip(level: ConfidenceLevel, modifier: Modifier = Modifier) {
     val color = when (level) {
         ConfidenceLevel.High -> FT.TextSecondary
         ConfidenceLevel.Medium -> FT.Info
-        ConfidenceLevel.Low -> FT.Warning
+        ConfidenceLevel.Low -> FT.Warn
     }
     Text(
         text = label,
@@ -160,7 +160,7 @@ fun FTRangeIndicator(range: PersonalRange, modifier: Modifier = Modifier, curren
     val domainMax = listOfNotNull(minimum, maximum, range.current, range.baseline).max() + pad
     val domainSpan = (domainMax - domainMin).takeIf { it > 0.0 } ?: 1.0
     fun fraction(value: Double) = ((value - domainMin) / domainSpan).toFloat().coerceIn(0f, 1f)
-    val bandColor = if (range.kind == RangeKind.ReferenceRange) FT.TextSecondary.copy(alpha = 0.30f) else FT.Emerald.copy(alpha = 0.38f)
+    val bandColor = if (range.kind == RangeKind.ReferenceRange) FT.TextSecondary.copy(alpha = 0.30f) else FT.Ok.copy(alpha = 0.38f)
     val comparisonLabel = when (range.comparison) {
         RangeComparison.Below -> "BELOW RANGE"
         RangeComparison.Within -> "WITHIN RANGE"
@@ -227,7 +227,7 @@ fun FTCard(
     // Caveats / "what this is" copy lives behind one help button in the title
     // bar instead of a muted paragraph inside the card.
     info: String? = null,
-    // Analysis Layer 3 / Phase 7: a metric-registry key. When set, the help button also shows that metric's methodology,
+    // A metric-registry key. When set, the help button also shows that metric's methodology,
     // limits and references (after `info`, if any), so the text comes from the single registry instead of per-screen strings.
     methodology: String? = null,
     // The longer part of `info` (thresholds, references): shown in the help dialog behind METHOD, LIMITS AND REFERENCES,
@@ -340,10 +340,10 @@ fun metricStateLabel(state: MetricState): String = stateTreatment(state).label
 internal data class StateTreatment(val label: String, val symbol: String, val color: Color)
 
 internal fun stateTreatment(state: MetricState) = when (state) {
-    MetricState.Optimal -> StateTreatment("OPTIMAL", "●", FT.Emerald)
+    MetricState.Optimal -> StateTreatment("OPTIMAL", "●", FT.Ok)
     MetricState.Neutral -> StateTreatment("CURRENT", "●", FT.TextSecondary)
-    MetricState.Warning -> StateTreatment("ATTENTION", "!", FT.Warning)
-    MetricState.Critical -> StateTreatment("CRITICAL", "!", FT.Critical)
+    MetricState.Warning -> StateTreatment("ATTENTION", "!", FT.Warn)
+    MetricState.Critical -> StateTreatment("CRITICAL", "!", FT.Bad)
     MetricState.Building -> StateTreatment("BUILDING", "·", FT.Analysis)
     MetricState.Unavailable -> StateTreatment("UNAVAILABLE", "—", FT.TextMuted)
 }

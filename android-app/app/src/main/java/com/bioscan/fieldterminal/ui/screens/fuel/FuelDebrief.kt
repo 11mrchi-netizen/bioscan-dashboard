@@ -158,7 +158,7 @@ fun FuelDebriefContent(target: DebriefTarget, onSaved: () -> Unit) {
                 adherence.verdict?.let { v ->
                     Text(
                         "SCHEDULE ${v.label} · ${(adherence.carbShare!! * 100).roundToInt()} % of the planned carbohydrate",
-                        style = FTType.LabelCaps, color = if (v == ScheduleVerdict.HELD) FT.Emerald else FT.Warning,
+                        style = FTType.LabelCaps, color = if (v == ScheduleVerdict.HELD) FT.Ok else FT.Warn,
                     )
                 }
                 adherence.slipped.forEach { Text("· ${it.label}: ${it.taken} of ${it.planned} taken", style = FTType.Caption, color = FT.TextSecondary) }
@@ -194,7 +194,7 @@ fun FuelDebriefContent(target: DebriefTarget, onSaved: () -> Unit) {
             Column(Modifier.weight(1f)) { DLabel("AFTER KG"); FieldTextField(after, { after = it }, "e.g. 68.9", keyboardType = KeyboardType.Decimal) }
         }
         Column { DLabel("NOTES (OPTIONAL)"); FieldTextField(notes, { notes = it }, "What worked, what didn't", singleLine = false) }
-        error?.let { Text(it, style = FTType.Caption, color = FT.Critical) }
+        error?.let { Text(it, style = FTType.Caption, color = FT.Bad) }
 
         if (!saved) {
             val d = parseHoursMinutes(duration)

@@ -114,7 +114,7 @@ private fun MatchRow(day: PlannedDay, item: PlannedItem, onChange: () -> Unit, o
                 FTButton("CHANGE", modifier = Modifier.weight(1f), onClick = onChange)
             }
         }
-        error?.let { Text("Couldn't save: $it", style = FTType.Caption, color = FT.Critical) }
+        error?.let { Text("Couldn't save: $it", style = FTType.Caption, color = FT.Bad) }
     }
 }
 
@@ -167,7 +167,7 @@ private fun MatchSheet(day: PlannedDay, item: PlannedItem, recent: List<PlannedD
                     scope.launchSafe(onError = { error = describeLoadFailure(it) }, onDone = { saving = false }) { repo.clear(id); onSaved() }
                 }
             }
-            error?.let { Text("Couldn't save: $it", style = FTType.Caption, color = FT.Critical) }
+            error?.let { Text("Couldn't save: $it", style = FTType.Caption, color = FT.Bad) }
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -223,7 +223,7 @@ fun LongSessionFuelCard(recent: List<PlannedDay>, today: LocalDate, modifier: Mo
                 }
             }
         }
-        error?.let { Text("Couldn't open the debrief: $it", style = FTType.Caption, color = FT.Critical) }
+        error?.let { Text("Couldn't open the debrief: $it", style = FTType.Caption, color = FT.Bad) }
     }
     debrief?.let { FuelDebriefSheet(it, onDismiss = { debrief = null }, onSaved = { debrief = null }) }
 }
